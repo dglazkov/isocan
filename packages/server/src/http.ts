@@ -6,10 +6,16 @@ import type { PostOpRequest, UndoRedoRequest } from "@isocan/core";
 import { OpValidationError } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
+import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 
 const STARTED_AT = new Date().toISOString();
 
-export function registerRoutes(app: FastifyInstance, engine: Engine, store: Store): void {
+export function registerRoutes(
+  app: FastifyInstance,
+  engine: Engine,
+  store: Store,
+  presence: PresenceHub,
+): void {
   // Raw bodies for blob uploads; JSON stays JSON.
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
@@ -69,6 +75,39 @@ export function registerRoutes(app: FastifyInstance, engine: Engine, store: Stor
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
     return engine.redo(id, body.actor, body.clientId);
+  });
+
+  // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
+
+  app.post("/api/projects/:id/sessions", async (req) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id); // 404 unknown projects
+    const body = req.body as import("@isocan/core").CreateSessionRequest;
+    const session = presence.createSession(id, body.actor, "cli", {
+      ...(body.label !== undefined ? { label: body.label } : {}),
+    });
+    return { sessionId: session.sessionId, ttlMs: SESSION_TTL_MS };
+  });
+
+  app.put("/api/projects/:id/sessions/:sid", async (req, reply) => {
+    const { id, sid } = req.params as { id: string; sid: string };
+    const body = (req.body ?? {}) as import("@isocan/core").UpdateSessionRequest;
+    if (!presence.touch(id, sid, body)) {
+      return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
+    }
+    return { ok: true };
+  });
+
+  app.delete("/api/projects/:id/sessions/:sid", async (req) => {
+    const { id, sid } = req.params as { id: string; sid: string };
+    presence.endSession(id, sid);
+    return { ok: true };
+  });
+
+  app.get("/api/projects/:id/sessions", async (req) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    return presence.roster(id);
   });
 
   app.post("/api/projects/:id/gc", async (req) => {

@@ -4,12 +4,54 @@ import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 /** Default daemon port, localhost only. */
 export const DEFAULT_PORT = 4441;
 
-// ---- WebSocket, server → client only ----
+// ---- WebSocket ----
 
 export type ServerMessage =
   | { type: "snapshot"; project: Project; canvas: CanvasState; lastSeq: number }
   | { type: "op-applied"; entry: LogEntry }
-  | { type: "project-deleted" };
+  | { type: "project-deleted" }
+  | { type: "presence-roster"; sessions: PresenceSession[] };
+
+/** Client → server. Presence is the ephemeral plane: daemon memory + WS
+ * fan-out only — never the oplog, never storage, never undo. */
+export type ClientMessage = {
+  type: "presence";
+  /** The tab's client id — doubles as its presence session id. */
+  sessionId: string;
+  actor: Actor;
+  cursor: { x: number; y: number } | null;
+  selection: string[];
+};
+
+// ---- presence sessions ----
+
+export interface PresenceSession {
+  sessionId: string;
+  actor: Actor;
+  kind: "web" | "cli";
+  /** Display override; fall back to actor.name. */
+  label: string | null;
+  cursor: { x: number; y: number } | null;
+  selection: string[];
+  status: string | null;
+  lastSeen: string;
+}
+
+export interface CreateSessionRequest {
+  actor: Actor;
+  label?: string;
+}
+
+export interface CreateSessionResponse {
+  sessionId: string;
+  ttlMs: number;
+}
+
+export interface UpdateSessionRequest {
+  cursor?: { x: number; y: number } | null;
+  selection?: string[];
+  status?: string | null;
+}
 
 // ---- REST payloads ----
 

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { addFiles } from "../lib/upload.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
+import { CursorLayer } from "./CursorLayer.tsx";
 
 export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -179,6 +180,11 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
       onPointerDown={onPointerDown}
+      onPointerMove={(e) => {
+        const ui = useUiStore.getState();
+        publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
+      }}
+      onPointerLeave={() => publishCursor(null)}
       onDragOver={(e) => {
         e.preventDefault();
         setDropping(true);
@@ -202,6 +208,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         )}
       </div>
       <CommentLayer projectId={projectId} actor={actor} />
+      <CursorLayer />
       <MarqueeRect />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
       <ZoomChip />

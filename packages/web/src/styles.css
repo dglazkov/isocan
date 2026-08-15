@@ -275,6 +275,17 @@ input, textarea { font: inherit; color: var(--ink); }
 .gc-zone { display: flex; align-items: center; gap: 10px; }
 .gc-result { font-size: 11px; color: var(--ink-muted); }
 
+/* ---------- remote cursors (presence) ---------- */
+.remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
+.remote-cursor svg { display: block; filter: drop-shadow(0 1px 2px rgba(30,34,40,0.35)); }
+.cursor-chip {
+  margin: 2px 0 0 10px; padding: 3px 8px; border-radius: 999px 999px 999px 3px;
+  color: #fff; font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  display: flex; flex-direction: column; align-items: flex-start;
+  box-shadow: 0 4px 10px -4px rgba(30,34,40,0.4);
+}
+.cursor-chip em { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.85; }
+
 /* ---------- marquee ---------- */
 .marquee {
   position: absolute; z-index: 15; pointer-events: none;

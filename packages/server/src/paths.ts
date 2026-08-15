@@ -20,4 +20,5 @@ export const blobsIndexFile = (home: string, id: string) => path.join(projectDir
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");
+export const sessionFile = (home: string) => path.join(home, "session.json");
 export const configFile = (home: string) => path.join(home, "config.json");

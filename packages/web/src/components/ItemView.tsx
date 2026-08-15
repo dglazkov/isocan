@@ -5,6 +5,7 @@ import type { Actor, Item, Operation } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
+import { actorColor } from "../lib/colors.ts";
 
 const DRAG_SLOP = 4;
 const MIN_W = 80;
@@ -27,6 +28,11 @@ export function ItemView({
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const entered = useUiStore((s) => s.enteredHtmlItemId === item.id);
   const commentMode = useUiStore((s) => s.commentMode);
+  // A remote session holding this item shows as an outline in their color.
+  const remoteHolder = useCanvasStore((s) => {
+    const holder = s.sessions.find((session) => session.selection.includes(item.id));
+    return holder ? holder.actor.id : null;
+  });
 
   const x = drag ? item.x + drag.dx : item.x;
   const y = drag ? item.y + drag.dy : item.y;
@@ -168,7 +174,15 @@ export function ItemView({
     <div
       className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}`}
       data-item-id={item.id}
-      style={{ left: x, top: y, width, height }}
+      style={{
+        left: x,
+        top: y,
+        width,
+        height,
+        ...(remoteHolder && !selected
+          ? { outline: `2px dashed ${actorColor(remoteHolder)}`, outlineOffset: "1px" }
+          : {}),
+      }}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
     >

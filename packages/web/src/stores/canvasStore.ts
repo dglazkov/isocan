@@ -2,12 +2,16 @@ import { create } from "zustand";
 import type {
   Actor,
   CanvasState,
+  ClientMessage,
   Operation,
+  PresenceSession,
   Project,
   ProjectState,
   ServerMessage,
 } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
+import { CLIENT_ID } from "../lib/api.ts";
+import { useUiStore } from "./uiStore.ts";
 
 export type Connection = "connecting" | "live" | "reconnecting" | "gone";
 
@@ -17,6 +21,8 @@ interface CanvasStore {
   canvas: CanvasState | null;
   lastSeq: number;
   connection: Connection;
+  /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
+  sessions: PresenceSession[];
 }
 
 /**
@@ -31,7 +37,45 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   canvas: null,
   lastSeq: 0,
   connection: "connecting",
+  sessions: [],
 }));
+
+// ---- presence publishing (throttled, trailing-edge) ----
+
+let presenceActor: Actor | null = null;
+let lastCursor: { x: number; y: number } | null = null;
+let presenceTimer: ReturnType<typeof setTimeout> | null = null;
+let lastFlush = 0;
+const PRESENCE_INTERVAL_MS = 33;
+
+export function publishCursor(cursor: { x: number; y: number } | null): void {
+  lastCursor = cursor;
+  schedulePresenceFlush();
+}
+
+export function publishSelection(): void {
+  schedulePresenceFlush();
+}
+
+function schedulePresenceFlush(): void {
+  if (presenceTimer) return;
+  const wait = Math.max(0, PRESENCE_INTERVAL_MS - (Date.now() - lastFlush));
+  presenceTimer = setTimeout(flushPresence, wait);
+}
+
+function flushPresence(): void {
+  presenceTimer = null;
+  lastFlush = Date.now();
+  if (!presenceActor || !socket || socket.readyState !== WebSocket.OPEN) return;
+  const message: ClientMessage = {
+    type: "presence",
+    sessionId: CLIENT_ID,
+    actor: presenceActor,
+    cursor: lastCursor,
+    selection: useUiStore.getState().selectedItemIds,
+  };
+  socket.send(JSON.stringify(message));
+}
 
 /**
  * Optimistically fold a gesture's final op into the replica, so releasing a
@@ -60,15 +104,17 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentProjectId: string | null = null;
 
-export function connectToProject(projectId: string): void {
+export function connectToProject(projectId: string, actor: Actor): void {
   disconnect();
   currentProjectId = projectId;
+  presenceActor = actor;
   useCanvasStore.setState({
     projectId,
     project: null,
     canvas: null,
     lastSeq: 0,
     connection: "connecting",
+    sessions: [],
   });
   open(projectId);
 }
@@ -113,6 +159,13 @@ function open(projectId: string): void {
         canvas: message.canvas,
         lastSeq: message.lastSeq,
         connection: "live",
+      });
+      // Announce this tab's presence immediately so it shows up in rosters
+      // (and `isocan who`) even before the mouse moves.
+      schedulePresenceFlush();
+    } else if (message.type === "presence-roster") {
+      useCanvasStore.setState({
+        sessions: message.sessions.filter((session) => session.sessionId !== CLIENT_ID),
       });
     } else if (message.type === "op-applied") {
       const { project, canvas, lastSeq } = useCanvasStore.getState();

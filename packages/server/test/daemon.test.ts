@@ -324,9 +324,10 @@ describe("daemon WS", () => {
     expect((messages[0] as any).canvas.items["itm_1"].x).toBe(5);
 
     await op({ type: "item.move", itemId: "itm_1", x: 42, y: 43 });
-    await until(() => messages.length >= 2);
-    expect(messages[1]!.type).toBe("op-applied");
-    expect(((messages[1] as any).entry.envelope.op as any).x).toBe(42);
+    // presence-roster messages may interleave — find the op broadcast.
+    await until(() => messages.some((m) => m.type === "op-applied"));
+    const applied = messages.find((m) => m.type === "op-applied")!;
+    expect(((applied as any).entry.envelope.op as any).x).toBe(42);
     ws.close();
   });
 

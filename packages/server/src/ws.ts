@@ -1,28 +1,56 @@
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { ServerMessage } from "@isocan/core";
+import type { ClientMessage, ServerMessage } from "@isocan/core";
 import { Engine, ProjectNotFoundError } from "./engine.ts";
+import { PresenceHub } from "./presence.ts";
 
 /**
- * Per-project rooms; server→client only. On connect a client gets a full
- * snapshot, then one op-applied per mutation. Clients that need to resync
- * simply reconnect.
+ * Per-project rooms. Server→client: snapshot on connect, op-applied per
+ * mutation, presence rosters. Client→server (web only): presence updates —
+ * the tab's clientId doubles as its presence session id.
  */
-export function attachWebSockets(server: Server, engine: Engine): void {
+/** Returns a closer that terminates all live sockets — upgraded connections
+ * are hijacked from the HTTP server, so Fastify's forceCloseConnections
+ * cannot reach them and shutdown would hang otherwise. */
+export function attachWebSockets(
+  server: Server,
+  engine: Engine,
+  presence: PresenceHub,
+): () => void {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Set<WebSocket>>();
 
-  engine.onEvent((projectId, message) => {
+  function broadcast(projectId: string, message: ServerMessage): void {
     const room = rooms.get(projectId);
     if (!room) return;
     const payload = JSON.stringify(message);
     for (const socket of room) {
       if (socket.readyState === WebSocket.OPEN) socket.send(payload);
     }
+  }
+
+  engine.onEvent((projectId, message) => {
+    broadcast(projectId, message);
     if (message.type === "project-deleted") {
-      for (const socket of room) socket.close();
-      rooms.delete(projectId);
+      const room = rooms.get(projectId);
+      if (room) {
+        for (const socket of room) socket.close();
+        rooms.delete(projectId);
+      }
     }
+  });
+
+  // Coalesce roster broadcasts — cursor streams would otherwise flood.
+  const pendingRoster = new Map<string, ReturnType<typeof setTimeout>>();
+  presence.onChange((projectId) => {
+    if (pendingRoster.has(projectId)) return;
+    pendingRoster.set(
+      projectId,
+      setTimeout(() => {
+        pendingRoster.delete(projectId);
+        broadcast(projectId, { type: "presence-roster", sessions: presence.roster(projectId) });
+      }, 40),
+    );
   });
 
   server.on("upgrade", (request, socket, head) => {
@@ -44,8 +72,13 @@ export function attachWebSockets(server: Server, engine: Engine): void {
     }
     try {
       const snapshot = await engine.getSnapshot(projectId);
-      const message: ServerMessage = { type: "snapshot", ...snapshot };
-      ws.send(JSON.stringify(message));
+      const hello: ServerMessage = { type: "snapshot", ...snapshot };
+      ws.send(JSON.stringify(hello));
+      const roster: ServerMessage = {
+        type: "presence-roster",
+        sessions: presence.roster(projectId),
+      };
+      ws.send(JSON.stringify(roster));
     } catch (err) {
       ws.close(err instanceof ProjectNotFoundError ? 4404 : 4500, String(err));
       return;
@@ -56,9 +89,39 @@ export function attachWebSockets(server: Server, engine: Engine): void {
       rooms.set(projectId, room);
     }
     room.add(ws);
+
+    // This connection's presence session, created lazily on its first
+    // presence message and torn down with the socket.
+    let sessionId: string | null = null;
+
+    ws.on("message", (data) => {
+      let message: ClientMessage;
+      try {
+        message = JSON.parse(String(data)) as ClientMessage;
+      } catch {
+        return;
+      }
+      if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
+      if (sessionId === null) {
+        sessionId = message.sessionId;
+        presence.createSession(projectId!, message.actor, "web", { sessionId });
+      }
+      presence.touch(projectId!, sessionId, {
+        cursor: message.cursor,
+        selection: Array.isArray(message.selection) ? message.selection : [],
+      });
+    });
+
     ws.on("close", () => {
       room.delete(ws);
       if (room.size === 0) rooms.delete(projectId);
+      if (sessionId !== null) presence.endSession(projectId, sessionId);
     });
   }
+
+  return () => {
+    for (const timer of pendingRoster.values()) clearTimeout(timer);
+    pendingRoster.clear();
+    for (const socket of wss.clients) socket.terminate();
+  };
 }

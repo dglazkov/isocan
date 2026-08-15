@@ -5,6 +5,7 @@ import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
+import { actorColor } from "../lib/colors.ts";
 
 /**
  * Pins and popovers render in SCREEN space (constant size at any zoom),
@@ -101,7 +102,7 @@ function ThreadPin({
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
       {shown.map((author) => (
-        <span className="pin-avatar" key={author.id}>
+        <span className="pin-avatar" key={author.id} style={{ background: actorColor(author.id) }}>
           {author.name.charAt(0).toUpperCase()}
         </span>
       ))}

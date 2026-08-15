@@ -7,12 +7,15 @@ import type {
   Actor,
   BlobUploadResponse,
   CanvasSnapshotResponse,
+  CreateSessionResponse,
   GcReport,
   GcRequest,
   LogEntry,
   Operation,
   PostOpResponse,
+  PresenceSession,
   Project,
+  UpdateSessionRequest,
 } from "@isocan/core";
 import { paths } from "@isocan/server";
 
@@ -76,8 +79,43 @@ export class DaemonClient {
     throw new Error(`daemon did not come up on ${this.base} — see ${paths.daemonLogFile(this.home)}`);
   }
 
-  sendOp(projectId: string | null, actor: Actor, op: Operation): Promise<PostOpResponse> {
-    return this.request("POST", "/api/ops", { projectId, actor, op });
+  sendOp(
+    projectId: string | null,
+    actor: Actor,
+    op: Operation,
+    clientId?: string,
+  ): Promise<PostOpResponse> {
+    return this.request("POST", "/api/ops", {
+      projectId,
+      actor,
+      op,
+      ...(clientId !== undefined ? { clientId } : {}),
+    });
+  }
+
+  // ---- presence sessions ----
+
+  createSession(projectId: string, actor: Actor, label?: string): Promise<CreateSessionResponse> {
+    return this.request("POST", `/api/projects/${projectId}/sessions`, {
+      actor,
+      ...(label !== undefined ? { label } : {}),
+    });
+  }
+
+  updateSession(
+    projectId: string,
+    sessionId: string,
+    patch: UpdateSessionRequest,
+  ): Promise<{ ok: true }> {
+    return this.request("PUT", `/api/projects/${projectId}/sessions/${sessionId}`, patch);
+  }
+
+  endSession(projectId: string, sessionId: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/projects/${projectId}/sessions/${sessionId}`);
+  }
+
+  listSessions(projectId: string): Promise<PresenceSession[]> {
+    return this.request("GET", `/api/projects/${projectId}/sessions`);
   }
 
   listProjects(): Promise<Project[]> {

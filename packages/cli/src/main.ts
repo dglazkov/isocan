@@ -51,8 +51,47 @@ function ctxOf(cmd: Command): Promise<Ctx> {
   return makeCtx(cmd);
 }
 
+// ---- presence session (the live cursor) ----
+
+interface SessionFile {
+  projectId: string;
+  sessionId: string;
+}
+
+async function readSessionFile(home: string): Promise<SessionFile | null> {
+  try {
+    return JSON.parse(await fs.readFile(paths.sessionFile(home), "utf8")) as SessionFile;
+  } catch {
+    return null;
+  }
+}
+
+async function writeSessionFile(home: string, session: SessionFile | null): Promise<void> {
+  if (session === null) {
+    await fs.rm(paths.sessionFile(home), { force: true });
+  } else {
+    await fs.writeFile(paths.sessionFile(home), JSON.stringify(session, null, 2));
+  }
+}
+
+/** The active session for this project, or an error telling how to start one. */
+async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile> {
+  const session = await readSessionFile(ctx.home);
+  if (!session || session.projectId !== projectId) {
+    throw new Error("no active session on this project — run `isocan session start` first");
+  }
+  return session;
+}
+
 async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
-  return ctx.client.sendOp(projectId, ctx.actor, op);
+  // Ops bound to an active session move its cursor to the op's locus
+  // (presence piggyback) — the daemon matches clientId to the session.
+  const session = await readSessionFile(ctx.home);
+  const clientId =
+    session && projectId !== null && session.projectId === projectId
+      ? session.sessionId
+      : undefined;
+  return ctx.client.sendOp(projectId, ctx.actor, op, clientId);
 }
 
 /** Resolve an item by exact id, id prefix, or title prefix. */
@@ -742,6 +781,116 @@ comment
       if (!thread) throw new Error(`no thread matches "${threadRef}"`);
       await sendOp(ctx, p.id, { type: "thread.delete", threadId: thread.id });
       console.log(`deleted thread ${thread.id}`);
+    }),
+  );
+
+// ---------- presence sessions ----------
+
+const session = program
+  .command("session")
+  .description("Presence session — your live cursor on the canvas");
+
+session
+  .command("start")
+  .description("Appear on the canvas; ops will move your cursor as you work")
+  .option("--label <label>", "display name override")
+  .action(
+    run(async (opts: { label?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const existing = await readSessionFile(ctx.home);
+      if (existing) {
+        await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
+      }
+      const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
+      await writeSessionFile(ctx.home, { projectId: p.id, sessionId: created.sessionId });
+      console.log(
+        `session ${created.sessionId} live on "${p.title}" — cursor follows your ops (ttl ${Math.round(created.ttlMs / 1000)}s, any command refreshes it)`,
+      );
+    }),
+  );
+
+session
+  .command("move <x> <y>")
+  .description("Move your cursor to world coordinates")
+  .allowUnknownOption() // negative coordinates
+  .action(
+    run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const active = await requireSession(ctx, p.id);
+      await ctx.client.updateSession(p.id, active.sessionId, {
+        cursor: { x: Number(x), y: Number(y) },
+      });
+      console.log(`cursor at ${x},${y}`);
+    }),
+  );
+
+session
+  .command("point <item>")
+  .description("Move your cursor to an item")
+  .action(
+    run(async (ref: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const active = await requireSession(ctx, p.id);
+      const item = resolveItem(snapshot, ref);
+      await ctx.client.updateSession(p.id, active.sessionId, {
+        cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+      });
+      console.log(`pointing at ${item.id}`);
+    }),
+  );
+
+session
+  .command("say [status]")
+  .description("Set (or clear) the status line under your cursor")
+  .action(
+    run(async (status: string | undefined, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const active = await requireSession(ctx, p.id);
+      await ctx.client.updateSession(p.id, active.sessionId, { status: status ?? null });
+      console.log(status ? `status: ${status}` : "status cleared");
+    }),
+  );
+
+session
+  .command("end")
+  .description("Leave the canvas")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const active = await readSessionFile(ctx.home);
+      if (!active) {
+        console.log("no active session");
+        return;
+      }
+      await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
+      await writeSessionFile(ctx.home, null);
+      console.log("session ended");
+    }),
+  );
+
+program
+  .command("who")
+  .description("Who is on this canvas right now")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const sessions = await ctx.client.listSessions(p.id);
+      if (ctx.json) return printJson(sessions);
+      printTable(
+        sessions.map((s) => ({
+          who: s.label ?? s.actor.name,
+          kind: s.kind,
+          cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
+          selection: String(s.selection.length || "—"),
+          status: s.status ?? "—",
+          seen: s.lastSeen,
+        })),
+      );
     }),
   );
 

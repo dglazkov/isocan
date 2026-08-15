@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { connectToProject, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
+import {
+  connectToProject,
+  disconnect,
+  publishSelection,
+  useCanvasStore,
+} from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
 import { fitBounds, itemsBounds } from "../lib/viewport.ts";
@@ -19,9 +24,14 @@ export function CanvasPage({ actor }: { actor: Actor }) {
   useEffect(() => {
     if (!projectId) return;
     didFit.current = false;
-    connectToProject(projectId);
+    connectToProject(projectId, actor);
     return disconnect;
-  }, [projectId]);
+  }, [projectId, actor]);
+
+  // Broadcast selection changes on the presence channel.
+  useEffect(() => useUiStore.subscribe((s, prev) => {
+    if (s.selectedItemIds !== prev.selectedItemIds) publishSelection();
+  }), []);
 
   // Zoom-to-fit once, on the first snapshot.
   useEffect(() => {
