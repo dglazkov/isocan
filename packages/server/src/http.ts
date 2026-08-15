@@ -61,8 +61,31 @@ export function registerRoutes(
 
   app.get("/api/projects/:id/oplog", async (req) => {
     const { id } = req.params as { id: string };
-    const { since } = req.query as { since?: string };
-    return engine.getLog(id, since ? Number(since) : 0);
+    const { since, waitMs } = req.query as { since?: string; waitMs?: string };
+    const sinceSeq = since ? Number(since) : 0;
+    let entries = await engine.getLog(id, sinceSeq);
+
+    // Long-poll: hold the request until an entry lands past `since` (or the
+    // window closes). The seq cursor makes this restart-safe — the waiter is
+    // resolved by the engine's op event, and a client abort cleans it up.
+    const holdMs = Math.min(Number(waitMs) || 0, 55_000);
+    if (entries.length === 0 && holdMs > 0) {
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          unsubscribe();
+          req.raw.off("close", done);
+          resolve();
+        };
+        const timer = setTimeout(done, holdMs);
+        const unsubscribe = engine.onEvent((projectId, message) => {
+          if (projectId === id && message.type === "op-applied") done();
+        });
+        req.raw.on("close", done);
+      });
+      entries = await engine.getLog(id, sinceSeq);
+    }
+    return entries;
   });
 
   app.post("/api/projects/:id/undo", async (req) => {

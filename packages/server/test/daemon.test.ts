@@ -266,6 +266,27 @@ describe("daemon HTTP", () => {
     expect(snapshot.canvas.items["itm_1"].x).toBe(100);
   });
 
+  it("oplog long-poll holds until an entry lands, or times out empty", async () => {
+    await createProjectWithItem(); // seqs 1..2
+    // Timeout path: nothing new past seq 2 → empty after ~waitMs.
+    let started = Date.now();
+    const empty = await get("/api/projects/prj_1/oplog?since=2&waitMs=250");
+    expect(empty).toEqual([]);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(200);
+
+    // Wake path: an op lands mid-poll → resolves early with the entry.
+    started = Date.now();
+    const pending = fetch(`${base}/api/projects/prj_1/oplog?since=2&waitMs=5000`).then((r) =>
+      r.json(),
+    );
+    await new Promise((r) => setTimeout(r, 120));
+    await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 });
+    const woke = (await pending) as LogEntry[];
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(woke).toHaveLength(1);
+    expect(woke[0]!.envelope.op.type).toBe("item.move");
+  });
+
   it("uploads and serves blobs with security headers", async () => {
     await createProjectWithItem();
     const body = "<h1>hi</h1>";

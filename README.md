@@ -70,6 +70,9 @@ isocan versions <item> · version promote <item> <version>
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
+isocan session start|work|point|move|say|end · isocan who   # live presence
+isocan wait [--timeout s] [--all-ops]  # block until someone else comments
+isocan tail [-f]                       # print/stream the operation log
 ```
 
 Items and threads resolve by id, id prefix, or title prefix. `--json`

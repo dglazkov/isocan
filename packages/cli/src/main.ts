@@ -68,7 +68,8 @@ Presence (being visible while you work):
 
 A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
-  edit/add/mv/… → comment reply <thread> "…" → repeat.`,
+  edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
+  the next comment from someone else) → repeat.`,
   );
 
 /** Wrap actions: friendly errors, non-zero exit. */
@@ -1004,6 +1005,108 @@ program
           seen: s.lastSeen,
         })),
       );
+    }),
+  );
+
+// ---------- waiting on collaborators ----------
+
+function describeEntry(entry: import("@isocan/core").LogEntry): string {
+  const op = entry.envelope.op;
+  const who = entry.envelope.actor.name;
+  switch (op.type) {
+    case "thread.create": {
+      const where = op.anchorItemId
+        ? `on ${op.anchorItemId}`
+        : `at ${Math.round(op.x)},${Math.round(op.y)}`;
+      return `${who} started thread ${op.threadId} (${where}): "${op.comment.body}"`;
+    }
+    case "thread.reply":
+      return `${who} replied on ${op.threadId}: "${op.comment.body}"`;
+    default: {
+      const target =
+        (op as { itemId?: string }).itemId ?? (op as { threadId?: string }).threadId ?? "";
+      return `${who} — ${op.type}${target ? ` ${target}` : ""}`;
+    }
+  }
+}
+
+program
+  .command("wait")
+  .description("Block until someone else comments — the agent's feedback loop")
+  .option("--all-ops", "wake on any operation by another actor, not just comments")
+  .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
+  .option("--since <seq>", "wake on anything after this oplog position instead of now")
+  .action(
+    run(async (opts: { allOps?: boolean; timeout?: string; since?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      let seq =
+        opts.since !== undefined
+          ? Number(opts.since)
+          : (await ctx.client.snapshot(p.id)).lastSeq;
+      const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
+      const isFeedback = (op: Operation) =>
+        op.type === "thread.create" || op.type === "thread.reply";
+      // Waiting is presence: show it, and keep the session alive while parked.
+      const sessionActive = (await readSessionFile(ctx.home))?.projectId === p.id;
+      const say = (status: string) =>
+        sessionActive ? touchSession(ctx, p.id, { status }).catch(() => {}) : Promise.resolve();
+      await say("waiting for your feedback…");
+
+      for (;;) {
+        const remaining = deadline === null ? Infinity : deadline - Date.now();
+        if (remaining <= 0) {
+          console.error("wait: timed out with no feedback");
+          process.exit(2);
+        }
+        const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
+        const entries = await ctx.client.getLog(p.id, seq, window);
+        if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
+        const matches = entries.filter(
+          (entry) =>
+            entry.envelope.actor.id !== ctx.actor.id &&
+            (opts.allOps ? true : isFeedback(entry.envelope.op)),
+        );
+        if (matches.length > 0) {
+          await say("reading your feedback…");
+          if (ctx.json) return printJson({ lastSeq: seq, entries: matches });
+          for (const entry of matches) {
+            console.log(describeEntry(entry));
+            const op = entry.envelope.op;
+            if (op.type === "thread.create" || op.type === "thread.reply") {
+              console.log(`  → isocan comment reply ${op.threadId} "…"`);
+            }
+          }
+          return;
+        }
+        await say("waiting for your feedback…"); // heartbeat between polls
+      }
+    }),
+  );
+
+program
+  .command("tail")
+  .description("Print recent operations; -f follows the live stream")
+  .option("-f, --follow", "keep streaming new operations as they land")
+  .option("-n, --lines <n>", "recent entries to show first (default 10)")
+  .action(
+    run(async (opts: { follow?: boolean; lines?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const printEntry = (entry: import("@isocan/core").LogEntry) => {
+        if (ctx.json) return console.log(JSON.stringify(entry));
+        const cause = entry.cause ? ` [${entry.cause.kind} of #${entry.cause.targetSeq}]` : "";
+        console.log(`#${entry.seq}  ${entry.envelope.ts}  ${describeEntry(entry)}${cause}`);
+      };
+      const all = await ctx.client.getLog(p.id, 0);
+      for (const entry of all.slice(-Number(opts.lines ?? 10))) printEntry(entry);
+      let seq = all.length > 0 ? all[all.length - 1]!.seq : 0;
+      if (!opts.follow) return;
+      for (;;) {
+        const entries = await ctx.client.getLog(p.id, seq, 30_000);
+        for (const entry of entries) printEntry(entry);
+        if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
+      }
     }),
   );
 

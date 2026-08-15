@@ -68,12 +68,14 @@ type EventListener = (projectId: string, message: ServerMessage) => void;
 export class Engine {
   private projects = new Map<string, ProjectRuntime>();
   private queue: Promise<unknown> = Promise.resolve();
-  private listeners: EventListener[] = [];
+  private listeners = new Set<EventListener>();
 
   constructor(private readonly store: Store) {}
 
-  onEvent(listener: EventListener): void {
-    this.listeners.push(listener);
+  /** Subscribe to project events; returns an unsubscribe function. */
+  onEvent(listener: EventListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   private emit(projectId: string, message: ServerMessage): void {

@@ -126,6 +126,13 @@ export class DaemonClient {
     return this.request("GET", `/api/projects/${projectId}/canvas`);
   }
 
+  /** With waitMs, the daemon long-polls: holds until an entry lands past
+   * `since` or the window closes (empty array). */
+  getLog(projectId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
+    const wait = waitMs !== undefined ? `&waitMs=${waitMs}` : "";
+    return this.request("GET", `/api/projects/${projectId}/oplog?since=${since}${wait}`);
+  }
+
   undo(projectId: string, actor: Actor): Promise<LogEntry> {
     return this.request("POST", `/api/projects/${projectId}/undo`, { actor });
   }
