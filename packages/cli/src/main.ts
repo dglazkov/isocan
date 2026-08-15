@@ -30,11 +30,46 @@ import {
 const program = new Command();
 program
   .name("isocan")
-  .description("Isomorphic canvas — same ops as the web app, from your terminal")
+  .description("Isomorphic canvas — same operations as the web app, from your terminal")
   .version("0.1.0")
-  .option("--json", "machine-readable JSON output")
+  .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
-  .option("--project <ref>", "project id or title prefix (default: `isocan use` setting)");
+  .option("--project <ref>", "project id or title prefix (default: `isocan use` setting)")
+  .addHelpText(
+    "after",
+    `
+The system:
+  A local daemon owns the state; this CLI and the web app are equal clients.
+  Every command here sends the same operation the web app would, so changes
+  appear live in any open browser — and vice versa.
+
+  project    a canvas; list with \`isocan project list\`
+  item       a file rendered on the canvas (markdown, image, video, HTML) at
+             x,y world coordinates (+x right, +y down)
+  version    every \`edit\` stacks a new version on the item; \`version promote\`
+             brings any older one back to the top
+  comment    threads pinned to an item (--item) or a spot (--at x,y)
+  undo       per-actor: \`isocan undo\` reverts YOUR last change, never a
+             collaborator's
+  trash      deleted items are recoverable until \`trash empty --force\`
+
+Conventions:
+  <item> and <thread> arguments accept an id, an id prefix, or a title prefix.
+  Set a default project once with \`isocan use <project>\`; --project overrides.
+  Identity (~/.isocan/identity.json) stamps every change you make; set it with
+  \`isocan identity --name "You"\`. The daemon auto-starts when needed.
+
+Presence (being visible while you work):
+  isocan session start --label "You"    appear as a live cursor on the canvas
+  isocan session work <item> --say "…"  animate on an item while you build
+  isocan session work --at x,y --say …  same, at an empty spot
+  isocan who                            see everyone on the canvas right now
+  Each operation you perform moves your cursor to where it happened.
+
+A typical collaboration loop:
+  session start → comment list → session work <item> --say "…" → build →
+  edit/add/mv/… → comment reply <thread> "…" → repeat.`,
+  );
 
 /** Wrap actions: friendly errors, non-zero exit. */
 function run(fn: (...args: any[]) => Promise<void>) {
@@ -153,7 +188,7 @@ async function projectAndSnapshot(ctx: Ctx): Promise<{ project: Project; snapsho
 
 program
   .command("identity")
-  .description("Set (or show) your identity")
+  .description("Set or show the identity stamped on your changes")
   .option("--name <name>", "display name")
   .action(
     run(async (opts: { name?: string }) => {
@@ -182,7 +217,7 @@ program
 
 program
   .command("serve")
-  .description("Run the daemon")
+  .description("Run the state daemon (auto-started by other commands; --foreground attaches)")
   .option("--foreground", "run in the foreground (default: detach)")
   .action(
     run(async (opts: { foreground?: boolean }, cmd: Command) => {
@@ -267,7 +302,7 @@ program
 
 // ---------- projects ----------
 
-const project = program.command("project").description("Manage projects (canvases)");
+const project = program.command("project").description("Create, list, edit, and delete projects — each project is a canvas");
 
 project
   .command("create <title>")
@@ -387,7 +422,7 @@ project
 
 program
   .command("use <ref>")
-  .description("Set the default project")
+  .description("Set the default project for subsequent commands")
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -402,7 +437,7 @@ program
 
 program
   .command("add <file>")
-  .description("Add a file to the canvas as a new item")
+  .description("Upload a file as a new canvas item (default placement: left of the leftmost item)")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--size <WxH>", "display size, e.g. 480x360")
@@ -501,7 +536,7 @@ program
 
 program
   .command("show <item>")
-  .description("Show item details")
+  .description("Show an item's full metadata and version stack")
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -541,7 +576,7 @@ program
 
 program
   .command("set <item>")
-  .description("Update item metadata")
+  .description("Update an item's title/description/properties; --size resizes it")
   .option("--title <title>")
   .option("-d, --description <text>")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
@@ -705,7 +740,16 @@ program
 
 // ---------- comments ----------
 
-const comment = program.command("comment").description("Comment threads on the canvas");
+const comment = program
+  .command("comment")
+  .description("Comment threads on the canvas")
+  .addHelpText(
+    "after",
+    `
+A thread starts with one comment — anchored to an item (--item, the pin
+follows the item) or freestanding at a canvas spot (--at x,y). Replies grow
+the thread; every comment is stamped with its author's identity.`,
+  );
 
 comment
   .command("add <text>")
@@ -808,7 +852,15 @@ comment
 
 const session = program
   .command("session")
-  .description("Presence session — your live cursor on the canvas");
+  .description("Presence session — your live cursor on the canvas")
+  .addHelpText(
+    "after",
+    `
+Sessions live in the daemon and expire after a few idle minutes; any session
+command refreshes yours, and performing operations auto-revives it. While a
+session is active, every operation you run moves your cursor to where it
+happened — \`work\` fills the quiet stretches in between.`,
+  );
 
 session
   .command("start")
@@ -959,7 +1011,7 @@ program
 
 program
   .command("undo")
-  .description("Undo the last operation on the project")
+  .description("Undo your last operation (undo is per-actor — never a collaborator's)")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -971,7 +1023,7 @@ program
 
 program
   .command("redo")
-  .description("Redo the last undone operation")
+  .description("Redo your last undone operation")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -1007,7 +1059,7 @@ program
     }),
   );
 
-const trash = program.command("trash").description("The project's trash bin");
+const trash = program.command("trash").description("List, restore, or permanently empty deleted items");
 
 trash
   .command("list")
