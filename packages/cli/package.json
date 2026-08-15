@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "isocan": "./bin/isocan.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "@isocan/server": "*",
+    "commander": "^13.1.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1"
+  }
+}

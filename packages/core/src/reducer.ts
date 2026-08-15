@@ -1,0 +1,288 @@
+import type {
+  Actor,
+  CanvasState,
+  Comment,
+  Item,
+  ItemVersion,
+  Project,
+  ProjectState,
+} from "./model.ts";
+import { emptyCanvas } from "./model.ts";
+import type { MetaPatch, NewVersion, OpEnvelope } from "./ops.ts";
+import { OpValidationError } from "./errors.ts";
+import { resolvePlacement } from "./placement.ts";
+
+/**
+ * The shared pure reducer. The daemon runs it authoritatively; the web client
+ * runs the identical function against its replica for every broadcast op.
+ *
+ * - `project.create` requires `state === null` and returns a fresh ProjectState.
+ * - `project.delete` returns null (the engine moves the directory aside; the
+ *   replica handles the separate "project-deleted" message).
+ * - Every mutation stamps `updatedAt`/`updatedBy` from the envelope. Undo
+ *   restores content, not these stamps — the undoer did mutate the item.
+ */
+export function applyOperation(
+  state: ProjectState | null,
+  envelope: OpEnvelope,
+): ProjectState | null {
+  const { op, actor, ts } = envelope;
+
+  if (op.type === "project.create") {
+    if (state !== null) {
+      throw new OpValidationError("bad-op", "project.create on existing project");
+    }
+    const project: Project = {
+      id: op.projectId,
+      title: op.title,
+      description: op.description ?? "",
+      properties: { ...op.properties },
+      createdAt: ts,
+      createdBy: actor,
+      updatedAt: ts,
+      updatedBy: actor,
+    };
+    return { project, canvas: emptyCanvas() };
+  }
+
+  if (state === null) {
+    throw new OpValidationError("bad-op", `${op.type} on missing project`);
+  }
+
+  if (op.type === "project.delete") {
+    return null;
+  }
+
+  const stamp = { updatedAt: ts, updatedBy: actor };
+  const { project, canvas } = state;
+
+  const withCanvas = (next: CanvasState): ProjectState => ({ project, canvas: next });
+
+  const getItem = (itemId: string): Item => {
+    const item = canvas.items[itemId];
+    if (!item) throw new OpValidationError("unknown-item", `unknown item: ${itemId}`);
+    return item;
+  };
+
+  const putItem = (item: Item): ProjectState =>
+    withCanvas({ ...canvas, items: { ...canvas.items, [item.id]: item } });
+
+  const getThread = (threadId: string) => {
+    const thread = canvas.threads[threadId];
+    if (!thread) throw new OpValidationError("unknown-thread", `unknown thread: ${threadId}`);
+    return thread;
+  };
+
+  switch (op.type) {
+    case "project.update":
+      return {
+        project: { ...project, ...applyMetaPatch(project, op.patch), ...stamp },
+        canvas,
+      };
+
+    case "item.add": {
+      if (canvas.items[op.itemId] || canvas.trash.some((t) => t.item.id === op.itemId)) {
+        throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
+      }
+      const { x, y } = resolvePlacement(canvas, op.placement, op.width);
+      const item: Item = {
+        id: op.itemId,
+        x,
+        y,
+        width: op.width,
+        height: op.height,
+        title: op.title ?? op.version.filename,
+        description: op.description ?? "",
+        properties: { ...op.properties },
+        versions: [toItemVersion(op.version, actor, ts)],
+        currentVersionId: op.version.id,
+        createdAt: ts,
+        createdBy: actor,
+        ...stamp,
+      };
+      return putItem(item);
+    }
+
+    case "item.move":
+      return putItem({ ...getItem(op.itemId), x: op.x, y: op.y, ...stamp });
+
+    case "item.resize":
+      return putItem({ ...getItem(op.itemId), width: op.width, height: op.height, ...stamp });
+
+    case "item.update": {
+      const item = getItem(op.itemId);
+      return putItem({ ...item, ...applyMetaPatch(item, op.patch), ...stamp });
+    }
+
+    case "item.addVersion": {
+      const item = getItem(op.itemId);
+      if (item.versions.some((v) => v.id === op.version.id)) {
+        throw new OpValidationError("duplicate-id", `version id already exists: ${op.version.id}`);
+      }
+      return putItem({
+        ...item,
+        versions: [...item.versions, toItemVersion(op.version, actor, ts)],
+        currentVersionId: op.version.id,
+        ...stamp,
+      });
+    }
+
+    case "item.setCurrentVersion": {
+      const item = getItem(op.itemId);
+      requireVersion(item, op.versionId);
+      return putItem({ ...item, currentVersionId: op.versionId, ...stamp });
+    }
+
+    case "item.removeVersion": {
+      const item = getItem(op.itemId);
+      requireVersion(item, op.versionId);
+      const versions = item.versions.filter((v) => v.id !== op.versionId);
+      if (versions.length === 0) {
+        throw new OpValidationError("bad-op", "cannot remove the only version");
+      }
+      if (!versions.some((v) => v.id === op.prevCurrentVersionId)) {
+        throw new OpValidationError(
+          "unknown-version",
+          `prevCurrentVersionId not among remaining versions: ${op.prevCurrentVersionId}`,
+        );
+      }
+      return putItem({ ...item, versions, currentVersionId: op.prevCurrentVersionId, ...stamp });
+    }
+
+    case "item.restoreVersion": {
+      const item = getItem(op.itemId);
+      if (item.versions.some((v) => v.id === op.version.id)) {
+        throw new OpValidationError("duplicate-id", `version id already exists: ${op.version.id}`);
+      }
+      return putItem({
+        ...item,
+        versions: [...item.versions, op.version],
+        currentVersionId: op.version.id,
+        ...stamp,
+      });
+    }
+
+    case "item.delete": {
+      const item = getItem(op.itemId);
+      const items = { ...canvas.items };
+      delete items[op.itemId];
+      return withCanvas({
+        ...canvas,
+        items,
+        trash: [...canvas.trash, { item, deletedAt: ts, deletedBy: actor }],
+      });
+    }
+
+    case "item.restore": {
+      const entry = canvas.trash.find((t) => t.item.id === op.itemId);
+      if (!entry) throw new OpValidationError("not-in-trash", `item not in trash: ${op.itemId}`);
+      return withCanvas({
+        ...canvas,
+        items: { ...canvas.items, [op.itemId]: entry.item },
+        trash: canvas.trash.filter((t) => t.item.id !== op.itemId),
+      });
+    }
+
+    case "trash.empty":
+      return withCanvas({ ...canvas, trash: [] });
+
+    case "thread.create": {
+      if (canvas.threads[op.threadId]) {
+        throw new OpValidationError("duplicate-id", `thread id already exists: ${op.threadId}`);
+      }
+      requireBody(op.comment.body);
+      if (op.anchorItemId !== null) getItem(op.anchorItemId);
+      const thread = {
+        id: op.threadId,
+        x: op.x,
+        y: op.y,
+        anchorItemId: op.anchorItemId,
+        comments: [toComment(op.comment, actor, ts)],
+        createdAt: ts,
+        createdBy: actor,
+      };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: thread } });
+    }
+
+    case "thread.reply": {
+      const thread = getThread(op.threadId);
+      requireBody(op.comment.body);
+      if (thread.comments.some((c) => c.id === op.comment.id)) {
+        throw new OpValidationError("duplicate-id", `comment id already exists: ${op.comment.id}`);
+      }
+      const next = { ...thread, comments: [...thread.comments, toComment(op.comment, actor, ts)] };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
+    case "comment.remove": {
+      const thread = getThread(op.threadId);
+      if (!thread.comments.some((c) => c.id === op.commentId)) {
+        throw new OpValidationError("unknown-comment", `unknown comment: ${op.commentId}`);
+      }
+      if (thread.comments.length === 1) {
+        throw new OpValidationError("last-comment", "cannot remove the last comment of a thread");
+      }
+      const next = { ...thread, comments: thread.comments.filter((c) => c.id !== op.commentId) };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
+    case "comment.restore": {
+      const thread = getThread(op.threadId);
+      if (thread.comments.some((c) => c.id === op.comment.id)) {
+        throw new OpValidationError("duplicate-id", `comment id already exists: ${op.comment.id}`);
+      }
+      const next = { ...thread, comments: [...thread.comments, op.comment] };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
+    case "thread.delete": {
+      getThread(op.threadId);
+      const threads = { ...canvas.threads };
+      delete threads[op.threadId];
+      return withCanvas({ ...canvas, threads });
+    }
+
+    case "thread.restore": {
+      if (canvas.threads[op.thread.id]) {
+        throw new OpValidationError("duplicate-id", `thread id already exists: ${op.thread.id}`);
+      }
+      return withCanvas({
+        ...canvas,
+        threads: { ...canvas.threads, [op.thread.id]: op.thread },
+      });
+    }
+  }
+}
+
+function applyMetaPatch(
+  target: { title: string; description: string; properties: Record<string, string> },
+  patch: MetaPatch,
+): { title: string; description: string; properties: Record<string, string> } {
+  const properties = { ...target.properties, ...patch.properties };
+  for (const key of patch.removeProperties ?? []) delete properties[key];
+  return {
+    title: patch.title ?? target.title,
+    description: patch.description ?? target.description,
+    properties,
+  };
+}
+
+function toItemVersion(v: NewVersion, actor: Actor, ts: string): ItemVersion {
+  return { ...v, createdAt: ts, createdBy: actor };
+}
+
+function toComment(c: { id: string; body: string }, actor: Actor, ts: string): Comment {
+  return { id: c.id, author: actor, body: c.body, createdAt: ts };
+}
+
+function requireVersion(item: Item, versionId: string): void {
+  if (!item.versions.some((v) => v.id === versionId)) {
+    throw new OpValidationError("unknown-version", `unknown version: ${versionId}`);
+  }
+}
+
+function requireBody(body: string): void {
+  if (body.trim().length === 0) {
+    throw new OpValidationError("empty-body", "comment body cannot be empty");
+  }
+}
