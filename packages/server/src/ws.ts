@@ -34,6 +34,10 @@ export function attachWebSockets(server: Server, engine: Engine): void {
   });
 
   async function handleConnection(ws: WebSocket, projectId: string | null): Promise<void> {
+    // Without a listener, an abrupt client death (ECONNRESET) raises an
+    // unhandled 'error' event on the EventEmitter and would crash the daemon.
+    // 'close' always follows, which is where cleanup lives.
+    ws.on("error", () => {});
     if (!projectId) {
       ws.close(4400, "projectId query parameter required");
       return;

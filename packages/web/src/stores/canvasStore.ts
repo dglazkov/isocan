@@ -84,9 +84,19 @@ export function disconnect(): void {
   doomed?.close();
 }
 
-function open(projectId: string): void {
+function wsUrl(projectId: string): string {
+  // In dev the page is served by Vite but the daemon owns /ws — connect
+  // straight to the daemon. Proxying WebSockets through Vite added a flaky
+  // hop that spammed "ws proxy error: write EPIPE" whenever either end tore
+  // down mid-write (tsx watch restarts, tab closes, socket replacement).
+  const devPort = import.meta.env.DEV ? (import.meta.env.VITE_ISOCAN_PORT ?? "4441") : null;
+  const host = devPort ? `127.0.0.1:${devPort}` : location.host;
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${location.host}/ws?projectId=${projectId}`);
+  return `${protocol}//${host}/ws?projectId=${projectId}`;
+}
+
+function open(projectId: string): void {
+  const ws = new WebSocket(wsUrl(projectId));
   socket = ws;
   // Events from any socket that is no longer THE socket are ignored. Without
   // this, StrictMode's double-mount let a superseded socket's late onclose
