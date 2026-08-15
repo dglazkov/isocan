@@ -126,9 +126,12 @@ input, textarea { font: inherit; color: var(--ink); }
   border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-card);
   display: flex; flex-direction: column;
+  /* Each item is its own stacking context so internal layers (version
+     badge, plies, resize handle) can never paint over sibling items. */
+  z-index: 0;
 }
-.item.selected { outline: 2px solid var(--accent); }
-.item.dragging { opacity: 0.92; cursor: grabbing; }
+.item.selected { outline: 2px solid var(--accent); z-index: 1; }
+.item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
 .item-titlebar {
   display: flex; align-items: center; gap: 6px; flex: none;
   padding: 6px 9px; font-size: 11px; color: var(--ink-muted);
@@ -184,7 +187,7 @@ input, textarea { font: inherit; color: var(--ink); }
 
 /* ---------- version fan-out ---------- */
 .fan-card {
-  position: absolute; background: var(--card); border: 1px solid var(--line);
+  position: absolute; z-index: 3; background: var(--card); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow-pop); overflow: hidden;
   display: flex; flex-direction: column; cursor: pointer;
   transition: transform 0.16s ease, opacity 0.16s ease;
