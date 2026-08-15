@@ -33,27 +33,40 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
   }
 
   const threads = Object.values(canvas.threads);
+  const screenOf = (thread: CommentThread) => {
+    const world = pinWorldPos(thread);
+    return worldToScreen(viewport, world.x, world.y);
+  };
+  const openThread = openThreadId ? canvas.threads[openThreadId] : undefined;
 
+  // Two layers: pins sit under panels (z 8); popovers sit above them (z 30).
+  // One layer would trap the popover in the pins' stacking context.
   return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 8 }}>
-      {threads.map((thread) => {
-        const world = pinWorldPos(thread);
-        const screen = worldToScreen(viewport, world.x, world.y);
-        return (
+    <>
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 8 }}>
+        {threads.map((thread) => (
           <ThreadPin
             key={thread.id}
             thread={thread}
-            screen={screen}
+            screen={screenOf(thread)}
             open={openThreadId === thread.id}
+          />
+        ))}
+      </div>
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 30 }}>
+        {openThread && (
+          <ThreadPopover
+            thread={openThread}
+            screen={screenOf(openThread)}
             projectId={projectId}
             actor={actor}
           />
-        );
-      })}
-      {pendingComment && (
-        <ComposePopover projectId={projectId} actor={actor} pending={pendingComment} />
-      )}
-    </div>
+        )}
+        {pendingComment && (
+          <ComposePopover projectId={projectId} actor={actor} pending={pendingComment} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -61,78 +74,79 @@ function ThreadPin({
   thread,
   screen,
   open,
+}: {
+  thread: CommentThread;
+  screen: { x: number; y: number };
+  open: boolean;
+}) {
+  const first = thread.comments[0]!;
+  return (
+    <button
+      className="pin"
+      style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
+      title={`${first.author.name}: ${first.body.slice(0, 60)}`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
+    >
+      {first.author.name.charAt(0).toUpperCase()}
+    </button>
+  );
+}
+
+function ThreadPopover({
+  thread,
+  screen,
   projectId,
   actor,
 }: {
   thread: CommentThread;
   screen: { x: number; y: number };
-  open: boolean;
   projectId: string;
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
-  const first = thread.comments[0]!;
-  const initial = first.author.name.charAt(0).toUpperCase();
-
   return (
-    <>
-      <button
-        className="pin"
-        style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
-        title={`${first.author.name}: ${first.body.slice(0, 60)}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
-      >
-        {initial}
-      </button>
-      {open && (
-        <div
-          className="thread-popover"
-          style={{ left: screen.x + 30, top: screen.y - 16, pointerEvents: "auto" }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {thread.comments.map((comment) => (
-            <div className="comment" key={comment.id}>
-              <span className="who">{comment.author.name}</span>
-              <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
-              <p className="body">{comment.body}</p>
-            </div>
-          ))}
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const body = reply.trim();
-              if (!body) return;
-              setReply("");
-              await sendOp(projectId, actor, {
-                type: "thread.reply",
-                threadId: thread.id,
-                comment: { id: newCommentId(), body },
-              });
-            }}
-          >
-            <input
-              placeholder="Reply…"
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-            />
-            <button className="btn" type="submit" disabled={!reply.trim()}>
-              ↑
-            </button>
-          </form>
-          <div className="thread-actions">
-            <button
-              onClick={async () => {
-                useUiStore.getState().setOpenThread(null);
-                await sendOp(projectId, actor, { type: "thread.delete", threadId: thread.id });
-              }}
-            >
-              Delete thread
-            </button>
-          </div>
+    <div
+      className="thread-popover"
+      style={{ left: screen.x + 30, top: screen.y - 16, pointerEvents: "auto" }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {thread.comments.map((comment) => (
+        <div className="comment" key={comment.id}>
+          <span className="who">{comment.author.name}</span>
+          <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+          <p className="body">{comment.body}</p>
         </div>
-      )}
-    </>
+      ))}
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const body = reply.trim();
+          if (!body) return;
+          setReply("");
+          await sendOp(projectId, actor, {
+            type: "thread.reply",
+            threadId: thread.id,
+            comment: { id: newCommentId(), body },
+          });
+        }}
+      >
+        <input placeholder="Reply…" value={reply} onChange={(e) => setReply(e.target.value)} />
+        <button className="btn" type="submit" disabled={!reply.trim()}>
+          ↑
+        </button>
+      </form>
+      <div className="thread-actions">
+        <button
+          onClick={async () => {
+            useUiStore.getState().setOpenThread(null);
+            await sendOp(projectId, actor, { type: "thread.delete", threadId: thread.id });
+          }}
+        >
+          Delete thread
+        </button>
+      </div>
+    </div>
   );
 }
 
