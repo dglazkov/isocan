@@ -61,6 +61,7 @@ export class PresenceHub {
       cursor: null,
       selection: [],
       status: null,
+      activity: null,
       lastSeen: new Date().toISOString(),
       lastSeenMs: Date.now(),
     };
@@ -77,6 +78,7 @@ export class PresenceHub {
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       status?: string | null;
+      activity?: { kind: "working"; itemId: string } | null;
     } = {},
   ): boolean {
     const session = this.rooms.get(projectId)?.get(sessionId);
@@ -84,6 +86,7 @@ export class PresenceHub {
     if (patch.cursor !== undefined) session.cursor = patch.cursor;
     if (patch.selection !== undefined) session.selection = patch.selection;
     if (patch.status !== undefined) session.status = patch.status;
+    if (patch.activity !== undefined) session.activity = patch.activity;
     session.lastSeenMs = Date.now();
     session.lastSeen = new Date().toISOString();
     this.emit(projectId);
@@ -120,7 +123,8 @@ export class PresenceHub {
     }
     if (!session) return;
     const locus = opLocus(op, canvas);
-    this.touch(projectId, clientId, locus ? { cursor: locus } : {});
+    // An applied op ends any "working" animation — working resolves into done.
+    this.touch(projectId, clientId, { activity: null, ...(locus ? { cursor: locus } : {}) });
   }
 
   private sweep(): void {

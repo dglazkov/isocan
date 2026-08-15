@@ -842,7 +842,10 @@ session
     run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
-      await touchSession(ctx, p.id, { cursor: { x: Number(x), y: Number(y) } });
+      await touchSession(ctx, p.id, {
+        cursor: { x: Number(x), y: Number(y) },
+        activity: null,
+      });
       console.log(`cursor at ${x},${y}`);
     }),
   );
@@ -857,8 +860,27 @@ session
       const item = resolveItem(snapshot, ref);
       await touchSession(ctx, p.id, {
         cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+        activity: null,
       });
       console.log(`pointing at ${item.id}`);
+    }),
+  );
+
+session
+  .command("work <item>")
+  .description("Show yourself busy on an item — your cursor animates around it until you move, finish an op, or go idle")
+  .option("--say <status>", "status line to show while working")
+  .action(
+    run(async (ref: string, opts: { say?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      await touchSession(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
+        cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+        ...(opts.say !== undefined ? { status: opts.say } : {}),
+      });
+      console.log(`working on ${item.id}${opts.say ? ` — ${opts.say}` : ""}`);
     }),
   );
 
@@ -906,6 +928,7 @@ program
           kind: s.kind,
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
+          activity: s.activity ? `working on ${s.activity.itemId}` : "—",
           status: s.status ?? "—",
           seen: s.lastSeen,
         })),

@@ -34,6 +34,10 @@ export interface PresenceSession {
   cursor: { x: number; y: number } | null;
   selection: string[];
   status: string | null;
+  /** "Busy with X" — clients render the motion locally; the daemon only
+   * stores the fact. Cleared by explicit cursor commands and by any
+   * piggybacked op (working resolves into done). */
+  activity: { kind: "working"; itemId: string } | null;
   lastSeen: string;
 }
 
@@ -51,6 +55,7 @@ export interface UpdateSessionRequest {
   cursor?: { x: number; y: number } | null;
   selection?: string[];
   status?: string | null;
+  activity?: { kind: "working"; itemId: string } | null;
 }
 
 // ---- REST payloads ----
