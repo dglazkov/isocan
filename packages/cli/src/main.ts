@@ -17,6 +17,7 @@ import { readIdentity, writeIdentity } from "./identity.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
   collectProp,
+  formatBytes,
   formatProps,
   parseXY,
   printJson,
@@ -767,6 +768,32 @@ program
       const p = await resolveProject(ctx);
       const entry = await ctx.client.redo(p.id, ctx.actor);
       console.log(`redid: applied ${entry.envelope.op.type}`);
+    }),
+  );
+
+program
+  .command("gc")
+  .description("Reclaim storage: compact the oplog and sweep unreachable blobs")
+  .option("--dry-run", "report what would be freed without deleting anything")
+  .option("--keep-ops <n>", "how many recent operations to keep undoable (default 500)")
+  .action(
+    run(async (opts: { dryRun?: boolean; keepOps?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveProject(ctx);
+      const report = await ctx.client.gc(p.id, {
+        ...(opts.dryRun ? { dryRun: true } : {}),
+        ...(opts.keepOps !== undefined ? { keepOps: Number(opts.keepOps) } : {}),
+      });
+      if (ctx.json) return printJson(report);
+      const verb = report.dryRun ? "would sweep" : "swept";
+      printKeyValues({
+        oplog: `${report.retainedEntries} entries kept, ${report.droppedEntries} ${report.dryRun ? "would be archived" : "archived"}`,
+        reachable: `${report.reachableBlobs} blobs (${formatBytes(report.reachableBytes)})`,
+        [verb]: `${report.sweptBlobs} blobs (${formatBytes(report.sweptBytes)})`,
+        ...(report.skippedRecentBlobs > 0
+          ? { "skipped (too recent)": String(report.skippedRecentBlobs) }
+          : {}),
+      });
     }),
   );
 

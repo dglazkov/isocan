@@ -1,8 +1,21 @@
 import { useState } from "react";
-import type { Actor } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
+import type { Actor, GcReport } from "@isocan/core";
+import { runGc, sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes;
+  let unit = "B";
+  for (const next of units) {
+    if (value < 1024) break;
+    value /= 1024;
+    unit = next;
+  }
+  return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`;
+}
 
 export function TrashPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
   const open = useUiStore((s) => s.trashOpen);
@@ -11,8 +24,19 @@ export function TrashPanel({ projectId, actor }: { projectId: string; actor: Act
   const canvas = useCanvasStore((s) => s.canvas);
   const trash = canvas?.trash ?? [];
   const [confirming, setConfirming] = useState(false);
+  const [gcBusy, setGcBusy] = useState(false);
+  const [gcResult, setGcResult] = useState<GcReport | null>(null);
 
   if (!open) return null;
+
+  async function reclaim() {
+    setGcBusy(true);
+    try {
+      setGcResult(await runGc(projectId));
+    } finally {
+      setGcBusy(false);
+    }
+  }
 
   return (
     <div className="trash-panel">
@@ -44,6 +68,19 @@ export function TrashPanel({ projectId, actor }: { projectId: string; actor: Act
             </button>
           </div>
         ))}
+      </div>
+      <div className="trash-empty-zone gc-zone">
+        <button className="btn" onClick={reclaim} disabled={gcBusy}>
+          {gcBusy ? "Reclaiming…" : "Reclaim storage"}
+        </button>
+        {gcResult && (
+          <span className="gc-result">
+            {gcResult.sweptBlobs > 0
+              ? `freed ${formatBytes(gcResult.sweptBytes)} (${gcResult.sweptBlobs} blob${gcResult.sweptBlobs === 1 ? "" : "s"})`
+              : "nothing to free"}
+            {` · ${formatBytes(gcResult.reachableBytes)} in use`}
+          </span>
+        )}
       </div>
       {trash.length > 0 && (
         <div className="trash-empty-zone">

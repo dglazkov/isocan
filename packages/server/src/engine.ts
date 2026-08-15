@@ -18,6 +18,14 @@ import {
 } from "@isocan/core";
 import type { Store } from "./store.ts";
 import { UndoStacks } from "./undo.ts";
+import {
+  DEFAULT_GRACE_MS,
+  DEFAULT_KEEP_OPS,
+  chooseRetained,
+  reachableHashes,
+  type GcOptions,
+  type GcReport,
+} from "./gc.ts";
 
 interface ProjectRuntime {
   state: ProjectState;
@@ -153,6 +161,77 @@ export class Engine {
         }
         runtime.undo.discardRedoTarget(actor.id, next.targetSeq);
       }
+    });
+  }
+
+  /**
+   * Blob garbage collection: compact the oplog to an undo horizon (dropped
+   * entries go to the archive), then sweep blobs unreachable from live state,
+   * trash, and the retained log. Runs inside the single-writer queue, so it
+   * cannot race a mutation; the mtime grace period covers uploads that have
+   * not become items yet. Maintenance, not an Operation — never undoable.
+   */
+  gc(projectId: string, options: GcOptions = {}): Promise<GcReport> {
+    return this.enqueue(async () => {
+      const runtime = await this.runtime(projectId);
+      const keepOps = options.keepOps ?? DEFAULT_KEEP_OPS;
+      const graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
+      const dryRun = options.dryRun ?? false;
+
+      const retained = chooseRetained(runtime.entries, keepOps);
+      const retainedSeqs = new Set(retained.map((entry) => entry.seq));
+      const dropped = runtime.entries.filter((entry) => !retainedSeqs.has(entry.seq));
+
+      const marked = reachableHashes(runtime.state, retained);
+      const index = await this.store.blobIndex(projectId);
+
+      const report: GcReport = {
+        dryRun,
+        retainedEntries: retained.length,
+        droppedEntries: dropped.length,
+        reachableBlobs: 0,
+        reachableBytes: 0,
+        sweptBlobs: 0,
+        sweptBytes: 0,
+        skippedRecentBlobs: 0,
+      };
+
+      const sweep: string[] = [];
+      for (const [hash, meta] of Object.entries(index)) {
+        if (marked.has(hash)) {
+          report.reachableBlobs += 1;
+          report.reachableBytes += meta.size;
+          continue;
+        }
+        const age = await this.store.blobAgeMs(projectId, meta);
+        if (age !== null && age < graceMs) {
+          report.skippedRecentBlobs += 1;
+          continue;
+        }
+        sweep.push(hash);
+        report.sweptBlobs += 1;
+        report.sweptBytes += meta.size;
+      }
+
+      if (dryRun) return report;
+
+      // Order matters for crash safety: archive first, then the atomic log
+      // rewrite, and only then delete blob bytes. A crash at any point leaves
+      // either extra history or extra garbage — both harmless and re-collectable.
+      if (dropped.length > 0) {
+        await this.store.archiveOplogEntries(projectId, dropped);
+        await this.store.rewriteOplog(projectId, retained);
+        runtime.entries = retained;
+        runtime.undo = UndoStacks.rebuild(retained);
+      }
+      if (sweep.length > 0) {
+        for (const hash of sweep) {
+          await this.store.deleteBlobFile(projectId, index[hash]!);
+          delete index[hash];
+        }
+        await this.store.writeBlobIndex(projectId, index);
+      }
+      return report;
     });
   }
 

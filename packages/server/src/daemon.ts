@@ -28,7 +28,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   await store.init();
   const engine = new Engine(store);
 
-  const app = Fastify({ bodyLimit: 512 * 1024 * 1024 });
+  // forceCloseConnections: shutdown must not hang on a browser's idle
+  // keep-alive sockets or a half-read blob stream.
+  const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
   registerRoutes(app, engine, store);
   await app.listen({ port, host: "127.0.0.1" });
   attachWebSockets(app.server, engine);

@@ -13,6 +13,8 @@ export const projectFile = (home: string, id: string) => path.join(projectDir(ho
 export const canvasFile = (home: string, id: string) => path.join(projectDir(home, id), "canvas.json");
 export const trashFile = (home: string, id: string) => path.join(projectDir(home, id), "trash.json");
 export const oplogFile = (home: string, id: string) => path.join(projectDir(home, id), "oplog.jsonl");
+export const oplogArchiveFile = (home: string, id: string) =>
+  path.join(projectDir(home, id), "oplog-archive.jsonl");
 export const blobsDir = (home: string, id: string) => path.join(projectDir(home, id), "blobs");
 export const blobsIndexFile = (home: string, id: string) => path.join(projectDir(home, id), "blobs.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");

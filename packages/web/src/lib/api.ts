@@ -2,6 +2,8 @@ import type {
   Actor,
   BlobUploadResponse,
   CanvasSnapshotResponse,
+  GcReport,
+  GcRequest,
   LogEntry,
   Operation,
   PostOpResponse,
@@ -75,6 +77,10 @@ export async function uploadBlob(
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as BlobUploadResponse;
+}
+
+export function runGc(projectId: string, options: GcRequest = {}): Promise<GcReport> {
+  return request("POST", `/api/projects/${projectId}/gc`, options);
 }
 
 export function blobUrl(projectId: string, blobHash: string): string {

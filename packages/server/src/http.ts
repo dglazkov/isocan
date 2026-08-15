@@ -71,6 +71,12 @@ export function registerRoutes(app: FastifyInstance, engine: Engine, store: Stor
     return engine.redo(id, body.actor, body.clientId);
   });
 
+  app.post("/api/projects/:id/gc", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
+    return engine.gc(id, body);
+  });
+
   app.post("/api/projects/:id/blobs", async (req, reply) => {
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id); // 404 for unknown projects

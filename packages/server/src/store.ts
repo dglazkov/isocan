@@ -162,8 +162,41 @@ export class Store {
     return { path: path.join(p.blobsDir(this.home, id), meta.file), meta };
   }
 
-  private async blobIndex(id: string): Promise<Record<string, BlobMeta>> {
+  async blobIndex(id: string): Promise<Record<string, BlobMeta>> {
     return (await readJson<Record<string, BlobMeta>>(p.blobsIndexFile(this.home, id))) ?? {};
+  }
+
+  // ---- garbage collection primitives (composed by Engine.gc) ----
+
+  /** Age of a blob file in ms, or null if it is already gone. */
+  async blobAgeMs(id: string, meta: BlobMeta): Promise<number | null> {
+    try {
+      const stat = await fs.stat(path.join(p.blobsDir(this.home, id), meta.file));
+      return Date.now() - stat.mtimeMs;
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteBlobFile(id: string, meta: BlobMeta): Promise<void> {
+    await fs.rm(path.join(p.blobsDir(this.home, id), meta.file), { force: true });
+  }
+
+  async writeBlobIndex(id: string, index: Record<string, BlobMeta>): Promise<void> {
+    await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
+  }
+
+  /** Preserve compacted-away entries for audit before the live log shrinks. */
+  async archiveOplogEntries(id: string, dropped: LogEntry[]): Promise<void> {
+    if (dropped.length === 0) return;
+    const lines = dropped.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+    await fs.appendFile(p.oplogArchiveFile(this.home, id), lines);
+  }
+
+  /** Atomically replace the live oplog with the retained entries. */
+  async rewriteOplog(id: string, retained: LogEntry[]): Promise<void> {
+    const body = retained.map((entry) => JSON.stringify(entry)).join("\n");
+    await writeFileAtomic(p.oplogFile(this.home, id), body.length > 0 ? body + "\n" : "");
   }
 }
 

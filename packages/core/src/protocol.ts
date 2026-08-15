@@ -54,3 +54,26 @@ export interface ApiError {
   error: string;
   code?: string;
 }
+
+// ---- blob garbage collection (maintenance; not an Operation) ----
+
+export interface GcRequest {
+  /** How many recent oplog entries to keep (the undo horizon). */
+  keepOps?: number;
+  /** Report only; delete and rewrite nothing. */
+  dryRun?: boolean;
+  /** Blobs younger than this are never swept (covers the upload→item.add gap). */
+  graceMs?: number;
+}
+
+export interface GcReport {
+  dryRun: boolean;
+  retainedEntries: number;
+  droppedEntries: number;
+  reachableBlobs: number;
+  reachableBytes: number;
+  sweptBlobs: number;
+  sweptBytes: number;
+  /** Unreachable but inside the grace period — left for a later run. */
+  skippedRecentBlobs: number;
+}

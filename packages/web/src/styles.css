@@ -254,6 +254,8 @@ input, textarea { font: inherit; color: var(--ink); }
 .trash-entry .meta { color: var(--ink-soft); font-size: 10.5px; }
 .trash-empty-zone { padding: 10px 14px; border-top: 1px solid var(--line-soft); }
 .trash-none { color: var(--ink-muted); font-size: 12.5px; text-align: center; padding: 24px 0; }
+.gc-zone { display: flex; align-items: center; gap: 10px; }
+.gc-result { font-size: 11px; color: var(--ink-muted); }
 
 /* ---------- marquee ---------- */
 .marquee {

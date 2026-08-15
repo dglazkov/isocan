@@ -69,6 +69,7 @@ isocan edit <item> [<file>]        # new version from a file or $EDITOR
 isocan versions <item> · version promote <item> <version>
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan undo · redo · trash list|restore|empty --force
+isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 ```
 
 Items and threads resolve by id, id prefix, or title prefix. `--json`
@@ -91,6 +92,13 @@ directories with human-readable JSON snapshots, an append-only `oplog.jsonl`
 as the source of truth (crash recovery replays the tail), and sha256
 content-addressed blobs. Every op's inverse is computed from pre-state and
 stored in the log — undo/redo replay stored inverses, never re-derive them.
+
+Storage is reclaimed by `isocan gc` (or the trash panel's "Reclaim storage"):
+it compacts the oplog to an undo horizon (default: the last 500 ops, kept
+pair-complete so redo never dangles; dropped entries go to
+`oplog-archive.jsonl`), then sweeps blobs unreachable from live items, the
+trash, and the retained log. Blobs younger than ten minutes are never swept,
+covering the gap between upload and `item.add`.
 
 ## Development
 

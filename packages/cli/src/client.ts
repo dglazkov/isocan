@@ -7,6 +7,8 @@ import type {
   Actor,
   BlobUploadResponse,
   CanvasSnapshotResponse,
+  GcReport,
+  GcRequest,
   LogEntry,
   Operation,
   PostOpResponse,
@@ -92,6 +94,10 @@ export class DaemonClient {
 
   redo(projectId: string, actor: Actor): Promise<LogEntry> {
     return this.request("POST", `/api/projects/${projectId}/redo`, { actor });
+  }
+
+  gc(projectId: string, request: GcRequest): Promise<GcReport> {
+    return this.request("POST", `/api/projects/${projectId}/gc`, request);
   }
 
   async uploadBlob(
