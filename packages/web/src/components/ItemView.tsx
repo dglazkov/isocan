@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -265,7 +266,8 @@ function MarkdownView({ url, plain }: { url: string; plain: boolean }) {
   if (plain) return <div className="md-view" style={{ whiteSpace: "pre-wrap" }}>{text}</div>;
   return (
     <div className="md-view">
-      <ReactMarkdown>{text}</ReactMarkdown>
+      {/* GFM: tables, strikethrough, task lists, autolinks */}
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   );
 }
