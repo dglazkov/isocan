@@ -30,19 +30,16 @@ function expectIdentity(state: ProjectState, op: Operation) {
 describe("apply ∘ invert round-trips", () => {
   const s = seedState();
 
-  it("project.create → project.delete", () => {
+  it("project.create is not undoable; explicit project.delete still applies", () => {
     const op: Operation = {
       type: "project.create",
       projectId: "prj_new",
       title: "New",
     };
-    const inverse = invertOperation(null, op);
-    const after = applyOperation(null, {
-      ...envelope(op),
-      projectId: null,
-    });
+    expect(invertOperation(null, op)).toBeNull();
+    const after = applyOperation(null, { ...envelope(op), projectId: null });
     expect(after?.project.title).toBe("New");
-    expect(applyOperation(after, envelope(inverse!))).toBeNull();
+    expect(applyOperation(after, envelope({ type: "project.delete" }))).toBeNull();
   });
 
   it("project.update (title, description, props set/add/remove)", () => {

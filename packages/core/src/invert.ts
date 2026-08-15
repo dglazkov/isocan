@@ -15,7 +15,9 @@ export function invertOperation(
   op: Operation,
 ): Operation | null {
   if (op.type === "project.create") {
-    return { type: "project.delete" };
+    // Not undoable: its inverse would be project.delete, and project deletion
+    // must never be reachable through a casual ⌘Z — it stays confirmation-gated.
+    return null;
   }
   if (stateBefore === null) {
     throw new OpValidationError("bad-op", `${op.type} on missing project`);
