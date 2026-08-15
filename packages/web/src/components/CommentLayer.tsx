@@ -82,15 +82,30 @@ function ThreadPin({
   open: boolean;
 }) {
   const first = thread.comments[0]!;
+  // Distinct authors in comment order; up to three initials, then a +N chip.
+  const authors: Actor[] = [];
+  for (const comment of thread.comments) {
+    if (!authors.some((author) => author.id === comment.author.id)) {
+      authors.push(comment.author);
+    }
+  }
+  const shown = authors.length > 3 ? authors.slice(0, 2) : authors;
+  const overflow = authors.length - shown.length;
+
   return (
     <button
       className="pin"
       style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
-      title={`${first.author.name}: ${first.body.slice(0, 60)}`}
+      title={`${authors.map((author) => author.name).join(", ")} — ${first.body.slice(0, 60)}`}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
-      {first.author.name.charAt(0).toUpperCase()}
+      {shown.map((author) => (
+        <span className="pin-avatar" key={author.id}>
+          {author.name.charAt(0).toUpperCase()}
+        </span>
+      ))}
+      {overflow > 0 && <span className="pin-avatar pin-more">+{overflow}</span>}
     </button>
   );
 }
