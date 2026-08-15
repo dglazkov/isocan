@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Actor, Item } from "@isocan/core";
+import type { Actor, Item, Operation } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 
 const DRAG_SLOP = 4;
 const MIN_W = 80;
@@ -86,11 +86,16 @@ export function ItemView({
       frame.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.drag;
-      state.setDrag(null);
-      if (!moved || !final) return;
+      if (!moved || !final) {
+        state.setDrag(null);
+        return;
+      }
       // One op per gesture — a group drag is a single undo step.
       const canvas = useCanvasStore.getState().canvas;
-      if (!canvas) return;
+      if (!canvas) {
+        state.setDrag(null);
+        return;
+      }
       const moves = final.itemIds
         .map((itemId) => canvas.items[itemId])
         .filter((dragged) => dragged !== undefined)
@@ -99,11 +104,20 @@ export function ItemView({
           x: Math.round(dragged.x + final.dx),
           y: Math.round(dragged.y + final.dy),
         }));
-      if (moves.length === 1) {
-        void sendOp(projectId, actor, { type: "item.move", ...moves[0]! });
-      } else if (moves.length > 1) {
-        void sendOp(projectId, actor, { type: "items.move", moves });
+      const op: Operation | null =
+        moves.length === 1
+          ? { type: "item.move", ...moves[0]! }
+          : moves.length > 1
+            ? { type: "items.move", moves }
+            : null;
+      if (op) {
+        // Fold the final position into the replica BEFORE dropping the drag
+        // override — otherwise the item flashes at its old position until the
+        // WS echo lands.
+        applyLocalEcho(op, actor);
+        void sendOp(projectId, actor, op);
       }
+      state.setDrag(null);
     }
     frame.addEventListener("pointermove", onMove);
     frame.addEventListener("pointerup", onUp);
@@ -130,15 +144,17 @@ export function ItemView({
       handle.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.resize;
-      state.setResize(null);
       if (final && (final.width !== item.width || final.height !== item.height)) {
-        void sendOp(projectId, actor, {
+        const op = {
           type: "item.resize",
           itemId: item.id,
           width: final.width,
           height: final.height,
-        });
+        } as const;
+        applyLocalEcho(op, actor);
+        void sendOp(projectId, actor, op);
       }
+      state.setResize(null);
     }
     handle.addEventListener("pointermove", onMove);
     handle.addEventListener("pointerup", onUp);
