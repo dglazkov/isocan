@@ -456,6 +456,7 @@ program
 program
   .command("mv <item> <x> <y>")
   .description("Move an item")
+  .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
     run(async (ref: string, x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -647,8 +648,10 @@ comment
       if (opts.item) {
         const item = resolveItem(snapshot, opts.item);
         anchorItemId = item.id;
-        x = item.x + item.width + 12;
-        y = item.y;
+        // Anchored pins store an offset from the item origin: just off the
+        // item's top-right corner.
+        x = item.width + 12;
+        y = 0;
       } else {
         ({ x, y } = parseXY(opts.at!));
         anchorItemId = null;

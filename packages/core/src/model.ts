@@ -62,11 +62,12 @@ export interface Comment {
 
 export interface CommentThread {
   id: string;
-  /** World coordinates of the pin. */
+  /** Freestanding: world coordinates of the pin. Anchored: offset from the
+   * anchor item's top-left corner, so the pin follows the item. */
   x: number;
   y: number;
-  /** null = freestanding. If the anchor item is in the trash, renderers treat
-   * the thread as freestanding at its world position. */
+  /** null = freestanding. If the anchor item is in the trash or missing,
+   * renderers fall back to treating (x, y) as world coordinates. */
   anchorItemId: string | null;
   /** Always at least one comment. */
   comments: Comment[];
