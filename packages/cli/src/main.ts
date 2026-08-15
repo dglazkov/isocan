@@ -867,20 +867,35 @@ session
   );
 
 session
-  .command("work <item>")
-  .description("Show yourself busy on an item — your cursor animates around it until you move, finish an op, or go idle")
+  .command("work [item]")
+  .description("Show yourself busy — cursor animates around an item (or --at a spot) until you move, finish an op, or go idle")
+  .option("--at <x,y>", "work at a freestanding canvas location instead of an item")
   .option("--say <status>", "status line to show while working")
   .action(
-    run(async (ref: string, opts: { say?: string }, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { at?: string; say?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
+      if (!ref && !opts.at) throw new Error("pass an item or --at x,y");
+      let activity: import("@isocan/core").PresenceActivity;
+      let cursor: { x: number; y: number };
+      let where: string;
+      if (ref) {
+        const item = resolveItem(snapshot, ref);
+        activity = { kind: "working", itemId: item.id };
+        cursor = { x: item.x + item.width / 2, y: item.y + item.height / 2 };
+        where = item.id;
+      } else {
+        const point = parseXY(opts.at!);
+        activity = { kind: "working", ...point };
+        cursor = point;
+        where = opts.at!;
+      }
       await touchSession(ctx, p.id, {
-        activity: { kind: "working", itemId: item.id },
-        cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+        activity,
+        cursor,
         ...(opts.say !== undefined ? { status: opts.say } : {}),
       });
-      console.log(`working on ${item.id}${opts.say ? ` — ${opts.say}` : ""}`);
+      console.log(`working on ${where}${opts.say ? ` — ${opts.say}` : ""}`);
     }),
   );
 
@@ -928,7 +943,11 @@ program
           kind: s.kind,
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
-          activity: s.activity ? `working on ${s.activity.itemId}` : "—",
+          activity: s.activity
+            ? "itemId" in s.activity
+              ? `working on ${s.activity.itemId}`
+              : `working at ${Math.round(s.activity.x)},${Math.round(s.activity.y)}`
+            : "—",
           status: s.status ?? "—",
           seen: s.lastSeen,
         })),

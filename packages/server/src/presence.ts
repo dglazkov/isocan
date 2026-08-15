@@ -1,4 +1,4 @@
-import type { Actor, CanvasState, Operation, PresenceSession } from "@isocan/core";
+import type { Actor, CanvasState, Operation, PresenceActivity, PresenceSession } from "@isocan/core";
 import { newId } from "@isocan/core";
 
 /**
@@ -78,7 +78,7 @@ export class PresenceHub {
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       status?: string | null;
-      activity?: { kind: "working"; itemId: string } | null;
+      activity?: PresenceActivity | null;
     } = {},
   ): boolean {
     const session = this.rooms.get(projectId)?.get(sessionId);

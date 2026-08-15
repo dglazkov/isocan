@@ -4,9 +4,10 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
 
-const LERP = 0.22;
+const LERP_HUMAN = 0.22; // real cursors track tightly
+const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
 const WANDER_LERP = 0.07; // slower, deliberate drift while "working"
-const SNAP_DISTANCE = 800; // world units — teleport instead of gliding across the map
+const SNAP_DISTANCE = 1600; // world units — teleport instead of gliding across the map
 
 interface Anim {
   x: number;
@@ -46,16 +47,27 @@ export function CursorLayer() {
       let moving = false;
 
       for (const session of current) {
-        const workingItem =
-          session.activity?.kind === "working" && canvas
-            ? canvas.items[session.activity.itemId]
-            : undefined;
-        if (!session.cursor && !workingItem) continue;
+        // Wander area: the anchored item's bounds, or a synthetic patch
+        // around a freestanding work point.
+        let workingBounds: { x: number; y: number; width: number; height: number } | undefined;
+        if (session.activity?.kind === "working") {
+          if ("itemId" in session.activity) {
+            workingBounds = canvas?.items[session.activity.itemId];
+          } else {
+            workingBounds = {
+              x: session.activity.x - 110,
+              y: session.activity.y - 75,
+              width: 220,
+              height: 150,
+            };
+          }
+        }
+        if (!session.cursor && !workingBounds) continue;
         live.add(session.sessionId);
 
         const home = session.cursor ?? {
-          x: workingItem!.x + workingItem!.width / 2,
-          y: workingItem!.y + workingItem!.height / 2,
+          x: workingBounds!.x + workingBounds!.width / 2,
+          y: workingBounds!.y + workingBounds!.height / 2,
         };
         let rec = animated.current.get(session.sessionId);
         if (!rec || Math.hypot(home.x - rec.x, home.y - rec.y) > SNAP_DISTANCE) {
@@ -63,7 +75,7 @@ export function CursorLayer() {
           animated.current.set(session.sessionId, rec);
         }
 
-        if (workingItem) {
+        if (workingBounds) {
           if (now >= rec.nextAt) {
             if (Math.random() < 0.22) {
               // thinking pause — hold position a beat
@@ -73,10 +85,10 @@ export function CursorLayer() {
               const pad = 12;
               const t = Math.random();
               const along = Math.random();
-              const w = workingItem.width + pad * 2;
-              const h = workingItem.height + pad * 2;
-              const ox = workingItem.x - pad;
-              const oy = workingItem.y - pad;
+              const w = workingBounds.width + pad * 2;
+              const h = workingBounds.height + pad * 2;
+              const ox = workingBounds.x - pad;
+              const oy = workingBounds.y - pad;
               if (t < 0.7) {
                 // edge band
                 const edge = Math.floor(Math.random() * 4);
@@ -95,19 +107,19 @@ export function CursorLayer() {
           rec.ty = home.y;
         }
 
-        const rate = workingItem ? WANDER_LERP : LERP;
+        const rate = workingBounds ? WANDER_LERP : session.kind === "web" ? LERP_HUMAN : LERP_AGENT;
         const dx = rec.tx - rec.x;
         const dy = rec.ty - rec.y;
         if (Math.hypot(dx, dy) > 0.5) {
           rec.x += dx * rate;
           rec.y += dy * rate;
           // micro-stutter while working — a hand, not a tween
-          if (workingItem) {
+          if (workingBounds) {
             rec.x += (Math.random() - 0.5) * 0.9;
             rec.y += (Math.random() - 0.5) * 0.9;
           }
           moving = true;
-        } else if (workingItem) {
+        } else if (workingBounds) {
           moving = true; // keep the loop alive through pauses
         }
       }
