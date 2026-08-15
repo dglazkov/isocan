@@ -40,6 +40,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
         presence.opApplied(
           projectId,
           message.entry.envelope.clientId,
+          message.entry.envelope.actor,
           message.entry.envelope.op,
           snapshot.canvas,
         ),

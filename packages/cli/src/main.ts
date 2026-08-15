@@ -13,6 +13,7 @@ import {
 } from "@isocan/core";
 import { paths } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
+import { ApiError } from "./client.ts";
 import { readIdentity, writeIdentity } from "./identity.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
@@ -56,6 +57,7 @@ function ctxOf(cmd: Command): Promise<Ctx> {
 interface SessionFile {
   projectId: string;
   sessionId: string;
+  label?: string;
 }
 
 async function readSessionFile(home: string): Promise<SessionFile | null> {
@@ -81,6 +83,24 @@ async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile>
     throw new Error("no active session on this project — run `isocan session start` first");
   }
   return session;
+}
+
+/** Update the session; if it expired while we were thinking, quietly start a
+ * fresh one (same label) and retry — working makes you visible again. */
+async function touchSession(
+  ctx: Ctx,
+  projectId: string,
+  patch: import("@isocan/core").UpdateSessionRequest,
+): Promise<void> {
+  const active = await requireSession(ctx, projectId);
+  try {
+    await ctx.client.updateSession(projectId, active.sessionId, patch);
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+    const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
+    await writeSessionFile(ctx.home, { ...active, sessionId: created.sessionId });
+    await ctx.client.updateSession(projectId, created.sessionId, patch);
+  }
 }
 
 async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
@@ -803,7 +823,11 @@ session
         await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
       }
       const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
-      await writeSessionFile(ctx.home, { projectId: p.id, sessionId: created.sessionId });
+      await writeSessionFile(ctx.home, {
+        projectId: p.id,
+        sessionId: created.sessionId,
+        ...(opts.label !== undefined ? { label: opts.label } : {}),
+      });
       console.log(
         `session ${created.sessionId} live on "${p.title}" — cursor follows your ops (ttl ${Math.round(created.ttlMs / 1000)}s, any command refreshes it)`,
       );
@@ -818,10 +842,7 @@ session
     run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
-      const active = await requireSession(ctx, p.id);
-      await ctx.client.updateSession(p.id, active.sessionId, {
-        cursor: { x: Number(x), y: Number(y) },
-      });
+      await touchSession(ctx, p.id, { cursor: { x: Number(x), y: Number(y) } });
       console.log(`cursor at ${x},${y}`);
     }),
   );
@@ -833,9 +854,8 @@ session
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const active = await requireSession(ctx, p.id);
       const item = resolveItem(snapshot, ref);
-      await ctx.client.updateSession(p.id, active.sessionId, {
+      await touchSession(ctx, p.id, {
         cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
       });
       console.log(`pointing at ${item.id}`);
@@ -849,8 +869,7 @@ session
     run(async (status: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
-      const active = await requireSession(ctx, p.id);
-      await ctx.client.updateSession(p.id, active.sessionId, { status: status ?? null });
+      await touchSession(ctx, p.id, { status: status ?? null });
       console.log(status ? `status: ${status}` : "status cleared");
     }),
   );

@@ -11,7 +11,9 @@ interface SessionState extends PresenceSession {
   lastSeenMs: number;
 }
 
-export const SESSION_TTL_MS = 60_000;
+// Long enough for an agent to think between commands; ops auto-revive
+// anyway, so this mostly bounds how long an idle cursor lingers.
+export const SESSION_TTL_MS = 5 * 60_000;
 const SWEEP_INTERVAL_MS = 10_000;
 
 export class PresenceHub {
@@ -100,10 +102,22 @@ export class PresenceHub {
   }
 
   /** Op piggyback: an op whose clientId matches a session moves that
-   * session's cursor to the op's locus — presence traces the real work. */
-  opApplied(projectId: string, clientId: string | undefined, op: Operation, canvas: CanvasState): void {
+   * session's cursor to the op's locus — presence traces the real work.
+   * A CLI session that expired mid-task (ids are "ses_…") is auto-revived
+   * from the op's own actor: working makes you visible again. */
+  opApplied(
+    projectId: string,
+    clientId: string | undefined,
+    actor: Actor,
+    op: Operation,
+    canvas: CanvasState,
+  ): void {
     if (!clientId) return;
-    const session = this.rooms.get(projectId)?.get(clientId);
+    let session = this.rooms.get(projectId)?.get(clientId);
+    if (!session && clientId.startsWith("ses_")) {
+      this.createSession(projectId, actor, "cli", { sessionId: clientId });
+      session = this.rooms.get(projectId)?.get(clientId);
+    }
     if (!session) return;
     const locus = opLocus(op, canvas);
     this.touch(projectId, clientId, locus ? { cursor: locus } : {});

@@ -141,6 +141,22 @@ describe("presence over the daemon", () => {
     expect(gone.status).toBe(404);
   });
 
+  it("an expired CLI session is revived by its own ops", async () => {
+    // No session exists for this id — the op resurrects it from its actor.
+    await post("/api/ops", {
+      projectId: "prj_1",
+      actor: claude,
+      clientId: "ses_ghost1234",
+      op: { type: "item.move", itemId: "itm_1", x: 40, y: 60 },
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`)).json()) as PresenceSession[];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]!.sessionId).toBe("ses_ghost1234");
+    expect(roster[0]!.actor).toEqual(claude);
+    expect(roster[0]!.cursor).toEqual({ x: 90, y: 90 }); // item center after move
+  });
+
   it("web presence flows to the roster and other clients", async () => {
     const messages: ServerMessage[] = [];
     const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_1`);
