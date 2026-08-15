@@ -77,6 +77,11 @@ export type Operation =
     }
   | { type: "item.delete"; itemId: string } // → trash, all versions travel with it
   | { type: "item.restore"; itemId: string } // ← trash
+  // Batch variants exist so a multi-select gesture is ONE op and therefore
+  // ONE undo step. They add no new capability over their singular forms.
+  | { type: "items.move"; moves: Array<{ itemId: string; x: number; y: number }> }
+  | { type: "items.delete"; itemIds: string[] }
+  | { type: "items.restore"; itemIds: string[] }
   | { type: "trash.empty" } // NOT undoable; confirmation-gated
   // ---- comments ----
   | {

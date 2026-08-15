@@ -58,9 +58,17 @@ export function CanvasPage({ actor }: { actor: Actor }) {
         const action = e.shiftKey ? redo : undo;
         void action(projectId!, actor).catch(() => {}); // 409 = nothing to undo
       } else if (e.key === "Delete" || e.key === "Backspace") {
-        if (ui.selectedItemId) {
+        const ids = ui.selectedItemIds;
+        if (ids.length > 0) {
           e.preventDefault();
-          void sendOp(projectId!, actor, { type: "item.delete", itemId: ui.selectedItemId });
+          // Batch delete = one undo step for the whole selection.
+          void sendOp(
+            projectId!,
+            actor,
+            ids.length === 1
+              ? { type: "item.delete", itemId: ids[0]! }
+              : { type: "items.delete", itemIds: ids },
+          );
           ui.select(null);
         }
       } else if (e.key === "Escape") {
@@ -71,8 +79,9 @@ export function CanvasPage({ actor }: { actor: Actor }) {
         else if (ui.enteredHtmlItemId) ui.setEnteredHtml(null);
         else ui.select(null);
       } else if (e.key.toLowerCase() === "v" && !e.metaKey && !e.ctrlKey) {
-        if (ui.selectedItemId) {
-          ui.setFanned(ui.fannedItemId === ui.selectedItemId ? null : ui.selectedItemId);
+        if (ui.selectedItemIds.length === 1) {
+          const only = ui.selectedItemIds[0]!;
+          ui.setFanned(ui.fannedItemId === only ? null : only);
         }
       } else if (e.key === "0") {
         zoomToFit();

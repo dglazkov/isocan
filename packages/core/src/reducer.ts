@@ -183,6 +183,49 @@ export function applyOperation(
       });
     }
 
+    case "items.move": {
+      requireUniqueIds(op.moves.map((m) => m.itemId));
+      for (const move of op.moves) getItem(move.itemId); // validate all before applying any
+      const items = { ...canvas.items };
+      for (const move of op.moves) {
+        items[move.itemId] = { ...items[move.itemId]!, x: move.x, y: move.y, ...stamp };
+      }
+      return withCanvas({ ...canvas, items });
+    }
+
+    case "items.delete": {
+      requireUniqueIds(op.itemIds);
+      const deleted = op.itemIds.map(getItem);
+      const items = { ...canvas.items };
+      for (const itemId of op.itemIds) delete items[itemId];
+      return withCanvas({
+        ...canvas,
+        items,
+        trash: [
+          ...canvas.trash,
+          ...deleted.map((item) => ({ item, deletedAt: ts, deletedBy: actor })),
+        ],
+      });
+    }
+
+    case "items.restore": {
+      requireUniqueIds(op.itemIds);
+      const wanted = new Set(op.itemIds);
+      const entries = canvas.trash.filter((t) => wanted.has(t.item.id));
+      if (entries.length !== op.itemIds.length) {
+        const found = new Set(entries.map((t) => t.item.id));
+        const missing = op.itemIds.find((id) => !found.has(id));
+        throw new OpValidationError("not-in-trash", `item not in trash: ${missing}`);
+      }
+      const items = { ...canvas.items };
+      for (const entry of entries) items[entry.item.id] = entry.item;
+      return withCanvas({
+        ...canvas,
+        items,
+        trash: canvas.trash.filter((t) => !wanted.has(t.item.id)),
+      });
+    }
+
     case "trash.empty":
       return withCanvas({ ...canvas, trash: [] });
 
@@ -273,6 +316,15 @@ function toItemVersion(v: NewVersion, actor: Actor, ts: string): ItemVersion {
 
 function toComment(c: { id: string; body: string }, actor: Actor, ts: string): Comment {
   return { id: c.id, author: actor, body: c.body, createdAt: ts };
+}
+
+function requireUniqueIds(ids: string[]): void {
+  if (ids.length === 0) {
+    throw new OpValidationError("bad-op", "batch op requires at least one item");
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new OpValidationError("duplicate-id", "batch op lists an item twice");
+  }
 }
 
 function requireVersion(item: Item, versionId: string): void {

@@ -71,6 +71,18 @@ function resolveItem(snapshot: CanvasSnapshotResponse, ref: string): Item {
   throw new Error(`no item matches "${ref}"`);
 }
 
+/** Resolve a trashed item by exact id, id prefix, or title prefix. */
+function resolveTrashed(snapshot: CanvasSnapshotResponse, ref: string) {
+  const entry =
+    snapshot.canvas.trash.find((t) => t.item.id === ref) ??
+    snapshot.canvas.trash.find(
+      (t) =>
+        t.item.id.startsWith(ref) || t.item.title.toLowerCase().startsWith(ref.toLowerCase()),
+    );
+  if (!entry) throw new Error(`no trashed item matches "${ref}"`);
+  return entry;
+}
+
 async function projectAndSnapshot(ctx: Ctx): Promise<{ project: Project; snapshot: CanvasSnapshotResponse }> {
   const project = await resolveProject(ctx);
   const snapshot = await ctx.client.snapshot(project.id);
@@ -598,35 +610,36 @@ version
   );
 
 program
-  .command("rm <item>")
-  .description("Delete an item (to the trash)")
+  .command("rm <items...>")
+  .description("Delete item(s) to the trash — several at once is one undo step")
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
+    run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      await sendOp(ctx, p.id, { type: "item.delete", itemId: item.id });
-      console.log(`moved ${item.id} to trash (isocan trash restore ${item.id})`);
+      const ids = [...new Set(refs.map((ref) => resolveItem(snapshot, ref).id))];
+      if (ids.length === 1) {
+        await sendOp(ctx, p.id, { type: "item.delete", itemId: ids[0]! });
+      } else {
+        await sendOp(ctx, p.id, { type: "items.delete", itemIds: ids });
+      }
+      console.log(`moved ${ids.join(", ")} to trash (isocan restore ${ids.join(" ")})`);
     }),
   );
 
 program
-  .command("restore <item>")
-  .description("Restore an item from the trash")
+  .command("restore <items...>")
+  .description("Restore item(s) from the trash")
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
+    run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const entry =
-        snapshot.canvas.trash.find((t) => t.item.id === ref) ??
-        snapshot.canvas.trash.find(
-          (t) =>
-            t.item.id.startsWith(ref) ||
-            t.item.title.toLowerCase().startsWith(ref.toLowerCase()),
-        );
-      if (!entry) throw new Error(`no trashed item matches "${ref}"`);
-      await sendOp(ctx, p.id, { type: "item.restore", itemId: entry.item.id });
-      console.log(`restored ${entry.item.id}`);
+      const ids = [...new Set(refs.map((ref) => resolveTrashed(snapshot, ref).item.id))];
+      if (ids.length === 1) {
+        await sendOp(ctx, p.id, { type: "item.restore", itemId: ids[0]! });
+      } else {
+        await sendOp(ctx, p.id, { type: "items.restore", itemIds: ids });
+      }
+      console.log(`restored ${ids.join(", ")}`);
     }),
   );
 
@@ -778,22 +791,19 @@ trash
   );
 
 trash
-  .command("restore <item>")
-  .description("Restore a trashed item")
+  .command("restore <items...>")
+  .description("Restore trashed item(s)")
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
+    run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const entry =
-        snapshot.canvas.trash.find((t) => t.item.id === ref) ??
-        snapshot.canvas.trash.find(
-          (t) =>
-            t.item.id.startsWith(ref) ||
-            t.item.title.toLowerCase().startsWith(ref.toLowerCase()),
-        );
-      if (!entry) throw new Error(`no trashed item matches "${ref}"`);
-      await sendOp(ctx, p.id, { type: "item.restore", itemId: entry.item.id });
-      console.log(`restored ${entry.item.id}`);
+      const ids = [...new Set(refs.map((ref) => resolveTrashed(snapshot, ref).item.id))];
+      if (ids.length === 1) {
+        await sendOp(ctx, p.id, { type: "item.restore", itemId: ids[0]! });
+      } else {
+        await sendOp(ctx, p.id, { type: "items.restore", itemIds: ids });
+      }
+      console.log(`restored ${ids.join(", ")}`);
     }),
   );
 

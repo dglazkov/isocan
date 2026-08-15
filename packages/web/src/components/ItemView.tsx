@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import type { Actor, Item } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 
 const DRAG_SLOP = 4;
 const MIN_W = 80;
@@ -17,14 +18,17 @@ export function ItemView({
   projectId: string;
   actor: Actor;
 }) {
-  const selected = useUiStore((s) => s.selectedItemId === item.id);
-  const drag = useUiStore((s) => (s.drag?.itemId === item.id ? s.drag : null));
+  const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
+  const soleSelection = useUiStore(
+    (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
+  );
+  const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const entered = useUiStore((s) => s.enteredHtmlItemId === item.id);
   const commentMode = useUiStore((s) => s.commentMode);
 
-  const x = drag?.x ?? item.x;
-  const y = drag?.y ?? item.y;
+  const x = drag ? item.x + drag.dx : item.x;
+  const y = drag ? item.y + drag.dy : item.y;
   const width = resize?.width ?? item.width;
   const height = resize?.height ?? item.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
@@ -46,19 +50,34 @@ export function ItemView({
     }
 
     e.stopPropagation();
+
+    if (e.shiftKey) {
+      // Shift-click toggles membership; no drag from a shift press.
+      ui.toggleSelect(item.id);
+      return;
+    }
+
+    // Dragging a selected item moves the whole selection; dragging an
+    // unselected one selects it alone first.
+    const wasInSelection = ui.selectedItemIds.includes(item.id);
+    const dragIds = wasInSelection ? ui.selectedItemIds : [item.id];
+    if (!wasInSelection) ui.select(item.id);
+
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
     const start = { x: e.clientX, y: e.clientY };
-    const origin = { x: item.x, y: item.y };
     let moved = false;
 
     function onMove(ev: PointerEvent) {
       const scale = useUiStore.getState().viewport.scale;
-      const dx = (ev.clientX - start.x) / scale;
-      const dy = (ev.clientY - start.y) / scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
       moved = true;
-      useUiStore.getState().setDrag({ itemId: item.id, x: origin.x + dx, y: origin.y + dy, moved });
+      useUiStore.getState().setDrag({
+        itemIds: dragIds,
+        dx: (ev.clientX - start.x) / scale,
+        dy: (ev.clientY - start.y) / scale,
+        moved,
+      });
     }
     function onUp(ev: PointerEvent) {
       frame.releasePointerCapture(ev.pointerId);
@@ -67,15 +86,22 @@ export function ItemView({
       const state = useUiStore.getState();
       const final = state.drag;
       state.setDrag(null);
-      state.select(item.id);
-      if (moved && final) {
-        // One op per gesture — the drag itself is local-only.
-        void sendOp(projectId, actor, {
-          type: "item.move",
-          itemId: item.id,
-          x: Math.round(final.x),
-          y: Math.round(final.y),
-        });
+      if (!moved || !final) return;
+      // One op per gesture — a group drag is a single undo step.
+      const canvas = useCanvasStore.getState().canvas;
+      if (!canvas) return;
+      const moves = final.itemIds
+        .map((itemId) => canvas.items[itemId])
+        .filter((dragged) => dragged !== undefined)
+        .map((dragged) => ({
+          itemId: dragged.id,
+          x: Math.round(dragged.x + final.dx),
+          y: Math.round(dragged.y + final.dy),
+        }));
+      if (moves.length === 1) {
+        void sendOp(projectId, actor, { type: "item.move", ...moves[0]! });
+      } else if (moves.length > 1) {
+        void sendOp(projectId, actor, { type: "items.move", moves });
       }
     }
     frame.addEventListener("pointermove", onMove);
@@ -162,7 +188,7 @@ export function ItemView({
           <div className="html-hint">double-click to interact</div>
         )}
       </div>
-      {selected && !entered && <span className="resize-handle" onPointerDown={onResizeDown} />}
+      {soleSelection && !entered && <span className="resize-handle" onPointerDown={onResizeDown} />}
     </div>
   );
 }

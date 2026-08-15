@@ -126,6 +126,33 @@ describe("validation", () => {
     );
   });
 
+  it("batch ops reject empty lists, duplicates, and unknown items atomically", () => {
+    expectRejects({ type: "items.move", moves: [] }, "bad-op");
+    expectRejects(
+      {
+        type: "items.move",
+        moves: [
+          { itemId: "itm_1", x: 0, y: 0 },
+          { itemId: "itm_1", x: 1, y: 1 },
+        ],
+      },
+      "duplicate-id",
+    );
+    // One bad id in the batch → nothing applies.
+    expectRejects(
+      {
+        type: "items.move",
+        moves: [
+          { itemId: "itm_1", x: 0, y: 0 },
+          { itemId: "itm_nope", x: 1, y: 1 },
+        ],
+      },
+      "unknown-item",
+    );
+    expectRejects({ type: "items.delete", itemIds: ["itm_1", "itm_nope"] }, "unknown-item");
+    expectRejects({ type: "items.restore", itemIds: ["itm_trashed", "itm_1"] }, "not-in-trash");
+  });
+
   it("rejects ops on a missing project", () => {
     expect(() =>
       applyOperation(null, envelope({ type: "item.move", itemId: "itm_1", x: 0, y: 0 })),

@@ -24,9 +24,11 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
     if (thread.anchorItemId) {
       const item = canvas!.items[thread.anchorItemId];
       if (item) {
-        const ix = drag?.itemId === item.id ? drag.x : item.x;
-        const iy = drag?.itemId === item.id ? drag.y : item.y;
-        return { x: ix + thread.x, y: iy + thread.y };
+        const riding = drag?.itemIds.includes(item.id) ? drag : null;
+        return {
+          x: item.x + (riding?.dx ?? 0) + thread.x,
+          y: item.y + (riding?.dy ?? 0) + thread.y,
+        };
       }
     }
     return { x: thread.x, y: thread.y };

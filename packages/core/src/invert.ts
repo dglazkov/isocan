@@ -95,6 +95,21 @@ export function invertOperation(
     case "item.restore":
       return { type: "item.delete", itemId: op.itemId };
 
+    case "items.move":
+      return {
+        type: "items.move",
+        moves: op.moves.map((move) => {
+          const { x, y } = getItem(move.itemId);
+          return { itemId: move.itemId, x, y };
+        }),
+      };
+
+    case "items.delete":
+      return { type: "items.restore", itemIds: op.itemIds };
+
+    case "items.restore":
+      return { type: "items.delete", itemIds: op.itemIds };
+
     case "trash.empty":
       return null;
 

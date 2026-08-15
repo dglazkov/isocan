@@ -255,6 +255,14 @@ input, textarea { font: inherit; color: var(--ink); }
 .trash-empty-zone { padding: 10px 14px; border-top: 1px solid var(--line-soft); }
 .trash-none { color: var(--ink-muted); font-size: 12.5px; text-align: center; padding: 24px 0; }
 
+/* ---------- marquee ---------- */
+.marquee {
+  position: absolute; z-index: 15; pointer-events: none;
+  border: 1px solid var(--accent);
+  background: rgba(31, 63, 208, 0.08);
+  border-radius: 2px;
+}
+
 /* ---------- drop overlay & misc ---------- */
 .drop-overlay {
   position: absolute; inset: 8px; z-index: 40; pointer-events: none;

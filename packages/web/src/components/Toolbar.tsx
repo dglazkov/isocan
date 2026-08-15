@@ -27,12 +27,13 @@ export function Toolbar({
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
-    const { selectedItemId, viewport } = useUiStore.getState();
-    // Selection anchors placement (left of the selected item); otherwise the
+    const { selectedItemIds, viewport } = useUiStore.getState();
+    // A single selected item anchors placement (left of it); otherwise the
     // viewport center.
-    const placement = selectedItemId
-      ? { anchorItemId: selectedItemId }
-      : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
+    const placement =
+      selectedItemIds.length === 1
+        ? { anchorItemId: selectedItemIds[0]! }
+        : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
     const ids = await addFiles(projectId, actor, files, placement);
     const last = ids[ids.length - 1];
     if (last) useUiStore.getState().select(last);

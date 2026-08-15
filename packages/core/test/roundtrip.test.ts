@@ -117,6 +117,24 @@ describe("apply ∘ invert round-trips", () => {
     expectIdentity(s, { type: "item.setCurrentVersion", itemId: "itm_1", versionId: "ver_1" });
   });
 
+  it("items.move (batch) restores every previous position", () => {
+    expectIdentity(s, {
+      type: "items.move",
+      moves: [
+        { itemId: "itm_1", x: -12, y: 900 },
+        { itemId: "itm_2", x: 77, y: -3 },
+      ],
+    });
+  });
+
+  it("items.delete → items.restore (batch, one undo step)", () => {
+    expectIdentity(s, { type: "items.delete", itemIds: ["itm_1", "itm_2"] });
+  });
+
+  it("items.restore → items.delete", () => {
+    expectIdentity(s, { type: "items.restore", itemIds: ["itm_trashed"] });
+  });
+
   it("item.delete → item.restore", () => {
     expectIdentity(s, { type: "item.delete", itemId: "itm_1" });
   });
