@@ -17,13 +17,13 @@ import {
   resolvePlacement,
 } from "@isocan/core";
 import type { Store } from "./store.ts";
-import { UndoStack } from "./undo.ts";
+import { UndoStacks } from "./undo.ts";
 
 interface ProjectRuntime {
   state: ProjectState;
   lastSeq: number;
   entries: LogEntry[];
-  undo: UndoStack;
+  undo: UndoStacks;
 }
 
 export class ProjectNotFoundError extends Error {
@@ -34,8 +34,8 @@ export class ProjectNotFoundError extends Error {
 }
 
 export class NothingToUndoError extends Error {
-  constructor(kind: "undo" | "redo") {
-    super(`nothing to ${kind}`);
+  constructor(kind: "undo" | "redo", actorName?: string) {
+    super(actorName ? `nothing to ${kind} for ${actorName}` : `nothing to ${kind}`);
     this.name = "NothingToUndoError";
   }
 }
@@ -101,34 +101,58 @@ export class Engine {
     return this.enqueue(() => this.applyAndPersist(request, undefined));
   }
 
+  /**
+   * Actor-scoped undo: walk THIS actor's stack. Stored inverses are applied
+   * as-is when possible (stale values are accepted — undo restores what you
+   * changed); inverses invalidated by other actors' ops are repaired (batch
+   * ops shrink to their surviving members) or skipped entirely.
+   */
   undo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       const runtime = await this.runtime(projectId);
-      const targetSeq = runtime.undo.nextUndoTarget();
-      if (targetSeq === null) throw new NothingToUndoError("undo");
-      const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
-      return this.applyAndPersist(
-        { projectId, actor, op: target.inverse!, ...(clientId !== undefined ? { clientId } : {}) },
-        { kind: "undo", targetSeq },
-      );
+      for (;;) {
+        const targetSeq = runtime.undo.nextUndoTarget(actor.id);
+        if (targetSeq === null) throw new NothingToUndoError("undo", actor.name);
+        const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
+        const op = repairInverse(runtime.state, target.inverse!);
+        if (op !== null) {
+          try {
+            return await this.applyAndPersist(
+              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { kind: "undo", targetSeq },
+            );
+          } catch (err) {
+            if (!(err instanceof OpValidationError)) throw err;
+          }
+        }
+        // The inverse no longer applies (its objects were changed by someone
+        // else); its effect is already gone, so drop it and try the next.
+        runtime.undo.discardUndoTarget(actor.id, targetSeq);
+      }
     });
   }
 
   redo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       const runtime = await this.runtime(projectId);
-      const next = runtime.undo.nextRedoTarget();
-      if (next === null) throw new NothingToUndoError("redo");
-      const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
-      return this.applyAndPersist(
-        {
-          projectId,
-          actor,
-          op: undoEntry.inverse!,
-          ...(clientId !== undefined ? { clientId } : {}),
-        },
-        { kind: "redo", targetSeq: next.targetSeq },
-      );
+      for (;;) {
+        const next = runtime.undo.nextRedoTarget(actor.id);
+        if (next === null) throw new NothingToUndoError("redo", actor.name);
+        const target = runtime.entries.find((entry) => entry.seq === next.targetSeq)!;
+        const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
+        const op = repairInverse(runtime.state, redoOpFor(target, undoEntry));
+        if (op !== null) {
+          try {
+            return await this.applyAndPersist(
+              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { kind: "redo", targetSeq: next.targetSeq },
+            );
+          } catch (err) {
+            if (!(err instanceof OpValidationError)) throw err;
+          }
+        }
+        runtime.undo.discardRedoTarget(actor.id, next.targetSeq);
+      }
     });
   }
 
@@ -212,7 +236,7 @@ export class Engine {
       state,
       lastSeq: 1,
       entries: [entry],
-      undo: UndoStack.rebuild([entry]),
+      undo: UndoStacks.rebuild([entry]),
     });
     return entry;
   }
@@ -237,9 +261,60 @@ export class Engine {
       state: loaded.state,
       lastSeq: loaded.lastSeq,
       entries: loaded.entries,
-      undo: UndoStack.rebuild(loaded.entries),
+      undo: UndoStacks.rebuild(loaded.entries),
     };
     this.projects.set(projectId, runtime);
     return runtime;
+  }
+}
+
+/**
+ * Choose what op performs a redo. Under actor-scoped undo, actors interleave,
+ * so "inverse of the undo entry" can embed OTHER actors' values for
+ * value-carrying ops (it captures state at undo time). Those redo by
+ * re-applying the actor's ORIGINAL op — its values are the actor's intent.
+ * Structural creations instead redo via the undo's stored inverse, which
+ * restores full fidelity (trash contents, thread snapshots, version
+ * authorship) that re-running the original op would lose or violate.
+ */
+function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
+  switch (target.envelope.op.type) {
+    case "item.add": // re-add would collide with the trashed item → restore it
+    case "item.addVersion": // restoreVersion keeps original authorship
+    case "thread.create": // thread.restore keeps replies added before the undo
+    case "thread.reply": // comment.restore keeps author + timestamp
+      return undoEntry.inverse!;
+    default:
+      return target.envelope.op;
+  }
+}
+
+/**
+ * Adapt a stored inverse to the current state before applying it as
+ * undo/redo. Batch ops are atomic in the reducer, so one member deleted by
+ * another actor would invalidate the whole inverse — shrink it to the members
+ * that still apply instead. Returns null when nothing survives; non-batch ops
+ * pass through untouched (the apply-time validation decides their fate).
+ */
+function repairInverse(state: ProjectState, op: Operation): Operation | null {
+  switch (op.type) {
+    case "items.move": {
+      const moves = op.moves.filter((move) => state.canvas.items[move.itemId] !== undefined);
+      if (moves.length === 0) return null;
+      return moves.length === op.moves.length ? op : { ...op, moves };
+    }
+    case "items.delete": {
+      const itemIds = op.itemIds.filter((id) => state.canvas.items[id] !== undefined);
+      if (itemIds.length === 0) return null;
+      return itemIds.length === op.itemIds.length ? op : { ...op, itemIds };
+    }
+    case "items.restore": {
+      const inTrash = new Set(state.canvas.trash.map((t) => t.item.id));
+      const itemIds = op.itemIds.filter((id) => inTrash.has(id));
+      if (itemIds.length === 0) return null;
+      return itemIds.length === op.itemIds.length ? op : { ...op, itemIds };
+    }
+    default:
+      return op;
   }
 }

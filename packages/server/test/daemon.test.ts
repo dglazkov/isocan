@@ -113,38 +113,140 @@ describe("daemon HTTP", () => {
     expect(res.status).toBe(404);
   });
 
-  it("undo/redo over HTTP with shared linear stack", async () => {
-    await createProjectWithItem();
-    await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 });
+  it("undo/redo are actor-scoped: each actor walks only their own ops", async () => {
+    await createProjectWithItem(); // alice: create (1), add itm_1 at 5,6 (2)
+    await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 }, "prj_1", alice); // 3
+    await op({ type: "item.move", itemId: "itm_1", x: 200, y: 200 }, "prj_1", bob); // 4
 
-    const undo = await post("/api/projects/prj_1/undo", { actor: bob });
-    expect(undo.status).toBe(200);
-    expect(undo.json.cause).toEqual({ kind: "undo", targetSeq: 3 });
+    // Bob's undo reverses BOB's move, not the top of a shared stack.
+    const bobUndo = await post("/api/projects/prj_1/undo", { actor: bob });
+    expect(bobUndo.status).toBe(200);
+    expect(bobUndo.json.cause).toEqual({ kind: "undo", targetSeq: 4 });
     let snapshot = await get("/api/projects/prj_1/canvas");
-    expect(snapshot.canvas.items["itm_1"].x).toBe(5);
-    expect(snapshot.canvas.items["itm_1"].updatedBy).toEqual(bob);
-
-    const redo = await post("/api/projects/prj_1/redo", { actor: bob });
-    expect(redo.json.cause).toEqual({ kind: "redo", targetSeq: 3 });
-    snapshot = await get("/api/projects/prj_1/canvas");
     expect(snapshot.canvas.items["itm_1"].x).toBe(100);
 
-    // undo of item.add parks the item in trash
-    await post("/api/projects/prj_1/undo", { actor: alice }); // undoes the redone move
-    await post("/api/projects/prj_1/undo", { actor: alice }); // undoes item.add
+    // Alice's undo reverses ALICE's move.
+    const aliceUndo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(aliceUndo.json.cause).toEqual({ kind: "undo", targetSeq: 3 });
+    snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.items["itm_1"].x).toBe(5);
+
+    // Bob can still redo his own move afterwards.
+    const bobRedo = await post("/api/projects/prj_1/redo", { actor: bob });
+    expect(bobRedo.json.cause).toEqual({ kind: "redo", targetSeq: 4 });
+    snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.items["itm_1"].x).toBe(200);
+
+    // Alice undoes her item.add → item (carrying everyone's edits) to trash.
+    await post("/api/projects/prj_1/undo", { actor: alice });
     snapshot = await get("/api/projects/prj_1/canvas");
     expect(snapshot.canvas.items["itm_1"]).toBeUndefined();
     expect(snapshot.canvas.trash).toHaveLength(1);
 
-    // exhausted
-    const exhausted = await post("/api/projects/prj_1/undo", { actor: alice });
-    expect(exhausted.status).toBe(409);
+    // Alice is exhausted (project.create is not undoable)…
+    expect((await post("/api/projects/prj_1/undo", { actor: alice })).status).toBe(409);
+    // …and Bob's remaining undo candidate targets a trashed item → skipped → 409.
+    expect((await post("/api/projects/prj_1/undo", { actor: bob })).status).toBe(409);
+  });
 
-    // new op truncates redo
-    await post("/api/projects/prj_1/redo", { actor: alice }); // restore itm_1
-    await op({ type: "item.move", itemId: "itm_1", x: 7, y: 7 });
-    const noRedo = await post("/api/projects/prj_1/redo", { actor: alice });
-    expect(noRedo.status).toBe(409);
+  it("a fresh op truncates only that actor's redo branch", async () => {
+    await createProjectWithItem();
+    await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 }, "prj_1", alice);
+    await op({ type: "item.move", itemId: "itm_1", x: 200, y: 200 }, "prj_1", bob);
+    await post("/api/projects/prj_1/undo", { actor: alice }); // move back toward 5,6
+    await post("/api/projects/prj_1/undo", { actor: bob });
+
+    // Alice acts anew → HER redo is gone, Bob's survives.
+    await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 }, "prj_1", alice);
+    expect((await post("/api/projects/prj_1/redo", { actor: alice })).status).toBe(409);
+    const bobRedo = await post("/api/projects/prj_1/redo", { actor: bob });
+    expect(bobRedo.status).toBe(200);
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.items["itm_1"].x).toBe(200);
+  });
+
+  it("undo skips entries whose targets another actor deleted", async () => {
+    await createProjectWithItem();
+    await op(
+      { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: null, comment: { id: "cmt_1", body: "one" } },
+      "prj_1",
+      alice,
+    );
+    const t2 = await op(
+      { type: "thread.create", threadId: "thr_2", x: 0, y: 0, anchorItemId: null, comment: { id: "cmt_2", body: "two" } },
+      "prj_1",
+      alice,
+    );
+    await op({ type: "thread.delete", threadId: "thr_2" }, "prj_1", bob);
+
+    // Alice's top candidate (create thr_2) is gone — skipped; her undo lands
+    // on create thr_1 instead.
+    const undo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(undo.status).toBe(200);
+    expect(undo.json.cause.targetSeq).toBeLessThan(t2.json.seq);
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(Object.keys(snapshot.canvas.threads)).toEqual([]);
+  });
+
+  it("redo of a creation restores full fidelity, including others' replies", async () => {
+    await createProjectWithItem();
+    await op(
+      { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: null, comment: { id: "cmt_1", body: "mine" } },
+      "prj_1",
+      alice,
+    );
+    await op(
+      { type: "thread.reply", threadId: "thr_1", comment: { id: "cmt_2", body: "bob's reply" } },
+      "prj_1",
+      bob,
+    );
+
+    // Alice undoes her thread.create → the whole thread (with Bob's reply) goes.
+    await post("/api/projects/prj_1/undo", { actor: alice });
+    let snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.threads["thr_1"]).toBeUndefined();
+
+    // Redo restores the snapshot, not a re-run of the original op — Bob's
+    // reply and authorship come back intact.
+    await post("/api/projects/prj_1/redo", { actor: alice });
+    snapshot = await get("/api/projects/prj_1/canvas");
+    const comments = snapshot.canvas.threads["thr_1"].comments;
+    expect(comments.map((c: any) => c.body)).toEqual(["mine", "bob's reply"]);
+    expect(comments[1].author).toEqual(bob);
+  });
+
+  it("batch inverses are repaired to their surviving members", async () => {
+    await createProjectWithItem();
+    await op({
+      type: "item.add",
+      itemId: "itm_2",
+      version: nv("ver_2"),
+      width: 50,
+      height: 50,
+      placement: { x: 500, y: 500 },
+    });
+    await op(
+      {
+        type: "items.move",
+        moves: [
+          { itemId: "itm_1", x: 1000, y: 1000 },
+          { itemId: "itm_2", x: 2000, y: 2000 },
+        ],
+      },
+      "prj_1",
+      alice,
+    );
+    await op({ type: "item.delete", itemId: "itm_2" }, "prj_1", bob);
+
+    // Alice's group-move inverse shrinks to the surviving item.
+    const undo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(undo.status).toBe(200);
+    expect(undo.json.envelope.op).toEqual({
+      type: "items.move",
+      moves: [{ itemId: "itm_1", x: 5, y: 6 }],
+    });
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.items["itm_1"].x).toBe(5);
   });
 
   it("undo state survives a daemon restart (rebuilt from oplog)", async () => {
@@ -157,8 +259,8 @@ describe("daemon HTTP", () => {
     const address = daemon.app.server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
-    // redo the undone move after restart
-    const redo = await post("/api/projects/prj_1/redo", { actor: bob });
+    // redo the undone move after restart — per-actor stacks rebuild from the oplog
+    const redo = await post("/api/projects/prj_1/redo", { actor: alice });
     expect(redo.status).toBe(200);
     const snapshot = await get("/api/projects/prj_1/canvas");
     expect(snapshot.canvas.items["itm_1"].x).toBe(100);

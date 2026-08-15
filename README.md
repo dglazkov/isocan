@@ -50,9 +50,11 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted.
-- **Trash & undo**: deletes go to a per-project trash; a shared linear undo
-  stack covers every mutation (`⌘Z`/`⇧⌘Z`, `isocan undo|redo`). Trash-empty
-  and project-delete are confirmation-gated and not undoable.
+- **Trash & undo**: deletes go to a per-project trash; undo is
+  **actor-scoped** (`⌘Z`/`⇧⌘Z`, `isocan undo|redo`) — your undo walks your
+  own ops, never a collaborator's. Entries invalidated by others (your target
+  got deleted) are skipped; batch inverses shrink to their surviving members.
+  Trash-empty and project-delete are confirmation-gated and not undoable.
 - **Projects**: each project is its own canvas; create/list/edit/delete from
   either surface.
 
