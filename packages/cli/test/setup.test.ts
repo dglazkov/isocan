@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Project } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 
 /**
  * `isocan setup` is the whole "cd anywhere, run one thing" promise (#42): the
@@ -35,6 +35,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
+  // The CLI restarts a daemon it finds stale, and that replacement is
+  // detached: closing the handle we started is not enough to leave the
+  // machine as we found it.
+  await stopDaemons(port, home).catch(() => {});
   await fs.rm(home, { recursive: true, force: true });
   await fs.rm(work, { recursive: true, force: true });
 });

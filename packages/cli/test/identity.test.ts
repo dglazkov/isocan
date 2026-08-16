@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PresenceSession, Project } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 
 /**
  * Two parties share a machine: the person who owns it, and the agents working
@@ -50,6 +50,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
+  // The CLI restarts a daemon it finds stale, and that replacement is
+  // detached: closing the handle we started is not enough to leave the
+  // machine as we found it.
+  await stopDaemons(port, home).catch(() => {});
   await fs.rm(home, { recursive: true, force: true });
   await fs.rm(work, { recursive: true, force: true });
 });
