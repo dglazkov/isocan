@@ -84,8 +84,17 @@ async function main() {
   // A release names the commit it was built from, so that commit has to be
   // real: not your unsaved edits, and not a commit only this laptop has.
   if (!force) {
-    if (git("status", "--porcelain")) {
-      throw new Error("working tree is dirty — commit or stash first (--force to override)");
+    const dirty = git("status", "--porcelain");
+    if (dirty && !process.env.CI) {
+      throw new Error(
+        `working tree is dirty — commit or stash first (--force to override):\n${dirty}`,
+      );
+    }
+    if (dirty) {
+      // On a runner the tree IS the commit: the dirt is whatever `npm ci`
+      // churned, and none of it can reach the release — everything below
+      // comes from HEAD, except the built app, which is the point.
+      console.error(`release: ignoring a dirty tree on CI:\n${dirty}`);
     }
     if (!git("branch", "-r", "--contains", "HEAD")) {
       throw new Error("HEAD is not on any remote — push it first (--force to override)");
@@ -114,7 +123,9 @@ async function main() {
     git("read-tree", head, { env });
     git("add", "-f", "packages/web/dist", { env });
 
-    const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+    // From HEAD, not from disk: a release is of a commit, so nothing an
+    // install left lying in the working tree can end up in the manifest.
+    const pkg = JSON.parse(git("show", `${head}:package.json`));
     const manifest = path.join(tmp, "package.json");
     await fs.writeFile(
       manifest,
