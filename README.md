@@ -46,8 +46,9 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   subtle elevation plies hint at the stack; fan it out (`V`) to preview and
   promote any version.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
-  drags); create, reply, delete from either surface. `comment anchor` re-pins
-  a thread after the fact — e.g. onto the item it asked for.
+  drags); create, reply, delete from either surface. Bodies render as
+  markdown; `comment anchor` re-pins a thread after the fact — e.g. onto
+  the item it asked for.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted.

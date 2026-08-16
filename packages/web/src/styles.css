@@ -228,7 +228,28 @@ input, textarea { font: inherit; color: var(--ink); }
 .thread-popover .comment { margin-bottom: 8px; }
 .thread-popover .who { font-weight: 700; font-size: 11px; }
 .thread-popover .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
-.thread-popover .body { margin: 2px 0 0; white-space: pre-wrap; }
+/* Comment bodies render as markdown — same idiom as .md-view, sized down. */
+.thread-popover .body { margin: 2px 0 0; }
+.thread-popover .body > :first-child { margin-top: 0; }
+.thread-popover .body > :last-child { margin-bottom: 0; }
+.thread-popover .body p { margin: 0.3em 0; }
+.thread-popover .body ul, .thread-popover .body ol { margin: 0.3em 0; padding-left: 18px; }
+.thread-popover .body h1, .thread-popover .body h2, .thread-popover .body h3,
+.thread-popover .body h4 { margin: 0.4em 0 0.2em; font-size: 12px; line-height: 1.25; }
+.thread-popover .body pre {
+  background: var(--chip); border-radius: 5px; padding: 6px; overflow-x: auto; font-size: 11px;
+}
+.thread-popover .body code { background: var(--chip); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
+.thread-popover .body img { max-width: 100%; }
+.thread-popover .body table { border-collapse: collapse; margin: 0.4em 0; font-size: 11px; }
+.thread-popover .body th, .thread-popover .body td {
+  border: 1px solid var(--line); padding: 2px 6px; text-align: left; vertical-align: top;
+}
+.thread-popover .body th { background: var(--chip); font-weight: 600; }
+.thread-popover .body blockquote {
+  border-left: 3px solid var(--line); margin: 0.4em 0; padding-left: 8px; color: var(--ink-muted);
+}
+.thread-popover .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
 .thread-popover form { display: flex; gap: 6px; margin-top: 8px; }
 .thread-popover input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--chip-line); }
 .thread-popover .thread-actions { display: flex; justify-content: flex-end; margin-top: 6px; }

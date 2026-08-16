@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Actor, CommentThread } from "@isocan/core";
 import { newCommentId, newThreadId } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
@@ -133,7 +135,9 @@ function ThreadPopover({
         <div className="comment" key={comment.id}>
           <span className="who">{comment.author.name}</span>
           <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
-          <p className="body">{comment.body}</p>
+          <div className="body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
+          </div>
         </div>
       ))}
       <form
