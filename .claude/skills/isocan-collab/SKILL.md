@@ -55,11 +55,16 @@ keep it — a stable name is worth more than a fresh one.
    what the human sees on your cursor, so keep your name in it.
 2. **Read.** `isocan comment list` — a comment needs addressing when the last
    entry in its thread is not yours.
-3. **Show your work — before the quiet part.** The moment you start on a task:
+3. **Presence narrates itself — add your own words for the quiet parts.**
+   Once a session exists, every command you run updates your cursor and
+   status automatically: reads narrate ("looking at…", "reading the
+   comments…"), ops move your cursor to where they happened, waking from
+   `wait` lands you on the summoning thread, and posting a comment clears
+   your status. What the system cannot see is you authoring files or
+   thinking — the canvas shows "quiet Ns" honestly, but better is
    `isocan session work <item> --say "what you're doing…"` (or
-   `session work --at x,y --say …` when no item exists yet). Do this BEFORE
-   authoring files or thinking — that's when you'd otherwise look frozen.
-   Update the narration with `session say "…"` as phases change.
+   `session work --at x,y --say …`) BEFORE a long silent stretch. Your words
+   outrank the derived narration until your next comment.
 4. **Build.** `add` new files, `edit <item> <file>` for changes to existing
    items (each edit stacks a version — never re-add), `mv`/`set` to arrange.
    Every op you run snaps your cursor to where it happened.
@@ -78,7 +83,7 @@ keep it — a stable name is worth more than a fresh one.
    mentioned in. Everything else — comments for others, comments mentioning
    nobody — is ether and won't wake you.
    Exit 2 on timeout, 0 with the feedback as JSON. Run it as a background
-   task; while parked your cursor shows "waiting for your feedback…"
+   task; while parked your cursor shows "waiting for you…"
    automatically. On wake: go to step 3.
    **Parking puts you on call for the whole home**, not just this canvas —
    see below. Do NOT pass `--project` to `wait`: that pins you to one canvas
@@ -104,18 +109,20 @@ canvases the human creates after you started waiting — so they can reach you
 there by @-mention or by writing in that canvas's main thread. This is how a
 brand-new space gets an agent: you do not have to be invited to it.
 
-When `wait` wakes you on a canvas that is not your default, it says which
-one and hands back a `--project` command. Move over properly before working:
+When `wait` wakes you on a summons, your presence has already moved: your
+cursor sits on the thread that woke you — on whichever canvas it lives —
+showing "reading your comment…". No `session start` needed. What `wait`
+cannot do for you is retarget your COMMANDS, so when the canvas is not your
+default:
 
 ```sh
 isocan use <project>                      # or pass --project to each command
 isocan who --all                          # check your name is free here too
-isocan session start --label "<name> 🤖"  # a cursor on THIS canvas
 ```
 
 Then run the loop from step 3 as usual. Your on-call presence ends when
-`wait` returns; `session start` is what makes you visibly present on the
-canvas you were summoned to.
+`wait` returns; the landed cursor is what keeps you visible on the canvas
+you were summoned to.
 
 ## Practices that earn trust
 

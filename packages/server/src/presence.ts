@@ -14,6 +14,10 @@ import { newId } from "@isocan/core";
 
 interface SessionState extends PresenceSession {
   lastSeenMs: number;
+  /** The status was said out loud (`session say`), not derived — inferred
+   * narration must not displace it. Cleared when working resolves into a
+   * posted comment. */
+  statusSticky: boolean;
 }
 
 // Long enough for an agent to think between commands; ops auto-revive
@@ -83,6 +87,7 @@ export class PresenceHub {
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       status?: string | null;
+      statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
     } = {},
   ): boolean {
@@ -96,7 +101,11 @@ export class PresenceHub {
   /** Heartbeat for an on-call session. False once it has expired. */
   touchOnCall(
     sessionId: string,
-    patch: { status?: string | null; activity?: PresenceActivity | null } = {},
+    patch: {
+      status?: string | null;
+      statusSource?: "explicit" | "lifecycle" | "inferred";
+      activity?: PresenceActivity | null;
+    } = {},
   ): boolean {
     const session = this.onCall.get(sessionId);
     if (!session) return false;
@@ -123,7 +132,7 @@ export class PresenceHub {
     const here = [...(this.rooms.get(projectId)?.values() ?? [])];
     const present = new Set(here.map((session) => session.actor.id));
     const listening = [...this.onCall.values()].filter((s) => !present.has(s.actor.id));
-    return [...here, ...listening].map(({ lastSeenMs, ...session }) => session);
+    return [...here, ...listening].map(({ lastSeenMs, statusSticky, ...session }) => session);
   }
 
   /** Op piggyback: an op whose clientId matches a session moves that
@@ -145,8 +154,17 @@ export class PresenceHub {
     }
     if (!session) return;
     const locus = opLocus(op, canvas);
-    // An applied op ends any "working" animation — working resolves into done.
-    this.touch(projectId, clientId, { activity: null, ...(locus ? { cursor: locus } : {}) });
+    // An applied op ends any "working" animation — working resolves into
+    // done — and retires the narration that announced it. A posted comment is
+    // the receipt for the whole work episode, so it clears even a status the
+    // actor said out loud; other ops only sweep derived narration.
+    const receipt = op.type === "thread.create" || op.type === "thread.reply";
+    this.touch(projectId, clientId, {
+      activity: null,
+      status: null,
+      statusSource: receipt ? "lifecycle" : "inferred",
+      ...(locus ? { cursor: locus } : {}),
+    });
   }
 
   private sweep(): void {
@@ -191,6 +209,7 @@ function blankSession(
     activity: null,
     lastSeen: new Date().toISOString(),
     lastSeenMs: Date.now(),
+    statusSticky: false,
   };
 }
 
@@ -200,12 +219,21 @@ function patchSession(
     cursor?: { x: number; y: number } | null;
     selection?: string[];
     status?: string | null;
+    statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
   },
 ): void {
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
-  if (patch.status !== undefined) session.status = patch.status;
+  if (patch.status !== undefined) {
+    // Words the actor said outrank narration the system derived; lifecycle
+    // turns (parking, waking, a posted comment) outrank everything.
+    const source = patch.statusSource ?? "explicit";
+    if (source !== "inferred" || !session.statusSticky) {
+      session.status = patch.status;
+      session.statusSticky = source === "explicit" && patch.status !== null;
+    }
+  }
   if (patch.activity !== undefined) session.activity = patch.activity;
   session.lastSeenMs = Date.now();
   session.lastSeen = new Date().toISOString();

@@ -608,6 +608,15 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: 0 4px 10px -4px rgba(30,34,40,0.4);
 }
 .cursor-chip em { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.85; }
+/* Quiet-but-alive: the agent hasn't touched the daemon in a while but its
+   session is live — breathe instead of freezing, so thinking reads as
+   presence rather than a crash. */
+.remote-cursor.quiet svg,
+.remote-cursor.quiet .cursor-chip { animation: cursor-breathe 2.6s ease-in-out infinite; }
+@keyframes cursor-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 
 /* ---------- marquee ---------- */
 .marquee {

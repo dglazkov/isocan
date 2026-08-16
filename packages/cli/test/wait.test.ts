@@ -185,6 +185,77 @@ describe("isocan wait presence", () => {
     expect(session?.status ?? null).toBeNull();
   }, 30_000);
 
+  it("an UNPINNED wait says 'waiting' on the canvas cursor too — and retracts it", async () => {
+    // The failure this guards: agent works on a canvas, parks with a plain
+    // `isocan wait` — the roster shows the canvas session (it has the
+    // cursor), so the waiting status must live THERE, not only on the
+    // on-call session hidden behind it.
+    await isocan("session", "start", "--project", "prj_1");
+    const run = isocan("wait", "--timeout", "20");
+
+    // The VISIBLE session — project scope, the one with the cursor — is the
+    // one that must say "waiting", not just the on-call listener behind it.
+    await until(
+      sessions,
+      (list) => list.some((s) => s.scope === "project" && s.status?.includes("waiting")),
+      "the waiting status on the canvas session",
+    );
+
+    await post("/api/ops", {
+      projectId: "prj_1",
+      actor: dimitri,
+      op: {
+        type: "thread.create",
+        threadId: "th_park",
+        x: 10,
+        y: 10,
+        anchorItemId: null,
+        comment: { id: "cmt_park", body: "@Nico ping", mentions: [nico.id] },
+      },
+    });
+    const done = await run;
+    expect(done.code).toBe(0);
+    // The wake replaced "waiting" with the handoff status on the same face.
+    const list = await sessions();
+    expect(list.filter((s) => s.actor.id === nico.id)).toHaveLength(1);
+    expect(list[0]!.scope).toBe("project");
+    expect(list[0]!.status).toBe("reading your comment…");
+  }, 30_000);
+
+  it("waking on a summons lands presence on the summoning canvas", async () => {
+    const run = isocan("wait", "--timeout", "20");
+    await until(sessions, (list) => waiting(list).length === 1, "the on-call session");
+
+    await post("/api/ops", {
+      projectId: "prj_1",
+      actor: dimitri,
+      op: {
+        type: "thread.create",
+        threadId: "th_1",
+        x: 400,
+        y: 250,
+        anchorItemId: null,
+        comment: { id: "cmt_1", body: "@Nico can you help?", mentions: [nico.id] },
+      },
+    });
+
+    const done = await run;
+    expect(done.code).toBe(0);
+    // The wake itself put a cursor on the summoning thread — no `session
+    // start` ran, yet the canvas shows the agent reading the feedback.
+    const list = await until(
+      sessions,
+      (l) => l.some((s) => s.scope === "project"),
+      "the landed session",
+    );
+    const landed = list.find((s) => s.scope === "project")!;
+    expect(landed.actor.id).toBe(nico.id);
+    expect(landed.status).toBe("reading your comment…");
+    expect(landed.cursor).toEqual({ x: 400, y: 250 });
+    // …and exactly one face: the on-call listener was retired, not doubled.
+    expect(list.filter((s) => s.actor.id === nico.id)).toHaveLength(1);
+  }, 30_000);
+
   it("ends the on-call session when it times out", async () => {
     const run = await isocan("wait", "--timeout", "1");
 

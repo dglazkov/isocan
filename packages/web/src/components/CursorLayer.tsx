@@ -3,6 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
+import { quietFor, statusLine } from "../lib/presence.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
 const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
@@ -134,6 +135,14 @@ export function CursorLayer() {
     return () => cancelAnimationFrame(raf);
   }, [visible.length]);
 
+  // A quiet agent produces no roster traffic and no motion, so nothing above
+  // would re-render — tick slowly to keep "quiet 40s" aging honestly.
+  useEffect(() => {
+    if (visible.length === 0) return;
+    const timer = setInterval(() => force((n) => n + 1), 5000);
+    return () => clearInterval(timer);
+  }, [visible.length]);
+
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 25 }}>
       {visible.map((session) => {
@@ -144,10 +153,17 @@ export function CursorLayer() {
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColor(session.actor.id);
         const name = session.label ?? session.actor.name;
+        // Say only what we know: the session's status if it has one, and
+        // for how long it has been quiet once it goes silent — a thinking
+        // agent must not look frozen, but we never invent a verb for it.
+        const quiet = quietFor(session);
+        const line = [statusLine(session), quiet && `quiet ${quiet}`]
+          .filter(Boolean)
+          .join(" · ");
         return (
           <div
             key={session.sessionId}
-            className="remote-cursor"
+            className={`remote-cursor${quiet ? " quiet" : ""}`}
             style={{ left: screen.x, top: screen.y }}
           >
             <svg width="18" height="20" viewBox="0 0 18 20">
@@ -155,7 +171,7 @@ export function CursorLayer() {
             </svg>
             <span className="cursor-chip" style={{ background: color }}>
               {name}
-              {session.status && <em>{session.status}</em>}
+              {line && <em>{line}</em>}
             </span>
           </div>
         );

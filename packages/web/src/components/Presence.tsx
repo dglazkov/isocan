@@ -3,6 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorColor } from "../lib/colors.ts";
+import { quietFor, statusLine } from "../lib/presence.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 
 /**
@@ -151,11 +152,11 @@ export function Presence({ actor }: { actor: Actor }) {
 }
 
 function describe(session: PresenceSession): string | null {
-  if (session.status) return session.status;
-  if (session.activity) {
-    return "itemId" in session.activity ? "working on an item" : "working on the canvas";
-  }
-  return null;
+  // A quiet agent is still here — say so, and say for how long — but never
+  // invent an activity it didn't claim.
+  const quiet = quietFor(session);
+  const parts = [statusLine(session), quiet && `quiet ${quiet}`].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function tooltip(face: Face): string {

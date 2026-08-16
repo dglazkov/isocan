@@ -89,13 +89,17 @@ Your name (agents, read this):
   Isao, Cana — all hiding in the letters of "isocan". Keep it for the whole
   collaboration so the human can call you back by it.
 
-Presence (being visible while you work):
+Presence (automatic once you have a session):
   isocan session start --label "You"    appear as a live cursor on the canvas
-  isocan session work <item> --say "…"  animate on an item while you build
-  isocan session work --at x,y --say …  same, at an empty spot
+  From then on presence follows the work by itself: every operation moves
+  your cursor to where it happened, reads narrate themselves ("looking at…",
+  "reading the comments…"), waking from \`wait\` lands your cursor on the
+  summoning thread, and posting a comment clears your status — done is done.
+  isocan session work <item> --say "…"  say it in your own words — your words
+                                        outrank the derived narration until
+                                        your next comment
   isocan who                            see everyone on the canvas right now
   isocan who --all                      every name the canvas knows, live or not
-  Each operation you perform moves your cursor to where it happened.
 
 Being on call (how a canvas you've never opened can reach you):
   A session belongs to ONE canvas. \`isocan wait\` belongs to the HOME: while
@@ -177,6 +181,29 @@ async function touchSession(
     await writeSessionFile(ctx.home, { ...active, sessionId: created.sessionId });
     await ctx.client.updateSession(projectId, created.sessionId, patch);
   }
+}
+
+/**
+ * Auto-narration: presence follows the work, whether or not the agent
+ * remembers to say anything. Commands call this with a status derived from
+ * what they are doing ("looking at …", "editing …"); the daemon treats it as
+ * INFERRED, so it never displaces a status the agent set with `say`/`--say`,
+ * and any applied op sweeps it away. Best-effort on purpose: no session on
+ * this project means no narration, and no failure here may break a command.
+ */
+async function narrate(
+  ctx: Ctx,
+  projectId: string,
+  patch: import("@isocan/core").UpdateSessionRequest,
+): Promise<void> {
+  const session = await readSessionFile(ctx.home);
+  if (!session || session.projectId !== projectId) return;
+  await touchSession(ctx, projectId, { ...patch, statusSource: "inferred" }).catch(() => {});
+}
+
+/** World center of an item — where narration points the cursor. */
+function itemCenter(item: Item): { x: number; y: number } {
+  return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 }
 
 async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
@@ -562,6 +589,7 @@ program
         const data = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
+        await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
         const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
 
         let { width, height } = defaultSize(mimeType);
@@ -616,7 +644,8 @@ program
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { snapshot } = await projectAndSnapshot(ctx);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      await narrate(ctx, p.id, { status: "surveying the canvas…" });
       const items = Object.values(snapshot.canvas.items);
       if (ctx.json) return printJson(items);
       printTable(
@@ -639,8 +668,12 @@ program
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { snapshot } = await projectAndSnapshot(ctx);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      await narrate(ctx, p.id, {
+        cursor: itemCenter(item),
+        status: `looking at "${truncate(item.title || item.id, 24)}"`,
+      });
       if (ctx.json) return printJson(item);
       const current = item.versions.find((v) => v.id === item.currentVersionId);
       printKeyValues({
@@ -723,6 +756,13 @@ program
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       const current = item.versions.find((v) => v.id === item.currentVersionId)!;
+      // Announce the edit BEFORE the slow part (upload, or a human in
+      // $EDITOR) — the applied op will resolve this back into "done".
+      await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
+        cursor: itemCenter(item),
+        status: `editing "${truncate(item.title || item.id, 24)}"…`,
+      });
 
       let data: Buffer;
       let filename: string;
@@ -765,8 +805,12 @@ program
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { snapshot } = await projectAndSnapshot(ctx);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      await narrate(ctx, p.id, {
+        cursor: itemCenter(item),
+        status: `comparing versions of "${truncate(item.title || item.id, 24)}"`,
+      });
       if (ctx.json) return printJson(item.versions);
       printTable(
         item.versions.map((v, index) => ({
@@ -982,7 +1026,8 @@ comment
   .action(
     run(async (opts: { item?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { snapshot } = await projectAndSnapshot(ctx);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      await narrate(ctx, p.id, { status: "reading the comments…" });
       let threads = Object.values(snapshot.canvas.threads);
       if (opts.item) {
         const item = resolveItem(snapshot, opts.item);
@@ -1060,8 +1105,10 @@ const session = program
     `
 Sessions live in the daemon and expire after a few idle minutes; any session
 command refreshes yours, and performing operations auto-revives it. While a
-session is active, every operation you run moves your cursor to where it
-happened — \`work\` fills the quiet stretches in between.`,
+session is active presence narrates itself: every operation moves your cursor
+to where it happened, reads (\`show\`, \`ls\`, \`comment list\`, …) set a derived
+status, and posting a comment clears it. \`work --say\` puts it in your own
+words — those outrank the derived narration until your next comment.`,
   );
 
 session
@@ -1286,6 +1333,53 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
   }
 }
 
+/** Where a thread sits in world coordinates, anchored or freestanding. */
+function threadLocus(
+  snapshot: CanvasSnapshotResponse,
+  thread: CommentThread,
+): { x: number; y: number } {
+  const anchor = thread.anchorItemId ? snapshot.canvas.items[thread.anchorItemId] : undefined;
+  return anchor ? { x: anchor.x + thread.x, y: anchor.y + thread.y } : { x: thread.x, y: thread.y };
+}
+
+/**
+ * The wake IS the status: the moment `wait` returns with a summons, land the
+ * agent's presence on the summoning canvas — cursor at the thread, status
+ * "reading your comment…" — before it runs a single command. This closes the
+ * silent stretch between "summoned" and "first op" without the agent having
+ * to remember anything; the daemon retires the status when the reply lands.
+ */
+async function landPresence(
+  ctx: Ctx,
+  entry: WatchedLogEntry,
+  snap: () => Promise<CanvasSnapshotResponse>,
+): Promise<void> {
+  const op = entry.envelope.op as { threadId: string };
+  const snapshot = await snap();
+  const thread = snapshot.canvas.threads[op.threadId];
+  const cursor = thread ? threadLocus(snapshot, thread) : null;
+  const patch: import("@isocan/core").UpdateSessionRequest = {
+    status: "reading your comment…",
+    statusSource: "lifecycle",
+    activity: null,
+    ...(cursor ? { cursor } : {}),
+  };
+  const active = await readSessionFile(ctx.home);
+  if (active && active.projectId === entry.projectId) {
+    return touchSession(ctx, entry.projectId, patch);
+  }
+  // Summoned to a canvas the session isn't on: move over, keeping the label
+  // the human knows this agent by.
+  if (active) await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
+  const created = await ctx.client.createSession(entry.projectId, ctx.actor, active?.label);
+  await writeSessionFile(ctx.home, {
+    projectId: entry.projectId,
+    sessionId: created.sessionId,
+    ...(active?.label !== undefined ? { label: active.label } : {}),
+  });
+  await ctx.client.updateSession(entry.projectId, created.sessionId, patch);
+}
+
 program
   .command("wait")
   .description(
@@ -1306,7 +1400,13 @@ A comment wakes you when it @-mentions you (identity name or session label),
 lands in a MAIN thread (\`comment main\`), or lands in a thread you wrote
 in or were mentioned in. Everything else — including comments that mention
 nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
-on everything.`,
+on everything.
+
+While parked, the cursor you left on the canvas says "waiting for you…";
+waking on a summons then moves your presence for you: your cursor lands on
+the thread that woke you — on whichever canvas it lives — showing "reading
+your comment…" until your next command or reply. No \`session start\` needed
+after a wake.`,
   )
   .action(
     run(async (
@@ -1336,28 +1436,32 @@ on everything.`,
         : seeded; // seed: from now on
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
 
-      // Waiting is presence: show it, and keep it alive while parked. A
-      // pinned wait only stirs the canvas session it is pinned to; an
-      // unpinned one registers on call, so every canvas can see and summon
-      // you. Both are torn down on every way out — a canvas must never show
-      // an agent listening when no process is.
+      // Waiting is presence: show it, and keep it alive while parked. The
+      // canvas session — the cursor the human actually sees — says it is
+      // waiting wherever it stands, pinned or not; an unpinned wait also
+      // registers on call, so every canvas can see and summon you. Both are
+      // torn down on every way out — a canvas must never show an agent
+      // listening when no process is.
       const session = await readSessionFile(ctx.home);
-      const sessionActive = pinned !== null && session?.projectId === pinned.id;
       const label = session?.label;
       const onCall = pinned
         ? null
         : (await ctx.client.createOnCall(ctx.actor, label).catch(() => null))?.sessionId ?? null;
       // Retract everything the wait advertised. On-call sessions have a TTL
       // to fall back on, but the canvas status is sticky text on a session
-      // that outlives us — nothing clears it but this.
+      // that outlives us — nothing clears it but this. A wake that landed a
+      // handoff status is the one exception: that claim is now the truth,
+      // and the daemon retires it when the reply lands.
+      let woken = false;
       const stopPresence = async () => {
-        if (sessionActive && pinned) {
+        if (session && !woken) {
           // Don't resurrect an expired session just to blank it: if it is
-          // gone, nothing is left claiming to wait.
+          // gone, nothing is left claiming to wait. (Re-read the file: the
+          // heartbeat may have revived the session under a new id.)
           const active = await readSessionFile(ctx.home);
-          if (active?.projectId === pinned.id) {
+          if (active) {
             await ctx.client
-              .updateSession(pinned.id, active.sessionId, { status: null })
+              .updateSession(active.projectId, active.sessionId, { status: null })
               .catch(() => {});
           }
         }
@@ -1369,11 +1473,19 @@ on everything.`,
         });
       }
       const say = async (status: string) => {
-        if (sessionActive && pinned) await touchSession(ctx, pinned.id, { status }).catch(() => {});
+        // The visible cursor must say it too: a parked agent whose canvas
+        // session read as silent (or worse, "working") is exactly the lie
+        // this narration exists to prevent. touchSession also keeps that
+        // session alive for the whole park instead of letting it expire.
+        if (session) {
+          await touchSession(ctx, session.projectId, { status, statusSource: "lifecycle" }).catch(
+            () => {},
+          );
+        }
         // An expired on-call session (we thought for longer than the TTL)
         // just gets minted again: parking is what makes you reachable.
         if (onCall) {
-          await ctx.client.touchOnCall(onCall, { status }).catch(() => {});
+          await ctx.client.touchOnCall(onCall, { status, statusSource: "lifecycle" }).catch(() => {});
         }
       };
 
@@ -1409,7 +1521,7 @@ on everything.`,
       };
 
       try {
-        await say("waiting for your feedback…");
+        await say("waiting for you…");
 
         for (;;) {
           const remaining = deadline === null ? Infinity : deadline - Date.now();
@@ -1439,9 +1551,20 @@ on everything.`,
             }
           }
           if (matches.length > 0) {
-            // No "reading your feedback…" here: `wait` is about to return,
-            // and a status set on the way out is a claim nobody retracts.
-            // Whoever wakes says what they are doing next.
+            // A summons (a comment for me) lands presence on its canvas
+            // automatically — cursor on the thread, "reading your comment…"
+            // — so the canvas never goes silent between wake and first op.
+            const summons = matches.find(
+              (m) =>
+                m.envelope.op.type === "thread.create" ||
+                m.envelope.op.type === "thread.reply",
+            );
+            if (summons) {
+              woken = await landPresence(ctx, summons, snapOf(summons.projectId)).then(
+                () => true,
+                () => false,
+              );
+            }
             if (ctx.json) return printJson({ cursors, entries: matches });
             for (const entry of matches) {
               // Say WHICH canvas summoned you when you were listening to more
@@ -1454,9 +1577,15 @@ on everything.`,
                 console.log(`  → isocan ${project}comment reply ${op.threadId} "…"`);
               }
             }
+            if (woken && summons) {
+              console.log(
+                `(your cursor already sits on that thread in "${summons.projectTitle}" — ` +
+                  `it shows "reading your comment…" until your next command or reply)`,
+              );
+            }
             return;
           }
-          await say("waiting for your feedback…"); // heartbeat between polls
+          await say("waiting for you…"); // heartbeat between polls
         }
       } finally {
         // Woken, timed out, or thrown out by a daemon that cannot watch —

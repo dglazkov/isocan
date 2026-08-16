@@ -67,6 +67,63 @@ describe("PresenceHub", () => {
     hub.close();
   });
 
+  it("a said status outranks inferred narration; lifecycle outranks everything", () => {
+    const hub = new PresenceHub(1000);
+    const session = hub.createSession("prj", kenny, "cli");
+    const sid = session.sessionId;
+    const status = () => hub.roster("prj")[0]!.status;
+
+    // Inferred narration fills silence…
+    hub.touch("prj", sid, { status: "looking at X", statusSource: "inferred" });
+    expect(status()).toBe("looking at X");
+    // …but never displaces what the agent said out loud…
+    hub.touch("prj", sid, { status: "building the dashboard" });
+    hub.touch("prj", sid, { status: "reading comments…", statusSource: "inferred" });
+    expect(status()).toBe("building the dashboard");
+    // …while a lifecycle turn (parking, waking) overrides anything.
+    hub.touch("prj", sid, { status: "waiting for your feedback…", statusSource: "lifecycle" });
+    expect(status()).toBe("waiting for your feedback…");
+    // Lifecycle text is not sticky: narration may take over again.
+    hub.touch("prj", sid, { status: "editing Y…", statusSource: "inferred" });
+    expect(status()).toBe("editing Y…");
+    hub.close();
+  });
+
+  it("ops retire narration; a posted comment retires even a said status", () => {
+    const canvas = {
+      ...emptyCanvas(),
+      items: {
+        itm_1: {
+          id: "itm_1", x: 0, y: 0, width: 10, height: 10,
+          title: "", description: "", properties: {},
+          versions: [], currentVersionId: "v",
+          createdAt: "", createdBy: alice, updatedAt: "", updatedBy: alice,
+        },
+      },
+    };
+    const hub = new PresenceHub(1000);
+    const sid = hub.createSession("prj", kenny, "cli").sessionId;
+    const status = () => hub.roster("prj")[0]!.status;
+    const move = { type: "item.move", itemId: "itm_1", x: 0, y: 0 } as const;
+    const reply = {
+      type: "thread.reply", threadId: "th_1", comment: { id: "c", body: "done" },
+    } as const;
+
+    // Derived narration is swept by any applied op — working resolved.
+    hub.touch("prj", sid, { status: "editing X…", statusSource: "inferred" });
+    hub.opApplied("prj", sid, kenny, move, canvas);
+    expect(status()).toBeNull();
+
+    // A said status survives ordinary ops…
+    hub.touch("prj", sid, { status: "building the dashboard" });
+    hub.opApplied("prj", sid, kenny, move, canvas);
+    expect(status()).toBe("building the dashboard");
+    // …but the reply is the receipt for the whole episode.
+    hub.opApplied("prj", sid, kenny, reply, canvas);
+    expect(status()).toBeNull();
+    hub.close();
+  });
+
   it("opLocus maps ops to canvas positions", () => {
     const canvas = {
       ...emptyCanvas(),

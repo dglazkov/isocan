@@ -65,6 +65,12 @@ export interface UpdateSessionRequest {
   cursor?: { x: number; y: number } | null;
   selection?: string[];
   status?: string | null;
+  /** Who is speaking when `status` is set. "explicit" (default) — the actor
+   * said it (`session say/work --say`); it sticks until they post a comment
+   * or say something else. "lifecycle" — the choreography itself (parking on
+   * `wait`, being woken); overrides anything. "inferred" — narration derived
+   * from what a command is doing; never displaces an explicit status. */
+  statusSource?: "explicit" | "lifecycle" | "inferred";
   activity?: PresenceActivity | null;
 }
 
