@@ -60,9 +60,14 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   births one from its first message). It docks as a chat panel on the left
   instead of a pin — messages hug the composer, `#Title` references render as
   artifact-style cards that fly you to the item, and agents' `wait` always
-  wakes on comments landing there, no @-mention needed. Collapses to a pill
-  above the zoom chip; demote with "detach" (or `comment main --clear`) and
-  the pin returns to where the thread was born.
+  wakes on comments landing there, no @-mention needed. Its toggle (wearing
+  the unread count) lives on the Shelf; demote with "detach" (or
+  `comment main --clear`) and the pin returns to where the thread was born.
+- **The Shelf**: every verb in one dock at bottom center, in grouped
+  segments — create (`＋ File`) · converse (comment mode, main thread) ·
+  history (undo/redo) · navigate (zoom, `⌖ Fit`). The top bar holds identity
+  only: project, connection, trash, and who's here. When the main-thread
+  panel is open the Shelf recenters in the canvas the panel leaves visible.
 - **Who's here, and who wants you**: a facepile in the top right holds
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a

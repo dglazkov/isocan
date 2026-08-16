@@ -12,6 +12,7 @@ import { redo, sendOp, undo } from "../lib/api.ts";
 import { fitBounds, itemsBounds } from "../lib/viewport.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
+import { Shelf } from "../components/Shelf.tsx";
 import { Minimap } from "../components/Minimap.tsx";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
@@ -131,7 +132,8 @@ export function CanvasPage({ actor }: { actor: Actor }) {
   return (
     <div className="canvas-page">
       <CanvasViewport projectId={projectId} actor={actor} />
-      <Toolbar projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
+      <Toolbar actor={actor} />
+      <Shelf projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
       <MainThreadPanel projectId={projectId} actor={actor} />

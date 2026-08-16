@@ -213,7 +213,6 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       <CursorLayer />
       <MarqueeRect />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
-      <ZoomChip />
     </div>
   );
 }
@@ -237,17 +236,3 @@ function MarqueeRect() {
   );
 }
 
-function ZoomChip() {
-  const viewport = useUiStore((s) => s.viewport);
-  const setViewport = useUiStore((s) => s.setViewport);
-  const center = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-  return (
-    <div className="zoom-chip">
-      <button onClick={() => setViewport(zoomAt(viewport, center().x, center().y, 1 / 1.25))}>
-        −
-      </button>
-      <span>{Math.round(viewport.scale * 100)}%</span>
-      <button onClick={() => setViewport(zoomAt(viewport, center().x, center().y, 1.25))}>+</button>
-    </div>
-  );
-}

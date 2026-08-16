@@ -12,7 +12,7 @@ import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
-import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
+import { markRead } from "../stores/unreadStore.ts";
 import { makeComment } from "./CommentLayer.tsx";
 
 /**
@@ -58,7 +58,6 @@ export function openMainPanel(projectId: string, open: boolean): void {
 export function MainThreadPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
-  const seen = useUnreadStore((s) => s.seen);
 
   // First snapshot decides the default: open when a main thread already
   // exists (someone designated this channel), closed on a virgin canvas.
@@ -78,23 +77,9 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
       .setMainPanelOpen(stored ? stored === "open" : mainThread(canvas) !== null);
   }, [canvas, projectId]);
 
-  if (!canvas) return null;
-  const thread = mainThread(canvas);
-  const unread = thread ? unreadCount(thread, seen, actor.id) : 0;
-
-  if (!open) {
-    return (
-      <button
-        className="main-pill"
-        title="Main thread — the canvas's direct channel"
-        onClick={() => openMainPanel(projectId, true)}
-      >
-        <span className="main-pill-glyph">✳</span>
-        Main thread
-        {unread > 0 && <span className="main-pill-badge">{unread}</span>}
-      </button>
-    );
-  }
+  // Closed, the panel has no surface of its own — its toggle (wearing the
+  // unread badge) lives on the Shelf.
+  if (!canvas || !open) return null;
   return <Panel projectId={projectId} actor={actor} />;
 }
 
