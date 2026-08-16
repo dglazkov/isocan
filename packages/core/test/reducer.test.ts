@@ -247,6 +247,18 @@ describe("semantics", () => {
     expect(s.canvas.threads["thr_1"]!.anchorItemId).toBe("itm_2");
   });
 
+  it("comments store resolved @-mentions; absent when none were passed", () => {
+    let s = apply(seedState(), {
+      type: "thread.reply",
+      threadId: "thr_1",
+      comment: { id: "cmt_m", body: "@Alice take a look", mentions: ["usr_alice"] },
+    })!;
+    const withMention = s.canvas.threads["thr_1"]!.comments.find((c) => c.id === "cmt_m")!;
+    expect(withMention.mentions).toEqual(["usr_alice"]);
+    // Seed comments were created without mentions — the field stays absent.
+    expect("mentions" in s.canvas.threads["thr_1"]!.comments[0]!).toBe(false);
+  });
+
   it("applyOperation is pure — inputs are never mutated", () => {
     const s = seedState();
     const snapshot = JSON.parse(JSON.stringify(s));

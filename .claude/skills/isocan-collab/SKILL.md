@@ -40,11 +40,16 @@ when you need to parse output.
    Every op you run snaps your cursor to where it happened.
 5. **Close the loop on the thread.** Always `isocan comment reply <thread>
    "…"` describing what you did, where you put it, and any judgment calls.
-   The reply is the deliverable's receipt.
+   The reply is the deliverable's receipt. Comments render as markdown in
+   the web app, so structure is welcome. Address a specific person with
+   `@Name` (first names work) — mentions are resolved when you post.
 6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
-   from someone else (exit 2 on timeout, 0 with the feedback as JSON). Run it
-   as a background task; while parked your cursor shows "waiting for your
-   feedback…" automatically. On wake: go to step 3.
+   that is FOR YOU: one that @-mentions you (name or session label) or lands
+   in a thread you wrote in or were mentioned in. Everything else — comments
+   for others, comments mentioning nobody — is ether and won't wake you.
+   Exit 2 on timeout, 0 with the feedback as JSON. Run it as a background
+   task; while parked your cursor shows "waiting for your feedback…"
+   automatically. On wake: go to step 3.
 7. **Leave.** `isocan session end` when the collaboration is over.
 
 ## Practices that earn trust

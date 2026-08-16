@@ -3,8 +3,19 @@ import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
-import type { CanvasSnapshotResponse, CommentThread, Item, Operation, Project } from "@isocan/core";
+import type {
+  CanvasSnapshotResponse,
+  Comment,
+  CommentThread,
+  Item,
+  MentionCandidate,
+  NewComment,
+  Operation,
+  Project,
+} from "@isocan/core";
 import {
+  collectCanvasActors,
+  extractMentions,
   newCommentId,
   newItemId,
   newProjectId,
@@ -48,8 +59,8 @@ The system:
              x,y world coordinates (+x right, +y down)
   version    every \`edit\` stacks a new version on the item; \`version promote\`
              brings any older one back to the top
-  comment    threads pinned to an item (--item) or a spot (--at x,y);
-             \`comment anchor\` re-pins a thread onto an item
+  comment    threads pinned to an item (--item) or a spot (--at x,y); write
+             @Name to address someone, \`comment anchor\` to re-pin a thread
   undo       per-actor: \`isocan undo\` reverts YOUR last change, never a
              collaborator's
   trash      deleted items are recoverable until \`trash empty --force\`
@@ -70,7 +81,8 @@ Presence (being visible while you work):
 A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
   edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
-  the next comment from someone else) → repeat.`,
+  the next comment that's for you — @-mentions you or is in your thread) →
+  repeat.`,
   );
 
 /** Wrap actions: friendly errors, non-zero exit. */
@@ -759,8 +771,30 @@ const comment = program
     `
 A thread starts with one comment — anchored to an item (--item, the pin
 follows the item) or freestanding at a canvas spot (--at x,y). Replies grow
-the thread; every comment is stamped with its author's identity.`,
+the thread; every comment is stamped with its author's identity.
+
+Address someone with @Name (their identity name or presence label; first
+names work: "@Dimitri"). Mentions are resolved when the comment is posted
+and drive \`isocan wait\`'s notification filter.`,
   );
+
+/** Build the comment payload, resolving @Name mentions against everyone the
+ * author can see: canvas actors plus the live presence roster (labels too). */
+async function newComment(
+  ctx: Ctx,
+  projectId: string,
+  snapshot: CanvasSnapshotResponse,
+  body: string,
+): Promise<NewComment> {
+  const candidates: MentionCandidate[] = collectCanvasActors(snapshot.canvas);
+  const sessions = await ctx.client.listSessions(projectId).catch(() => []);
+  for (const s of sessions) {
+    candidates.push(s.actor);
+    if (s.label) candidates.push({ id: s.actor.id, name: s.label });
+  }
+  const mentions = extractMentions(body, candidates);
+  return { id: newCommentId(), body, ...(mentions.length > 0 ? { mentions } : {}) };
+}
 
 comment
   .command("add <text>")
@@ -791,7 +825,7 @@ comment
         x,
         y,
         anchorItemId,
-        comment: { id: newCommentId(), body: text },
+        comment: await newComment(ctx, p.id, snapshot, text),
       });
       console.log(`started thread ${threadId}`);
     }),
@@ -808,7 +842,7 @@ comment
       await sendOp(ctx, p.id, {
         type: "thread.reply",
         threadId: thread.id,
-        comment: { id: newCommentId(), body: text },
+        comment: await newComment(ctx, p.id, snapshot, text),
       });
       console.log(`replied to ${thread.id}`);
     }),
@@ -1080,12 +1114,23 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
 
 program
   .command("wait")
-  .description("Block until someone else comments — the agent's feedback loop")
+  .description("Block until someone comments for you — the agent's feedback loop")
   .option("--all-ops", "wake on any operation by another actor, not just comments")
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
   .option("--since <seq>", "wake on anything after this oplog position instead of now")
+  .addHelpText(
+    "after",
+    `
+A comment wakes you when it @-mentions you (identity name or session label)
+or lands in a thread you wrote in or were mentioned in. Everything else —
+including comments that mention nobody — is ether: visible in \`tail\`, but
+not actionable. --all-ops wakes on everything.`,
+  )
   .action(
-    run(async (opts: { allOps?: boolean; timeout?: string; since?: string }, cmd: Command) => {
+    run(async (
+      opts: { allOps?: boolean; timeout?: string; since?: string },
+      cmd: Command,
+    ) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
       let seq =
@@ -1093,12 +1138,37 @@ program
           ? Number(opts.since)
           : (await ctx.client.snapshot(p.id)).lastSeq;
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
-      const isFeedback = (op: Operation) =>
-        op.type === "thread.create" || op.type === "thread.reply";
       // Waiting is presence: show it, and keep the session alive while parked.
-      const sessionActive = (await readSessionFile(ctx.home))?.projectId === p.id;
+      const session = await readSessionFile(ctx.home);
+      const sessionActive = session?.projectId === p.id;
       const say = (status: string) =>
         sessionActive ? touchSession(ctx, p.id, { status }).catch(() => {}) : Promise.resolve();
+
+      // Names I answer to: identity name, plus my session label if any.
+      const selfNames: MentionCandidate[] = [ctx.actor];
+      if (sessionActive && session?.label) selfNames.push({ id: ctx.actor.id, name: session.label });
+      const addressesMe = (c: NewComment | Comment) =>
+        (c.mentions ?? []).includes(ctx.actor.id) ||
+        extractMentions(c.body, selfNames).length > 0;
+
+      // A comment is for me when it addresses me or lands in a thread I'm
+      // part of (wrote in / was mentioned in). Unaddressed comments are
+      // ether — not actionable. `snap` is fetched lazily, once per poll batch.
+      const isForMe = async (
+        op: Operation,
+        snap: () => Promise<CanvasSnapshotResponse>,
+      ): Promise<boolean> => {
+        if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
+        if (addressesMe(op.comment)) return true;
+        if (op.type === "thread.reply") {
+          const thread = (await snap()).canvas.threads[op.threadId];
+          if (thread?.comments.some((c) => c.author.id === ctx.actor.id || addressesMe(c))) {
+            return true;
+          }
+        }
+        return false;
+      };
+
       await say("waiting for your feedback…");
 
       for (;;) {
@@ -1110,11 +1180,13 @@ program
         const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
         const entries = await ctx.client.getLog(p.id, seq, window);
         if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
-        const matches = entries.filter(
-          (entry) =>
-            entry.envelope.actor.id !== ctx.actor.id &&
-            (opts.allOps ? true : isFeedback(entry.envelope.op)),
-        );
+        let snapCache: Promise<CanvasSnapshotResponse> | null = null;
+        const snap = () => (snapCache ??= ctx.client.snapshot(p.id));
+        const matches: typeof entries = [];
+        for (const entry of entries) {
+          if (entry.envelope.actor.id === ctx.actor.id) continue;
+          if (opts.allOps || (await isForMe(entry.envelope.op, snap))) matches.push(entry);
+        }
         if (matches.length > 0) {
           await say("reading your feedback…");
           if (ctx.json) return printJson({ lastSeq: seq, entries: matches });

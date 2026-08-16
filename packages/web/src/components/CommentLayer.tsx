@@ -1,13 +1,26 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Actor, CommentThread } from "@isocan/core";
-import { newCommentId, newThreadId } from "@isocan/core";
+import type { Actor, CommentThread, MentionCandidate, NewComment } from "@isocan/core";
+import { collectCanvasActors, extractMentions, newCommentId, newThreadId } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
+
+/** Comment payload with @Name mentions resolved against everyone visible on
+ * the canvas — actors in the state plus the live presence roster (labels too). */
+function makeComment(body: string): NewComment {
+  const { canvas, sessions } = useCanvasStore.getState();
+  const candidates: MentionCandidate[] = canvas ? collectCanvasActors(canvas) : [];
+  for (const s of sessions) {
+    candidates.push(s.actor);
+    if (s.label) candidates.push({ id: s.actor.id, name: s.label });
+  }
+  const mentions = extractMentions(body, candidates);
+  return { id: newCommentId(), body, ...(mentions.length > 0 ? { mentions } : {}) };
+}
 
 /**
  * Pins and popovers render in SCREEN space (constant size at any zoom),
@@ -149,7 +162,7 @@ function ThreadPopover({
           await sendOp(projectId, actor, {
             type: "thread.reply",
             threadId: thread.id,
-            comment: { id: newCommentId(), body },
+            comment: makeComment(body),
           });
         }}
       >
@@ -213,7 +226,7 @@ function ComposePopover({
             x: pending.x,
             y: pending.y,
             anchorItemId: pending.anchorItemId,
-            comment: { id: newCommentId(), body: trimmed },
+            comment: makeComment(trimmed),
           });
         }}
         style={{ display: "block" }}

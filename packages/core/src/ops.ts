@@ -25,6 +25,13 @@ export interface NewVersion {
  */
 export type Placement = { x: number; y: number } | { anchorItemId: string };
 
+export interface NewComment {
+  id: string;
+  body: string;
+  /** Resolved @-mentions (actor ids); see Comment.mentions. */
+  mentions?: string[];
+}
+
 export interface MetaPatch {
   title?: string;
   description?: string;
@@ -90,9 +97,9 @@ export type Operation =
       x: number;
       y: number;
       anchorItemId: string | null;
-      comment: { id: string; body: string };
+      comment: NewComment;
     }
-  | { type: "thread.reply"; threadId: string; comment: { id: string; body: string } }
+  | { type: "thread.reply"; threadId: string; comment: NewComment }
   | {
       // Re-pin a thread: to an item (x,y become an offset from its top-left)
       // or freestanding (x,y become world coordinates). Lets a thread that

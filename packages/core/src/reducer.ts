@@ -8,7 +8,7 @@ import type {
   ProjectState,
 } from "./model.ts";
 import { emptyCanvas } from "./model.ts";
-import type { MetaPatch, NewVersion, OpEnvelope } from "./ops.ts";
+import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
 import { resolvePlacement } from "./placement.ts";
 
@@ -329,8 +329,10 @@ function toItemVersion(v: NewVersion, actor: Actor, ts: string): ItemVersion {
   return { ...v, createdAt: ts, createdBy: actor };
 }
 
-function toComment(c: { id: string; body: string }, actor: Actor, ts: string): Comment {
-  return { id: c.id, author: actor, body: c.body, createdAt: ts };
+function toComment(c: NewComment, actor: Actor, ts: string): Comment {
+  const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
+  if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
+  return comment;
 }
 
 function requireUniqueIds(ids: string[]): void {

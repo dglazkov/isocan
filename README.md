@@ -47,8 +47,9 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   promote any version.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
   drags); create, reply, delete from either surface. Bodies render as
-  markdown; `comment anchor` re-pins a thread after the fact — e.g. onto
-  the item it asked for.
+  markdown; `@Name` addresses a collaborator (mentions are resolved when
+  posted and drive the CLI's `wait` filter); `comment anchor` re-pins a
+  thread after the fact — e.g. onto the item it asked for.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted.
@@ -74,7 +75,7 @@ isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who   # live presence
-isocan wait [--timeout s] [--all-ops]  # block until someone else comments
+isocan wait [--timeout s] [--all-ops]  # block until a comment addresses you
 isocan tail [-f]                       # print/stream the operation log
 ```
 

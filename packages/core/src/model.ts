@@ -57,6 +57,9 @@ export interface Comment {
   id: string;
   author: Actor;
   body: string;
+  /** Actor ids @-mentioned in the body, resolved at authoring time against
+   * the actors the author could see. Absent on older comments. */
+  mentions?: string[];
   createdAt: string;
 }
 
