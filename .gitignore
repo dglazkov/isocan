@@ -141,3 +141,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# An agent working in this repo names itself here (isocan identity --name … --here).
+# That name is the agent's, not the project's: local, never committed.
+.isocan/

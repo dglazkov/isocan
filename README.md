@@ -107,6 +107,14 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   unread badge, its author's face is badged in the pile, and the tab title
   carries the count. Read state is per-viewer, kept in the browser — so
   reopening a canvas shows what happened while you were away.
+- **Two parties, two names**: the person who owns the machine, and the agents
+  working in its directories. `~/.isocan/identity.json` is yours;
+  `<dir>/.isocan/identity.json` (written by `isocan identity --name … --here`)
+  belongs to the agent working there, and commands run in that directory speak
+  as it. So an agent introducing itself can never rename you, `isocan setup`
+  always creates *your* canvas rather than one owned by someone called Isaac,
+  and a CLI with no terminal writes the directory slot by default — because
+  the thing at the other end of a pipe is not the person.
 - **Identity**: a name you pick at the door (web dialog / CLI prompt); stamped
   on every mutation, comment, and version. Click your own face in the pile to
   change it: *rename* keeps your actor id, so your undo stack and the comments
@@ -134,7 +142,8 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 
 ```
 isocan setup [dir]                 # skill + CLI + canvas for a directory
-isocan identity|whoami · serve [--force]|status|stop · open
+isocan identity [--name X [--here|--home|--new]]|whoami
+isocan serve [--force]|status|stop · open
 isocan project create|list|show|edit|delete · isocan use <project>
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore

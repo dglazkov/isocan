@@ -39,7 +39,14 @@ import {
 import { paths } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
 import { ApiError, DaemonClient } from "./client.ts";
-import { readIdentity, writeIdentity } from "./identity.ts";
+import {
+  findLocalIdentity,
+  localIdentityFile,
+  readIdentity,
+  resolveIdentity,
+  writeIdentity,
+  writeLocalIdentity,
+} from "./identity.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
   collectProp,
@@ -332,30 +339,78 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
   }
 }
 
+/**
+ * Which slot a `--name` writes. Two parties share a machine: the person who
+ * owns it (home) and the agents working in its directories.
+ *
+ * An agent that renames the home identity renames the human — which is
+ * exactly what used to happen, since the skill told every agent to introduce
+ * itself. So an automated caller (no TTY) writes a directory identity unless
+ * it insists on `--home`, and a caller already speaking as a directory
+ * identity renames that one. A person at a keyboard is the machine's owner.
+ */
+async function identityTarget(
+  home: string,
+  opts: { here?: boolean; home?: boolean },
+): Promise<{ file: "home" | string; scope: "home" | "directory" }> {
+  if (opts.here) return { file: process.cwd(), scope: "directory" };
+  if (opts.home) return { file: "home", scope: "home" };
+  const local = await findLocalIdentity(process.cwd(), home);
+  if (local) return { file: path.dirname(path.dirname(local.file)), scope: "directory" };
+  if (process.stdin.isTTY) return { file: "home", scope: "home" };
+  return { file: process.cwd(), scope: "directory" };
+}
+
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
   .option("--name <name>", "display name")
+  .option("--here", "name yourself for THIS directory — what an agent does, leaving the human's name alone")
+  .option("--home", "name the person who owns this machine (~/.isocan)")
+  .option("--new", "become a new person instead of renaming this one (fresh actor id)")
   .action(
-    run(async (opts: { name?: string }, cmd: Command) => {
-      const home = paths.isocanHome();
-      if (opts.name) {
-        const actor = await writeIdentity(home, opts.name);
-        console.log(`identity saved: ${actor.name} (${actor.id})`);
-        await relabelLiveSession(cmd, actor);
-        const taken = await nameCollision(cmd, actor);
-        if (taken) {
-          console.error(
-            `warning: "${taken.name}" is already used on "${taken.project}" by ${taken.id} — ` +
-              "@-mentions can't tell you apart; pick another name",
-          );
+    run(
+      async (
+        opts: { name?: string; here?: boolean; home?: boolean; new?: boolean },
+        cmd: Command,
+      ) => {
+        const home = paths.isocanHome();
+        if (opts.name) {
+          const target = await identityTarget(home, opts);
+          const actor =
+            target.scope === "home"
+              ? await writeIdentity(home, opts.name, opts.new ?? false)
+              : await writeLocalIdentity(target.file as string, opts.name, opts.new ?? false);
+          const where =
+            target.scope === "home"
+              ? paths.identityFile(home)
+              : localIdentityFile(target.file as string);
+          console.log(`identity saved: ${actor.name} (${actor.id}) → ${where}`);
+          if (target.scope === "directory" && !opts.here) {
+            console.error(
+              "note: named for this directory, not the machine — the home identity is the person's.",
+            );
+          }
+          await relabelLiveSession(cmd, actor);
+          const taken = await nameCollision(cmd, actor);
+          if (taken) {
+            console.error(
+              `warning: "${taken.name}" is already used on "${taken.project}" by ${taken.id} — ` +
+                "@-mentions can't tell you apart; pick another name",
+            );
+          }
+        } else {
+          const resolved = await resolveIdentity(home, process.cwd());
+          if (!resolved) throw new Error("no identity configured — use --name");
+          printKeyValues({
+            id: resolved.actor.id,
+            name: resolved.actor.name,
+            scope: resolved.source === "home" ? "this machine's person" : "this directory",
+            file: resolved.file,
+          });
         }
-      } else {
-        const actor = await readIdentity(home);
-        if (!actor) throw new Error("no identity configured — use --name");
-        printKeyValues({ id: actor.id, name: actor.name });
-      }
-    }),
+      },
+    ),
   );
 
 program
@@ -363,9 +418,11 @@ program
   .description("Show your identity")
   .action(
     run(async () => {
-      const actor = await readIdentity(paths.isocanHome());
-      if (!actor) throw new Error('no identity configured — run `isocan identity --name "You"`');
-      console.log(`${actor.name} (${actor.id})`);
+      const home = paths.isocanHome();
+      const resolved = await resolveIdentity(home, process.cwd());
+      if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
+      const suffix = resolved.source === "directory" ? " — in this directory" : "";
+      console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
     }),
   );
 
@@ -574,22 +631,24 @@ program
         // Identity, daemon, canvas — everything that needs the daemon comes
         // after, and none of it may sink the skill install.
         //
-        // On a terminal the first command prompts for a name. Setup can be run
-        // by an agent or a script, where a prompt is a hang and an error is a
-        // dead end, so a nameless one takes the OS user's name and says so —
-        // one command has to be enough, and `identity --name` renames you.
+        // Setup belongs to the PERSON, whoever typed it — often an agent, on
+        // their behalf. So it speaks as the home identity and never as the
+        // agent named for this directory: the canvas you are about to open is
+        // yours, and it should not be created by someone called Isaac. It
+        // never asks, either: a prompt is a hang when a script runs this, so a
+        // nameless machine takes its OS user's name and says where it got it.
         const home = paths.isocanHome();
-        let named = true;
-        if (!(await readIdentity(home)) && !process.stdin.isTTY) {
-          await writeIdentity(home, os.userInfo().username || "You");
-          named = false;
-        }
+        const known = await readIdentity(home);
+        const you = known ?? (await writeIdentity(home, os.userInfo().username || "You"));
+        const agentHere = await findLocalIdentity(target, home);
+
         let ctx: Ctx | null = null;
         try {
-          ctx = await ctxOf(cmd);
-          report.identity = named
-            ? `${ctx.actor.name} (${ctx.actor.id})`
-            : `${ctx.actor.name} (${ctx.actor.id}) — your OS user; \`isocan identity --name "…"\` to change`;
+          ctx = { ...(await ctxOf(cmd)), actor: you };
+          report.identity = known
+            ? `${you.name} (${you.id})`
+            : `${you.name} (${you.id}) — your OS user; \`isocan identity --name "…"\` to change`;
+          if (agentHere) report.agent = `${agentHere.actor.name} — named for this directory`;
           report.daemon = ctx.client.base;
         } catch (err) {
           report.identity = `not set — \`isocan identity --name "You"\` (${(err as Error).message})`;

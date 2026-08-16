@@ -23,7 +23,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const home = paths.isocanHome();
   const port = opts.port ? Number(opts.port) : Number(process.env.ISOCAN_PORT ?? DEFAULT_PORT);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-  const actor = await requireIdentity(home);
+  const actor = await requireIdentity(home, process.cwd());
   await client.ensureDaemon();
   return {
     client,
