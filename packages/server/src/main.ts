@@ -1,14 +1,13 @@
 import { runDaemon } from "./daemon.ts";
 
+// `npm run dev` means "the daemon I just started is the one serving". Bowing
+// out to whoever already holds the port is how you end up talking to a stale
+// daemon for an hour without a single error to show for it — so take the
+// port instead, and say whose it was.
 runDaemon({
+  takeover: true,
   ...(process.env.ISOCAN_PORT ? { port: Number(process.env.ISOCAN_PORT) } : {}),
 }).catch((err: unknown) => {
-  const code = (err as NodeJS.ErrnoException).code;
-  if (code === "EADDRINUSE") {
-    // Port bind is the spawn-race mutex: another daemon won; that's success.
-    console.log("isocan daemon already running");
-    process.exit(0);
-  }
-  console.error(err);
+  console.error(`isocan daemon: ${(err as Error).message}`);
   process.exit(1);
 });

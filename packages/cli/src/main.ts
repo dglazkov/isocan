@@ -311,20 +311,22 @@ program
   .command("serve")
   .description("Run the state daemon (auto-started by other commands; --foreground attaches)")
   .option("--foreground", "run in the foreground (default: detach)")
+  .option("--force", "stop whatever daemon is on the port and take it over")
   .action(
-    run(async (opts: { foreground?: boolean }, cmd: Command) => {
-      const globals = cmd.optsWithGlobals() as { port?: string };
+    run(async (opts: { foreground?: boolean; force?: boolean }, cmd: Command) => {
+      const home = paths.isocanHome();
+      const port = daemonPort(cmd);
       if (opts.foreground) {
         const { runDaemon } = await import("@isocan/server");
-        const port = globals.port ?? process.env.ISOCAN_PORT;
-        await runDaemon(port ? { port: Number(port) } : {});
+        await runDaemon({ port, home, ...(opts.force ? { takeover: true } : {}) });
         return new Promise<void>(() => {}); // runs until signaled
       }
-      const { DaemonClient } = await import("./client.ts");
-      const home = paths.isocanHome();
-      const port = globals.port ?? String(process.env.ISOCAN_PORT ?? 4441);
       const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-      if (await client.health()) {
+      if (opts.force) {
+        const { stopDaemons } = await import("@isocan/server");
+        const stopped = await stopDaemons(port, home);
+        if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
+      } else if (await client.health()) {
         console.log(`daemon already running on ${client.base}`);
         return;
       }
@@ -333,13 +335,19 @@ program
     }),
   );
 
+/** The port this invocation talks to: --port, then ISOCAN_PORT, then default. */
+function daemonPort(cmd: Command): number {
+  const globals = cmd.optsWithGlobals() as { port?: string };
+  return Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
+}
+
 program
   .command("status")
   .description("Show daemon status")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
-      const globals = cmd.optsWithGlobals() as { port?: string; json?: boolean };
-      const port = globals.port ?? String(process.env.ISOCAN_PORT ?? 4441);
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const port = daemonPort(cmd);
       const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
         signal: AbortSignal.timeout(500),
       }).catch(() => null);
@@ -360,19 +368,18 @@ program
 
 program
   .command("stop")
-  .description("Stop the daemon")
+  .description("Stop the daemon — asks the port who it is, so a stale one can't hide")
   .action(
-    run(async () => {
-      const home = paths.isocanHome();
-      try {
-        const daemon = JSON.parse(await fs.readFile(paths.daemonFile(home), "utf8")) as {
-          pid: number;
-        };
-        process.kill(daemon.pid, "SIGTERM");
-        console.log(`sent SIGTERM to daemon (pid ${daemon.pid})`);
-      } catch {
-        console.log("daemon not running");
-      }
+    run(async (_opts: unknown, cmd: Command) => {
+      const { stopDaemons } = await import("@isocan/server");
+      // Waits for the processes to actually die (SIGKILL if they won't), so
+      // `stop && serve` can't race its own predecessor.
+      const stopped = await stopDaemons(daemonPort(cmd), paths.isocanHome());
+      console.log(
+        stopped.length > 0
+          ? `stopped daemon${stopped.length > 1 ? "s" : ""} ${stopped.join(", ")}`
+          : "daemon not running",
+      );
     }),
   );
 

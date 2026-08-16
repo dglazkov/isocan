@@ -35,7 +35,10 @@ node bin/isocan.js open          # opens the canvas in your browser
 ```
 
 The CLI auto-starts the daemon. For development, `npm run dev` at the repo root
-runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
+runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together;
+it takes the port from any daemon already there, so you are never quietly
+served by a stale one. `isocan stop` (or `isocan serve --force`) does the same
+from the CLI — both ask the port who it is rather than trusting the pidfile.
 
 ## What it does
 
@@ -100,7 +103,7 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
 ## CLI surface
 
 ```
-isocan identity|whoami · serve|status|stop · open
+isocan identity|whoami · serve [--force]|status|stop · open
 isocan project create|list|show|edit|delete · isocan use <project>
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
