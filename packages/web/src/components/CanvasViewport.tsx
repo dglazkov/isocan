@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
+import { parseUriList } from "@isocan/core";
 import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
@@ -155,9 +156,23 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     e.preventDefault();
     setDropping(false);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+
+    // A dragged link or tab arrives as text/uri-list — the same type a
+    // browser item's blob stores — and lands as a projected site (#40).
+    if (files.length === 0) {
+      const link = parseUriList(e.dataTransfer.getData("text/uri-list"));
+      if (link) {
+        const { addBrowserItem } = await import("../lib/upload.ts");
+        try {
+          ui.select(await addBrowserItem(projectId, actor, link, world));
+        } catch {
+          // Not http(s) — nothing to project.
+        }
+      }
+      return;
+    }
 
     // Dropping a single file onto an existing item = new version of that item.
     const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");

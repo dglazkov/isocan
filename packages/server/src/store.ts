@@ -210,6 +210,7 @@ function extensionFor(filename: string, mimeType: string): string {
   if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
   const map: Record<string, string> = {
     "text/markdown": "md",
+    "text/uri-list": "uri",
     "text/html": "html",
     "text/plain": "txt",
     "image/png": "png",

@@ -12,11 +12,13 @@ import type {
   MentionCandidate,
   NewComment,
   Operation,
+  Placement,
   PresenceSession,
   Project,
   WatchedLogEntry,
 } from "@isocan/core";
 import {
+  BROWSER_MIME,
   DEFAULT_PORT,
   collectCanvasActors,
   collectCanvasNames,
@@ -29,6 +31,9 @@ import {
   newProjectId,
   newThreadId,
   newVersionId,
+  normalizeSiteUrl,
+  siteFilename,
+  siteLabel,
 } from "@isocan/core";
 import { paths } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
@@ -65,6 +70,9 @@ The system:
   project    a canvas; list with \`isocan project list\`
   item       a file rendered on the canvas (markdown, image, video, HTML) at
              x,y world coordinates (+x right, +y down)
+  browser    \`isocan browse <url>\` projects a live site onto the canvas —
+             point it at the localhost dev server you're building and the
+             human watches it run (vite HMR keeps it fresh by itself)
   version    every \`edit\` stacks a new version on the item; \`version promote\`
              brings any older one back to the top
   comment    threads pinned to an item (--item) or a spot (--at x,y); write
@@ -561,6 +569,32 @@ program
 
 // ---------- items ----------
 
+/** Shared placement rule for new items: --at > --anchor > left of the
+ * leftmost item > the origin. */
+function placementFor(
+  snapshot: CanvasSnapshotResponse,
+  opts: { at?: string; anchor?: string },
+): Placement {
+  if (opts.at) return parseXY(opts.at);
+  if (opts.anchor) return { anchorItemId: resolveItem(snapshot, opts.anchor).id };
+  const leftmost = Object.values(snapshot.canvas.items).reduce<Item | null>(
+    (best, item) => (best === null || item.x < best.x ? item : best),
+    null,
+  );
+  return leftmost ? { anchorItemId: leftmost.id } : { x: 0, y: 0 };
+}
+
+/** --size WxH, or the given default. */
+function sizeFor(
+  size: string | undefined,
+  fallback: { width: number; height: number },
+): { width: number; height: number } {
+  if (!size) return fallback;
+  const match = size.match(/^(\d+)x(\d+)$/);
+  if (!match) throw new Error(`--size expects WxH, got: ${size}`);
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
 program
   .command("add <file>")
   .description("Upload a file as a new canvas item (default placement: left of the leftmost item)")
@@ -592,27 +626,8 @@ program
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
         const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
 
-        let { width, height } = defaultSize(mimeType);
-        if (opts.size) {
-          const match = opts.size.match(/^(\d+)x(\d+)$/);
-          if (!match) throw new Error(`--size expects WxH, got: ${opts.size}`);
-          width = Number(match[1]);
-          height = Number(match[2]);
-        }
-
-        const items = Object.values(snapshot.canvas.items);
-        const leftmost = items.reduce<Item | null>(
-          (best, item) => (best === null || item.x < best.x ? item : best),
-          null,
-        );
-        const placement = opts.at
-          ? parseXY(opts.at)
-          : opts.anchor
-            ? { anchorItemId: resolveItem(snapshot, opts.anchor).id }
-            : leftmost
-              ? { anchorItemId: leftmost.id }
-              : { x: 0, y: 0 };
-
+        const { width, height } = sizeFor(opts.size, defaultSize(mimeType));
+        const placement = placementFor(snapshot, opts);
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -634,6 +649,59 @@ program
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
         if (ctx.json) return printJson({ itemId, placement: placed });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
+      },
+    ),
+  );
+
+program
+  .command("browse <url>")
+  .description(
+    "Project a live site onto the canvas as a mini-browser item — point it at the localhost dev server you're building",
+  )
+  .option("--at <x,y>", "place at world coordinates")
+  .option("--anchor <item>", "place to the left of this item")
+  .option("--size <WxH>", "display size (default 800x600)")
+  .option("--title <title>")
+  .action(
+    run(
+      async (
+        url: string,
+        opts: { at?: string; anchor?: string; size?: string; title?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const site = normalizeSiteUrl(url);
+        const filename = siteFilename(site);
+        await narrate(ctx, p.id, { status: `projecting ${truncate(siteLabel(site), 32)}…` });
+        // The blob IS the URL: a text/uri-list, so this is an ordinary
+        // item.add — undo, versions, and `isocan edit` need nothing new.
+        const upload = await ctx.client.uploadBlob(
+          p.id,
+          Buffer.from(`${site}\n`),
+          BROWSER_MIME,
+          filename,
+        );
+        const { width, height } = sizeFor(opts.size, { width: 800, height: 600 });
+        const itemId = newItemId();
+        const result = await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: {
+            id: newVersionId(),
+            blobHash: upload.blobHash,
+            mimeType: BROWSER_MIME,
+            filename,
+            size: upload.size,
+          },
+          width,
+          height,
+          placement: placementFor(snapshot, opts),
+          title: opts.title ?? siteLabel(site),
+        });
+        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        if (ctx.json) return printJson({ itemId, url: site, placement: placed });
+        console.log(`projected ${site} as ${itemId} at ${placed.x},${placed.y}`);
       },
     ),
   );

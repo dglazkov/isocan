@@ -38,7 +38,9 @@ interface UiStore {
   drag: DragState | null;
   resize: ResizeState | null;
   marquee: MarqueeState | null;
-  enteredHtmlItemId: string | null;
+  /** Item whose content owns the pointer (entered by double-click): an HTML
+   * document or a projected browser item. */
+  enteredItemId: string | null;
   openThreadId: string | null;
   pendingComment: PendingComment | null;
   commentMode: boolean;
@@ -62,7 +64,7 @@ interface UiStore {
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
-  setEnteredHtml: (itemId: string | null) => void;
+  setEntered: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
   setCommentMode: (on: boolean) => void;
@@ -76,8 +78,7 @@ export const useUiStore = create<UiStore>((set) => {
   const selectionSideEffects = (s: UiStore, next: string[]) => ({
     selectedItemIds: next,
     fannedItemId: next.length === 1 && s.fannedItemId === next[0] ? s.fannedItemId : null,
-    enteredHtmlItemId:
-      next.length === 1 && s.enteredHtmlItemId === next[0] ? s.enteredHtmlItemId : null,
+    enteredItemId: next.length === 1 && s.enteredItemId === next[0] ? s.enteredItemId : null,
   });
   return {
     viewport: { tx: 0, ty: 0, scale: 1 },
@@ -86,7 +87,7 @@ export const useUiStore = create<UiStore>((set) => {
     drag: null,
     resize: null,
     marquee: null,
-    enteredHtmlItemId: null,
+    enteredItemId: null,
     openThreadId: null,
     pendingComment: null,
     commentMode: false,
@@ -113,7 +114,7 @@ export const useUiStore = create<UiStore>((set) => {
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
     setMarquee: (marquee) => set({ marquee }),
-    setEnteredHtml: (enteredHtmlItemId) => set({ enteredHtmlItemId }),
+    setEntered: (enteredItemId) => set({ enteredItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setCommentMode: (commentMode) => set({ commentMode }),

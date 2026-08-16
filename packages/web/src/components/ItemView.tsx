@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
+import { BROWSER_MIME, parseUriList } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
@@ -26,7 +27,7 @@ export function ItemView({
   );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
-  const entered = useUiStore((s) => s.enteredHtmlItemId === item.id);
+  const entered = useUiStore((s) => s.enteredItemId === item.id);
   const commentMode = useUiStore((s) => s.commentMode);
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
@@ -41,11 +42,20 @@ export function ItemView({
   const height = resize?.height ?? item.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const stackDepth = Math.min(item.versions.length - 1, 2);
+  const isBrowser = current.mimeType === BROWSER_MIME;
+  // Bumping this remounts a browser item's iframe — the reload button. Vite
+  // sites refresh themselves over HMR; this is for everything that doesn't.
+  const [reloadToken, setReloadToken] = useState(0);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest(".resize-handle") || target.closest(".version-badge")) return;
+    if (
+      target.closest(".resize-handle") ||
+      target.closest(".version-badge") ||
+      target.closest(".browser-reload")
+    )
+      return;
     if (entered) return; // entered content owns the pointer
 
     const ui = useUiStore.getState();
@@ -168,7 +178,7 @@ export function ItemView({
   }
 
   function onDoubleClick() {
-    useUiStore.getState().setEnteredHtml(item.id);
+    useUiStore.getState().setEntered(item.id);
   }
 
   return (
@@ -210,6 +220,18 @@ export function ItemView({
         <span className="name" title={`${item.title} — last edit by ${item.updatedBy.name}`}>
           {item.title}
         </span>
+        {isBrowser && (
+          <button
+            className="browser-reload"
+            title="Reload the projected site"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReloadToken((n) => n + 1);
+            }}
+          >
+            ⟳
+          </button>
+        )}
         {worker && (
           <span
             className="work-chip"
@@ -230,8 +252,9 @@ export function ItemView({
           mimeType={current.mimeType}
           filename={current.filename}
           entered={entered}
+          reloadToken={reloadToken}
         />
-        {current.mimeType === "text/html" && !entered && (
+        {(current.mimeType === "text/html" || isBrowser) && !entered && (
           <div className="html-hint">double-click to interact</div>
         )}
         {worker && <div className="work-sheen" />}
@@ -290,12 +313,15 @@ export function VersionContent({
   mimeType,
   filename,
   entered,
+  reloadToken = 0,
 }: {
   projectId: string;
   blobHash: string;
   mimeType: string;
   filename: string;
   entered: boolean;
+  /** Bumped by the titlebar's ⟳ to remount a browser item's iframe. */
+  reloadToken?: number;
 }) {
   const url = blobUrl(projectId, blobHash);
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
@@ -306,6 +332,9 @@ export function VersionContent({
   }
   if (mimeType.startsWith("video/")) {
     return <video className="video-view" src={url} controls={entered} muted loop playsInline />;
+  }
+  if (mimeType === BROWSER_MIME) {
+    return <BrowserView blobUrl={url} reloadToken={reloadToken} />;
   }
   if (mimeType === "text/html") {
     // Security boundary: allow-scripts WITHOUT allow-same-origin gives the
@@ -319,6 +348,56 @@ export function VersionContent({
       {filename}
       <br />({mimeType})
     </div>
+  );
+}
+
+/**
+ * The mini-browser (#40): the version's blob is a text/uri-list naming a
+ * live site — typically a localhost dev server — and the content is that
+ * site in an iframe. A Vite site refreshes itself over its own HMR socket;
+ * the titlebar's ⟳ remounts the frame for everything else.
+ *
+ * Sandbox posture, deliberately different from the HTML-blob boundary
+ * above: the projected site keeps ITS OWN origin (`allow-same-origin`), so
+ * its localStorage, cookies, and dev tooling work — and since a dev server
+ * on another port is cross-origin from this app, that still cannot reach
+ * the canvas's DOM, storage, or the daemon API. The one exception is
+ * projecting this app's own origin onto itself, which is the user
+ * projecting their own tool — not a boundary this sandbox is defending.
+ */
+function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: number }) {
+  const [site, setSite] = useState(() => {
+    const cached = textCache.get(blobUrl);
+    return cached === undefined ? null : parseUriList(cached);
+  });
+
+  useEffect(() => {
+    if (textCache.has(blobUrl)) {
+      setSite(parseUriList(textCache.get(blobUrl)!));
+      return;
+    }
+    let cancelled = false;
+    fetch(blobUrl)
+      .then((res) => res.text())
+      .then((body) => {
+        textCache.set(blobUrl, body);
+        if (!cancelled) setSite(parseUriList(body));
+      })
+      .catch(() => !cancelled && setSite(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [blobUrl]);
+
+  if (site === null) return <div className="file-view">…</div>;
+  return (
+    <iframe
+      key={reloadToken}
+      className="browser-view"
+      src={site}
+      sandbox="allow-scripts allow-same-origin allow-forms"
+      title={site}
+    />
   );
 }
 

@@ -1,10 +1,10 @@
-import { useRef } from "react";
-import type { Actor } from "@isocan/core";
+import { useRef, useState } from "react";
+import type { Actor, Placement } from "@isocan/core";
 import { mainThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, undo } from "../lib/api.ts";
-import { addFiles } from "../lib/upload.ts";
+import { addBrowserItem, addFiles } from "../lib/upload.ts";
 import { screenToWorld, zoomAt } from "../lib/viewport.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
@@ -29,24 +29,42 @@ export function Shelf({
   const canvas = useCanvasStore((s) => s.canvas);
   const seen = useUnreadStore((s) => s.seen);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [siteOpen, setSiteOpen] = useState(false);
+  const [siteUrl, setSiteUrl] = useState("");
+  const [siteError, setSiteError] = useState<string | null>(null);
 
   const main = canvas ? mainThread(canvas) : null;
   const unread = main ? unreadCount(main, seen, actor.id) : 0;
+
+  // A single selected item anchors placement (left of it); otherwise the
+  // viewport center.
+  function createPlacement(): Placement {
+    const { selectedItemIds, viewport } = useUiStore.getState();
+    return selectedItemIds.length === 1
+      ? { anchorItemId: selectedItemIds[0]! }
+      : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
+  }
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
-    const { selectedItemIds, viewport } = useUiStore.getState();
-    // A single selected item anchors placement (left of it); otherwise the
-    // viewport center.
-    const placement =
-      selectedItemIds.length === 1
-        ? { anchorItemId: selectedItemIds[0]! }
-        : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
-    const ids = await addFiles(projectId, actor, files, placement);
+    const ids = await addFiles(projectId, actor, files, createPlacement());
     const last = ids[ids.length - 1];
     if (last) useUiStore.getState().select(last);
+  }
+
+  async function onProjectSite(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const itemId = await addBrowserItem(projectId, actor, siteUrl, createPlacement());
+      setSiteOpen(false);
+      setSiteUrl("");
+      setSiteError(null);
+      useUiStore.getState().select(itemId);
+    } catch (err) {
+      setSiteError((err as Error).message);
+    }
   }
 
   const zoom = (factor: number) =>
@@ -70,6 +88,37 @@ export function Shelf({
         onChange={onPick}
         accept=".md,.markdown,.txt,.html,.htm,image/*,video/*"
       />
+      <button
+        className={`btn${siteOpen ? " active" : ""}`}
+        title="Project a live site — point it at your localhost dev server"
+        onClick={() => {
+          setSiteOpen(!siteOpen);
+          setSiteError(null);
+        }}
+      >
+        ＋ Site
+      </button>
+      {siteOpen && (
+        <form className="site-popover" onSubmit={onProjectSite}>
+          <input
+            className="text-input"
+            autoFocus
+            placeholder="localhost:5173"
+            value={siteUrl}
+            onChange={(e) => {
+              setSiteUrl(e.target.value);
+              setSiteError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setSiteOpen(false);
+            }}
+          />
+          <button className="btn primary" type="submit" disabled={!siteUrl.trim()}>
+            Project
+          </button>
+          {siteError && <div className="site-error">{siteError}</div>}
+        </form>
+      )}
       <span className="shelf-divider" />
       <button
         className={`btn icon${commentMode ? " active" : ""}`}

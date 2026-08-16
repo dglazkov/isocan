@@ -143,7 +143,7 @@ export function CanvasPage({ actor }: { actor: Actor }) {
         else if (ui.openThreadId) ui.setOpenThread(null);
         else if (ui.commentMode) ui.setCommentMode(false);
         else if (ui.fannedItemId) ui.setFanned(null);
-        else if (ui.enteredHtmlItemId) ui.setEnteredHtml(null);
+        else if (ui.enteredItemId) ui.setEntered(null);
         else ui.select(null);
       } else if (e.key.toLowerCase() === "v" && !e.metaKey && !e.ctrlKey) {
         if (ui.selectedItemIds.length === 1) {

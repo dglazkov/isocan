@@ -1,5 +1,12 @@
 import type { Actor, Placement } from "@isocan/core";
-import { newItemId, newVersionId } from "@isocan/core";
+import {
+  BROWSER_MIME,
+  newItemId,
+  newVersionId,
+  normalizeSiteUrl,
+  siteFilename,
+  siteLabel,
+} from "@isocan/core";
 import { sendOp, uploadBlob } from "./api.ts";
 import { mimeTypeOf } from "./mime.ts";
 
@@ -64,6 +71,41 @@ export async function addFiles(
     offset += 28;
   }
   return ids;
+}
+
+/** Default footprint for a projected site — roomy enough to be an app. */
+export const BROWSER_SIZE = { width: 800, height: 600 };
+
+/**
+ * Project a live site onto the canvas (#40): an ordinary item whose blob is
+ * a text/uri-list naming the URL. Throws on a URL that isn't http(s).
+ */
+export async function addBrowserItem(
+  projectId: string,
+  actor: Actor,
+  rawUrl: string,
+  placement: Placement,
+): Promise<string> {
+  const site = normalizeSiteUrl(rawUrl);
+  const filename = siteFilename(site);
+  const blob = new Blob([`${site}\n`], { type: BROWSER_MIME });
+  const upload = await uploadBlob(projectId, blob, filename);
+  const itemId = newItemId();
+  await sendOp(projectId, actor, {
+    type: "item.add",
+    itemId,
+    version: {
+      id: newVersionId(),
+      blobHash: upload.blobHash,
+      mimeType: BROWSER_MIME,
+      filename,
+      size: upload.size,
+    },
+    ...BROWSER_SIZE,
+    placement,
+    title: siteLabel(site),
+  });
+  return itemId;
 }
 
 /** Upload a file as a NEW VERSION of an existing item. */

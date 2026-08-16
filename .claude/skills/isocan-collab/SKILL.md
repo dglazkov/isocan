@@ -139,6 +139,10 @@ you were summoned to.
   asks for something and you build the item, run
   `isocan comment anchor <thread> <item>` so the thread pins to the result
   and follows it from then on.
+- **Show running software, don't describe it.** When your work is a dev
+  server the human could look at, `isocan browse http://localhost:<port>`
+  projects the live site onto the canvas as a mini-browser item — vite
+  HMR keeps it current on its own; the item's ⟳ reloads anything else.
 - **Versions are the medium for iteration.** "Change X on this item" means
   `edit` → new version. Mention "vN on the stack — fan out (V) to compare"
   in your reply so the human knows the history is there.
@@ -162,5 +166,5 @@ you were summoned to.
 `isocan --help` covers everything; the commands you'll live in:
 `comment list|add|reply|anchor`, `session start|work|say|point|end`,
 `who [--all]`,
-`add`, `edit`, `mv`, `set`, `ls`, `show`, `versions`, `version promote`,
+`add`, `browse <url>`, `edit`, `mv`, `set`, `ls`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`.

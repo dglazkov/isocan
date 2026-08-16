@@ -7,4 +7,5 @@ export * from "./placement.ts";
 export * from "./protocol.ts";
 export * from "./ids.ts";
 export * from "./mentions.ts";
+export * from "./browseritem.ts";
 export * from "./itemrefs.ts";
