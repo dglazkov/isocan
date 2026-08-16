@@ -112,6 +112,22 @@ export class Engine {
   }
 
   /**
+   * Upload a blob. Not an Operation — but `blobs.json` is a whole-file
+   * read-modify-write, and gc rewrites the same file, so an upload is a
+   * writer like any other and belongs on the same chain. Off it, two clients
+   * uploading at once both read the pre-upload index and the second write
+   * erases the first's entry: bytes on disk that nothing can name, and a
+   * permanent 404 for the item pointing at them.
+   */
+  putBlob(
+    projectId: string,
+    data: Buffer,
+    meta: { mimeType: string; filename: string },
+  ): Promise<{ blobHash: string; size: number; mimeType: string }> {
+    return this.enqueue(() => this.store.putBlob(projectId, data, meta));
+  }
+
+  /**
    * Actor-scoped undo: walk THIS actor's stack. Stored inverses are applied
    * as-is when possible (stale values are accepted — undo restores what you
    * changed); inverses invalidated by other actors' ops are repaired (batch

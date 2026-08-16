@@ -137,6 +137,11 @@ export class Store {
 
   // ---- blobs ----
 
+  /**
+   * Store bytes and name them in the index. Read-modify-write over the whole
+   * of `blobs.json`, so like every other writer here it must be called from
+   * the engine's single-writer chain — `Engine.putBlob`, never directly.
+   */
   async putBlob(
     id: string,
     data: Buffer,

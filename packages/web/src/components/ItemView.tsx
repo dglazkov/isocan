@@ -307,6 +307,34 @@ function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
 
 const textCache = new Map<string, string>();
 
+/**
+ * A blob's body as text, memoized. Only a 2xx is cached — a 404's body is the
+ * daemon's `{"error":"blob not found"}`, and reading it as the document is how
+ * that JSON ends up rendered on the canvas, then remembered as the file's
+ * contents for the rest of the session.
+ */
+async function fetchBlobText(url: string): Promise<string> {
+  const cached = textCache.get(url);
+  if (cached !== undefined) return cached;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.text();
+  textCache.set(url, body);
+  return body;
+}
+
+/** Loaded text, a load failure, or neither yet. */
+type TextLoad = { text: string } | { failed: string } | null;
+
+function BlobError({ reason }: { reason: string }) {
+  return (
+    <div className="file-view">
+      couldn't load this file
+      <br />({reason})
+    </div>
+  );
+}
+
 export function VersionContent({
   projectId,
   blobHash,
@@ -366,30 +394,25 @@ export function VersionContent({
  * projecting their own tool — not a boundary this sandbox is defending.
  */
 function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: number }) {
-  const [site, setSite] = useState(() => {
+  const [load, setLoad] = useState<TextLoad>(() => {
     const cached = textCache.get(blobUrl);
-    return cached === undefined ? null : parseUriList(cached);
+    return cached === undefined ? null : { text: cached };
   });
 
   useEffect(() => {
-    if (textCache.has(blobUrl)) {
-      setSite(parseUriList(textCache.get(blobUrl)!));
-      return;
-    }
     let cancelled = false;
-    fetch(blobUrl)
-      .then((res) => res.text())
-      .then((body) => {
-        textCache.set(blobUrl, body);
-        if (!cancelled) setSite(parseUriList(body));
-      })
-      .catch(() => !cancelled && setSite(null));
+    fetchBlobText(blobUrl)
+      .then((body) => !cancelled && setLoad({ text: body }))
+      .catch((err: Error) => !cancelled && setLoad({ failed: err.message }));
     return () => {
       cancelled = true;
     };
   }, [blobUrl]);
 
-  if (site === null) return <div className="file-view">…</div>;
+  if (load === null) return <div className="file-view">…</div>;
+  if ("failed" in load) return <BlobError reason={load.failed} />;
+  const site = parseUriList(load.text);
+  if (site === null) return <BlobError reason="not a link" />;
   return (
     <iframe
       key={reloadToken}
@@ -402,32 +425,28 @@ function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: n
 }
 
 function MarkdownView({ url, plain }: { url: string; plain: boolean }) {
-  const [text, setText] = useState(() => textCache.get(url) ?? null);
+  const [load, setLoad] = useState<TextLoad>(() => {
+    const cached = textCache.get(url);
+    return cached === undefined ? null : { text: cached };
+  });
 
   useEffect(() => {
-    if (textCache.has(url)) {
-      setText(textCache.get(url)!);
-      return;
-    }
     let cancelled = false;
-    fetch(url)
-      .then((res) => res.text())
-      .then((body) => {
-        textCache.set(url, body);
-        if (!cancelled) setText(body);
-      })
-      .catch(() => !cancelled && setText("(failed to load)"));
+    fetchBlobText(url)
+      .then((body) => !cancelled && setLoad({ text: body }))
+      .catch((err: Error) => !cancelled && setLoad({ failed: err.message }));
     return () => {
       cancelled = true;
     };
   }, [url]);
 
-  if (text === null) return <div className="file-view">…</div>;
-  if (plain) return <div className="md-view" style={{ whiteSpace: "pre-wrap" }}>{text}</div>;
+  if (load === null) return <div className="file-view">…</div>;
+  if ("failed" in load) return <BlobError reason={load.failed} />;
+  if (plain) return <div className="md-view" style={{ whiteSpace: "pre-wrap" }}>{load.text}</div>;
   return (
     <div className="md-view">
       {/* GFM: tables, strikethrough, task lists, autolinks */}
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{load.text}</ReactMarkdown>
     </div>
   );
 }

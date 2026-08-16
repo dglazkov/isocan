@@ -242,7 +242,7 @@ export function registerRoutes(
     }
     const mimeType = req.headers["content-type"] ?? "application/octet-stream";
     const filename = String(req.headers["x-isocan-filename"] ?? "upload.bin");
-    return store.putBlob(id, data, { mimeType, filename });
+    return engine.putBlob(id, data, { mimeType, filename });
   });
 
   app.get("/api/projects/:id/blobs/:hash", async (req, reply) => {
