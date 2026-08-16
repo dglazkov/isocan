@@ -176,7 +176,15 @@ function open(projectId: string): void {
         return;
       }
       const state: ProjectState = { project, canvas };
-      const next = applyOperation(state, message.entry.envelope);
+      let next: ProjectState | null;
+      try {
+        next = applyOperation(state, message.entry.envelope);
+      } catch {
+        // An op this build cannot apply — a tab left open across a daemon
+        // upgrade. Same policy as a gap: resync from a server snapshot.
+        ws.close();
+        return;
+      }
       if (next === null) return; // project.delete arrives as project-deleted too
       useCanvasStore.setState({
         project: next.project,

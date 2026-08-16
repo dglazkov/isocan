@@ -108,6 +108,26 @@ describe("daemon HTTP", () => {
     expect(internal.json.code).toBe("internal-op");
   });
 
+  // Regression: a daemon older than the client that sent the op used to fall
+  // out of the reducer switch — the entry landed in the oplog with no inverse
+  // and undefined became the project's in-memory state, 500ing every read
+  // afterwards.
+  it("rejects an op type it does not know, leaving the project intact", async () => {
+    await createProjectWithItem();
+    const future = await op({ type: "item.teleport", itemId: "itm_1" } as unknown as Operation);
+    expect(future.status).toBe(400);
+    expect(future.json.code).toBe("unknown-op");
+
+    const log: LogEntry[] = await get("/api/projects/prj_1/oplog?since=0");
+    expect(log).toHaveLength(2); // nothing appended
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(snapshot.canvas.items["itm_1"].x).toBe(5);
+
+    // The project still accepts ops.
+    const move = await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 });
+    expect(move.status).toBe(200);
+  });
+
   it("404s unknown projects", async () => {
     const res = await fetch(`${base}/api/projects/prj_nope/canvas`);
     expect(res.status).toBe(404);

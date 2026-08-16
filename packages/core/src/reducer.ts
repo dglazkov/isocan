@@ -9,7 +9,7 @@ import type {
 } from "./model.ts";
 import { emptyCanvas } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
-import { OpValidationError } from "./errors.ts";
+import { OpValidationError, unknownOperation } from "./errors.ts";
 import { resolvePlacement } from "./placement.ts";
 
 /**
@@ -309,6 +309,9 @@ export function applyOperation(
         threads: { ...canvas.threads, [op.thread.id]: op.thread },
       });
     }
+
+    default:
+      return unknownOperation(op);
   }
 }
 

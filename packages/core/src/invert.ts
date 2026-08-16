@@ -1,6 +1,6 @@
 import type { ProjectState } from "./model.ts";
 import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
-import { OpValidationError } from "./errors.ts";
+import { OpValidationError, unknownOperation } from "./errors.ts";
 
 /**
  * Compute the inverse of an operation against the state it is ABOUT to be
@@ -152,6 +152,9 @@ export function invertOperation(
 
     case "thread.restore":
       return { type: "thread.delete", threadId: op.thread.id };
+
+    default:
+      return unknownOperation(op);
   }
 }
 
