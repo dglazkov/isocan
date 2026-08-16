@@ -13,7 +13,7 @@ import type {
 import { applyOperation } from "@isocan/core";
 import { CLIENT_ID } from "../lib/api.ts";
 import { useUiStore } from "./uiStore.ts";
-import { noticeComment, syncProject } from "./unreadStore.ts";
+import { markRead, noticeComment, syncProject } from "./unreadStore.ts";
 
 export type Connection = "connecting" | "live" | "reconnecting" | "gone";
 
@@ -107,6 +107,13 @@ function announceComment(envelope: OpEnvelope): void {
   const { op, actor } = envelope;
   if (op.type !== "thread.create" && op.type !== "thread.reply") return;
   if (actor.id === presenceActor?.id) return;
+  // Landing in the main thread while its panel is open: you're looking right
+  // at it — no toast, the watermark moves instead (same rule as open popovers).
+  const thread = useCanvasStore.getState().canvas?.threads[op.threadId];
+  if (thread?.main && useUiStore.getState().mainPanelOpen) {
+    markRead(op.threadId);
+    return;
+  }
   noticeComment({
     id: op.comment.id,
     threadId: op.threadId,

@@ -18,13 +18,14 @@ import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
 import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
+import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
  * presence roster (labels too), and the live items. Resolved at send time
  * from the store, so the rosters are never stale. */
-function makeComment(body: string): NewComment {
+export function makeComment(body: string): NewComment {
   const { canvas, sessions } = useCanvasStore.getState();
   const mentions = extractMentions(body, mentionRoster(canvas, sessions).candidates);
   const items = canvas ? extractItemRefs(body, collectItemRefCandidates(canvas)) : [];
@@ -60,12 +61,14 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
     return { x: world.x + (riding?.dx ?? 0), y: world.y + (riding?.dy ?? 0) };
   }
 
-  const threads = Object.values(canvas.threads);
+  // The main thread has no pin — it lives in the docked panel instead.
+  const threads = Object.values(canvas.threads).filter((thread) => !thread.main);
   const screenOf = (thread: CommentThread) => {
     const world = pinWorldPos(thread);
     return worldToScreen(viewport, world.x, world.y);
   };
-  const openThread = openThreadId ? canvas.threads[openThreadId] : undefined;
+  const openedThread = openThreadId ? canvas.threads[openThreadId] : undefined;
+  const openThread = openedThread?.main ? undefined : openedThread;
 
   // Two layers: pins sit under panels (z 8); popovers sit above them (z 30).
   // One layer would trap the popover in the pins' stacking context.
@@ -272,6 +275,17 @@ function ThreadPopover({
         </button>
       </form>
       <div className="thread-actions">
+        <button
+          className="promote"
+          title="Dock this thread as the canvas's main thread — agents always wake on it"
+          onClick={async () => {
+            useUiStore.getState().setOpenThread(null);
+            openMainPanel(projectId, true);
+            await sendOp(projectId, actor, { type: "thread.setMain", threadId: thread.id });
+          }}
+        >
+          Make main
+        </button>
         <button
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);

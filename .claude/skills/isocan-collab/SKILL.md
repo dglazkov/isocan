@@ -73,13 +73,24 @@ keep it — a stable name is worth more than a fresh one.
    full id) — in the web app the chip flies the reader to the item, so
    "done, see #Roadmap" beats describing where things are.
 6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
-   that is FOR YOU: one that @-mentions you (name or session label) or lands
-   in a thread you wrote in or were mentioned in. Everything else — comments
-   for others, comments mentioning nobody — is ether and won't wake you.
+   that is FOR YOU: one that @-mentions you (name or session label), lands in
+   the MAIN thread (see below), or lands in a thread you wrote in or were
+   mentioned in. Everything else — comments for others, comments mentioning
+   nobody — is ether and won't wake you.
    Exit 2 on timeout, 0 with the feedback as JSON. Run it as a background
    task; while parked your cursor shows "waiting for your feedback…"
    automatically. On wake: go to step 3.
 7. **Leave.** `isocan session end` when the collaboration is over.
+
+## The main thread
+
+One thread per canvas may be designated "main" (`isocan comment main` shows
+it; `comment main <thread>` designates). It is the user's direct channel to
+you: in the web app it renders as a docked chat panel, everything posted
+there wakes your `wait` with no @-mention needed, and `#Title` references in
+it render as cards that fly the reader to the item. Treat it as the primary
+conversation — reply to main-thread asks in the main thread, and keep
+item-specific critique on the item's own anchored threads.
 
 ## Practices that earn trust
 

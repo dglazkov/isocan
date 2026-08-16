@@ -317,35 +317,107 @@ input, textarea { font: inherit; color: var(--ink); }
   /* Bleed into the padding so the scrollbar rides the popover's edge. */
   margin: -10px -12px 0; padding: 10px 12px 0;
 }
-.thread-popover .comment { margin-bottom: 8px; overflow-wrap: anywhere; }
-.thread-popover .who { font-weight: 700; font-size: 11px; }
-.thread-popover .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
+/* .comment renders in the thread popover AND the main-thread panel. */
+.comment { margin-bottom: 8px; overflow-wrap: anywhere; }
+.comment .who { font-weight: 700; font-size: 11px; }
+.comment .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
 /* Comment bodies render as markdown — same idiom as .md-view, sized down. */
-.thread-popover .body { margin: 2px 0 0; }
-.thread-popover .body > :first-child { margin-top: 0; }
-.thread-popover .body > :last-child { margin-bottom: 0; }
-.thread-popover .body p { margin: 0.3em 0; }
-.thread-popover .body ul, .thread-popover .body ol { margin: 0.3em 0; padding-left: 18px; }
-.thread-popover .body h1, .thread-popover .body h2, .thread-popover .body h3,
-.thread-popover .body h4 { margin: 0.4em 0 0.2em; font-size: 12px; line-height: 1.25; }
-.thread-popover .body pre {
+.comment .body { margin: 2px 0 0; }
+.comment .body > :first-child { margin-top: 0; }
+.comment .body > :last-child { margin-bottom: 0; }
+.comment .body p { margin: 0.3em 0; }
+.comment .body ul, .comment .body ol { margin: 0.3em 0; padding-left: 18px; }
+.comment .body h1, .comment .body h2, .comment .body h3,
+.comment .body h4 { margin: 0.4em 0 0.2em; font-size: 12px; line-height: 1.25; }
+.comment .body pre {
   background: var(--chip); border-radius: 5px; padding: 6px; overflow-x: auto; font-size: 11px;
 }
-.thread-popover .body code { background: var(--chip); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
-.thread-popover .body img { max-width: 100%; }
-.thread-popover .body table { border-collapse: collapse; margin: 0.4em 0; font-size: 11px; }
-.thread-popover .body th, .thread-popover .body td {
+.comment .body code { background: var(--chip); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
+.comment .body img { max-width: 100%; }
+.comment .body table { border-collapse: collapse; margin: 0.4em 0; font-size: 11px; }
+.comment .body th, .comment .body td {
   border: 1px solid var(--line); padding: 2px 6px; text-align: left; vertical-align: top;
 }
-.thread-popover .body th { background: var(--chip); font-weight: 600; }
-.thread-popover .body blockquote {
+.comment .body th { background: var(--chip); font-weight: 600; }
+.comment .body blockquote {
   border-left: 3px solid var(--line); margin: 0.4em 0; padding-left: 8px; color: var(--ink-muted);
 }
-.thread-popover .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
+.comment .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
 .thread-popover form { display: flex; gap: 6px; margin-top: 8px; flex: none; }
-.thread-popover .thread-actions { display: flex; justify-content: flex-end; margin-top: 6px; flex: none; }
+.thread-popover .thread-actions { display: flex; justify-content: space-between; margin-top: 6px; flex: none; }
 .thread-popover .thread-actions button {
   background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
+}
+.thread-popover .thread-actions button.promote { color: var(--accent); }
+
+/* ---------- main thread (#36): docked panel + collapsed pill ---------- */
+/* The designated agent↔user channel. Docked left like the trash panel's
+   mirror; messages hug the bottom, chat-style; #item references render as
+   cards (ItemCard). Collapsed, it is a pill above the zoom chip. */
+.main-panel {
+  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: 25;
+  background: var(--card); border-right: 1px solid var(--line);
+  box-shadow: 12px 0 24px -18px rgba(30, 34, 40, 0.3);
+  display: flex; flex-direction: column; font-size: 12px;
+}
+.main-panel header {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.main-panel header b { font-size: 12.5px; }
+.main-panel header .spacer { flex: 1; }
+.main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.main-detach, .main-close {
+  background: none; border: none; color: var(--ink-soft); font-size: 11px; padding: 2px 4px;
+}
+.main-detach:hover, .main-close:hover { color: var(--ink); }
+.main-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; display: flex; }
+/* Bottom-anchored like a chat: a short thread sits at the composer, a long
+   one scrolls. min-height makes the margin-auto trick and scrolling coexist. */
+.main-msgs {
+  margin-top: auto; min-height: min-content; width: 100%;
+  padding: 12px 14px 6px; display: flex; flex-direction: column;
+}
+.main-empty { color: var(--ink-muted); padding-bottom: 6px; }
+.main-panel form {
+  display: flex; gap: 6px; flex: none; padding: 10px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* #item reference as a card — the Claude-Artifact idiom, so it's familiar. */
+.mt-card {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  margin-top: 6px; padding: 8px 10px; text-align: left;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+button.mt-card:hover { border-color: var(--accent); }
+.mt-card.gone { color: var(--ink-muted); box-shadow: none; border-style: dashed; }
+.mt-glyph {
+  width: 28px; height: 28px; border-radius: 6px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, white);
+  color: var(--accent); font-size: 13px;
+}
+.mt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mt-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-meta { font-size: 10.5px; color: var(--ink-muted); }
+.mt-go { color: var(--ink-soft); flex: none; }
+
+/* Collapsed: a pill above the zoom chip, wearing the unread count. */
+.main-pill {
+  position: absolute; left: 14px; bottom: 52px; z-index: 20;
+  display: flex; align-items: center; gap: 7px; padding: 6px 12px 6px 10px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 4px 10px -3px rgba(31, 63, 208, 0.35);
+  font-size: 12px; font-weight: 600; color: var(--ink);
+}
+.main-pill:hover { border-color: var(--accent); }
+.main-pill-badge {
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
 }
 
 /* ---------- arriving-comment toasts ---------- */
@@ -414,12 +486,12 @@ input, textarea { font: inherit; color: var(--ink); }
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 3px; font-weight: 600;
 }
-.thread-popover .body .item-ref {
+.comment .body .item-ref {
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
-.thread-popover .body .item-ref:hover {
+.comment .body .item-ref:hover {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }

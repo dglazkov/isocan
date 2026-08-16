@@ -139,6 +139,14 @@ function randomOp(state: ProjectState, rnd: () => number): Operation | null {
     {
       weight: 1,
       when: threads.length > 0,
+      make: () => ({
+        type: "thread.setMain",
+        threadId: rnd() < 0.25 ? null : pickThread().id,
+      }),
+    },
+    {
+      weight: 1,
+      when: threads.length > 0,
       make: () => ({ type: "thread.delete", threadId: pickThread().id }),
     },
     {

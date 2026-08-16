@@ -247,6 +247,47 @@ describe("semantics", () => {
     expect(s.canvas.threads["thr_1"]!.anchorItemId).toBe("itm_2");
   });
 
+  it("setMain keeps at most one main thread; null demotes", () => {
+    let s = apply(seedState(), { type: "thread.setMain", threadId: "thr_1" })!;
+    expect(s.canvas.threads["thr_1"]!.main).toBe(true);
+    s = apply(s, { type: "thread.setMain", threadId: "thr_2" })!;
+    expect("main" in s.canvas.threads["thr_1"]!).toBe(false);
+    expect(s.canvas.threads["thr_2"]!.main).toBe(true);
+    s = apply(s, { type: "thread.setMain", threadId: null })!;
+    expect(Object.values(s.canvas.threads).some((t) => t.main)).toBe(false);
+  });
+
+  it("rejects a second thread born main while one exists", () => {
+    const s = apply(seedState(), { type: "thread.setMain", threadId: "thr_1" })!;
+    try {
+      applyOperation(
+        s,
+        envelope({
+          type: "thread.create",
+          threadId: "thr_x",
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          main: true,
+          comment: { id: "cmt_x", body: "hi" },
+        }),
+      );
+      expect.unreachable("expected main-exists");
+    } catch (err) {
+      expect((err as OpValidationError).code).toBe("main-exists");
+    }
+  });
+
+  it("restoring a deleted main thread yields if another main appeared since", () => {
+    let s = apply(seedState(), { type: "thread.setMain", threadId: "thr_1" })!;
+    const deleted = s.canvas.threads["thr_1"]!;
+    s = apply(s, { type: "thread.delete", threadId: "thr_1" })!;
+    s = apply(s, { type: "thread.setMain", threadId: "thr_2" })!;
+    s = apply(s, { type: "thread.restore", thread: deleted })!;
+    expect("main" in s.canvas.threads["thr_1"]!).toBe(false);
+    expect(s.canvas.threads["thr_2"]!.main).toBe(true);
+  });
+
   it("comments store resolved @-mentions; absent when none were passed", () => {
     let s = apply(seedState(), {
       type: "thread.reply",

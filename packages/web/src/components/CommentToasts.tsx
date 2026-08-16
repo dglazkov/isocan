@@ -4,6 +4,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { dismissNotice, useUnreadStore, type CommentNotice } from "../stores/unreadStore.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
+import { openMainPanel } from "./MainThreadPanel.tsx";
 
 const LIFETIME_MS = 12_000; // long enough to read, short enough to forgive
 
@@ -47,7 +48,11 @@ function Toast({ notice }: { notice: CommentNotice }) {
   function jump() {
     const state = useCanvasStore.getState().canvas;
     const target = state?.threads[notice.threadId];
-    if (target) {
+    if (target?.main) {
+      // The main thread lives in the docked panel, not at a canvas spot.
+      const projectId = useCanvasStore.getState().projectId;
+      if (projectId) openMainPanel(projectId, true);
+    } else if (target) {
       const world = threadWorldPos(state!, target);
       const ui = useUiStore.getState();
       ui.setViewport(centerOn(ui.viewport, world.x, world.y, window.innerWidth, window.innerHeight));

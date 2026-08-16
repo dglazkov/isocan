@@ -43,6 +43,9 @@ interface UiStore {
   pendingComment: PendingComment | null;
   commentMode: boolean;
   trashOpen: boolean;
+  /** The docked main-thread panel (pill when closed). Persisted per project
+   * by openMainPanel in MainThreadPanel — set only through it. */
+  mainPanelOpen: boolean;
   setViewport: (viewport: Viewport) => void;
   /** Replace the selection with one item (or clear it). */
   select: (itemId: string | null) => void;
@@ -57,6 +60,7 @@ interface UiStore {
   setPendingComment: (pending: PendingComment | null) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
+  setMainPanelOpen: (open: boolean) => void;
 }
 
 /** Local-only UI state — never synced, deliberately per-client. */
@@ -80,6 +84,7 @@ export const useUiStore = create<UiStore>((set) => {
     pendingComment: null,
     commentMode: false,
     trashOpen: false,
+    mainPanelOpen: false,
     setViewport: (viewport) => set({ viewport }),
     select: (itemId) => set((s) => selectionSideEffects(s, itemId === null ? [] : [itemId])),
     setSelection: (itemIds) => set((s) => selectionSideEffects(s, itemIds)),
@@ -101,5 +106,6 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setCommentMode: (commentMode) => set({ commentMode }),
     setTrashOpen: (trashOpen) => set({ trashOpen }),
+    setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
   };
 });

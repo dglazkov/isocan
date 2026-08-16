@@ -14,6 +14,7 @@ import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
 import { TrashPanel } from "../components/TrashPanel.tsx";
+import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
@@ -133,6 +134,7 @@ export function CanvasPage({ actor }: { actor: Actor }) {
       <Toolbar projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
+      <MainThreadPanel projectId={projectId} actor={actor} />
       <CommentToasts />
     </div>
   );

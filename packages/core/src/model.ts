@@ -77,6 +77,11 @@ export interface CommentThread {
   anchorItemId: string | null;
   /** Always at least one comment. */
   comments: Comment[];
+  /** At most one thread on a canvas is "main": the designated agent↔user
+   * channel. It renders as a docked chat panel instead of a canvas pin, and
+   * agents always wake on comments landing in it. Its (x, y) are kept so
+   * demoting it puts the pin back where the thread lived. */
+  main?: boolean;
   createdAt: string;
   createdBy: Actor;
 }
@@ -101,4 +106,9 @@ export interface ProjectState {
 
 export function emptyCanvas(): CanvasState {
   return { items: {}, threads: {}, trash: [] };
+}
+
+/** The designated main thread, if the canvas has one. */
+export function mainThread(canvas: CanvasState): CommentThread | null {
+  return Object.values(canvas.threads).find((thread) => thread.main) ?? null;
 }

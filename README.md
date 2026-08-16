@@ -55,6 +55,14 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
+- **The main thread**: one thread per canvas can be designated "main"
+  (`comment main <thread>`, or "Make main" on a pin's popover; the panel also
+  births one from its first message). It docks as a chat panel on the left
+  instead of a pin — messages hug the composer, `#Title` references render as
+  artifact-style cards that fly you to the item, and agents' `wait` always
+  wakes on comments landing there, no @-mention needed. Collapses to a pill
+  above the zoom chip; demote with "detach" (or `comment main --clear`) and
+  the pin returns to where the thread was born.
 - **Who's here, and who wants you**: a facepile in the top right holds
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a
@@ -89,6 +97,7 @@ isocan edit <item> [<file>]        # new version from a file or $EDITOR
 isocan versions <item> · version promote <item> <version>
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
+isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence

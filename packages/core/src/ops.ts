@@ -100,6 +100,11 @@ export type Operation =
       y: number;
       anchorItemId: string | null;
       comment: NewComment;
+      /** Born as the canvas's main thread (the docked agent↔user channel).
+       * Only valid while no main thread exists — the panel creates its
+       * thread lazily on first message; promotion of an existing thread is
+       * thread.setMain. One op so the first message is one undo step. */
+      main?: boolean;
     }
   | { type: "thread.reply"; threadId: string; comment: NewComment }
   | {
@@ -111,6 +116,13 @@ export type Operation =
       anchorItemId: string | null;
       x: number;
       y: number;
+    }
+  | {
+      // Designate a thread as the canvas's main thread (null demotes the
+      // current one). The reducer keeps the at-most-one invariant; the
+      // inverse is thread.setMain with the previously-main thread id.
+      type: "thread.setMain";
+      threadId: string | null;
     }
   | { type: "thread.delete"; threadId: string }
   | {

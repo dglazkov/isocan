@@ -8,6 +8,7 @@ export type OpErrorCode =
   | "duplicate-id"
   | "empty-body"
   | "last-comment"
+  | "main-exists"
   | "internal-op"
   | "unknown-op"
   | "bad-op";

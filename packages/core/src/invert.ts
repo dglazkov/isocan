@@ -119,6 +119,14 @@ export function invertOperation(
     case "thread.reply":
       return { type: "comment.remove", threadId: op.threadId, commentId: op.comment.id };
 
+    case "thread.setMain": {
+      if (op.threadId !== null && !canvas.threads[op.threadId]) {
+        throw new OpValidationError("unknown-thread", `unknown thread: ${op.threadId}`);
+      }
+      const prev = Object.values(canvas.threads).find((t) => t.main);
+      return { type: "thread.setMain", threadId: prev?.id ?? null };
+    }
+
     case "thread.setAnchor": {
       const thread = canvas.threads[op.threadId];
       if (!thread) throw new OpValidationError("unknown-thread", `unknown thread: ${op.threadId}`);

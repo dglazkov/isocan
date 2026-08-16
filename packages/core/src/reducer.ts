@@ -7,7 +7,7 @@ import type {
   Project,
   ProjectState,
 } from "./model.ts";
-import { emptyCanvas } from "./model.ts";
+import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { resolvePlacement } from "./placement.ts";
@@ -235,12 +235,19 @@ export function applyOperation(
       }
       requireBody(op.comment.body);
       if (op.anchorItemId !== null) getItem(op.anchorItemId);
+      // Strict, not takeover: a race between two clients birthing a main
+      // thread must not leave one silently demoted — the loser errors and
+      // replies to the winner's thread instead. Keeps undo exact, too.
+      if (op.main && mainThread(canvas)) {
+        throw new OpValidationError("main-exists", "canvas already has a main thread");
+      }
       const thread = {
         id: op.threadId,
         x: op.x,
         y: op.y,
         anchorItemId: op.anchorItemId,
         comments: [toComment(op.comment, actor, ts)],
+        ...(op.main ? { main: true } : {}),
         createdAt: ts,
         createdBy: actor,
       };
@@ -255,6 +262,20 @@ export function applyOperation(
       }
       const next = { ...thread, comments: [...thread.comments, toComment(op.comment, actor, ts)] };
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
+    case "thread.setMain": {
+      const prev = mainThread(canvas);
+      const next = op.threadId === null ? null : getThread(op.threadId);
+      if (prev?.id === next?.id) return withCanvas(canvas); // no-op, but keep the entry
+      const threads = { ...canvas.threads };
+      if (prev) {
+        const demoted = { ...prev };
+        delete demoted.main;
+        threads[prev.id] = demoted;
+      }
+      if (next) threads[next.id] = { ...next, main: true };
+      return withCanvas({ ...canvas, threads });
     }
 
     case "thread.setAnchor": {
@@ -304,9 +325,13 @@ export function applyOperation(
       if (canvas.threads[op.thread.id]) {
         throw new OpValidationError("duplicate-id", `thread id already exists: ${op.thread.id}`);
       }
+      // The carried thread may have been main when deleted; if another thread
+      // has become main since, the restored one yields — at most one main.
+      const { main: wasMain, ...bare } = op.thread;
+      const thread = wasMain && !mainThread(canvas) ? { ...bare, main: true } : bare;
       return withCanvas({
         ...canvas,
-        threads: { ...canvas.threads, [op.thread.id]: op.thread },
+        threads: { ...canvas.threads, [op.thread.id]: thread },
       });
     }
 

@@ -191,6 +191,34 @@ describe("apply ∘ invert round-trips", () => {
     expectIdentity(s, { type: "thread.delete", threadId: "thr_1" });
   });
 
+  it("thread.setMain round-trips (promote, switch, demote)", () => {
+    // Promote when nothing was main → inverse demotes back to none.
+    expectIdentity(s, { type: "thread.setMain", threadId: "thr_1" });
+    const withMain = applyOperation(
+      s,
+      envelope({ type: "thread.setMain", threadId: "thr_1" }),
+    )!;
+    // Switching main to thr_2 must restore thr_1's mainness on undo.
+    expectIdentity(withMain, { type: "thread.setMain", threadId: "thr_2" });
+    // Demoting to none restores the previous main on undo.
+    expectIdentity(withMain, { type: "thread.setMain", threadId: null });
+  });
+
+  it("a thread born main round-trips; deleting the main thread restores mainness", () => {
+    const op: Operation = {
+      type: "thread.create",
+      threadId: "thr_main",
+      x: 1,
+      y: 2,
+      anchorItemId: null,
+      main: true,
+      comment: { id: "cmt_main", body: "hello" },
+    };
+    expectIdentity(s, op);
+    const withMain = applyOperation(s, envelope(op))!;
+    expectIdentity(withMain, { type: "thread.delete", threadId: "thr_main" });
+  });
+
   it("non-undoable ops invert to null", () => {
     expect(invertOperation(s, { type: "trash.empty" })).toBeNull();
     expect(invertOperation(s, { type: "project.delete" })).toBeNull();

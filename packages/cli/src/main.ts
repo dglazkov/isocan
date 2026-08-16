@@ -22,6 +22,7 @@ import {
   collectItemRefCandidates,
   extractItemRefs,
   extractMentions,
+  mainThread,
   newCommentId,
   newItemId,
   newProjectId,
@@ -66,7 +67,9 @@ The system:
   version    every \`edit\` stacks a new version on the item; \`version promote\`
              brings any older one back to the top
   comment    threads pinned to an item (--item) or a spot (--at x,y); write
-             @Name to address someone, \`comment anchor\` to re-pin a thread
+             @Name to address someone, \`comment anchor\` to re-pin a thread.
+             One thread may be \`comment main\`: the docked agent↔user channel —
+             \`wait\` always wakes on comments landing there
   undo       per-actor: \`isocan undo\` reverts YOUR last change, never a
              collaborator's
   trash      deleted items are recoverable until \`trash empty --force\`
@@ -96,8 +99,8 @@ Presence (being visible while you work):
 A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
   edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
-  the next comment that's for you — @-mentions you or is in your thread) →
-  repeat.`,
+  the next comment that's for you — @-mentions you, lands in the main
+  thread, or is in your thread) → repeat.`,
   );
 
 /** Wrap actions: friendly errors, non-zero exit. */
@@ -972,13 +975,49 @@ comment
       if (ctx.json) return printJson(threads);
       if (threads.length === 0) return printTable([]);
       for (const t of threads) {
-        const anchor = t.anchorItemId ? `on ${t.anchorItemId}` : `at ${t.x},${t.y}`;
+        const anchor = t.main
+          ? "★ main"
+          : t.anchorItemId
+            ? `on ${t.anchorItemId}`
+            : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
           console.log(`  ${c.author.name} · ${c.createdAt}`);
           console.log(`    ${c.body}`);
         }
       }
+    }),
+  );
+
+comment
+  .command("main [thread]")
+  .description("Show, designate, or clear the canvas's main thread")
+  .option("--clear", "demote the current main thread back to a canvas pin")
+  .addHelpText(
+    "after",
+    `
+The main thread is the designated agent↔user channel: the web app renders it
+as a docked chat panel instead of a canvas pin, and \`isocan wait\` ALWAYS
+wakes on comments landing in it — no @-mention needed. At most one thread is
+main. With no argument, prints the current main thread.`,
+  )
+  .action(
+    run(async (threadRef: string | undefined, opts: { clear?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const current = mainThread(snapshot.canvas);
+      if (opts.clear) {
+        if (!current) throw new Error("no main thread to clear");
+        await sendOp(ctx, p.id, { type: "thread.setMain", threadId: null });
+        return console.log(`cleared main thread (was ${current.id})`);
+      }
+      if (!threadRef) {
+        if (ctx.json) return printJson(current);
+        return console.log(current ? `main thread: ${current.id}` : "no main thread");
+      }
+      const thread = resolveThread(snapshot, threadRef);
+      await sendOp(ctx, p.id, { type: "thread.setMain", threadId: thread.id });
+      console.log(`main thread: ${thread.id}`);
     }),
   );
 
@@ -1216,6 +1255,10 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
       return op.anchorItemId
         ? `${who} anchored thread ${op.threadId} to ${op.anchorItemId}`
         : `${who} detached thread ${op.threadId} (at ${Math.round(op.x)},${Math.round(op.y)})`;
+    case "thread.setMain":
+      return op.threadId
+        ? `${who} made ${op.threadId} the main thread`
+        : `${who} cleared the main thread`;
     default: {
       const target =
         (op as { itemId?: string }).itemId ?? (op as { threadId?: string }).threadId ?? "";
@@ -1233,10 +1276,11 @@ program
   .addHelpText(
     "after",
     `
-A comment wakes you when it @-mentions you (identity name or session label)
-or lands in a thread you wrote in or were mentioned in. Everything else —
-including comments that mention nobody — is ether: visible in \`tail\`, but
-not actionable. --all-ops wakes on everything.`,
+A comment wakes you when it @-mentions you (identity name or session label),
+lands in the MAIN thread (\`comment main\`), or lands in a thread you wrote
+in or were mentioned in. Everything else — including comments that mention
+nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
+on everything.`,
   )
   .action(
     run(async (
@@ -1263,17 +1307,22 @@ not actionable. --all-ops wakes on everything.`,
         (c.mentions ?? []).includes(ctx.actor.id) ||
         extractMentions(c.body, selfNames).length > 0;
 
-      // A comment is for me when it addresses me or lands in a thread I'm
-      // part of (wrote in / was mentioned in). Unaddressed comments are
-      // ether — not actionable. `snap` is fetched lazily, once per poll batch.
+      // A comment is for me when it addresses me, lands in the MAIN thread
+      // (the designated agent↔user channel — always actionable), or lands in
+      // a thread I'm part of (wrote in / was mentioned in). Everything else
+      // is ether — not actionable. `snap` is fetched lazily, per poll batch.
       const isForMe = async (
         op: Operation,
         snap: () => Promise<CanvasSnapshotResponse>,
       ): Promise<boolean> => {
         if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
         if (addressesMe(op.comment)) return true;
+        // Snapshot state, not the op, decides mainness: it also catches the
+        // thread.create that BIRTHS the main thread (op.main or a setMain
+        // landing in the same batch).
+        const thread = (await snap()).canvas.threads[op.threadId];
+        if (thread?.main) return true;
         if (op.type === "thread.reply") {
-          const thread = (await snap()).canvas.threads[op.threadId];
           if (thread?.comments.some((c) => c.author.id === ctx.actor.id || addressesMe(c))) {
             return true;
           }
