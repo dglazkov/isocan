@@ -128,6 +128,17 @@ function randomOp(state: ProjectState, rnd: () => number): Operation | null {
     {
       weight: 1,
       when: threads.length > 0,
+      make: () => ({
+        type: "thread.setAnchor",
+        threadId: pickThread().id,
+        anchorItemId: items.length > 0 && rnd() < 0.5 ? pickItem().id : null,
+        x: coord(),
+        y: coord(),
+      }),
+    },
+    {
+      weight: 1,
+      when: threads.length > 0,
       make: () => ({ type: "thread.delete", threadId: pickThread().id }),
     },
     {

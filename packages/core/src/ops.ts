@@ -93,6 +93,16 @@ export type Operation =
       comment: { id: string; body: string };
     }
   | { type: "thread.reply"; threadId: string; comment: { id: string; body: string } }
+  | {
+      // Re-pin a thread: to an item (x,y become an offset from its top-left)
+      // or freestanding (x,y become world coordinates). Lets a thread that
+      // started before its item existed be anchored to it after the fact.
+      type: "thread.setAnchor";
+      threadId: string;
+      anchorItemId: string | null;
+      x: number;
+      y: number;
+    }
   | { type: "thread.delete"; threadId: string }
   | {
       // internal: inverse of thread.reply

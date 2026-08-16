@@ -162,6 +162,23 @@ describe("apply ∘ invert round-trips", () => {
     });
   });
 
+  it("thread.setAnchor round-trips (freestanding → anchored, anchored → freestanding)", () => {
+    expectIdentity(s, {
+      type: "thread.setAnchor",
+      threadId: "thr_2",
+      anchorItemId: "itm_2",
+      x: 312,
+      y: 0,
+    });
+    expectIdentity(s, {
+      type: "thread.setAnchor",
+      threadId: "thr_1",
+      anchorItemId: null,
+      x: 40,
+      y: 40,
+    });
+  });
+
   it("thread.reply → comment.remove", () => {
     expectIdentity(s, {
       type: "thread.reply",

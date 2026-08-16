@@ -53,6 +53,10 @@ when you need to parse output.
   that item. Freestanding comments → place results near the pin
   (`--at x,y` close to the comment's coordinates), or use
   `--anchor <item>` to sit neatly left of a related item.
+- **Anchor the thread to what it produced.** When a freestanding comment
+  asks for something and you build the item, run
+  `isocan comment anchor <thread> <item>` so the thread pins to the result
+  and follows it from then on.
 - **Versions are the medium for iteration.** "Change X on this item" means
   `edit` → new version. Mention "vN on the stack — fan out (V) to compare"
   in your reply so the human knows the history is there.
@@ -74,6 +78,6 @@ when you need to parse output.
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply`, `session start|work|say|point|end`, `who`,
+`comment list|add|reply|anchor`, `session start|work|say|point|end`, `who`,
 `add`, `edit`, `mv`, `set`, `ls`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`.

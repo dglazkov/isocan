@@ -173,6 +173,7 @@ export function opLocus(op: Operation, canvas: CanvasState): { x: number; y: num
           }
         : { x: op.x, y: op.y };
     case "thread.reply":
+    case "thread.setAnchor":
     case "thread.delete":
     case "comment.remove":
     case "comment.restore": {

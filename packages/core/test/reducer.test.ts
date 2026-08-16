@@ -107,6 +107,17 @@ describe("validation", () => {
     );
   });
 
+  it("rejects setAnchor on a missing thread or missing item", () => {
+    expectRejects(
+      { type: "thread.setAnchor", threadId: "thr_nope", anchorItemId: "itm_1", x: 0, y: 0 },
+      "unknown-thread",
+    );
+    expectRejects(
+      { type: "thread.setAnchor", threadId: "thr_2", anchorItemId: "itm_nope", x: 0, y: 0 },
+      "unknown-item",
+    );
+  });
+
   it("rejects removing the last comment of a thread", () => {
     expectRejects(
       { type: "comment.remove", threadId: "thr_2", commentId: "cmt_3" },
@@ -201,6 +212,39 @@ describe("semantics", () => {
   it("threads anchored to a deleted item keep their dangling anchor (rendered freestanding)", () => {
     const s = apply(seedState(), { type: "item.delete", itemId: "itm_1" })!;
     expect(s.canvas.threads["thr_1"]!.anchorItemId).toBe("itm_1");
+  });
+
+  it("setAnchor re-pins a freestanding thread to an item and back", () => {
+    let s = apply(seedState(), {
+      type: "thread.setAnchor",
+      threadId: "thr_2",
+      anchorItemId: "itm_2",
+      x: 312, // itm_2.width + 12
+      y: 0,
+    })!;
+    expect(s.canvas.threads["thr_2"]).toMatchObject({ anchorItemId: "itm_2", x: 312, y: 0 });
+    s = apply(s, {
+      type: "thread.setAnchor",
+      threadId: "thr_2",
+      anchorItemId: null,
+      x: -50,
+      y: 300,
+    })!;
+    expect(s.canvas.threads["thr_2"]).toMatchObject({ anchorItemId: null, x: -50, y: 300 });
+    // Comments ride along untouched.
+    expect(s.canvas.threads["thr_2"]!.comments.map((c) => c.id)).toEqual(["cmt_3"]);
+  });
+
+  it("setAnchor can re-point a thread whose anchor item was deleted", () => {
+    let s = apply(seedState(), { type: "item.delete", itemId: "itm_1" })!;
+    s = apply(s, {
+      type: "thread.setAnchor",
+      threadId: "thr_1",
+      anchorItemId: "itm_2",
+      x: 0,
+      y: 0,
+    })!;
+    expect(s.canvas.threads["thr_1"]!.anchorItemId).toBe("itm_2");
   });
 
   it("applyOperation is pure — inputs are never mutated", () => {

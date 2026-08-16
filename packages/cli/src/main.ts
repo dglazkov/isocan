@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
-import type { CanvasSnapshotResponse, Item, Operation, Project } from "@isocan/core";
+import type { CanvasSnapshotResponse, CommentThread, Item, Operation, Project } from "@isocan/core";
 import {
   newCommentId,
   newItemId,
@@ -48,7 +48,8 @@ The system:
              x,y world coordinates (+x right, +y down)
   version    every \`edit\` stacks a new version on the item; \`version promote\`
              brings any older one back to the top
-  comment    threads pinned to an item (--item) or a spot (--at x,y)
+  comment    threads pinned to an item (--item) or a spot (--at x,y);
+             \`comment anchor\` re-pins a thread onto an item
   undo       per-actor: \`isocan undo\` reverts YOUR last change, never a
              collaborator's
   trash      deleted items are recoverable until \`trash empty --force\`
@@ -165,6 +166,15 @@ function resolveItem(snapshot: CanvasSnapshotResponse, ref: string): Item {
     );
   }
   throw new Error(`no item matches "${ref}"`);
+}
+
+/** Resolve a thread by exact id or id prefix. */
+function resolveThread(snapshot: CanvasSnapshotResponse, ref: string): CommentThread {
+  const threads = Object.values(snapshot.canvas.threads);
+  const thread =
+    threads.find((t) => t.id === ref) ?? threads.find((t) => t.id.startsWith(ref));
+  if (!thread) throw new Error(`no thread matches "${ref}"`);
+  return thread;
 }
 
 /** Resolve a trashed item by exact id, id prefix, or title prefix. */
@@ -794,10 +804,7 @@ comment
     run(async (threadRef: string, text: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const threads = Object.values(snapshot.canvas.threads);
-      const thread =
-        threads.find((t) => t.id === threadRef) ?? threads.find((t) => t.id.startsWith(threadRef));
-      if (!thread) throw new Error(`no thread matches "${threadRef}"`);
+      const thread = resolveThread(snapshot, threadRef);
       await sendOp(ctx, p.id, {
         type: "thread.reply",
         threadId: thread.id,
@@ -805,6 +812,46 @@ comment
       });
       console.log(`replied to ${thread.id}`);
     }),
+  );
+
+comment
+  .command("anchor <thread> [item]")
+  .description("Re-pin a thread: anchor it to an item, or detach it with --at")
+  .option("--at <x,y>", "detach: make the thread freestanding at world coordinates")
+  .addHelpText(
+    "after",
+    `
+Made for the "comment first, item second" flow: a freestanding comment asks
+for something, you build the item, then anchor the thread to it so the pin
+follows the item from now on.`,
+  )
+  .action(
+    run(
+      async (threadRef: string, itemRef: string | undefined, opts: { at?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const thread = resolveThread(snapshot, threadRef);
+        let x: number, y: number, anchorItemId: string | null;
+        if (itemRef) {
+          const item = resolveItem(snapshot, itemRef);
+          anchorItemId = item.id;
+          // Same spot as `comment add --item`: just off the top-right corner.
+          x = item.width + 12;
+          y = 0;
+        } else if (opts.at) {
+          ({ x, y } = parseXY(opts.at));
+          anchorItemId = null;
+        } else {
+          throw new Error("pass an item to anchor to, or --at x,y to detach");
+        }
+        await sendOp(ctx, p.id, { type: "thread.setAnchor", threadId: thread.id, anchorItemId, x, y });
+        console.log(
+          anchorItemId
+            ? `anchored ${thread.id} to ${anchorItemId}`
+            : `detached ${thread.id} — freestanding at ${x},${y}`,
+        );
+      },
+    ),
   );
 
 comment
@@ -840,10 +887,7 @@ comment
     run(async (threadRef: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const threads = Object.values(snapshot.canvas.threads);
-      const thread =
-        threads.find((t) => t.id === threadRef) ?? threads.find((t) => t.id.startsWith(threadRef));
-      if (!thread) throw new Error(`no thread matches "${threadRef}"`);
+      const thread = resolveThread(snapshot, threadRef);
       await sendOp(ctx, p.id, { type: "thread.delete", threadId: thread.id });
       console.log(`deleted thread ${thread.id}`);
     }),
@@ -1022,6 +1066,10 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
     }
     case "thread.reply":
       return `${who} replied on ${op.threadId}: "${op.comment.body}"`;
+    case "thread.setAnchor":
+      return op.anchorItemId
+        ? `${who} anchored thread ${op.threadId} to ${op.anchorItemId}`
+        : `${who} detached thread ${op.threadId} (at ${Math.round(op.x)},${Math.round(op.y)})`;
     default: {
       const target =
         (op as { itemId?: string }).itemId ?? (op as { threadId?: string }).threadId ?? "";

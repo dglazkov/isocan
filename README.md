@@ -46,7 +46,8 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   subtle elevation plies hint at the stack; fan it out (`V`) to preview and
   promote any version.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
-  drags); create, reply, delete from either surface.
+  drags); create, reply, delete from either surface. `comment anchor` re-pins
+  a thread after the fact — e.g. onto the item it asked for.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted.
@@ -68,6 +69,7 @@ isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · resto
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
 isocan versions <item> · version promote <item> <version>
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
+isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who   # live presence

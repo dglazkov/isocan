@@ -257,6 +257,21 @@ export function applyOperation(
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 
+    case "thread.setAnchor": {
+      const thread = getThread(op.threadId);
+      // A trashed item is a valid anchor (rendered dangling, like after
+      // item.delete) — undoing a re-anchor must restore a dangling anchor.
+      if (
+        op.anchorItemId !== null &&
+        !canvas.items[op.anchorItemId] &&
+        !canvas.trash.some((t) => t.item.id === op.anchorItemId)
+      ) {
+        throw new OpValidationError("unknown-item", `unknown item: ${op.anchorItemId}`);
+      }
+      const next = { ...thread, anchorItemId: op.anchorItemId, x: op.x, y: op.y };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
     case "comment.remove": {
       const thread = getThread(op.threadId);
       if (!thread.comments.some((c) => c.id === op.commentId)) {
