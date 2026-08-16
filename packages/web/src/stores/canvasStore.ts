@@ -3,6 +3,7 @@ import type {
   Actor,
   CanvasState,
   ClientMessage,
+  OpEnvelope,
   Operation,
   PresenceSession,
   Project,
@@ -12,6 +13,7 @@ import type {
 import { applyOperation } from "@isocan/core";
 import { CLIENT_ID } from "../lib/api.ts";
 import { useUiStore } from "./uiStore.ts";
+import { noticeComment, syncProject } from "./unreadStore.ts";
 
 export type Connection = "connecting" | "live" | "reconnecting" | "gone";
 
@@ -100,6 +102,20 @@ export function applyLocalEcho(op: Operation, actor: Actor): void {
   }
 }
 
+/** Someone else's comment landing is the one op worth interrupting for. */
+function announceComment(envelope: OpEnvelope): void {
+  const { op, actor } = envelope;
+  if (op.type !== "thread.create" && op.type !== "thread.reply") return;
+  if (actor.id === presenceActor?.id) return;
+  noticeComment({
+    id: op.comment.id,
+    threadId: op.threadId,
+    author: actor,
+    body: op.comment.body,
+    at: Date.now(),
+  });
+}
+
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentProjectId: string | null = null;
@@ -160,6 +176,7 @@ function open(projectId: string): void {
         lastSeq: message.lastSeq,
         connection: "live",
       });
+      syncProject(projectId, message.canvas);
       // Announce this tab's presence immediately so it shows up in rosters
       // (and `isocan who`) even before the mouse moves.
       schedulePresenceFlush();
@@ -191,6 +208,7 @@ function open(projectId: string): void {
         canvas: next.canvas,
         lastSeq: message.entry.seq,
       });
+      announceComment(message.entry.envelope);
     } else if (message.type === "project-deleted") {
       useCanvasStore.setState({ connection: "gone" });
       disconnect();

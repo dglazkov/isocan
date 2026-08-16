@@ -1,4 +1,4 @@
-import type { CanvasState } from "@isocan/core";
+import type { CanvasState, CommentThread } from "@isocan/core";
 
 /** The viewport transform: screen = world * scale + t. One transform node. */
 export interface Viewport {
@@ -31,6 +31,27 @@ export function zoomAt(vp: Viewport, cx: number, cy: number, factor: number): Vi
 
 export function pan(vp: Viewport, dx: number, dy: number): Viewport {
   return { ...vp, tx: vp.tx + dx, ty: vp.ty + dy };
+}
+
+/** Put a world point in the middle of the window, keeping the zoom. */
+export function centerOn(
+  vp: Viewport,
+  wx: number,
+  wy: number,
+  viewWidth: number,
+  viewHeight: number,
+): Viewport {
+  return { ...vp, tx: viewWidth / 2 - wx * vp.scale, ty: viewHeight / 2 - wy * vp.scale };
+}
+
+/** Where a thread's pin sits in the world: anchored threads store an offset
+ * from their item's origin, so the pin travels with the item. */
+export function threadWorldPos(
+  canvas: CanvasState,
+  thread: CommentThread,
+): { x: number; y: number } {
+  const item = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
+  return item ? { x: item.x + thread.x, y: item.y + thread.y } : { x: thread.x, y: thread.y };
 }
 
 export interface Box {

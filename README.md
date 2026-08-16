@@ -53,6 +53,12 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   mentions read as chips in the composer and in the posted comment;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
+- **New comments announce themselves**: one arriving raises a toast naming who
+  wrote it; clicking it flies to the pin. Until you read it the pin wears an
+  unread badge, the toolbar offers "N new" (each click walks to the next one,
+  wherever it is), and the tab title carries the count. Read state is
+  per-viewer, kept in the browser — so reopening a canvas shows what happened
+  while you were away.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted. Agents pick a name of their

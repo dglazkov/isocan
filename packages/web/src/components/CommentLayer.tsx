@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CommentThread, NewComment } from "@isocan/core";
@@ -6,10 +6,11 @@ import { extractMentions, newCommentId, newThreadId } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { worldToScreen } from "../lib/viewport.ts";
+import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
 import { mentionRoster, rehypeMentions, useMentionRoster } from "../lib/mentions.ts";
 import { MentionField } from "./MentionField.tsx";
+import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
 /** Comment payload with @Name mentions resolved against everyone visible on
  * the canvas — actors in the state plus the live presence roster (labels too).
@@ -31,21 +32,17 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
   const drag = useUiStore((s) => s.drag);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
+  const seen = useUnreadStore((s) => s.seen);
 
   if (!canvas) return null;
 
   function pinWorldPos(thread: CommentThread): { x: number; y: number } {
-    if (thread.anchorItemId) {
-      const item = canvas!.items[thread.anchorItemId];
-      if (item) {
-        const riding = drag?.itemIds.includes(item.id) ? drag : null;
-        return {
-          x: item.x + (riding?.dx ?? 0) + thread.x,
-          y: item.y + (riding?.dy ?? 0) + thread.y,
-        };
-      }
-    }
-    return { x: thread.x, y: thread.y };
+    const world = threadWorldPos(canvas!, thread);
+    // While a drag is live the item has not moved in the replica yet, so the
+    // pin rides the gesture's delta to stay glued to it.
+    const riding =
+      thread.anchorItemId && drag?.itemIds.includes(thread.anchorItemId) ? drag : null;
+    return { x: world.x + (riding?.dx ?? 0), y: world.y + (riding?.dy ?? 0) };
   }
 
   const threads = Object.values(canvas.threads);
@@ -66,6 +63,7 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
             thread={thread}
             screen={screenOf(thread)}
             open={openThreadId === thread.id}
+            unread={unreadCount(thread, seen, actor.id)}
           />
         ))}
       </div>
@@ -134,10 +132,12 @@ function ThreadPin({
   thread,
   screen,
   open,
+  unread,
 }: {
   thread: CommentThread;
   screen: { x: number; y: number };
   open: boolean;
+  unread: number;
 }) {
   const first = thread.comments[0]!;
   // Distinct authors in comment order; up to three initials, then a +N chip.
@@ -149,12 +149,17 @@ function ThreadPin({
   }
   const shown = authors.length > 3 ? authors.slice(0, 2) : authors;
   const overflow = authors.length - shown.length;
+  const newest = thread.comments[thread.comments.length - 1]!;
 
   return (
     <button
-      className="pin"
+      className={`pin${unread > 0 ? " unread" : ""}`}
       style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
-      title={`${authors.map((author) => author.name).join(", ")} — ${first.body.slice(0, 60)}`}
+      title={
+        unread > 0
+          ? `${unread} new from ${newest.author.name} — ${newest.body.slice(0, 60)}`
+          : `${authors.map((author) => author.name).join(", ")} — ${first.body.slice(0, 60)}`
+      }
       onPointerDown={(e) => e.stopPropagation()}
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
@@ -164,6 +169,7 @@ function ThreadPin({
         </span>
       ))}
       {overflow > 0 && <span className="pin-avatar pin-more">+{overflow}</span>}
+      {unread > 0 && <span className="pin-unread">{unread}</span>}
     </button>
   );
 }
@@ -183,6 +189,8 @@ function ThreadPopover({
   const { candidates, peers } = useMentionRoster(actor.id);
   const chips = useMemo(() => [rehypeMentions(candidates, actor.id)], [candidates, actor.id]);
   const { ref, style } = usePopoverPlacement(screen, 30, -16);
+  // Open is read — including replies that land while you are looking at it.
+  useEffect(() => markRead(thread.id), [thread.id, thread.comments.length]);
   return (
     <div
       ref={ref}

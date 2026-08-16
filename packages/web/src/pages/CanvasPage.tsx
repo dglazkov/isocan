@@ -14,11 +14,14 @@ import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
 import { TrashPanel } from "../components/TrashPanel.tsx";
+import { CommentToasts } from "../components/CommentToasts.tsx";
+import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
 export function CanvasPage({ actor }: { actor: Actor }) {
   const { projectId } = useParams<{ projectId: string }>();
   const canvas = useCanvasStore((s) => s.canvas);
   const connection = useCanvasStore((s) => s.connection);
+  const seen = useUnreadStore((s) => s.seen);
   const didFit = useRef(false);
 
   useEffect(() => {
@@ -44,6 +47,15 @@ export function CanvasPage({ actor }: { actor: Actor }) {
         .setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
     }
   }, [canvas]);
+
+  // Unread comments reach a backgrounded tab through its title.
+  useEffect(() => {
+    const count = canvas ? unreadThreads(canvas, seen, actor.id).length : 0;
+    document.title = count > 0 ? `(${count}) isocan` : "isocan";
+    return () => {
+      document.title = "isocan";
+    };
+  }, [canvas, seen, actor.id]);
 
   const zoomToFit = useCallback(() => {
     const current = useCanvasStore.getState().canvas;
@@ -121,6 +133,7 @@ export function CanvasPage({ actor }: { actor: Actor }) {
       <Toolbar projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
+      <CommentToasts />
     </div>
   );
 }
