@@ -5,6 +5,7 @@ import {
   connectToProject,
   disconnect,
   publishSelection,
+  setPresenceActor,
   useCanvasStore,
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -20,7 +21,13 @@ import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx"
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
-export function CanvasPage({ actor }: { actor: Actor }) {
+export function CanvasPage({
+  actor,
+  onIdentity,
+}: {
+  actor: Actor;
+  onIdentity: (actor: Actor | null) => void;
+}) {
   const { projectId } = useParams<{ projectId: string }>();
   const canvas = useCanvasStore((s) => s.canvas);
   const connection = useCanvasStore((s) => s.connection);
@@ -31,13 +38,24 @@ export function CanvasPage({ actor }: { actor: Actor }) {
     return session ? session.label ?? session.actor.name : null;
   });
   const didFit = useRef(false);
+  // Who to open a connection as, without making a rename reconnect.
+  const actorRef = useRef(actor);
+  actorRef.current = actor;
 
   useEffect(() => {
     if (!projectId) return;
     didFit.current = false;
-    connectToProject(projectId, actor);
+    connectToProject(projectId, actorRef.current);
     return disconnect;
-  }, [projectId, actor]);
+  }, [projectId]);
+
+  // Becoming someone else does NOT drop the socket. The tab keeps its session
+  // and simply asserts the new actor on the next presence beat, which the
+  // daemon adopts — reconnecting would race the old socket's teardown against
+  // the new socket's session (same tab id) and could leave you off the roster.
+  useEffect(() => {
+    setPresenceActor(actor);
+  }, [actor]);
 
   // Broadcast selection changes on the presence channel.
   useEffect(() => useUiStore.subscribe((s, prev) => {
@@ -175,7 +193,7 @@ export function CanvasPage({ actor }: { actor: Actor }) {
   return (
     <div className="canvas-page">
       <CanvasViewport projectId={projectId} actor={actor} />
-      <Toolbar actor={actor} />
+      <Toolbar actor={actor} onIdentity={onIdentity} />
       {followedLabel && (
         <button className="follow-banner" onClick={() => useUiStore.getState().setFollow(null)}>
           Watching {followedLabel} — Esc to stop

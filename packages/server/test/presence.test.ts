@@ -30,6 +30,22 @@ describe("PresenceHub", () => {
     hub.close();
   });
 
+  it("a beat re-asserts who is holding the session — renaming is not reconnecting", () => {
+    const hub = new PresenceHub(1000);
+    const session = hub.createSession("prj", kenny, "web");
+    hub.touch("prj", session.sessionId, { actor: { ...kenny, name: "Kenny 🤖" } });
+    expect(hub.roster("prj")[0]!.actor).toEqual({ id: kenny.id, name: "Kenny 🤖" });
+
+    // Becoming someone else entirely reuses the one session this tab owns,
+    // rather than leaving a ghost of the person who left.
+    hub.touch("prj", session.sessionId, { actor: alice, cursor: { x: 1, y: 2 } });
+    const roster = hub.roster("prj");
+    expect(roster).toHaveLength(1);
+    expect(roster[0]!.actor).toEqual(alice);
+    expect(roster[0]!.cursor).toEqual({ x: 1, y: 2 });
+    hub.close();
+  });
+
   it("an on-call session is reachable from every canvas, including brand-new ones", () => {
     const hub = new PresenceHub(1000);
     const oncall = hub.createOnCall(kenny, { label: "Kenny 🤖" });
@@ -301,6 +317,27 @@ describe("presence over the daemon", () => {
           m.type === "presence-roster" &&
           m.sessions.length === 2 &&
           m.sessions.some((s) => s.kind === "web" && s.cursor?.x === 7 && s.selection[0] === "itm_1"),
+      ),
+    );
+
+    // The tab becomes someone else on the same socket (#43): one face, the
+    // new name, broadcast to everyone watching.
+    ws.send(
+      JSON.stringify({
+        type: "presence",
+        sessionId: "cli_tab1",
+        actor: { id: "usr_nico", name: "Nico" },
+        cursor: { x: 7, y: 8 },
+        selection: [],
+      }),
+    );
+    await until(() =>
+      messages.some(
+        (m) =>
+          m.type === "presence-roster" &&
+          m.sessions.length === 2 &&
+          m.sessions.some((s) => s.kind === "web" && s.actor.name === "Nico") &&
+          !m.sessions.some((s) => s.actor.id === alice.id),
       ),
     );
 

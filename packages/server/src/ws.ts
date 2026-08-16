@@ -113,6 +113,9 @@ export function attachWebSockets(
         presence.createSession(projectId!, message.actor, "web", { sessionId });
       }
       presence.touch(projectId!, sessionId, {
+        // Every beat re-asserts who is holding the tab, so renaming yourself
+        // or switching identities re-labels the face live (#43).
+        actor: message.actor,
         cursor: message.cursor,
         selection: Array.isArray(message.selection) ? message.selection : [],
       });

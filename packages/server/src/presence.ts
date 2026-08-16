@@ -84,6 +84,10 @@ export class PresenceHub {
     projectId: string,
     sessionId: string,
     patch: {
+      /** Who is holding this session now. Presence is client-asserted on every
+       * beat, so renaming yourself — or becoming someone else entirely —
+       * lands on every other screen without dropping the socket. */
+      actor?: Actor;
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       status?: string | null;
@@ -216,6 +220,7 @@ function blankSession(
 function patchSession(
   session: SessionState,
   patch: {
+    actor?: Actor;
     cursor?: { x: number; y: number } | null;
     selection?: string[];
     status?: string | null;
@@ -223,6 +228,7 @@ function patchSession(
     activity?: PresenceActivity | null;
   },
 ): void {
+  if (patch.actor) session.actor = patch.actor;
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.status !== undefined) {

@@ -45,6 +45,8 @@ interface UiStore {
   pendingComment: PendingComment | null;
   commentMode: boolean;
   trashOpen: boolean;
+  /** The identity menu, opened by clicking your own face in the pile. */
+  identityOpen: boolean;
   /** The docked main-thread panel (pill when closed). Persisted per project
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
@@ -69,6 +71,7 @@ interface UiStore {
   setPendingComment: (pending: PendingComment | null) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
+  setIdentityOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
 }
 
@@ -92,6 +95,7 @@ export const useUiStore = create<UiStore>((set) => {
     pendingComment: null,
     commentMode: false,
     trashOpen: false,
+    identityOpen: false,
     mainPanelOpen: false,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
@@ -119,6 +123,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setCommentMode: (commentMode) => set({ commentMode }),
     setTrashOpen: (trashOpen) => set({ trashOpen }),
+    setIdentityOpen: (identityOpen) => set({ identityOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
   };
 });

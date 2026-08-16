@@ -119,6 +119,13 @@ export function Presence({ actor }: { actor: Actor }) {
   const overflow = faces.length - shown.length;
 
   function goTo(face: Face) {
+    // Your own face has nowhere to fly to — it is the handle for who you are
+    // instead: rename yourself, or come back as someone else (#43).
+    if (face.self) {
+      const ui = useUiStore.getState();
+      ui.setIdentityOpen(!ui.identityOpen);
+      return;
+    }
     const state = useCanvasStore.getState().canvas;
     if (!state) return;
     const ui = useUiStore.getState();
@@ -181,7 +188,8 @@ function describe(session: PresenceSession): string | null {
 }
 
 function tooltip(face: Face): string {
-  const parts = [face.self ? `${face.label} (you)` : face.label];
+  if (face.self) return `${face.label} (you) · click to rename or switch`;
+  const parts = [face.label];
   if (face.kind === "cli") parts.push("terminal");
   if (face.status) parts.push(face.status);
   if (face.unread > 0) parts.push(`${face.unread} new — click to read`);

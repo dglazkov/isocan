@@ -86,8 +86,14 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   unread badge, its author's face is badged in the pile, and the tab title
   carries the count. Read state is per-viewer, kept in the browser — so
   reopening a canvas shows what happened while you were away.
-- **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
-  every mutation, comment, and version. Architected so authenticated identity
+- **Identity**: a name you pick at the door (web dialog / CLI prompt); stamped
+  on every mutation, comment, and version. Click your own face in the pile to
+  change it: *rename* keeps your actor id, so your undo stack and the comments
+  addressed to you stay yours (`isocan identity --name` does the same); *leave*
+  returns you to the door, which now offers every name this browser has worn —
+  coming back as one resumes that same actor, not a stranger sharing a name.
+  A rename re-labels your face on everyone else's screen on the next presence
+  beat, without dropping the socket. Architected so authenticated identity
   later only changes how an `Actor` is minted. Agents pick a name of their
   own — one hiding in the letters of "isocan" (Isaac, Kenny, Nico, …), not
   their vendor's — checking `isocan who --all` first so no two collaborators

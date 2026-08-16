@@ -16,8 +16,11 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ProjectListPage actor={actor} />} />
-        <Route path="/p/:projectId" element={<CanvasPage actor={actor} />} />
+        <Route path="/" element={<ProjectListPage actor={actor} onIdentity={setActor} />} />
+        <Route
+          path="/p/:projectId"
+          element={<CanvasPage actor={actor} onIdentity={setActor} />}
+        />
       </Routes>
     </BrowserRouter>
   );

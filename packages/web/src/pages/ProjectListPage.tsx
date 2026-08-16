@@ -3,13 +3,22 @@ import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { newProjectId } from "@isocan/core";
 import { listProjects, sendOp } from "../lib/api.ts";
+import { actorColor } from "../lib/colors.ts";
 import { ProjectEditor } from "../components/ProjectEditor.tsx";
+import { IdentityMenu } from "../components/IdentityMenu.tsx";
 
-export function ProjectListPage({ actor }: { actor: Actor }) {
+export function ProjectListPage({
+  actor,
+  onIdentity,
+}: {
+  actor: Actor;
+  onIdentity: (actor: Actor | null) => void;
+}) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [identityOpen, setIdentityOpen] = useState(false);
 
   const refresh = useCallback(() => {
     listProjects().then(setProjects, () => setProjects([]));
@@ -41,7 +50,27 @@ export function ProjectListPage({ actor }: { actor: Actor }) {
     <div className="projects-page">
       <div className="projects-head">
         <h1>isocan</h1>
-        <span className="who">{actor.name}</span>
+        <div className="who">
+          <button
+            className={`who-btn${identityOpen ? " active" : ""}`}
+            title="You — rename yourself, or enter as someone else"
+            onClick={() => setIdentityOpen(!identityOpen)}
+          >
+            <span className="face-mark" style={{ background: actorColor(actor.id) }}>
+              {actor.name.charAt(0).toUpperCase()}
+            </span>
+            {actor.name}
+          </button>
+          {identityOpen && (
+            <div className="identity-popover">
+              <IdentityMenu
+                actor={actor}
+                onIdentity={onIdentity}
+                onClose={() => setIdentityOpen(false)}
+              />
+            </div>
+          )}
+        </div>
       </div>
       <div className="project-grid">
         {(projects ?? []).map((project) => (

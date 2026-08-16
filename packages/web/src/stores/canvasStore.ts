@@ -55,6 +55,20 @@ export function publishCursor(cursor: { x: number; y: number } | null): void {
   schedulePresenceFlush();
 }
 
+/**
+ * You became someone else (renamed, or switched identities entirely). The
+ * socket stays; the next presence beat carries the new actor and the daemon
+ * adopts it, so the facepile, cursor label, and "@" menu on every other
+ * screen follow within a frame. Read state is per viewer AND per person, so
+ * the new identity reads its own watermarks.
+ */
+export function setPresenceActor(actor: Actor): void {
+  presenceActor = actor;
+  const { projectId, canvas } = useCanvasStore.getState();
+  if (projectId && canvas) syncProject(projectId, canvas, actor.id);
+  flushPresence();
+}
+
 export function publishSelection(): void {
   schedulePresenceFlush();
 }
@@ -183,7 +197,7 @@ function open(projectId: string): void {
         lastSeq: message.lastSeq,
         connection: "live",
       });
-      syncProject(projectId, message.canvas);
+      syncProject(projectId, message.canvas, presenceActor?.id);
       // Announce this tab's presence immediately so it shows up in rosters
       // (and `isocan who`) even before the mouse moves.
       schedulePresenceFlush();

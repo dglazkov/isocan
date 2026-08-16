@@ -69,12 +69,14 @@ input, textarea { font: inherit; color: var(--ink); }
 .identity-dialog p { margin: 0 0 16px; color: var(--ink-muted); font-size: 13px; }
 .identity-dialog form { display: flex; gap: 8px; }
 .identity-dialog input { flex: 1; }
+/* Coming back: the names this browser has worn, one click each. */
+.identity-dialog .identity-known { margin-bottom: 14px; }
 
 /* ---------- project list ---------- */
 .projects-page { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
 .projects-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
 .projects-head h1 { font-size: 24px; margin: 0; }
-.projects-head .who { color: var(--ink-muted); font-size: 13px; margin-left: auto; }
+.projects-head .who { position: relative; margin-left: auto; }
 .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .project-card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -90,6 +92,45 @@ input, textarea { font: inherit; color: var(--ink); }
   border-style: dashed; align-items: stretch; justify-content: center; gap: 8px;
   background: transparent; box-shadow: none;
 }
+
+/* ---------- who you are ---------- */
+/* The menu behind your own face (and behind your name on the project list):
+   rename in place, return as someone this browser already knows, or leave. */
+.identity-anchor { position: relative; display: flex; align-items: center; }
+.identity-popover {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  width: 260px; padding: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+}
+.identity-menu { display: flex; flex-direction: column; gap: 10px; }
+.identity-rename { display: flex; gap: 6px; }
+.identity-rename .text-input { flex: 1; min-width: 0; }
+.identity-menu-head {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft); border-top: 1px solid var(--line-soft); padding-top: 10px;
+}
+.identity-known { display: flex; flex-direction: column; gap: 4px; }
+.identity-known-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 6px; border-radius: 6px; text-align: left; font-size: 13px;
+  background: none; border: 1px solid transparent; color: var(--ink);
+}
+.identity-known-row:hover { background: var(--chip); border-color: var(--chip-line); }
+.identity-known-row .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.identity-warning { font-size: 11px; color: #a06000; line-height: 1.35; }
+.identity-leave { justify-content: center; font-size: 12.5px; }
+
+/* The project list wears the same handle in its header. */
+.projects-head .who-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
+  background: none; border: 1px solid transparent;
+}
+.projects-head .who-btn:hover, .projects-head .who-btn.active {
+  background: var(--chip); border-color: var(--chip-line);
+}
+.projects-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 
 /* ---------- editing a project's name ---------- */
 .project-editor { display: flex; flex-direction: column; gap: 8px; }
