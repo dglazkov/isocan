@@ -181,13 +181,17 @@ async function touchSession(
   patch: import("@isocan/core").UpdateSessionRequest,
 ): Promise<void> {
   const active = await requireSession(ctx, projectId);
+  // Every update re-states who is holding the session, so `identity --name`
+  // re-labels the live cursor on the next command instead of leaving the old
+  // name standing until the session expires.
+  const beat = { actor: ctx.actor, ...patch };
   try {
-    await ctx.client.updateSession(projectId, active.sessionId, patch);
+    await ctx.client.updateSession(projectId, active.sessionId, beat);
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
     const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
     await writeSessionFile(ctx.home, { ...active, sessionId: created.sessionId });
-    await ctx.client.updateSession(projectId, created.sessionId, patch);
+    await ctx.client.updateSession(projectId, created.sessionId, beat);
   }
 }
 
@@ -306,6 +310,27 @@ async function nameCollision(
   }
 }
 
+/**
+ * A rename should reach the face you are already wearing. Best-effort, on the
+ * same terms as the collision check: only asks a daemon that is already
+ * running, and never fails `identity` — which has to work offline.
+ */
+async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
+  try {
+    const home = paths.isocanHome();
+    const session = await readSessionFile(home);
+    if (!session) return;
+    const globals = cmd.optsWithGlobals() as { port?: string };
+    const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
+    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+    if (!(await client.health())) return;
+    await client.updateSession(session.projectId, session.sessionId, { actor });
+  } catch {
+    // No daemon, no session, or it expired while we were being renamed —
+    // either way there is no face left wearing the old name.
+  }
+}
+
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
@@ -316,6 +341,7 @@ program
       if (opts.name) {
         const actor = await writeIdentity(home, opts.name);
         console.log(`identity saved: ${actor.name} (${actor.id})`);
+        await relabelLiveSession(cmd, actor);
         const taken = await nameCollision(cmd, actor);
         if (taken) {
           console.error(

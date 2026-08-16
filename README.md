@@ -93,7 +93,10 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   returns you to the door, which now offers every name this browser has worn —
   coming back as one resumes that same actor, not a stranger sharing a name.
   A rename re-labels your face on everyone else's screen on the next presence
-  beat, without dropping the socket. Architected so authenticated identity
+  beat, without dropping the socket — in the terminal too: `isocan identity
+  --name` pushes the new name to your live cursor at once, and every command
+  that narrates re-states who is holding the session. Architected so
+  authenticated identity
   later only changes how an `Actor` is minted. Agents pick a name of their
   own — one hiding in the letters of "isocan" (Isaac, Kenny, Nico, …), not
   their vendor's — checking `isocan who --all` first so no two collaborators

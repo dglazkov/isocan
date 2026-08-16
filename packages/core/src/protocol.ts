@@ -62,6 +62,10 @@ export interface CreateSessionResponse {
 }
 
 export interface UpdateSessionRequest {
+  /** Who is holding this session now. Sent on every update so renaming
+   * yourself re-labels the live face instead of waiting out its TTL — the
+   * same contract the web's presence beat carries over the socket. */
+  actor?: Actor;
   cursor?: { x: number; y: number } | null;
   selection?: string[];
   status?: string | null;

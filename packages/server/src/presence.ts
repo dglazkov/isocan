@@ -106,6 +106,7 @@ export class PresenceHub {
   touchOnCall(
     sessionId: string,
     patch: {
+      actor?: Actor;
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
@@ -228,7 +229,9 @@ function patchSession(
     activity?: PresenceActivity | null;
   },
 ): void {
-  if (patch.actor) session.actor = patch.actor;
+  // Presence is client-asserted, but a half-formed actor would leave a face
+  // with no name — take it only when it is one.
+  if (patch.actor?.id && patch.actor.name) session.actor = patch.actor;
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.status !== undefined) {
