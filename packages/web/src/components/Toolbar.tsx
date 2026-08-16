@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
+import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -31,13 +32,17 @@ export function Toolbar({
   // is allowed but worth a word, since @-mentions key on names (the same
   // warning `isocan identity --name` gives in the terminal).
   const otherNames = useMentionRoster(actor.id).peers.map((peer) => peer.name);
+  const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
+  const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
+    useUiStore.getState().setIdentityOpen(false),
+  );
 
   return (
     <div className="toolbar">
       <Link className="home" to="/" title="All projects">
         ⌂
       </Link>
-      <div className="project-name">
+      <div className="project-name" ref={nameRef}>
         <button
           className="title"
           disabled={!project}
@@ -74,7 +79,7 @@ export function Toolbar({
       </button>
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
-      <div className="identity-anchor">
+      <div className="identity-anchor" ref={identityRef}>
         <Presence actor={actor} />
         {identityOpen && (
           <div className="identity-popover">

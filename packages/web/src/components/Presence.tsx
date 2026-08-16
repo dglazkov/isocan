@@ -129,6 +129,9 @@ export function Presence({ actor }: { actor: Actor }) {
     const state = useCanvasStore.getState().canvas;
     if (!state) return;
     const ui = useUiStore.getState();
+    // The identity menu lives inside the pile, so a press on another face is
+    // not "outside" it — but going to look at someone else is done with it.
+    ui.setIdentityOpen(false);
     // Their comment first: it is the thing that wants an answer.
     const next = unreadThreads(state, useUnreadStore.getState().seen, actor.id).find((thread) =>
       thread.comments.some((comment) => comment.author.id === face.actor.id),

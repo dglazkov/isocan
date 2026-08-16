@@ -4,6 +4,7 @@ import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { newProjectId } from "@isocan/core";
 import { listProjects, sendOp } from "../lib/api.ts";
 import { actorColor } from "../lib/colors.ts";
+import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { ProjectEditor } from "../components/ProjectEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
 
@@ -19,6 +20,7 @@ export function ProjectListPage({
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [identityOpen, setIdentityOpen] = useState(false);
+  const whoRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () => setIdentityOpen(false));
 
   const refresh = useCallback(() => {
     listProjects().then(setProjects, () => setProjects([]));
@@ -50,7 +52,7 @@ export function ProjectListPage({
     <div className="projects-page">
       <div className="projects-head">
         <h1>isocan</h1>
-        <div className="who">
+        <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}
             title="You — rename yourself, or enter as someone else"
