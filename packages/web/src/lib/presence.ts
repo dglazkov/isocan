@@ -1,4 +1,4 @@
-import type { PresenceSession } from "@isocan/core";
+import type { CanvasState, PresenceSession } from "@isocan/core";
 
 /**
  * Honest liveness: a connected session that hasn't touched the daemon in a
@@ -17,6 +17,25 @@ export function quietFor(session: PresenceSession, nowMs = Date.now()): string |
   const ms = nowMs - Date.parse(session.lastSeen);
   if (!Number.isFinite(ms) || ms < QUIET_AFTER_MS) return null;
   return ms < 90_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`;
+}
+
+/** Where a session stands in the world: the center of the item it declared it
+ * is working on, its freestanding work point, or failing those its cursor.
+ * Null for a session with no location (an on-call agent parked in the home).
+ * The minimap dot and follow mode both aim here, so they always agree. */
+export function sessionLocus(
+  session: PresenceSession,
+  canvas: CanvasState | null,
+): { x: number; y: number } | null {
+  if (session.activity?.kind === "working") {
+    if ("itemId" in session.activity) {
+      const item = canvas?.items[session.activity.itemId];
+      if (item) return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
+    } else {
+      return { x: session.activity.x, y: session.activity.y };
+    }
+  }
+  return session.cursor;
 }
 
 /** The status line a session shows: only what it said or what its working

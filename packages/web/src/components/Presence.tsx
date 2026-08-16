@@ -21,11 +21,16 @@ import { centerOn, threadWorldPos } from "../lib/viewport.ts";
  * or just write in the main thread.
  *
  * Clicking a face takes you to them: to their next unread comment if they
- * left one, otherwise to wherever their cursor is.
+ * left one, otherwise to wherever their cursor is. Double-clicking a live
+ * face starts WATCHING them (#39): the camera follows their locus until you
+ * pan, zoom, jump, or press Esc — one glance at the facepile instead of
+ * hunting the canvas for their cursor.
  */
 
 interface Face {
   actor: Actor;
+  /** Their live session, when they have one — the handle follow mode needs. */
+  sessionId: string | null;
   /** Presence label if they have a session, else their plain name. */
   label: string;
   live: boolean;
@@ -45,6 +50,7 @@ export function Presence({ actor }: { actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const seen = useUnreadStore((s) => s.seen);
+  const followSessionId = useUiStore((s) => s.followSessionId);
   if (!canvas) return null;
 
   const pending = unreadThreads(canvas, seen, actor.id);
@@ -69,6 +75,7 @@ export function Presence({ actor }: { actor: Actor }) {
     const onCall = session.scope === "home";
     faces.push({
       actor: session.actor,
+      sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
       live: true,
       onCall,
@@ -84,6 +91,7 @@ export function Presence({ actor }: { actor: Actor }) {
     if (faces.some((face) => face.actor.id === id)) continue;
     faces.push({
       actor: author,
+      sessionId: null,
       label: author.name,
       live: false,
       onCall: false,
@@ -96,6 +104,7 @@ export function Presence({ actor }: { actor: Actor }) {
   }
   faces.push({
     actor,
+    sessionId: null,
     label: actor.name,
     live: true,
     onCall: false,
@@ -123,6 +132,15 @@ export function Presence({ actor }: { actor: Actor }) {
     if (next) ui.setOpenThread(next.id);
   }
 
+  /** Watch them: the camera tracks their locus until the user pans away.
+   * An on-call face has no place to watch, and watching yourself is a hall
+   * of mirrors. */
+  function toggleFollow(face: Face) {
+    if (!face.sessionId || face.onCall || face.self) return;
+    const ui = useUiStore.getState();
+    ui.setFollow(ui.followSessionId === face.sessionId ? null : face.sessionId);
+  }
+
   return (
     <div className="facepile">
       {shown.map((face) => (
@@ -130,9 +148,12 @@ export function Presence({ actor }: { actor: Actor }) {
           key={face.actor.id}
           className={`face${face.live ? "" : " away"}${face.onCall ? " oncall" : ""}${
             face.self ? " self" : ""
-          }${face.unread > 0 ? " badged" : ""}`}
+          }${face.unread > 0 ? " badged" : ""}${
+            face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
+          }`}
           title={tooltip(face)}
           onClick={() => goTo(face)}
+          onDoubleClick={() => toggleFollow(face)}
         >
           {/* The disc, not the button, carries the dimming — a badge on an
               absent author still has to read at full strength. */}
@@ -167,6 +188,7 @@ function tooltip(face: Face): string {
   else if (face.cursor) parts.push("click to jump to them");
   // An on-call face has nowhere to jump to — say how to reach them instead.
   else if (face.onCall) parts.push(`@${face.label} them, or write in the main thread`);
+  if (face.sessionId && !face.onCall && !face.self) parts.push("double-click to watch");
   return parts.join(" · ");
 }
 

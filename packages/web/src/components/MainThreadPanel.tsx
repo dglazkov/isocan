@@ -26,7 +26,7 @@ import { makeComment } from "./CommentLayer.tsx";
 const openKey = (projectId: string) => `isocan.mainpanel.${projectId}`;
 
 /** Must match .main-panel's width in styles.css. */
-const PANEL_WIDTH = 320;
+export const PANEL_WIDTH = 320;
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */
 function catapultBesidePanel(itemId: string): void {

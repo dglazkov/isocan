@@ -9,13 +9,14 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
-import { fitBounds, itemsBounds } from "../lib/viewport.ts";
+import { centerOn, fitBounds, itemsBounds } from "../lib/viewport.ts";
+import { sessionLocus } from "../lib/presence.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Shelf } from "../components/Shelf.tsx";
 import { Minimap } from "../components/Minimap.tsx";
 import { TrashPanel } from "../components/TrashPanel.tsx";
-import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
+import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
@@ -24,6 +25,11 @@ export function CanvasPage({ actor }: { actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const connection = useCanvasStore((s) => s.connection);
   const seen = useUnreadStore((s) => s.seen);
+  const followSessionId = useUiStore((s) => s.followSessionId);
+  const followedLabel = useCanvasStore((s) => {
+    const session = s.sessions.find((x) => x.sessionId === followSessionId);
+    return session ? session.label ?? session.actor.name : null;
+  });
   const didFit = useRef(false);
 
   useEffect(() => {
@@ -49,6 +55,41 @@ export function CanvasPage({ actor }: { actor: Actor }) {
         .setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
     }
   }, [canvas]);
+
+  // Watch mode (#39): the camera chases the followed session's locus so the
+  // agent's work is always on screen. Rest-and-chase, not a hard tether:
+  // hold still while they putter near center, glide after them once they
+  // stray, settle again. Any manual pan/zoom/jump goes through setViewport,
+  // which clears the follow — the user grabbing the wheel always wins.
+  useEffect(() => {
+    if (!followSessionId) return;
+    let raf = 0;
+    let chasing = true; // open with a catch-up glide to wherever they are
+    const step = () => {
+      const { sessions, canvas: current } = useCanvasStore.getState();
+      const ui = useUiStore.getState();
+      const session = sessions.find((s) => s.sessionId === followSessionId);
+      const locus = session && current ? sessionLocus(session, current) : null;
+      if (!locus || session!.scope === "home") {
+        ui.setFollow(null); // they left, or lost their place — nothing to watch
+        return;
+      }
+      const width = window.innerWidth + (ui.mainPanelOpen ? PANEL_WIDTH : 0);
+      const target = centerOn(ui.viewport, locus.x, locus.y, width, window.innerHeight);
+      const dx = target.tx - ui.viewport.tx;
+      const dy = target.ty - ui.viewport.ty;
+      const dist = Math.hypot(dx, dy); // screen px — tx/ty live in screen space
+      const wake = Math.min(width, window.innerHeight) * 0.22;
+      if (!chasing && dist > wake) chasing = true;
+      if (chasing) {
+        if (dist < 1) chasing = false;
+        else ui.followViewport({ ...ui.viewport, tx: ui.viewport.tx + dx * 0.12, ty: ui.viewport.ty + dy * 0.12 });
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [followSessionId]);
 
   // Unread comments reach a backgrounded tab through its title.
   useEffect(() => {
@@ -96,7 +137,9 @@ export function CanvasPage({ actor }: { actor: Actor }) {
           ui.select(null);
         }
       } else if (e.key === "Escape") {
-        if (ui.pendingComment) ui.setPendingComment(null);
+        // Watching is the outermost mode: Esc hands the camera back first.
+        if (ui.followSessionId) ui.setFollow(null);
+        else if (ui.pendingComment) ui.setPendingComment(null);
         else if (ui.openThreadId) ui.setOpenThread(null);
         else if (ui.commentMode) ui.setCommentMode(false);
         else if (ui.fannedItemId) ui.setFanned(null);
@@ -133,6 +176,11 @@ export function CanvasPage({ actor }: { actor: Actor }) {
     <div className="canvas-page">
       <CanvasViewport projectId={projectId} actor={actor} />
       <Toolbar actor={actor} />
+      {followedLabel && (
+        <button className="follow-banner" onClick={() => useUiStore.getState().setFollow(null)}>
+          Watching {followedLabel} — Esc to stop
+        </button>
+      )}
       <Shelf projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />

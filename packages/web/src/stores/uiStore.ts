@@ -46,7 +46,14 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per project
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
+  /** Session being followed: the camera tracks their locus until the user
+   * takes the wheel back (any manual pan/zoom/jump, or Esc). */
+  followSessionId: string | null;
   setViewport: (viewport: Viewport) => void;
+  /** Camera-driven viewport update from follow mode — the one mutation that
+   * does not read as "the user grabbed the wheel", so it keeps the follow. */
+  followViewport: (viewport: Viewport) => void;
+  setFollow: (sessionId: string | null) => void;
   /** Replace the selection with one item (or clear it). */
   select: (itemId: string | null) => void;
   setSelection: (itemIds: string[]) => void;
@@ -85,7 +92,12 @@ export const useUiStore = create<UiStore>((set) => {
     commentMode: false,
     trashOpen: false,
     mainPanelOpen: false,
-    setViewport: (viewport) => set({ viewport }),
+    followSessionId: null,
+    // Every existing caller of setViewport is a user gesture (wheel, drag,
+    // zoom buttons, a jump) — each one hands the camera back to the user.
+    setViewport: (viewport) => set({ viewport, followSessionId: null }),
+    followViewport: (viewport) => set({ viewport }),
+    setFollow: (followSessionId) => set({ followSessionId }),
     select: (itemId) => set((s) => selectionSideEffects(s, itemId === null ? [] : [itemId])),
     setSelection: (itemIds) => set((s) => selectionSideEffects(s, itemIds)),
     toggleSelect: (itemId) =>
