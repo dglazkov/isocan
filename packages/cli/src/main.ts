@@ -795,14 +795,23 @@ program
             const owner = rootOfBin(handOff);
             if (!before || path.resolve(before.root ?? "") !== owner) {
               const done = spawnSync(handOff, ["restart", "--port", String(port)], {
-                stdio: "ignore",
+                encoding: "utf8",
                 shell: process.platform === "win32",
                 env: { ...process.env, ISOCAN_HOME: home },
               });
-              if (done.status !== 0) throw new Error(`could not start the daemon from ${handOff}`);
-              report.restarted = before
-                ? `the daemon was running ${before.root} — restarted on the installed copy`
-                : `started on the installed copy, not this temporary one (${myRoot()})`;
+              if (done.status === 0) {
+                report.restarted = before
+                  ? `the daemon was running ${before.root} — restarted on the installed copy`
+                  : `started on the installed copy, not this temporary one (${myRoot()})`;
+              } else {
+                // Not fatal: a daemon from this copy is worth more than no
+                // daemon at all — it just won't outlive the cache, and the
+                // installed CLI will offer to restart it.
+                report.restarted =
+                  `could not start the daemon from ${handOff} ` +
+                  `(${(done.stderr || done.error?.message || "").trim().split("\n").pop() ?? "no output"}) — ` +
+                  "using this copy instead; `isocan restart` once it is on your PATH";
+              }
             }
           } else if (before && stalenessOf(before).stale) {
             const { stopDaemons } = await import("@isocan/server");
