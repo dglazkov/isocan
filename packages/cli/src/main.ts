@@ -1314,36 +1314,51 @@ on everything.`,
         ctx.projectRef !== undefined || opts.since !== undefined
           ? await resolveProject(ctx)
           : null;
-      let cursors: Record<string, number>;
-      if (pinned) {
-        cursors = {
-          [pinned.id]:
-            opts.since !== undefined
-              ? Number(opts.since)
-              : (await ctx.client.snapshot(pinned.id)).lastSeq,
-        };
-      } else {
-        cursors = (await ctx.client.watchLog({})).cursors; // seed: from now on
-      }
+      // Seed from the watch route itself — the very call the loop will live
+      // on — even when --since already names the position. Proving it works
+      // HERE is what keeps a wait that cannot poll from ever advertising
+      // itself as parked: it dies before it touches presence.
+      const seeded = (await ctx.client.watchLog(pinned ? { only: [pinned.id] } : {})).cursors;
+      let cursors: Record<string, number> = pinned
+        ? {
+            [pinned.id]:
+              opts.since !== undefined
+                ? Number(opts.since)
+                : (seeded[pinned.id] ?? (await ctx.client.snapshot(pinned.id)).lastSeq),
+          }
+        : seeded; // seed: from now on
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
 
       // Waiting is presence: show it, and keep it alive while parked. A
       // pinned wait only stirs the canvas session it is pinned to; an
       // unpinned one registers on call, so every canvas can see and summon
-      // you. Both are torn down when the wait ends.
+      // you. Both are torn down on every way out — a canvas must never show
+      // an agent listening when no process is.
       const session = await readSessionFile(ctx.home);
       const sessionActive = pinned !== null && session?.projectId === pinned.id;
       const label = session?.label;
       const onCall = pinned
         ? null
         : (await ctx.client.createOnCall(ctx.actor, label).catch(() => null))?.sessionId ?? null;
-      const stopOnCall = () => {
-        if (onCall) void ctx.client.endOnCall(onCall).catch(() => {});
+      // Retract everything the wait advertised. On-call sessions have a TTL
+      // to fall back on, but the canvas status is sticky text on a session
+      // that outlives us — nothing clears it but this.
+      const stopPresence = async () => {
+        if (sessionActive && pinned) {
+          // Don't resurrect an expired session just to blank it: if it is
+          // gone, nothing is left claiming to wait.
+          const active = await readSessionFile(ctx.home);
+          if (active?.projectId === pinned.id) {
+            await ctx.client
+              .updateSession(pinned.id, active.sessionId, { status: null })
+              .catch(() => {});
+          }
+        }
+        if (onCall) await ctx.client.endOnCall(onCall).catch(() => {});
       };
       for (const signal of ["SIGINT", "SIGTERM"] as const) {
         process.once(signal, () => {
-          stopOnCall();
-          process.exit(signal === "SIGINT" ? 130 : 143);
+          void stopPresence().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
         });
       }
       const say = async (status: string) => {
@@ -1386,53 +1401,60 @@ on everything.`,
         return false;
       };
 
-      await say("waiting for your feedback…");
+      try {
+        await say("waiting for your feedback…");
 
-      for (;;) {
-        const remaining = deadline === null ? Infinity : deadline - Date.now();
-        if (remaining <= 0) {
-          stopOnCall();
-          console.error("wait: timed out with no feedback");
-          process.exit(2);
-        }
-        const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
-        const batch = await ctx.client.watchLog({
-          cursors,
-          waitMs: window,
-          ...(pinned ? { only: [pinned.id] } : {}),
-        });
-        cursors = batch.cursors;
-        const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
-        const snapOf = (projectId: string) => () => {
-          let pending = snaps.get(projectId);
-          if (!pending) snaps.set(projectId, (pending = ctx.client.snapshot(projectId)));
-          return pending;
-        };
-        const matches: WatchedLogEntry[] = [];
-        for (const entry of batch.entries) {
-          if (entry.envelope.actor.id === ctx.actor.id) continue;
-          if (opts.allOps || (await isForMe(entry.envelope.op, snapOf(entry.projectId)))) {
-            matches.push(entry);
+        for (;;) {
+          const remaining = deadline === null ? Infinity : deadline - Date.now();
+          if (remaining <= 0) {
+            console.error("wait: timed out with no feedback");
+            process.exitCode = 2;
+            return;
           }
-        }
-        if (matches.length > 0) {
-          await say("reading your feedback…");
-          stopOnCall();
-          if (ctx.json) return printJson({ cursors, entries: matches });
-          for (const entry of matches) {
-            // Say WHICH canvas summoned you when you were listening to more
-            // than one — and hand back a command that lands there.
-            const where = pinned ? "" : `[${entry.projectTitle}] `;
-            console.log(`${where}${describeEntry(entry)}`);
-            const op = entry.envelope.op;
-            if (op.type === "thread.create" || op.type === "thread.reply") {
-              const project = pinned ? "" : `--project ${entry.projectId} `;
-              console.log(`  → isocan ${project}comment reply ${op.threadId} "…"`);
+          const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
+          const batch = await ctx.client.watchLog({
+            cursors,
+            waitMs: window,
+            ...(pinned ? { only: [pinned.id] } : {}),
+          });
+          cursors = batch.cursors;
+          const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
+          const snapOf = (projectId: string) => () => {
+            let pending = snaps.get(projectId);
+            if (!pending) snaps.set(projectId, (pending = ctx.client.snapshot(projectId)));
+            return pending;
+          };
+          const matches: WatchedLogEntry[] = [];
+          for (const entry of batch.entries) {
+            if (entry.envelope.actor.id === ctx.actor.id) continue;
+            if (opts.allOps || (await isForMe(entry.envelope.op, snapOf(entry.projectId)))) {
+              matches.push(entry);
             }
           }
-          return;
+          if (matches.length > 0) {
+            // No "reading your feedback…" here: `wait` is about to return,
+            // and a status set on the way out is a claim nobody retracts.
+            // Whoever wakes says what they are doing next.
+            if (ctx.json) return printJson({ cursors, entries: matches });
+            for (const entry of matches) {
+              // Say WHICH canvas summoned you when you were listening to more
+              // than one — and hand back a command that lands there.
+              const where = pinned ? "" : `[${entry.projectTitle}] `;
+              console.log(`${where}${describeEntry(entry)}`);
+              const op = entry.envelope.op;
+              if (op.type === "thread.create" || op.type === "thread.reply") {
+                const project = pinned ? "" : `--project ${entry.projectId} `;
+                console.log(`  → isocan ${project}comment reply ${op.threadId} "…"`);
+              }
+            }
+            return;
+          }
+          await say("waiting for your feedback…"); // heartbeat between polls
         }
-        await say("waiting for your feedback…"); // heartbeat between polls
+      } finally {
+        // Woken, timed out, or thrown out by a daemon that cannot watch —
+        // every way out of the loop retracts the presence it advertised.
+        await stopPresence();
       }
     }),
   );
