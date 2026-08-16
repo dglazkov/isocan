@@ -11,6 +11,21 @@ every operation you run appears on their screen live, and your presence
 renders as a named cursor. `isocan --help` is the full reference and is
 written for you; read it once per session.
 
+## If `isocan` isn't there
+
+The skill can arrive without the tool (`npx skills add dglazkov/isocan`
+installs this file alone). If `isocan --version` fails, install it — the repo
+is the package, no registry involved — and let it finish the setup:
+
+```sh
+npm i -g github:dglazkov/isocan   # the CLI, built from source
+isocan setup                      # this directory: skill, canvas, daemon
+```
+
+`isocan setup` is also the one-command start from scratch in any directory:
+`npx github:dglazkov/isocan setup`. It is idempotent — run it whenever you
+land somewhere new.
+
 ## Orient (once per session)
 
 ```sh

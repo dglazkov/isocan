@@ -1,0 +1,13 @@
+# Packing rules for `npm i github:dglazkov/isocan` — the repo is the package.
+#
+# This file exists to OVERRIDE .gitignore at pack time. `packages/web/dist` is
+# gitignored (it is a build artifact) but must ship: the install-time `prepare`
+# script builds it, and without it the daemon would serve an empty page. npm
+# consults .gitignore only when there is no .npmignore, so the moment this file
+# exists the artifact survives.
+node_modules
+coverage
+*.log
+.DS_Store
+.env
+.env.*

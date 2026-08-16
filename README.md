@@ -23,6 +23,27 @@ to the same engine.
 
 ## Quick start
 
+From any directory, one command — no npm publishing involved, the repo *is*
+the package:
+
+```sh
+npx github:dglazkov/isocan setup
+```
+
+That installs the CLI's own skill where agents look for it
+(`.agents/skills/isocan-collab`, plus the `.claude/` doorway), makes sure
+`isocan` is on your PATH, starts the daemon, and creates a canvas named after
+the directory — then prints its URL. It is idempotent; run it again anywhere.
+`isocan setup --help` for the knobs (`--canvas`, `--no-canvas`, `--force`).
+
+Want only the skill, for an agent that will install the rest itself?
+
+```sh
+npx skills add dglazkov/isocan
+```
+
+From a checkout:
+
 ```sh
 npm install
 npm run build          # build the web app once (daemon serves it)
@@ -112,6 +133,7 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 ## CLI surface
 
 ```
+isocan setup [dir]                 # skill + CLI + canvas for a directory
 isocan identity|whoami · serve [--force]|status|stop · open
 isocan project create|list|show|edit|delete · isocan use <project>
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import type {
   Actor,
@@ -458,6 +459,155 @@ program
       }).unref();
       console.log(url);
     }),
+  );
+
+// ---------- setup: one command, from any directory ----------
+
+/** The skill this build ships, in the same relative place in a checkout and
+ * in an `npm i -g github:…` install. */
+const SKILL_NAME = "isocan-collab";
+const skillSource = () =>
+  fileURLToPath(new URL(`../../../.agents/skills/${SKILL_NAME}`, import.meta.url));
+/** How to get this CLI without a registry — the repo is the package. */
+const INSTALL_SPEC = "github:dglazkov/isocan";
+
+async function exists(target: string): Promise<boolean> {
+  return fs.stat(target).then(() => true, () => false);
+}
+
+/**
+ * Put the skill where agents look. `.agents/skills/<name>/` is the convention
+ * pi, agy, Codex, Cursor, Gemini CLI and OpenCode discover on their own;
+ * Claude Code reads the same directory through a relative symlink. One copy
+ * per directory, several doorways to it — the arrangement this repo uses on
+ * itself.
+ */
+async function installSkill(
+  dir: string,
+  force: boolean,
+): Promise<{ path: string; state: "installed" | "refreshed" | "current" | "differs" }> {
+  const source = skillSource();
+  const dest = path.join(dir, ".agents", "skills", SKILL_NAME);
+  const already = await exists(dest);
+  let state: "installed" | "refreshed" | "current" | "differs" = "installed";
+  if (already && !force) {
+    const [theirs, ours] = await Promise.all([
+      fs.readFile(path.join(dest, "SKILL.md"), "utf8").catch(() => ""),
+      fs.readFile(path.join(source, "SKILL.md"), "utf8"),
+    ]);
+    state = theirs === ours ? "current" : "differs";
+  } else {
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.rm(dest, { recursive: true, force: true });
+    await fs.cp(source, dest, { recursive: true });
+    state = already ? "refreshed" : "installed";
+  }
+
+  // The Claude Code doorway: a relative symlink, so it survives being moved
+  // or cloned. Never overwrite a real directory someone put there.
+  const doorway = path.join(dir, ".claude", "skills", SKILL_NAME);
+  const link = await fs.lstat(doorway).catch(() => null);
+  if (!link) {
+    await fs.mkdir(path.dirname(doorway), { recursive: true });
+    await fs
+      .symlink(path.join("..", "..", ".agents", "skills", SKILL_NAME), doorway)
+      .catch(() => {}); // Windows without developer mode: the .agents copy stands
+  }
+  return { path: dest, state };
+}
+
+/** Is this build a git checkout of isocan itself, rather than an install? */
+async function runningFromCheckout(): Promise<boolean> {
+  return exists(fileURLToPath(new URL("../../../.git", import.meta.url)));
+}
+
+function onPath(command: string): boolean {
+  const which = process.platform === "win32" ? "where" : "which";
+  return spawnSync(which, [command], { stdio: "ignore" }).status === 0;
+}
+
+program
+  .command("setup [dir]")
+  .description(
+    "Ready a directory for canvas work: install the skill agents read, the CLI they run, and a canvas to work on",
+  )
+  .option("--canvas <title>", "canvas to create or reuse (default: the directory's name)")
+  .option("--no-canvas", "don't create or select a canvas")
+  .option("--no-install", "don't install the isocan CLI when it isn't on PATH")
+  .option("--force", "refresh the skill even if this directory already has one")
+  .action(
+    run(
+      async (
+        dir: string | undefined,
+        opts: { canvas?: string | boolean; install?: boolean; force?: boolean },
+        cmd: Command,
+      ) => {
+        const globals = cmd.optsWithGlobals() as { json?: boolean };
+        const target = path.resolve(dir ?? process.cwd());
+        if (!(await exists(target))) throw new Error(`no such directory: ${target}`);
+        const report: Record<string, string> = {};
+
+        const skill = await installSkill(target, opts.force ?? false);
+        report.skill =
+          skill.state === "differs"
+            ? `${path.relative(target, skill.path)} — differs from this build's copy; --force to refresh`
+            : `${path.relative(target, skill.path)} (${skill.state})`;
+
+        // The skill's every instruction starts with `isocan`, so a setup that
+        // leaves it unrunnable has set up nothing.
+        if (onPath("isocan")) {
+          report.cli = "already on PATH";
+        } else if (await runningFromCheckout()) {
+          report.cli = "running from a checkout — `npm link` to put it on PATH";
+        } else if (opts.install === false) {
+          report.cli = `not on PATH — \`npm i -g ${INSTALL_SPEC}\` when you want it`;
+        } else {
+          console.error(`isocan: installing the CLI (npm i -g ${INSTALL_SPEC})…`);
+          const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+          const done = spawnSync(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
+          report.cli =
+            done.status === 0 && onPath("isocan")
+              ? "installed globally"
+              : `install failed — run \`npm i -g ${INSTALL_SPEC}\` yourself`;
+        }
+
+        // Identity, daemon, canvas — everything that needs the daemon comes
+        // after, and none of it may sink the skill install.
+        let ctx: Ctx | null = null;
+        try {
+          ctx = await ctxOf(cmd);
+          report.identity = `${ctx.actor.name} (${ctx.actor.id})`;
+          report.daemon = ctx.client.base;
+        } catch (err) {
+          report.identity = `not set — \`isocan identity --name "You"\` (${(err as Error).message})`;
+        }
+
+        if (ctx && opts.canvas !== false) {
+          const title = typeof opts.canvas === "string" ? opts.canvas : path.basename(target);
+          const wanted = title.toLowerCase();
+          // Reuse a canvas of that name rather than minting a second one:
+          // running setup twice in a directory should land you where you were.
+          const existing = (await ctx.client.listProjects()).find(
+            (p) => p.title.toLowerCase() === wanted,
+          );
+          const projectId = existing?.id ?? newProjectId();
+          if (!existing) {
+            await ctx.client.sendOp(null, ctx.actor, { type: "project.create", projectId, title });
+          }
+          await writeConfig(ctx.home, {
+            ...(await readConfig(ctx.home)),
+            defaultProjectId: projectId,
+          });
+          report.canvas = `"${title}" ${existing ? "(reused)" : "(created)"} — ${ctx.client.base}/p/${projectId}`;
+        }
+
+        if (globals.json) return printJson(report);
+        printKeyValues(report);
+        console.log(
+          "\nOpen the canvas, then tell your agent to use the isocan-collab skill.",
+        );
+      },
+    ),
   );
 
 // ---------- projects ----------

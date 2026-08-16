@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "An isomorphic canvas: one 2.5D surface, driven from a web app and a terminal",
+  "bin": {
+    "isocan": "packages/cli/bin/isocan.js"
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -10,7 +14,19 @@
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @isocan/server\" \"npm run dev -w @isocan/web\"",
     "build": "npm run build -w @isocan/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "node scripts/prepare.mjs"
+  },
+  "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan` (no publishing) resolves them: a git install installs the root package only. The file: specs make the workspaces resolvable the same way in a checkout and in an install.",
+  "dependencies": {
+    "@isocan/cli": "file:packages/cli",
+    "@isocan/core": "file:packages/core",
+    "@isocan/server": "file:packages/server",
+    "commander": "^13.1.0",
+    "fastify": "^5.2.1",
+    "nanoid": "^5.0.9",
+    "tsx": "^4.19.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
