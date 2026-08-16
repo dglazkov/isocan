@@ -17,11 +17,8 @@
     "test": "vitest run",
     "prepare": "node scripts/prepare.mjs"
   },
-  "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan` (no publishing) resolves them: a git install installs the root package only. The file: specs make the workspaces resolvable the same way in a checkout and in an install.",
+  "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan` (no publishing) resolves them: a git install installs the root package only. The workspaces themselves are deliberately NOT dependencies — bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall.",
   "dependencies": {
-    "@isocan/cli": "file:packages/cli",
-    "@isocan/core": "file:packages/core",
-    "@isocan/server": "file:packages/server",
     "commander": "^13.1.0",
     "fastify": "^5.2.1",
     "nanoid": "^5.0.9",
