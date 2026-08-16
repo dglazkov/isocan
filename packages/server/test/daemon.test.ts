@@ -307,6 +307,83 @@ describe("daemon HTTP", () => {
     expect(woke[0]!.envelope.op.type).toBe("item.move");
   });
 
+  it("the home-wide watch seeds at now, then hears every canvas — new ones included", async () => {
+    await createProjectWithItem();
+
+    // Seeding (no cursors) reports tips and no entries: "from here on".
+    const seed = await post("/api/oplog/watch", {});
+    expect(seed.json.entries).toEqual([]);
+    expect(seed.json.cursors).toEqual({ prj_1: 2 });
+
+    // A canvas born after the agent parked, and a comment on it. The watcher
+    // never saw prj_2, so it is streamed from its very first op — issue #37.
+    await op({ type: "project.create", projectId: "prj_2", title: "New space" }, null, bob);
+    await op(
+      {
+        type: "thread.create",
+        threadId: "thr_1",
+        x: 1,
+        y: 2,
+        anchorItemId: null,
+        main: true,
+        comment: { id: "cmt_1", body: "are you there?" },
+      },
+      "prj_2",
+      bob,
+    );
+
+    const batch = await post("/api/oplog/watch", { cursors: seed.json.cursors });
+    expect(batch.json.entries.map((e: any) => [e.projectId, e.projectTitle, e.envelope.op.type]))
+      .toEqual([
+        ["prj_2", "New space", "project.create"],
+        ["prj_2", "New space", "thread.create"],
+      ]);
+    expect(batch.json.cursors).toEqual({ prj_1: 2, prj_2: 2 });
+
+    // Nothing new past those cursors → the poll holds, then comes back empty.
+    let started = Date.now();
+    const quiet = await post("/api/oplog/watch", { cursors: batch.json.cursors, waitMs: 250 });
+    expect(quiet.json.entries).toEqual([]);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(200);
+
+    // An op on ANY canvas wakes it — here, the one it was not started on.
+    started = Date.now();
+    const pending = post("/api/oplog/watch", { cursors: batch.json.cursors, waitMs: 5000 });
+    await new Promise((r) => setTimeout(r, 120));
+    await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 }, "prj_1", bob);
+    const woke = await pending;
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(woke.json.entries).toHaveLength(1);
+    expect(woke.json.entries[0].projectId).toBe("prj_1");
+  });
+
+  it("`only` pins the watch to named canvases — the rest of the home is silent", async () => {
+    await createProjectWithItem();
+    await op({ type: "project.create", projectId: "prj_2", title: "Elsewhere" }, null, bob);
+
+    // Pinned to prj_2, which has nothing past its creation. A canvas absent
+    // from `only` must not be swept in from seq 0.
+    const started = Date.now();
+    const quiet = await post("/api/oplog/watch", {
+      only: ["prj_2"],
+      cursors: { prj_2: 1 },
+      waitMs: 250,
+    });
+    expect(quiet.json.entries).toEqual([]);
+    expect(quiet.json.cursors).toEqual({ prj_2: 1 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(200);
+
+    // Nor may an op elsewhere cut the poll short.
+    const pending = post("/api/oplog/watch", {
+      only: ["prj_2"],
+      cursors: { prj_2: 1 },
+      waitMs: 400,
+    });
+    await new Promise((r) => setTimeout(r, 60));
+    await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 }, "prj_1", bob);
+    expect((await pending).json.entries).toEqual([]);
+  });
+
   it("uploads and serves blobs with security headers", async () => {
     await createProjectWithItem();
     const body = "<h1>hi</h1>";

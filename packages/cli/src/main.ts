@@ -14,6 +14,7 @@ import type {
   Operation,
   PresenceSession,
   Project,
+  WatchedLogEntry,
 } from "@isocan/core";
 import {
   DEFAULT_PORT,
@@ -96,11 +97,19 @@ Presence (being visible while you work):
   isocan who --all                      every name the canvas knows, live or not
   Each operation you perform moves your cursor to where it happened.
 
+Being on call (how a canvas you've never opened can reach you):
+  A session belongs to ONE canvas. \`isocan wait\` belongs to the HOME: while
+  parked you show up in every canvas's facepile as "on call", so the human
+  can @-mention you — or just write in its main thread — from a space made
+  after you started waiting. \`wait\` then names the canvas that summoned you
+  and hands back a --project command that lands there. Pass --project to
+  wait on one canvas only; you are invisible on the others while you do.
+
 A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
   edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
-  the next comment that's for you — @-mentions you, lands in the main
-  thread, or is in your thread) → repeat.`,
+  the next comment that's for you — @-mentions you, lands in a main
+  thread, or is in your thread — on any canvas in the home) → repeat.`,
   );
 
 /** Wrap actions: friendly errors, non-zero exit. */
@@ -1187,6 +1196,9 @@ program
         sessions.map((s) => ({
           who: s.label ?? s.actor.name,
           kind: s.kind,
+          // On call = parked on `isocan wait` somewhere in the home, so
+          // reachable here even though they have never opened this canvas.
+          where: s.scope === "home" ? "on call" : "here",
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: s.activity
@@ -1269,15 +1281,22 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
 
 program
   .command("wait")
-  .description("Block until someone comments for you — the agent's feedback loop")
+  .description(
+    "Block until someone comments for you, on any canvas — the agent's feedback loop",
+  )
   .option("--all-ops", "wake on any operation by another actor, not just comments")
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
   .option("--since <seq>", "wake on anything after this oplog position instead of now")
   .addHelpText(
     "after",
     `
+While parked you are ON CALL for the whole home: every canvas can see you in
+its facepile and @-mention you, including one created after you started
+waiting, and a comment on any of them wakes you. Pass --project (or --since)
+to listen to one canvas only — then you are invisible everywhere else.
+
 A comment wakes you when it @-mentions you (identity name or session label),
-lands in the MAIN thread (\`comment main\`), or lands in a thread you wrote
+lands in a MAIN thread (\`comment main\`), or lands in a thread you wrote
 in or were mentioned in. Everything else — including comments that mention
 nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
 on everything.`,
@@ -1288,21 +1307,57 @@ on everything.`,
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
-      let seq =
-        opts.since !== undefined
-          ? Number(opts.since)
-          : (await ctx.client.snapshot(p.id)).lastSeq;
+      // Scope. Naming a canvas (--project, or --since, which is one canvas's
+      // seq) pins the wait to it. Otherwise you listen to the whole home —
+      // that is what makes you reachable from a canvas you've never opened.
+      const pinned =
+        ctx.projectRef !== undefined || opts.since !== undefined
+          ? await resolveProject(ctx)
+          : null;
+      let cursors: Record<string, number>;
+      if (pinned) {
+        cursors = {
+          [pinned.id]:
+            opts.since !== undefined
+              ? Number(opts.since)
+              : (await ctx.client.snapshot(pinned.id)).lastSeq,
+        };
+      } else {
+        cursors = (await ctx.client.watchLog({})).cursors; // seed: from now on
+      }
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
-      // Waiting is presence: show it, and keep the session alive while parked.
+
+      // Waiting is presence: show it, and keep it alive while parked. A
+      // pinned wait only stirs the canvas session it is pinned to; an
+      // unpinned one registers on call, so every canvas can see and summon
+      // you. Both are torn down when the wait ends.
       const session = await readSessionFile(ctx.home);
-      const sessionActive = session?.projectId === p.id;
-      const say = (status: string) =>
-        sessionActive ? touchSession(ctx, p.id, { status }).catch(() => {}) : Promise.resolve();
+      const sessionActive = pinned !== null && session?.projectId === pinned.id;
+      const label = session?.label;
+      const onCall = pinned
+        ? null
+        : (await ctx.client.createOnCall(ctx.actor, label).catch(() => null))?.sessionId ?? null;
+      const stopOnCall = () => {
+        if (onCall) void ctx.client.endOnCall(onCall).catch(() => {});
+      };
+      for (const signal of ["SIGINT", "SIGTERM"] as const) {
+        process.once(signal, () => {
+          stopOnCall();
+          process.exit(signal === "SIGINT" ? 130 : 143);
+        });
+      }
+      const say = async (status: string) => {
+        if (sessionActive && pinned) await touchSession(ctx, pinned.id, { status }).catch(() => {});
+        // An expired on-call session (we thought for longer than the TTL)
+        // just gets minted again: parking is what makes you reachable.
+        if (onCall) {
+          await ctx.client.touchOnCall(onCall, { status }).catch(() => {});
+        }
+      };
 
       // Names I answer to: identity name, plus my session label if any.
       const selfNames: MentionCandidate[] = [ctx.actor];
-      if (sessionActive && session?.label) selfNames.push({ id: ctx.actor.id, name: session.label });
+      if (label) selfNames.push({ id: ctx.actor.id, name: label });
       const addressesMe = (c: NewComment | Comment) =>
         (c.mentions ?? []).includes(ctx.actor.id) ||
         extractMentions(c.body, selfNames).length > 0;
@@ -1310,7 +1365,8 @@ on everything.`,
       // A comment is for me when it addresses me, lands in the MAIN thread
       // (the designated agent↔user channel — always actionable), or lands in
       // a thread I'm part of (wrote in / was mentioned in). Everything else
-      // is ether — not actionable. `snap` is fetched lazily, per poll batch.
+      // is ether — not actionable. `snap` is fetched lazily, per canvas per
+      // poll batch.
       const isForMe = async (
         op: Operation,
         snap: () => Promise<CanvasSnapshotResponse>,
@@ -1335,27 +1391,43 @@ on everything.`,
       for (;;) {
         const remaining = deadline === null ? Infinity : deadline - Date.now();
         if (remaining <= 0) {
+          stopOnCall();
           console.error("wait: timed out with no feedback");
           process.exit(2);
         }
         const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
-        const entries = await ctx.client.getLog(p.id, seq, window);
-        if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
-        let snapCache: Promise<CanvasSnapshotResponse> | null = null;
-        const snap = () => (snapCache ??= ctx.client.snapshot(p.id));
-        const matches: typeof entries = [];
-        for (const entry of entries) {
+        const batch = await ctx.client.watchLog({
+          cursors,
+          waitMs: window,
+          ...(pinned ? { only: [pinned.id] } : {}),
+        });
+        cursors = batch.cursors;
+        const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
+        const snapOf = (projectId: string) => () => {
+          let pending = snaps.get(projectId);
+          if (!pending) snaps.set(projectId, (pending = ctx.client.snapshot(projectId)));
+          return pending;
+        };
+        const matches: WatchedLogEntry[] = [];
+        for (const entry of batch.entries) {
           if (entry.envelope.actor.id === ctx.actor.id) continue;
-          if (opts.allOps || (await isForMe(entry.envelope.op, snap))) matches.push(entry);
+          if (opts.allOps || (await isForMe(entry.envelope.op, snapOf(entry.projectId)))) {
+            matches.push(entry);
+          }
         }
         if (matches.length > 0) {
           await say("reading your feedback…");
-          if (ctx.json) return printJson({ lastSeq: seq, entries: matches });
+          stopOnCall();
+          if (ctx.json) return printJson({ cursors, entries: matches });
           for (const entry of matches) {
-            console.log(describeEntry(entry));
+            // Say WHICH canvas summoned you when you were listening to more
+            // than one — and hand back a command that lands there.
+            const where = pinned ? "" : `[${entry.projectTitle}] `;
+            console.log(`${where}${describeEntry(entry)}`);
             const op = entry.envelope.op;
             if (op.type === "thread.create" || op.type === "thread.reply") {
-              console.log(`  → isocan comment reply ${op.threadId} "…"`);
+              const project = pinned ? "" : `--project ${entry.projectId} `;
+              console.log(`  → isocan ${project}comment reply ${op.threadId} "…"`);
             }
           }
           return;

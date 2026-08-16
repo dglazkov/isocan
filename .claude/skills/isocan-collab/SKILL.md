@@ -74,12 +74,15 @@ keep it — a stable name is worth more than a fresh one.
    "done, see #Roadmap" beats describing where things are.
 6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
    that is FOR YOU: one that @-mentions you (name or session label), lands in
-   the MAIN thread (see below), or lands in a thread you wrote in or were
+   a MAIN thread (see below), or lands in a thread you wrote in or were
    mentioned in. Everything else — comments for others, comments mentioning
    nobody — is ether and won't wake you.
    Exit 2 on timeout, 0 with the feedback as JSON. Run it as a background
    task; while parked your cursor shows "waiting for your feedback…"
    automatically. On wake: go to step 3.
+   **Parking puts you on call for the whole home**, not just this canvas —
+   see below. Do NOT pass `--project` to `wait`: that pins you to one canvas
+   and makes you unreachable from every other.
 7. **Leave.** `isocan session end` when the collaboration is over.
 
 ## The main thread
@@ -87,10 +90,32 @@ keep it — a stable name is worth more than a fresh one.
 One thread per canvas may be designated "main" (`isocan comment main` shows
 it; `comment main <thread>` designates). It is the user's direct channel to
 you: in the web app it renders as a docked chat panel, everything posted
-there wakes your `wait` with no @-mention needed, and `#Title` references in
-it render as cards that fly the reader to the item. Treat it as the primary
-conversation — reply to main-thread asks in the main thread, and keep
-item-specific critique on the item's own anchored threads.
+there wakes your `wait` with no @-mention needed — on any canvas in the home,
+so a main thread is also how a new space calls you in — and `#Title`
+references in it render as cards that fly the reader to the item. Treat it as
+the primary conversation — reply to main-thread asks in the main thread, and
+keep item-specific critique on the item's own anchored threads.
+
+## On call: being summoned to a canvas you've never opened
+
+A session belongs to one canvas; `isocan wait` belongs to the whole home.
+While parked you appear in EVERY canvas's facepile as "on call" — including
+canvases the human creates after you started waiting — so they can reach you
+there by @-mention or by writing in that canvas's main thread. This is how a
+brand-new space gets an agent: you do not have to be invited to it.
+
+When `wait` wakes you on a canvas that is not your default, it says which
+one and hands back a `--project` command. Move over properly before working:
+
+```sh
+isocan use <project>                      # or pass --project to each command
+isocan who --all                          # check your name is free here too
+isocan session start --label "<name> 🤖"  # a cursor on THIS canvas
+```
+
+Then run the loop from step 3 as usual. Your on-call presence ends when
+`wait` returns; `session start` is what makes you visibly present on the
+canvas you were summoned to.
 
 ## Practices that earn trust
 

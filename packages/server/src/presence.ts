@@ -5,6 +5,11 @@ import { newId } from "@isocan/core";
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
  * never the oplog, never storage, never undo. Sessions expire on TTL so a
  * crashed agent's cursor evaporates instead of haunting the canvas.
+ *
+ * Two scopes. A PROJECT session is on one canvas and carries a cursor. An
+ * ON-CALL session belongs to the home: an agent parked on `isocan wait` is
+ * listening to every canvas, so it surfaces in every canvas's roster — that
+ * is what makes it @-mentionable from a space it has never touched.
  */
 
 interface SessionState extends PresenceSession {
@@ -18,7 +23,9 @@ const SWEEP_INTERVAL_MS = 10_000;
 
 export class PresenceHub {
   private rooms = new Map<string, Map<string, SessionState>>();
-  private listeners: Array<(projectId: string) => void> = [];
+  /** On call for the whole home — visible from every canvas. */
+  private onCall = new Map<string, SessionState>();
+  private listeners: Array<(projectId: string | null) => void> = [];
   private sweeper: ReturnType<typeof setInterval>;
 
   constructor(private readonly ttlMs = SESSION_TTL_MS) {
@@ -30,11 +37,12 @@ export class PresenceHub {
     clearInterval(this.sweeper);
   }
 
-  onChange(listener: (projectId: string) => void): void {
+  /** `null` means every canvas changed — an on-call session came or went. */
+  onChange(listener: (projectId: string | null) => void): void {
     this.listeners.push(listener);
   }
 
-  private emit(projectId: string): void {
+  private emit(projectId: string | null): void {
     for (const listener of this.listeners) listener(projectId);
   }
 
@@ -53,20 +61,17 @@ export class PresenceHub {
     kind: "web" | "cli",
     options: { label?: string; sessionId?: string } = {},
   ): PresenceSession {
-    const session: SessionState = {
-      sessionId: options.sessionId ?? newId("ses"),
-      actor,
-      kind,
-      label: options.label ?? null,
-      cursor: null,
-      selection: [],
-      status: null,
-      activity: null,
-      lastSeen: new Date().toISOString(),
-      lastSeenMs: Date.now(),
-    };
+    const session = blankSession(actor, kind, "project", options);
     this.room(projectId).set(session.sessionId, session);
     this.emit(projectId);
+    return session;
+  }
+
+  /** Park an actor in the home: reachable from every canvas at once. */
+  createOnCall(actor: Actor, options: { label?: string; sessionId?: string } = {}): PresenceSession {
+    const session = blankSession(actor, "cli", "home", options);
+    this.onCall.set(session.sessionId, session);
+    this.emit(null);
     return session;
   }
 
@@ -83,13 +88,20 @@ export class PresenceHub {
   ): boolean {
     const session = this.rooms.get(projectId)?.get(sessionId);
     if (!session) return false;
-    if (patch.cursor !== undefined) session.cursor = patch.cursor;
-    if (patch.selection !== undefined) session.selection = patch.selection;
-    if (patch.status !== undefined) session.status = patch.status;
-    if (patch.activity !== undefined) session.activity = patch.activity;
-    session.lastSeenMs = Date.now();
-    session.lastSeen = new Date().toISOString();
+    patchSession(session, patch);
     this.emit(projectId);
+    return true;
+  }
+
+  /** Heartbeat for an on-call session. False once it has expired. */
+  touchOnCall(
+    sessionId: string,
+    patch: { status?: string | null; activity?: PresenceActivity | null } = {},
+  ): boolean {
+    const session = this.onCall.get(sessionId);
+    if (!session) return false;
+    patchSession(session, patch);
+    this.emit(null);
     return true;
   }
 
@@ -98,10 +110,20 @@ export class PresenceHub {
     if (room?.delete(sessionId)) this.emit(projectId);
   }
 
+  endOnCall(sessionId: string): void {
+    if (this.onCall.delete(sessionId)) this.emit(null);
+  }
+
+  /**
+   * Who this canvas sees: everyone actually on it, then everyone on call for
+   * the home. An actor already here is not listed twice — the session with a
+   * cursor is the truer one.
+   */
   roster(projectId: string): PresenceSession[] {
-    const room = this.rooms.get(projectId);
-    if (!room) return [];
-    return [...room.values()].map(({ lastSeenMs, ...session }) => session);
+    const here = [...(this.rooms.get(projectId)?.values() ?? [])];
+    const present = new Set(here.map((session) => session.actor.id));
+    const listening = [...this.onCall.values()].filter((s) => !present.has(s.actor.id));
+    return [...here, ...listening].map(({ lastSeenMs, ...session }) => session);
   }
 
   /** Op piggyback: an op whose clientId matches a session moves that
@@ -140,7 +162,53 @@ export class PresenceHub {
       if (room.size === 0) this.rooms.delete(projectId);
       if (changed) this.emit(projectId);
     }
+    let dropped = false;
+    for (const [sessionId, session] of this.onCall) {
+      if (session.lastSeenMs < cutoff) {
+        this.onCall.delete(sessionId);
+        dropped = true;
+      }
+    }
+    if (dropped) this.emit(null);
   }
+}
+
+function blankSession(
+  actor: Actor,
+  kind: "web" | "cli",
+  scope: "project" | "home",
+  options: { label?: string; sessionId?: string },
+): SessionState {
+  return {
+    sessionId: options.sessionId ?? newId("ses"),
+    actor,
+    kind,
+    scope,
+    label: options.label ?? null,
+    cursor: null,
+    selection: [],
+    status: null,
+    activity: null,
+    lastSeen: new Date().toISOString(),
+    lastSeenMs: Date.now(),
+  };
+}
+
+function patchSession(
+  session: SessionState,
+  patch: {
+    cursor?: { x: number; y: number } | null;
+    selection?: string[];
+    status?: string | null;
+    activity?: PresenceActivity | null;
+  },
+): void {
+  if (patch.cursor !== undefined) session.cursor = patch.cursor;
+  if (patch.selection !== undefined) session.selection = patch.selection;
+  if (patch.status !== undefined) session.status = patch.status;
+  if (patch.activity !== undefined) session.activity = patch.activity;
+  session.lastSeenMs = Date.now();
+  session.lastSeen = new Date().toISOString();
 }
 
 /** Where on the canvas an op "happened", given post-apply state. */

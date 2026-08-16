@@ -29,6 +29,11 @@ export interface PresenceSession {
   sessionId: string;
   actor: Actor;
   kind: "web" | "cli";
+  /** Where this session lives. "project" — on this canvas, with a cursor.
+   * "home" — ON CALL: parked in a terminal (`isocan wait`) and listening to
+   * the whole home, so it surfaces on EVERY canvas, including ones it has
+   * never touched. That is how a fresh canvas can @-mention an agent. */
+  scope: "project" | "home";
   /** Display override; fall back to actor.name. */
   label: string | null;
   cursor: { x: number; y: number } | null;
@@ -61,6 +66,40 @@ export interface UpdateSessionRequest {
   selection?: string[];
   status?: string | null;
   activity?: PresenceActivity | null;
+}
+
+// ---- watching the whole home ----
+
+/**
+ * The cross-project long-poll behind `isocan wait`. An on-call agent listens
+ * to canvases it has never opened — including ones created while it waits —
+ * so the cursor is a MAP of per-project seqs rather than one number.
+ *
+ * Omit `cursors` to seed: the daemon returns no entries and the current tip
+ * of every project, which is "everything from now on". A project missing from
+ * a supplied map is watched from its very first op — exactly right for a
+ * canvas born mid-wait.
+ */
+export interface WatchLogRequest {
+  cursors?: Record<string, number>;
+  /** Watch exactly these canvases and no others — what `wait --project` uses.
+   * Omit to watch the whole home, canvases yet to be created included. */
+  only?: string[];
+  /** Hold the request open this long when nothing has landed yet. */
+  waitMs?: number;
+}
+
+export interface WatchedLogEntry extends LogEntry {
+  projectId: string;
+  /** The canvas's title, so a waiter can name where it was summoned. */
+  projectTitle: string;
+}
+
+export interface WatchLogResponse {
+  /** Across all watched projects, oldest first. */
+  entries: WatchedLogEntry[];
+  /** Feed straight back into the next request. */
+  cursors: Record<string, number>;
 }
 
 // ---- REST payloads ----

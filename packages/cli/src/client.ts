@@ -16,6 +16,8 @@ import type {
   PresenceSession,
   Project,
   UpdateSessionRequest,
+  WatchLogRequest,
+  WatchLogResponse,
 } from "@isocan/core";
 import { paths } from "@isocan/server";
 
@@ -118,6 +120,23 @@ export class DaemonClient {
     return this.request("GET", `/api/projects/${projectId}/sessions`);
   }
 
+  // ---- on call: presence that belongs to the home, not to one canvas ----
+
+  createOnCall(actor: Actor, label?: string): Promise<CreateSessionResponse> {
+    return this.request("POST", "/api/presence/oncall", {
+      actor,
+      ...(label !== undefined ? { label } : {}),
+    });
+  }
+
+  touchOnCall(sessionId: string, patch: UpdateSessionRequest): Promise<{ ok: true }> {
+    return this.request("PUT", `/api/presence/oncall/${sessionId}`, patch);
+  }
+
+  endOnCall(sessionId: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/presence/oncall/${sessionId}`);
+  }
+
   listProjects(): Promise<Project[]> {
     return this.request("GET", "/api/projects");
   }
@@ -131,6 +150,12 @@ export class DaemonClient {
   getLog(projectId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
     const wait = waitMs !== undefined ? `&waitMs=${waitMs}` : "";
     return this.request("GET", `/api/projects/${projectId}/oplog?since=${since}${wait}`);
+  }
+
+  /** Every project at once. Omit `cursors` to seed at "now"; otherwise the
+   * daemon long-polls until an op lands on any canvas. */
+  watchLog(request: WatchLogRequest): Promise<WatchLogResponse> {
+    return this.request("POST", "/api/oplog/watch", request);
   }
 
   undo(projectId: string, actor: Actor): Promise<LogEntry> {

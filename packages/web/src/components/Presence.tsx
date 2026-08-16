@@ -12,6 +12,13 @@ import { centerOn, threadWorldPos } from "../lib/viewport.ts";
  * row of faces: live people in their identity color, anyone who left an
  * unread comment behind dimmed, each badged with what they said.
  *
+ * A third state sits between the two: ON CALL — an agent parked on
+ * `isocan wait` in a terminal. It is not on this canvas and has no cursor,
+ * but it is listening to every canvas in the home, so it wears a dashed ring
+ * to say "not here, but you can reach them". That face is the answer to
+ * "how do I get the agent onto a space it has never seen?" — @-mention it,
+ * or just write in the main thread.
+ *
  * Clicking a face takes you to them: to their next unread comment if they
  * left one, otherwise to wherever their cursor is.
  */
@@ -21,6 +28,8 @@ interface Face {
   /** Presence label if they have a session, else their plain name. */
   label: string;
   live: boolean;
+  /** Listening from the home rather than standing on this canvas. */
+  onCall: boolean;
   kind: PresenceSession["kind"] | null;
   /** What they are up to, for the tooltip. */
   status: string | null;
@@ -50,28 +59,33 @@ export function Presence({ actor }: { actor: Actor }) {
     }
   }
 
-  // Live sessions first (one face per actor, whatever their tab count), then
-  // whoever only left a comment behind, then you.
+  // People on the canvas first, then whoever is on call for the home, then
+  // whoever only left a comment behind, then you. (The daemon already orders
+  // the roster that way and never lists an actor twice.)
   const faces: Face[] = [];
   for (const session of sessions) {
     if (faces.some((face) => face.actor.id === session.actor.id)) continue;
+    const onCall = session.scope === "home";
     faces.push({
       actor: session.actor,
       label: session.label ?? session.actor.name,
       live: true,
+      onCall,
       kind: session.kind,
-      status: describe(session),
+      status: describe(session) ?? (onCall ? "on call — parked in a terminal" : null),
       cursor: session.cursor,
       unread: unreadBy.get(session.actor.id)?.count ?? 0,
       self: false,
     });
   }
+  faces.sort((a, b) => Number(a.onCall) - Number(b.onCall));
   for (const [id, { actor: author, count }] of unreadBy) {
     if (faces.some((face) => face.actor.id === id)) continue;
     faces.push({
       actor: author,
       label: author.name,
       live: false,
+      onCall: false,
       kind: null,
       status: "not here — left a comment",
       cursor: null,
@@ -83,6 +97,7 @@ export function Presence({ actor }: { actor: Actor }) {
     actor,
     label: actor.name,
     live: true,
+    onCall: false,
     kind: "web",
     status: null,
     cursor: null,
@@ -112,9 +127,9 @@ export function Presence({ actor }: { actor: Actor }) {
       {shown.map((face) => (
         <button
           key={face.actor.id}
-          className={`face${face.live ? "" : " away"}${face.self ? " self" : ""}${
-            face.unread > 0 ? " badged" : ""
-          }`}
+          className={`face${face.live ? "" : " away"}${face.onCall ? " oncall" : ""}${
+            face.self ? " self" : ""
+          }${face.unread > 0 ? " badged" : ""}`}
           title={tooltip(face)}
           onClick={() => goTo(face)}
         >
@@ -149,6 +164,8 @@ function tooltip(face: Face): string {
   if (face.status) parts.push(face.status);
   if (face.unread > 0) parts.push(`${face.unread} new — click to read`);
   else if (face.cursor) parts.push("click to jump to them");
+  // An on-call face has nowhere to jump to — say how to reach them instead.
+  else if (face.onCall) parts.push(`@${face.label} them, or write in the main thread`);
   return parts.join(" · ");
 }
 

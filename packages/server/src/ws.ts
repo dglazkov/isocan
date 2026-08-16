@@ -42,7 +42,7 @@ export function attachWebSockets(
 
   // Coalesce roster broadcasts — cursor streams would otherwise flood.
   const pendingRoster = new Map<string, ReturnType<typeof setTimeout>>();
-  presence.onChange((projectId) => {
+  const scheduleRoster = (projectId: string) => {
     if (pendingRoster.has(projectId)) return;
     pendingRoster.set(
       projectId,
@@ -51,6 +51,12 @@ export function attachWebSockets(
         broadcast(projectId, { type: "presence-roster", sessions: presence.roster(projectId) });
       }, 40),
     );
+  };
+  // A null project id is an on-call session coming or going: it belongs to
+  // the home, so every open canvas sees its roster change.
+  presence.onChange((projectId) => {
+    if (projectId !== null) return scheduleRoster(projectId);
+    for (const openProjectId of rooms.keys()) scheduleRoster(openProjectId);
   });
 
   server.on("upgrade", (request, socket, head) => {

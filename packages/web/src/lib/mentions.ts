@@ -14,6 +14,10 @@ export interface MentionPeer {
   name: string;
   /** Has a live session right now — they'll see the comment immediately. */
   online: boolean;
+  /** Listening from the home rather than standing on this canvas: an agent
+   * parked on `isocan wait`. Mentioning them is how they learn this canvas
+   * exists, so they belong in the menu even though they've never touched it. */
+  onCall: boolean;
 }
 
 export interface MentionRoster {
@@ -24,10 +28,12 @@ export interface MentionRoster {
 }
 
 /**
- * Everyone visible on this canvas: actors in the state plus the live presence
- * roster (whose labels are mentionable names too). `selfId` is dropped from
- * the menu — you don't mention yourself — but kept as a candidate, so a body
- * that names you still resolves.
+ * Everyone reachable from this canvas: actors in the state, plus the presence
+ * roster (whose labels are mentionable names too) — which the daemon fills
+ * with on-call agents parked elsewhere in the home, so a brand-new canvas
+ * still has someone to talk to. `selfId` is dropped from the menu — you don't
+ * mention yourself — but kept as a candidate, so a body that names you still
+ * resolves.
  */
 export function mentionRoster(
   canvas: CanvasState | null,
@@ -38,7 +44,12 @@ export function mentionRoster(
   const peers = new Map<string, MentionPeer>();
   for (const candidate of candidates) {
     if (!peers.has(candidate.id)) {
-      peers.set(candidate.id, { id: candidate.id, name: candidate.name, online: false });
+      peers.set(candidate.id, {
+        id: candidate.id,
+        name: candidate.name,
+        online: false,
+        onCall: false,
+      });
     }
   }
   for (const session of sessions) {
@@ -46,11 +57,22 @@ export function mentionRoster(
     candidates.push(session.actor);
     if (session.label) candidates.push({ id: session.actor.id, name: session.label });
     // A live session speaks for the actor: its label wins over a stale name.
-    peers.set(session.actor.id, { id: session.actor.id, name, online: true });
+    peers.set(session.actor.id, {
+      id: session.actor.id,
+      name,
+      online: true,
+      onCall: session.scope === "home",
+    });
   }
+  // Here first, then on call, then everyone the canvas merely remembers.
   const ordered = [...peers.values()]
     .filter((peer) => peer.id !== selfId)
-    .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        Number(b.online) - Number(a.online) ||
+        Number(a.onCall) - Number(b.onCall) ||
+        a.name.localeCompare(b.name),
+    );
   return { candidates, peers: ordered };
 }
 

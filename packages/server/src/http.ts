@@ -88,6 +88,71 @@ export function registerRoutes(
     return entries;
   });
 
+  /**
+   * The whole home's oplog, one cursor per project — what `isocan wait`
+   * listens on. An on-call agent hears canvases it has never opened, so the
+   * long poll must be woken by ANY project's op, and a project born while it
+   * waits is streamed from its first entry.
+   */
+  app.post("/api/oplog/watch", async (req) => {
+    const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
+    const { cursors } = body;
+    const only = body.only ? new Set(body.only) : null;
+
+    const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
+      const entries: import("@isocan/core").WatchedLogEntry[] = [];
+      const next: Record<string, number> = {};
+      for (const project of await engine.listProjects()) {
+        if (only && !only.has(project.id)) continue;
+        const since = cursors?.[project.id] ?? 0;
+        // Seeding (no cursors at all) means "from now on" — tips, no entries.
+        const log = cursors ? await engine.getLog(project.id, since) : [];
+        const lastSeq = cursors
+          ? (log[log.length - 1]?.seq ?? since)
+          : (await engine.getSnapshot(project.id)).lastSeq;
+        for (const entry of log) {
+          entries.push({ ...entry, projectId: project.id, projectTitle: project.title });
+        }
+        next[project.id] = lastSeq;
+      }
+      entries.sort((a, b) => a.envelope.ts.localeCompare(b.envelope.ts) || a.seq - b.seq);
+      return { entries, cursors: next };
+    };
+
+    // Subscribe BEFORE the first sweep: scanning every project takes long
+    // enough that an op could land behind the reader and be missed until the
+    // window closed. Sweeping many projects is not atomic; this is.
+    let landed = false;
+    let wake: (() => void) | null = null;
+    const unsubscribe = engine.onEvent((projectId, message) => {
+      if (message.type !== "op-applied") return;
+      if (only && !only.has(projectId)) return; // another canvas is not our business
+      landed = true;
+      wake?.();
+    });
+    try {
+      let result = await collect();
+      const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
+      if (result.entries.length === 0 && !landed && holdMs > 0) {
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            wake = null;
+            req.raw.off("close", done);
+            resolve();
+          };
+          const timer = setTimeout(done, holdMs);
+          wake = done;
+          req.raw.on("close", done);
+        });
+        result = await collect();
+      }
+      return result;
+    } finally {
+      unsubscribe();
+    }
+  });
+
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
@@ -131,6 +196,33 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id);
     return presence.roster(id);
+  });
+
+  // ---- on call (home-scoped presence: parked agents, reachable everywhere) ----
+
+  app.post("/api/presence/oncall", async (req) => {
+    const body = req.body as import("@isocan/core").CreateSessionRequest;
+    const session = presence.createOnCall(body.actor, {
+      ...(body.label !== undefined ? { label: body.label } : {}),
+    });
+    return { sessionId: session.sessionId, ttlMs: SESSION_TTL_MS };
+  });
+
+  app.put("/api/presence/oncall/:sid", async (req, reply) => {
+    const { sid } = req.params as { sid: string };
+    const body = (req.body ?? {}) as import("@isocan/core").UpdateSessionRequest;
+    if (!presence.touchOnCall(sid, body)) {
+      return reply
+        .status(404)
+        .send({ error: "session expired or unknown", code: "unknown-session" });
+    }
+    return { ok: true };
+  });
+
+  app.delete("/api/presence/oncall/:sid", async (req) => {
+    const { sid } = req.params as { sid: string };
+    presence.endOnCall(sid);
+    return { ok: true };
   });
 
   app.post("/api/projects/:id/gc", async (req) => {

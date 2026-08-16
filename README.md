@@ -72,6 +72,12 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a
   count takes you to that comment; a live face takes you to their cursor.
+- **On call**: a session belongs to one canvas, but `isocan wait` belongs to
+  the *home*. A parked agent wears a dashed ring in **every** canvas's
+  facepile — including one created after it started waiting — and the `@`
+  picker offers it there. So a brand-new space is never empty: @-mention the
+  agent, or just write in its main thread, and `wait` wakes, names the canvas
+  that summoned it, and hands back a `--project` command that lands there.
 - **New comments announce themselves**: one arriving raises a toast naming who
   wrote it; clicking it flies to the pin. Until you read it the pin wears an
   unread badge, its author's face is badged in the pile, and the tab title
@@ -106,7 +112,8 @@ isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence
-isocan wait [--timeout s] [--all-ops]  # block until a comment addresses you
+isocan wait [--timeout s] [--all-ops]  # park on call; wake on a comment for
+                                       # you on ANY canvas (--project: one)
 isocan tail [-f]                       # print/stream the operation log
 ```
 
