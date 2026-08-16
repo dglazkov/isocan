@@ -573,10 +573,23 @@ program
 
         // Identity, daemon, canvas — everything that needs the daemon comes
         // after, and none of it may sink the skill install.
+        //
+        // On a terminal the first command prompts for a name. Setup can be run
+        // by an agent or a script, where a prompt is a hang and an error is a
+        // dead end, so a nameless one takes the OS user's name and says so —
+        // one command has to be enough, and `identity --name` renames you.
+        const home = paths.isocanHome();
+        let named = true;
+        if (!(await readIdentity(home)) && !process.stdin.isTTY) {
+          await writeIdentity(home, os.userInfo().username || "You");
+          named = false;
+        }
         let ctx: Ctx | null = null;
         try {
           ctx = await ctxOf(cmd);
-          report.identity = `${ctx.actor.name} (${ctx.actor.id})`;
+          report.identity = named
+            ? `${ctx.actor.name} (${ctx.actor.id})`
+            : `${ctx.actor.name} (${ctx.actor.id}) — your OS user; \`isocan identity --name "…"\` to change`;
           report.daemon = ctx.client.base;
         } catch (err) {
           report.identity = `not set — \`isocan identity --name "You"\` (${(err as Error).message})`;

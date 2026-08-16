@@ -108,6 +108,17 @@ describe("isocan setup", () => {
     expect(await fs.readFile(skill, "utf8")).not.toContain("local note");
   });
 
+  it("names a nameless home after the OS user rather than stopping to ask", async () => {
+    // What an agent or a script hits: no identity, no terminal to prompt on.
+    await fs.rm(path.join(home, "identity.json"));
+    const done = await isocan("setup", "--no-install", "--json");
+    expect(done.code).toBe(0);
+
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+    expect(report.identity).toContain("your OS user");
+    expect(await projects()).toHaveLength(1); // the canvas still got made
+  });
+
   it("--canvas names it, --no-canvas leaves the home alone", async () => {
     await isocan("setup", "--no-install", "--no-canvas");
     expect(await projects()).toEqual([]);
