@@ -33,6 +33,7 @@ export function ItemView({
     const holder = s.sessions.find((session) => session.selection.includes(item.id));
     return holder ? holder.actor.id : null;
   });
+  const worker = useWorkingSession(item.id);
 
   const x = drag ? item.x + drag.dx : item.x;
   const y = drag ? item.y + drag.dy : item.y;
@@ -182,6 +183,9 @@ export function ItemView({
         ...(remoteHolder && !selected
           ? { outline: `2px dashed ${actorColor(remoteHolder)}`, outlineOffset: "1px" }
           : {}),
+        ...(worker
+          ? ({ "--work-color": actorColor(worker.actorId) } as React.CSSProperties)
+          : {}),
       }}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
@@ -206,6 +210,18 @@ export function ItemView({
         <span className="name" title={`${item.title} — last edit by ${item.updatedBy.name}`}>
           {item.title}
         </span>
+        {worker && (
+          <span
+            className="work-chip"
+            title={`${worker.label} is working${worker.status ? ` — ${worker.status}` : ""}`}
+          >
+            <span className="work-dot" />
+            <span className="work-name">{worker.label}</span>
+            <i>.</i>
+            <i>.</i>
+            <i>.</i>
+          </span>
+        )}
       </div>
       <div className={`item-content${entered ? "" : " inert"}`}>
         <VersionContent
@@ -218,10 +234,45 @@ export function ItemView({
         {current.mimeType === "text/html" && !entered && (
           <div className="html-hint">double-click to interact</div>
         )}
+        {worker && <div className="work-sheen" />}
       </div>
       {soleSelection && !entered && <span className="resize-handle" onPointerDown={onResizeDown} />}
     </div>
   );
+}
+
+const WORK_LINGER_MS = 2500;
+
+// The session working on this item, held through a short linger after the
+// flag clears: the daemon drops `activity` the moment an op lands, so a long
+// task would otherwise strobe work → op → work between edits.
+function useWorkingSession(
+  itemId: string,
+): { actorId: string; label: string; status: string | null } | null {
+  // Serialized to a scalar so remote cursor moves don't re-render every item.
+  const live = useCanvasStore((s) => {
+    const session = s.sessions.find(
+      (candidate) =>
+        candidate.activity?.kind === "working" &&
+        "itemId" in candidate.activity &&
+        candidate.activity.itemId === itemId,
+    );
+    return session ? `${session.actor.id}\u0000${session.label}\u0000${session.status ?? ""}` : null;
+  });
+  const [held, setHeld] = useState<string | null>(null);
+  useEffect(() => {
+    if (live) {
+      setHeld(live);
+      return;
+    }
+    const timer = setTimeout(() => setHeld(null), WORK_LINGER_MS);
+    return () => clearTimeout(timer);
+  }, [live]);
+
+  const key = live ?? held;
+  if (!key) return null;
+  const [actorId, label, status] = key.split("\u0000");
+  return { actorId: actorId!, label: label!, status: status || null };
 }
 
 function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
