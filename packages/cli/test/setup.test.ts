@@ -9,8 +9,12 @@ import { startDaemon, type Daemon } from "@isocan/server";
 
 /**
  * `isocan setup` is the whole "cd anywhere, run one thing" promise (#42): the
- * skill where every agent looks, a canvas to work on, a daemon serving it.
- * These drive the real binary — the thing a stranger's `npx` would run.
+ * skill where every agent looks, the CLI they run, the daemon serving the app.
+ *
+ * What it deliberately does NOT do is make a canvas. That would stamp one with
+ * whoever typed the command — usually an agent, acting for a person who has
+ * not said their name yet. The browser is where the human names themselves.
+ * These drive the real binary: the thing a stranger's `npx` would run.
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -24,10 +28,6 @@ let port: number;
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-setup-home-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-setup-work-"));
-  await fs.writeFile(
-    path.join(home, "identity.json"),
-    JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
-  );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
@@ -59,14 +59,13 @@ const projects = (): Promise<Project[]> =>
   fetch(`http://127.0.0.1:${port}/api/projects`).then((r) => r.json() as Promise<Project[]>);
 
 describe("isocan setup", () => {
-  it("leaves a directory ready: the skill, its doorway, and a canvas", async () => {
-    const done = await isocan("setup", "--no-install", "--json");
+  it("leaves the skill, its doorway, and a running app — and no canvas", async () => {
+    const done = await isocan("setup", "--no-install", "--no-open", "--json");
     expect(done.code).toBe(0);
 
     // The skill, where the cross-agent convention says it lives.
     const skill = path.join(work, ".agents/skills/isocan-collab/SKILL.md");
-    const body = await fs.readFile(skill, "utf8");
-    expect(body).toMatch(/^name: isocan-collab$/m);
+    expect(await fs.readFile(skill, "utf8")).toMatch(/^name: isocan-collab$/m);
 
     // …reachable by Claude Code through a relative symlink, not a copy.
     const doorway = path.join(work, ".claude/skills/isocan-collab");
@@ -74,56 +73,65 @@ describe("isocan setup", () => {
     expect(path.isAbsolute(await fs.readlink(doorway))).toBe(false);
     expect(await fs.realpath(doorway)).toBe(await fs.realpath(path.dirname(skill)));
 
-    // A canvas named for the directory, and it is now the default.
-    const canvas = (await projects())[0]!;
-    expect(canvas.title).toBe(path.basename(work));
-    const config = JSON.parse(await fs.readFile(path.join(home, "config.json"), "utf8"));
-    expect(config.defaultProjectId).toBe(canvas.id);
-
     const report = JSON.parse(done.stdout) as Record<string, string>;
-    expect(report.canvas).toContain(canvas.id);
+    expect(report.app).toBe(`http://127.0.0.1:${port}`);
+    expect(report).not.toHaveProperty("canvas");
+    expect(await projects()).toEqual([]); // the human makes that, in the app
   });
 
-  it("is idempotent — running it again reuses the canvas and keeps the skill", async () => {
-    await isocan("setup", "--no-install");
-    const again = await isocan("setup", "--no-install", "--json");
+  it("needs no identity at all — nobody is named on the way through", async () => {
+    const done = await isocan("setup", "--no-install", "--no-open");
+    expect(done.code).toBe(0);
+    expect(done.stderr).toBe("");
+    // Nothing minted a name for the person who has not chosen one yet.
+    await expect(fs.stat(path.join(home, "identity.json"))).rejects.toThrow();
+    await expect(fs.stat(path.join(work, ".isocan"))).rejects.toThrow();
+  });
+
+  it("names the agent it finds here, and still speaks for nobody", async () => {
+    await isocan("identity", "--name", "Isaac", "--here");
+    const report = JSON.parse((await isocan("setup", "--no-install", "--no-open", "--json")).stdout);
+    expect(report.agent).toContain("Isaac");
+    expect(await projects()).toEqual([]);
+  });
+
+  it("is idempotent — a second run reports the skill as current", async () => {
+    await isocan("setup", "--no-install", "--no-open");
+    const again = await isocan("setup", "--no-install", "--no-open", "--json");
     expect(again.code).toBe(0);
-    const report = JSON.parse(again.stdout) as Record<string, string>;
-    expect(report.skill).toContain("current");
-    expect(report.canvas).toContain("reused");
-    expect(await projects()).toHaveLength(1);
+    expect((JSON.parse(again.stdout) as Record<string, string>).skill).toContain("current");
   });
 
   it("reports a skill someone has edited instead of quietly overwriting it", async () => {
-    await isocan("setup", "--no-install");
+    await isocan("setup", "--no-install", "--no-open");
     const skill = path.join(work, ".agents/skills/isocan-collab/SKILL.md");
     await fs.appendFile(skill, "\nlocal note\n");
 
-    const second = JSON.parse((await isocan("setup", "--no-install", "--json")).stdout);
+    const second = JSON.parse((await isocan("setup", "--no-install", "--no-open", "--json")).stdout);
     expect(second.skill).toContain("differs");
     expect(await fs.readFile(skill, "utf8")).toContain("local note");
 
-    const forced = JSON.parse((await isocan("setup", "--no-install", "--force", "--json")).stdout);
+    const forced = JSON.parse(
+      (await isocan("setup", "--no-install", "--no-open", "--force", "--json")).stdout,
+    );
     expect(forced.skill).toContain("refreshed");
     expect(await fs.readFile(skill, "utf8")).not.toContain("local note");
   });
 
-  it("names a nameless home after the OS user rather than stopping to ask", async () => {
-    // What an agent or a script hits: no identity, no terminal to prompt on.
-    await fs.rm(path.join(home, "identity.json"));
-    const done = await isocan("setup", "--no-install", "--json");
-    expect(done.code).toBe(0);
-
-    const report = JSON.parse(done.stdout) as Record<string, string>;
-    expect(report.identity).toContain("your OS user");
-    expect(await projects()).toHaveLength(1); // the canvas still got made
-  });
-
-  it("--canvas names it, --no-canvas leaves the home alone", async () => {
-    await isocan("setup", "--no-install", "--no-canvas");
-    expect(await projects()).toEqual([]);
-
-    await isocan("setup", "--no-install", "--canvas", "Reading Room");
-    expect((await projects()).map((p) => p.title)).toEqual(["Reading Room"]);
+  it("a canvas made afterwards belongs to whoever made it", async () => {
+    // The point of not creating one: this canvas is the person's, named by
+    // them, not a directory-shaped guess owned by a passing agent.
+    await isocan("setup", "--no-install", "--no-open");
+    await fetch(`http://127.0.0.1:${port}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: null,
+        actor: nico,
+        op: { type: "project.create", projectId: "prj_1", title: "Reading Room" },
+      }),
+    });
+    const [canvas] = await projects();
+    expect(canvas!.createdBy.name).toBe("Nico");
   });
 });

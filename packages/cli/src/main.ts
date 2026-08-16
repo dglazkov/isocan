@@ -586,17 +586,17 @@ function onPath(command: string): boolean {
 program
   .command("setup [dir]")
   .description(
-    "Ready a directory for canvas work: install the skill agents read, the CLI they run, and a canvas to work on",
+    "Ready a directory for canvas work: the skill agents read, the CLI they run, the daemon serving the app",
   )
-  .option("--canvas <title>", "canvas to create or reuse (default: the directory's name)")
-  .option("--no-canvas", "don't create or select a canvas")
   .option("--no-install", "don't install the isocan CLI when it isn't on PATH")
+  .option("--open", "open the app in a browser (default when you're at a terminal)")
+  .option("--no-open", "never open a browser")
   .option("--force", "refresh the skill even if this directory already has one")
   .action(
     run(
       async (
         dir: string | undefined,
-        opts: { canvas?: string | boolean; install?: boolean; force?: boolean },
+        opts: { install?: boolean; open?: boolean; force?: boolean },
         cmd: Command,
       ) => {
         const globals = cmd.optsWithGlobals() as { json?: boolean };
@@ -628,55 +628,40 @@ program
               : `install failed — run \`npm i -g ${INSTALL_SPEC}\` yourself`;
         }
 
-        // Identity, daemon, canvas — everything that needs the daemon comes
-        // after, and none of it may sink the skill install.
-        //
-        // Setup belongs to the PERSON, whoever typed it — often an agent, on
-        // their behalf. So it speaks as the home identity and never as the
-        // agent named for this directory: the canvas you are about to open is
-        // yours, and it should not be created by someone called Isaac. It
-        // never asks, either: a prompt is a hang when a script runs this, so a
-        // nameless machine takes its OS user's name and says where it got it.
+        // Setup deliberately creates NO canvas, and so needs no identity of
+        // its own. Making one here would stamp it with whoever typed the
+        // command — often an agent, acting for a person who has not said their
+        // name yet. The web app is where the human names themselves, and
+        // making a canvas there is one click; a name picked in the browser is
+        // the person's, which is the point.
         const home = paths.isocanHome();
-        const known = await readIdentity(home);
-        const you = known ?? (await writeIdentity(home, os.userInfo().username || "You"));
         const agentHere = await findLocalIdentity(target, home);
+        if (agentHere) report.agent = `${agentHere.actor.name} — named for this directory`;
 
-        let ctx: Ctx | null = null;
+        const port = daemonPort(cmd);
+        const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
         try {
-          ctx = { ...(await ctxOf(cmd)), actor: you };
-          report.identity = known
-            ? `${you.name} (${you.id})`
-            : `${you.name} (${you.id}) — your OS user; \`isocan identity --name "…"\` to change`;
-          if (agentHere) report.agent = `${agentHere.actor.name} — named for this directory`;
-          report.daemon = ctx.client.base;
+          await client.ensureDaemon();
+          report.app = client.base;
         } catch (err) {
-          report.identity = `not set — \`isocan identity --name "You"\` (${(err as Error).message})`;
+          report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
         }
 
-        if (ctx && opts.canvas !== false) {
-          const title = typeof opts.canvas === "string" ? opts.canvas : path.basename(target);
-          const wanted = title.toLowerCase();
-          // Reuse a canvas of that name rather than minting a second one:
-          // running setup twice in a directory should land you where you were.
-          const existing = (await ctx.client.listProjects()).find(
-            (p) => p.title.toLowerCase() === wanted,
-          );
-          const projectId = existing?.id ?? newProjectId();
-          if (!existing) {
-            await ctx.client.sendOp(null, ctx.actor, { type: "project.create", projectId, title });
-          }
-          await writeConfig(ctx.home, {
-            ...(await readConfig(ctx.home)),
-            defaultProjectId: projectId,
-          });
-          report.canvas = `"${title}" ${existing ? "(reused)" : "(created)"} — ${ctx.client.base}/p/${projectId}`;
+        // A person at a terminal gets the app opened for them; a script or an
+        // agent gets the URL to hand over.
+        const open = opts.open ?? Boolean(process.stdout.isTTY);
+        if (open && report.app === client.base) {
+          spawn(process.platform === "darwin" ? "open" : "xdg-open", [client.base], {
+            stdio: "ignore",
+            detached: true,
+          }).unref();
         }
 
         if (globals.json) return printJson(report);
         printKeyValues(report);
         console.log(
-          "\nOpen the canvas, then tell your agent to use the isocan-collab skill.",
+          `\nOpen ${client.base} — pick your name, make a canvas — then tell your agent` +
+            "\nto use the isocan-collab skill.",
         );
       },
     ),

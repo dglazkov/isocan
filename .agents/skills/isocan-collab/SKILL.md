@@ -19,7 +19,7 @@ is the package, no registry involved — and let it finish the setup:
 
 ```sh
 npm i -g github:dglazkov/isocan   # the CLI, built from source
-isocan setup                      # this directory: skill, canvas, daemon
+isocan setup                      # this directory: skill, daemon, the app
 ```
 
 `isocan setup` is also the one-command start from scratch in any directory:
@@ -36,6 +36,12 @@ isocan whoami                  # identity must be YOURS, not the user's
 isocan who --all               # every name the canvas knows — see "Your name"
 isocan identity --name "Kenny" --here   # your name, in THIS directory
 ```
+
+**If `project list` is empty, there is nothing to work on yet.** Canvases are
+the human's to make — they pick their name in the web app and create one
+there, which is why `setup` doesn't. Say so and hand them the URL
+(`isocan status` prints it) rather than inventing a canvas they didn't ask
+for; make one yourself only when asked, and it will be stamped as yours.
 
 Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command

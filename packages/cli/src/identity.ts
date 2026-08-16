@@ -116,8 +116,10 @@ export async function requireIdentity(home: string, cwd: string): Promise<Actor>
   const existing = await resolveIdentity(home, cwd);
   if (existing) return existing.actor;
   if (!process.stdin.isTTY) {
+    // Nothing here is interactive, so this is an agent or a script: the name
+    // it needs is its own, in the directory it is working in.
     throw new Error(
-      'no identity configured — run `isocan identity --name "Your Name"` first',
+      'no identity configured — run `isocan identity --name "Your Name" --here` first',
     );
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });

@@ -4,7 +4,7 @@ import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT } from "@isocan/core";
 import { paths } from "@isocan/server";
 import { DaemonClient } from "./client.ts";
-import { requireIdentity } from "./identity.ts";
+import { requireIdentity, resolveIdentity } from "./identity.ts";
 
 export interface Ctx {
   client: DaemonClient;
@@ -23,11 +23,25 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const home = paths.isocanHome();
   const port = opts.port ? Number(opts.port) : Number(process.env.ISOCAN_PORT ?? DEFAULT_PORT);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-  const actor = await requireIdentity(home, process.cwd());
+  // A person at a keyboard is asked once, up front. Everyone else is asked
+  // only if it turns out to matter: looking (`ls`, `project list`, `show`)
+  // stamps nothing, and an agent should be able to see where it has landed
+  // before it decides what to call itself. The getter is what makes that
+  // lazy — reads never touch `actor`, so they never demand one.
+  const known = await resolveIdentity(home, process.cwd());
+  const actor =
+    known?.actor ?? (process.stdin.isTTY ? await requireIdentity(home, process.cwd()) : null);
   await client.ensureDaemon();
   return {
     client,
-    actor,
+    get actor(): Actor {
+      if (!actor) {
+        throw new Error(
+          'no identity yet — `isocan identity --name "Your Name" --here` names you for this directory',
+        );
+      }
+      return actor;
+    },
     json: opts.json ?? false,
     home,
     ...(opts.project !== undefined ? { projectRef: opts.project } : {}),

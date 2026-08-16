@@ -133,14 +133,16 @@ describe("two parties, two identity slots", () => {
     await fs.rm(elsewhere, { recursive: true, force: true });
   });
 
-  it("setup is the person's, even with an agent named in that directory", async () => {
+  it("setup speaks for nobody — it names the agent it finds and stamps nothing", async () => {
     await isocan("identity", "--name", "Isaac", "--here");
-    const report = JSON.parse((await isocan("setup", "--no-install", "--json")).stdout);
+    const before = await projects();
+    const report = JSON.parse(
+      (await isocan("setup", "--no-install", "--no-open", "--json")).stdout,
+    );
 
-    expect(report.identity).toContain("Nico"); // the machine's person
     expect(report.agent).toContain("Isaac"); // seen, named as the agent, not used
-    const canvas = (await projects()).find((p) => p.title === path.basename(work))!;
-    expect(canvas.createdBy.name).toBe("Nico");
+    expect(report).not.toHaveProperty("identity"); // nobody had to be someone
+    expect(await projects()).toEqual(before); // and nothing was created as them
   });
 
   it("--new makes you a different person instead of renaming this one", async () => {

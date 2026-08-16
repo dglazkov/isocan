@@ -32,9 +32,12 @@ npx github:dglazkov/isocan setup
 
 That installs the CLI's own skill where agents look for it
 (`.agents/skills/isocan-collab`, plus the `.claude/` doorway), makes sure
-`isocan` is on your PATH, starts the daemon, and creates a canvas named after
-the directory — then prints its URL. It is idempotent; run it again anywhere.
-`isocan setup --help` for the knobs (`--canvas`, `--no-canvas`, `--force`).
+`isocan` is on your PATH, starts the daemon, and opens the app. You pick your
+name there and make a canvas — one click, and it is yours: setup creates no
+canvas precisely so that none is stamped with whoever typed the command,
+usually an agent acting for a person who hasn't said their name yet. It is
+idempotent; run it again anywhere. `isocan setup --help` for the knobs
+(`--no-open`, `--no-install`, `--force`).
 
 Want only the skill, for an agent that will install the rest itself?
 
@@ -141,7 +144,7 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 ## CLI surface
 
 ```
-isocan setup [dir]                 # skill + CLI + canvas for a directory
+isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--name X [--here|--home|--new]]|whoami
 isocan serve [--force]|status|stop · open
 isocan project create|list|show|edit|delete · isocan use <project>
