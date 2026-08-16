@@ -91,6 +91,13 @@ input, textarea { font: inherit; color: var(--ink); }
   background: transparent; box-shadow: none;
 }
 
+/* ---------- editing a project's name ---------- */
+.project-editor { display: flex; flex-direction: column; gap: 8px; }
+.project-editor .text-input { width: 100%; }
+.project-editor textarea { resize: vertical; min-height: 46px; }
+.project-editor .row { display: flex; gap: 6px; }
+.project-editor-error { font-size: 11px; color: var(--danger); }
+
 /* ---------- canvas page ---------- */
 .canvas-page { position: fixed; inset: 0; overflow: hidden; }
 .canvas-viewport {
@@ -112,7 +119,23 @@ input, textarea { font: inherit; color: var(--ink); }
   background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
 }
-.toolbar .title { font-weight: 600; font-size: 14px; margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolbar .project-name { position: relative; min-width: 0; display: flex; }
+.toolbar .title {
+  font-weight: 600; font-size: 14px; margin-right: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 40vw;
+  padding: 4px 6px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: inherit; text-align: left;
+}
+.toolbar .title:hover:enabled { background: var(--chip); border-color: var(--chip-line); }
+.toolbar .title:disabled { cursor: default; }
+/* The rename popover hangs under the name it renames. */
+.project-popover {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  width: 300px; padding: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+}
 .toolbar .home { color: var(--ink-muted); text-decoration: none; font-size: 16px; padding: 4px 6px; border-radius: 6px; }
 .toolbar .home:hover { background: var(--chip); }
 .toolbar .spacer { flex: 1; }
