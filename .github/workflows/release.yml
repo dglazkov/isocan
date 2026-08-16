@@ -1,0 +1,55 @@
+# Every commit on main becomes a build on `release` — the branch installs come
+# from (`github:dglazkov/isocan#release`). A change nobody releases is a change
+# nobody can install, and remembering to run `npm run release` by hand is a
+# thing to forget; scripts/release.mjs explains why the branch has to exist.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The branch is pushed, never force-pushed, so two runs racing would leave the
+# second one non-fast-forward. Queue them rather than cancel: every commit gets
+# its release, in order.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the release branch
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release commit names two parents by sha; a shallow clone
+          # cannot push a history it does not have.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Fetch the refs the release commit is built from
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git fetch --no-tags origin +refs/heads/release:refs/remotes/origin/release \
+            || echo "no release branch yet — this run creates it"
+
+      - run: npm ci
+
+      # A release nobody tested is a release that installs a broken canvas. If
+      # these fail, main keeps its last good release until the next green commit.
+      - run: npm test
+      - run: npm run typecheck
+
+      - name: Build and publish the release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm run release

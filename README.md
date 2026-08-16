@@ -27,7 +27,7 @@ From any directory, one command — no npm publishing involved, the repo *is*
 the package:
 
 ```sh
-npx github:dglazkov/isocan setup
+npx github:dglazkov/isocan#release setup
 ```
 
 That installs the CLI's own skill where agents look for it
@@ -38,6 +38,14 @@ canvas precisely so that none is stamped with whoever typed the command,
 usually an agent acting for a person who hasn't said their name yet. It is
 idempotent; run it again anywhere. `isocan setup --help` for the knobs
 (`--no-open`, `--no-install`, `--force`).
+
+Keep the `#release` on the spec. It is the branch you install from: this same
+tree with the web app already built, and without the manifest keys npm's git
+installer reads as "must build this first" — given any of them (`prepare`,
+`build`, `workspaces`, …) npm runs a nested install that inherits your `-g`
+and leaves an EMPTY directory with a dangling `isocan` on your PATH (#47).
+`npm run release` publishes the branch; `scripts/release.mjs` tells the whole
+story.
 
 Want only the skill, for an agent that will install the rest itself?
 
@@ -207,10 +215,10 @@ sibling: it says so once per daemon rather than on every command, `setup`
 restarts a stale one outright, and an open tab whose bundle no longer matches
 the one being served offers a reload.
 
-`npx github:dglazkov/isocan …` re-resolves the branch every run, so it always
-fetches the newest build — but it cannot replace a daemon an earlier run left
-behind; `isocan restart` does. From a checkout, `git pull && npm install`, then
-restart.
+`npx github:dglazkov/isocan#release …` re-resolves the branch every run, so it
+always fetches the newest *release* — but it cannot replace a daemon an
+earlier run left behind; `isocan restart` does. From a checkout,
+`git pull && npm install`, then restart.
 
 ## Development
 
@@ -219,7 +227,22 @@ npm run dev         # daemon + Vite with hot reload
 npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages
+npm run release     # build, commit onto the `release` branch, push it
 ```
+
+Work happens on `main`; `release` is generated, and generating it is CI's job:
+[`.github/workflows/release.yml`](.github/workflows/release.yml) tests,
+typechecks and releases every commit pushed to `main`, so what people install
+is never older than what landed. A red test leaves the last good release
+standing until the next green commit.
+
+`npm run release` is the same thing by hand, for when you want one now: it
+refuses a dirty tree or an unpushed HEAD, builds the web app, and commits that
+build alongside this tree under a manifest with no `prepare` and no
+`workspaces` (`-- --no-push` to stop before the push). Each release commit has
+two parents — the previous release, and the `main` commit it was built from —
+so the branch never needs a force push and `git log release` answers "which
+build is this?".
 
 Agents working in this repo start at [`AGENTS.md`](AGENTS.md). The skill that
 teaches one to collaborate on a canvas is an

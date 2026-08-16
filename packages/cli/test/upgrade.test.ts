@@ -8,7 +8,7 @@ import { planUpgrade, type Install } from "../src/upgrade.ts";
  * the far side of the disk.
  */
 
-const spec = "github:dglazkov/isocan";
+const spec = "github:dglazkov/isocan#release";
 const checkout: Install = { kind: "checkout", root: "/Users/me/code/isocan" };
 const clean = { dirty: false, branch: "main", hasUpstream: true };
 

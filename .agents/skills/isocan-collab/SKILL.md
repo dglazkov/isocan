@@ -14,17 +14,21 @@ written for you; read it once per session.
 ## If `isocan` isn't there
 
 The skill can arrive without the tool (`npx skills add dglazkov/isocan`
-installs this file alone). If `isocan --version` fails, install it — the repo
-is the package, no registry involved — and let it finish the setup:
+installs this file alone). If `isocan --version` fails, one command installs
+it and sets up the directory you are in — the repo is the package, no registry
+involved:
 
 ```sh
-npm i -g github:dglazkov/isocan   # the CLI, built from source
-isocan setup                      # this directory: skill, daemon, the app
+npx github:dglazkov/isocan#release setup   # CLI on PATH, skill, daemon, app
 ```
 
-`isocan setup` is also the one-command start from scratch in any directory:
-`npx github:dglazkov/isocan setup`. It is idempotent — run it whenever you
-land somewhere new.
+It is idempotent — run it whenever you land somewhere new — and it puts
+`isocan` on your PATH itself, so every command below is just `isocan …`.
+
+Keep the `#release` on the spec — without it npm installs nothing usable. If
+the CLI is still not on your PATH after setup, `npm i -g
+github:dglazkov/isocan#release` is the direct form, and prefixing every command
+with `npx github:dglazkov/isocan#release` works with no install at all.
 
 ## Orient (once per session)
 
@@ -68,7 +72,10 @@ Pick like this, once, before you appear:
 
 1. `isocan whoami` — if it already names you "in this directory", keep that
    name; a stable name is worth more than a fresh one. A name with no such
-   suffix is the HUMAN's, not yours: pick your own.
+   suffix is the HUMAN's, not yours: pick your own. On a machine where nobody
+   has been named yet it errors with "no identity configured" — that is the
+   answer "nobody, yet", not a broken install; same for an empty
+   `project list`. Neither is a reason to reinstall anything.
 2. `isocan who --all --json` — every name the canvas knows, live or not
    (history included: a name someone used once still addresses them).
 3. Take the first name from the roster above that nobody on the canvas

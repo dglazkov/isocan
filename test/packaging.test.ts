@@ -4,10 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * The repo is the package: `npx github:dglazkov/isocan` and
- * `npm i -g github:dglazkov/isocan` install this tree directly, no registry
- * involved (#42). Three things make that work, and each was learned the hard
- * way — this file remembers them.
+ * The repo is the package: `npx github:dglazkov/isocan#release` and
+ * `npm i -g github:dglazkov/isocan#release` install this tree directly, no
+ * registry involved (#42). Everything that makes that work was learned the
+ * hard way — this file remembers it.
  */
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
@@ -44,15 +44,69 @@ describe("installable straight from git", () => {
     for (const name of ["@isocan/core", "@isocan/server"]) expect(loader).toContain(name);
   });
 
+  it("hands out an install spec with the branch on it — the bare repo installs nothing", async () => {
+    // `npm i -g github:dglazkov/isocan` (no branch) leaves an EMPTY directory
+    // and a dangling `isocan` on the PATH: npm's git installer sees `prepare`
+    // (or `workspaces`, or `build`) on main, runs a nested install inside its
+    // staging clone, and that install inherits the outer `-g`. Every spec we
+    // print, run, or document therefore ends in #release.
+    const main = await fs.readFile(path.join(repo, "packages/cli/src/main.ts"), "utf8");
+    expect(main).toContain('const INSTALL_SPEC = "github:dglazkov/isocan#release"');
+    for (const doc of ["README.md", ".agents/skills/isocan-collab/SKILL.md"]) {
+      const text = await fs.readFile(path.join(repo, doc), "utf8");
+      const specs = text.match(/github:dglazkov\/isocan[^\s`.,)]*/g) ?? [];
+      expect(specs.length, `${doc} should say how to install`).toBeGreaterThan(0);
+      for (const spec of specs) {
+        expect(spec, `${doc} names a branchless install spec`).toContain("#release");
+      }
+    }
+  });
+
+  it("the release branch's manifest keeps none of the keys npm would 'prepare'", async () => {
+    // pacote/lib/git.js: `workspaces` or any of these scripts and npm decides
+    // the package must be built before use — which is where the empty install
+    // comes from. main needs `prepare` and `workspaces`; the branch we hand
+    // out must have shed both, and that is scripts/release.mjs's one job.
+    const { releaseManifest, PREPARATION_KEYS } = await import("../scripts/release.mjs");
+    const pkg = await readJson("package.json");
+    const released: Record<string, any> = releaseManifest(pkg, "abc1234");
+    for (const key of PREPARATION_KEYS) {
+      const [outer, inner] = key.split(".");
+      const value = inner ? released[outer!]?.[inner] : released[outer!];
+      expect(value, `${key} survived into the release manifest`).toBeUndefined();
+    }
+    // What an install DOES need: the bin it links, and the deps it resolves.
+    expect(released.bin).toEqual(pkg.bin);
+    expect(released.dependencies).toEqual(pkg.dependencies);
+    expect(released["//"]).toContain("abc1234");
+  });
+
+  it("releases from CI on every commit, with the history a push needs", async () => {
+    // Nobody remembers to release by hand, and an unreleased commit is one
+    // nobody can install. Two things the workflow cannot get wrong: full
+    // history (the release commit names two parents by sha, and a shallow
+    // clone cannot push what it does not have), and one concurrency group
+    // (the branch is pushed, never forced — two runs racing would leave the
+    // second non-fast-forward).
+    const workflow = await fs.readFile(path.join(repo, ".github/workflows/release.yml"), "utf8");
+    expect(workflow).toMatch(/branches:\s*\[main\]/);
+    expect(workflow).toMatch(/fetch-depth:\s*0/);
+    expect(workflow).toMatch(/group:\s*release/);
+    expect(workflow).toMatch(/cancel-in-progress:\s*false/);
+    expect(workflow).toContain("npm run release");
+  });
+
   it("ships the built web app, which .gitignore would otherwise drop", async () => {
-    // `prepare` builds packages/web/dist at install time; .npmignore exists
-    // solely so pack-time ignore rules don't then throw it away, leaving a
-    // daemon that serves an empty page.
+    // Two ways the app reaches a daemon, and .npmignore is load-bearing for
+    // both: `prepare` builds packages/web/dist in a checkout, `npm run
+    // release` commits it onto the release branch — and either way dist is
+    // gitignored, so without an .npmignore to override those rules pack-time
+    // would drop it and the daemon would serve an empty page.
     const pkg = await readJson("package.json");
     expect(pkg.scripts.prepare).toContain("prepare.mjs");
     const npmignore = await fs.readFile(path.join(repo, ".npmignore"), "utf8");
     expect(npmignore).not.toMatch(/^\s*dist\s*$/m);
     const gitignore = await fs.readFile(path.join(repo, ".gitignore"), "utf8");
-    expect(gitignore).toMatch(/^dist$/m); // still an artifact, still uncommitted
+    expect(gitignore).toMatch(/^dist$/m); // on main it stays an artifact
   });
 });

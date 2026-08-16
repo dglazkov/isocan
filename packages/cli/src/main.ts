@@ -645,8 +645,14 @@ program
 const SKILL_NAME = "isocan-collab";
 const skillSource = () =>
   fileURLToPath(new URL(`../../../.agents/skills/${SKILL_NAME}`, import.meta.url));
-/** How to get this CLI without a registry — the repo is the package. */
-const INSTALL_SPEC = "github:dglazkov/isocan";
+/**
+ * How to get this CLI without a registry — the repo is the package, and the
+ * `release` branch is the installable face of it: same tree, plus the built
+ * web app, minus the manifest keys npm's git installer trips over. Installing
+ * from `main` puts an EMPTY directory on your disk and a dangling `isocan` on
+ * your PATH (#47) — see scripts/release.mjs for the whole story.
+ */
+const INSTALL_SPEC = "github:dglazkov/isocan#release";
 
 async function exists(target: string): Promise<boolean> {
   return fs.stat(target).then(() => true, () => false);
