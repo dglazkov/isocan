@@ -702,6 +702,8 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop); cursor: pointer;
 }
 .follow-banner:hover { opacity: 0.9; }
+/* Same shape, different claim: the app on disk moved on, this tab did not. */
+.update-banner { background: var(--ink); color: var(--ground); }
 
 /* ---------- remote cursors (presence) ---------- */
 .remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }

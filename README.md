@@ -114,10 +114,10 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   working in its directories. `~/.isocan/identity.json` is yours;
   `<dir>/.isocan/identity.json` (written by `isocan identity --name … --here`)
   belongs to the agent working there, and commands run in that directory speak
-  as it. So an agent introducing itself can never rename you, `isocan setup`
-  always creates *your* canvas rather than one owned by someone called Isaac,
-  and a CLI with no terminal writes the directory slot by default — because
-  the thing at the other end of a pipe is not the person.
+  as it. So an agent introducing itself can never rename you, and a CLI with
+  no terminal writes the directory slot by default — because the thing at the
+  other end of a pipe is not the person. (`isocan setup` sidesteps the question
+  entirely: it makes no canvas, so none is stamped with whoever typed it.)
 - **Identity**: a name you pick at the door (web dialog / CLI prompt); stamped
   on every mutation, comment, and version. Click your own face in the pile to
   change it: *rename* keeps your actor id, so your undo stack and the comments
@@ -146,7 +146,7 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 ```
 isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--name X [--here|--home|--new]]|whoami
-isocan serve [--force]|status|stop · open
+isocan serve [--force]|status|stop|restart|upgrade · open
 isocan project create|list|show|edit|delete · isocan use <project>
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
@@ -190,6 +190,27 @@ pair-complete so redo never dangles; dropped entries go to
 `oplog-archive.jsonl`), then sweeps blobs unreachable from live items, the
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
+
+## Updating
+
+```sh
+isocan upgrade      # fetch the newest build, then restart the daemon on it
+isocan restart      # just restart: run the build you already have
+isocan status       # who holds the port, and which copy they are running
+```
+
+The daemon outlives the command that started it — `ensureDaemon` only starts
+one when the port is silent — so upgrading the CLI leaves yesterday's daemon
+serving yesterday's app. Every build now says which copy it is (`root`, and
+when its code was written), so a CLI notices when the daemon isn't its
+sibling: it says so once per daemon rather than on every command, `setup`
+restarts a stale one outright, and an open tab whose bundle no longer matches
+the one being served offers a reload.
+
+`npx github:dglazkov/isocan …` re-resolves the branch every run, so it always
+fetches the newest build — but it cannot replace a daemon an earlier run left
+behind; `isocan restart` does. From a checkout, `git pull && npm install`, then
+restart.
 
 ## Development
 

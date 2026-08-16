@@ -7,6 +7,7 @@ import { OpValidationError } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
+import { buildStamp } from "./build.ts";
 
 const STARTED_AT = new Date().toISOString();
 
@@ -33,11 +34,12 @@ export function registerRoutes(
     return reply.status(500).send({ error: "internal error" });
   });
 
+  // The stamp is what lets a CLI notice it is talking to yesterday's daemon.
   app.get("/healthz", async () => ({
     ok: true,
     pid: process.pid,
-    version: "0.1.0",
     startedAt: STARTED_AT,
+    ...buildStamp(),
   }));
 
   app.post("/api/ops", async (req) => {

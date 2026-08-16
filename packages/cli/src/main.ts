@@ -36,7 +36,7 @@ import {
   siteFilename,
   siteLabel,
 } from "@isocan/core";
-import { paths } from "@isocan/server";
+import { paths, stalenessOf } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
 import { ApiError, DaemonClient } from "./client.ts";
 import {
@@ -474,14 +474,95 @@ program
         console.log(`daemon: not running (port ${port})`);
         return;
       }
-      const health = (await res.json()) as { pid: number; startedAt: string; version: string };
+      const health = (await res.json()) as {
+        pid: number;
+        startedAt: string;
+        version: string;
+        root?: string;
+        codeAt?: string;
+      };
       if (globals.json) return printJson(health);
+      const { stale, why } = stalenessOf(health);
       printKeyValues({
         daemon: `running on http://127.0.0.1:${port}`,
         pid: String(health.pid),
         since: health.startedAt,
         version: health.version,
+        // Which copy is serving matters as soon as there is more than one:
+        // an npx cache, a global install and a checkout all look identical
+        // from the outside.
+        running: health.root ?? "(a build too old to say)",
+        ...(stale ? { stale: `${why} — \`isocan restart\`` } : {}),
       });
+    }),
+  );
+
+program
+  .command("restart")
+  .description("Stop the daemon and start this build in its place — what an upgrade needs")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const home = paths.isocanHome();
+      const port = daemonPort(cmd);
+      const { stopDaemons } = await import("@isocan/server");
+      const stopped = await stopDaemons(port, home);
+      const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+      await client.ensureDaemon();
+      const health = await client.healthz(2000);
+      await fs.rm(path.join(home, ".stale-warned"), { force: true });
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      if (globals.json) return printJson({ stopped, ...(health ?? {}) });
+      printKeyValues({
+        stopped: stopped.length > 0 ? stopped.join(", ") : "(nothing was running)",
+        daemon: `running on ${client.base}`,
+        pid: String(health?.pid ?? "?"),
+        running: health?.root ?? "(unknown build)",
+      });
+    }),
+  );
+
+/** How this copy got here — which decides how it is upgraded. */
+async function installKind(): Promise<"checkout" | "global" | "npx" | "local"> {
+  const root = fileURLToPath(new URL("../../..", import.meta.url));
+  if (await exists(path.join(root, ".git"))) return "checkout";
+  if (root.includes(`${path.sep}_npx${path.sep}`)) return "npx";
+  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  const globalRoot = spawnSync(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
+  if (globalRoot && path.resolve(root).startsWith(path.resolve(globalRoot))) return "global";
+  return "local";
+}
+
+program
+  .command("upgrade")
+  .description("Fetch the newest isocan and restart the daemon on it")
+  .option("--no-restart", "fetch only; leave the running daemon alone")
+  .action(
+    run(async (opts: { restart?: boolean }, cmd: Command) => {
+      const kind = await installKind();
+      if (kind === "checkout") {
+        console.log("this is a checkout — `git pull && npm install`, then `isocan restart`");
+        return;
+      }
+      if (kind === "npx") {
+        // npx re-resolves the git ref every run, so it upgrades itself; what
+        // it cannot do is replace the daemon a previous run left behind.
+        console.log(`npx fetches the newest build each run — for a lasting one: npm i -g ${INSTALL_SPEC}`);
+      } else {
+        console.error(`isocan: fetching (npm i -g ${INSTALL_SPEC})…`);
+        const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+        const done = spawnSync(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
+        if (done.status !== 0) throw new Error(`npm i -g ${INSTALL_SPEC} failed`);
+        console.log("fetched the newest build");
+      }
+      if (opts.restart === false) {
+        console.log("the daemon still runs the old build — `isocan restart` when you're ready");
+        return;
+      }
+      // Re-exec: the code that should serve is the code that just landed, not
+      // the one this process loaded before the upgrade.
+      const port = daemonPort(cmd);
+      const isocan = onPath("isocan") ? "isocan" : process.argv[1]!;
+      spawnSync(isocan, ["--port", String(port), "restart"], { stdio: "inherit" });
     }),
   );
 
@@ -641,6 +722,16 @@ program
         const port = daemonPort(cmd);
         const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
         try {
+          // Setup is what you run after an upgrade, so a daemon left over from
+          // an older copy is replaced rather than reported: "make this
+          // directory work" includes serving today's app, not yesterday's.
+          const before = await client.healthz();
+          if (before && stalenessOf(before).stale) {
+            const { stopDaemons } = await import("@isocan/server");
+            await stopDaemons(port, home);
+            await fs.rm(path.join(home, ".stale-warned"), { force: true });
+            report.restarted = `${stalenessOf(before).why} — restarted on this build`;
+          }
           await client.ensureDaemon();
           report.app = client.base;
         } catch (err) {

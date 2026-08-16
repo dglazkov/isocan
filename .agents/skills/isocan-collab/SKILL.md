@@ -30,6 +30,8 @@ land somewhere new.
 
 ```sh
 isocan status                  # daemon auto-starts on any command if down
+                               # says "stale"? `isocan restart` — the daemon is
+                               # an older copy than the CLI you just ran
 isocan project list            # find the canvas; then either:
 isocan use <project>           #   set default, or pass --project <ref> per command
 isocan whoami                  # identity must be YOURS, not the user's

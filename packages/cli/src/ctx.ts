@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { Command } from "commander";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT } from "@isocan/core";
-import { paths } from "@isocan/server";
+import { paths, stalenessOf } from "@isocan/server";
 import { DaemonClient } from "./client.ts";
 import { requireIdentity, resolveIdentity } from "./identity.ts";
 
@@ -32,6 +33,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const actor =
     known?.actor ?? (process.stdin.isTTY ? await requireIdentity(home, process.cwd()) : null);
   await client.ensureDaemon();
+  await warnIfStale(client, home);
   return {
     client,
     get actor(): Actor {
@@ -46,6 +48,29 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     home,
     ...(opts.project !== undefined ? { projectRef: opts.project } : {}),
   };
+}
+
+/**
+ * A daemon outlives the command that started it, so an upgrade leaves the old
+ * one holding the port — silently, since `ensureDaemon` only starts one when
+ * nothing answers. Say so, once per daemon: an agent runs dozens of commands
+ * and a line on every one of them is noise, but never saying it at all is how
+ * you spend an afternoon debugging yesterday's build.
+ */
+async function warnIfStale(client: DaemonClient, home: string): Promise<void> {
+  try {
+    const health = await client.healthz();
+    if (!health) return;
+    const { stale, why } = stalenessOf(health);
+    if (!stale) return;
+    const marker = path.join(home, ".stale-warned");
+    const said = await fs.readFile(marker, "utf8").catch(() => "");
+    if (said.trim() === health.startedAt) return;
+    await fs.writeFile(marker, health.startedAt).catch(() => {});
+    console.error(`note: ${why} — \`isocan restart\` to run this one.`);
+  } catch {
+    // Never let a courtesy check break a command.
+  }
 }
 
 interface ConfigFile {

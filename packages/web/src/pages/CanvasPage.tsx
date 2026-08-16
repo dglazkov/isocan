@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -12,6 +12,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
 import { centerOn, fitBounds, itemsBounds } from "../lib/viewport.ts";
 import { sessionLocus } from "../lib/presence.ts";
+import { checkForUpdate } from "../lib/appversion.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Shelf } from "../components/Shelf.tsx";
@@ -37,6 +38,7 @@ export function CanvasPage({
     const session = s.sessions.find((x) => x.sessionId === followSessionId);
     return session ? session.label ?? session.actor.name : null;
   });
+  const [outdated, setOutdated] = useState(false);
   const didFit = useRef(false);
   // Who to open a connection as, without making a rename reconnect.
   const actorRef = useRef(actor);
@@ -108,6 +110,20 @@ export function CanvasPage({
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [followSessionId]);
+
+  // A daemon restart is where an upgrade becomes visible: the socket drops,
+  // comes back, and the app this tab is running may no longer be the one being
+  // served. Check on every reconnect (and once on arrival) rather than polling.
+  useEffect(() => {
+    if (connection !== "live") return;
+    let cancelled = false;
+    void checkForUpdate().then((yes) => {
+      if (yes && !cancelled) setOutdated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [connection]);
 
   // Unread comments reach a backgrounded tab through its title.
   useEffect(() => {
@@ -194,6 +210,11 @@ export function CanvasPage({
     <div className="canvas-page">
       <CanvasViewport projectId={projectId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
+      {outdated && (
+        <button className="follow-banner update-banner" onClick={() => location.reload()}>
+          isocan updated — reload to catch up
+        </button>
+      )}
       {followedLabel && (
         <button className="follow-banner" onClick={() => useUiStore.getState().setFollow(null)}>
           Watching {followedLabel} — Esc to stop

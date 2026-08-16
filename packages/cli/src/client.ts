@@ -19,7 +19,15 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
 } from "@isocan/core";
+import type { BuildStamp } from "@isocan/server";
 import { paths } from "@isocan/server";
+
+/** `/healthz`: who is holding the port, and which build they are. */
+export interface Health extends Partial<BuildStamp> {
+  ok: true;
+  pid: number;
+  startedAt: string;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -53,11 +61,17 @@ export class DaemonClient {
   }
 
   async health(timeoutMs = 300): Promise<boolean> {
+    return (await this.healthz(timeoutMs)) !== null;
+  }
+
+  /** The daemon's own account of itself — pid, when it started, and which
+   * copy of isocan it is running. Null when nothing answers. */
+  async healthz(timeoutMs = 300): Promise<Health | null> {
     try {
       const res = await fetch(`${this.base}/healthz`, { signal: AbortSignal.timeout(timeoutMs) });
-      return res.ok;
+      return res.ok ? ((await res.json()) as Health) : null;
     } catch {
-      return false;
+      return null;
     }
   }
 
