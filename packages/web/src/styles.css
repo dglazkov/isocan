@@ -220,12 +220,20 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .pin-avatar + .pin-avatar { margin-left: -7px; }
 .pin-more { background: var(--chip); color: var(--ink-muted); border-color: var(--chip-line); }
+/* max-height comes from the placement hook: the popover is clamped to the
+   window and the comment list — not the reply box — takes the scroll. */
 .thread-popover {
   position: absolute; width: 240px; z-index: 30;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-pop); padding: 10px 12px; font-size: 12px;
+  display: flex; flex-direction: column; min-height: 0;
 }
-.thread-popover .comment { margin-bottom: 8px; }
+.thread-comments {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+  /* Bleed into the padding so the scrollbar rides the popover's edge. */
+  margin: -10px -12px 0; padding: 10px 12px 0;
+}
+.thread-popover .comment { margin-bottom: 8px; overflow-wrap: anywhere; }
 .thread-popover .who { font-weight: 700; font-size: 11px; }
 .thread-popover .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
 /* Comment bodies render as markdown — same idiom as .md-view, sized down. */
@@ -250,9 +258,9 @@ input, textarea { font: inherit; color: var(--ink); }
   border-left: 3px solid var(--line); margin: 0.4em 0; padding-left: 8px; color: var(--ink-muted);
 }
 .thread-popover .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
-.thread-popover form { display: flex; gap: 6px; margin-top: 8px; }
+.thread-popover form { display: flex; gap: 6px; margin-top: 8px; flex: none; }
 .thread-popover input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--chip-line); }
-.thread-popover .thread-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.thread-popover .thread-actions { display: flex; justify-content: flex-end; margin-top: 6px; flex: none; }
 .thread-popover .thread-actions button {
   background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
 }
@@ -323,6 +331,8 @@ input, textarea { font: inherit; color: var(--ink); }
   display: flex; align-items: center; justify-content: center;
   color: var(--accent); font-weight: 600;
 }
+/* Dragging the textarea taller than the clamped popover scrolls, not spills. */
+.compose-popover form { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .compose-popover textarea { width: 100%; min-height: 54px; resize: vertical; border: 1px solid var(--chip-line); border-radius: 5px; padding: 6px 8px; }
 .compose-popover .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .page-note { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); }

@@ -25,6 +25,8 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     const el = ref.current;
     if (!el) return;
     function onWheel(e: WheelEvent) {
+      // A wheel inside a popover scrolls its own content instead of panning.
+      if ((e.target as HTMLElement).closest?.(".thread-popover")) return;
       e.preventDefault();
       const ui = useUiStore.getState();
       if (e.ctrlKey || e.metaKey) {

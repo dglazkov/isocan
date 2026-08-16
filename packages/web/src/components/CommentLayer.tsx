@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CommentThread, MentionCandidate, NewComment } from "@isocan/core";
@@ -88,6 +88,50 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
   );
 }
 
+const GUTTER = 12; // breathing room from the window edges
+const TOOLBAR_H = 48; // popovers must clear the toolbar
+
+/**
+ * Screen placement for a popover hanging off a pin: capped to a height that
+ * fits between the toolbar and the bottom gutter (long threads scroll inside),
+ * flipped to the pin's other side when it would run off the right edge, and
+ * clamped so it never leaves the window.
+ */
+function usePopoverPlacement(anchor: { x: number; y: number }, dx: number, dy: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 240, height: 0 });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setSize({ width: el.offsetWidth, height: el.offsetHeight });
+    measure();
+    // The element resizes as the thread grows; the window resize re-clamps it.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  const top = TOOLBAR_H + GUTTER;
+  const maxHeight = Math.max(120, window.innerHeight - top - GUTTER);
+  const rightLimit = window.innerWidth - GUTTER - size.width;
+  const flipped = anchor.x + dx > rightLimit;
+
+  return {
+    ref,
+    style: {
+      left: Math.max(GUTTER, Math.min(flipped ? anchor.x - dx - size.width : anchor.x + dx, rightLimit)),
+      top: Math.max(top, Math.min(anchor.y + dy, window.innerHeight - GUTTER - size.height)),
+      maxHeight,
+      pointerEvents: "auto",
+    } satisfies CSSProperties,
+  };
+}
+
 function ThreadPin({
   thread,
   screen,
@@ -138,21 +182,25 @@ function ThreadPopover({
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
+  const { ref, style } = usePopoverPlacement(screen, 30, -16);
   return (
     <div
+      ref={ref}
       className="thread-popover"
-      style={{ left: screen.x + 30, top: screen.y - 16, pointerEvents: "auto" }}
+      style={style}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {thread.comments.map((comment) => (
-        <div className="comment" key={comment.id}>
-          <span className="who">{comment.author.name}</span>
-          <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
-          <div className="body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
+      <div className="thread-comments">
+        {thread.comments.map((comment) => (
+          <div className="comment" key={comment.id}>
+            <span className="who">{comment.author.name}</span>
+            <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+            <div className="body">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -207,11 +255,13 @@ function ComposePopover({
     wy = item.y + pending.y;
   }
   const screen = worldToScreen(viewport, wx, wy);
+  const { ref, style } = usePopoverPlacement(screen, 0, 0);
 
   return (
     <div
+      ref={ref}
       className="thread-popover compose-popover"
-      style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
+      style={style}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <form
