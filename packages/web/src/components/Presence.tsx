@@ -1,0 +1,159 @@
+import type { Actor, PresenceSession } from "@isocan/core";
+import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
+import { actorColor } from "../lib/colors.ts";
+import { centerOn, threadWorldPos } from "../lib/viewport.ts";
+
+/**
+ * Who is on this canvas, top right — and, in the same cluster, who has said
+ * something you have not read. Presence and notification are one question to
+ * a collaborator ("is anyone here, and did they need me?"), so they share one
+ * row of faces: live people in their identity color, anyone who left an
+ * unread comment behind dimmed, each badged with what they said.
+ *
+ * Clicking a face takes you to them: to their next unread comment if they
+ * left one, otherwise to wherever their cursor is.
+ */
+
+interface Face {
+  actor: Actor;
+  /** Presence label if they have a session, else their plain name. */
+  label: string;
+  live: boolean;
+  kind: PresenceSession["kind"] | null;
+  /** What they are up to, for the tooltip. */
+  status: string | null;
+  cursor: { x: number; y: number } | null;
+  unread: number;
+  self: boolean;
+}
+
+const MAX_FACES = 5;
+
+export function Presence({ actor }: { actor: Actor }) {
+  const canvas = useCanvasStore((s) => s.canvas);
+  const sessions = useCanvasStore((s) => s.sessions);
+  const seen = useUnreadStore((s) => s.seen);
+  if (!canvas) return null;
+
+  const pending = unreadThreads(canvas, seen, actor.id);
+  const unreadBy = new Map<string, { actor: Actor; count: number }>();
+  for (const thread of pending) {
+    for (const comment of thread.comments) {
+      if (comment.author.id === actor.id) continue;
+      const since = seen[thread.id];
+      if (since && comment.createdAt <= since) continue;
+      const entry = unreadBy.get(comment.author.id);
+      if (entry) entry.count += 1;
+      else unreadBy.set(comment.author.id, { actor: comment.author, count: 1 });
+    }
+  }
+
+  // Live sessions first (one face per actor, whatever their tab count), then
+  // whoever only left a comment behind, then you.
+  const faces: Face[] = [];
+  for (const session of sessions) {
+    if (faces.some((face) => face.actor.id === session.actor.id)) continue;
+    faces.push({
+      actor: session.actor,
+      label: session.label ?? session.actor.name,
+      live: true,
+      kind: session.kind,
+      status: describe(session),
+      cursor: session.cursor,
+      unread: unreadBy.get(session.actor.id)?.count ?? 0,
+      self: false,
+    });
+  }
+  for (const [id, { actor: author, count }] of unreadBy) {
+    if (faces.some((face) => face.actor.id === id)) continue;
+    faces.push({
+      actor: author,
+      label: author.name,
+      live: false,
+      kind: null,
+      status: "not here — left a comment",
+      cursor: null,
+      unread: count,
+      self: false,
+    });
+  }
+  faces.push({
+    actor,
+    label: actor.name,
+    live: true,
+    kind: "web",
+    status: null,
+    cursor: null,
+    unread: 0,
+    self: true,
+  });
+
+  const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
+  const overflow = faces.length - shown.length;
+
+  function goTo(face: Face) {
+    const state = useCanvasStore.getState().canvas;
+    if (!state) return;
+    const ui = useUiStore.getState();
+    // Their comment first: it is the thing that wants an answer.
+    const next = unreadThreads(state, useUnreadStore.getState().seen, actor.id).find((thread) =>
+      thread.comments.some((comment) => comment.author.id === face.actor.id),
+    );
+    const target = next ? threadWorldPos(state, next) : face.cursor;
+    if (!target) return;
+    ui.setViewport(centerOn(ui.viewport, target.x, target.y, window.innerWidth, window.innerHeight));
+    if (next) ui.setOpenThread(next.id);
+  }
+
+  return (
+    <div className="facepile">
+      {shown.map((face) => (
+        <button
+          key={face.actor.id}
+          className={`face${face.live ? "" : " away"}${face.self ? " self" : ""}${
+            face.unread > 0 ? " badged" : ""
+          }`}
+          title={tooltip(face)}
+          onClick={() => goTo(face)}
+        >
+          {/* The disc, not the button, carries the dimming — a badge on an
+              absent author still has to read at full strength. */}
+          <span className="face-mark" style={{ background: actorColor(face.actor.id) }}>
+            {initial(face.label)}
+          </span>
+          {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
+        </button>
+      ))}
+      {overflow > 0 && (
+        <span className="face" title={faces.slice(shown.length).map(tooltip).join("\n")}>
+          <span className="face-mark face-more">+{overflow}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function describe(session: PresenceSession): string | null {
+  if (session.status) return session.status;
+  if (session.activity) {
+    return "itemId" in session.activity ? "working on an item" : "working on the canvas";
+  }
+  return null;
+}
+
+function tooltip(face: Face): string {
+  const parts = [face.self ? `${face.label} (you)` : face.label];
+  if (face.kind === "cli") parts.push("terminal");
+  if (face.status) parts.push(face.status);
+  if (face.unread > 0) parts.push(`${face.unread} new — click to read`);
+  else if (face.cursor) parts.push("click to jump to them");
+  return parts.join(" · ");
+}
+
+/** First character of a label, skipping a leading emoji when there is a word. */
+function initial(label: string): string {
+  const word = label.trim().split(/\s+/).find((part) => /\p{L}|\p{N}/u.test(part));
+  return (word ?? label).charAt(0).toUpperCase();
+}

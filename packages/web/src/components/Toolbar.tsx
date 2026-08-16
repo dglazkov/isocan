@@ -5,36 +5,8 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, undo } from "../lib/api.ts";
 import { addFiles } from "../lib/upload.ts";
-import { centerOn, screenToWorld, threadWorldPos } from "../lib/viewport.ts";
-import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
-
-/**
- * Comments that arrived while you were away have pins, but a pin can be
- * anywhere on an infinite canvas — this walks them. Each click flies to the
- * next unread thread and opens it, which marks it read, so the count ticks
- * down to nothing.
- */
-function UnreadJump({ actor }: { actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.canvas);
-  const seen = useUnreadStore((s) => s.seen);
-  if (!canvas) return null;
-  const pending = unreadThreads(canvas, seen, actor.id);
-  if (pending.length === 0) return null;
-
-  function jump() {
-    const next = pending[0]!;
-    const world = threadWorldPos(canvas!, next);
-    const ui = useUiStore.getState();
-    ui.setViewport(centerOn(ui.viewport, world.x, world.y, window.innerWidth, window.innerHeight));
-    ui.setOpenThread(next.id);
-  }
-
-  return (
-    <button className="btn unread-jump" onClick={jump} title="Go to the next unread comment">
-      💬 {pending.length} new
-    </button>
-  );
-}
+import { screenToWorld } from "../lib/viewport.ts";
+import { Presence } from "./Presence.tsx";
 
 export function Toolbar({
   projectId,
@@ -93,7 +65,6 @@ export function Toolbar({
         💬
       </button>
       <span className="spacer" />
-      <UnreadJump actor={actor} />
       <span className={`conn ${connection}`}>{connection}</span>
       <button
         className="btn icon"
@@ -118,6 +89,7 @@ export function Toolbar({
       >
         🗑{trashCount > 0 ? ` ${trashCount}` : ""}
       </button>
+      <Presence actor={actor} />
     </div>
   );
 }

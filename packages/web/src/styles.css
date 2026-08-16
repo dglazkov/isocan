@@ -238,7 +238,38 @@ input, textarea { font: inherit; color: var(--ink); }
   70% { box-shadow: 0 0 0 10px rgba(31, 63, 208, 0), 0 4px 10px -3px rgba(31, 63, 208, 0.5); }
   100% { box-shadow: 0 0 0 3px rgba(31, 63, 208, 0.16), 0 4px 10px -3px rgba(31, 63, 208, 0.5); }
 }
-.unread-jump { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+/* ---------- facepile (who's on canvas) ---------- */
+.facepile {
+  display: flex; align-items: center; gap: 6px; margin-left: 6px; padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+/* Faces sit side by side rather than overlapping Figma-style: at this size an
+   overlap buries the unread badge under the next person's disc. */
+.face {
+  position: relative; flex: none; padding: 0;
+  background: none; border: none; line-height: 0;
+}
+/* Faces overlap, so a badge would slide under the next face — lift it. */
+.face.badged { z-index: 2; }
+.face:hover { z-index: 3; transform: translateY(-1px); }
+.face-mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 999px;
+  border: 2px solid var(--card);
+  color: #fff; font-size: 11px; font-weight: 700; line-height: 1;
+}
+/* Not here, but they left something behind. */
+.face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
+.face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
+.face-more { background: var(--chip); color: var(--ink-muted); font-size: 10px; }
+.face-badge {
+  position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px;
+  padding: 0 4px; border-radius: 999px; border: 2px solid var(--card);
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 9.5px; font-weight: 700; line-height: 11px;
+}
+/* An unread comment outranks dimming: the badge must stay legible. */
+.face.away .face-badge { opacity: 1; filter: none; }
 /* max-height comes from the placement hook: the popover is clamped to the
    window and the comment list — not the reply box — takes the scroll. */
 .thread-popover {
