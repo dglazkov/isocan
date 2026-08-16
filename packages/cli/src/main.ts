@@ -47,6 +47,7 @@ import {
   writeIdentity,
   writeLocalIdentity,
 } from "./identity.ts";
+import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
   collectProp,
@@ -521,48 +522,84 @@ program
     }),
   );
 
-/** How this copy got here — which decides how it is upgraded. */
-async function installKind(): Promise<"checkout" | "global" | "npx" | "local"> {
-  const root = fileURLToPath(new URL("../../..", import.meta.url));
-  if (await exists(path.join(root, ".git"))) return "checkout";
-  if (root.includes(`${path.sep}_npx${path.sep}`)) return "npx";
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const globalRoot = spawnSync(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
-  if (globalRoot && path.resolve(root).startsWith(path.resolve(globalRoot))) return "global";
-  return "local";
-}
-
 program
   .command("upgrade")
   .description("Fetch the newest isocan and restart the daemon on it")
   .option("--no-restart", "fetch only; leave the running daemon alone")
   .action(
     run(async (opts: { restart?: boolean }, cmd: Command) => {
-      const kind = await installKind();
-      if (kind === "checkout") {
-        console.log("this is a checkout — `git pull && npm install`, then `isocan restart`");
-        return;
-      }
-      if (kind === "npx") {
-        // npx re-resolves the git ref every run, so it upgrades itself; what
-        // it cannot do is replace the daemon a previous run left behind.
-        console.log(`npx fetches the newest build each run — for a lasting one: npm i -g ${INSTALL_SPEC}`);
+      const install = await whichInstall(
+        path.resolve(fileURLToPath(new URL("../../..", import.meta.url))),
+      );
+      const plan = planUpgrade(
+        install,
+        install.kind === "checkout" ? checkoutState(install.root) : null,
+        INSTALL_SPEC,
+      );
+      const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+      const shell = (command: string, args: string[], cwd?: string) =>
+        spawnSync(command, args, { stdio: "inherit", ...(cwd ? { cwd } : {}) });
+
+      if (plan.action === "none") {
+        console.log(plan.message);
+      } else if (plan.action === "pull") {
+        // A linked checkout is somebody's working copy: fast-forward only, and
+        // only when it is clean — the plan refused otherwise.
+        console.error(`isocan: ${plan.message}`);
+        const pulled = spawnSync("git", ["-C", install.root, "pull", "--ff-only"], {
+          encoding: "utf8",
+        });
+        process.stderr.write(pulled.stdout ?? "");
+        if (pulled.status !== 0) {
+          // Almost always: the checkout has commits of its own. Refusing to
+          // merge is the right call — say what to do rather than what failed.
+          throw new Error(
+            `could not fast-forward ${install.root} — it has diverged from its upstream; ` +
+              `reconcile it there, then \`isocan restart\`\n${(pulled.stderr ?? "").trim()}`,
+          );
+        }
+        if (/Already up to date/i.test(pulled.stdout ?? "")) {
+          console.log(`${install.root} was already current`);
+        } else {
+          // New code can mean new dependencies, and the web bundle is a build
+          // artifact a pull never brings with it.
+          if (shell(npm, ["install"], install.root).status !== 0) throw new Error("npm install failed");
+          if (shell(npm, ["run", "build"], install.root).status !== 0) throw new Error("npm run build failed");
+          console.log(`updated ${install.root}`);
+        }
       } else {
-        console.error(`isocan: fetching (npm i -g ${INSTALL_SPEC})…`);
-        const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-        const done = spawnSync(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
-        if (done.status !== 0) throw new Error(`npm i -g ${INSTALL_SPEC} failed`);
+        console.error(`isocan: ${plan.message}`);
+        if (shell(npm, ["install", "-g", INSTALL_SPEC]).status !== 0) {
+          throw new Error(`npm i -g ${INSTALL_SPEC} failed`);
+        }
         console.log("fetched the newest build");
       }
+
       if (opts.restart === false) {
         console.log("the daemon still runs the old build — `isocan restart` when you're ready");
         return;
       }
-      // Re-exec: the code that should serve is the code that just landed, not
-      // the one this process loaded before the upgrade.
       const port = daemonPort(cmd);
-      const isocan = onPath("isocan") ? "isocan" : process.argv[1]!;
-      spawnSync(isocan, ["--port", String(port), "restart"], { stdio: "inherit" });
+      if (plan.action === "none") {
+        // Nothing was fetched, so bouncing the daemon would be theatre —
+        // unless it is serving some other copy, which is the one case where
+        // an upgrade that changed nothing still has work to do.
+        const health = await new DaemonClient(`http://127.0.0.1:${port}`, paths.isocanHome())
+          .healthz();
+        if (!health || !stalenessOf(health).stale) {
+          console.log("the daemon is already running this build");
+          return;
+        }
+      }
+      // Re-exec THE COPY WE JUST UPGRADED — by path, never by PATH. This
+      // process loaded the old code, and `isocan` on PATH may well be a
+      // different copy entirely: upgrade a checkout while a global install
+      // shadows it and the daemon would come back on the wrong one.
+      spawnSync(
+        process.execPath,
+        [path.join(install.root, "packages/cli/bin/isocan.js"), "--port", String(port), "restart"],
+        { stdio: "inherit" },
+      );
     }),
   );
 
