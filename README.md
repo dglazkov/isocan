@@ -165,3 +165,11 @@ npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages
 ```
+
+Agents working in this repo start at [`AGENTS.md`](AGENTS.md). The skill that
+teaches one to collaborate on a canvas is an
+[Agent Skill](https://agentskills.io/specification) at
+`.agents/skills/isocan-collab/` — the location most harnesses discover on
+their own; Claude Code reaches the same file through the committed symlink at
+`.claude/skills/isocan-collab`. Adding a harness means adding a doorway to
+that file, never a second copy of it (`test/skills.test.ts` holds the line).
