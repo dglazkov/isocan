@@ -2,23 +2,38 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CommentThread, NewComment } from "@isocan/core";
-import { extractMentions, newCommentId, newThreadId } from "@isocan/core";
+import {
+  collectItemRefCandidates,
+  extractItemRefs,
+  extractMentions,
+  newCommentId,
+  newThreadId,
+} from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
-import { mentionRoster, rehypeMentions, useMentionRoster } from "../lib/mentions.ts";
+import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
+import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
+import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
-/** Comment payload with @Name mentions resolved against everyone visible on
- * the canvas — actors in the state plus the live presence roster (labels too).
- * Resolved at send time from the store, so the roster is never stale. */
+/** Comment payload with @Name mentions and #Title item references resolved
+ * against what's visible on the canvas — actors in the state plus the live
+ * presence roster (labels too), and the live items. Resolved at send time
+ * from the store, so the rosters are never stale. */
 function makeComment(body: string): NewComment {
   const { canvas, sessions } = useCanvasStore.getState();
   const mentions = extractMentions(body, mentionRoster(canvas, sessions).candidates);
-  return { id: newCommentId(), body, ...(mentions.length > 0 ? { mentions } : {}) };
+  const items = canvas ? extractItemRefs(body, collectItemRefCandidates(canvas)) : [];
+  return {
+    id: newCommentId(),
+    body,
+    ...(mentions.length > 0 ? { mentions } : {}),
+    ...(items.length > 0 ? { items } : {}),
+  };
 }
 
 /**
@@ -187,10 +202,19 @@ function ThreadPopover({
 }) {
   const [reply, setReply] = useState("");
   const { candidates, peers } = useMentionRoster(actor.id);
-  const chips = useMemo(() => [rehypeMentions(candidates, actor.id)], [candidates, actor.id]);
+  const itemRoster = useItemRefRoster();
+  const chips = useMemo(
+    () => [rehypeChips(candidates, actor.id, itemRoster.candidates)],
+    [candidates, actor.id, itemRoster.candidates],
+  );
   const { ref, style } = usePopoverPlacement(screen, 30, -16);
   // Open is read — including replies that land while you are looking at it.
   useEffect(() => markRead(thread.id), [thread.id, thread.comments.length]);
+  // Item chips come out of rehype as plain elements, so their clicks are
+  // delegated: any [data-item-id] under the comment list catapults.
+  function chipTarget(e: { target: EventTarget }): string | null {
+    return (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id") ?? null;
+  }
   return (
     <div
       ref={ref}
@@ -198,7 +222,17 @@ function ThreadPopover({
       style={style}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="thread-comments">
+      <div
+        className="thread-comments"
+        onClick={(e) => {
+          const itemId = chipTarget(e);
+          if (itemId) catapultToItem(itemId);
+        }}
+        onKeyDown={(e) => {
+          const itemId = e.key === "Enter" ? chipTarget(e) : null;
+          if (itemId) catapultToItem(itemId);
+        }}
+      >
         {thread.comments.map((comment) => (
           <div className="comment" key={comment.id}>
             <span className="who">{comment.author.name}</span>
@@ -230,6 +264,8 @@ function ThreadPopover({
           onChange={setReply}
           candidates={candidates}
           peers={peers}
+          itemCandidates={itemRoster.candidates}
+          items={itemRoster.entries}
         />
         <button className="btn" type="submit" disabled={!reply.trim()}>
           ↑
@@ -261,6 +297,7 @@ function ComposePopover({
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.canvas);
   const { candidates, peers } = useMentionRoster(actor.id);
+  const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
 
   // Pending world position: anchored offsets resolve against the item.
@@ -306,6 +343,8 @@ function ComposePopover({
           onChange={setBody}
           candidates={candidates}
           peers={peers}
+          itemCandidates={itemRoster.candidates}
+          items={itemRoster.entries}
         />
         <div className="row">
           <button

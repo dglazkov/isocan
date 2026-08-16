@@ -60,6 +60,9 @@ export interface Comment {
   /** Actor ids @-mentioned in the body, resolved at authoring time against
    * the actors the author could see. Absent on older comments. */
   mentions?: string[];
+  /** Item ids #-referenced in the body, resolved at authoring time against
+   * the live items the author could see. Absent on older comments. */
+  items?: string[];
   createdAt: string;
 }
 

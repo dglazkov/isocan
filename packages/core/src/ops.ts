@@ -30,6 +30,8 @@ export interface NewComment {
   body: string;
   /** Resolved @-mentions (actor ids); see Comment.mentions. */
   mentions?: string[];
+  /** Resolved #item-references (item ids); see Comment.items. */
+  items?: string[];
 }
 
 export interface MetaPatch {

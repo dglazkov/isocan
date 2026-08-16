@@ -19,6 +19,8 @@ import {
   DEFAULT_PORT,
   collectCanvasActors,
   collectCanvasNames,
+  collectItemRefCandidates,
+  extractItemRefs,
   extractMentions,
   newCommentId,
   newItemId,
@@ -830,11 +832,16 @@ the thread; every comment is stamped with its author's identity.
 
 Address someone with @Name (their identity name or presence label; first
 names work: "@Dimitri"). Mentions are resolved when the comment is posted
-and drive \`isocan wait\`'s notification filter.`,
+and drive \`isocan wait\`'s notification filter.
+
+Link an item with #Title (its exact title, case-insensitive, or its full
+id: "#itm_…"). References are resolved when the comment is posted; in the
+web app the chip flies the reader to the item.`,
   );
 
 /** Build the comment payload, resolving @Name mentions against everyone the
- * author can see: canvas actors plus the live presence roster (labels too). */
+ * author can see (canvas actors plus the live presence roster, labels too)
+ * and #Title references against the live items. */
 async function newComment(
   ctx: Ctx,
   projectId: string,
@@ -848,7 +855,13 @@ async function newComment(
     if (s.label) candidates.push({ id: s.actor.id, name: s.label });
   }
   const mentions = extractMentions(body, candidates);
-  return { id: newCommentId(), body, ...(mentions.length > 0 ? { mentions } : {}) };
+  const items = extractItemRefs(body, collectItemRefCandidates(snapshot.canvas));
+  return {
+    id: newCommentId(),
+    body,
+    ...(mentions.length > 0 ? { mentions } : {}),
+    ...(items.length > 0 ? { items } : {}),
+  };
 }
 
 comment

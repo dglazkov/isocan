@@ -51,6 +51,8 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   posted and drive the CLI's `wait` filter) — typing `@` in the web composer
   opens a picker of everyone on the canvas, live sessions first, and resolved
   mentions read as chips in the composer and in the posted comment;
+  `#Title` links an item the same way (`#` opens an item picker, recently
+  touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
 - **Who's here, and who wants you**: a facepile in the top right holds

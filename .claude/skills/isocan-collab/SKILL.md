@@ -69,6 +69,9 @@ keep it — a stable name is worth more than a fresh one.
    the web app, so structure is welcome — but keep it short (see below).
    Address a specific person with
    `@Name` (first names work) — mentions are resolved when you post.
+   Point at your work with `#Title` (an item's exact title, or `#itm_…` its
+   full id) — in the web app the chip flies the reader to the item, so
+   "done, see #Roadmap" beats describing where things are.
 6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
    that is FOR YOU: one that @-mentions you (name or session label) or lands
    in a thread you wrote in or were mentioned in. Everything else — comments
