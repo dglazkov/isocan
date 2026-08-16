@@ -15,19 +15,44 @@ written for you; read it once per session.
 
 ```sh
 isocan status                  # daemon auto-starts on any command if down
-isocan whoami                  # identity must be YOURS (e.g. "Claude"), not the user's
-isocan identity --name "Claude"   # only if unset or wrong
 isocan project list            # find the canvas; then either:
 isocan use <project>           #   set default, or pass --project <ref> per command
+isocan whoami                  # identity must be YOURS, not the user's
+isocan who --all               # every name the canvas knows — see "Your name"
+isocan identity --name "Kenny" # only if unset, the user's, or already taken
 ```
 
 Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
 when you need to parse output.
 
+## Your name
+
+You are a collaborator on this canvas, so you need a name of your own — not
+your model's or your vendor's ("Claude", "GPT", "Gemini" are all wrong here,
+and any harness should be able to run this skill), and never the human's.
+
+Names hiding in the letters of "isocan" fit the place: **Isaac, Kenny, Nico,
+Sonia, Iona, Osian, Isao, Cana** — or invent another in the same spirit.
+
+Pick like this, once, before you appear:
+
+1. `isocan who --all --json` — every name the canvas knows, live or not
+   (history included: a name someone used once still addresses them).
+2. Take the first name from the roster above that nobody on the canvas
+   answers to. If they are all taken, coin a new one from the same letters.
+3. `isocan identity --name "<name>"`, then keep it for the whole
+   collaboration — the human will call you back by it, and `@Name` only
+   works if exactly one of you answers to it. The CLI warns you if the name
+   is already taken on that canvas; if it does, pick again.
+
+If your identity is already set to a name of yours from an earlier session,
+keep it — a stable name is worth more than a fresh one.
+
 ## The session protocol
 
-1. **Appear.** `isocan session start --label "Claude 🤖"`
+1. **Appear.** `isocan session start --label "<your name> 🤖"` — the label is
+   what the human sees on your cursor, so keep your name in it.
 2. **Read.** `isocan comment list` — a comment needs addressing when the last
    entry in its thread is not yours.
 3. **Show your work — before the quiet part.** The moment you start on a task:
@@ -83,6 +108,7 @@ when you need to parse output.
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply|anchor`, `session start|work|say|point|end`, `who`,
+`comment list|add|reply|anchor`, `session start|work|say|point|end`,
+`who [--all]`,
 `add`, `edit`, `mv`, `set`, `ls`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`.

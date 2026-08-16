@@ -1,67 +1,73 @@
 import { describe, expect, it } from "vitest";
-import { collectCanvasActors, extractMentions, findMentionSpans } from "../src/index.ts";
-import { seedState } from "./helpers.ts";
+import {
+  collectCanvasActors,
+  collectCanvasNames,
+  extractMentions,
+  findMentionSpans,
+} from "../src/index.ts";
+import { apply, seedState } from "./helpers.ts";
 
 const dimitri = { id: "usr_d", name: "Dimitri Glazkov" };
-const claude = { id: "usr_c", name: "Claude" };
-const claudeLabel = { id: "usr_c", name: "Claude 🤖" };
+const kenny = { id: "usr_k", name: "Kenny" };
+const kennyLabel = { id: "usr_k", name: "Kenny 🤖" };
+const nico = { id: "usr_n", name: "Nico" };
 
 describe("extractMentions", () => {
   it("matches full names and first-name tokens, case-insensitively", () => {
-    expect(extractMentions("@Dimitri Glazkov please review", [dimitri, claude])).toEqual(["usr_d"]);
-    expect(extractMentions("@dimitri please review", [dimitri, claude])).toEqual(["usr_d"]);
-    expect(extractMentions("ping @CLAUDE about this", [dimitri, claude])).toEqual(["usr_c"]);
+    expect(extractMentions("@Dimitri Glazkov please review", [dimitri, kenny])).toEqual(["usr_d"]);
+    expect(extractMentions("@dimitri please review", [dimitri, kenny])).toEqual(["usr_d"]);
+    expect(extractMentions("ping @KENNY about this", [dimitri, kenny])).toEqual(["usr_k"]);
   });
 
   it("matches presence labels and dedupes to one id", () => {
-    expect(extractMentions("@Claude 🤖 build it", [claude, claudeLabel])).toEqual(["usr_c"]);
-    expect(extractMentions("hey @Claude and again @Claude", [claude, claudeLabel])).toEqual([
-      "usr_c",
+    expect(extractMentions("@Kenny 🤖 build it", [kenny, kennyLabel])).toEqual(["usr_k"]);
+    expect(extractMentions("hey @Kenny and again @Kenny", [kenny, kennyLabel])).toEqual([
+      "usr_k",
     ]);
   });
 
   it("collects multiple distinct mentions", () => {
-    expect(extractMentions("@Claude and @Dimitri: thoughts?", [dimitri, claude])).toEqual([
+    expect(extractMentions("@Kenny and @Dimitri: thoughts?", [dimitri, kenny])).toEqual([
       "usr_d",
-      "usr_c",
+      "usr_k",
     ]);
   });
 
   it("requires @ to start a word — emails and partial names don't mention", () => {
     expect(extractMentions("mail dimitri@example.com", [dimitri])).toEqual([]);
-    expect(extractMentions("@Claudette is someone else", [claude])).toEqual([]);
+    expect(extractMentions("@Nicolas is someone else", [nico])).toEqual([]);
     expect(extractMentions("no at-sign Dimitri", [dimitri])).toEqual([]);
   });
 
   it("handles punctuation after the name", () => {
-    expect(extractMentions("@Claude, take a look.", [claude])).toEqual(["usr_c"]);
+    expect(extractMentions("@Kenny, take a look.", [kenny])).toEqual(["usr_k"]);
     expect(extractMentions("(@Dimitri)", [dimitri])).toEqual(["usr_d"]);
   });
 });
 
 describe("findMentionSpans", () => {
   it("locates each mention, longest name first", () => {
-    const body = "@Dimitri Glazkov: ask @Claude 🤖 about it";
-    expect(findMentionSpans(body, [dimitri, claude, claudeLabel])).toEqual([
+    const body = "@Dimitri Glazkov: ask @Kenny 🤖 about it";
+    expect(findMentionSpans(body, [dimitri, kenny, kennyLabel])).toEqual([
       { start: 0, end: 16, actorId: "usr_d", name: "Dimitri Glazkov" },
-      { start: 22, end: 32, actorId: "usr_c", name: "Claude 🤖" },
+      { start: 22, end: 31, actorId: "usr_k", name: "Kenny 🤖" },
     ]);
     expect(body.slice(0, 16)).toBe("@Dimitri Glazkov");
-    expect(body.slice(22, 32)).toBe("@Claude 🤖");
+    expect(body.slice(22, 31)).toBe("@Kenny 🤖");
   });
 
   it("keeps the body's own casing in the span", () => {
-    expect(findMentionSpans("hey @claude", [claude])).toEqual([
-      { start: 4, end: 11, actorId: "usr_c", name: "claude" },
+    expect(findMentionSpans("hey @kenny", [kenny])).toEqual([
+      { start: 4, end: 10, actorId: "usr_k", name: "kenny" },
     ]);
   });
 
   it("skips non-mentions and never overlaps", () => {
     expect(findMentionSpans("mail dimitri@example.com", [dimitri])).toEqual([]);
-    expect(findMentionSpans("@Claudette", [claude])).toEqual([]);
-    expect(findMentionSpans("@Claude @Claude", [claude])).toEqual([
-      { start: 0, end: 7, actorId: "usr_c", name: "Claude" },
-      { start: 8, end: 15, actorId: "usr_c", name: "Claude" },
+    expect(findMentionSpans("@Nicolas", [nico])).toEqual([]);
+    expect(findMentionSpans("@Kenny @Kenny", [kenny])).toEqual([
+      { start: 0, end: 6, actorId: "usr_k", name: "Kenny" },
+      { start: 7, end: 13, actorId: "usr_k", name: "Kenny" },
     ]);
   });
 });
@@ -70,5 +76,25 @@ describe("collectCanvasActors", () => {
   it("collects item creators/editors, trashed items' actors, and comment authors", () => {
     const actors = collectCanvasActors(seedState().canvas);
     expect(actors.map((a) => a.id).sort()).toEqual(["usr_alice", "usr_bob"]);
+  });
+});
+
+describe("collectCanvasNames", () => {
+  it("keeps every name an actor has worked under; actors stay one entry", () => {
+    // Bob comes back under a new name — both still address him.
+    const renamed = { id: "usr_bob", name: "Roberta" };
+    const state = apply(
+      seedState(),
+      { type: "thread.reply", threadId: "thr_1", comment: { id: "cmt_new", body: "back" } },
+      renamed,
+    )!;
+    const names = collectCanvasNames(state.canvas).map((c) => `${c.id}:${c.name}`);
+    expect(names).toContain("usr_bob:Bob");
+    expect(names).toContain("usr_bob:Roberta");
+    expect(new Set(names).size).toBe(names.length);
+    expect(collectCanvasActors(state.canvas).map((a) => a.id).sort()).toEqual([
+      "usr_alice",
+      "usr_bob",
+    ]);
   });
 });

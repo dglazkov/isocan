@@ -9,12 +9,12 @@ import { PresenceHub, opLocus } from "../src/presence.ts";
 import { emptyCanvas } from "@isocan/core";
 
 const alice = { id: "usr_alice", name: "Alice" };
-const claude = { id: "usr_claude", name: "Claude" };
+const kenny = { id: "usr_kenny", name: "Kenny" };
 
 describe("PresenceHub", () => {
   it("creates, touches, ends, and expires sessions", () => {
     const hub = new PresenceHub(1000);
-    const session = hub.createSession("prj", claude, "cli", { label: "Claude 🤖" });
+    const session = hub.createSession("prj", kenny, "cli", { label: "Kenny 🤖" });
     expect(hub.roster("prj")).toHaveLength(1);
     expect(hub.touch("prj", session.sessionId, { cursor: { x: 5, y: 6 }, status: "reading" })).toBe(
       true,
@@ -22,7 +22,7 @@ describe("PresenceHub", () => {
     const [state] = hub.roster("prj");
     expect(state!.cursor).toEqual({ x: 5, y: 6 });
     expect(state!.status).toBe("reading");
-    expect(state!.label).toBe("Claude 🤖");
+    expect(state!.label).toBe("Kenny 🤖");
 
     hub.endSession("prj", session.sessionId);
     expect(hub.roster("prj")).toEqual([]);
@@ -107,14 +107,14 @@ describe("presence over the daemon", () => {
   }
 
   it("CLI session lifecycle + op piggyback + who", async () => {
-    const created = await post("/api/projects/prj_1/sessions", { actor: claude, label: "Claude" });
+    const created = await post("/api/projects/prj_1/sessions", { actor: kenny, label: "Kenny" });
     expect(created.status).toBe(200);
     const sid = created.json.sessionId as string;
 
     // Bound op moves the session cursor to the op's locus (item center).
     await post("/api/ops", {
       projectId: "prj_1",
-      actor: claude,
+      actor: kenny,
       clientId: sid,
       op: { type: "item.move", itemId: "itm_1", x: 1000, y: 2000 },
     });
@@ -145,7 +145,7 @@ describe("presence over the daemon", () => {
     // No session exists for this id — the op resurrects it from its actor.
     await post("/api/ops", {
       projectId: "prj_1",
-      actor: claude,
+      actor: kenny,
       clientId: "ses_ghost1234",
       op: { type: "item.move", itemId: "itm_1", x: 40, y: 60 },
     });
@@ -153,7 +153,7 @@ describe("presence over the daemon", () => {
     const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`)).json()) as PresenceSession[];
     expect(roster).toHaveLength(1);
     expect(roster[0]!.sessionId).toBe("ses_ghost1234");
-    expect(roster[0]!.actor).toEqual(claude);
+    expect(roster[0]!.actor).toEqual(kenny);
     expect(roster[0]!.cursor).toEqual({ x: 90, y: 90 }); // item center after move
   });
 
@@ -174,7 +174,7 @@ describe("presence over the daemon", () => {
         selection: ["itm_1"],
       }),
     );
-    await post("/api/projects/prj_1/sessions", { actor: claude });
+    await post("/api/projects/prj_1/sessions", { actor: kenny });
 
     await until(() =>
       messages.some(

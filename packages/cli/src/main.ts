@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import type {
+  Actor,
   CanvasSnapshotResponse,
   Comment,
   CommentThread,
@@ -11,10 +12,13 @@ import type {
   MentionCandidate,
   NewComment,
   Operation,
+  PresenceSession,
   Project,
 } from "@isocan/core";
 import {
+  DEFAULT_PORT,
   collectCanvasActors,
+  collectCanvasNames,
   extractMentions,
   newCommentId,
   newItemId,
@@ -24,7 +28,7 @@ import {
 } from "@isocan/core";
 import { paths } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
-import { ApiError } from "./client.ts";
+import { ApiError, DaemonClient } from "./client.ts";
 import { readIdentity, writeIdentity } from "./identity.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
@@ -71,11 +75,20 @@ Conventions:
   Identity (~/.isocan/identity.json) stamps every change you make; set it with
   \`isocan identity --name "You"\`. The daemon auto-starts when needed.
 
+Your name (agents, read this):
+  Pick a name of your own — not your model's or vendor's, and never the
+  human's. \`isocan who --all\` lists every name already on the canvas; choose
+  one nobody answers to, since \`@Name\` addresses people by name. Names in
+  the spirit of the canvas fit best: Isaac, Kenny, Nico, Sonia, Iona, Osian,
+  Isao, Cana — all hiding in the letters of "isocan". Keep it for the whole
+  collaboration so the human can call you back by it.
+
 Presence (being visible while you work):
   isocan session start --label "You"    appear as a live cursor on the canvas
   isocan session work <item> --say "…"  animate on an item while you build
   isocan session work --at x,y --say …  same, at an empty spot
   isocan who                            see everyone on the canvas right now
+  isocan who --all                      every name the canvas knows, live or not
   Each operation you perform moves your cursor to where it happened.
 
 A typical collaboration loop:
@@ -209,16 +222,58 @@ async function projectAndSnapshot(ctx: Ctx): Promise<{ project: Project; snapsho
 
 // ---------- identity & daemon lifecycle ----------
 
+/**
+ * Best-effort collision check: is this name already answering to someone else
+ * on the canvas? Two collaborators sharing a name make `@Name` ambiguous, and
+ * agents pick their own names, so a heads-up is worth the lookup. Only asks a
+ * daemon that is ALREADY running — `identity` has to work offline.
+ */
+async function nameCollision(
+  cmd: Command,
+  actor: Actor,
+): Promise<{ name: string; id: string; project: string } | null> {
+  try {
+    const globals = cmd.optsWithGlobals() as { port?: string; project?: string };
+    const home = paths.isocanHome();
+    const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
+    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+    if (!(await client.health())) return null;
+    const ctx: Ctx = {
+      client,
+      actor,
+      json: false,
+      home,
+      ...(globals.project !== undefined ? { projectRef: globals.project } : {}),
+    };
+    const project = await resolveProject(ctx);
+    const sessions = await client.listSessions(project.id);
+    const wanted = actor.name.toLowerCase();
+    const clash = (await knownNames(ctx, project, sessions)).find(
+      (known) => known.id !== actor.id && known.name.toLowerCase() === wanted,
+    );
+    return clash ? { name: clash.name, id: clash.id, project: project.title } : null;
+  } catch {
+    return null; // no daemon, no project, nothing to collide with
+  }
+}
+
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
   .option("--name <name>", "display name")
   .action(
-    run(async (opts: { name?: string }) => {
+    run(async (opts: { name?: string }, cmd: Command) => {
       const home = paths.isocanHome();
       if (opts.name) {
         const actor = await writeIdentity(home, opts.name);
         console.log(`identity saved: ${actor.name} (${actor.id})`);
+        const taken = await nameCollision(cmd, actor);
+        if (taken) {
+          console.error(
+            `warning: "${taken.name}" is already used on "${taken.project}" by ${taken.id} — ` +
+              "@-mentions can't tell you apart; pick another name",
+          );
+        }
       } else {
         const actor = await readIdentity(home);
         if (!actor) throw new Error("no identity configured — use --name");
@@ -1061,12 +1116,20 @@ session
 
 program
   .command("who")
-  .description("Who is on this canvas right now")
+  .description("Who is on this canvas right now (--all: everyone who has touched it)")
+  .option("--all", "include names from the canvas history, not just live sessions")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { all?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
       const sessions = await ctx.client.listSessions(p.id);
+      if (opts.all) {
+        const known = await knownNames(ctx, p, sessions);
+        if (ctx.json) return printJson(known);
+        return printTable(
+          known.map((n) => ({ name: n.name, id: n.id, live: n.live ? "yes" : "—" })),
+        );
+      }
       if (ctx.json) return printJson(sessions);
       printTable(
         sessions.map((s) => ({
@@ -1085,6 +1148,42 @@ program
       );
     }),
   );
+
+/** A name in use on a canvas — from a live session or from its history. Keyed
+ * by NAME, not actor: one person can have worked under several, and every one
+ * of them still answers to `@Name`. Agents read this to pick a free one. */
+interface KnownName {
+  name: string;
+  /** Who answers to it. */
+  id: string;
+  /** They are on the canvas right now, under this name. */
+  live: boolean;
+}
+
+async function knownNames(
+  ctx: Ctx,
+  project: Project,
+  sessions: PresenceSession[],
+): Promise<KnownName[]> {
+  const known = new Map<string, KnownName>();
+  const add = (name: string, id: string, live: boolean) => {
+    const key = name.toLowerCase();
+    const prior = known.get(key);
+    if (!prior) known.set(key, { name, id, live });
+    else if (live) known.set(key, { ...prior, live: true });
+  };
+  const { canvas } = await ctx.client.snapshot(project.id);
+  // The project's own author counts: they named the canvas before touching it.
+  for (const actor of [project.createdBy, project.updatedBy]) add(actor.name, actor.id, false);
+  for (const candidate of collectCanvasNames(canvas)) add(candidate.name, candidate.id, false);
+  for (const session of sessions) {
+    add(session.actor.name, session.actor.id, true);
+    if (session.label) add(session.label, session.actor.id, true);
+  }
+  return [...known.values()].sort(
+    (a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name),
+  );
+}
 
 // ---------- waiting on collaborators ----------
 

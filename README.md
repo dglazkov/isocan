@@ -55,7 +55,10 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
   asked for.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
-  later only changes how an `Actor` is minted.
+  later only changes how an `Actor` is minted. Agents pick a name of their
+  own — one hiding in the letters of "isocan" (Isaac, Kenny, Nico, …), not
+  their vendor's — checking `isocan who --all` first so no two collaborators
+  answer to the same `@Name`.
 - **Trash & undo**: deletes go to a per-project trash; undo is
   **actor-scoped** (`⌘Z`/`⇧⌘Z`, `isocan undo|redo`) — your undo walks your
   own ops, never a collaborator's. Entries invalidated by others (your target
@@ -77,7 +80,7 @@ isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
-isocan session start|work|point|move|say|end · isocan who   # live presence
+isocan session start|work|point|move|say|end · isocan who [--all]  # presence
 isocan wait [--timeout s] [--all-ops]  # block until a comment addresses you
 isocan tail [-f]                       # print/stream the operation log
 ```

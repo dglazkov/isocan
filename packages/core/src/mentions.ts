@@ -93,24 +93,43 @@ function isWordChar(ch: string): boolean {
   return /[\p{L}\p{N}_]/u.test(ch);
 }
 
-/** Every actor visible in a canvas: item creators/editors (live and trashed)
- * and comment authors. Combine with the live presence roster for candidates. */
-export function collectCanvasActors(canvas: CanvasState): Actor[] {
-  const seen = new Map<string, Actor>();
-  const add = (actor: Actor) => {
-    if (!seen.has(actor.id)) seen.set(actor.id, actor);
-  };
-  for (const item of Object.values(canvas.items)) {
-    add(item.createdBy);
-    add(item.updatedBy);
-  }
-  for (const entry of canvas.trash) {
-    add(entry.item.createdBy);
-    add(entry.item.updatedBy);
+/** Everyone stamped anywhere in a canvas, in the order they turn up: item
+ * creators/editors and version authors (live and trashed), thread starters
+ * and comment authors. */
+function* canvasActors(canvas: CanvasState): Generator<Actor> {
+  const items = [
+    ...Object.values(canvas.items),
+    ...canvas.trash.map((entry) => entry.item),
+  ];
+  for (const item of items) {
+    yield item.createdBy;
+    yield item.updatedBy;
+    for (const version of item.versions) yield version.createdBy;
   }
   for (const thread of Object.values(canvas.threads)) {
-    add(thread.createdBy);
-    for (const comment of thread.comments) add(comment.author);
+    yield thread.createdBy;
+    for (const comment of thread.comments) yield comment.author;
+  }
+}
+
+/** One entry per actor visible in a canvas, under the first name they used.
+ * Combine with the live presence roster for mention candidates. */
+export function collectCanvasActors(canvas: CanvasState): Actor[] {
+  const seen = new Map<string, Actor>();
+  for (const actor of canvasActors(canvas)) {
+    if (!seen.has(actor.id)) seen.set(actor.id, actor);
+  }
+  return [...seen.values()];
+}
+
+/** One entry per (actor, name) pair the canvas has recorded — the same person
+ * can have worked under more than one name, and it is NAMES that `@mentions`
+ * and "is this name taken?" key on. */
+export function collectCanvasNames(canvas: CanvasState): MentionCandidate[] {
+  const seen = new Map<string, MentionCandidate>();
+  for (const actor of canvasActors(canvas)) {
+    const key = `${actor.id} ${actor.name}`;
+    if (!seen.has(key)) seen.set(key, { id: actor.id, name: actor.name });
   }
   return [...seen.values()];
 }
