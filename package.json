@@ -7,18 +7,7 @@
   "bin": {
     "isocan": "packages/cli/bin/isocan.js"
   },
-  "workspaces": [
-    "packages/*"
-  ],
-  "scripts": {
-    "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @isocan/server\" \"npm run dev -w @isocan/web\"",
-    "build": "npm run build -w @isocan/web",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "vitest run",
-    "release": "node scripts/release.mjs",
-    "prepare": "node scripts/prepare.mjs"
-  },
-  "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan#release` (no publishing) resolves them: a git install installs the root package only. The workspaces themselves are deliberately NOT dependencies — bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall. `workspaces` and `prepare` are why installs come from the release branch and not from here: npm's git installer empties the install directory for any package it thinks it must build first (#47, scripts/release.mjs).",
+  "//": "GENERATED BRANCH — `npm run release` builds it from ba18b5c on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
   "dependencies": {
     "commander": "^13.1.0",
     "fastify": "^5.2.1",
