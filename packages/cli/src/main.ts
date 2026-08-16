@@ -1831,6 +1831,11 @@ in or were mentioned in. Everything else — including comments that mention
 nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
 on everything.
 
+Run this in the FOREGROUND, as one tool call: the call returning is your
+wake-up. Detached (\`nohup\`, \`&\`, output redirected to a file you poll) it
+still holds your cursor but cannot wake you — a file is not a notification.
+Size --timeout to the longest call your harness allows; on exit 2, wait again.
+
 While parked, the cursor you left on the canvas says "waiting for you…";
 waking on a summons then moves your presence for you: your cursor lands on
 the thread that woke you — on whichever canvas it lives — showing "reading

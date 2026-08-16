@@ -109,18 +109,48 @@ yours and can be gitignored — don't edit their `.gitignore` yourself.
    Point at your work with `#Title` (an item's exact title, or `#itm_…` its
    full id) — in the web app the chip flies the reader to the item, so
    "done, see #Roadmap" beats describing where things are.
-6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
+6. **Park.** `isocan wait --json --timeout <sec>` blocks until the next comment
    that is FOR YOU: one that @-mentions you (name or session label), lands in
    a MAIN thread (see below), or lands in a thread you wrote in or were
    mentioned in. Everything else — comments for others, comments mentioning
    nobody — is ether and won't wake you.
-   Exit 2 on timeout, 0 with the feedback as JSON. Run it as a background
-   task; while parked your cursor shows "waiting for you…"
-   automatically. On wake: go to step 3.
+   Exit 2 on timeout, 0 with the feedback as JSON. **Run it in the
+   foreground, as one tool call** — the call returning IS your wake-up (see
+   "Parking is a foreground call"). While parked your cursor shows "waiting
+   for you…" automatically. On wake: go to step 3.
    **Parking puts you on call for the whole home**, not just this canvas —
    see below. Do NOT pass `--project` to `wait`: that pins you to one canvas
    and makes you unreachable from every other.
 7. **Leave.** `isocan session end` when the collaboration is over.
+
+## Parking is a foreground call
+
+`wait` is not a job you start; it is the turn you are having. The blocking
+tool call is the notification channel: when it returns, your harness hands you
+the JSON and you are awake, in the same turn, with the work in front of you.
+
+A detached `wait` keeps your cursor on the canvas but cannot wake the model —
+its stdout ends up somewhere nobody reads, and **a file is not a
+notification**. So no `nohup`, no `&`, no "run this in the background" mode of
+your shell tool, no `> wait.json` you come back to poll. If your harness
+cannot hold a long-running tool call open, that is a harness gap to fix with
+event forwarding, not something to paper over with a detached supervisor.
+
+- **Size the timeout to your harness.** Set `--timeout` a little under the
+  longest tool call your harness allows, and raise the tool's own timeout to
+  match: `--timeout 3600` where calls can run an hour, `--timeout 570` under a
+  10-minute cap. A short park is fine — it just means more laps.
+- **Exit 2 means nothing came.** Park again. Never invent work out of a
+  timeout.
+- **One waiter, ever.** Two parked processes race for the same wake and one of
+  them will be doing invisible work. Start the next `wait` only after the work
+  is done and the receipt is posted.
+- **Handle the wake in the turn it arrives.** The JSON names the project and
+  thread — take the project ID/title from it (see "On call") rather than
+  assuming it is your default canvas, read the thread, do the work, reply.
+- **If a turn is interrupted, re-read before acting.** An old `wait` payload
+  is not a queue. `isocan comment list` and `isocan tail` are the truth; match
+  on comment/operation ids so you don't answer the same comment twice.
 
 ## The main thread
 
