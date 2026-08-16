@@ -1,24 +1,22 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Actor, CommentThread, MentionCandidate, NewComment } from "@isocan/core";
-import { collectCanvasActors, extractMentions, newCommentId, newThreadId } from "@isocan/core";
+import type { Actor, CommentThread, NewComment } from "@isocan/core";
+import { extractMentions, newCommentId, newThreadId } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
+import { mentionRoster, rehypeMentions, useMentionRoster } from "../lib/mentions.ts";
+import { MentionField } from "./MentionField.tsx";
 
 /** Comment payload with @Name mentions resolved against everyone visible on
- * the canvas — actors in the state plus the live presence roster (labels too). */
+ * the canvas — actors in the state plus the live presence roster (labels too).
+ * Resolved at send time from the store, so the roster is never stale. */
 function makeComment(body: string): NewComment {
   const { canvas, sessions } = useCanvasStore.getState();
-  const candidates: MentionCandidate[] = canvas ? collectCanvasActors(canvas) : [];
-  for (const s of sessions) {
-    candidates.push(s.actor);
-    if (s.label) candidates.push({ id: s.actor.id, name: s.label });
-  }
-  const mentions = extractMentions(body, candidates);
+  const mentions = extractMentions(body, mentionRoster(canvas, sessions).candidates);
   return { id: newCommentId(), body, ...(mentions.length > 0 ? { mentions } : {}) };
 }
 
@@ -182,6 +180,8 @@ function ThreadPopover({
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
+  const { candidates, peers } = useMentionRoster(actor.id);
+  const chips = useMemo(() => [rehypeMentions(candidates, actor.id)], [candidates, actor.id]);
   const { ref, style } = usePopoverPlacement(screen, 30, -16);
   return (
     <div
@@ -196,7 +196,9 @@ function ThreadPopover({
             <span className="who">{comment.author.name}</span>
             <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
             <div className="body">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
+                {comment.body}
+              </ReactMarkdown>
             </div>
           </div>
         ))}
@@ -214,7 +216,13 @@ function ThreadPopover({
           });
         }}
       >
-        <input placeholder="Reply…" value={reply} onChange={(e) => setReply(e.target.value)} />
+        <MentionField
+          placeholder="Reply…"
+          value={reply}
+          onChange={setReply}
+          candidates={candidates}
+          peers={peers}
+        />
         <button className="btn" type="submit" disabled={!reply.trim()}>
           ↑
         </button>
@@ -244,6 +252,7 @@ function ComposePopover({
 }) {
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.canvas);
+  const { candidates, peers } = useMentionRoster(actor.id);
   const [body, setBody] = useState("");
 
   // Pending world position: anchored offsets resolve against the item.
@@ -281,13 +290,14 @@ function ComposePopover({
         }}
         style={{ display: "block" }}
       >
-        <textarea
+        <MentionField
+          multiline
           autoFocus
-          placeholder={
-            pending.anchorItemId ? "Comment on this item…" : "Comment here…"
-          }
+          placeholder={pending.anchorItemId ? "Comment on this item…" : "Comment here…"}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={setBody}
+          candidates={candidates}
+          peers={peers}
         />
         <div className="row">
           <button

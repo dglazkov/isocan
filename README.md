@@ -48,8 +48,11 @@ runs the daemon (`:4441`) and Vite (`:5173`, proxying `/api` + `/ws`) together.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
   drags); create, reply, delete from either surface. Bodies render as
   markdown; `@Name` addresses a collaborator (mentions are resolved when
-  posted and drive the CLI's `wait` filter); `comment anchor` re-pins a
-  thread after the fact — e.g. onto the item it asked for.
+  posted and drive the CLI's `wait` filter) — typing `@` in the web composer
+  opens a picker of everyone on the canvas, live sessions first, and resolved
+  mentions read as chips in the composer and in the posted comment;
+  `comment anchor` re-pins a thread after the fact — e.g. onto the item it
+  asked for.
 - **Identity**: a name you pick once (web dialog / CLI prompt); stamped on
   every mutation, comment, and version. Architected so authenticated identity
   later only changes how an `Actor` is minted.

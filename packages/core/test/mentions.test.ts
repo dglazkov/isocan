@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectCanvasActors, extractMentions } from "../src/index.ts";
+import { collectCanvasActors, extractMentions, findMentionSpans } from "../src/index.ts";
 import { seedState } from "./helpers.ts";
 
 const dimitri = { id: "usr_d", name: "Dimitri Glazkov" };
@@ -36,6 +36,33 @@ describe("extractMentions", () => {
   it("handles punctuation after the name", () => {
     expect(extractMentions("@Claude, take a look.", [claude])).toEqual(["usr_c"]);
     expect(extractMentions("(@Dimitri)", [dimitri])).toEqual(["usr_d"]);
+  });
+});
+
+describe("findMentionSpans", () => {
+  it("locates each mention, longest name first", () => {
+    const body = "@Dimitri Glazkov: ask @Claude 🤖 about it";
+    expect(findMentionSpans(body, [dimitri, claude, claudeLabel])).toEqual([
+      { start: 0, end: 16, actorId: "usr_d", name: "Dimitri Glazkov" },
+      { start: 22, end: 32, actorId: "usr_c", name: "Claude 🤖" },
+    ]);
+    expect(body.slice(0, 16)).toBe("@Dimitri Glazkov");
+    expect(body.slice(22, 32)).toBe("@Claude 🤖");
+  });
+
+  it("keeps the body's own casing in the span", () => {
+    expect(findMentionSpans("hey @claude", [claude])).toEqual([
+      { start: 4, end: 11, actorId: "usr_c", name: "claude" },
+    ]);
+  });
+
+  it("skips non-mentions and never overlaps", () => {
+    expect(findMentionSpans("mail dimitri@example.com", [dimitri])).toEqual([]);
+    expect(findMentionSpans("@Claudette", [claude])).toEqual([]);
+    expect(findMentionSpans("@Claude @Claude", [claude])).toEqual([
+      { start: 0, end: 7, actorId: "usr_c", name: "Claude" },
+      { start: 8, end: 15, actorId: "usr_c", name: "Claude" },
+    ]);
   });
 });
 

@@ -259,11 +259,69 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .thread-popover .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
 .thread-popover form { display: flex; gap: 6px; margin-top: 8px; flex: none; }
-.thread-popover input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--chip-line); }
 .thread-popover .thread-actions { display: flex; justify-content: flex-end; margin-top: 6px; flex: none; }
 .thread-popover .thread-actions button {
   background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
 }
+
+/* ---------- @-mentions ---------- */
+/* A chip in a rendered comment: the actor's identity color, tinted. The
+   background is drawn with a spread box-shadow rather than padding so the
+   same rule can sit under live text in the composer without moving it. */
+.mention {
+  color: var(--mention-color, var(--accent));
+  background: color-mix(in srgb, var(--mention-color, var(--accent)) 13%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mention-color, var(--accent)) 13%, transparent);
+  border-radius: 3px; font-weight: 600;
+}
+.mention-me {
+  background: color-mix(in srgb, var(--mention-color, var(--accent)) 24%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mention-color, var(--accent)) 24%, transparent);
+}
+
+/* The composer: a real <input>/<textarea> over a backdrop that mirrors its
+   text exactly and paints the chips. Every metric below MUST match between
+   the two layers, or the highlight drifts off the text. */
+.mention-field { position: relative; flex: 1 1 auto; min-width: 0; }
+.mention-field .mention-input,
+.mention-field .mention-backdrop {
+  display: block; width: 100%; margin: 0; padding: 5px 8px;
+  border: 1px solid transparent; border-radius: 5px;
+  font: inherit; line-height: 1.45; white-space: pre; overflow-wrap: normal;
+}
+.mention-field.multiline .mention-input,
+.mention-field.multiline .mention-backdrop {
+  white-space: pre-wrap; overflow-wrap: break-word;
+}
+.mention-field .mention-input {
+  position: relative; background: transparent; border-color: var(--chip-line);
+  overflow: auto; resize: none;
+}
+.mention-field.multiline .mention-input { min-height: 54px; resize: vertical; }
+.mention-field .mention-backdrop {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  color: transparent; user-select: none;
+}
+/* Under live text the chip is background only — padding or bold here would
+   shift the mirrored glyphs out from under the real ones. */
+.mention-field .mention { color: transparent; font-weight: inherit; }
+
+.mention-menu {
+  position: fixed; z-index: 60; padding: 4px; min-width: 168px; max-width: 260px;
+  max-height: 196px; overflow-y: auto;
+  display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: var(--shadow-pop);
+}
+.mention-menu button {
+  display: flex; align-items: center; gap: 7px;
+  background: none; border: none; border-radius: 4px;
+  padding: 5px 7px; font-size: 12px; color: var(--ink); text-align: left;
+}
+.mention-menu button.active { background: var(--chip); }
+.mention-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.mention-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mention-live { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); }
 
 /* ---------- minimap ---------- */
 .minimap {
@@ -333,7 +391,6 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 /* Dragging the textarea taller than the clamped popover scrolls, not spills. */
 .compose-popover form { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.compose-popover textarea { width: 100%; min-height: 54px; resize: vertical; border: 1px solid var(--chip-line); border-radius: 5px; padding: 6px 8px; }
 .compose-popover .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .page-note { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); }
 
