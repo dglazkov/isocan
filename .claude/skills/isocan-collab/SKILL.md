@@ -66,7 +66,8 @@ keep it — a stable name is worth more than a fresh one.
 5. **Close the loop on the thread.** Always `isocan comment reply <thread>
    "…"` describing what you did, where you put it, and any judgment calls.
    The reply is the deliverable's receipt. Comments render as markdown in
-   the web app, so structure is welcome. Address a specific person with
+   the web app, so structure is welcome — but keep it short (see below).
+   Address a specific person with
    `@Name` (first names work) — mentions are resolved when you post.
 6. **Park.** `isocan wait --json --timeout 3600` blocks until the next comment
    that is FOR YOU: one that @-mentions you (name or session label) or lands
@@ -79,6 +80,11 @@ keep it — a stable name is worth more than a fresh one.
 
 ## Practices that earn trust
 
+- **Comments are read in a small thread window — be terse.** Precise and
+  concise wins: a few tight sentences saying what you did, where it is, and
+  any judgment call, then stop. No preamble, no restating the ask, no
+  bullet-point reports. If detail truly matters, put it in an item on the
+  canvas and point to it.
 - **Placement**: honor the comment's location. Anchored comments → work on
   that item. Freestanding comments → place results near the pin
   (`--at x,y` close to the comment's coordinates), or use
