@@ -263,3 +263,67 @@ describe("isocan wait presence", () => {
     expect(await sessions()).toEqual([]);
   }, 30_000);
 });
+
+/**
+ * Agents drop out of the loop at two moments: after posting the receipt (the
+ * work feels done) and after exit 2 (silence reads as dismissal). Both are
+ * moments the CLI is the last thing they read, so both carry the next move.
+ * These assertions are the point of those strings — if one goes, the nudge
+ * went with it.
+ */
+describe("the loop nudges where an agent decides it is finished", () => {
+  it("a timeout says park again, not goodbye", async () => {
+    const run = await isocan("wait", "--timeout", "1");
+
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/park again/i);
+  }, 30_000);
+
+  it("replying hands back the next command — but only to an agent in session", async () => {
+    await post("/api/ops", {
+      projectId: "prj_1",
+      actor: dimitri,
+      op: {
+        type: "thread.create",
+        threadId: "th_r",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_r", body: "@Nico look at this", mentions: [nico.id] },
+      },
+    });
+
+    // No session yet: this is a person replying, and a person is not parked.
+    const bare = await isocan("--project", "prj_1", "comment", "reply", "th_r", "on it");
+    expect(bare.stdout).toContain("replied to th_r");
+    expect(bare.stdout).not.toMatch(/isocan wait/);
+
+    await isocan("session", "start", "--project", "prj_1");
+    const parked = await isocan("--project", "prj_1", "comment", "reply", "th_r", "done");
+    expect(parked.stdout).toMatch(/isocan wait/);
+  }, 30_000);
+
+  it("the --json wake carries the next move too", async () => {
+    const run = isocan("wait", "--json", "--timeout", "20");
+    await until(sessions, (list) => waiting(list).length === 1, "the on-call session");
+
+    await post("/api/ops", {
+      projectId: "prj_1",
+      actor: dimitri,
+      op: {
+        type: "thread.create",
+        threadId: "th_j",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_j", body: "@Nico ping", mentions: [nico.id] },
+      },
+    });
+
+    const done = await run;
+    expect(done.code).toBe(0);
+    // --json is the documented way to park, so it cannot be the one path
+    // that says nothing about what happens after the reply.
+    expect(JSON.parse(done.stdout).next).toMatch(/wait/);
+  }, 30_000);
+});

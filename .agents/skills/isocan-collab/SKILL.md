@@ -83,6 +83,14 @@ yours and can be gitignored — don't edit their `.gitignore` yourself.
 
 ## The session protocol
 
+**The canvas is the only channel.** The human is watching the web app, not
+your terminal — anything you say outside a comment is said to nobody. Once
+you have appeared, everything you would have told them goes in a comment.
+
+Steps 1–2 happen once. **Steps 3–6 are a lap, and you run laps until the
+human sends you home.** Every lap ends at step 6 — including the one you
+think is the last.
+
 1. **Appear.** `isocan session start --label "<your name> 🤖"` — the label is
    what the human sees on your cursor, so keep your name in it.
 2. **Read.** `isocan comment list` — a comment needs addressing when the last
@@ -117,11 +125,16 @@ yours and can be gitignored — don't edit their `.gitignore` yourself.
    Exit 2 on timeout, 0 with the feedback as JSON. **Run it in the
    foreground, as one tool call** — the call returning IS your wake-up (see
    "Parking is a foreground call"). While parked your cursor shows "waiting
-   for you…" automatically. On wake: go to step 3.
+   for you…" automatically. On wake, or on a timeout: start the next lap.
    **Parking puts you on call for the whole home**, not just this canvas —
    see below. Do NOT pass `--project` to `wait`: that pins you to one canvas
    and makes you unreachable from every other.
-7. **Leave.** `isocan session end` when the collaboration is over.
+
+**Going home** is not a step, it is an interruption: run `isocan session end`
+when the human has told you the collaboration is over, and only then. Nothing
+else ends it — not an empty comment list, not a finished task, not a `wait`
+that timed out. Until those words come, the answer to "what now?" is always
+step 6.
 
 ## Parking is a foreground call
 
@@ -136,12 +149,18 @@ your shell tool, no `> wait.json` you come back to poll. If your harness
 cannot hold a long-running tool call open, that is a harness gap to fix with
 event forwarding, not something to paper over with a detached supervisor.
 
+- **Your turn ends inside `wait`, or it ends wrong.** Before you stop, look
+  at the last command you ran: if it is not `isocan wait`, you have not
+  finished the lap — you have walked off the canvas while the human is still
+  typing, and they have no way to tell the difference. "Nothing left to do"
+  is not an exit; it is precisely the moment to park.
 - **Size the timeout to your harness.** Set `--timeout` a little under the
   longest tool call your harness allows, and raise the tool's own timeout to
   match: `--timeout 3600` where calls can run an hour, `--timeout 570` under a
   10-minute cap. A short park is fine — it just means more laps.
-- **Exit 2 means nothing came.** Park again. Never invent work out of a
-  timeout.
+- **Exit 2 means nothing came.** It is the quiet half of a conversation, not
+  the end of one: park again. Never invent work out of a timeout, and never
+  read one as permission to leave.
 - **One waiter, ever.** Two parked processes race for the same wake and one of
   them will be doing invisible work. Start the next `wait` only after the work
   is done and the receipt is posted.

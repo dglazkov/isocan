@@ -130,7 +130,9 @@ A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
   edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
   the next comment that's for you — @-mentions you, lands in a main
-  thread, or is in your thread — on any canvas in the home) → repeat.`,
+  thread, or is in your thread — on any canvas in the home) → repeat.
+  The loop's only exit is the human saying so: \`session end\` is theirs to
+  ask for, not yours to decide. Every other lap ends parked on \`wait\`.`,
   );
 
 /** Wrap actions: friendly errors, non-zero exit. */
@@ -1405,6 +1407,13 @@ comment
         comment: await newComment(ctx, p.id, snapshot, text),
       });
       console.log(`replied to ${thread.id}`);
+      // The receipt is the moment an agent feels finished — and the moment
+      // it walks off the canvas, leaving a human talking to a face that
+      // isn't listening. So the last line it reads here is the next move.
+      // Only for an agent mid-session: a person replying is just replying.
+      if (await readSessionFile(ctx.home)) {
+        console.log(`  → now park: isocan wait --json --timeout <sec>`);
+      }
     }),
   );
 
@@ -1834,7 +1843,9 @@ on everything.
 Run this in the FOREGROUND, as one tool call: the call returning is your
 wake-up. Detached (\`nohup\`, \`&\`, output redirected to a file you poll) it
 still holds your cursor but cannot wake you — a file is not a notification.
-Size --timeout to the longest call your harness allows; on exit 2, wait again.
+Size --timeout to the longest call your harness allows. Exit 2 is silence,
+not dismissal: park again. A wait that expires never means the collaboration
+is over — only the human saying so does.
 
 While parked, the cursor you left on the canvas says "waiting for you…";
 waking on a summons then moves your presence for you: your cursor lands on
@@ -1960,7 +1971,13 @@ after a wake.`,
         for (;;) {
           const remaining = deadline === null ? Infinity : deadline - Date.now();
           if (remaining <= 0) {
-            console.error("wait: timed out with no feedback");
+            // Exit 2 is silence, not dismissal. Say so on the way out: an
+            // agent that reads "timed out" as "we're done here" is the most
+            // common way a session dies with nobody deciding to end it.
+            console.error(
+              "wait: timed out with no feedback — nobody came yet. Park again; " +
+                "the session ends when the human says so, not when a wait expires.",
+            );
             process.exitCode = 2;
             return;
           }
@@ -1999,7 +2016,17 @@ after a wake.`,
                 () => false,
               );
             }
-            if (ctx.json) return printJson({ cursors, entries: matches });
+            // The documented loop parks with --json, so the nudge the
+            // human-readable branch prints below has to live here too —
+            // otherwise the agents who follow the skill are the only ones
+            // who never get told what comes next.
+            if (ctx.json) {
+              return printJson({
+                cursors,
+                entries: matches,
+                next: "reply on the thread, then `isocan wait` again — a lap ends parked",
+              });
+            }
             for (const entry of matches) {
               // Say WHICH canvas summoned you when you were listening to more
               // than one — and hand back a command that lands there.
