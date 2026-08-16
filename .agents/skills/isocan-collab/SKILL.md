@@ -25,10 +25,11 @@ npx github:dglazkov/isocan#release setup   # CLI on PATH, skill, daemon, app
 It is idempotent — run it whenever you land somewhere new — and it puts
 `isocan` on your PATH itself, so every command below is just `isocan …`.
 
-Keep the `#release` on the spec — without it npm installs nothing usable. If
-the CLI is still not on your PATH after setup, `npm i -g
-github:dglazkov/isocan#release` is the direct form, and prefixing every command
-with `npx github:dglazkov/isocan#release` works with no install at all.
+Keep the `#release` on the spec — without it npm installs nothing usable.
+Setup's report says where the CLI landed, and if your shell cannot see it (a
+non-login subshell often can't see nvm's or asdf's directories) that line
+carries the `export PATH=…` that reaches it. Prefixing every command with
+`npx github:dglazkov/isocan#release` also works, with no install at all.
 
 ## Orient (once per session)
 

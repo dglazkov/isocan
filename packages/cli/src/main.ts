@@ -48,6 +48,7 @@ import {
   writeLocalIdentity,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
+import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
   collectProp,
@@ -704,10 +705,8 @@ async function runningFromCheckout(): Promise<boolean> {
   return exists(fileURLToPath(new URL("../../../.git", import.meta.url)));
 }
 
-function onPath(command: string): boolean {
-  const which = process.platform === "win32" ? "where" : "which";
-  return spawnSync(which, [command], { stdio: "ignore" }).status === 0;
-}
+/** This copy's package root — the thing a daemon's `root` is compared against. */
+const myRoot = () => fileURLToPath(new URL("../../..", import.meta.url));
 
 program
   .command("setup [dir]")
@@ -737,9 +736,13 @@ program
             : `${path.relative(target, skill.path)} (${skill.state})`;
 
         // The skill's every instruction starts with `isocan`, so a setup that
-        // leaves it unrunnable has set up nothing.
-        if (onPath("isocan")) {
-          report.cli = "already on PATH";
+        // leaves it unrunnable has set up nothing — and "runnable" means from
+        // the NEXT command's shell, not from this one. `findOnPath` ignores
+        // the npx cache this process may be running out of; `which` does not,
+        // which is how setup used to report a CLI nobody could run (#48).
+        let durableBin = findOnPath("isocan");
+        if (durableBin) {
+          report.cli = `already on PATH (${durableBin})`;
         } else if (await runningFromCheckout()) {
           report.cli = "running from a checkout — `npm link` to put it on PATH";
         } else if (opts.install === false) {
@@ -748,10 +751,20 @@ program
           console.error(`isocan: installing the CLI (npm i -g ${INSTALL_SPEC})…`);
           const npm = process.platform === "win32" ? "npm.cmd" : "npm";
           const done = spawnSync(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
-          report.cli =
-            done.status === 0 && onPath("isocan")
-              ? "installed globally"
-              : `install failed — run \`npm i -g ${INSTALL_SPEC}\` yourself`;
+          durableBin = done.status === 0 ? findOnPath("isocan") : null;
+          const bin = done.status === 0 && !durableBin ? globalBinDir() : null;
+          if (durableBin) {
+            report.cli = `installed globally (${durableBin})`;
+          } else if (bin) {
+            // Installed into a directory this shell cannot see. nvm, fnm, asdf
+            // and volta all put binaries under a version they expect a shell
+            // rc file to have exported — and an agent's subshell often sources
+            // none. Say where it went, and the one line that reaches it.
+            durableBin = path.join(bin, "isocan");
+            report.cli = `installed at ${durableBin} — not on this PATH; export PATH="${bin}:$PATH"`;
+          } else {
+            report.cli = `install failed — run \`npm i -g ${INSTALL_SPEC}\` yourself`;
+          }
         }
 
         // Setup deliberately creates NO canvas, and so needs no identity of
@@ -766,12 +779,32 @@ program
 
         const port = daemonPort(cmd);
         const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+        // The daemon outlives the command that starts it, so it has to belong
+        // to a copy that outlives it too. Run through npx, THIS copy is a
+        // cache directory npm deletes — and every command from the CLI we just
+        // installed would find that daemon and call it stale (#48). So when we
+        // are the transient one, the installed copy is handed the daemon.
+        const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
+        const handOff = transient ? durableBin : null;
         try {
           // Setup is what you run after an upgrade, so a daemon left over from
           // an older copy is replaced rather than reported: "make this
           // directory work" includes serving today's app, not yesterday's.
           const before = await client.healthz();
-          if (before && stalenessOf(before).stale) {
+          if (handOff) {
+            const owner = rootOfBin(handOff);
+            if (!before || path.resolve(before.root ?? "") !== owner) {
+              const done = spawnSync(handOff, ["restart", "--port", String(port)], {
+                stdio: "ignore",
+                shell: process.platform === "win32",
+                env: { ...process.env, ISOCAN_HOME: home },
+              });
+              if (done.status !== 0) throw new Error(`could not start the daemon from ${handOff}`);
+              report.restarted = before
+                ? `the daemon was running ${before.root} — restarted on the installed copy`
+                : `started on the installed copy, not this temporary one (${myRoot()})`;
+            }
+          } else if (before && stalenessOf(before).stale) {
             const { stopDaemons } = await import("@isocan/server");
             await stopDaemons(port, home);
             await fs.rm(path.join(home, ".stale-warned"), { force: true });
