@@ -146,7 +146,9 @@
     color: var(--ink);
     margin: 2.4rem 0;
   }
-  .pull em { font-style: normal; background: var(--lime); padding: 0 0.2em; }
+  /* Lime carries ink, never light text — the highlight has to survive
+     landing inside a dark band, where .pull's own color is the pale one. */
+  .pull em { font-style: normal; background: var(--lime); color: var(--ink); padding: 0 0.2em; }
   .band-dark .pull { color: var(--on-dark); }
 
   /* ---------------- cards ---------------- */
