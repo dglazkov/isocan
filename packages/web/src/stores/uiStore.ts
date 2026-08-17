@@ -47,6 +47,8 @@ interface UiStore {
   trashOpen: boolean;
   /** The identity menu, opened by clicking your own face in the pile. */
   identityOpen: boolean;
+  /** The ⌘K command bar: the friction-free lane to your emissary. */
+  commandBarOpen: boolean;
   /** The docked main-thread panel (pill when closed). Persisted per project
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
@@ -72,6 +74,7 @@ interface UiStore {
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
+  setCommandBarOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
 }
 
@@ -96,6 +99,7 @@ export const useUiStore = create<UiStore>((set) => {
     commentMode: false,
     trashOpen: false,
     identityOpen: false,
+    commandBarOpen: false,
     mainPanelOpen: false,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
@@ -124,6 +128,7 @@ export const useUiStore = create<UiStore>((set) => {
     setCommentMode: (commentMode) => set({ commentMode }),
     setTrashOpen: (trashOpen) => set({ trashOpen }),
     setIdentityOpen: (identityOpen) => set({ identityOpen }),
+    setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
   };
 });

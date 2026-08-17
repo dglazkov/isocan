@@ -14,6 +14,7 @@ import { centerOn, fitBounds, itemsBounds } from "../lib/viewport.ts";
 import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
+import { CommandBar } from "../components/CommandBar.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Shelf } from "../components/Shelf.tsx";
 import { Minimap } from "../components/Minimap.tsx";
@@ -147,6 +148,14 @@ export function CanvasPage({
   useEffect(() => {
     if (!projectId) return;
     function onKeyDown(e: KeyboardEvent) {
+      // ⌘K is global — the lane to your emissary opens from anywhere, even
+      // mid-typing in another field.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        const ui = useUiStore.getState();
+        ui.setCommandBarOpen(!ui.commandBarOpen);
+        return;
+      }
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         return;
@@ -209,6 +218,7 @@ export function CanvasPage({
   return (
     <div className="canvas-page">
       <CanvasViewport projectId={projectId} actor={actor} />
+      <CommandBar projectId={projectId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
