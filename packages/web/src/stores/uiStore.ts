@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Viewport } from "../lib/viewport.ts";
 
 /** The pointer tools on the right rail. */
-export type Tool = "select" | "hand" | "comment";
+export type Tool = "select" | "hand" | "comment" | "zoom";
 
 export interface DragState {
   /** Every item riding this gesture — the whole selection for a group drag. */

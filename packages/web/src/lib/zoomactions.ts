@@ -29,6 +29,11 @@ function fitBox(box: Box | null): void {
   useUiStore.getState().setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
 }
 
+/** Fit an arbitrary world box — the Zoom tool's drag-a-region gesture. */
+export function zoomToBox(box: Box): void {
+  fitBox(box);
+}
+
 function boundsOfItems(canvas: CanvasState | null, ids: string[]): Box | null {
   if (!canvas || ids.length === 0) return null;
   const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };

@@ -5,8 +5,8 @@ import { type Tool, useUiStore } from "../stores/uiStore.ts";
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
  * default (click + marquee); Hand pans on drag (also momentary while Space is
  * held); Comment drops pins. The active tool is the store's `activeTool`; each
- * answers to a letter — Select=V, Hand=H, Comment=C — and Esc returns to Select.
- * (Version fan-out, once on V, lives on an item's version badge.)
+ * answers to a letter — Select=V, Hand=H, Zoom=Z, Comment=C — and Esc returns
+ * to Select. (Version fan-out, once on V, lives on an item's version badge.)
  */
 
 interface ToolDef {
@@ -40,9 +40,17 @@ const COMMENT = (
   </svg>
 );
 
+const ZOOM = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <circle cx="7" cy="7" r="4.2" />
+    <path d="M10.2 10.2 14 14M7 5.2v3.6M5.2 7h3.6" />
+  </svg>
+);
+
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
+  { tool: "zoom", label: "Zoom", hint: "Zoom — Z (tap to latch, hold to zoom a region)", icon: ZOOM },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 

@@ -207,6 +207,11 @@ input, textarea { font: inherit; color: var(--ink); }
 .canvas-viewport.hand { cursor: grab; }
 .canvas-viewport.panning { cursor: grabbing; }
 .canvas-viewport.comment-mode { cursor: crosshair; }
+/* Zoom tool: magnifier cursor, and the item under it lights up as the target. */
+.canvas-viewport.zoom { cursor: zoom-in; }
+.canvas-viewport.zoom .item:hover {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 
 /* ---------- toolbar ---------- */
