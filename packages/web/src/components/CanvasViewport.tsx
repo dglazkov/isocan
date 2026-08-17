@@ -10,6 +10,13 @@ import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 
+// WebKit-only trackpad pinch event; not in the standard TS DOM lib.
+interface GestureEvent extends UIEvent {
+  readonly scale: number;
+  readonly clientX: number;
+  readonly clientY: number;
+}
+
 export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
@@ -20,29 +27,68 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   const [panning, setPanning] = useState(false);
   const spaceDown = useRef(false);
 
-  // Wheel must be non-passive to preventDefault; React's synthetic wheel is
-  // passive, so attach by hand.
+  // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
+  // or a gesture event (Safari). Left alone, the browser zooms the whole page —
+  // the toolbar, minimap, and shelf scale and scroll off. We must preventDefault
+  // to suppress that, which needs a NON-passive listener (React's synthetic
+  // wheel is passive, so we attach by hand). And we listen on `window` in the
+  // capture phase, not on the canvas element: the toolbar/minimap/shelf sit on
+  // top of the canvas as siblings, so a pinch whose cursor is over one of them
+  // would never reach a canvas-scoped listener and the page would zoom anyway.
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
     function onWheel(e: WheelEvent) {
-      // Whatever owns the pointer owns the wheel: a thread popover, and the
-      // content of an entered item (`.inert` marks content not handed over
-      // yet, and its pointer-events:none keeps it out of `e.target` anyway).
-      // Both scroll themselves instead of panning the canvas.
-      if ((e.target as HTMLElement).closest?.(".thread-popover, .item-content:not(.inert)")) return;
+      const target = e.target as HTMLElement;
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
+        // browser never page-zooms. Zoom the canvas at the cursor instead.
+        e.preventDefault();
+        const factor = Math.exp(-e.deltaY * 0.0022);
+        const ui = useUiStore.getState();
+        ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
+        return;
+      }
+      // Plain two-finger scroll pans the canvas — but only over the canvas
+      // itself, and never over something that scrolls its own content: a thread
+      // popover, or the content of an entered item (`.inert` marks content not
+      // handed over yet). Elsewhere (toolbar, panels) let the scroll be.
+      if (!target.closest?.(".canvas-viewport")) return;
+      if (target.closest?.(".thread-popover, .item-content:not(.inert)")) return;
       e.preventDefault();
       const ui = useUiStore.getState();
-      if (e.ctrlKey || e.metaKey) {
-        // Pinch (macOS trackpads report ctrlKey) or ctrl+wheel: zoom at cursor.
-        const factor = Math.exp(-e.deltaY * 0.0022);
-        ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
-      } else {
-        ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
-      }
+      ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
     }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+
+    // Safari/WebKit trackpad pinch does NOT synthesize a ctrlKey wheel (that is
+    // Chrome's behavior, handled above) — it fires gesture events instead.
+    // `e.scale` is cumulative from gesturestart, so we zoom by the delta since
+    // the last event.
+    let gestureScale = 1;
+    function onGestureStart(e: GestureEvent) {
+      e.preventDefault();
+      gestureScale = e.scale;
+    }
+    function onGestureChange(e: GestureEvent) {
+      e.preventDefault();
+      const factor = e.scale / gestureScale;
+      gestureScale = e.scale;
+      const ui = useUiStore.getState();
+      ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
+    }
+    function onGestureEnd(e: GestureEvent) {
+      e.preventDefault();
+    }
+    const opts = { passive: false, capture: true } as const;
+    window.addEventListener("gesturestart", onGestureStart as EventListener, opts);
+    window.addEventListener("gesturechange", onGestureChange as EventListener, opts);
+    window.addEventListener("gestureend", onGestureEnd as EventListener, opts);
+
+    return () => {
+      window.removeEventListener("wheel", onWheel, true);
+      window.removeEventListener("gesturestart", onGestureStart as EventListener, true);
+      window.removeEventListener("gesturechange", onGestureChange as EventListener, true);
+      window.removeEventListener("gestureend", onGestureEnd as EventListener, true);
+    };
   }, []);
 
   // Track spacebar for space-drag panning.
