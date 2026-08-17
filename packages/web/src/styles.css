@@ -1,8 +1,14 @@
 /* isocan — Direction A "Drafting Table"
    Vellum ground + dot grid, white hairline cards with soft depth,
-   cobalt accent for selection / pins / primary actions. */
+   cobalt accent for selection / pins / primary actions.
 
-:root {
+   Every color is a token here so the whole app can be re-skinned by swapping
+   this block. Dark mode is the same tokens re-valued under [data-theme="dark"]
+   (see below); the resolved theme is stamped on <html> — light by default, and
+   the door for "system" is opened before first paint by index.html. */
+
+:root,
+:root[data-theme="light"] {
   --ground: #fbfbf9;
   --dot: #c9ccc4;
   --card: #ffffff;
@@ -12,13 +18,46 @@
   --ink-muted: #8a8e95;
   --ink-soft: #b4b7bd;
   --chip: #f0f1ec;
+  --chip-hover: #e9eae4;
   --chip-line: #e0e1da;
   --accent: #1f3fd0;
+  --accent-hover: #1a36b4;
   --accent-ink: #ffffff;
   --danger: #b3261e;
+  --warn: #a06000;
+  /* Frosted surfaces that float over the canvas: toolbar, minimap, popovers. */
+  --panel: rgba(255, 255, 255, 0.92);
+  /* Dimmer behind a modal. */
+  --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   --radius: 8px;
+}
+
+/* Dark: a graphite ground under the same dot grid, slate cards, a brighter
+   cobalt so selection still reads against the dark. Shadows go to near-black
+   since a soft gray one is invisible on a dark surface. */
+:root[data-theme="dark"] {
+  --ground: #0e0f12;
+  --dot: #2b2f36;
+  --card: #1b1e23;
+  --line: #2c313a;
+  --line-soft: #23272e;
+  --ink: #e7e9ec;
+  --ink-muted: #8b929d;
+  --ink-soft: #596170;
+  --chip: #262a31;
+  --chip-hover: #2f343d;
+  --chip-line: #343a44;
+  --accent: #4c6ef5;
+  --accent-hover: #5c7cff;
+  --accent-ink: #ffffff;
+  --danger: #f26a60;
+  --warn: #d99a3a;
+  --panel: rgba(23, 26, 31, 0.9);
+  --overlay: rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
 }
 
 * { box-sizing: border-box; }
@@ -40,12 +79,12 @@ input, textarea { font: inherit; color: var(--ink); }
   background: var(--chip); color: var(--ink);
   border: 1px solid var(--chip-line);
 }
-.btn:hover { background: #e9eae4; }
+.btn:hover { background: var(--chip-hover); }
 .btn:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.primary:hover { background: #1a36b4; }
+.btn.primary:hover { background: var(--accent-hover); }
 .btn.danger { color: var(--danger); }
 .btn.icon { padding: 6px 8px; }
 .btn:disabled { opacity: 0.45; cursor: default; }
@@ -58,7 +97,7 @@ input, textarea { font: inherit; color: var(--ink); }
 
 /* ---------- identity dialog ---------- */
 .identity-backdrop {
-  position: fixed; inset: 0; background: rgba(35, 38, 43, 0.35);
+  position: fixed; inset: 0; background: var(--overlay);
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
 .identity-dialog {
@@ -118,8 +157,24 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .identity-known-row:hover { background: var(--chip); border-color: var(--chip-line); }
 .identity-known-row .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
-.identity-warning { font-size: 11px; color: #a06000; line-height: 1.35; }
+.identity-warning { font-size: 11px; color: var(--warn); line-height: 1.35; }
 .identity-leave { justify-content: center; font-size: 12.5px; }
+
+/* Light / dark / system — a segmented pill; the active segment lifts like a card. */
+.theme-switch {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
+  padding: 3px; border-radius: 8px;
+  background: var(--chip); border: 1px solid var(--chip-line);
+}
+.theme-opt {
+  padding: 5px 6px; border-radius: 6px; font-size: 12px; text-align: center;
+  color: var(--ink-muted); background: none; border: 1px solid transparent;
+}
+.theme-opt:hover { color: var(--ink); }
+.theme-opt.active {
+  color: var(--ink); background: var(--card);
+  border-color: var(--chip-line); box-shadow: var(--shadow-card);
+}
 
 /* The project list wears the same handle in its header. */
 .projects-head .who-btn {
@@ -157,7 +212,7 @@ input, textarea { font: inherit; color: var(--ink); }
 .toolbar {
   position: absolute; top: 0; left: 0; right: 0; height: 48px; z-index: 20;
   display: flex; align-items: center; gap: 8px; padding: 0 12px;
-  background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--line);
+  background: var(--panel); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
 }
 .toolbar .project-name { position: relative; min-width: 0; display: flex; }
@@ -219,7 +274,7 @@ input, textarea { font: inherit; color: var(--ink); }
   font-size: 10px; font-weight: 700; border-radius: 999px; padding: 3px 7px;
   line-height: 1; border: none;
 }
-.version-badge:hover { background: #1a36b4; }
+.version-badge:hover { background: var(--accent-hover); }
 
 /* renderers */
 .md-view { padding: 10px 14px; font-size: 13px; overflow: auto; height: 100%; }
@@ -245,7 +300,7 @@ input, textarea { font: inherit; color: var(--ink); }
 .browser-reload:hover { color: var(--ink); }
 .html-hint {
   position: absolute; inset: auto 0 0 0; text-align: center; font-size: 10px;
-  color: var(--ink-muted); background: rgba(255,255,255,0.85); padding: 3px;
+  color: var(--ink-muted); background: var(--panel); padding: 3px;
 }
 .file-view { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); font-size: 12px; padding: 12px; text-align: center; }
 
@@ -614,7 +669,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Raised to clear the Shelf's line (per the approved mock). */
 .minimap {
   position: absolute; right: 14px; bottom: 78px; z-index: 20;
-  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   cursor: pointer;
 }
 /* A collaborator's place on the map. Clicking one recenters there like any

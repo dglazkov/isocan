@@ -4,8 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>isocan</title>
-    <script type="module" crossorigin src="/assets/index-CNH1eioH.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BHbmr3XG.css">
+    <script>
+      // Resolve the theme before first paint so there is no flash of the wrong
+      // one. Kept in sync afterwards by src/lib/theme.ts (same storage key).
+      (function () {
+        try {
+          var pref = localStorage.getItem("isocan.theme") || "system";
+          var dark =
+            pref === "dark" ||
+            (pref === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-DhH7NyhD.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CDYggtIq.css">
   </head>
   <body>
     <div id="root"></div>
