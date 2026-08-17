@@ -2,6 +2,13 @@ import { useState } from "react";
 import type { Actor } from "@isocan/core";
 import { adoptIdentity, knownIdentities, renameIdentity, signOut } from "../lib/identity.ts";
 import { actorColor } from "../lib/colors.ts";
+import { type ThemePref, useTheme } from "../lib/theme.ts";
+
+const THEME_OPTS: { value: ThemePref; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
 
 /**
  * Who you are, and how to be someone else (#43). Three verbs, deliberately
@@ -33,6 +40,8 @@ export function IdentityMenu({
 }) {
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
+  const themePref = useTheme((s) => s.pref);
+  const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
   const collides = takenNames.some(
     (taken) => taken.trim().toLowerCase() === trimmed.toLowerCase(),
@@ -93,6 +102,19 @@ export function IdentityMenu({
           </div>
         </>
       )}
+      <div className="identity-menu-head">Theme</div>
+      <div className="theme-switch" role="group" aria-label="Theme">
+        {THEME_OPTS.map((opt) => (
+          <button
+            key={opt.value}
+            className={`theme-opt${themePref === opt.value ? " active" : ""}`}
+            aria-pressed={themePref === opt.value}
+            onClick={() => setThemePref(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       <button
         className="btn identity-leave"
         onClick={() => {
