@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { encodeFilename } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
 
@@ -80,5 +81,49 @@ describe("concurrent blob uploads", () => {
     const index = JSON.parse(await fs.readFile(p.blobsIndexFile(home, "prj_1"), "utf8"));
     expect(Object.keys(index)).toHaveLength(1);
     expect((await fetchBlob(hashes[0]!)).status).toBe(200);
+  });
+});
+
+describe("filenames that are not ByteStrings", () => {
+  /**
+   * Every macOS screenshot is named "Screenshot … at 8.05.12 PM.png" with
+   * U+202F (narrow no-break space) before AM/PM. A header value is a
+   * ByteString, so handing that name to `fetch` throws before a request is
+   * made — in the web app, inside an async drop handler with nothing
+   * catching it, which is how dropping a PNG on the canvas failed in total
+   * silence. Filenames travel percent-encoded now; the daemon decodes.
+   */
+  const SCREENSHOT = "Screenshot 2026-08-16 at 8.05.12 PM.png";
+
+  async function uploadNamed(name: string, encoded: string): Promise<Record<string, { filename: string }>> {
+    const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", "X-Isocan-Filename": encoded },
+      body: `bytes of ${name}`,
+    });
+    expect(res.status).toBe(200);
+    return JSON.parse(await fs.readFile(p.blobsIndexFile(home, "prj_1"), "utf8"));
+  }
+
+  it("survives the round trip when percent-encoded", async () => {
+    const index = await uploadNamed(SCREENSHOT, encodeFilename(SCREENSHOT));
+    expect(Object.values(index).map((entry) => entry.filename)).toEqual([SCREENSHOT]);
+  });
+
+  it("keeps emoji and non-Latin names intact", async () => {
+    const name = "Скриншот 🌍.png";
+    const index = await uploadNamed(name, encodeFilename(name));
+    expect(Object.values(index).map((entry) => entry.filename)).toEqual([name]);
+  });
+
+  it("still accepts a literal name — an older client, or curl by hand", async () => {
+    const index = await uploadNamed("plain.png", "plain.png");
+    expect(Object.values(index).map((entry) => entry.filename)).toEqual(["plain.png"]);
+  });
+
+  it("does not mangle a name that merely contains a percent", async () => {
+    const name = "100% done.png";
+    const index = await uploadNamed(name, encodeFilename(name));
+    expect(Object.values(index).map((entry) => entry.filename)).toEqual([name]);
   });
 });

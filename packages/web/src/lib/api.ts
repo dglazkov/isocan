@@ -9,7 +9,7 @@ import type {
   PostOpResponse,
   Project,
 } from "@isocan/core";
-import { newClientId } from "@isocan/core";
+import { encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
 export const CLIENT_ID = newClientId();
@@ -70,7 +70,7 @@ export async function uploadBlob(
     method: "POST",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
-      "X-Isocan-Filename": filename,
+      [FILENAME_HEADER]: encodeFilename(filename),
     },
     body: file,
   });

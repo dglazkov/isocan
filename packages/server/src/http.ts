@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { PostOpRequest, UndoRedoRequest } from "@isocan/core";
-import { OpValidationError } from "@isocan/core";
+import { decodeFilename, FILENAME_HEADER, OpValidationError } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
@@ -241,7 +241,7 @@ export function registerRoutes(
       return reply.status(400).send({ error: "empty blob body", code: "bad-op" });
     }
     const mimeType = req.headers["content-type"] ?? "application/octet-stream";
-    const filename = String(req.headers["x-isocan-filename"] ?? "upload.bin");
+    const filename = decodeFilename(req.headers[FILENAME_HEADER.toLowerCase()]);
     return engine.putBlob(id, data, { mimeType, filename });
   });
 
