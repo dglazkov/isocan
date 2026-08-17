@@ -138,6 +138,30 @@ export interface BlobUploadResponse {
   size: number;
 }
 
+/** The header a blob upload carries its filename in. */
+export const FILENAME_HEADER = "X-Isocan-Filename";
+
+/**
+ * Filenames travel percent-encoded, because a header value is a ByteString
+ * and real filenames are not. Every macOS screenshot is named with U+202F
+ * (narrow no-break space) before AM/PM, and handing that to `fetch` throws
+ * before a request is ever made — which read, on the canvas, as a PNG that
+ * silently refused to be dropped.
+ */
+export const encodeFilename = (filename: string): string => encodeURIComponent(filename);
+
+/** Inverse of {@link encodeFilename}. A literal name from an older client or
+ * a hand-rolled `curl` survives: only malformed escapes fall back. */
+export function decodeFilename(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
+  if (!value) return "upload.bin";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export interface CanvasSnapshotResponse {
   project: Project;
   canvas: CanvasState;

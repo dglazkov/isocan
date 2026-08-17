@@ -19,6 +19,7 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
 } from "@isocan/core";
+import { encodeFilename, FILENAME_HEADER } from "@isocan/core";
 import type { BuildStamp } from "@isocan/server";
 import { paths } from "@isocan/server";
 
@@ -192,7 +193,7 @@ export class DaemonClient {
   ): Promise<BlobUploadResponse> {
     const res = await fetch(`${this.base}/api/projects/${projectId}/blobs`, {
       method: "POST",
-      headers: { "Content-Type": mimeType, "X-Isocan-Filename": filename },
+      headers: { "Content-Type": mimeType, [FILENAME_HEADER]: encodeFilename(filename) },
       body: new Uint8Array(data),
     });
     const json = (await res.json().catch(() => null)) as any;
