@@ -206,6 +206,38 @@ export async function stopDaemons(
   return pids;
 }
 
+/**
+ * Die with the process that had us started. A daemon is detached on purpose —
+ * that is how it survives the `isocan` command that spawned it — and the price
+ * is that nothing reaps one when a run ends the way runs actually end: the
+ * terminal closes, the session goes away, someone SIGKILLs the lot. The
+ * `afterEach` that would have called `stopDaemons` never gets to run, and the
+ * daemon keeps answering on its port, out of a temp home that was deleted
+ * hours ago, until you go looking in `ps`.
+ *
+ * So ISOCAN_DAEMON_GUARD_PID names a process this daemon has no business
+ * outliving. Nothing sets it in normal use; the test setup file points it at
+ * the vitest worker, and it reaches here for free because tests hand
+ * `{ ...process.env }` to the CLI and `ensureDaemon` passes that on.
+ */
+function guardedBy(pid: number | undefined, stop: () => void): void {
+  if (pid === undefined) return;
+  const watch = setInterval(() => {
+    if (!isAlive(pid)) stop();
+  }, 1000);
+  // Never the reason this process stays up — only ever the reason it goes down.
+  watch.unref();
+}
+
+/** The pid to die with, if we were given a usable one. Our own doesn't count:
+ * an in-process daemon already shares its fate. */
+function guardPid(): number | undefined {
+  const raw = process.env.ISOCAN_DAEMON_GUARD_PID;
+  if (raw === undefined) return undefined;
+  const pid = Number(raw);
+  return Number.isInteger(pid) && pid > 0 && pid !== process.pid ? pid : undefined;
+}
+
 /** Long-running entrypoint with signal handling. */
 export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon> {
   const port = options.port ?? DEFAULT_PORT;
@@ -235,5 +267,6 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+  guardedBy(guardPid(), shutdown);
   return daemon;
 }

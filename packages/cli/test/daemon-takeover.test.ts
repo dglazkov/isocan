@@ -166,3 +166,60 @@ describe("taking the port from a stale daemon", () => {
     expect((await health())?.pid).toBe(pid);
   }, 30_000);
 });
+
+describe("a daemon that was told whose fate it shares", () => {
+  /**
+   * A process that does nothing but exist, so we can take it away. It watches
+   * for being orphaned on the same terms this suite's workers do: a stand-in
+   * for a killed run must not become the thing that survives one.
+   */
+  function bystander(): ChildProcess {
+    const doNothing = "setInterval(() => process.ppid === 1 && process.kill(process.pid), 250)";
+    return spawn(process.execPath, ["-e", doNothing], { stdio: "ignore" });
+  }
+
+  it("stops when the process named by ISOCAN_DAEMON_GUARD_PID is gone", async () => {
+    const guard = bystander();
+    squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
+      env: {
+        ...process.env,
+        ISOCAN_HOME: home,
+        ISOCAN_PORT: String(port),
+        ISOCAN_DAEMON_GUARD_PID: String(guard.pid),
+      },
+      cwd: home,
+      stdio: "ignore",
+    });
+    await until(health, (h) => h !== null, "the guarded daemon");
+
+    // Nobody stops the daemon: the process it was told to die with just dies,
+    // which is what a killed test run looks like from down here.
+    guard.kill("SIGKILL");
+
+    await exited(squatter);
+    expect(await health()).toBeNull();
+  }, 30_000);
+
+  it("keeps serving while that process is alive", async () => {
+    const guard = bystander();
+    try {
+      squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
+        env: {
+          ...process.env,
+          ISOCAN_HOME: home,
+          ISOCAN_PORT: String(port),
+          ISOCAN_DAEMON_GUARD_PID: String(guard.pid),
+        },
+        cwd: home,
+        stdio: "ignore",
+      });
+      const up = await until(health, (h) => h !== null, "the guarded daemon");
+
+      await new Promise((r) => setTimeout(r, 2500)); // several checks' worth
+
+      expect((await health())?.pid).toBe(up!.pid);
+    } finally {
+      guard.kill("SIGKILL");
+    }
+  }, 30_000);
+});
