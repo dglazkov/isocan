@@ -364,6 +364,18 @@
   .try .note { font-size: 0.84rem; color: var(--on-dark-mute); line-height: 1.5; margin: 0.5rem 0 0; }
   .try .note code { background: #2b2836; color: var(--on-dark-soft); }
 
+  /* ---------------- screenshot ---------------- */
+
+  .shot { margin: 2.4rem 0 0; }
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(20,19,26,.06), 0 16px 40px rgba(20,19,26,.10);
+  }
+  .shot figcaption { margin-left: auto; margin-right: auto; text-align: center; }
+
   /* ---------------- example ---------------- */
 
   .example {
@@ -636,7 +648,16 @@
       <p>Because the state is durable and the vocabulary complete, that same agent can be handed the canvas cold: it lists what's there, reads the threads, edits an item into a new version, and replies — every step something the human could have done by hand, and can see, and can undo.</p>
       <p><strong>This page is one of those artifacts.</strong> It was built on an isocan canvas: the outline argued out in a comment thread, the diagram chosen from variants pinned side by side, the design system picked the same way, each round landing as a new version on the same item while the other party watched it arrive. Then it was committed here.</p>
     </div>
+  </div>
 
+  <div class="wide">
+    <figure class="shot">
+      <img src="built-on-a-canvas.png" width="1415" height="976" alt="An isocan canvas holding the drafts of this page: the outline, the page itself, three design-system mocks, and nine diagram variants — with an agent's cursor parked at the left, labelled 'Kenny — waiting for you…'">
+      <figcaption>This page, mid-argument. The outline is at the left, the page beside it, the design systems and diagram variants below — every round of feedback a comment thread, every revision a version on the same item. The tag at the far left is the agent's cursor, parked: <em>waiting for you…</em></figcaption>
+    </figure>
+  </div>
+
+  <div class="wrap">
     <p style="margin-top:2rem">The pattern generalizes past canvases. Anything with shared state and more than one kind of user — editors, dashboards, issue trackers, design tools — can be built this way. What it costs is the discipline to name the changes first and route everything through them. What it buys is that the second surface is never the lesser one.</p>
   </div>
 </section>
