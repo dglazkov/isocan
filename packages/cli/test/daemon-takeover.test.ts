@@ -57,6 +57,7 @@ async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: s
 async function startSquatter(): Promise<number> {
   squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
     env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+    cwd: home,
     stdio: "ignore",
   });
   const answered = await until(health, (h) => h !== null, "the squatting daemon");
@@ -70,6 +71,9 @@ const exited = (child: ChildProcess) =>
 function isocan(...args: string[]): Promise<{ code: number; stdout: string }> {
   const child = spawn(process.execPath, [cliBin, ...args], {
     env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+    // Not the repo root — see wait.test.ts: a directory identity outranks
+    // the home identity these tests write.
+    cwd: home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";

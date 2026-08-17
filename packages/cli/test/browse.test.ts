@@ -53,6 +53,9 @@ afterEach(async () => {
 function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, [cliBin, ...args], {
     env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+    // Not the repo root — a directory identity there would outrank the home
+    // identity this test wrote. See wait.test.ts for the failure it caused.
+    cwd: home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";

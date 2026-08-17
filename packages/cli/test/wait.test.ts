@@ -105,6 +105,13 @@ interface Run {
 function isocan(...args: string[]): Promise<Run> {
   const child = spawn(process.execPath, [cliBin, ...args], {
     env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(proxyPort) },
+    // Run from the temp home, never the repo root: the CLI resolves a
+    // DIRECTORY identity from cwd, which outranks the home identity these
+    // tests write. An agent following the skill leaves one in this repo
+    // (`identity --name … --here`), and the wait would then park as *it*
+    // rather than Nico — waking on nothing, timing out, failing here only
+    // on the machine where somebody had done the thing we tell them to do.
+    cwd: home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";

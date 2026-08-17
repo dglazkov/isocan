@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Isomorphic Surfaces</title>
+<style>
+  :root {
+    /* system C — Two-Tone Stage */
+    --ground:   #f6f4f0;
+    --ink:      #14131a;
+    --ink-soft: #4a4854;
+    --ink-mute: #66646f;
+    --ink-dim:  #a9a6b2;
+    --card:     #ffffff;
+    --rule:     #e0ddd6;
+    --lime:     #d9f24b;
+    --violet:   #7b61ff;
+    --dark:     #14131a;
+    --dark-2:   #211f2a;
+    --on-dark:  #f6f4f0;
+    --on-dark-soft: #b9b6c4;
+    --on-dark-mute: #8b8894;
+
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --col: 42rem;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: var(--col); margin: 0 auto; padding: 0 1.5rem; }
+  .wide { max-width: 58rem; margin: 0 auto; padding: 0 1.5rem; }
+
+  p { margin: 0 0 1.15rem; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 650; }
+  em { font-style: italic; }
+  a { color: var(--violet); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: #eeebe4;
+    border-radius: 5px;
+    padding: 0.1em 0.36em;
+    color: var(--ink);
+  }
+
+  /* ---------------- dark bands ---------------- */
+
+  .band-dark { background: var(--dark); color: var(--on-dark); }
+  .band-dark p { color: var(--on-dark-soft); }
+  .band-dark strong { color: var(--on-dark); }
+  .band-dark code { background: #2b2836; color: var(--on-dark); }
+  .band-dark a { color: var(--lime); }
+
+  /* ---------------- hero ---------------- */
+
+  header { padding: 5rem 0 4rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--lime);
+    margin: 0 0 1.5rem;
+  }
+  h1 {
+    font-size: clamp(2.9rem, 8.5vw, 4.6rem);
+    line-height: 0.96;
+    letter-spacing: -0.042em;
+    font-weight: 680;
+    margin: 0 0 1.6rem;
+    color: var(--on-dark);
+  }
+  .thesis {
+    font-size: clamp(1.12rem, 2.4vw, 1.34rem);
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    max-width: 33rem;
+    margin: 0 0 2.2rem;
+  }
+  .thesis mark { background: var(--lime); color: var(--ink); padding: 0 0.22em; }
+  .byline {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--on-dark-mute);
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  /* ---------------- sections ---------------- */
+
+  section { padding: 4.25rem 0 0; }
+  section.band-dark { padding: 4.25rem 0 4.25rem; margin-top: 4.25rem; }
+  section:last-of-type { padding-bottom: 4rem; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3.4vw, 1.95rem);
+    letter-spacing: -0.032em;
+    font-weight: 660;
+    line-height: 1.12;
+    margin: 0 0 0.9rem;
+  }
+  h2 .num {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--violet);
+    font-weight: 400;
+    margin-bottom: 0.75rem;
+  }
+  .band-dark h2 .num { color: var(--lime); }
+
+  h3 {
+    font-size: 1.06rem;
+    font-weight: 660;
+    letter-spacing: -0.014em;
+    margin: 2.2rem 0 0.4rem;
+    color: var(--ink);
+  }
+  .band-dark h3 { color: var(--on-dark); }
+
+  .lede { font-size: 1.06rem; color: var(--ink); }
+
+  /* ---------------- pull quote ---------------- */
+
+  .pull {
+    font-size: clamp(1.28rem, 3.1vw, 1.68rem);
+    line-height: 1.24;
+    letter-spacing: -0.03em;
+    font-weight: 620;
+    color: var(--ink);
+    margin: 2.4rem 0;
+  }
+  .pull em { font-style: normal; background: var(--lime); padding: 0 0.2em; }
+  .band-dark .pull { color: var(--on-dark); }
+
+  /* ---------------- cards ---------------- */
+
+  .nots { display: grid; gap: 0.9rem; grid-template-columns: 1fr 1fr; margin: 1.9rem 0 0; }
+  .not {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 1.2rem 1.3rem 1.35rem;
+    box-shadow: 0 1px 2px rgba(20,19,26,.05), 0 8px 20px rgba(20,19,26,.05);
+  }
+  .not .tag {
+    font-size: 0.63rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--lime);
+    border-radius: 999px;
+    padding: 0.2em 0.6em;
+    display: inline-block;
+    margin-bottom: 0.75rem;
+  }
+  .not h4 { font-size: 0.99rem; font-weight: 650; margin: 0 0 0.35rem; letter-spacing: -0.012em; }
+  .not p { font-size: 0.92rem; line-height: 1.5; color: var(--ink-mute); margin: 0; }
+
+  /* ---------------- figure ---------------- */
+
+  .figure {
+    margin: 2.4rem 0 0;
+    background: var(--card);
+    border-radius: 16px;
+    padding: 1.9rem 1.6rem 1.35rem;
+    box-shadow: 0 1px 2px rgba(20,19,26,.05), 0 14px 34px rgba(20,19,26,.06);
+    overflow-x: auto;
+  }
+  .figure svg { display: block; margin: 0 auto; width: 100%; max-width: 44rem; height: auto; }
+  figcaption {
+    font-size: 0.83rem;
+    color: var(--ink-mute);
+    line-height: 1.5;
+    margin-top: 1.2rem;
+    max-width: 40rem;
+  }
+
+  /* ---------------- numbered list ---------------- */
+
+  ol.mech { list-style: none; counter-reset: m; padding: 0; margin: 1.9rem 0 0; }
+  ol.mech > li {
+    counter-increment: m;
+    position: relative;
+    padding: 0 0 1.5rem 3.2rem;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 1.5rem;
+  }
+  ol.mech > li:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+  ol.mech > li::before {
+    content: counter(m);
+    position: absolute;
+    left: 0;
+    top: 0.1em;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--lime);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.mech h3 { margin: 0 0 0.32rem; font-size: 1.02rem; }
+  ol.mech p { margin: 0; font-size: 0.97rem; line-height: 1.55; color: var(--ink-mute); }
+
+  /* ---------------- two planes ---------------- */
+
+  .planes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin: 2.1rem 0 0; }
+  .plane { border-radius: 16px; padding: 1.4rem 1.4rem 1.5rem; }
+  .plane.light { background: var(--card); box-shadow: 0 1px 2px rgba(20,19,26,.05), 0 8px 20px rgba(20,19,26,.05); }
+  .plane.night { background: var(--dark); }
+  .plane .kicker {
+    font-family: var(--mono);
+    font-size: 0.63rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 0.2rem;
+  }
+  .plane.night .kicker { color: var(--lime); }
+  .plane h4 { font-size: 1.04rem; font-weight: 650; margin: 0 0 0.15rem; letter-spacing: -0.016em; }
+  .plane.night h4 { color: var(--on-dark); }
+  .plane .sub { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); margin: 0 0 1rem; }
+  .plane.night .sub { color: var(--on-dark-mute); }
+  .plane ul { margin: 0; padding: 0; list-style: none; }
+  .plane li {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--ink-mute);
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .plane.night li { color: var(--on-dark-soft); border-top-color: #302d3c; }
+  .plane li b { color: var(--ink); font-weight: 650; }
+  .plane.night li b { color: var(--on-dark); }
+
+  /* ---------------- checklist ---------------- */
+
+  .checklist { margin: 1.9rem 0 0; padding: 0; list-style: none; }
+  .checklist li {
+    font-size: 0.97rem;
+    line-height: 1.55;
+    color: var(--ink-mute);
+    padding: 0.85rem 0 0.85rem 1.9rem;
+    border-top: 1px solid var(--rule);
+    position: relative;
+  }
+  .checklist li:last-child { border-bottom: 1px solid var(--rule); }
+  .checklist li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 1.35em;
+    width: 0.62rem;
+    height: 0.62rem;
+    border-radius: 50%;
+    background: var(--lime);
+  }
+  .checklist b { color: var(--ink); font-weight: 650; }
+  .band-dark .checklist li { color: var(--on-dark-soft); border-top-color: #302d3c; }
+  .band-dark .checklist li:last-child { border-bottom-color: #302d3c; }
+  .band-dark .checklist b { color: var(--on-dark); }
+
+  /* ---------------- code ---------------- */
+
+  pre {
+    background: var(--dark);
+    color: #efedf5;
+    border-radius: 14px;
+    padding: 1.2rem 1.3rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.79rem;
+    line-height: 1.68;
+    margin: 1.9rem 0 0.65rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+  pre .c { color: #75727f; }
+  pre .k { color: var(--lime); }
+  pre .s { color: #cfc9ff; }
+  .caption { font-size: 0.82rem; color: var(--ink-mute); margin: 0 0 1.6rem; }
+  .band-dark .caption { color: var(--on-dark-mute); }
+
+  /* ---------------- try box ---------------- */
+
+  .try {
+    background: var(--dark-2);
+    border-radius: 16px;
+    padding: 1.7rem 1.6rem 1.8rem;
+    margin: 2.3rem 0 0;
+  }
+  .try .kicker {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lime);
+    margin: 0 0 1.1rem;
+  }
+  .try ol { counter-reset: t; list-style: none; margin: 0; padding: 0; }
+  .try li { counter-increment: t; position: relative; padding: 0 0 1.2rem 2.6rem; }
+  .try li:last-child { padding-bottom: 0; }
+  .try li::before {
+    content: counter(t);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    background: var(--lime);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .try .step { display: block; font-size: 0.97rem; font-weight: 650; color: var(--on-dark); margin-bottom: 0.5rem; line-height: 1.4; }
+  .try .cmd {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: var(--dark);
+    color: #efedf5;
+    border-radius: 10px;
+    padding: 0.65rem 0.9rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .try .cmd .p { color: #75727f; }
+  .try .said {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    background: var(--lime);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 0.32rem 0.9rem;
+    font-weight: 500;
+  }
+  .try .note { font-size: 0.84rem; color: var(--on-dark-mute); line-height: 1.5; margin: 0.5rem 0 0; }
+  .try .note code { background: #2b2836; color: var(--on-dark-soft); }
+
+  /* ---------------- example ---------------- */
+
+  .example {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 1.6rem 1.6rem 1.7rem;
+    margin: 1rem 0 0;
+    box-shadow: 0 1px 2px rgba(20,19,26,.05), 0 8px 20px rgba(20,19,26,.05);
+  }
+  .example .kicker {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin: 0 0 0.7rem;
+  }
+  .example h3 { margin-top: 0; font-size: 1.06rem; }
+  .example p { font-size: 0.95rem; }
+  .example p:last-child { margin-bottom: 0; }
+
+  footer {
+    background: var(--dark);
+    padding: 2.6rem 0 3.4rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--on-dark-mute);
+  }
+  footer a { color: var(--lime); }
+  footer p { color: var(--on-dark-mute); margin: 0; }
+
+  @media (max-width: 640px) {
+    body { font-size: 16.5px; }
+    .nots, .planes { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="band-dark">
+  <div class="wrap">
+    <p class="eyebrow">A design pattern for shared state</p>
+    <h1>Isomorphic<br>Surfaces</h1>
+    <p class="thesis">Two surfaces are isomorphic when everything you can do with a click you can do with a command — and neither can see a state the other can't. <mark>The guarantee doesn't live in either interface.</mark> It lives in the vocabulary they're both restricted to.</p>
+    <p class="byline">worked example → <a href="https://github.com/dglazkov/isocan">isocan</a>, an infinite canvas driven from a browser and a terminal at once</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">01 · The scene</span>Two hands on one canvas</h2>
+    <p class="lede">A person drags an item across a canvas. At the same moment, in a terminal on the same machine, an agent stacks a new version onto that item. Neither waits for the other, and both changes appear on both screens at once, with the right name on each.</p>
+    <p>A shared document with two front ends is ordinary; what isn't is the claim underneath — that no feature belongs to the mouse alone — and a claim like that stays true only if something structural keeps it true.</p>
+  </div>
+
+  <div class="wide">
+    <div class="figure">
+      <svg viewBox="0 0 620 350" role="img" aria-label="A table: a gesture on the left, the named change in the middle, the command on the right, and a fourth column left open for a surface nobody has built yet.">
+        <text x="16" y="18" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="1.2" fill="#a9a6b2">A HAND</text>
+        <text x="196" y="18" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="1.2" fill="#7b61ff">THE WORD</text>
+        <text x="386" y="18" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="1.2" fill="#a9a6b2">A TERMINAL</text>
+        <text x="546" y="18" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="1.2" fill="#7b61ff">NOT BUILT YET</text>
+        <line x1="16" y1="28" x2="604" y2="28" stroke="#14131a" stroke-width="1.2"/>
+
+        <rect x="480" y="32" width="132" height="212" rx="12" fill="#7b61ff" opacity="0.06"/>
+        <rect x="480" y="32" width="132" height="212" rx="12" fill="none" stroke="#7b61ff" stroke-dasharray="4 4" opacity="0.5"/>
+
+        <g font-family="ui-sans-serif, system-ui" font-size="11.5" fill="#14131a">
+          <text x="16" y="60">drag a card</text>
+          <text x="16" y="106">drop a file on it</text>
+          <text x="16" y="152">pin a note to it</text>
+          <text x="16" y="198">type in the thread</text>
+        </g>
+
+        <g>
+          <rect x="126" y="46" width="140" height="22" rx="11" fill="#d9f24b"/>
+          <rect x="126" y="92" width="140" height="22" rx="11" fill="#d9f24b"/>
+          <rect x="126" y="138" width="140" height="22" rx="11" fill="#d9f24b"/>
+          <rect x="126" y="184" width="140" height="22" rx="11" fill="#d9f24b"/>
+        </g>
+        <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle" fill="#14131a">
+          <text x="196" y="61">item.move</text>
+          <text x="196" y="107">item.addVersion</text>
+          <text x="196" y="153">thread.create</text>
+          <text x="196" y="199">thread.reply</text>
+        </g>
+
+        <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle" fill="#4a4854">
+          <text x="386" y="61">isocan mv …</text>
+          <text x="386" y="107">isocan edit …</text>
+          <text x="386" y="153">isocan comment add …</text>
+          <text x="386" y="199">isocan comment reply …</text>
+        </g>
+
+        <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle" fill="#7b61ff">
+          <text x="546" y="61">a tool call?</text>
+          <text x="546" y="107">a phone gesture?</text>
+          <text x="546" y="153">a voice note?</text>
+          <text x="546" y="199">a chat message?</text>
+        </g>
+
+        <line x1="16" y1="258" x2="604" y2="258" stroke="#14131a" stroke-width="1.2"/>
+
+        <rect x="16" y="272" width="588" height="62" rx="14" fill="#14131a"/>
+        <text x="310" y="298" text-anchor="middle" font-family="ui-sans-serif, system-ui" font-size="13.5" font-weight="640" fill="#f6f4f0">A new surface doesn't need a plan. It needs the column.</text>
+        <text x="310" y="320" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#8b8894">speak the same words and you arrive complete — no re-deriving what “move” means</text>
+      </svg>
+      <figcaption>Capability lives in the middle column. A gesture and a command are two spellings of one word, and the room on the right is the point: anything that learns to say those words inherits all of it at once.</figcaption>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <p><em>Isomorphic</em> is borrowed from mathematics: a structure-preserving map that runs both ways. Between interfaces it means the set of things each one can express is the same set, acting on one state. Not similar — the same. Two nearby ideas it is not:</p>
+
+    <div class="nots">
+      <div class="not">
+        <span class="tag">Not this</span>
+        <h4>Isomorphic JavaScript</h4>
+        <p>That term means one codebase running on both server and client — a deployment property. This is about capability parity across interfaces, a different axis entirely. The code need not be shared; the vocabulary must be.</p>
+      </div>
+      <div class="not">
+        <span class="tag">Not this</span>
+        <h4>A CLI wrapper on an app</h4>
+        <p>A wrapper mirrors whatever subset someone got around to mirroring. The app team ships a feature; the CLI team catches up; the gap becomes a backlog item that never reaches zero. Parity by effort always decays.</p>
+      </div>
+    </div>
+
+    <p class="pull">Isomorphism is not a property of your interfaces. It is a property of the <em>vocabulary</em> you refuse to let them escape.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">02 · The pattern</span>Name the changes, not the screens</h2>
+    <p>The pattern is three commitments, and none of them is about how anything is built.</p>
+
+    <ol class="mech">
+      <li>
+        <h3>Enumerate what can change</h3>
+        <p>Every change the state can undergo is a named value in one closed set — defined before any interface exists, and belonging to none of them. Not an API per client. One list.</p>
+      </li>
+      <li>
+        <h3>Give surfaces no other way in</h3>
+        <p>An interface's only power is to author values from that set. A drag is one way to say "move this"; a command is another. Neither has a private door, so there is nothing for one to have that the other lacks.</p>
+      </li>
+      <li>
+        <h3>Keep one state, and tell everyone</h3>
+        <p>Changes are applied in one place, to one state, and every surface is told. Parity of <em>capability</em> without parity of <em>view</em> is only half the property — both surfaces have to be looking at the same thing.</p>
+      </li>
+    </ol>
+
+    <p style="margin-top:1.9rem">What follows from that is the useful part: the set is now the definition of the product. A capability that isn't in it doesn't exist for anyone, and one that is in it exists for everyone — including surfaces nobody has built yet.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">03 · The line</span>What is deliberately <em>not</em> isomorphic</h2>
+    <p>The pattern is usually explained as "make everything symmetric," which is wrong and makes it unbuildable. Isomorphism binds the <strong>durable plane</strong> — the state everyone shares and the record that proves it. The <strong>ephemeral plane</strong> is where surfaces are allowed to be themselves, and drawing that line in the right place is the actual design work.</p>
+
+    <div class="planes">
+      <div class="plane light">
+        <p class="kicker">Bound by the contract</p>
+        <h4>The durable plane</h4>
+        <p class="sub">logged · replayable · undoable · shared</p>
+        <ul>
+          <li><b>Content and structure</b> — what exists, where, in what version</li>
+          <li><b>Conversation</b> — threads, replies, what they're pinned to</li>
+          <li><b>Attribution</b> — the identity stamped on every change</li>
+          <li><b>History</b> — the record itself, and how to walk it back</li>
+        </ul>
+      </div>
+      <div class="plane night">
+        <p class="kicker">Free to differ</p>
+        <h4>The ephemeral plane</h4>
+        <p class="sub">in memory · broadcast · expiring · per-viewer</p>
+        <ul>
+          <li><b>Presence</b> — cursors, sessions, "what I'm doing right now," expiring on a timeout so a crashed client doesn't haunt the canvas</li>
+          <li><b>Viewport</b> — where each surface is looking, at what zoom</li>
+          <li><b>Read state</b> — what <em>you</em> have seen, kept by you</li>
+          <li><b>Undo scope</b> — shared state, but each actor's undo walks only their own changes</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="pull">Isomorphism binds the durable plane. The ephemeral plane is where a terminal gets to be <em>a terminal</em>.</p>
+
+    <p>That last row is the subtle one. Undo is usually thought of as a property of a document, but in a shared document a global undo stack means your last action can be erased by someone else's reflex. Actor-scoped undo keeps the state shared and the history personal — asymmetric on purpose, because symmetry there would be a bug.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">04 · The consequence</span>The contract is a seam teams can build against</h2>
+    <p>Once the vocabulary is the contract rather than any one client, it becomes an organizational boundary. The interface team and the agent-surface team each build against the set of changes, not against each other's release schedule. Neither is downstream.</p>
+
+    <ul class="checklist">
+      <li><b>Completeness becomes mechanical.</b> "Is the CLI finished?" is a judgment call. "Does every change have a command?" is a test — one you can actually run in CI.</li>
+      <li><b>New surfaces arrive complete.</b> A mobile client, a tool server, a bot inherits the full capability set by speaking the same words. Nobody re-derives what "move an item" means, or gets it subtly wrong.</li>
+      <li><b>The vocabulary routes feature work.</b> If a feature needs a new entry, it is durable and every surface gets it. If it can be built without one, it belongs to the ephemeral plane by definition. The question answers itself.</li>
+      <li><b>The cost, stated plainly.</b> Nobody extends the set unilaterally, and every addition owes a way to undo it. That coordination is the price — and it is the <em>only</em> place coordination is required, which is the whole trade.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="band-dark">
+  <div class="wrap">
+    <h2><span class="num">05 · Why now</span>Your collaborator might not have a mouse</h2>
+    <p>The pattern has always been good hygiene. What makes it urgent is that software now has a second kind of user, and that user is most fluent in text.</p>
+    <p>An agent <em>can</em> drive a mouse: read the screen, find the button, click it. But that is a reconstruction — state inferred from pixels, intent squeezed through an interface built for hands, and the work reported back in prose because there is no other channel. It often succeeds, and it is lossy in every direction.</p>
+    <p>An agent pointed at an isomorphic surface issues the same changes the interface issues. Its work appears on the human's screen as it happens, attributed and undoable, indistinguishable in kind from a collaborator's. There is no "let me tell you what I did," because you watched.</p>
+
+    <h3>Granularity is freedom</h3>
+    <p>The deeper effect is where the line gets drawn. Without a vocabulary, every capability an agent is given is a separate judgment call — someone decides which task deserves an entry point — and that line is almost always drawn too high. You end up exposing a handful of coarse, task-shaped hooks: <em>generate the summary</em>, <em>publish the page</em>. The agent can do those things and nothing between them.</p>
+    <p>Enumerating changes at their natural grain removes the judgment. The line falls where the state's own joints are, which is as low as it goes, and the agent composes from primitives instead of petitioning for a feature. It can then do things nobody designed a hook for — which is exactly what you want from a collaborator, and exactly what a coarse interface forbids.</p>
+
+    <p class="pull">A surface only an agent inhabits is a house it lives in. A surface both can drive is a <em>stage they dance on</em>.</p>
+
+    <p>That is the shift worth naming. Building for agents usually means building a container — a room the agent works inside, whose walls are whatever hooks it was handed, and whose output is a report. An isomorphic surface isn't a container. It is a shared place, where the human and the agent make changes of the same kind, in the same units, in front of each other. The prize isn't automation. It is that presence becomes truthful, and a machine collaborator becomes a peer rather than a process you supervise.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">06 · Worked example</span>isocan</h2>
+    <p><a href="https://github.com/dglazkov/isocan">isocan</a> — short for <strong>isomorphic canvas</strong> — is an infinite canvas built to hold the claim rather than describe it. A local daemon owns the state; the web app and the <code>isocan</code> CLI are equal clients over it. Every change is a value from one set, posted to one endpoint, applied by one function that the daemon runs authoritatively and the browser runs against a replica.</p>
+
+    <pre><code><span class="c">// the contract, abridged — packages/core/src/ops.ts</span>
+<span class="k">export type</span> Operation =
+  | { type: <span class="s">"item.add"</span>; itemId; version; width; height; placement }
+  | { type: <span class="s">"item.move"</span>; itemId; x; y }
+  | { type: <span class="s">"item.addVersion"</span>; itemId; version }
+  | { type: <span class="s">"thread.create"</span>; threadId; x; y; anchorItemId; comment }
+  | { type: <span class="s">"thread.reply"</span>; threadId; comment }
+  <span class="c">// …every mutation either surface can perform, and nothing else</span></code></pre>
+    <p class="caption">If it isn't here, no surface can do it. If it is here, both can.</p>
+
+    <p>Four implementation choices hold the three commitments in place — the pattern doesn't require these, but something has to play their part:</p>
+
+    <ul class="checklist">
+      <li><b>One write endpoint.</b> A second write path is where two surfaces begin to differ, so there isn't one.</li>
+      <li><b>One reducer, several runtimes.</b> A pure <code>(state, op) → state</code> function, run by the daemon authoritatively, again to replay the log after a crash, and again by the browser against its replica — the same function, not the same behavior reimplemented.</li>
+      <li><b>Transient context resolved before the record.</b> A surface may say "put this next to the item I have selected"; the daemon turns that into coordinates before logging, so the durable record never depends on a view only one surface had.</li>
+      <li><b>Every operation carries its inverse</b>, computed from pre-state. An operation you can't invert is one you haven't finished designing.</li>
+    </ul>
+
+    <div class="try">
+      <p class="kicker">Put an agent on a canvas — three steps</p>
+      <ol>
+        <li>
+          <span class="step">Add the skill to your project.</span>
+          <code class="cmd"><span class="p">$ </span>npx skills add dglazkov/isocan</code>
+        </li>
+        <li>
+          <span class="step">Start your agent there.</span>
+          <p class="note">Any harness that reads <code>.agents/skills/</code> — the skill is one file, not a per-vendor copy.</p>
+        </li>
+        <li>
+          <span class="step">Tell it:</span>
+          <span class="said">use isocan</span>
+          <p class="note">It installs the CLI and starts the daemon itself, picks a name of its own, and hands you the URL. You open the app, pick <em>your</em> name, and make the canvas — the agent deliberately doesn't, so no canvas is stamped with whoever typed the command.</p>
+        </li>
+      </ol>
+    </div>
+
+    <div class="example">
+      <p class="kicker">What the pattern buys, in practice</p>
+      <h3>An agent that is visibly in the room</h3>
+      <p>Because presence is a first-class ephemeral plane, an agent working through the CLI shows up as a named cursor that moves to wherever its last change landed — and a comment thread is the channel it answers on. The human watches the work arrive rather than reading a report about it.</p>
+      <p>Because the state is durable and the vocabulary complete, that same agent can be handed the canvas cold: it lists what's there, reads the threads, edits an item into a new version, and replies — every step something the human could have done by hand, and can see, and can undo.</p>
+    </div>
+
+    <p style="margin-top:2rem">The pattern generalizes past canvases. Anything with shared state and more than one kind of user — editors, dashboards, issue trackers, design tools — can be built this way. What it costs is the discipline to name the changes first and route everything through them. What it buys is that the second surface is never the lesser one.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>source and worked example → <a href="https://github.com/dglazkov/isocan">github.com/dglazkov/isocan</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
