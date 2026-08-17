@@ -406,7 +406,7 @@
     <p class="eyebrow">A design pattern for shared state</p>
     <h1>Isomorphic<br>Surfaces</h1>
     <p class="thesis">Two surfaces are isomorphic when everything you can do with a click you can do with a command — and neither can see a state the other can't. <mark>The guarantee doesn't live in either interface.</mark> It lives in the vocabulary they're both restricted to.</p>
-    <p class="byline">worked example → <a href="https://github.com/dglazkov/isocan">isocan</a>, an infinite canvas driven from a browser and a terminal at once</p>
+    <p class="byline">working example → <a href="https://github.com/dglazkov/isocan">isocan</a>, an infinite canvas driven from a browser and a terminal at once</p>
   </div>
 </header>
 
@@ -586,7 +586,7 @@
 
 <section>
   <div class="wrap">
-    <h2><span class="num">06 · Worked example</span>isocan</h2>
+    <h2><span class="num">06 · Working example</span>isocan</h2>
     <p><a href="https://github.com/dglazkov/isocan">isocan</a> — short for <strong>isomorphic canvas</strong> — is an infinite canvas built to hold the claim rather than describe it. A local daemon owns the state; the web app and the <code>isocan</code> CLI are equal clients over it. Every change is a value from one set, posted to one endpoint, applied by one function that the daemon runs authoritatively and the browser runs against a replica.</p>
 
     <pre><code><span class="c">// the contract, abridged — packages/core/src/ops.ts</span>
@@ -632,6 +632,7 @@
       <h3>An agent that is visibly in the room</h3>
       <p>Because presence is a first-class ephemeral plane, an agent working through the CLI shows up as a named cursor that moves to wherever its last change landed — and a comment thread is the channel it answers on. The human watches the work arrive rather than reading a report about it.</p>
       <p>Because the state is durable and the vocabulary complete, that same agent can be handed the canvas cold: it lists what's there, reads the threads, edits an item into a new version, and replies — every step something the human could have done by hand, and can see, and can undo.</p>
+      <p><strong>This page is one of those artifacts.</strong> It was built on an isocan canvas: the outline argued out in a comment thread, the diagram chosen from variants pinned side by side, the design system picked the same way, each round landing as a new version on the same item while the other party watched it arrive. Then it was committed here.</p>
     </div>
 
     <p style="margin-top:2rem">The pattern generalizes past canvases. Anything with shared state and more than one kind of user — editors, dashboards, issue trackers, design tools — can be built this way. What it costs is the discipline to name the changes first and route everything through them. What it buys is that the second surface is never the lesser one.</p>
@@ -640,7 +641,8 @@
 
 <footer>
   <div class="wrap">
-    <p>source and worked example → <a href="https://github.com/dglazkov/isocan">github.com/dglazkov/isocan</a></p>
+    <p>this page was written, redesigned and revised on an isocan canvas — then committed as <code>docs/index.html</code></p>
+    <p style="margin-top:0.6rem">source and working example → <a href="https://github.com/dglazkov/isocan">github.com/dglazkov/isocan</a></p>
   </div>
 </footer>
 
