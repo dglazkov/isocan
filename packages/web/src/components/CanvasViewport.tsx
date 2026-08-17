@@ -4,6 +4,7 @@ import { parseUriList } from "@isocan/core";
 import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
+import { zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
@@ -21,11 +22,13 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
+  const activeTool = useUiStore((s) => s.activeTool);
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
   const [panning, setPanning] = useState(false);
   const spaceDown = useRef(false);
+  const zDown = useRef(false);
 
   // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
   // or a gesture event (Safari). Left alone, the browser zooms the whole page —
@@ -91,27 +94,52 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     };
   }, []);
 
-  // Track spacebar for space-drag panning.
+  // Hold-to-mode keys: Space for a momentary grab (pan-drag), Z for zoom-to-node
+  // (hold Z, click an item, land on it). Both are *held*, not toggled — release
+  // returns to the current tool.
   useEffect(() => {
     function down(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
       if (e.code === "Space") spaceDown.current = true;
+      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) zDown.current = true;
     }
     function up(e: KeyboardEvent) {
       if (e.code === "Space") spaceDown.current = false;
+      if (e.code === "KeyZ") zDown.current = false;
+    }
+    // Hold-Z + click a node → fit it. A capture-phase listener runs before the
+    // item's own pointerdown (which stops propagation), so we win the click and
+    // swallow it so it neither selects nor drags.
+    function onZoomClick(e: PointerEvent) {
+      if (!zDown.current || e.button !== 0) return;
+      const el = (e.target as HTMLElement).closest?.("[data-item-id]");
+      const itemId = el?.getAttribute("data-item-id");
+      if (!itemId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      zoomToItem(itemId);
     }
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("pointerdown", onZoomClick, true);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("pointerdown", onZoomClick, true);
     };
   }, []);
 
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
-    const wantsPan = e.button === 1 || (spaceDown.current && e.button === 0);
+    // Middle-drag, Space-drag, or the Hand tool all pan. The Hand tool pans
+    // from anywhere (an item yields its pointer when it is active), so it is
+    // not gated on the background.
+    const wantsPan =
+      e.button === 1 ||
+      ((spaceDown.current || activeTool === "hand") && e.button === 0);
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
       const ui = useUiStore.getState();
@@ -240,7 +268,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}`}
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}`}
       style={{
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,

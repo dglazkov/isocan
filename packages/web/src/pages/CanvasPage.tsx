@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -15,9 +15,11 @@ import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { CommandBar } from "../components/CommandBar.tsx";
+import { CanvasTools } from "../components/CanvasTools.tsx";
+import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
-import { Shelf } from "../components/Shelf.tsx";
 import { Minimap } from "../components/Minimap.tsx";
+import { zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
@@ -135,15 +137,6 @@ export function CanvasPage({
     };
   }, [canvas, seen, actor.id]);
 
-  const zoomToFit = useCallback(() => {
-    const current = useCanvasStore.getState().canvas;
-    if (!current) return;
-    const box = itemsBounds(current);
-    if (box) {
-      useUiStore.getState().setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
-    }
-  }, []);
-
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
     if (!projectId) return;
@@ -185,6 +178,7 @@ export function CanvasPage({
         else if (ui.pendingComment) ui.setPendingComment(null);
         else if (ui.openThreadId) ui.setOpenThread(null);
         else if (ui.commentMode) ui.setCommentMode(false);
+        else if (ui.activeTool !== "select") ui.setActiveTool("select");
         else if (ui.fannedItemId) ui.setFanned(null);
         else if (ui.enteredItemId) ui.setEntered(null);
         else ui.select(null);
@@ -193,15 +187,26 @@ export function CanvasPage({
           const only = ui.selectedItemIds[0]!;
           ui.setFanned(ui.fannedItemId === only ? null : only);
         }
+      } else if (e.shiftKey && e.code === "Digit0") {
+        e.preventDefault();
+        zoomTo100();
+      } else if (e.shiftKey && e.code === "Digit1") {
+        e.preventDefault();
+        zoomToFit();
+      } else if (e.shiftKey && e.code === "Digit2") {
+        e.preventDefault();
+        zoomToSelection();
       } else if (e.key === "0") {
         zoomToFit();
+      } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
+        ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [projectId, actor, zoomToFit]);
+  }, [projectId, actor]);
 
   if (!projectId) return null;
 
@@ -230,7 +235,8 @@ export function CanvasPage({
           Watching {followedLabel} — Esc to stop
         </button>
       )}
-      <Shelf projectId={projectId} actor={actor} onZoomToFit={zoomToFit} />
+      <CanvasTools />
+      <ZoomControls projectId={projectId} actor={actor} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
       <MainThreadPanel projectId={projectId} actor={actor} />

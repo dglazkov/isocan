@@ -59,6 +59,9 @@ export function ItemView({
     if (entered) return; // entered content owns the pointer
 
     const ui = useUiStore.getState();
+    // Hand tool: yield the pointer (no stopPropagation) so the drag bubbles to
+    // the viewport and pans, even though it started on this item.
+    if (ui.activeTool === "hand") return;
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
