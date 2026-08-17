@@ -2,18 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
-import { mainThread, newThreadId } from "@isocan/core";
+import { mainThread } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
+import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { centerOn, screenToWorld } from "../lib/viewport.ts";
+import { centerOn } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { markRead } from "../stores/unreadStore.ts";
-import { makeComment } from "./CommentLayer.tsx";
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -110,41 +110,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   if (!canvas) return null; // reconnecting — parent unmounts us next render
 
   async function send(body: string) {
-    const existing = mainThread(useCanvasStore.getState().canvas ?? canvas!);
-    if (existing) {
-      await sendOp(projectId, actor, {
-        type: "thread.reply",
-        threadId: existing.id,
-        comment: makeComment(body),
-      });
-      return;
-    }
-    // First message births the thread. Its coordinates are where the pin
-    // lands if it is ever demoted — the middle of the current view.
-    const ui = useUiStore.getState();
-    const center = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
-    try {
-      await sendOp(projectId, actor, {
-        type: "thread.create",
-        threadId: newThreadId(),
-        x: Math.round(center.x),
-        y: Math.round(center.y),
-        anchorItemId: null,
-        main: true,
-        comment: makeComment(body),
-      });
-    } catch {
-      // Lost a birth race ("main-exists") — the winner's thread is the
-      // channel now; deliver the message there.
-      const winner = mainThread(useCanvasStore.getState().canvas ?? canvas!);
-      if (winner) {
-        await sendOp(projectId, actor, {
-          type: "thread.reply",
-          threadId: winner.id,
-          comment: makeComment(body),
-        });
-      }
-    }
+    await postToMain(projectId, actor, body);
   }
 
   function chipTarget(e: { target: EventTarget }): string | null {
