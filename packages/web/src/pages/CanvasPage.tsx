@@ -183,10 +183,7 @@ export function CanvasPage({
         else if (ui.enteredItemId) ui.setEntered(null);
         else ui.select(null);
       } else if (e.key.toLowerCase() === "v" && !e.metaKey && !e.ctrlKey) {
-        if (ui.selectedItemIds.length === 1) {
-          const only = ui.selectedItemIds[0]!;
-          ui.setFanned(ui.fannedItemId === only ? null : only);
-        }
+        ui.setActiveTool("select"); // V selects the Select tool (Figma-standard)
       } else if (e.shiftKey && e.code === "Digit0") {
         e.preventDefault();
         zoomTo100();

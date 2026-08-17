@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
 import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
-import { useUiStore } from "../stores/uiStore.ts";
+import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
@@ -27,7 +27,8 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
   const [panning, setPanning] = useState(false);
-  const spaceDown = useRef(false);
+  // The tool to restore when a momentary Space-grab ends (null when not held).
+  const spacePrevTool = useRef<Tool | null>(null);
   const zDown = useRef(false);
 
   // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
@@ -94,20 +95,28 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     };
   }, []);
 
-  // Hold-to-mode keys: Space for a momentary grab (pan-drag), Z for zoom-to-node
-  // (hold Z, click an item, land on it). Both are *held*, not toggled — release
-  // returns to the current tool.
+  // Hold-to-mode keys: Space for a momentary Hand grab, Z for zoom-to-node
+  // (hold Z, click an item, land on it). Both are *held*, not toggled — Space
+  // switches to Hand while down and restores the previous tool on release, so
+  // the rail and cursor reflect the grab and then snap back.
   useEffect(() => {
     function down(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         return;
       }
-      if (e.code === "Space") spaceDown.current = true;
+      if (e.code === "Space" && spacePrevTool.current === null) {
+        const ui = useUiStore.getState();
+        spacePrevTool.current = ui.activeTool; // capture once; keydown repeats while held
+        ui.setActiveTool("hand");
+      }
       if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) zDown.current = true;
     }
     function up(e: KeyboardEvent) {
-      if (e.code === "Space") spaceDown.current = false;
+      if (e.code === "Space" && spacePrevTool.current !== null) {
+        useUiStore.getState().setActiveTool(spacePrevTool.current);
+        spacePrevTool.current = null;
+      }
       if (e.code === "KeyZ") zDown.current = false;
     }
     // Hold-Z + click a node → fit it. A capture-phase listener runs before the
@@ -134,12 +143,10 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
 
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
-    // Middle-drag, Space-drag, or the Hand tool all pan. The Hand tool pans
-    // from anywhere (an item yields its pointer when it is active), so it is
-    // not gated on the background.
-    const wantsPan =
-      e.button === 1 ||
-      ((spaceDown.current || activeTool === "hand") && e.button === 0);
+    // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
+    // through activeTool too.) The Hand tool pans from anywhere — an item
+    // yields its pointer when it is active — so it is not gated on background.
+    const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
       const ui = useUiStore.getState();

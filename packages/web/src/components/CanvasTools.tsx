@@ -3,10 +3,10 @@ import { type Tool, useUiStore } from "../stores/uiStore.ts";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
- * default (click + marquee); Hand pans on drag (like holding Space); Comment
- * drops pins. The active tool is the store's `activeTool`; each also answers to
- * a letter — Hand=H, Comment=C — while Select is Esc or this button (V stays
- * bound to version fan-out).
+ * default (click + marquee); Hand pans on drag (also momentary while Space is
+ * held); Comment drops pins. The active tool is the store's `activeTool`; each
+ * answers to a letter — Select=V, Hand=H, Comment=C — and Esc returns to Select.
+ * (Version fan-out, once on V, lives on an item's version badge.)
  */
 
 interface ToolDef {
@@ -41,7 +41,7 @@ const COMMENT = (
 );
 
 const TOOLS: ToolDef[] = [
-  { tool: "select", label: "Select", hint: "Select — Esc", icon: CURSOR },
+  { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
