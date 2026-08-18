@@ -325,9 +325,17 @@ export function CanvasPage({
           );
           ui.select(null);
         }
+      } else if (e.key === "F2") {
+        // Rename the selection, the way a file manager would.
+        const ids = ui.selectedItemIds;
+        if (ids.length === 1) {
+          e.preventDefault();
+          ui.setRenaming(ids[0]!);
+        }
       } else if (e.key === "Escape") {
         // Watching is the outermost mode: Esc hands the camera back first.
-        if (ui.followSessionId) ui.setFollow(null);
+        if (ui.renamingItemId) ui.setRenaming(null);
+        else if (ui.followSessionId) ui.setFollow(null);
         else if (ui.pendingComment) ui.setPendingComment(null);
         else if (ui.openThreadId) ui.setOpenThread(null);
         else if (ui.commentMode) ui.setCommentMode(false);

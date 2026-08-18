@@ -89,6 +89,15 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
   through a stack of them.
+- **Names**: an item's name sits above it rather than inside a chrome bar —
+  the item is the content — and stays hidden until you point at the item or
+  select it, so a canvas of sketches reads as the sketches rather than as a
+  column of the word "Sketch". Double-click the label (or `F2` on the selection) to
+  rename in place — the label itself becomes the field, same type and same
+  spot — and the file underneath follows: "Bass tab v2" makes
+  `bass-tab-v2.png`, keeping the extension, so what you call a thing on the
+  canvas is what `isocan get` hands you. A name already spoken for on the
+  canvas steps aside to `-2`. One op, so name and file undo together.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
   subtle elevation plies hint at the stack; fan it out (`V`) to preview and
   promote any version.
@@ -106,6 +115,18 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   axis has no line to claim it, equal spacing does: dropped between two
   neighbours, the item centers itself and purple measure bars — a rule with end
   caps across each gap — say the two distances match.
+- **The edge radar**: items that pan out of sight leave a bar lying flush along
+  the rim, where a ray from the middle of the screen leaves the window and as
+  long as the thing out there would be — the edge becomes a shadow of what is
+  off screen, and nothing juts into the canvas. Bars on the same wall that
+  overlap merge into one; hovering lists everything that bar speaks for —
+  thumbnail, title, and its own distance, nearest first — and any row takes you
+  to that item, while the bar itself fits the whole group. Only items entirely
+  out of sight get one: something with a corner still showing is already
+  telling you where it is.
+- **The minimap folds away**: hover it for the fold control and it slides into
+  its corner, leaving a handle that slides it back. Remembered per browser, and
+  instant for anyone who has asked for less motion.
 - **Walking the canvas**: `⌘`/`Ctrl` + an arrow moves the SELECTION to the next
   item that way — edge distance with a heavy penalty on sideways drift, so a
   walk stays in its row instead of wandering to whatever is nearest in a

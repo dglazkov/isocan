@@ -106,7 +106,16 @@ export type Operation =
     }
   | { type: "item.move"; itemId: string; x: number; y: number }
   | { type: "item.resize"; itemId: string; width: number; height: number }
-  | { type: "item.update"; itemId: string; patch: MetaPatch }
+  | {
+      type: "item.update";
+      itemId: string;
+      patch: MetaPatch;
+      /** Rename the file under the CURRENT version too. Renaming an item and
+       * renaming its file are one act — one op, so they are one undo — and the
+       * filename is a property of the version, which is why it rides here
+       * rather than in the patch (which projects share). */
+      filename?: string;
+    }
   | { type: "item.addVersion"; itemId: string; version: NewVersion }
   | { type: "item.setCurrentVersion"; itemId: string; versionId: string }
   | {

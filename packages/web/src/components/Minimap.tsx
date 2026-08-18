@@ -8,10 +8,17 @@ const MAP_W = 168;
 const MAP_H = 108;
 const PAD = 8;
 
-/** Full-canvas preview: item rects, everyone's presence dot, and the current
- * viewport rectangle. Click or drag to move the view. */
+/**
+ * Full-canvas preview: item rects, everyone's presence dot, and the current
+ * viewport rectangle. Click or drag to move the view.
+ *
+ * It folds away into its corner for anyone who would rather have the canvas:
+ * the map slides down and out, leaving a small handle anchored where it was,
+ * and the handle slides it back. The choice is remembered per browser.
+ */
 export function Minimap() {
   const colors = useActorColors();
+  const open = useUiStore((s) => s.minimapOpen);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
@@ -74,14 +81,33 @@ export function Minimap() {
   }
 
   return (
-    <svg
-      className="minimap"
-      width={MAP_W}
-      height={MAP_H}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-    >
-      {Object.values(canvas.items).map((item) => (
+    <div className={`minimap-dock${open ? "" : " folded"}`}>
+      <button
+        className="minimap-handle"
+        title="Show the minimap"
+        aria-label="Show the minimap"
+        aria-expanded={open}
+        onClick={() => useUiStore.getState().setMinimapOpen(true)}
+      >
+        {MAP_GLYPH}
+      </button>
+      <div className="minimap-panel">
+        <button
+          className="minimap-fold"
+          title="Hide the minimap"
+          aria-label="Hide the minimap"
+          onClick={() => useUiStore.getState().setMinimapOpen(false)}
+        >
+          ⌄
+        </button>
+        <svg
+          className="minimap"
+          width={MAP_W}
+          height={MAP_H}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+        >
+          {Object.values(canvas.items).map((item) => (
         <rect
           key={item.id}
           x={mapX(item.x)}
@@ -92,7 +118,7 @@ export function Minimap() {
           rx={1}
         />
       ))}
-      {standing.map(({ session, locus }) => (
+          {standing.map(({ session, locus }) => (
         <circle
           key={session.sessionId}
           className={`minimap-dot${session.activity ? " working" : ""}${
@@ -108,16 +134,24 @@ export function Minimap() {
           <title>{session.label ?? session.actor.name}</title>
         </circle>
       ))}
-      <rect
-        x={mapX(vpTopLeft.x)}
-        y={mapY(vpTopLeft.y)}
-        width={(vpBottomRight.x - vpTopLeft.x) * scale}
-        height={(vpBottomRight.y - vpTopLeft.y) * scale}
-        fill="none"
-        stroke="#1f3fd0"
-        strokeWidth={1.5}
-        rx={2}
-      />
-    </svg>
+          <rect
+            x={mapX(vpTopLeft.x)}
+            y={mapY(vpTopLeft.y)}
+            width={(vpBottomRight.x - vpTopLeft.x) * scale}
+            height={(vpBottomRight.y - vpTopLeft.y) * scale}
+            fill="none"
+            stroke="#1f3fd0"
+            strokeWidth={1.5}
+            rx={2}
+          />
+        </svg>
+      </div>
+    </div>
   );
 }
+
+const MAP_GLYPH = (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+    <path d="M1.5 4.2 5.8 2.4v9.4L1.5 13.6zM5.8 2.4l4.4 1.8v9.4L5.8 11.8zM10.2 4.2l4.3-1.8v9.4l-4.3 1.8z" />
+  </svg>
+);

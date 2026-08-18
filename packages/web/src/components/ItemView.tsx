@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
-import { BROWSER_MIME, isDrawingItem, parseUriList } from "@isocan/core";
+import { BROWSER_MIME, isDrawingItem, parseUriList, renamedFilename } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
@@ -10,6 +10,8 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 
 const DRAG_SLOP = 4;
+/** Two presses this close together are one double-press. */
+const DOUBLE_PRESS_MS = 450;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same
 // pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
 // magnetic, for when you are aiming at a line rather than a place.
@@ -35,6 +37,7 @@ export function ItemView({
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const entered = useUiStore((s) => s.enteredItemId === item.id);
+  const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const commentMode = useUiStore((s) => s.commentMode);
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
@@ -42,6 +45,8 @@ export function ItemView({
     return holder ? holder.actor.id : null;
   });
   const worker = useWorkingSession(item.id);
+  // When the label was last pressed, for spotting a double-press on it.
+  const labelPress = useRef(0);
 
   const x = (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
   const y = (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
@@ -82,6 +87,28 @@ export function ItemView({
     }
 
     e.stopPropagation();
+
+    // A second press on the label row starts a rename — the row, not just the
+    // text: a short title leaves most of the strip bare, and aiming at five
+    // characters is not an affordance. It is caught HERE rather
+    // than with an onDoubleClick on the label, because the drag below captures
+    // the pointer, and a captured pointer retargets the click and dblclick
+    // that follow to the frame — the label would never hear its own event.
+    // The count is kept by hand: a pointerdown carries no click count (detail
+    // is 0 on pointer events), so the pair has to be recognized by the clock.
+    if (target.closest(".item-titlebar")) {
+      const now = Date.now();
+      if (now - labelPress.current < DOUBLE_PRESS_MS) {
+        labelPress.current = 0;
+        // Without this the browser's own focus-on-press lands AFTER the field
+        // mounts, moving focus off it — the editor would open and blur itself
+        // shut inside a frame.
+        e.preventDefault();
+        ui.setRenaming(item.id);
+        return;
+      }
+      labelPress.current = now;
+    }
 
     if (e.shiftKey) {
       // Shift-click toggles membership; no drag from a shift press.
@@ -240,14 +267,41 @@ export function ItemView({
   }
 
   function onDoubleClick() {
+    const ui = useUiStore.getState();
     // Two quick dots from the Pen are ink, not a request to enter the item.
-    if (useUiStore.getState().activeTool === "pen") return;
-    useUiStore.getState().setEntered(item.id);
+    if (ui.activeTool === "pen") return;
+    // The pointer capture above hands us the label's double-click too; naming
+    // a thing is not the same as stepping inside it.
+    if (ui.renamingItemId === item.id) return;
+    ui.setEntered(item.id);
+  }
+
+  /**
+   * Renaming moves the name AND the file under it: what you call a thing on
+   * the canvas is what it should be called when it leaves — `isocan get`, a
+   * download, the blob's own name. One op, so a rename is one undo, and the
+   * canvas picks the next free name if that one is spoken for.
+   */
+  function rename(next: string) {
+    const ui = useUiStore.getState();
+    ui.setRenaming(null);
+    const title = next.trim();
+    if (title === "" || title === item.title) return;
+    const canvas = useCanvasStore.getState().canvas;
+    const filename = canvas ? renamedFilename(canvas, item.id, title, current.filename) : undefined;
+    const op = {
+      type: "item.update",
+      itemId: item.id,
+      patch: { title },
+      ...(filename && filename !== current.filename ? { filename } : {}),
+    } as const;
+    applyLocalEcho(op, actor);
+    void sendOp(projectId, actor, op);
   }
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}`}
+      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${renaming ? " renaming" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,
@@ -281,9 +335,16 @@ export function ItemView({
         </button>
       )}
       <div className="item-titlebar">
-        <span className="name" title={`${item.title} — last edit by ${item.updatedBy.name}`}>
-          {item.title}
-        </span>
+        {renaming ? (
+          <NameInput title={item.title} onDone={rename} />
+        ) : (
+          <span
+            className="name"
+            title={`${item.title} (${current.filename}) — double-click to rename · last edit by ${item.updatedBy.name}`}
+          >
+            {item.title}
+          </span>
+        )}
         {isBrowser && (
           <button
             className="browser-reload"
@@ -332,6 +393,32 @@ export function ItemView({
         </>
       )}
     </div>
+  );
+}
+
+/** The name, in place. Enter keeps it, Escape puts it back, clicking away
+ * keeps it — the same bargain every rename field in the app makes. */
+function NameInput({ title, onDone }: { title: string; onDone: (next: string) => void }) {
+  const [draft, setDraft] = useState(title);
+  return (
+    <input
+      className="name-input"
+      autoFocus
+      // Sized to what it holds: a full-width field would announce itself as a
+      // form, and this is meant to read as the label you are editing.
+      style={{ width: `${Math.min(Math.max(draft.length, 3) + 1, 40)}ch` }}
+      value={draft}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onBlur={() => onDone(draft)}
+      onKeyDown={(e) => {
+        e.stopPropagation(); // the canvas's shortcuts are not for this field
+        if (e.key === "Enter") onDone(draft);
+        if (e.key === "Escape") onDone(title);
+      }}
+    />
   );
 }
 
