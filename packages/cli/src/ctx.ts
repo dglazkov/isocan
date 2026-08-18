@@ -40,7 +40,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     get actor(): Actor {
       if (!actor) {
         throw new Error(
-          'no identity yet — `isocan identity --name "Your Name" --here` names you for this directory',
+          'no identity yet — `isocan identity --name "Your Name" --session` names this agent',
         );
       }
       return actor;

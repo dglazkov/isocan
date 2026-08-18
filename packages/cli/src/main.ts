@@ -40,12 +40,9 @@ import { paths, stalenessOf } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
 import { ApiError, DaemonClient } from "./client.ts";
 import {
-  findLocalIdentity,
-  localIdentityFile,
   readIdentity,
   resolveIdentity,
   writeIdentity,
-  writeLocalIdentity,
   writeSessionIdentity,
   type NameHolder,
 } from "./identity.ts";
@@ -383,25 +380,20 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
 
 /**
  * Which slot a `--name` writes. Two parties share a machine: the person who
- * owns it (home) and the agents working in its directories.
+ * owns it (home) and the agents working in its sessions.
  *
  * An agent that renames the home identity renames the human — which is
  * exactly what used to happen, since the skill told every agent to introduce
- * itself. So an automated caller (no TTY) writes a directory identity unless
- * it insists on `--home`, and a caller already speaking as a directory
- * identity renames that one. A person at a keyboard is the machine's owner.
+ * itself. So an automated caller (no TTY) names its own session unless it
+ * insists on `--home`; with no harness session in the environment that is an
+ * error, not a silent write somewhere else (`ISOCAN_SESSION_ID` is the answer
+ * for a bare shell or a cron job). A person at a keyboard is the machine's
+ * owner.
  */
-async function identityTarget(
-  home: string,
-  opts: { session?: boolean; here?: boolean; home?: boolean },
-): Promise<{ file: "home" | string; scope: "session" | "home" | "directory" }> {
-  if (opts.session) return { file: "session", scope: "session" };
-  if (opts.here) return { file: process.cwd(), scope: "directory" };
-  if (opts.home) return { file: "home", scope: "home" };
-  const local = await findLocalIdentity(process.cwd(), home);
-  if (local) return { file: path.dirname(path.dirname(local.file)), scope: "directory" };
-  if (process.stdin.isTTY) return { file: "home", scope: "home" };
-  return { file: process.cwd(), scope: "directory" };
+function identityTarget(opts: { session?: boolean; home?: boolean }): "session" | "home" {
+  if (opts.session) return "session";
+  if (opts.home) return "home";
+  return process.stdin.isTTY ? "home" : "session";
 }
 
 program
@@ -412,39 +404,27 @@ program
     "--session",
     "name the agent running this command — what tells two agents in ONE directory apart",
   )
-  .option("--here", "name yourself for THIS directory — what an agent does, leaving the human's name alone")
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
   .action(
     run(
       async (
-        opts: { name?: string; session?: boolean; here?: boolean; home?: boolean; new?: boolean },
+        opts: { name?: string; session?: boolean; home?: boolean; new?: boolean },
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
         if (opts.name) {
-          const target = await identityTarget(home, opts);
+          const scope = identityTarget(opts);
           const bound =
-            target.scope === "session"
+            scope === "session"
               ? await writeSessionIdentity(home, opts.name, opts.new ?? false, await heldNames(cmd))
               : null;
-          const actor =
-            bound?.actor ??
-            (target.scope === "home"
-              ? await writeIdentity(home, opts.name, opts.new ?? false)
-              : await writeLocalIdentity(target.file as string, opts.name, opts.new ?? false));
+          const actor = bound?.actor ?? (await writeIdentity(home, opts.name, opts.new ?? false));
           const where =
-            target.scope === "session"
+            scope === "session"
               ? `${paths.agentsFile(home)} (${bound!.harness} session)`
-              : target.scope === "home"
-                ? paths.identityFile(home)
-                : localIdentityFile(target.file as string);
+              : paths.identityFile(home);
           console.log(`identity saved: ${actor.name} (${actor.id}) → ${where}`);
-          if (target.scope === "directory" && !opts.here) {
-            console.error(
-              "note: named for this directory, not the machine — the home identity is the person's.",
-            );
-          }
           await relabelLiveSession(cmd, actor);
           const taken = await nameCollision(cmd, actor);
           if (taken) {
@@ -462,9 +442,7 @@ program
             scope:
               resolved.source === "session"
                 ? `this agent session (${resolved.harness})`
-                : resolved.source === "home"
-                  ? "this machine's person"
-                  : "this directory",
+                : "this machine's person",
             file: resolved.file,
           });
         }
@@ -480,12 +458,7 @@ program
       const home = paths.isocanHome();
       const resolved = await resolveIdentity(home, process.cwd());
       if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
-      const suffix =
-        resolved.source === "session"
-          ? " — this agent session"
-          : resolved.source === "directory"
-            ? " — in this directory"
-            : "";
+      const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
     }),
   );
@@ -834,9 +807,6 @@ program
         // making a canvas there is one click; a name picked in the browser is
         // the person's, which is the point.
         const home = paths.isocanHome();
-        const agentHere = await findLocalIdentity(target, home);
-        if (agentHere) report.agent = `${agentHere.actor.name} — named for this directory`;
-
         const port = daemonPort(cmd);
         const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
         // The daemon outlives the command that starts it, so it has to belong

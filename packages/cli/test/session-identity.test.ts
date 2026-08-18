@@ -12,9 +12,10 @@ import { harnessVars } from "../src/harness.ts";
  * Two agents, one directory.
  *
  * A directory has one identity file, so agents sharing a checkout used to
- * share a name. Every harness exports a session id into the commands it runs;
- * naming yourself against that id is what makes them two people — without
- * either of them having to be told the other exists.
+ * share a name — which is why there is no directory identity slot (#56).
+ * Every harness exports a session id into the commands it runs; naming
+ * yourself against that id is what makes them two people — without either of
+ * them having to be told the other exists.
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -104,15 +105,6 @@ describe("two agents in one directory", () => {
     const human = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8"));
     expect(human.name).toBe("Nico");
   });
-
-  it("outrank the directory identity without erasing it", async () => {
-    await asAgent({}, "identity", "--name", "Osian", "--here");
-    await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
-
-    expect((await asAgent(claude("s-1"), "whoami")).stdout).toContain("Kenny");
-    // An agent with no session of its own still finds the directory's name.
-    expect((await asAgent({}, "whoami")).stdout).toContain("Osian");
-  });
 });
 
 describe("a session is a key, not a person", () => {
@@ -159,11 +151,11 @@ describe("agents launched by agents", () => {
 });
 
 describe("nothing to name", () => {
-  it("--session says so, and points at the flag that does work", async () => {
+  it("--session says so, and points at the variable that does work", async () => {
     const out = await asAgent({}, "identity", "--name", "Kenny", "--session");
     expect(out.code).not.toBe(0);
     expect(out.stderr).toContain("no harness session");
-    expect(out.stderr).toContain("--here");
+    expect(out.stderr).toContain("ISOCAN_SESSION_ID");
   });
 });
 
@@ -240,15 +232,14 @@ describe("one name, one agent", () => {
     expect((await asAgent(claude("s-2"), "whoami")).stdout).not.toContain("Kenny");
   });
 
-  it("a live name is taken however its wearer got it — a directory name counts", async () => {
-    // The reported failure. A previous agent had left `.isocan/identity.json`
-    // in the checkout, so the Kenny on the canvas belonged to no session at
-    // all, and a guard that only compared session bindings saw nothing.
-    await asAgent({}, "identity", "--name", "Osian", "--here");
+  it("a live name is taken however its wearer got it — the human's counts too", async () => {
+    // The guard compares against everyone a canvas answers to, not just the
+    // session registry: here the Nico on the canvas belongs to no session at
+    // all, and a check that only read session bindings would see nothing.
     await asAgent({}, "project", "create", "Shared");
     await asAgent({}, "session", "start", "--project", "Shared");
 
-    const taken = await asAgent(claude("s-1"), "identity", "--name", "Osian", "--session");
+    const taken = await asAgent(claude("s-1"), "identity", "--name", "Nico", "--session");
     expect(taken.code).not.toBe(0);
     expect(taken.stderr).toContain("taken here");
     expect(taken.stderr).toContain("Shared"); // and says where it is worn

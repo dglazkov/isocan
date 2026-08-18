@@ -1,5 +1,4 @@
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor } from "@isocan/core";
@@ -16,19 +15,20 @@ interface IdentityFile extends Actor {
  * A machine holds one person and any number of agents, and no two of them are
  * the same person.
  *
- * Three slots, most specific first. A SESSION identity
+ * Two slots, most specific first. A SESSION identity
  * (`~/.isocan/agents.json`, keyed by the session id the harness puts in the
  * environment) is one agent, in whatever directory it happens to work — the
- * only slot that can tell two agents apart when they share one, because a
- * directory has a single identity file and both of them would read it. A
- * DIRECTORY identity (`<dir>/.isocan/identity.json`, found by walking up from
- * the working directory) belongs to whoever works there. The HOME identity
- * (`~/.isocan/identity.json`) belongs to whoever owns the machine — you.
+ * filesystem has no notion of who is asking, so a slot that names an agent
+ * cannot live on it. The HOME identity (`~/.isocan/identity.json`) belongs to
+ * whoever owns the machine — you.
  *
  * So an agent naming itself never renames the human, and the human's canvas is
  * never created under an agent's name. One slot per machine was the old
  * design, and the skill told agents to claim it — so the last agent to
- * introduce itself became the user.
+ * introduce itself became the user. A DIRECTORY slot
+ * (`<dir>/.isocan/identity.json`) came next and failed the mirrored way: a
+ * directory has one identity file, so it handed its name to whoever walked in
+ * next (#56). Sessions are the slot that is actually per-agent.
  */
 /** Somebody a canvas answers to. Not only the faces on it right now: an
  * @-mention reaches a name that was used once and put down, so a name stays
@@ -43,15 +43,13 @@ export interface NameHolder {
 
 export interface ResolvedIdentity {
   actor: Actor;
-  /** "session" = this agent, whatever directory it is in. "directory" = an
-   * agent's, in a working directory. "home" = the human's. */
-  source: "session" | "directory" | "home";
+  /** "session" = this agent, whatever directory it is in. "home" = the
+   * human's. */
+  source: "session" | "home";
   file: string;
   /** The harness that named this session, when `source` is "session". */
   harness?: string;
 }
-
-export const localIdentityFile = (dir: string) => path.join(dir, ".isocan", "identity.json");
 
 async function readFrom(file: string): Promise<Actor | null> {
   try {
@@ -64,36 +62,6 @@ async function readFrom(file: string): Promise<Actor | null> {
 
 export async function readIdentity(home: string): Promise<Actor | null> {
   return readFrom(paths.identityFile(home));
-}
-
-/**
- * The nearest directory identity at or above `cwd` — an agent that named
- * itself in a project still speaks as itself from a subdirectory of it.
- *
- * Two floors under the walk. The isocan home is never a directory identity:
- * `~/.isocan/identity.json` is the human's slot by definition. And the walk
- * stops below `$HOME`, because everything above it belongs to the person, not
- * to a piece of work — without that, `ISOCAN_HOME=/tmp/x isocan …` in any
- * project would climb out and adopt the real user's name as if an agent had
- * left it there.
- */
-export async function findLocalIdentity(
-  cwd: string,
-  home: string,
-): Promise<{ actor: Actor; file: string } | null> {
-  const isocanHome = path.resolve(home);
-  const userHome = path.resolve(os.homedir());
-  let dir = path.resolve(cwd);
-  for (;;) {
-    if (dir !== userHome && path.join(dir, ".isocan") !== isocanHome) {
-      const file = localIdentityFile(dir);
-      const actor = await readFrom(file);
-      if (actor) return { actor, file };
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir || dir === userHome) return null;
-    dir = parent;
-  }
 }
 
 /* ── The session registry ────────────────────────────────────────────────
@@ -173,7 +141,7 @@ function bindKey(registry: AgentRegistry, present: HarnessSession[], looked: str
       "no harness session in the environment — `--session` names the agent running this " +
         `command, and nothing here says which one that is (looked for ${looked.join(", ")}). ` +
         "Export ISOCAN_SESSION_ID yourself, or add your harness's variable to config.json as " +
-        '`{"harnessVars": {"<name>": "<VAR>"}}`, or use `--here` to name this directory instead.',
+        '`{"harnessVars": {"<name>": "<VAR>"}}`.',
     );
   }
   return present.find((s) => !registry.sessions[s.key]) ?? present[0]!;
@@ -210,10 +178,10 @@ const CLAIM_STANDS_MS = 30 * 60 * 1000;
  *
  * `held` is everyone the canvases answer to — live faces AND the names in
  * their history, because that is what an @-mention reaches. Most name holders
- * are not session identities at all: the collision this was written for was a
- * directory name a previous agent left in a checkout, which the registry knows
- * nothing about. Empty when no daemon is running, which costs the check
- * nothing it cannot do without.
+ * are not session identities at all: a name can be worn by the web app or
+ * remembered from a canvas's history, and the registry knows nothing about
+ * either. Empty when no daemon is running, which costs the check nothing it
+ * cannot do without.
  */
 export async function writeSessionIdentity(
   home: string,
@@ -268,10 +236,10 @@ export async function writeSessionIdentity(
 }
 
 /**
- * Who this command speaks as: this agent, else the agent working here, else
- * the human — most specific first. The session slot is path-independent by
- * design, so an agent that named itself keeps its name after it wanders into
- * another directory, and two agents sharing one directory stay two people.
+ * Who this command speaks as: this agent, else the human. The session slot is
+ * path-independent by design, so an agent that named itself keeps its name
+ * after it wanders into another directory, and two agents sharing one
+ * directory stay two people.
  */
 export async function resolveIdentity(
   home: string,
@@ -285,8 +253,6 @@ export async function resolveIdentity(
       file: session.file,
       harness: session.harness,
     };
-  const local = await findLocalIdentity(cwd, home);
-  if (local) return { actor: local.actor, source: "directory", file: local.file };
   const actor = await readIdentity(home);
   return actor ? { actor, source: "home", file: paths.identityFile(home) } : null;
 }
@@ -305,26 +271,15 @@ export async function writeIdentity(home: string, name: string, fresh = false): 
   return write(paths.identityFile(home), { id: existing?.id ?? newActorId(), name });
 }
 
-export async function writeLocalIdentity(
-  dir: string,
-  name: string,
-  fresh = false,
-): Promise<Actor> {
-  const file = localIdentityFile(dir);
-  const existing = fresh ? null : await readFrom(file);
-  return write(file, { id: existing?.id ?? newActorId(), name });
-}
-
 /** First-run flow: prompt on a TTY, otherwise fail with instructions. */
 export async function requireIdentity(home: string, cwd: string): Promise<Actor> {
   const existing = await resolveIdentity(home, cwd);
   if (existing) return existing.actor;
   if (!process.stdin.isTTY) {
     // Nothing here is interactive, so this is an agent or a script: the name
-    // it needs is its own, in the directory it is working in.
+    // it needs is its own, keyed by its session.
     throw new Error(
-      'no identity configured — run `isocan identity --name "Your Name" --session` first ' +
-        "(or `--here` to name the directory rather than yourself)",
+      'no identity configured — run `isocan identity --name "Your Name" --session` first',
     );
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
