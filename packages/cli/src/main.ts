@@ -47,7 +47,7 @@ import {
   writeIdentity,
   writeLocalIdentity,
   writeSessionIdentity,
-  plannedSessionActor,
+  type NameHolder,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -325,30 +325,39 @@ async function nameCollision(
 }
 
 /**
- * Actor ids wearing a face on ANY canvas right now.
+ * Everyone every canvas answers to — live faces and the names in their
+ * history, which is the same set `@Name` resolves against.
  *
- * `nameCollision` asks about one project — the default, when there is one —
- * which is the wrong question for "is somebody already being Kenny": agents
- * pick names before they pick canvases. Best-effort, and only of a daemon that
- * is already running, because naming yourself has to work offline.
+ * `nameCollision` asks the same question of ONE project, the default when
+ * there is one, and only warns after the fact. That is the wrong shape for
+ * "may I be Kenny": agents pick names before they pick canvases, and a name
+ * put down an hour ago still answers. Best-effort, and only of a daemon
+ * already running, because naming yourself has to work offline.
  */
-async function liveActorIds(cmd: Command, except?: string): Promise<Set<string>> {
-  const ids = new Set<string>();
+async function heldNames(cmd: Command): Promise<NameHolder[]> {
+  const holders: NameHolder[] = [];
   try {
     const globals = cmd.optsWithGlobals() as { port?: string };
     const home = paths.isocanHome();
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-    if (!(await client.health())) return ids;
+    if (!(await client.health())) return holders;
+    // knownNames only reads through the client; nobody is speaking here.
+    const ctx = { client, actor: { id: "", name: "" }, json: false, home } as Ctx;
     for (const project of await client.listProjects()) {
-      for (const session of await client.listSessions(project.id)) {
-        if (session.actor.id !== except) ids.add(session.actor.id);
+      const sessions = await client.listSessions(project.id);
+      for (const known of await knownNames(ctx, project, sessions)) {
+        holders.push({
+          actor: { id: known.id, name: known.name },
+          project: project.title,
+          live: known.live,
+        });
       }
     }
   } catch {
-    // No daemon, no canvases, no faces to be wearing.
+    // No daemon, no canvases, nobody to collide with.
   }
-  return ids;
+  return holders;
 }
 
 /**
@@ -417,13 +426,7 @@ program
           const target = await identityTarget(home, opts);
           const bound =
             target.scope === "session"
-              ? await writeSessionIdentity(
-                  home,
-                  opts.name,
-                  opts.new ?? false,
-                  // Your own face is not a rival for your own name.
-                  await liveActorIds(cmd, (await plannedSessionActor(home))?.id),
-                )
+              ? await writeSessionIdentity(home, opts.name, opts.new ?? false, await heldNames(cmd))
               : null;
           const actor =
             bound?.actor ??

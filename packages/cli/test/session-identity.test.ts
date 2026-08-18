@@ -234,10 +234,24 @@ describe("one name, one agent", () => {
     const second = await asAgent(claude("s-2"), "identity", "--name", "Kenny", "--session");
 
     expect(second.code).not.toBe(0);
-    expect(second.stderr).toContain("already another session's name");
+    expect(second.stderr).toContain("taken here");
     expect(Object.keys((await registry()).sessions)).toEqual(["claude-code:s-1"]);
     // And the loser is still nobody, rather than quietly being the winner.
     expect((await asAgent(claude("s-2"), "whoami")).stdout).not.toContain("Kenny");
+  });
+
+  it("a live name is taken however its wearer got it — a directory name counts", async () => {
+    // The reported failure. A previous agent had left `.isocan/identity.json`
+    // in the checkout, so the Kenny on the canvas belonged to no session at
+    // all, and a guard that only compared session bindings saw nothing.
+    await asAgent({}, "identity", "--name", "Osian", "--here");
+    await asAgent({}, "project", "create", "Shared");
+    await asAgent({}, "session", "start", "--project", "Shared");
+
+    const taken = await asAgent(claude("s-1"), "identity", "--name", "Osian", "--session");
+    expect(taken.code).not.toBe(0);
+    expect(taken.stderr).toContain("taken here");
+    expect(taken.stderr).toContain("Shared"); // and says where it is worn
   });
 
   it("--new takes the name on purpose, and is still a different person", async () => {

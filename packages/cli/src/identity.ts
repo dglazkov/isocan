@@ -30,6 +30,17 @@ interface IdentityFile extends Actor {
  * design, and the skill told agents to claim it — so the last agent to
  * introduce itself became the user.
  */
+/** Somebody a canvas answers to. Not only the faces on it right now: an
+ * @-mention reaches a name that was used once and put down, so a name stays
+ * taken after its wearer goes quiet. */
+export interface NameHolder {
+  actor: Actor;
+  /** Canvas title, for saying where. */
+  project: string;
+  /** Wearing it at this moment, rather than remembered from the history. */
+  live: boolean;
+}
+
 export interface ResolvedIdentity {
   actor: Actor;
   /** "session" = this agent, whatever directory it is in. "directory" = an
@@ -124,17 +135,6 @@ function byRecency(entries: [string, SessionBinding][]): [string, SessionBinding
 }
 
 /**
- * The actor this process is ALREADY bound as, under the key `--session` would
- * claim. The caller needs it to tell its own name apart from a rival's.
- */
-export async function plannedSessionActor(home: string): Promise<Actor | null> {
-  const registry = await readRegistry(home);
-  const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
-  const binding = registry.sessions[session.key];
-  return binding ? { id: binding.id, name: binding.name } : null;
-}
-
-/**
  * Who this process is, when it has said so before.
  *
  * A nested agent sees its own session id AND the ids of whatever launched it,
@@ -208,37 +208,54 @@ const CLAIM_STANDS_MS = 30 * 60 * 1000;
  * Name the agent running this command. Two of them in one directory get one
  * slot each, and neither touches the directory's identity or the human's.
  *
- * `live` is the actor ids with a face on some canvas right now; empty when no
- * daemon is running, which costs the check nothing it cannot do without.
+ * `held` is everyone the canvases answer to — live faces AND the names in
+ * their history, because that is what an @-mention reaches. Most name holders
+ * are not session identities at all: the collision this was written for was a
+ * directory name a previous agent left in a checkout, which the registry knows
+ * nothing about. Empty when no daemon is running, which costs the check
+ * nothing it cannot do without.
  */
 export async function writeSessionIdentity(
   home: string,
   name: string,
   fresh = false,
-  live: ReadonlySet<string> = new Set(),
+  held: readonly NameHolder[] = [],
 ): Promise<{ actor: Actor; harness: string }> {
   const registry = await readRegistry(home);
   const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
+  const mine = registry.sessions[session.key]?.id;
+  const wanted = name.toLowerCase();
   const others = byRecency(
     Object.entries(registry.sessions).filter(([key, b]) => key !== session.key && b.name === name),
   );
-  const held = others.find(
-    ([, b]) => live.has(b.id) || Date.now() - Date.parse(b.boundAt) < CLAIM_STANDS_MS,
-  );
-  if (held && !fresh) {
-    const [, binding] = held;
-    throw new Error(
-      `"${name}" is already another session's name here (${binding.id}, ` +
-        `${live.has(binding.id) ? "on a canvas right now" : "claimed just now"}) — ` +
-        `@${name} would reach both of you, and taking it would make you one actor ` +
-        "wearing two faces. Pick another name, or `--new` to be a second " +
-        `${name} on purpose.`,
+  // Who taking this name would make you. A name already answering to that
+  // same actor is you, coming back — nobody to collide with.
+  const candidate = fresh ? undefined : (registry.sessions[session.key] ?? others[0]?.[1])?.id;
+  if (!fresh) {
+    const someoneElse = held.find(
+      (h) => h.actor.name.toLowerCase() === wanted && h.actor.id !== candidate,
     );
+    // Your own past self, but somebody is wearing it right now.
+    const stillWorn =
+      candidate && candidate !== mine && held.some((h) => h.live && h.actor.id === candidate);
+    // Or claimed so recently that its owner has not put a face on yet.
+    const justClaimed = others.find(
+      ([, b]) => b.id !== mine && Date.now() - Date.parse(b.boundAt) < CLAIM_STANDS_MS,
+    );
+    if (someoneElse || stillWorn || justClaimed) {
+      const where = someoneElse
+        ? `${someoneElse.actor.id}, ${someoneElse.live ? "on" : "known to"} "${someoneElse.project}"`
+        : `${candidate ?? justClaimed![1].id}, another session just now`;
+      throw new Error(
+        `"${name}" is taken here (${where}) — @${name} would reach both of you, and ` +
+          "taking it would make you one actor wearing two faces. Pick another name, " +
+          `or \`--new\` to be a second ${name} on purpose.`,
+      );
+    }
   }
-  // Only a claim nobody is standing on is inherited: that is yesterday's
+  // Only a name nobody is standing on gets inherited: that is yesterday's
   // session of the same agent, and the history it made is still its own.
-  const existing = fresh ? null : (registry.sessions[session.key] ?? others[0]?.[1]);
-  const actor: Actor = { id: existing?.id ?? newActorId(), name };
+  const actor: Actor = { id: candidate ?? newActorId(), name };
   registry.sessions[session.key] = {
     ...actor,
     harness: session.harness,
