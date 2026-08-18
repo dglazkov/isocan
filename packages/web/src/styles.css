@@ -304,12 +304,6 @@ input, textarea { font: inherit; color: var(--ink); }
 .item.ink .item-content { border-radius: var(--radius); }
 .item.ink .img-view { background: transparent; }
 .item.ink .ply { background: transparent; border-color: var(--line-soft); }
-.item.ink .item-titlebar {
-  position: absolute; left: 0; right: 0; top: -21px; padding: 0 2px;
-  background: none; border: none; border-radius: 0;
-  opacity: 0; transition: opacity 0.12s ease;
-}
-.item.ink:hover .item-titlebar, .item.ink.selected .item-titlebar { opacity: 1; }
 /* Pointing at an item shows the box you would get, in the accent color that
    means "this one" everywhere else — a dashed preview of the solid outline a
    click would give it. It matters most for a drawing, whose box is otherwise
@@ -319,16 +313,33 @@ input, textarea { font: inherit; color: var(--ink); }
   outline: 1px dashed var(--accent); outline-offset: 2px;
 }
 .canvas-viewport:not(.pen) .item.selected:hover { outline: 2px solid var(--accent); }
+/* The name floats ABOVE the card rather than inside it: the item is the
+   content, and a label that sits on top of it is a label, not a chrome bar.
+   It stays out of the way until you point at the item — a canvas of sketches
+   should read as the sketches, not as a column of the word "Sketch". */
 .item-titlebar {
-  display: flex; align-items: center; gap: 6px; flex: none;
-  padding: 6px 9px; font-size: 11px; color: var(--ink-muted);
-  border-bottom: 1px solid var(--line-soft); line-height: 1.2;
-  cursor: grab; user-select: none; -webkit-user-select: none;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--card);
+  position: absolute; left: 1px; right: 1px; top: -20px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 3px; font-size: 11px; color: var(--ink-muted);
+  line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
+  opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
+.item:hover .item-titlebar,
+.item.selected .item-titlebar,
+.item.renaming .item-titlebar { opacity: 1; }
+.item.selected .item-titlebar { color: var(--accent); }
+/* Renaming in place: the label IS the field. Same type, same spot, a hairline
+   to say it is live — nothing that reads as a form. */
+.name-input {
+  min-width: 0; max-width: 100%; padding: 0 3px; margin: 0 -3px;
+  font: inherit; color: var(--ink);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  border: 1px solid var(--accent); border-radius: 4px;
+  outline: none;
+}
+.name-input::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 .item-titlebar .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-content { flex: 1; overflow: hidden; position: relative; border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px); }
+.item-content { flex: 1; overflow: hidden; position: relative; border-radius: calc(var(--radius) - 1px); }
 .item-content.inert { pointer-events: none; user-select: none; -webkit-user-select: none; }
 
 /* version stack plies (the 0.5D) */
@@ -739,10 +750,49 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- minimap ---------- */
 /* Bottom-left, clearing the right-edge tool rail and zoom cluster. */
+/* The minimap folds into its corner. The dock is the anchor both states share:
+   the map slides down and out of it, the handle fades up in its place, so the
+   two read as one thing changing shape rather than two things swapping. */
+.minimap-dock { position: absolute; left: 14px; bottom: 16px; z-index: 20; }
+.minimap-panel {
+  transform-origin: 0 100%;
+  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.18s ease;
+}
+.minimap-dock.folded .minimap-panel {
+  transform: translateY(12px) scale(0.82);
+  opacity: 0;
+  pointer-events: none;
+}
 .minimap {
-  position: absolute; left: 14px; bottom: 16px; z-index: 20;
+  display: block;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   cursor: pointer;
+}
+/* The fold control: quiet until you are looking at the map. */
+.minimap-fold {
+  position: absolute; right: 2px; top: -2px; z-index: 1;
+  width: 20px; height: 20px; padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink-muted); font-size: 12px;
+  opacity: 0; transition: opacity 0.14s ease;
+}
+.minimap-dock:hover .minimap-fold { opacity: 1; }
+.minimap-fold:hover { color: var(--ink); border-color: var(--accent); }
+/* The handle left behind: same corner, so the map comes back where it went. */
+.minimap-handle {
+  position: absolute; left: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: var(--shadow-card); color: var(--ink-muted);
+  opacity: 0; transform: translateY(8px) scale(0.9); pointer-events: none;
+  transition: opacity 0.18s ease 0.06s, transform 0.24s cubic-bezier(0.2, 0.8, 0.3, 1) 0.06s;
+}
+.minimap-dock.folded .minimap-handle { opacity: 1; transform: none; pointer-events: auto; }
+.minimap-handle:hover { color: var(--ink); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .minimap-panel, .minimap-handle { transition-duration: 0.01ms; }
 }
 /* A collaborator's place on the map. Clicking one recenters there like any
    minimap click — the dot IS the answer to "where is the agent?" (#39). */
@@ -893,6 +943,56 @@ button.mt-card:hover { border-color: var(--accent); }
 .follow-banner:hover { opacity: 0.9; }
 /* Same shape, different claim: the app on disk moved on, this tab did not. */
 .update-banner { background: var(--ink); color: var(--ground); }
+
+/* ---------- the edge radar: what is out there, and which way ---------- */
+/* A bar lies flush along the wall, as long as the thing it stands for would
+   be if you could see it — the rim becomes a shadow of what is off screen.
+   Nothing juts into the canvas, so a busy canvas stays a canvas. */
+.edge-radar { position: absolute; inset: 0; z-index: 18; pointer-events: none; }
+.edge-bar {
+  position: absolute; pointer-events: auto; padding: 0; border: none;
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  transition: background 0.12s ease;
+}
+.edge-bar-left { width: 7px; border-radius: 0 5px 5px 0; }
+.edge-bar-right { width: 7px; border-radius: 5px 0 0 5px; }
+.edge-bar-top { height: 7px; border-radius: 0 0 5px 5px; }
+.edge-bar-bottom { height: 7px; border-radius: 5px 5px 0 0; }
+.edge-bar:hover, .edge-bar.hot { background: var(--accent); }
+
+/* Hover card: a row per item this beacon speaks for, nearest first, each one
+   a way to go there. */
+.beacon-card {
+  position: absolute; pointer-events: auto;
+  display: flex; flex-direction: column; gap: 2px; width: max-content; max-width: 280px;
+  padding: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow-pop); color: var(--ink); text-align: left;
+}
+/* Centered on the bar, and never off the screen it is meant to be read on. */
+.beacon-card-v { transform: translateY(-50%); max-height: 70vh; overflow-y: auto; }
+.beacon-card-h { transform: translateX(-50%); }
+.beacon-head {
+  padding: 2px 8px 4px; color: var(--ink-muted); font-size: 10.5px; font-weight: 600;
+}
+.beacon-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 4px 8px 4px 4px; border: none; border-radius: 8px;
+  background: none; color: inherit; text-align: left;
+}
+.beacon-row:hover { background: var(--chip); }
+.beacon-more { padding: 3px 8px 2px; color: var(--ink-muted); font-size: 10.5px; }
+.beacon-card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.beacon-card-text b { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beacon-card-text i { font-style: normal; font-size: 10.5px; color: var(--ink-muted); }
+.beacon-thumb {
+  flex: none; width: 34px; height: 34px; border-radius: 6px;
+  object-fit: cover; background: var(--chip); border: 1px solid var(--line-soft);
+}
+.beacon-thumb-glyph {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-muted); font-size: 13px; font-weight: 600;
+}
 
 /* ---------- remote cursors (presence) ---------- */
 .remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }

@@ -54,12 +54,17 @@ export function invertOperation(
       return { type: "item.resize", itemId: op.itemId, width, height };
     }
 
-    case "item.update":
+    case "item.update": {
+      const item = getItem(op.itemId);
+      const current = item.versions.find((version) => version.id === item.currentVersionId);
       return {
         type: "item.update",
         itemId: op.itemId,
-        patch: invertMetaPatch(getItem(op.itemId), op.patch),
+        patch: invertMetaPatch(item, op.patch),
+        // Undoing a rename puts the file back under its old name.
+        ...(op.filename !== undefined && current ? { filename: current.filename } : {}),
       };
+    }
 
     case "item.addVersion":
       return {

@@ -55,6 +55,9 @@ interface UiStore {
   /** Item whose content owns the pointer (entered by double-click): an HTML
    * document or a projected browser item. */
   enteredItemId: string | null;
+  /** Item whose name is being edited in place — double-clicking the label, or
+   * F2 on the selection. */
+  renamingItemId: string | null;
   openThreadId: string | null;
   pendingComment: PendingComment | null;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
@@ -82,6 +85,9 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per project
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
+  /** The minimap, which folds away into its corner. Remembered per browser:
+   * someone who put it away wants it away tomorrow too. */
+  minimapOpen: boolean;
   /** Session being followed: the camera tracks their locus until the user
    * takes the wheel back (any manual pan/zoom/jump, or Esc). */
   followSessionId: string | null;
@@ -100,6 +106,7 @@ interface UiStore {
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
+  setRenaming: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
   setSketchError: (message: string | null) => void;
@@ -118,9 +125,28 @@ interface UiStore {
   setIdentityOpen: (open: boolean) => void;
   setCommandBarOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
+  setMinimapOpen: (open: boolean) => void;
 }
 
 const INK_KEY = "isocan.ink";
+const MINIMAP_KEY = "isocan.minimap";
+
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : raw === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeFlag(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // Storage denied: the choice holds for this session and no longer.
+  }
+}
 
 /** The ink you last dipped into, if any. Only a literal hex survives the trip
  * back — the value ends up inside a saved SVG. */
@@ -160,6 +186,7 @@ export const useUiStore = create<UiStore>((set) => {
     guides: [],
     spacing: [],
     enteredItemId: null,
+    renamingItemId: null,
     openThreadId: null,
     pendingComment: null,
     sketch: [],
@@ -171,6 +198,7 @@ export const useUiStore = create<UiStore>((set) => {
     identityOpen: false,
     commandBarOpen: false,
     mainPanelOpen: false,
+    minimapOpen: readFlag(MINIMAP_KEY, true),
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
     // zoom buttons, a jump) — each one hands the camera back to the user.
@@ -194,6 +222,7 @@ export const useUiStore = create<UiStore>((set) => {
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
+    setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setSketchError: (sketchError) => set({ sketchError }),
@@ -224,5 +253,9 @@ export const useUiStore = create<UiStore>((set) => {
     setIdentityOpen: (identityOpen) => set({ identityOpen }),
     setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
+    setMinimapOpen: (minimapOpen) => {
+      writeFlag(MINIMAP_KEY, minimapOpen);
+      set({ minimapOpen });
+    },
   };
 });

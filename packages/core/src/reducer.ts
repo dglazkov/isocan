@@ -117,7 +117,18 @@ export function applyOperation(
 
     case "item.update": {
       const item = getItem(op.itemId);
-      return putItem({ ...item, ...applyMetaPatch(item, op.patch), ...stamp });
+      const renamed =
+        op.filename === undefined
+          ? item.versions
+          : item.versions.map((version) =>
+              version.id === item.currentVersionId ? { ...version, filename: op.filename! } : version,
+            );
+      return putItem({
+        ...item,
+        ...applyMetaPatch(item, op.patch),
+        versions: renamed,
+        ...stamp,
+      });
     }
 
     case "item.addVersion": {
