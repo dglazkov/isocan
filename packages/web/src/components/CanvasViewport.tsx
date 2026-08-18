@@ -19,6 +19,12 @@ interface GestureEvent extends UIEvent {
   readonly clientY: number;
 }
 
+// How briskly a Chrome/Firefox trackpad pinch (a ctrlKey wheel) zooms: the
+// exponent on deltaY. Higher = snappier. 0.0022 felt sluggish next to Figma;
+// this is roughly 2.5× that. Safari's gesture path is already 1:1 with the
+// physical pinch (e.scale), so it needs no such constant.
+const PINCH_ZOOM_SENSITIVITY = 0.0055;
+
 export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
@@ -50,7 +56,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
         // browser never page-zooms. Zoom the canvas at the cursor instead.
         e.preventDefault();
-        const factor = Math.exp(-e.deltaY * 0.0022);
+        const factor = Math.exp(-e.deltaY * PINCH_ZOOM_SENSITIVITY);
         const ui = useUiStore.getState();
         ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
         return;
