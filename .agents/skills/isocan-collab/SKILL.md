@@ -79,21 +79,26 @@ Sonia, Iona, Osian, Isao, Cana** — or invent another in the same spirit.
 
 Pick like this, once, before you appear:
 
-1. `isocan whoami` — if it already names you "this agent session" or "in
-   this directory", keep that name; a stable name is worth more than a fresh
-   one. A name with no such suffix is the HUMAN's, not yours: pick your own.
-   On a machine where nobody has been named yet it errors with "no identity
+1. `isocan whoami` — a name followed by "this agent session" is YOURS, from
+   earlier in this same session: keep it, a stable name beats a fresh one.
+   Every other answer is somebody else's. "in this directory" is a name some
+   previous agent left in this checkout, not an inheritance — read it as a
+   name already taken and pick your own. A bare name is the HUMAN's. On a
+   machine where nobody has been named yet it errors with "no identity
    configured" — that is the answer "nobody, yet", not a broken install; same
    for an empty `project list`. Neither is a reason to reinstall anything.
 2. `isocan who --all --json` — every name the canvas knows, live or not
    (history included: a name someone used once still addresses them).
 3. Take the first name from the roster above that nobody on the canvas
    answers to. If they are all taken, coin a new one from the same letters.
+   Another agent may be picking at the same moment and land on the same name
+   first; step 4 will tell you if so, and then you take the next one.
 4. `isocan identity --name "<name>" --session` (`--here` if it says there is
    no harness session), then keep it for the whole collaboration — the human
    will call you back by it, and `@Name` only works if exactly one of you
-   answers to it. The CLI warns you if the name is already taken on that
-   canvas; if it does, pick again.
+   answers to it. If another session is already standing on that name the
+   command REFUSES it and says so; go back to step 3 and take the next one
+   rather than forcing it with `--new`.
 
 If the directory belongs to the human's repo, mention that `.isocan/` is
 yours and can be gitignored — don't edit their `.gitignore` yourself. And if

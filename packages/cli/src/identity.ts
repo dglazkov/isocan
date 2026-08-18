@@ -124,6 +124,17 @@ function byRecency(entries: [string, SessionBinding][]): [string, SessionBinding
 }
 
 /**
+ * The actor this process is ALREADY bound as, under the key `--session` would
+ * claim. The caller needs it to tell its own name apart from a rival's.
+ */
+export async function plannedSessionActor(home: string): Promise<Actor | null> {
+  const registry = await readRegistry(home);
+  const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
+  const binding = registry.sessions[session.key];
+  return binding ? { id: binding.id, name: binding.name } : null;
+}
+
+/**
  * Who this process is, when it has said so before.
  *
  * A nested agent sees its own session id AND the ids of whatever launched it,
@@ -185,20 +196,48 @@ function prune(registry: AgentRegistry): void {
 }
 
 /**
+ * How long a claim on a name stands after it was made, when nothing can be
+ * seen to be using it. Liveness is the real answer, but there is a window —
+ * between naming yourself and starting a presence session — where an agent is
+ * working and nothing on any canvas says so, and two agents launched together
+ * pass through that window at the same moment. Recency covers it.
+ */
+const CLAIM_STANDS_MS = 30 * 60 * 1000;
+
+/**
  * Name the agent running this command. Two of them in one directory get one
  * slot each, and neither touches the directory's identity or the human's.
+ *
+ * `live` is the actor ids with a face on some canvas right now; empty when no
+ * daemon is running, which costs the check nothing it cannot do without.
  */
 export async function writeSessionIdentity(
   home: string,
   name: string,
   fresh = false,
+  live: ReadonlySet<string> = new Set(),
 ): Promise<{ actor: Actor; harness: string }> {
   const registry = await readRegistry(home);
   const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
-  const [previous] = byRecency(
-    Object.entries(registry.sessions).filter(([, b]) => b.name === name),
+  const others = byRecency(
+    Object.entries(registry.sessions).filter(([key, b]) => key !== session.key && b.name === name),
   );
-  const existing = fresh ? null : (registry.sessions[session.key] ?? previous?.[1]);
+  const held = others.find(
+    ([, b]) => live.has(b.id) || Date.now() - Date.parse(b.boundAt) < CLAIM_STANDS_MS,
+  );
+  if (held && !fresh) {
+    const [, binding] = held;
+    throw new Error(
+      `"${name}" is already another session's name here (${binding.id}, ` +
+        `${live.has(binding.id) ? "on a canvas right now" : "claimed just now"}) — ` +
+        `@${name} would reach both of you, and taking it would make you one actor ` +
+        "wearing two faces. Pick another name, or `--new` to be a second " +
+        `${name} on purpose.`,
+    );
+  }
+  // Only a claim nobody is standing on is inherited: that is yesterday's
+  // session of the same agent, and the history it made is still its own.
+  const existing = fresh ? null : (registry.sessions[session.key] ?? others[0]?.[1]);
   const actor: Actor = { id: existing?.id ?? newActorId(), name };
   registry.sessions[session.key] = {
     ...actor,

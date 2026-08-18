@@ -47,6 +47,7 @@ import {
   writeIdentity,
   writeLocalIdentity,
   writeSessionIdentity,
+  plannedSessionActor,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -324,6 +325,33 @@ async function nameCollision(
 }
 
 /**
+ * Actor ids wearing a face on ANY canvas right now.
+ *
+ * `nameCollision` asks about one project — the default, when there is one —
+ * which is the wrong question for "is somebody already being Kenny": agents
+ * pick names before they pick canvases. Best-effort, and only of a daemon that
+ * is already running, because naming yourself has to work offline.
+ */
+async function liveActorIds(cmd: Command, except?: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  try {
+    const globals = cmd.optsWithGlobals() as { port?: string };
+    const home = paths.isocanHome();
+    const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
+    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+    if (!(await client.health())) return ids;
+    for (const project of await client.listProjects()) {
+      for (const session of await client.listSessions(project.id)) {
+        if (session.actor.id !== except) ids.add(session.actor.id);
+      }
+    }
+  } catch {
+    // No daemon, no canvases, no faces to be wearing.
+  }
+  return ids;
+}
+
+/**
  * A rename should reach the face you are already wearing. Best-effort, on the
  * same terms as the collision check: only asks a daemon that is already
  * running, and never fails `identity` — which has to work offline.
@@ -389,7 +417,13 @@ program
           const target = await identityTarget(home, opts);
           const bound =
             target.scope === "session"
-              ? await writeSessionIdentity(home, opts.name, opts.new ?? false)
+              ? await writeSessionIdentity(
+                  home,
+                  opts.name,
+                  opts.new ?? false,
+                  // Your own face is not a rival for your own name.
+                  await liveActorIds(cmd, (await plannedSessionActor(home))?.id),
+                )
               : null;
           const actor =
             bound?.actor ??

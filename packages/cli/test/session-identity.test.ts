@@ -70,6 +70,17 @@ function asAgent(session: Record<string, string>, ...args: string[]) {
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
+
+/** Put a claim in the past. A name is held while someone is standing on it,
+ * so "the same agent, tomorrow" has to be tomorrow to mean anything. */
+async function age(key: string, hours: number): Promise<void> {
+  const file = path.join(home, "agents.json");
+  const reg = JSON.parse(await fs.readFile(file, "utf8")) as {
+    sessions: Record<string, { boundAt: string }>;
+  };
+  reg.sessions[key]!.boundAt = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  await fs.writeFile(file, JSON.stringify(reg));
+}
 const projects = (): Promise<Project[]> =>
   fetch(`${base}/api/projects`).then((r) => r.json() as Promise<Project[]>);
 const idOf = (out: string) => /\((usr_[^)]+)\)/.exec(out)?.[1];
@@ -107,6 +118,7 @@ describe("two agents in one directory", () => {
 describe("a session is a key, not a person", () => {
   it("the same name in a later session is the same actor", async () => {
     const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    await age("claude-code:s-1", 26); // yesterday's session, long since let go
     const later = await asAgent(claude("s-9"), "identity", "--name", "Kenny", "--session");
     // Sessions are fresh every morning; the history Kenny made is still his.
     expect(idOf(later.stdout)).toBe(idOf(first.stdout));
@@ -205,5 +217,44 @@ describe("harnesses isocan has not met", () => {
     const out = await asAgent({}, "identity", "--name", "Kenny", "--session");
     expect(out.stderr).toContain("ISOCAN_SESSION_ID");
     expect(out.stderr).toContain("harnessVars");
+  });
+});
+
+describe("one name, one agent", () => {
+  const registry = () =>
+    fs
+      .readFile(path.join(home, "agents.json"), "utf8")
+      .then((raw) => JSON.parse(raw) as { sessions: Record<string, { id: string; name: string }> });
+
+  it("the second agent to reach for a name is refused, not merged into the first", async () => {
+    // The bug this exists for: both agents entered a checkout, both were told
+    // to be Kenny, and name-continuity handed the second one the first one's
+    // actor id. Two processes, one actor, and `@Kenny` reaching both.
+    await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const second = await asAgent(claude("s-2"), "identity", "--name", "Kenny", "--session");
+
+    expect(second.code).not.toBe(0);
+    expect(second.stderr).toContain("already another session's name");
+    expect(Object.keys((await registry()).sessions)).toEqual(["claude-code:s-1"]);
+    // And the loser is still nobody, rather than quietly being the winner.
+    expect((await asAgent(claude("s-2"), "whoami")).stdout).not.toContain("Kenny");
+  });
+
+  it("--new takes the name on purpose, and is still a different person", async () => {
+    const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const second = await asAgent(
+      claude("s-2"), "identity", "--name", "Kenny", "--session", "--new",
+    );
+    expect(second.code).toBe(0);
+    expect(idOf(second.stdout)).not.toBe(idOf(first.stdout));
+  });
+
+  it("renaming yourself is never a collision with yourself", async () => {
+    await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const again = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    expect(again.code).toBe(0);
+    const renamed = await asAgent(claude("s-1"), "identity", "--name", "Kenny the Second", "--session");
+    expect(renamed.code).toBe(0);
+    expect(idOf(renamed.stdout)).toBe(idOf(again.stdout));
   });
 });
