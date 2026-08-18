@@ -1,24 +1,22 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { mainThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { addBrowserItem, addFiles } from "../lib/upload.ts";
+import { addBrowserItem } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
 /**
  * The content actions, now docked in the top bar: bring things onto the canvas
- * (a File, a live Site) and open the Main thread — the direct channel to your
- * emissary. Interaction tools (select/hand/comment) live on the right rail;
- * navigation (zoom/undo) lives bottom-right.
+ * (a live Site) and open the Main thread — the direct channel to your emissary.
+ * File upload has moved to the right tool rail (CanvasTools).
  */
 export function CreateActions({ projectId, actor }: { projectId: string; actor: Actor }) {
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const canvas = useCanvasStore((s) => s.canvas);
   const seen = useUnreadStore((s) => s.seen);
-  const fileInput = useRef<HTMLInputElement>(null);
   const [siteOpen, setSiteOpen] = useState(false);
   const [siteUrl, setSiteUrl] = useState("");
   const [siteError, setSiteError] = useState<string | null>(null);
@@ -33,15 +31,6 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
     return selectedItemIds.length === 1
       ? { anchorItemId: selectedItemIds[0]! }
       : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
-  }
-
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (files.length === 0) return;
-    const ids = await addFiles(projectId, actor, files, createPlacement());
-    const last = ids[ids.length - 1];
-    if (last) useUiStore.getState().select(last);
   }
 
   async function onProjectSite(e: React.FormEvent) {
@@ -59,17 +48,6 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
 
   return (
     <div className="create-actions">
-      <button className="btn primary" onClick={() => fileInput.current?.click()}>
-        ＋ File
-      </button>
-      <input
-        ref={fileInput}
-        type="file"
-        multiple
-        hidden
-        onChange={onPick}
-        accept=".md,.markdown,.txt,.html,.htm,image/*,video/*"
-      />
       <div className="create-site">
         <button
           className={`btn${siteOpen ? " active" : ""}`}
