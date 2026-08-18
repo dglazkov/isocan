@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { Viewport } from "../lib/viewport.ts";
 
+/** The pointer tools on the right rail. */
+export type Tool = "select" | "hand" | "comment" | "zoom";
+
 export interface DragState {
   /** Every item riding this gesture — the whole selection for a group drag. */
   itemIds: string[];
@@ -43,6 +46,11 @@ interface UiStore {
   enteredItemId: string | null;
   openThreadId: string | null;
   pendingComment: PendingComment | null;
+  /** The active pointer tool, chosen from the right rail. "select" is the
+   * default (click + marquee); "hand" pans on drag; "comment" drops pins.
+   * `commentMode` below is kept in lockstep as the derived convenience the
+   * comment code already reads — the two never disagree. */
+  activeTool: Tool;
   commentMode: boolean;
   trashOpen: boolean;
   /** The identity menu, opened by clicking your own face in the pile. */
@@ -71,6 +79,7 @@ interface UiStore {
   setEntered: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
+  setActiveTool: (tool: Tool) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
@@ -96,6 +105,7 @@ export const useUiStore = create<UiStore>((set) => {
     enteredItemId: null,
     openThreadId: null,
     pendingComment: null,
+    activeTool: "select",
     commentMode: false,
     trashOpen: false,
     identityOpen: false,
@@ -125,7 +135,14 @@ export const useUiStore = create<UiStore>((set) => {
     setEntered: (enteredItemId) => set({ enteredItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
-    setCommentMode: (commentMode) => set({ commentMode }),
+    // activeTool is the source of truth; commentMode is its "comment" facet,
+    // set together so the two can never drift.
+    setActiveTool: (activeTool) => set({ activeTool, commentMode: activeTool === "comment" }),
+    setCommentMode: (commentMode) =>
+      set((s) => ({
+        commentMode,
+        activeTool: commentMode ? "comment" : s.activeTool === "comment" ? "select" : s.activeTool,
+      })),
     setTrashOpen: (trashOpen) => set({ trashOpen }),
     setIdentityOpen: (identityOpen) => set({ identityOpen }),
     setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
