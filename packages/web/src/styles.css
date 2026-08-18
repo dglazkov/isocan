@@ -359,12 +359,16 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 @keyframes work-sweep { 0% { left: -60%; } 60%, 100% { left: 110%; } }
 
-/* resize handle */
+/* resize handles — one per corner */
 .resize-handle {
-  position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px;
+  position: absolute; width: 12px; height: 12px;
   background: var(--card); border: 1.5px solid var(--accent); border-radius: 2px;
-  cursor: nwse-resize; z-index: 4;
+  z-index: 4;
 }
+.resize-handle-nw { left: -6px;  top: -6px;    cursor: nwse-resize; }
+.resize-handle-ne { right: -6px; top: -6px;    cursor: nesw-resize; }
+.resize-handle-sw { left: -6px;  bottom: -6px; cursor: nesw-resize; }
+.resize-handle-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
 
 /* ---------- version fan-out ---------- */
 .fan-card {
