@@ -11,6 +11,8 @@
 :root[data-theme="light"] {
   --ground: #fbfbf9;
   --dot: #c9ccc4;
+  /* The grid dots under the cursor spotlight — a denser cobalt-tinted dot. */
+  --dot-glow: #6f81df;
   --card: #ffffff;
   --line: #e2e3dd;
   --line-soft: #eff0ea;
@@ -40,6 +42,7 @@
 :root[data-theme="dark"] {
   --ground: #0e0f12;
   --dot: #2b2f36;
+  --dot-glow: #c3c9d6;
   --card: #1b1e23;
   --line: #2c313a;
   --line-soft: #23272e;
@@ -213,6 +216,18 @@ input, textarea { font: inherit; color: var(--ink); }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+/* Cursor spotlight: a brighter copy of the dot grid, aligned to the base grid,
+   revealed only in a soft circle around the pointer. JS fades its opacity out
+   as you stop moving. Purely decorative — hidden for reduced-motion. */
+.cursor-glow {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
+  background-image: radial-gradient(circle, var(--dot-glow) 1px, transparent 1px);
+  --gx: -200px; --gy: -200px;
+  -webkit-mask-image: radial-gradient(circle 132px at var(--gx) var(--gy), #000 0%, #000 16%, transparent 70%);
+  mask-image: radial-gradient(circle 132px at var(--gx) var(--gy), #000 0%, #000 16%, transparent 70%);
+}
+@media (prefers-reduced-motion: reduce) { .cursor-glow { display: none; } }
 
 /* ---------- toolbar ---------- */
 .toolbar {
