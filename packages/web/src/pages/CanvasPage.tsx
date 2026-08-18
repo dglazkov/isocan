@@ -232,7 +232,7 @@ export function CanvasPage({
           Watching {followedLabel} — Esc to stop
         </button>
       )}
-      <CanvasTools />
+      <CanvasTools projectId={projectId} actor={actor} />
       <ZoomControls projectId={projectId} actor={actor} />
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
