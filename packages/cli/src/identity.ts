@@ -30,6 +30,17 @@ interface IdentityFile extends Actor {
  * design, and the skill told agents to claim it — so the last agent to
  * introduce itself became the user.
  */
+/** Somebody a canvas answers to. Not only the faces on it right now: an
+ * @-mention reaches a name that was used once and put down, so a name stays
+ * taken after its wearer goes quiet. */
+export interface NameHolder {
+  actor: Actor;
+  /** Canvas title, for saying where. */
+  project: string;
+  /** Wearing it at this moment, rather than remembered from the history. */
+  live: boolean;
+}
+
 export interface ResolvedIdentity {
   actor: Actor;
   /** "session" = this agent, whatever directory it is in. "directory" = an
@@ -185,21 +196,66 @@ function prune(registry: AgentRegistry): void {
 }
 
 /**
+ * How long a claim on a name stands after it was made, when nothing can be
+ * seen to be using it. Liveness is the real answer, but there is a window —
+ * between naming yourself and starting a presence session — where an agent is
+ * working and nothing on any canvas says so, and two agents launched together
+ * pass through that window at the same moment. Recency covers it.
+ */
+const CLAIM_STANDS_MS = 30 * 60 * 1000;
+
+/**
  * Name the agent running this command. Two of them in one directory get one
  * slot each, and neither touches the directory's identity or the human's.
+ *
+ * `held` is everyone the canvases answer to — live faces AND the names in
+ * their history, because that is what an @-mention reaches. Most name holders
+ * are not session identities at all: the collision this was written for was a
+ * directory name a previous agent left in a checkout, which the registry knows
+ * nothing about. Empty when no daemon is running, which costs the check
+ * nothing it cannot do without.
  */
 export async function writeSessionIdentity(
   home: string,
   name: string,
   fresh = false,
+  held: readonly NameHolder[] = [],
 ): Promise<{ actor: Actor; harness: string }> {
   const registry = await readRegistry(home);
   const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
-  const [previous] = byRecency(
-    Object.entries(registry.sessions).filter(([, b]) => b.name === name),
+  const mine = registry.sessions[session.key]?.id;
+  const wanted = name.toLowerCase();
+  const others = byRecency(
+    Object.entries(registry.sessions).filter(([key, b]) => key !== session.key && b.name === name),
   );
-  const existing = fresh ? null : (registry.sessions[session.key] ?? previous?.[1]);
-  const actor: Actor = { id: existing?.id ?? newActorId(), name };
+  // Who taking this name would make you. A name already answering to that
+  // same actor is you, coming back — nobody to collide with.
+  const candidate = fresh ? undefined : (registry.sessions[session.key] ?? others[0]?.[1])?.id;
+  if (!fresh) {
+    const someoneElse = held.find(
+      (h) => h.actor.name.toLowerCase() === wanted && h.actor.id !== candidate,
+    );
+    // Your own past self, but somebody is wearing it right now.
+    const stillWorn =
+      candidate && candidate !== mine && held.some((h) => h.live && h.actor.id === candidate);
+    // Or claimed so recently that its owner has not put a face on yet.
+    const justClaimed = others.find(
+      ([, b]) => b.id !== mine && Date.now() - Date.parse(b.boundAt) < CLAIM_STANDS_MS,
+    );
+    if (someoneElse || stillWorn || justClaimed) {
+      const where = someoneElse
+        ? `${someoneElse.actor.id}, ${someoneElse.live ? "on" : "known to"} "${someoneElse.project}"`
+        : `${candidate ?? justClaimed![1].id}, another session just now`;
+      throw new Error(
+        `"${name}" is taken here (${where}) — @${name} would reach both of you, and ` +
+          "taking it would make you one actor wearing two faces. Pick another name, " +
+          `or \`--new\` to be a second ${name} on purpose.`,
+      );
+    }
+  }
+  // Only a name nobody is standing on gets inherited: that is yesterday's
+  // session of the same agent, and the history it made is still its own.
+  const actor: Actor = { id: candidate ?? newActorId(), name };
   registry.sessions[session.key] = {
     ...actor,
     harness: session.harness,
