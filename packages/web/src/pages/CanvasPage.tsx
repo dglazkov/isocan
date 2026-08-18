@@ -19,7 +19,7 @@ import { CanvasTools } from "../components/CanvasTools.tsx";
 import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
-import { zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
+import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
@@ -147,6 +147,23 @@ export function CanvasPage({
         e.preventDefault();
         const ui = useUiStore.getState();
         ui.setCommandBarOpen(!ui.commandBarOpen);
+        return;
+      }
+      // ⌘+/⌘− zoom the canvas, not the browser viewport. ⌘0 → zoom-to-fit.
+      // Placed before the input-field guard so they fire globally (like ⌘K).
+      if ((e.metaKey || e.ctrlKey) && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        zoomBy(1.25);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "-") {
+        e.preventDefault();
+        zoomBy(1 / 1.25);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        zoomToFit();
         return;
       }
       const target = e.target as HTMLElement;
