@@ -41,10 +41,9 @@ import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig }
 import { ApiError, DaemonClient } from "./client.ts";
 import {
   readIdentity,
+  claimSessionIdentity,
   resolveIdentity,
   writeIdentity,
-  writeSessionIdentity,
-  type NameHolder,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -95,15 +94,16 @@ The system:
 Conventions:
   <item> and <thread> arguments accept an id, an id prefix, or a title prefix.
   Set a default project once with \`isocan use <project>\`; --project overrides.
-  Identity (~/.isocan/identity.json) stamps every change you make; set it with
-  \`isocan identity --name "You"\`. The daemon auto-starts when needed.
+  Identity stamps every change you make. A person: \`isocan identity --name
+  "You" --home\`. An agent: \`isocan identity --session\` — the daemon hands
+  out a free name, or asks for yours with --name. Auto-starts when needed.
 
 Your name (agents, read this):
-  Pick a name of your own — not your model's or vendor's, and never the
-  human's. \`isocan who --all\` lists every name already on the canvas; choose
-  one nobody answers to, since \`@Name\` addresses people by name. Names in
-  the spirit of the canvas fit best: Isaac, Kenny, Nico, Sonia, Iona, Osian,
-  Isao, Cana — all hiding in the letters of "isocan". Keep it for the whole
+  You need a name of your own — not your model's or vendor's, and never the
+  human's. \`isocan identity --session\` hands you a free one (Isaac, Kenny,
+  Nico… — names hiding in the letters of "isocan"); ask for a specific one
+  with --name and the daemon refuses it if somebody already answers to it,
+  since \`@Name\` addresses people by name. Keep it for the whole
   collaboration so the human can call you back by it.
 
 Presence (automatic once you have a session):
@@ -322,42 +322,6 @@ async function nameCollision(
 }
 
 /**
- * Everyone every canvas answers to — live faces and the names in their
- * history, which is the same set `@Name` resolves against.
- *
- * `nameCollision` asks the same question of ONE project, the default when
- * there is one, and only warns after the fact. That is the wrong shape for
- * "may I be Kenny": agents pick names before they pick canvases, and a name
- * put down an hour ago still answers. Best-effort, and only of a daemon
- * already running, because naming yourself has to work offline.
- */
-async function heldNames(cmd: Command): Promise<NameHolder[]> {
-  const holders: NameHolder[] = [];
-  try {
-    const globals = cmd.optsWithGlobals() as { port?: string };
-    const home = paths.isocanHome();
-    const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
-    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-    if (!(await client.health())) return holders;
-    // knownNames only reads through the client; nobody is speaking here.
-    const ctx = { client, actor: { id: "", name: "" }, json: false, home } as Ctx;
-    for (const project of await client.listProjects()) {
-      const sessions = await client.listSessions(project.id);
-      for (const known of await knownNames(ctx, project, sessions)) {
-        holders.push({
-          actor: { id: known.id, name: known.name },
-          project: project.title,
-          live: known.live,
-        });
-      }
-    }
-  } catch {
-    // No daemon, no canvases, nobody to collide with.
-  }
-  return holders;
-}
-
-/**
  * A rename should reach the face you are already wearing. Best-effort, on the
  * same terms as the collision check: only asks a daemon that is already
  * running, and never fails `identity` — which has to work offline.
@@ -390,8 +354,8 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
  * for a bare shell or a cron job). A person at a keyboard is the machine's
  * owner.
  */
-function identityTarget(opts: { session?: boolean; home?: boolean }): "session" | "home" {
-  if (opts.session) return "session";
+function identityTarget(opts: { session?: boolean; home?: boolean; as?: string }): "session" | "home" {
+  if (opts.session || opts.as !== undefined) return "session";
   if (opts.home) return "home";
   return process.stdin.isTTY ? "home" : "session";
 }
@@ -399,32 +363,40 @@ function identityTarget(opts: { session?: boolean; home?: boolean }): "session" 
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
-  .option("--name <name>", "display name")
+  .option("--name <name>", "display name (with --session, omit it to be handed a free one)")
   .option(
     "--session",
     "name the agent running this command — what tells two agents in ONE directory apart",
   )
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
+  .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
   .action(
     run(
       async (
-        opts: { name?: string; session?: boolean; home?: boolean; new?: boolean },
+        opts: { name?: string; session?: boolean; home?: boolean; new?: boolean; as?: string },
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
-        if (opts.name) {
+        const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+        // `--session` alone is a claim, not a lookup: "hand me a free name".
+        if (opts.name || opts.session || opts.as) {
           const scope = identityTarget(opts);
-          const bound =
-            scope === "session"
-              ? await writeSessionIdentity(home, opts.name, opts.new ?? false, await heldNames(cmd))
-              : null;
-          const actor = bound?.actor ?? (await writeIdentity(home, opts.name, opts.new ?? false));
-          const where =
-            scope === "session"
-              ? `${paths.agentsFile(home)} (${bound!.harness} session)`
-              : paths.identityFile(home);
-          console.log(`identity saved: ${actor.name} (${actor.id}) → ${where}`);
+          if (scope === "session") {
+            const { actor, harness } = await claimSessionIdentity(client, home, {
+              ...(opts.name !== undefined ? { name: opts.name } : {}),
+              ...(opts.new ? { fresh: true } : {}),
+              ...(opts.as !== undefined ? { as: opts.as } : {}),
+            });
+            console.log(
+              `identity saved: ${actor.name} (${actor.id}) → ${paths.actorsFile(home)} (${harness} session)`,
+            );
+            await relabelLiveSession(cmd, actor);
+            return;
+          }
+          if (!opts.name) throw new Error('a name is required — `isocan identity --name "You" --home`');
+          const actor = await writeIdentity(home, opts.name, opts.new ?? false);
+          console.log(`identity saved: ${actor.name} (${actor.id}) → ${paths.identityFile(home)}`);
           await relabelLiveSession(cmd, actor);
           const taken = await nameCollision(cmd, actor);
           if (taken) {
@@ -434,7 +406,7 @@ program
             );
           }
         } else {
-          const resolved = await resolveIdentity(home, process.cwd());
+          const resolved = await resolveIdentity(client, home);
           if (!resolved) throw new Error("no identity configured — use --name");
           printKeyValues({
             id: resolved.actor.id,
@@ -454,9 +426,10 @@ program
   .command("whoami")
   .description("Show your identity")
   .action(
-    run(async () => {
+    run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
-      const resolved = await resolveIdentity(home, process.cwd());
+      const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+      const resolved = await resolveIdentity(client, home);
       if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
       const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);

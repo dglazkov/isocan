@@ -9,6 +9,8 @@ export type OpErrorCode =
   | "empty-body"
   | "last-comment"
   | "main-exists"
+  | "name-taken"
+  | "unknown-actor"
   | "internal-op"
   | "unknown-op"
   | "bad-op";

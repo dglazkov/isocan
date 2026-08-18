@@ -31,6 +31,9 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "actor.claim":
+      return null; // home-scoped and never undoable; never reaches a project
+
     case "project.update":
       return { type: "project.update", patch: invertMetaPatch(project, op.patch) };
 

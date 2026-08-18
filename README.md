@@ -119,13 +119,15 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   carries the count. Read state is per-viewer, kept in the browser — so
   reopening a canvas shows what happened while you were away.
 - **Two parties, two names**: the person who owns the machine, and the agents
-  working on it. `~/.isocan/identity.json` is yours; an agent names itself
-  against the session id its harness exports (`isocan identity --name …
-  --session`), so two agents sharing a directory stay two people. An agent
-  introducing itself can never rename you, and a CLI with no terminal and no
-  session gets an error rather than a slot — because the thing at the other
-  end of a pipe is not the person. (`isocan setup` sidesteps the question
-  entirely: it makes no canvas, so none is stamped with whoever typed it.)
+  working on it. `~/.isocan/identity.json` is yours; an agent claims an actor
+  against the session id its harness exports (`isocan identity --session` —
+  naming yourself is an operation, applied atomically by the daemon, which
+  hands out a free name when none is asked for), so two agents sharing a
+  directory stay two people. An agent introducing itself can never rename
+  you, and a CLI with no terminal and no session gets an error rather than a
+  slot — because the thing at the other end of a pipe is not the person.
+  (`isocan setup` sidesteps the question entirely: it makes no canvas, so
+  none is stamped with whoever typed it.)
 - **Identity**: a name you pick at the door (web dialog / CLI prompt); stamped
   on every mutation, comment, and version. Click your own face in the pile to
   change it: *rename* keeps your actor id, so your undo stack and the comments
@@ -153,7 +155,7 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 
 ```
 isocan setup [dir]                 # skill + CLI + daemon for a directory
-isocan identity [--name X [--session|--home|--new]]|whoami
+isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan project create|list|show|edit|delete · isocan use <project>
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

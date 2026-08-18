@@ -115,9 +115,11 @@ export interface WatchLogResponse {
 // ---- REST payloads ----
 
 export interface PostOpRequest {
-  /** null only for project.create. */
+  /** null only for project.create and actor.claim. */
   projectId: string | null;
-  actor: Actor;
+  /** Who is speaking. Optional for actor.claim only — a claim RESOLVES who
+   * is speaking, and the response envelope carries the answer. */
+  actor?: Actor;
   clientId?: string;
   op: Operation;
 }

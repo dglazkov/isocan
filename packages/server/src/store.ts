@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { LogEntry, Project, ProjectState } from "@isocan/core";
-import { applyOperation, emptyCanvas } from "@isocan/core";
+import type { ActorRegistry, LogEntry, Project, ProjectState } from "@isocan/core";
+import { applyOperation, bindClaim, emptyCanvas } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 
@@ -133,6 +133,45 @@ export class Store {
       p.projectDir(this.home, id),
       path.join(p.deletedProjectsDir(this.home), `${id}-${stamp}`),
     );
+  }
+
+  // ---- the actor registry (home-scoped; see core/claims.ts) ----
+
+  /**
+   * Load the registry: snapshot plus any oplog tail the snapshot doesn't
+   * cover. Replay is trivial — the envelope carries the RESOLVED actor, so a
+   * logged claim re-applies without re-validation — which is what makes the
+   * jsonl the source of truth and actors.json derived, same as a project.
+   */
+  async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
+    const snapshot = await readJson<{ lastSeq: number; claims: ActorRegistry["claims"] }>(
+      p.actorsFile(this.home),
+    );
+    let registry: ActorRegistry = { claims: snapshot?.claims ?? {} };
+    let lastSeq = snapshot?.lastSeq ?? 0;
+    const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
+    let recovered = false;
+    for (const entry of entries) {
+      if (entry.seq <= lastSeq) continue;
+      const op = entry.envelope.op;
+      if (op.type !== "actor.claim") continue;
+      registry = bindClaim(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, op });
+      lastSeq = entry.seq;
+      recovered = true;
+    }
+    if (recovered) await this.saveActors(registry, lastSeq);
+    return { registry, lastSeq };
+  }
+
+  async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
+    await writeFileAtomic(
+      p.actorsFile(this.home),
+      pretty({ lastSeq, claims: registry.claims }),
+    );
+  }
+
+  async appendActorsLog(entry: LogEntry): Promise<void> {
+    await appendLineDurable(p.actorsLogFile(this.home), JSON.stringify(entry));
   }
 
   // ---- blobs ----

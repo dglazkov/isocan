@@ -151,25 +151,6 @@ describe("a rename reaches the live face", () => {
     expect(after[0]!.actor).toEqual({ id: isaac.id, name: "Isaac the Second" });
   });
 
-  it("or on the next command, when the file changed behind the daemon's back", async () => {
-    await isocan(claude("s-1"), "identity", "--name", "Isaac", "--session");
-    await isocan(claude("s-1"), "session", "start", "--project", "prj_1");
-    const [live] = await roster();
-    const isaac = live!.actor;
-
-    const agentsFile = path.join(home, "agents.json");
-    const registry = JSON.parse(await fs.readFile(agentsFile, "utf8")) as {
-      sessions: Record<string, { name: string }>;
-    };
-    registry.sessions["claude-code:s-1"]!.name = "Renamed Offline";
-    await fs.writeFile(agentsFile, JSON.stringify(registry));
-    expect((await roster())[0]!.actor.name).toBe("Isaac");
-
-    // Any command that narrates carries the current actor with it.
-    await isocan(claude("s-1"), "ls", "--project", "prj_1");
-    expect((await roster())[0]!.actor).toEqual({ id: isaac.id, name: "Renamed Offline" });
-  });
-
   it("renaming without a session (or a daemon) still just works", async () => {
     const renamed = await isocan({}, "identity", "--name", "Solo", "--home");
     expect(renamed.code).toBe(0);

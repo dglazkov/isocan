@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   Actor,
+  ActorBindingRecord,
+  ActorClaimOp,
   BlobUploadResponse,
   CanvasSnapshotResponse,
   CreateSessionResponse,
@@ -94,6 +96,18 @@ export class DaemonClient {
       await new Promise((r) => setTimeout(r, 150));
     }
     throw new Error(`daemon did not come up on ${this.base} — see ${paths.daemonLogFile(this.home)}`);
+  }
+
+  /** Name (or resume) the actor behind a session key — the one op sent
+   * without an actor: the response envelope says who you are. */
+  claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
+    return this.request("POST", "/api/ops", { projectId: null, op });
+  }
+
+  /** Who the given session keys speak as (everyone, when omitted). */
+  actorBindings(keys?: string[]): Promise<ActorBindingRecord[]> {
+    const query = keys?.length ? `?keys=${keys.map(encodeURIComponent).join(",")}` : "";
+    return this.request("GET", `/api/actors${query}`);
   }
 
   sendOp(

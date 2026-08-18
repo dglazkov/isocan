@@ -36,8 +36,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const store = new Store(home);
   await store.init();
-  const engine = new Engine(store);
   const presence = new PresenceHub();
+  // Claims consult presence: a live face holds its name (see core/claims.ts).
+  const engine = new Engine(store, { liveness: (projectId) => presence.roster(projectId) });
 
   // Op piggyback: an op bound to a session (clientId === sessionId) moves
   // that session's cursor to the op's locus — presence traces real work.

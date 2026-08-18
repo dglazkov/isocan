@@ -30,9 +30,8 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   // stamps nothing, and an agent should be able to see where it has landed
   // before it decides what to call itself. The getter is what makes that
   // lazy — reads never touch `actor`, so they never demand one.
-  const known = await resolveIdentity(home, process.cwd());
-  const actor =
-    known?.actor ?? (process.stdin.isTTY ? await requireIdentity(home, process.cwd()) : null);
+  const known = await resolveIdentity(client, home);
+  const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
   await client.ensureDaemon();
   await warnIfStale(client, home);
   return {

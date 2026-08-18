@@ -43,6 +43,30 @@ export interface MetaPatch {
 }
 
 export type Operation =
+  // ---- actors ----
+  | {
+      /**
+       * Naming yourself, as a mutation like any other (#57). Home-scoped:
+       * `projectId` is null, the entry lands in the home's actors log, and
+       * the ENGINE applies it against the actor registry — a per-project
+       * reducer never sees it. NOT undoable (see project.delete's precedent).
+       * The envelope's `actor` is the RESULT: the daemon stamps the resolved
+       * actor, which is how the caller learns who it is.
+       */
+      type: "actor.claim";
+      /** `<harness>:<session id>` — the one key one agent holds, durable
+       * across resume because harnesses name conversations, not processes. */
+      sessionKey: string;
+      /** The name asked for. Omitted: the daemon allocates the next free
+       * isocan name — ask, receive. */
+      name?: string;
+      /** Reincarnate deliberately as this existing actor id — a returning
+       * agent whose conversation (and so session id) is truly gone. */
+      as?: string;
+      /** Mint a NEW actor even if the name is worn: a second Kenny on
+       * purpose, not a collision. */
+      fresh?: boolean;
+    }
   // ---- projects ----
   | {
       type: "project.create";

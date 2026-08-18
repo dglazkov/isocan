@@ -40,8 +40,7 @@ isocan status                  # daemon auto-starts on any command if down
 isocan project list            # find the canvas; then either:
 isocan use <project>           #   set default, or pass --project <ref> per command
 isocan whoami                  # identity must be YOURS, not the user's
-isocan who --all               # every name the canvas knows — see "Your name"
-isocan identity --name "Kenny" --session # your name, as THIS agent
+isocan identity --session      # be handed a name, as THIS agent
 ```
 
 **If `project list` is empty, there is nothing to work on yet.** Canvases are
@@ -63,11 +62,12 @@ and any harness should be able to run this skill), and never the human's.
 **A machine holds one person and any number of agents.** Two slots keep them
 apart. `~/.isocan/identity.json` is the person's name. A session — the id
 your harness puts in the environment of every command it runs — belongs to
-you alone, and `--session` claims it: two agents in one checkout are two
-people without having to coordinate at all. There is no directory slot — a
-directory cannot tell one agent from another, so a name written there would
-be handed to whoever walks in next. `--session` can never rename the human —
-that is the whole reason the flag exists.
+you alone, and `--session` claims it: naming yourself is an operation the
+daemon applies atomically, so two agents in one checkout are two people
+without having to coordinate at all, even claiming in the same second. There
+is no directory slot — a directory cannot tell one agent from another, so a
+name written there would be handed to whoever walks in next. `--session` can
+never rename the human — that is the whole reason the flag exists.
 
 If `--session` reports no harness session, export a session id yourself
 before naming yourself — any stable string works for the length of your run:
@@ -79,9 +79,6 @@ export ISOCAN_SESSION_ID="$(uuidgen)"   # with ISOCAN_HARNESS for the label
 or name your harness's own variable once in `~/.isocan/config.json` under
 `harnessVars` so it works every time after.
 
-Names hiding in the letters of "isocan" fit the place: **Isaac, Kenny, Nico,
-Sonia, Iona, Osian, Isao, Cana** — or invent another in the same spirit.
-
 Pick like this, once, before you appear:
 
 1. `isocan whoami` — a name followed by "this agent session" is YOURS, from
@@ -90,17 +87,20 @@ Pick like this, once, before you appear:
    nobody has been named yet it errors with "no identity configured" — that
    is the answer "nobody, yet", not a broken install; same for an empty
    `project list`. Neither is a reason to reinstall anything.
-2. `isocan who --all --json` — every name the canvas knows, live or not
-   (history included: a name someone used once still addresses them).
-3. Take the first name from the roster above that nobody on the canvas
-   answers to. If they are all taken, coin a new one from the same letters.
-   Another agent may be picking at the same moment and land on the same name
-   first; step 4 will tell you if so, and then you take the next one.
-4. `isocan identity --name "<name>" --session`, then keep it for the whole
-   collaboration — the human will call you back by it, and `@Name` only works
-   if exactly one of you answers to it. If someone is already standing on
-   that name the command REFUSES it and says so; go back to step 3 and take
-   the next one rather than forcing it with `--new`.
+2. `isocan identity --session` — ask, receive. The daemon knows every name
+   every canvas answers to and hands you a free one (Isaac, Kenny, Nico… —
+   names hiding in the letters of "isocan"); no roster to read, no race to
+   lose. Want a specific name? `--name "<name>"` — if somebody already
+   answers to it the command REFUSES and names the holder; take what
+   allocation offers instead of forcing it with `--new`. Then keep the name
+   for the whole collaboration — the human will call you back by it, and
+   `@Name` only works if exactly one of you answers to it.
+
+Your session id is durable across resume — a resumed conversation gets the
+same actor back by running the same command. Only if your conversation is
+truly gone (fresh session, no transcript) and you must be your old self
+again: `isocan identity --as <your old usr_… id>` — deliberate reincarnation,
+never a way to take a name that isn't yours.
 
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
