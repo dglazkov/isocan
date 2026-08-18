@@ -92,13 +92,6 @@ describe("isocan setup", () => {
     await expect(fs.stat(path.join(work, ".isocan"))).rejects.toThrow();
   });
 
-  it("names the agent it finds here, and still speaks for nobody", async () => {
-    await isocan("identity", "--name", "Isaac", "--here");
-    const report = JSON.parse((await isocan("setup", "--no-install", "--no-open", "--json")).stdout);
-    expect(report.agent).toContain("Isaac");
-    expect(await projects()).toEqual([]);
-  });
-
   it("is idempotent — a second run reports the skill as current", async () => {
     await isocan("setup", "--no-install", "--no-open");
     const again = await isocan("setup", "--no-install", "--no-open", "--json");

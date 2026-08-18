@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { startDaemon, type Daemon } from "@isocan/server";
 import {
   adoptIdentity,
   enterAs,
@@ -7,6 +11,13 @@ import {
   renameIdentity,
   signOut,
 } from "../src/lib/identity.ts";
+
+/**
+ * Web identity is a claim, not a file (#58): every door in the UI issues
+ * `actor.claim`, so these tests assert against a real daemon — the same
+ * single writer the CLI's `identity --session` talks to. localStorage is
+ * memory (which actors are this browser's to ask for), never authority.
+ */
 
 /** localStorage, in memory — the module reads it lazily, so a stub is enough. */
 function stubStorage(): void {
@@ -23,48 +34,102 @@ function stubStorage(): void {
   };
 }
 
-describe("web identity", () => {
-  beforeEach(stubStorage);
+let home: string;
+let daemon: Daemon;
+let base: string;
+const realFetch = globalThis.fetch;
 
-  it("mints an id on first entry and remembers it", () => {
-    const me = enterAs("Dimitri");
+beforeEach(async () => {
+  stubStorage();
+  home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-web-identity-"));
+  daemon = await startDaemon({ port: 0, home });
+  const address = daemon.app.server.address();
+  base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  // The app fetches same-origin ("/api/…"); in node the daemon is the origin.
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+    realFetch(
+      typeof input === "string" && input.startsWith("/") ? `${base}${input}` : input,
+      init,
+    )) as typeof fetch;
+});
+
+afterEach(async () => {
+  globalThis.fetch = realFetch;
+  await daemon.close();
+  await fs.rm(home, { recursive: true, force: true });
+});
+
+/** The daemon's registry, as the API serves it. */
+const bindings = (): Promise<{ key: string; actor: { id: string; name: string } }[]> =>
+  realFetch(`${base}/api/actors`).then((r) => r.json() as Promise<any>);
+
+describe("web identity", () => {
+  it("mints an id on first entry, remembers it, and the daemon holds the claim", async () => {
+    const me = await enterAs("Dimitri");
     expect(me.id).toMatch(/^usr_/);
     expect(readIdentity()).toEqual(me);
     expect(knownIdentities()).toEqual([me]);
+
+    const bound = await bindings();
+    expect(bound).toHaveLength(1);
+    expect(bound[0]!.key).toMatch(/^web:/);
+    expect(bound[0]!.actor).toEqual(me);
   });
 
-  it("renaming keeps the id — you are the same person, differently spelled", () => {
-    const before = enterAs("Dimitri");
-    const after = renameIdentity("Dimitri G");
+  it("renaming keeps the id — you are the same person, differently spelled", async () => {
+    const before = await enterAs("Dimitri");
+    const after = await renameIdentity("Dimitri G");
     expect(after.id).toBe(before.id);
     expect(readIdentity()).toEqual(after);
     // One roster entry, not two: renaming does not clone you.
     expect(knownIdentities()).toEqual([after]);
+    // And one binding: the rename travelled through the same session key.
+    const bound = await bindings();
+    expect(bound).toHaveLength(1);
+    expect(bound[0]!.actor).toEqual(after);
   });
 
-  it("leaving and re-entering under a name used before returns the SAME actor", () => {
-    const first = enterAs("Dimitri");
+  it("leaving and re-entering under a name used before returns the SAME actor", async () => {
+    const first = await enterAs("Dimitri");
     signOut();
     expect(readIdentity()).toBeNull();
     expect(knownIdentities()).toEqual([first]); // leaving is not forgetting
 
-    const back = enterAs("dimitri"); // case is not a different person
-    expect(back).toEqual(first);
+    const back = await enterAs("dimitri"); // case is not a different person
+    expect(back).toEqual(first); // the DAEMON said so — same rule as the CLI
   });
 
-  it("a name never used before is someone new, and both are remembered", () => {
-    const dimitri = enterAs("Dimitri");
-    const kenny = enterAs("Kenny");
+  it("a name never used before is someone new, and both are remembered", async () => {
+    const dimitri = await enterAs("Dimitri");
+    const kenny = await enterAs("Kenny");
     expect(kenny.id).not.toBe(dimitri.id);
     // Most recently worn first.
     expect(knownIdentities()).toEqual([kenny, dimitri]);
 
-    expect(adoptIdentity(dimitri)).toEqual(dimitri);
+    expect(await adoptIdentity(dimitri)).toEqual(dimitri);
     expect(readIdentity()).toEqual(dimitri);
     expect(knownIdentities()).toEqual([dimitri, kenny]);
   });
 
-  it("survives a browser that refuses storage", () => {
+  it("a name somebody ELSE answers to is refused, not quietly become", async () => {
+    // Kenny exists on a canvas, made there by someone who is not this
+    // browser: the door must not hand this browser his actor — or a fresh
+    // one wearing his name.
+    await realFetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: null,
+        actor: { id: "usr_cli_kenny", name: "Kenny" },
+        op: { type: "project.create", projectId: "prj_1", title: "Kenny's" },
+      }),
+    });
+
+    await expect(enterAs("Kenny")).rejects.toThrow(/taken here/);
+    expect(readIdentity()).toBeNull(); // still at the door
+  });
+
+  it("survives a browser that refuses storage", async () => {
     (globalThis as { localStorage?: unknown }).localStorage = {
       getItem: () => {
         throw new Error("denied");
@@ -76,7 +141,7 @@ describe("web identity", () => {
         throw new Error("denied");
       },
     };
-    const me = enterAs("Nico");
+    const me = await enterAs("Nico");
     expect(me.name).toBe("Nico");
     expect(readIdentity()).toBeNull(); // not remembered, but not broken
     expect(knownIdentities()).toEqual([]);

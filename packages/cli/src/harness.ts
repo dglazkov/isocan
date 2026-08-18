@@ -8,7 +8,7 @@ import { paths } from "@isocan/server";
  * commands it runs — its own name for "this conversation". None of them
  * agreed on a variable, but all of them do it, so one probe covers the field:
  * two agents in the SAME directory can tell themselves apart without either
- * being told anything, which a directory identity alone can never do.
+ * being told anything — which nothing on the filesystem can ever do.
  *
  * The id is not an identity. It is fresh on every session, so binding an
  * actor to it directly would make an agent a stranger every morning — it is a

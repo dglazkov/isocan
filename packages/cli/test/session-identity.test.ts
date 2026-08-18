@@ -12,9 +12,11 @@ import { harnessVars } from "../src/harness.ts";
  * Two agents, one directory.
  *
  * A directory has one identity file, so agents sharing a checkout used to
- * share a name. Every harness exports a session id into the commands it runs;
- * naming yourself against that id is what makes them two people — without
- * either of them having to be told the other exists.
+ * share a name — which is why there is no directory identity slot (#56).
+ * Every harness exports a session id into the commands it runs; claiming an
+ * actor against that id (`actor.claim`, applied by the daemon's single
+ * writer) is what makes them two people — without either of them having to
+ * be told the other exists (#57).
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -71,16 +73,29 @@ function asAgent(session: Record<string, string>, ...args: string[]) {
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
 
-/** Put a claim in the past. A name is held while someone is standing on it,
- * so "the same agent, tomorrow" has to be tomorrow to mean anything. */
+/** The daemon's registry, read from its snapshot on disk. */
+const registry = () =>
+  fs
+    .readFile(path.join(home, "actors.json"), "utf8")
+    .then(
+      (raw) =>
+        JSON.parse(raw) as { claims: Record<string, { id: string; name: string; boundAt: string }> },
+    );
+
+/**
+ * Put a claim in the past. The registry lives in the daemon's memory, so
+ * aging a binding means editing the snapshot UNDER a stopped daemon and
+ * starting a fresh one — which doubles as a persistence test.
+ */
 async function age(key: string, hours: number): Promise<void> {
-  const file = path.join(home, "agents.json");
-  const reg = JSON.parse(await fs.readFile(file, "utf8")) as {
-    sessions: Record<string, { boundAt: string }>;
-  };
-  reg.sessions[key]!.boundAt = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  await fs.writeFile(file, JSON.stringify(reg));
+  await daemon.close();
+  const file = path.join(home, "actors.json");
+  const reg = await registry();
+  reg.claims[key]!.boundAt = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  await fs.writeFile(file, JSON.stringify(reg, null, 2));
+  daemon = await startDaemon({ port, home });
 }
+
 const projects = (): Promise<Project[]> =>
   fetch(`${base}/api/projects`).then((r) => r.json() as Promise<Project[]>);
 const idOf = (out: string) => /\((usr_[^)]+)\)/.exec(out)?.[1];
@@ -104,29 +119,57 @@ describe("two agents in one directory", () => {
     const human = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8"));
     expect(human.name).toBe("Nico");
   });
-
-  it("outrank the directory identity without erasing it", async () => {
-    await asAgent({}, "identity", "--name", "Osian", "--here");
-    await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
-
-    expect((await asAgent(claude("s-1"), "whoami")).stdout).toContain("Kenny");
-    // An agent with no session of its own still finds the directory's name.
-    expect((await asAgent({}, "whoami")).stdout).toContain("Osian");
-  });
 });
 
 describe("a session is a key, not a person", () => {
-  it("the same name in a later session is the same actor", async () => {
+  it("the same key later — even after a restart — is the same actor", async () => {
     const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
-    await age("claude-code:s-1", 26); // yesterday's session, long since let go
-    const later = await asAgent(claude("s-9"), "identity", "--name", "Kenny", "--session");
-    // Sessions are fresh every morning; the history Kenny made is still his.
+    await age("claude-code:s-1", 26); // restarts the daemon: registry reloads
+    // `--continue` semantics: the conversation resumed, the key is the same.
+    const later = await asAgent(claude("s-1"), "identity", "--session");
+    expect(later.code).toBe(0);
+    expect(later.stdout).toContain("Kenny");
     expect(idOf(later.stdout)).toBe(idOf(first.stdout));
+  });
+
+  it("a NEW session wanting a used name is refused — coincidence is not identity", async () => {
+    // The old rule resumed "a name you used before" by lookup, which made a
+    // returning Kenny indistinguishable from a second Kenny. No name lookup
+    // anywhere now: a different key asking for Kenny is somebody else.
+    const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const second = await asAgent(claude("s-9"), "identity", "--name", "Kenny", "--session");
+    expect(second.code).not.toBe(0);
+    expect(second.stderr).toContain("taken here");
+    expect(second.stderr).toContain(`--as ${idOf(first.stdout)}`); // the deliberate way back
+  });
+
+  it("--as resumes a lost actor on purpose, and unseats the dead session", async () => {
+    const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const kenny = idOf(first.stdout)!;
+    await age("claude-code:s-1", 26); // the old conversation is long gone
+
+    const back = await asAgent(claude("s-9"), "identity", "--as", kenny);
+    expect(back.code).toBe(0);
+    expect(back.stdout).toContain("Kenny");
+    expect(idOf(back.stdout)).toBe(kenny);
+
+    // One actor is one session: the abandoned key no longer speaks as Kenny.
+    expect(Object.keys((await registry()).claims)).toEqual(["claude-code:s-9"]);
+  });
+
+  it("--as is refused while the actor is visibly somebody", async () => {
+    // The suggestion "use --as if you are them" must not be followable by
+    // somebody who is not: a just-claimed session is presumed alive.
+    const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const steal = await asAgent(claude("s-9"), "identity", "--as", idOf(first.stdout)!);
+    expect(steal.code).not.toBe(0);
+    expect(steal.stderr).toContain("two faces");
   });
 
   it("unless --new, which makes you someone else", async () => {
     const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
     const other = await asAgent(claude("s-9"), "identity", "--name", "Kenny", "--session", "--new");
+    expect(other.code).toBe(0);
     expect(idOf(other.stdout)).not.toBe(idOf(first.stdout));
   });
 
@@ -145,6 +188,86 @@ describe("a session is a key, not a person", () => {
   });
 });
 
+describe("ask, receive", () => {
+  it("a claim with no name is handed the next free isocan name", async () => {
+    const first = await asAgent(claude("s-1"), "identity", "--session");
+    expect(first.code).toBe(0);
+    expect(first.stdout).toContain("Isaac"); // the roster, in order
+
+    const second = await asAgent(claude("s-2"), "identity", "--session");
+    expect(second.stdout).toContain("Kenny"); // Isaac is taken — no race, no retry
+
+    // And asking again is being told who you already are, not a third name.
+    const again = await asAgent(claude("s-1"), "identity", "--session");
+    expect(again.stdout).toContain("Isaac");
+    expect(idOf(again.stdout)).toBe(idOf(first.stdout));
+  });
+
+  it("allocation skips names the canvases answer to, not just claimed ones", async () => {
+    await asAgent({}, "project", "create", "Isaac's Own"); // Nico's canvas...
+    await asAgent({}, "session", "start", "--project", "Isaac's Own");
+    // ...but rename the human to Isaac so the name is on the canvas's record.
+    await asAgent({}, "identity", "--name", "Isaac", "--home");
+    await asAgent({}, "ls", "--project", "Isaac's Own"); // put the new name on a live face
+
+    const claimed = await asAgent(claude("s-1"), "identity", "--session");
+    expect(claimed.code).toBe(0);
+    expect(claimed.stdout).not.toContain("Isaac ("); // not handed the human's name
+    expect(claimed.stdout).toContain("Kenny");
+  });
+});
+
+describe("two agents, two faces", () => {
+  it("presence beats never cross — each agent touches only its own session", async () => {
+    await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
+    await asAgent(claude("s-2"), "identity", "--name", "Osian", "--session");
+    await asAgent(claude("s-1"), "project", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
+    await asAgent(claude("s-2"), "session", "start", "--project", "Surfaces", "--label", "Osian 🤖");
+
+    // The facepile bug: the session pointer was ONE file per home, and every
+    // update re-states who is holding the session — so Iona's next command
+    // read the pointer Osian had just overwritten and beat HER actor into
+    // HIS session: Iona's face under the label "Osian 🤖", while Iona's own
+    // session starved. Narrating commands are the beats that did it.
+    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
+    await asAgent(claude("s-2"), "comment", "list", "--project", "Surfaces");
+    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
+
+    const project = (await projects()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+      r.json(),
+    )) as { sessionId: string; label: string | null; actor: { id: string; name: string } }[];
+
+    expect(roster).toHaveLength(2); // two faces, neither starved out
+    const byLabel = Object.fromEntries(roster.map((s) => [s.label, s.actor.name]));
+    expect(byLabel).toEqual({ "Iona 🤖": "Iona", "Osian 🤖": "Osian" });
+    expect(new Set(roster.map((s) => s.actor.id)).size).toBe(2);
+  });
+});
+
+describe("leaving is leaving", () => {
+  it("session end clears the face even when the pointer is lost", async () => {
+    // The transition ghost: sessions started before the per-actor pointer
+    // existed could never be ended by the file — "no active session" — and
+    // the face blinked on until its TTL. End by ACTOR instead: the pointer
+    // is a cache, the daemon is the truth.
+    await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
+    await asAgent(claude("s-1"), "project", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
+    await fs.rm(path.join(home, "sessions"), { recursive: true, force: true });
+
+    const ended = await asAgent(claude("s-1"), "session", "end", "--project", "Surfaces");
+    expect(ended.stdout).toContain("session ended");
+
+    const project = (await projects()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+      r.json(),
+    )) as unknown[];
+    expect(roster).toEqual([]); // nobody left blinking
+  });
+});
+
 describe("agents launched by agents", () => {
   it("the inner one speaks, though it can see the outer one's session too", async () => {
     // Claude Code names itself, then starts codex: the child inherits
@@ -159,20 +282,16 @@ describe("agents launched by agents", () => {
 });
 
 describe("nothing to name", () => {
-  it("--session says so, and points at the flag that does work", async () => {
+  it("--session says so, and points at the variable that does work", async () => {
     const out = await asAgent({}, "identity", "--name", "Kenny", "--session");
     expect(out.code).not.toBe(0);
     expect(out.stderr).toContain("no harness session");
-    expect(out.stderr).toContain("--here");
+    expect(out.stderr).toContain("ISOCAN_SESSION_ID");
+    expect(out.stderr).toContain("harnessVars");
   });
 });
 
 describe("harnesses isocan has not met", () => {
-  const registry = () =>
-    fs
-      .readFile(path.join(home, "agents.json"), "utf8")
-      .then((raw) => JSON.parse(raw) as { sessions: Record<string, { name: string }> });
-
   it("ISOCAN_SESSION_ID names an agent when nothing else does", async () => {
     await asAgent({ ISOCAN_SESSION_ID: "own-1" }, "identity", "--name", "Sonia", "--session");
     const who = await asAgent({ ISOCAN_SESSION_ID: "own-1" }, "whoami");
@@ -198,7 +317,7 @@ describe("harnesses isocan has not met", () => {
       "Sonia",
       "--session",
     );
-    expect(Object.keys((await registry()).sessions)).toEqual(["isocan:own-1"]);
+    expect(Object.keys((await registry()).claims)).toEqual(["isocan:own-1"]);
   });
 
   it("config.json adopts a harness isocan never shipped", async () => {
@@ -209,23 +328,12 @@ describe("harnesses isocan has not met", () => {
     const out = await asAgent({ JETSKI_CONVO: "j-1" }, "identity", "--name", "Cana", "--session");
     expect(out.code).toBe(0);
     expect(out.stdout).toContain("(jetski session)"); // and the typo alongside it was ignored
-    expect(Object.keys((await registry()).sessions)).toEqual(["jetski:j-1"]);
+    expect(Object.keys((await registry()).claims)).toEqual(["jetski:j-1"]);
     expect((await asAgent({ JETSKI_CONVO: "j-1" }, "whoami")).stdout).toContain("Cana");
-  });
-
-  it("the error names both ways out when there is no session at all", async () => {
-    const out = await asAgent({}, "identity", "--name", "Kenny", "--session");
-    expect(out.stderr).toContain("ISOCAN_SESSION_ID");
-    expect(out.stderr).toContain("harnessVars");
   });
 });
 
 describe("one name, one agent", () => {
-  const registry = () =>
-    fs
-      .readFile(path.join(home, "agents.json"), "utf8")
-      .then((raw) => JSON.parse(raw) as { sessions: Record<string, { id: string; name: string }> });
-
   it("the second agent to reach for a name is refused, not merged into the first", async () => {
     // The bug this exists for: both agents entered a checkout, both were told
     // to be Kenny, and name-continuity handed the second one the first one's
@@ -235,20 +343,18 @@ describe("one name, one agent", () => {
 
     expect(second.code).not.toBe(0);
     expect(second.stderr).toContain("taken here");
-    expect(Object.keys((await registry()).sessions)).toEqual(["claude-code:s-1"]);
+    expect(Object.keys((await registry()).claims)).toEqual(["claude-code:s-1"]);
     // And the loser is still nobody, rather than quietly being the winner.
     expect((await asAgent(claude("s-2"), "whoami")).stdout).not.toContain("Kenny");
   });
 
-  it("a live name is taken however its wearer got it — a directory name counts", async () => {
-    // The reported failure. A previous agent had left `.isocan/identity.json`
-    // in the checkout, so the Kenny on the canvas belonged to no session at
-    // all, and a guard that only compared session bindings saw nothing.
-    await asAgent({}, "identity", "--name", "Osian", "--here");
+  it("a live name is taken however its wearer got it — the human's counts too", async () => {
+    // The reducer compares against everyone a canvas answers to, not just the
+    // registry: here the Nico on the canvas belongs to no session at all.
     await asAgent({}, "project", "create", "Shared");
     await asAgent({}, "session", "start", "--project", "Shared");
 
-    const taken = await asAgent(claude("s-1"), "identity", "--name", "Osian", "--session");
+    const taken = await asAgent(claude("s-1"), "identity", "--name", "Nico", "--session");
     expect(taken.code).not.toBe(0);
     expect(taken.stderr).toContain("taken here");
     expect(taken.stderr).toContain("Shared"); // and says where it is worn

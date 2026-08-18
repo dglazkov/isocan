@@ -3,7 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColor } from "../lib/colors.ts";
-import { quietFor, statusLine } from "../lib/presence.ts";
+import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
 const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
@@ -47,6 +47,17 @@ export function CursorLayer() {
       const live = new Set<string>();
       let moving = false;
 
+      // Stacked cursors — everyone the same summons landed on one thread —
+      // fan out so each face stays visible. Working sessions are excluded:
+      // their wander already tells them apart.
+      const stillTargets = new Map<string, { x: number; y: number }>();
+      for (const session of current) {
+        if (session.cursor && session.activity?.kind !== "working") {
+          stillTargets.set(session.sessionId, session.cursor);
+        }
+      }
+      const spread = spreadOverlaps(stillTargets);
+
       for (const session of current) {
         // Wander area: the anchored item's bounds, or a synthetic patch
         // around a freestanding work point.
@@ -66,10 +77,11 @@ export function CursorLayer() {
         if (!session.cursor && !workingBounds) continue;
         live.add(session.sessionId);
 
-        const home = session.cursor ?? {
-          x: workingBounds!.x + workingBounds!.width / 2,
-          y: workingBounds!.y + workingBounds!.height / 2,
-        };
+        const home = spread.get(session.sessionId) ??
+          session.cursor ?? {
+            x: workingBounds!.x + workingBounds!.width / 2,
+            y: workingBounds!.y + workingBounds!.height / 2,
+          };
         let rec = animated.current.get(session.sessionId);
         if (!rec || Math.hypot(home.x - rec.x, home.y - rec.y) > SNAP_DISTANCE) {
           rec = { x: home.x, y: home.y, tx: home.x, ty: home.y, nextAt: 0 };

@@ -1,9 +1,14 @@
 import type {
   Actor,
+  ActorBindingRecord,
+  ActorClaimOp,
+  ActorRegistry,
   CanvasSnapshotResponse,
   LogEntry,
+  NameHolder,
   OpEnvelope,
   Operation,
+  PresenceSession,
   Project,
   ProjectState,
   ServerMessage,
@@ -11,7 +16,9 @@ import type {
 import {
   INTERNAL_OP_TYPES,
   OpValidationError,
+  applyClaim,
   applyOperation,
+  collectCanvasNames,
   invertOperation,
   newOpId,
   resolvePlacement,
@@ -32,6 +39,17 @@ interface ProjectRuntime {
   lastSeq: number;
   entries: LogEntry[];
   undo: UndoStacks;
+}
+
+interface ActorsRuntime {
+  registry: ActorRegistry;
+  lastSeq: number;
+}
+
+export interface EngineOptions {
+  /** Who is visibly on a canvas right now — presence, which lives outside
+   * the engine. Claims consult it so a live face holds its name. */
+  liveness?: (projectId: string) => PresenceSession[];
 }
 
 export class ProjectNotFoundError extends Error {
@@ -55,6 +73,11 @@ export interface SubmitRequest {
   op: Operation;
 }
 
+export interface ClaimRequest {
+  op: ActorClaimOp;
+  clientId?: string;
+}
+
 type EventListener = (projectId: string, message: ServerMessage) => void;
 
 /**
@@ -67,10 +90,14 @@ type EventListener = (projectId: string, message: ServerMessage) => void;
  */
 export class Engine {
   private projects = new Map<string, ProjectRuntime>();
+  private actorsRuntime: ActorsRuntime | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
 
-  constructor(private readonly store: Store) {}
+  constructor(
+    private readonly store: Store,
+    private readonly options: EngineOptions = {},
+  ) {}
 
   /** Subscribe to project events; returns an unsubscribe function. */
   onEvent(listener: EventListener): () => void {
@@ -109,6 +136,25 @@ export class Engine {
 
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(() => this.applyAndPersist(request, undefined));
+  }
+
+  /**
+   * Naming yourself, atomically (#57). A writer like any other: two agents
+   * claiming at the same moment serialize on this chain, so the second is
+   * refused or handed a different name by construction — never by a
+   * client-side pre-check both of them can pass at once.
+   */
+  claim(request: ClaimRequest): Promise<LogEntry> {
+    return this.enqueue(() => this.applyClaimAndPersist(request));
+  }
+
+  /** Who the given session keys (or everyone, when omitted) speak as. */
+  async actorBindings(keys?: string[] | null): Promise<ActorBindingRecord[]> {
+    const { registry } = await this.actors();
+    const wanted = keys ? new Set(keys) : null;
+    return Object.entries(registry.claims)
+      .filter(([key]) => !wanted || wanted.has(key))
+      .map(([key, { boundAt, ...actor }]) => ({ key, actor, boundAt }));
   }
 
   /**
@@ -253,6 +299,65 @@ export class Engine {
     });
   }
 
+  private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
+    const runtime = await this.actors();
+    const ts = new Date().toISOString();
+    const { registry, actor } = applyClaim(
+      { registry: runtime.registry, held: await this.heldNames(), now: ts },
+      request.op,
+    );
+    const envelope: OpEnvelope = {
+      id: newOpId(),
+      projectId: null,
+      actor,
+      ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+      ts,
+      op: request.op,
+    };
+    const seq = runtime.lastSeq + 1;
+    const entry: LogEntry = { seq, envelope, inverse: null };
+    await this.store.appendActorsLog(entry);
+    runtime.registry = registry;
+    runtime.lastSeq = seq;
+    await this.store.saveActors(registry, seq);
+    return entry;
+  }
+
+  /**
+   * Everyone every canvas answers to — live faces (and their labels) plus
+   * every name remembered in history, the same set an @-mention resolves
+   * against. This is what `heldNames()` in the CLI used to reconstruct by
+   * polling; here it is a read the single writer takes mid-claim.
+   */
+  private async heldNames(): Promise<NameHolder[]> {
+    const holders: NameHolder[] = [];
+    for (const project of await this.listProjects()) {
+      let state: ProjectState;
+      try {
+        state = (await this.runtime(project.id)).state;
+      } catch {
+        continue; // a project directory mid-delete answers for nobody
+      }
+      const add = (actor: Actor, live: boolean) =>
+        holders.push({ actor, project: project.title, live });
+      add(project.createdBy, false);
+      add(project.updatedBy, false);
+      for (const known of collectCanvasNames(state.canvas)) {
+        add({ id: known.id, name: known.name }, false);
+      }
+      for (const session of this.options.liveness?.(project.id) ?? []) {
+        add(session.actor, true);
+        if (session.label) add({ id: session.actor.id, name: session.label }, true);
+      }
+    }
+    return holders;
+  }
+
+  private async actors(): Promise<ActorsRuntime> {
+    if (!this.actorsRuntime) this.actorsRuntime = await this.store.loadActors();
+    return this.actorsRuntime;
+  }
+
   /** Core pipeline. Runs inside the queue. */
   private async applyAndPersist(
     request: SubmitRequest,
@@ -263,6 +368,11 @@ export class Engine {
     // Internal ops only ever arrive via undo/redo (from stored inverses).
     if (cause === undefined && INTERNAL_OP_TYPES.has(op.type)) {
       throw new OpValidationError("internal-op", `${op.type} cannot be issued directly`);
+    }
+
+    if (op.type === "actor.claim") {
+      // Home-scoped, and it resolves its own actor — `claim()` is its door.
+      throw new OpValidationError("bad-op", "actor.claim goes through Engine.claim");
     }
 
     if (op.type === "project.create") {

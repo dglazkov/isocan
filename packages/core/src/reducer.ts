@@ -74,6 +74,11 @@ export function applyOperation(
   };
 
   switch (op.type) {
+    case "actor.claim":
+      // Home-scoped: the engine applies claims against the actor registry
+      // and never routes them here. The case exists for exhaustiveness.
+      throw new OpValidationError("bad-op", "actor.claim is not a canvas operation");
+
     case "project.update":
       return {
         project: { ...project, ...applyMetaPatch(project, op.patch), ...stamp },

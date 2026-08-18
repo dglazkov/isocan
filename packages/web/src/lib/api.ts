@@ -1,5 +1,6 @@
 import type {
   Actor,
+  ActorClaimOp,
   BlobUploadResponse,
   CanvasSnapshotResponse,
   GcReport,
@@ -35,6 +36,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as T;
+}
+
+/** Name (or resume) this browser's actor — the one op sent without an
+ * actor: the claim resolves who is speaking, and the response envelope
+ * carries the answer. */
+export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
+  return request("POST", "/api/ops", { projectId: null, clientId: CLIENT_ID, op });
 }
 
 export function sendOp(

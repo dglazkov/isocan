@@ -1,5 +1,6 @@
-import type { Actor } from "@isocan/core";
-import { newActorId } from "@isocan/core";
+import type { Actor, ActorClaimOp } from "@isocan/core";
+import { newId } from "@isocan/core";
+import { claimActor } from "./api.ts";
 
 const KEY = "isocan.identity";
 const ROSTER_KEY = "isocan.identities";
@@ -8,57 +9,68 @@ const ROSTER_KEY = "isocan.identities";
 const MAX_REMEMBERED = 8;
 
 /**
- * Web identity lives in localStorage; the CLI's lives in ~/.isocan. Two
- * personas per machine is honest for v1; authenticated identity later only
- * changes how an Actor is minted.
+ * Who this browser is, answered by the daemon. Entering under a name issues
+ * `actor.claim` — the same operation the CLI's `identity --session` sends —
+ * so "coming back as a name you used before returns the SAME actor" is ONE
+ * rule, applied at the single writer, instead of one implementation per
+ * client over different storage (#58).
  *
- * Beside the current identity sits a roster of the ones this browser has
- * worn (#43). It exists because `Actor.id`, not the name, is what the canvas
- * remembers: your undo stack, your mentions, and the color of your cursor all
- * hang off it. So leaving and coming back as a name you used before has to
- * return you to the SAME actor, not a stranger who happens to share a name.
+ * What stays in localStorage is memory, not authority. Beside the current
+ * identity sits a roster of the personas this browser has worn (#43): each
+ * remembers its actor AND the session key it claims that actor with, so
+ * switching back is a resume — same key, same id, same history — and never a
+ * coincidence of spelling. The daemon decides whether the claim stands; the
+ * roster only remembers which actors are this browser's to ask for.
  */
+interface Persona extends Actor {
+  /** The session key this persona claims with. Durable per browser — the
+   * web's analog of a harness session id. Absent on rosters written before
+   * #58; minted on the next resume. */
+  key?: string;
+}
+
 export function readIdentity(): Actor | null {
-  return parseActor(read(KEY));
+  const current = parsePersona(read(KEY));
+  return current ? { id: current.id, name: current.name } : null;
 }
 
 /** Everyone this browser has been, most recently used first. */
 export function knownIdentities(): Actor[] {
-  const raw = read(ROSTER_KEY);
-  if (!Array.isArray(raw)) return [];
-  const seen = new Set<string>();
-  const roster: Actor[] = [];
-  for (const entry of raw) {
-    const actor = parseActor(entry);
-    if (!actor || seen.has(actor.id)) continue;
-    seen.add(actor.id);
-    roster.push(actor);
-  }
-  return roster.slice(0, MAX_REMEMBERED);
+  return personas().map(({ id, name }) => ({ id, name }));
 }
 
 /**
- * Enter under a name: the one the dialog calls. A name this browser has worn
- * before resumes that identity — same id, same history — rather than minting
- * a stranger. Anyone else is new.
+ * Enter under a name: the one the dialog calls. A persona this browser has
+ * worn before resumes — the daemon is asked to bind its key to the same
+ * actor. Anyone else is a fresh claim, which the daemon REFUSES if somebody
+ * on a canvas already answers to the name (the refusal names the holder);
+ * refusal surfaces as a thrown ApiError for the dialog to show.
  */
-export function enterAs(name: string): Actor {
+export async function enterAs(name: string): Promise<Actor> {
   const trimmed = name.trim();
-  const known = knownIdentities().find((actor) => sameName(actor.name, trimmed));
-  return become(known ?? { id: newActorId(), name: trimmed });
+  const known = personas().find((p) => sameName(p.name, trimmed));
+  if (known) return resume(known);
+  const key = mintKey();
+  return claimInto(key, { type: "actor.claim", sessionKey: key, name: trimmed });
 }
 
 /** Same person, new label: keeps the id, so everything you have done stays
- * yours. Matches `isocan identity --name`, which also renames in place. */
-export function renameIdentity(name: string): Actor {
-  const current = readIdentity();
+ * yours. Matches `isocan identity --name --session`, which renames the same
+ * way — one rule, one writer. */
+export async function renameIdentity(name: string): Promise<Actor> {
   const trimmed = name.trim();
-  return become(current ? { ...current, name: trimmed } : { id: newActorId(), name: trimmed });
+  const current = parsePersona(read(KEY));
+  if (!current) return enterAs(trimmed);
+  const key = current.key ?? mintKey();
+  // `as` pins the id: even if the daemon has pruned this key's binding, the
+  // rename must not quietly mint a stranger.
+  return claimInto(key, { type: "actor.claim", sessionKey: key, as: current.id, name: trimmed });
 }
 
 /** Become someone this browser already knows. */
-export function adoptIdentity(actor: Actor): Actor {
-  return become(actor);
+export async function adoptIdentity(actor: Actor): Promise<Actor> {
+  const known = personas().find((p) => p.id === actor.id);
+  return resume(known ?? { ...actor });
 }
 
 /**
@@ -73,21 +85,55 @@ export function signOut(): void {
   }
 }
 
-function become(actor: Actor): Actor {
-  const roster = [actor, ...knownIdentities().filter((known) => known.id !== actor.id)];
-  write(KEY, actor);
-  write(ROSTER_KEY, roster.slice(0, MAX_REMEMBERED));
-  return actor;
+/** Resume a persona: same key, same actor. `as` + `name` make the claim
+ * whole even when the daemon no longer remembers the binding. */
+function resume(persona: Persona): Promise<Actor> {
+  const key = persona.key ?? mintKey();
+  return claimInto(key, {
+    type: "actor.claim",
+    sessionKey: key,
+    as: persona.id,
+    name: persona.name,
+  });
 }
+
+async function claimInto(key: string, op: ActorClaimOp): Promise<Actor> {
+  const { envelope } = await claimActor(op);
+  return become({ id: envelope.actor.id, name: envelope.actor.name, key });
+}
+
+function personas(): Persona[] {
+  const raw = read(ROSTER_KEY);
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const roster: Persona[] = [];
+  for (const entry of raw) {
+    const persona = parsePersona(entry);
+    if (!persona || seen.has(persona.id)) continue;
+    seen.add(persona.id);
+    roster.push(persona);
+  }
+  return roster.slice(0, MAX_REMEMBERED);
+}
+
+function become(persona: Persona): Actor {
+  const roster = [persona, ...personas().filter((known) => known.id !== persona.id)];
+  write(KEY, persona);
+  write(ROSTER_KEY, roster.slice(0, MAX_REMEMBERED));
+  return { id: persona.id, name: persona.name };
+}
+
+const mintKey = (): string => `web:${newId("per").slice(4)}`;
 
 function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-function parseActor(value: unknown): Actor | null {
+function parsePersona(value: unknown): Persona | null {
   if (!value || typeof value !== "object") return null;
-  const { id, name } = value as Partial<Actor>;
-  return typeof id === "string" && typeof name === "string" && id && name ? { id, name } : null;
+  const { id, name, key } = value as Partial<Persona>;
+  if (typeof id !== "string" || typeof name !== "string" || !id || !name) return null;
+  return { id, name, ...(typeof key === "string" && key ? { key } : {}) };
 }
 
 function read(key: string): unknown {

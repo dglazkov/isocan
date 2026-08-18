@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
-import { useMentionRoster } from "../lib/mentions.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
@@ -30,10 +29,6 @@ export function Toolbar({
   const identityOpen = useUiStore((s) => s.identityOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
   const [editing, setEditing] = useState(false);
-  // The names already spoken for on this canvas — a rename into one of them
-  // is allowed but worth a word, since @-mentions key on names (the same
-  // warning `isocan identity --name` gives in the terminal).
-  const otherNames = useMentionRoster(actor.id).peers.map((peer) => peer.name);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
     useUiStore.getState().setIdentityOpen(false),
@@ -88,7 +83,6 @@ export function Toolbar({
           <div className="identity-popover">
             <IdentityMenu
               actor={actor}
-              takenNames={otherNames}
               onIdentity={onIdentity}
               onClose={() => useUiStore.getState().setIdentityOpen(false)}
             />

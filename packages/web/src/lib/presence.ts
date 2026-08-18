@@ -49,3 +49,41 @@ export function statusLine(session: PresenceSession): string | null {
   }
   return null;
 }
+
+/**
+ * Two cursors on exactly the same point read as one. The choreography lands
+ * them there honestly — a summons parks every woken agent on the summoning
+ * thread, and op piggyback puts a replying agent on the thread's pin — so
+ * legibility is the renderer's job: when several sessions share a locus,
+ * each is fanned onto a small ring, evenly spaced by its rank among the
+ * crowd (sorted by session id, so every client draws the same fan). A
+ * cursor alone on its point sits exactly on it; when the crowd changes the
+ * ring re-spaces, and the easing renders that as a small glide.
+ */
+export function spreadOverlaps(
+  targets: ReadonlyMap<string, { x: number; y: number }>,
+  radius = 26,
+): Map<string, { x: number; y: number }> {
+  const cell = (p: { x: number; y: number }) =>
+    `${Math.round(p.x / 12)}:${Math.round(p.y / 12)}`;
+  const buckets = new Map<string, string[]>();
+  for (const [sessionId, point] of targets) {
+    const key = cell(point);
+    buckets.set(key, [...(buckets.get(key) ?? []), sessionId]);
+  }
+  const spread = new Map<string, { x: number; y: number }>();
+  for (const [sessionId, point] of targets) {
+    const crowd = buckets.get(cell(point))!;
+    if (crowd.length < 2) {
+      spread.set(sessionId, point);
+      continue;
+    }
+    const rank = [...crowd].sort().indexOf(sessionId);
+    const angle = -Math.PI / 2 + (rank * 2 * Math.PI) / crowd.length;
+    spread.set(sessionId, {
+      x: point.x + Math.cos(angle) * radius,
+      y: point.y + Math.sin(angle) * radius,
+    });
+  }
+  return spread;
+}

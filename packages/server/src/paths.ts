@@ -20,7 +20,16 @@ export const blobsIndexFile = (home: string, id: string) => path.join(projectDir
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");
-/** Agents that named themselves for one harness session; see cli/identity.ts. */
+/** The actor registry snapshot: which session key speaks as whom (#57). */
+export const actorsFile = (home: string) => path.join(home, "actors.json");
+/** The home's identity oplog — every actor.claim, append-only. */
+export const actorsLogFile = (home: string) => path.join(home, "actors.jsonl");
+/** The CLI-era session registry (pre-#57); read only to migrate (#59). */
 export const agentsFile = (home: string) => path.join(home, "agents.json");
-export const sessionFile = (home: string) => path.join(home, "session.json");
+/** Pre-facepile-fix single pointer; read by nobody, removed on sight. */
+export const legacySessionFile = (home: string) => path.join(home, "session.json");
+/** One presence-session pointer PER ACTOR — a home-scoped single file was
+ * how two agents ended up beating each other's actor into one session. */
+export const cliSessionFile = (home: string, actorId: string) =>
+  path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");

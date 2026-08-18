@@ -5,7 +5,7 @@ import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT } from "@isocan/core";
 import { paths, stalenessOf } from "@isocan/server";
 import { DaemonClient } from "./client.ts";
-import { requireIdentity, resolveIdentity } from "./identity.ts";
+import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
 
 export interface Ctx {
@@ -30,9 +30,9 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   // stamps nothing, and an agent should be able to see where it has landed
   // before it decides what to call itself. The getter is what makes that
   // lazy — reads never touch `actor`, so they never demand one.
-  const known = await resolveIdentity(home, process.cwd());
-  const actor =
-    known?.actor ?? (process.stdin.isTTY ? await requireIdentity(home, process.cwd()) : null);
+  await retireStrandedIdentities(process.cwd(), home);
+  const known = await resolveIdentity(client, home);
+  const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
   await client.ensureDaemon();
   await warnIfStale(client, home);
   return {
@@ -40,7 +40,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     get actor(): Actor {
       if (!actor) {
         throw new Error(
-          'no identity yet — `isocan identity --name "Your Name" --here` names you for this directory',
+          'no identity yet — `isocan identity --name "Your Name" --session` names this agent',
         );
       }
       return actor;

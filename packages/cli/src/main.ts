@@ -40,14 +40,11 @@ import { paths, stalenessOf } from "@isocan/server";
 import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
 import { ApiError, DaemonClient } from "./client.ts";
 import {
-  findLocalIdentity,
-  localIdentityFile,
   readIdentity,
+  claimSessionIdentity,
   resolveIdentity,
+  retireStrandedIdentities,
   writeIdentity,
-  writeLocalIdentity,
-  writeSessionIdentity,
-  type NameHolder,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -98,15 +95,16 @@ The system:
 Conventions:
   <item> and <thread> arguments accept an id, an id prefix, or a title prefix.
   Set a default project once with \`isocan use <project>\`; --project overrides.
-  Identity (~/.isocan/identity.json) stamps every change you make; set it with
-  \`isocan identity --name "You"\`. The daemon auto-starts when needed.
+  Identity stamps every change you make. A person: \`isocan identity --name
+  "You" --home\`. An agent: \`isocan identity --session\` — the daemon hands
+  out a free name, or asks for yours with --name. Auto-starts when needed.
 
 Your name (agents, read this):
-  Pick a name of your own — not your model's or vendor's, and never the
-  human's. \`isocan who --all\` lists every name already on the canvas; choose
-  one nobody answers to, since \`@Name\` addresses people by name. Names in
-  the spirit of the canvas fit best: Isaac, Kenny, Nico, Sonia, Iona, Osian,
-  Isao, Cana — all hiding in the letters of "isocan". Keep it for the whole
+  You need a name of your own — not your model's or vendor's, and never the
+  human's. \`isocan identity --session\` hands you a free one (Isaac, Kenny,
+  Nico… — names hiding in the letters of "isocan"); ask for a specific one
+  with --name and the daemon refuses it if somebody already answers to it,
+  since \`@Name\` addresses people by name. Keep it for the whole
   collaboration so the human can call you back by it.
 
 Presence (automatic once you have a session):
@@ -155,6 +153,13 @@ function ctxOf(cmd: Command): Promise<Ctx> {
 }
 
 // ---- presence session (the live cursor) ----
+//
+// The pointer to "my live session" is PER ACTOR (~/.isocan/sessions/
+// <actorId>.json). It used to be one file per home — and since every update
+// re-states who is holding the session, two agents sharing that file beat
+// each other's actor into one session: Iona's face under Osian's label,
+// while Iona's real session starved. One file per actor also means two
+// agents never read-modify-write each other's pointer.
 
 interface SessionFile {
   projectId: string;
@@ -162,25 +167,36 @@ interface SessionFile {
   label?: string;
 }
 
-async function readSessionFile(home: string): Promise<SessionFile | null> {
+async function readSessionFile(home: string, actorId: string): Promise<SessionFile | null> {
+  // The old single-pointer file can't say whose it was — that is the bug —
+  // so nobody reads it; its session expires on its own TTL.
+  await fs.rm(paths.legacySessionFile(home), { force: true }).catch(() => {});
   try {
-    return JSON.parse(await fs.readFile(paths.sessionFile(home), "utf8")) as SessionFile;
+    return JSON.parse(
+      await fs.readFile(paths.cliSessionFile(home, actorId), "utf8"),
+    ) as SessionFile;
   } catch {
     return null;
   }
 }
 
-async function writeSessionFile(home: string, session: SessionFile | null): Promise<void> {
+async function writeSessionFile(
+  home: string,
+  actorId: string,
+  session: SessionFile | null,
+): Promise<void> {
+  const file = paths.cliSessionFile(home, actorId);
   if (session === null) {
-    await fs.rm(paths.sessionFile(home), { force: true });
+    await fs.rm(file, { force: true });
   } else {
-    await fs.writeFile(paths.sessionFile(home), JSON.stringify(session, null, 2));
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, JSON.stringify(session, null, 2));
   }
 }
 
 /** The active session for this project, or an error telling how to start one. */
 async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile> {
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   if (!session || session.projectId !== projectId) {
     throw new Error("no active session on this project — run `isocan session start` first");
   }
@@ -204,7 +220,7 @@ async function touchSession(
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
     const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
-    await writeSessionFile(ctx.home, { ...active, sessionId: created.sessionId });
+    await writeSessionFile(ctx.home, ctx.actor.id, { ...active, sessionId: created.sessionId });
     await ctx.client.updateSession(projectId, created.sessionId, beat);
   }
 }
@@ -222,7 +238,7 @@ async function narrate(
   projectId: string,
   patch: import("@isocan/core").UpdateSessionRequest,
 ): Promise<void> {
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   if (!session || session.projectId !== projectId) return;
   await touchSession(ctx, projectId, { ...patch, statusSource: "inferred" }).catch(() => {});
 }
@@ -235,7 +251,7 @@ function itemCenter(item: Item): { x: number; y: number } {
 async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   const clientId =
     session && projectId !== null && session.projectId === projectId
       ? session.sessionId
@@ -325,42 +341,6 @@ async function nameCollision(
 }
 
 /**
- * Everyone every canvas answers to — live faces and the names in their
- * history, which is the same set `@Name` resolves against.
- *
- * `nameCollision` asks the same question of ONE project, the default when
- * there is one, and only warns after the fact. That is the wrong shape for
- * "may I be Kenny": agents pick names before they pick canvases, and a name
- * put down an hour ago still answers. Best-effort, and only of a daemon
- * already running, because naming yourself has to work offline.
- */
-async function heldNames(cmd: Command): Promise<NameHolder[]> {
-  const holders: NameHolder[] = [];
-  try {
-    const globals = cmd.optsWithGlobals() as { port?: string };
-    const home = paths.isocanHome();
-    const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
-    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-    if (!(await client.health())) return holders;
-    // knownNames only reads through the client; nobody is speaking here.
-    const ctx = { client, actor: { id: "", name: "" }, json: false, home } as Ctx;
-    for (const project of await client.listProjects()) {
-      const sessions = await client.listSessions(project.id);
-      for (const known of await knownNames(ctx, project, sessions)) {
-        holders.push({
-          actor: { id: known.id, name: known.name },
-          project: project.title,
-          live: known.live,
-        });
-      }
-    }
-  } catch {
-    // No daemon, no canvases, nobody to collide with.
-  }
-  return holders;
-}
-
-/**
  * A rename should reach the face you are already wearing. Best-effort, on the
  * same terms as the collision check: only asks a daemon that is already
  * running, and never fails `identity` — which has to work offline.
@@ -368,7 +348,7 @@ async function heldNames(cmd: Command): Promise<NameHolder[]> {
 async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
   try {
     const home = paths.isocanHome();
-    const session = await readSessionFile(home);
+    const session = await readSessionFile(home, actor.id);
     if (!session) return;
     const globals = cmd.optsWithGlobals() as { port?: string };
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
@@ -383,68 +363,60 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
 
 /**
  * Which slot a `--name` writes. Two parties share a machine: the person who
- * owns it (home) and the agents working in its directories.
+ * owns it (home) and the agents working in its sessions.
  *
  * An agent that renames the home identity renames the human — which is
  * exactly what used to happen, since the skill told every agent to introduce
- * itself. So an automated caller (no TTY) writes a directory identity unless
- * it insists on `--home`, and a caller already speaking as a directory
- * identity renames that one. A person at a keyboard is the machine's owner.
+ * itself. So an automated caller (no TTY) names its own session unless it
+ * insists on `--home`; with no harness session in the environment that is an
+ * error, not a silent write somewhere else (`ISOCAN_SESSION_ID` is the answer
+ * for a bare shell or a cron job). A person at a keyboard is the machine's
+ * owner.
  */
-async function identityTarget(
-  home: string,
-  opts: { session?: boolean; here?: boolean; home?: boolean },
-): Promise<{ file: "home" | string; scope: "session" | "home" | "directory" }> {
-  if (opts.session) return { file: "session", scope: "session" };
-  if (opts.here) return { file: process.cwd(), scope: "directory" };
-  if (opts.home) return { file: "home", scope: "home" };
-  const local = await findLocalIdentity(process.cwd(), home);
-  if (local) return { file: path.dirname(path.dirname(local.file)), scope: "directory" };
-  if (process.stdin.isTTY) return { file: "home", scope: "home" };
-  return { file: process.cwd(), scope: "directory" };
+function identityTarget(opts: { session?: boolean; home?: boolean; as?: string }): "session" | "home" {
+  if (opts.session || opts.as !== undefined) return "session";
+  if (opts.home) return "home";
+  return process.stdin.isTTY ? "home" : "session";
 }
 
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
-  .option("--name <name>", "display name")
+  .option("--name <name>", "display name (with --session, omit it to be handed a free one)")
   .option(
     "--session",
     "name the agent running this command — what tells two agents in ONE directory apart",
   )
-  .option("--here", "name yourself for THIS directory — what an agent does, leaving the human's name alone")
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
+  .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
   .action(
     run(
       async (
-        opts: { name?: string; session?: boolean; here?: boolean; home?: boolean; new?: boolean },
+        opts: { name?: string; session?: boolean; home?: boolean; new?: boolean; as?: string },
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
-        if (opts.name) {
-          const target = await identityTarget(home, opts);
-          const bound =
-            target.scope === "session"
-              ? await writeSessionIdentity(home, opts.name, opts.new ?? false, await heldNames(cmd))
-              : null;
-          const actor =
-            bound?.actor ??
-            (target.scope === "home"
-              ? await writeIdentity(home, opts.name, opts.new ?? false)
-              : await writeLocalIdentity(target.file as string, opts.name, opts.new ?? false));
-          const where =
-            target.scope === "session"
-              ? `${paths.agentsFile(home)} (${bound!.harness} session)`
-              : target.scope === "home"
-                ? paths.identityFile(home)
-                : localIdentityFile(target.file as string);
-          console.log(`identity saved: ${actor.name} (${actor.id}) → ${where}`);
-          if (target.scope === "directory" && !opts.here) {
-            console.error(
-              "note: named for this directory, not the machine — the home identity is the person's.",
+        const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+        await retireStrandedIdentities(process.cwd(), home);
+        // `--session` alone is a claim, not a lookup: "hand me a free name".
+        if (opts.name || opts.session || opts.as) {
+          const scope = identityTarget(opts);
+          if (scope === "session") {
+            const { actor, harness } = await claimSessionIdentity(client, home, {
+              ...(opts.name !== undefined ? { name: opts.name } : {}),
+              ...(opts.new ? { fresh: true } : {}),
+              ...(opts.as !== undefined ? { as: opts.as } : {}),
+            });
+            console.log(
+              `identity saved: ${actor.name} (${actor.id}) → ${paths.actorsFile(home)} (${harness} session)`,
             );
+            await relabelLiveSession(cmd, actor);
+            return;
           }
+          if (!opts.name) throw new Error('a name is required — `isocan identity --name "You" --home`');
+          const actor = await writeIdentity(home, opts.name, opts.new ?? false);
+          console.log(`identity saved: ${actor.name} (${actor.id}) → ${paths.identityFile(home)}`);
           await relabelLiveSession(cmd, actor);
           const taken = await nameCollision(cmd, actor);
           if (taken) {
@@ -454,7 +426,7 @@ program
             );
           }
         } else {
-          const resolved = await resolveIdentity(home, process.cwd());
+          const resolved = await resolveIdentity(client, home);
           if (!resolved) throw new Error("no identity configured — use --name");
           printKeyValues({
             id: resolved.actor.id,
@@ -462,9 +434,7 @@ program
             scope:
               resolved.source === "session"
                 ? `this agent session (${resolved.harness})`
-                : resolved.source === "home"
-                  ? "this machine's person"
-                  : "this directory",
+                : "this machine's person",
             file: resolved.file,
           });
         }
@@ -476,16 +446,13 @@ program
   .command("whoami")
   .description("Show your identity")
   .action(
-    run(async () => {
+    run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
-      const resolved = await resolveIdentity(home, process.cwd());
+      const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+      await retireStrandedIdentities(process.cwd(), home);
+      const resolved = await resolveIdentity(client, home);
       if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
-      const suffix =
-        resolved.source === "session"
-          ? " — this agent session"
-          : resolved.source === "directory"
-            ? " — in this directory"
-            : "";
+      const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
     }),
   );
@@ -834,9 +801,6 @@ program
         // making a canvas there is one click; a name picked in the browser is
         // the person's, which is the point.
         const home = paths.isocanHome();
-        const agentHere = await findLocalIdentity(target, home);
-        if (agentHere) report.agent = `${agentHere.actor.name} — named for this directory`;
-
         const port = daemonPort(cmd);
         const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
         // The daemon outlives the command that starts it, so it has to belong
@@ -1519,7 +1483,7 @@ comment
       // it walks off the canvas, leaving a human talking to a face that
       // isn't listening. So the last line it reads here is the next move.
       // Only for an agent mid-session: a person replying is just replying.
-      if (await readSessionFile(ctx.home)) {
+      if (await readSessionFile(ctx.home, ctx.actor.id)) {
         console.log(`  → now park: isocan wait --json --timeout <sec>`);
       }
     }),
@@ -1665,12 +1629,12 @@ session
     run(async (opts: { label?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
-      const existing = await readSessionFile(ctx.home);
+      const existing = await readSessionFile(ctx.home, ctx.actor.id);
       if (existing) {
         await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
       }
       const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
-      await writeSessionFile(ctx.home, {
+      await writeSessionFile(ctx.home, ctx.actor.id, {
         projectId: p.id,
         sessionId: created.sessionId,
         ...(opts.label !== undefined ? { label: opts.label } : {}),
@@ -1764,14 +1728,18 @@ session
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const active = await readSessionFile(ctx.home);
-      if (!active) {
-        console.log("no active session");
-        return;
+      const active = await readSessionFile(ctx.home, ctx.actor.id);
+      if (active) {
+        await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
+        await writeSessionFile(ctx.home, ctx.actor.id, null);
       }
-      await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
-      await writeSessionFile(ctx.home, null);
-      console.log("session ended");
+      // The pointer is a cache; the daemon is the truth. Sweep every CLI
+      // session this actor still holds, so a pointer lost to a crash or a
+      // migration cannot leave a face blinking after its agent has left.
+      const swept = await ctx.client
+        .endActorSessions(ctx.actor.id, "cli")
+        .catch(() => ({ ended: 0 }));
+      console.log(active || swept.ended > 0 ? "session ended" : "no active session");
     }),
   );
 
@@ -1910,7 +1878,7 @@ async function landPresence(
     activity: null,
     ...(cursor ? { cursor } : {}),
   };
-  const active = await readSessionFile(ctx.home);
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
   if (active && active.projectId === entry.projectId) {
     return touchSession(ctx, entry.projectId, patch);
   }
@@ -1918,7 +1886,7 @@ async function landPresence(
   // the human knows this agent by.
   if (active) await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
   const created = await ctx.client.createSession(entry.projectId, ctx.actor, active?.label);
-  await writeSessionFile(ctx.home, {
+  await writeSessionFile(ctx.home, ctx.actor.id, {
     projectId: entry.projectId,
     sessionId: created.sessionId,
     ...(active?.label !== undefined ? { label: active.label } : {}),
@@ -1995,7 +1963,7 @@ after a wake.`,
       // registers on call, so every canvas can see and summon you. Both are
       // torn down on every way out — a canvas must never show an agent
       // listening when no process is.
-      const session = await readSessionFile(ctx.home);
+      const session = await readSessionFile(ctx.home, ctx.actor.id);
       const label = session?.label;
       const onCall = pinned
         ? null
@@ -2011,7 +1979,7 @@ after a wake.`,
           // Don't resurrect an expired session just to blank it: if it is
           // gone, nothing is left claiming to wait. (Re-read the file: the
           // heartbeat may have revived the session under a new id.)
-          const active = await readSessionFile(ctx.home);
+          const active = await readSessionFile(ctx.home, ctx.actor.id);
           if (active) {
             await ctx.client
               .updateSession(active.projectId, active.sessionId, { status: null })

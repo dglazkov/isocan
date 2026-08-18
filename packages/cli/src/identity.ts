@@ -2,10 +2,11 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
-import type { Actor } from "@isocan/core";
+import type { Actor, ActorClaimOp } from "@isocan/core";
 import { newActorId } from "@isocan/core";
 import { paths } from "@isocan/server";
-import { harnessSessions, harnessVarsFor, type HarnessSession } from "./harness.ts";
+import { ApiError, type DaemonClient } from "./client.ts";
+import { harnessSessions, harnessVarsFor } from "./harness.ts";
 
 interface IdentityFile extends Actor {
   createdAt: string;
@@ -16,42 +17,34 @@ interface IdentityFile extends Actor {
  * A machine holds one person and any number of agents, and no two of them are
  * the same person.
  *
- * Three slots, most specific first. A SESSION identity
- * (`~/.isocan/agents.json`, keyed by the session id the harness puts in the
- * environment) is one agent, in whatever directory it happens to work — the
- * only slot that can tell two agents apart when they share one, because a
- * directory has a single identity file and both of them would read it. A
- * DIRECTORY identity (`<dir>/.isocan/identity.json`, found by walking up from
- * the working directory) belongs to whoever works there. The HOME identity
- * (`~/.isocan/identity.json`) belongs to whoever owns the machine — you.
+ * Two slots, most specific first. A SESSION identity is one agent, in
+ * whatever directory it happens to work — and it lives in the DAEMON, not in
+ * a file here: naming yourself is `actor.claim`, a mutation applied by the
+ * single writer like every other mutation in isocan (#57), so two agents
+ * claiming one name at the same moment serialize instead of racing. The HOME
+ * identity (`~/.isocan/identity.json`) belongs to whoever owns the machine —
+ * you. It is the one slot that stays a local file, because a person opening a
+ * fresh terminal is the only party with no session and no transcript, and
+ * their name has to work before any daemon exists.
  *
- * So an agent naming itself never renames the human, and the human's canvas is
- * never created under an agent's name. One slot per machine was the old
+ * So an agent naming itself never renames the human, and the human's canvas
+ * is never created under an agent's name. One slot per machine was the old
  * design, and the skill told agents to claim it — so the last agent to
- * introduce itself became the user.
+ * introduce itself became the user. A DIRECTORY slot
+ * (`<dir>/.isocan/identity.json`) came next and failed the mirrored way: a
+ * directory has one identity file, so it handed its name to whoever walked in
+ * next (#56). Sessions are the slot that is actually per-agent.
  */
-/** Somebody a canvas answers to. Not only the faces on it right now: an
- * @-mention reaches a name that was used once and put down, so a name stays
- * taken after its wearer goes quiet. */
-export interface NameHolder {
-  actor: Actor;
-  /** Canvas title, for saying where. */
-  project: string;
-  /** Wearing it at this moment, rather than remembered from the history. */
-  live: boolean;
-}
-
 export interface ResolvedIdentity {
   actor: Actor;
-  /** "session" = this agent, whatever directory it is in. "directory" = an
-   * agent's, in a working directory. "home" = the human's. */
-  source: "session" | "directory" | "home";
+  /** "session" = this agent, whatever directory it is in. "home" = the
+   * human's. */
+  source: "session" | "home";
+  /** Where the slot lives, for saying so. */
   file: string;
   /** The harness that named this session, when `source` is "session". */
   harness?: string;
 }
-
-export const localIdentityFile = (dir: string) => path.join(dir, ".isocan", "identity.json");
 
 async function readFrom(file: string): Promise<Actor | null> {
   try {
@@ -66,227 +59,170 @@ export async function readIdentity(home: string): Promise<Actor | null> {
   return readFrom(paths.identityFile(home));
 }
 
-/**
- * The nearest directory identity at or above `cwd` — an agent that named
- * itself in a project still speaks as itself from a subdirectory of it.
+/* ── The session slot ────────────────────────────────────────────────────
  *
- * Two floors under the walk. The isocan home is never a directory identity:
- * `~/.isocan/identity.json` is the human's slot by definition. And the walk
- * stops below `$HOME`, because everything above it belongs to the person, not
- * to a piece of work — without that, `ISOCAN_HOME=/tmp/x isocan …` in any
- * project would climb out and adopt the real user's name as if an agent had
- * left it there.
+ * The daemon's registry maps `<harness>:<session id>` to the actor speaking
+ * through it. The id is durable across resume — every harness names the
+ * CONVERSATION, not the process — so a returning agent presents the same key
+ * and is handed the same actor back. There is no lookup by name anywhere:
+ * that is what made a returning Kenny indistinguishable from a second Kenny.
+ * An agent whose conversation is truly gone comes back deliberately, with
+ * `--as <actor id>`.
  */
-export async function findLocalIdentity(
-  cwd: string,
+
+/**
+ * Who this process is, when it has said so before. Asks the daemon —
+ * starting one if none answers, since the registry lives behind the single
+ * writer now — but only when a harness session is in the environment at all:
+ * a bare shell resolves the home identity offline, as it always has.
+ *
+ * A nested agent sees its own session id AND the ids of whatever launched
+ * it, so several keys can be bound at once. The newest binding wins: an
+ * agent names itself when it starts, so the most recently claimed session is
+ * the closest one to this process.
+ */
+export async function findSessionIdentity(
+  client: DaemonClient,
   home: string,
-): Promise<{ actor: Actor; file: string } | null> {
+): Promise<{ actor: Actor; harness: string } | null> {
+  const present = await harnessSessions(home);
+  if (present.length === 0) return null;
+  await client.ensureDaemon();
+  const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
+  if (!bindings) return null;
+  const newest = [...bindings].sort((a, b) => b.boundAt.localeCompare(a.boundAt))[0];
+  if (!newest) return null;
+  const harness = present.find((s) => s.key === newest.key)?.harness ?? "unknown";
+  return { actor: newest.actor, harness };
+}
+
+export interface ClaimOptions {
+  /** Omitted: the daemon hands out the next free isocan name. */
+  name?: string;
+  /** Become a NEW actor even if the name is worn — a second Kenny on purpose. */
+  fresh?: boolean;
+  /** Resume an existing actor whose conversation (and session id) is gone. */
+  as?: string;
+}
+
+/**
+ * Name the agent running this command: send `actor.claim` to the daemon and
+ * be told who you are. Everything that used to be checked here — recency
+ * windows, live faces, names remembered by canvases — is the reducer's
+ * business now, checked atomically at the single writer.
+ *
+ * The key claimed is an unclaimed one first: a nested agent inherits the
+ * variables of the agent that launched it, and that one has already taken
+ * its own key — so the key still free is this process's own.
+ */
+export async function claimSessionIdentity(
+  client: DaemonClient,
+  home: string,
+  options: ClaimOptions = {},
+): Promise<{ actor: Actor; harness: string }> {
+  const present = await harnessSessions(home);
+  if (present.length === 0) {
+    const looked = await harnessVarsFor(home);
+    throw new Error(
+      "no harness session in the environment — `--session` names the agent running this " +
+        `command, and nothing here says which one that is (looked for ${looked.join(", ")}). ` +
+        "Export ISOCAN_SESSION_ID yourself, or add your harness's variable to config.json as " +
+        '`{"harnessVars": {"<name>": "<VAR>"}}`.',
+    );
+  }
+  await client.ensureDaemon();
+  const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
+  if (!bindings) {
+    throw new Error(
+      "the running daemon predates actor.claim and cannot name anyone — `isocan restart` " +
+        "brings up this build's, then try again",
+    );
+  }
+  const bound = new Set(bindings.map((b) => b.key));
+  const session = present.find((s) => !bound.has(s.key)) ?? present[0]!;
+  const op: ActorClaimOp = {
+    type: "actor.claim",
+    sessionKey: session.key,
+    ...(options.name !== undefined ? { name: options.name } : {}),
+    ...(options.fresh ? { fresh: true } : {}),
+    ...(options.as !== undefined ? { as: options.as } : {}),
+  };
+  const { envelope } = await client.claimActor(op);
+  return { actor: envelope.actor, harness: session.harness };
+}
+
+/**
+ * GET /api/actors, asked of whatever daemon is running. A daemon from before
+ * #57 has no such route — and no 404 either: its SPA fallback answers 200
+ * with index.html for any unmatched GET, which parses to null. Either shape
+ * means "this daemon has no registry", answered as null so the caller can
+ * degrade while `warnIfStale` tells the user to restart.
+ */
+async function legacyTolerant<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    const result = await request;
+    return Array.isArray(result) ? result : null;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * The directory identity files the deleted slot left behind (#56, #59). One
+ * may be sitting in any checkout an agent ever named itself in — this repo
+ * had the Kenny that caused #55. It no longer speaks for anyone, but it is
+ * also the only local record of which actor id made that directory's
+ * history, so it is renamed aside rather than deleted, with a one-time
+ * notice saying what it was and the deliberate way back (`--as`).
+ */
+export async function retireStrandedIdentities(cwd: string, home: string): Promise<void> {
   const isocanHome = path.resolve(home);
   const userHome = path.resolve(os.homedir());
   let dir = path.resolve(cwd);
   for (;;) {
     if (dir !== userHome && path.join(dir, ".isocan") !== isocanHome) {
-      const file = localIdentityFile(dir);
-      const actor = await readFrom(file);
-      if (actor) return { actor, file };
+      const file = path.join(dir, ".isocan", "identity.json");
+      const stranded = await readFrom(file);
+      if (stranded) {
+        try {
+          await fs.rename(file, `${file}.retired`);
+          console.error(
+            `note: ${file} held a directory identity — "${stranded.name}" ` +
+              `(${stranded.id}). A directory cannot tell one agent from another, so it no ` +
+              `longer speaks for anyone; the file was renamed aside to keep the record. ` +
+              `To be that actor again on purpose: isocan identity --as ${stranded.id} ` +
+              `--name "${stranded.name}"`,
+          );
+        } catch {
+          // Read-only checkout: leave it be. It resolves to nobody either way.
+        }
+      }
     }
     const parent = path.dirname(dir);
-    if (parent === dir || dir === userHome) return null;
+    if (parent === dir || dir === userHome) return;
     dir = parent;
   }
 }
 
-/* ── The session registry ────────────────────────────────────────────────
- *
- * `~/.isocan/agents.json` maps `<harness>:<session id>` to the actor speaking
- * through it. Keyed by session, but the actor id is looked up BY NAME, so an
- * agent that comes back tomorrow under the name it used today keeps the
- * history it made — the same promise `writeIdentity` makes to the human.
- */
-
-interface SessionBinding extends Actor {
-  boundAt: string;
-  harness: string;
-}
-
-interface AgentRegistry {
-  sessions: Record<string, SessionBinding>;
-}
-
-/** Bindings this old are dropped on the next write — but never the newest one
- * under a given name, because that is the anchor the name reuses to stay the
- * same person. An abandoned session costs one line; a forgotten name costs an
- * agent its history. */
-const PRUNE_AFTER_DAYS = 30;
-
-async function readRegistry(home: string): Promise<AgentRegistry> {
-  try {
-    const raw = JSON.parse(await fs.readFile(paths.agentsFile(home), "utf8")) as AgentRegistry;
-    return raw?.sessions && typeof raw.sessions === "object" ? raw : { sessions: {} };
-  } catch {
-    return { sessions: {} };
-  }
-}
-
-/** Newest first — "newest" is how both the innermost agent and the surviving
- * name are chosen. */
-function byRecency(entries: [string, SessionBinding][]): [string, SessionBinding][] {
-  return [...entries].sort(([, a], [, b]) => b.boundAt.localeCompare(a.boundAt));
-}
-
 /**
- * Who this process is, when it has said so before.
- *
- * A nested agent sees its own session id AND the ids of whatever launched it,
- * so several keys can be bound at once. The newest binding wins: an agent
- * names itself when it starts, so the most recently claimed session is the
- * closest one to this process.
- */
-export async function findSessionIdentity(
-  home: string,
-): Promise<{ actor: Actor; file: string; harness: string } | null> {
-  const present = await harnessSessions(home);
-  if (present.length === 0) return null;
-  const { sessions } = await readRegistry(home);
-  const bound = present.flatMap((s) => {
-    const entry = sessions[s.key];
-    return entry ? ([[s.key, entry]] as [string, SessionBinding][]) : [];
-  });
-  const [newest] = byRecency(bound);
-  if (!newest) return null;
-  const [, binding] = newest;
-  return {
-    actor: { id: binding.id, name: binding.name },
-    file: paths.agentsFile(home),
-    harness: binding.harness,
-  };
-}
-
-/**
- * The session to claim. An unclaimed one first: a nested agent inherits the
- * variables of the agent that launched it, and that one has already taken its
- * own key — so the key still free is this process's own.
- */
-function bindKey(registry: AgentRegistry, present: HarnessSession[], looked: string[]) {
-  if (present.length === 0) {
-    throw new Error(
-      "no harness session in the environment — `--session` names the agent running this " +
-        `command, and nothing here says which one that is (looked for ${looked.join(", ")}). ` +
-        "Export ISOCAN_SESSION_ID yourself, or add your harness's variable to config.json as " +
-        '`{"harnessVars": {"<name>": "<VAR>"}}`, or use `--here` to name this directory instead.',
-    );
-  }
-  return present.find((s) => !registry.sessions[s.key]) ?? present[0]!;
-}
-
-function prune(registry: AgentRegistry): void {
-  const cutoff = Date.now() - PRUNE_AFTER_DAYS * 24 * 60 * 60 * 1000;
-  const keep = new Set<string>();
-  const seen = new Set<string>();
-  for (const [key, binding] of byRecency(Object.entries(registry.sessions))) {
-    if (!seen.has(binding.name)) {
-      seen.add(binding.name);
-      keep.add(key); // the anchor for this name, however old
-    }
-    if (Date.parse(binding.boundAt) >= cutoff) keep.add(key);
-  }
-  for (const key of Object.keys(registry.sessions)) {
-    if (!keep.has(key)) delete registry.sessions[key];
-  }
-}
-
-/**
- * How long a claim on a name stands after it was made, when nothing can be
- * seen to be using it. Liveness is the real answer, but there is a window —
- * between naming yourself and starting a presence session — where an agent is
- * working and nothing on any canvas says so, and two agents launched together
- * pass through that window at the same moment. Recency covers it.
- */
-const CLAIM_STANDS_MS = 30 * 60 * 1000;
-
-/**
- * Name the agent running this command. Two of them in one directory get one
- * slot each, and neither touches the directory's identity or the human's.
- *
- * `held` is everyone the canvases answer to — live faces AND the names in
- * their history, because that is what an @-mention reaches. Most name holders
- * are not session identities at all: the collision this was written for was a
- * directory name a previous agent left in a checkout, which the registry knows
- * nothing about. Empty when no daemon is running, which costs the check
- * nothing it cannot do without.
- */
-export async function writeSessionIdentity(
-  home: string,
-  name: string,
-  fresh = false,
-  held: readonly NameHolder[] = [],
-): Promise<{ actor: Actor; harness: string }> {
-  const registry = await readRegistry(home);
-  const session = bindKey(registry, await harnessSessions(home), await harnessVarsFor(home));
-  const mine = registry.sessions[session.key]?.id;
-  const wanted = name.toLowerCase();
-  const others = byRecency(
-    Object.entries(registry.sessions).filter(([key, b]) => key !== session.key && b.name === name),
-  );
-  // Who taking this name would make you. A name already answering to that
-  // same actor is you, coming back — nobody to collide with.
-  const candidate = fresh ? undefined : (registry.sessions[session.key] ?? others[0]?.[1])?.id;
-  if (!fresh) {
-    const someoneElse = held.find(
-      (h) => h.actor.name.toLowerCase() === wanted && h.actor.id !== candidate,
-    );
-    // Your own past self, but somebody is wearing it right now.
-    const stillWorn =
-      candidate && candidate !== mine && held.some((h) => h.live && h.actor.id === candidate);
-    // Or claimed so recently that its owner has not put a face on yet.
-    const justClaimed = others.find(
-      ([, b]) => b.id !== mine && Date.now() - Date.parse(b.boundAt) < CLAIM_STANDS_MS,
-    );
-    if (someoneElse || stillWorn || justClaimed) {
-      const where = someoneElse
-        ? `${someoneElse.actor.id}, ${someoneElse.live ? "on" : "known to"} "${someoneElse.project}"`
-        : `${candidate ?? justClaimed![1].id}, another session just now`;
-      throw new Error(
-        `"${name}" is taken here (${where}) — @${name} would reach both of you, and ` +
-          "taking it would make you one actor wearing two faces. Pick another name, " +
-          `or \`--new\` to be a second ${name} on purpose.`,
-      );
-    }
-  }
-  // Only a name nobody is standing on gets inherited: that is yesterday's
-  // session of the same agent, and the history it made is still its own.
-  const actor: Actor = { id: candidate ?? newActorId(), name };
-  registry.sessions[session.key] = {
-    ...actor,
-    harness: session.harness,
-    boundAt: new Date().toISOString(),
-  };
-  prune(registry);
-  await fs.mkdir(path.dirname(paths.agentsFile(home)), { recursive: true });
-  await fs.writeFile(paths.agentsFile(home), JSON.stringify(registry, null, 2));
-  return { actor, harness: session.harness };
-}
-
-/**
- * Who this command speaks as: this agent, else the agent working here, else
- * the human — most specific first. The session slot is path-independent by
- * design, so an agent that named itself keeps its name after it wanders into
- * another directory, and two agents sharing one directory stay two people.
+ * Who this command speaks as: this agent, else the human. The session slot is
+ * path-independent by design, so an agent that named itself keeps its name
+ * after it wanders into another directory, and two agents sharing one
+ * directory stay two people.
  */
 export async function resolveIdentity(
+  client: DaemonClient,
   home: string,
-  cwd: string,
 ): Promise<ResolvedIdentity | null> {
-  const session = await findSessionIdentity(home);
+  const session = await findSessionIdentity(client, home);
   if (session)
     return {
       actor: session.actor,
       source: "session",
-      file: session.file,
+      file: paths.actorsFile(home),
       harness: session.harness,
     };
-  const local = await findLocalIdentity(cwd, home);
-  if (local) return { actor: local.actor, source: "directory", file: local.file };
   const actor = await readIdentity(home);
   return actor ? { actor, source: "home", file: paths.identityFile(home) } : null;
 }
@@ -305,26 +241,15 @@ export async function writeIdentity(home: string, name: string, fresh = false): 
   return write(paths.identityFile(home), { id: existing?.id ?? newActorId(), name });
 }
 
-export async function writeLocalIdentity(
-  dir: string,
-  name: string,
-  fresh = false,
-): Promise<Actor> {
-  const file = localIdentityFile(dir);
-  const existing = fresh ? null : await readFrom(file);
-  return write(file, { id: existing?.id ?? newActorId(), name });
-}
-
 /** First-run flow: prompt on a TTY, otherwise fail with instructions. */
-export async function requireIdentity(home: string, cwd: string): Promise<Actor> {
-  const existing = await resolveIdentity(home, cwd);
+export async function requireIdentity(client: DaemonClient, home: string): Promise<Actor> {
+  const existing = await resolveIdentity(client, home);
   if (existing) return existing.actor;
   if (!process.stdin.isTTY) {
     // Nothing here is interactive, so this is an agent or a script: the name
-    // it needs is its own, in the directory it is working in.
+    // it needs is its own, keyed by its session.
     throw new Error(
-      'no identity configured — run `isocan identity --name "Your Name" --session` first ' +
-        "(or `--here` to name the directory rather than yourself)",
+      'no identity configured — run `isocan identity --name "Your Name" --session` first',
     );
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });

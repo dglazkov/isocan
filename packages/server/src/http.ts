@@ -2,7 +2,7 @@ import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
-import type { PostOpRequest, UndoRedoRequest } from "@isocan/core";
+import type { Actor, PostOpRequest, UndoRedoRequest } from "@isocan/core";
 import { decodeFilename, FILENAME_HEADER, OpValidationError } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
@@ -42,10 +42,29 @@ export function registerRoutes(
     ...buildStamp(),
   }));
 
-  app.post("/api/ops", async (req) => {
+  app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
-    const entry = await engine.submit(body);
+    if (body.op?.type === "actor.claim") {
+      // A claim resolves who is speaking, so it is the one op that arrives
+      // without an actor; the response envelope carries the answer.
+      const entry = await engine.claim({
+        op: body.op,
+        ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
+      });
+      return { seq: entry.seq, envelope: entry.envelope };
+    }
+    if (!body.actor) {
+      return reply.status(400).send({ error: "actor is required", code: "bad-op" });
+    }
+    const entry = await engine.submit(body as PostOpRequest & { actor: Actor });
     return { seq: entry.seq, envelope: entry.envelope };
+  });
+
+  // ---- the actor registry: who a session key speaks as (#57) ----
+
+  app.get("/api/actors", async (req) => {
+    const { keys } = req.query as { keys?: string };
+    return engine.actorBindings(keys ? keys.split(",").filter(Boolean) : null);
   });
 
   app.get("/api/projects", async () => engine.listProjects());
@@ -219,6 +238,12 @@ export function registerRoutes(
         .send({ error: "session expired or unknown", code: "unknown-session" });
     }
     return { ok: true };
+  });
+
+  app.delete("/api/presence/actors/:actorId", async (req) => {
+    const { actorId } = req.params as { actorId: string };
+    const { kind } = req.query as { kind?: "web" | "cli" };
+    return { ended: presence.endActorSessions(actorId, kind) };
   });
 
   app.delete("/api/presence/oncall/:sid", async (req) => {
