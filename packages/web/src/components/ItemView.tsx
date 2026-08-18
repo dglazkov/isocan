@@ -36,8 +36,8 @@ export function ItemView({
   });
   const worker = useWorkingSession(item.id);
 
-  const x = drag ? item.x + drag.dx : item.x;
-  const y = drag ? item.y + drag.dy : item.y;
+  const x = (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
+  const y = (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
   const width = resize?.width ?? item.width;
   const height = resize?.height ?? item.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
@@ -144,20 +144,27 @@ export function ItemView({
     frame.addEventListener("pointerup", onUp);
   }
 
-  function onResizeDown(e: React.PointerEvent) {
+  function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
     if (e.button !== 0) return;
     e.stopPropagation();
     const handle = e.currentTarget as HTMLElement;
     handle.setPointerCapture(e.pointerId);
     const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
+    // Sign multipliers: which way the pointer delta affects width/height.
+    const sx = corner === "nw" || corner === "sw" ? -1 : 1;
+    const sy = corner === "nw" || corner === "ne" ? -1 : 1;
 
     function onMove(ev: PointerEvent) {
       const scale = useUiStore.getState().viewport.scale;
-      useUiStore.getState().setResize({
-        itemId: item.id,
-        width: Math.max(MIN_W, Math.round(start.width + (ev.clientX - start.x) / scale)),
-        height: Math.max(MIN_H, Math.round(start.height + (ev.clientY - start.y) / scale)),
-      });
+      const rawDx = (ev.clientX - start.x) / scale;
+      const rawDy = (ev.clientY - start.y) / scale;
+      const newW = Math.max(MIN_W, Math.round(start.width + rawDx * sx));
+      const newH = Math.max(MIN_H, Math.round(start.height + rawDy * sy));
+      // Origin offset: the difference between requested and clamped size,
+      // only on axes where the corner moves the origin.
+      const dx = sx === -1 ? -(newW - start.width) : 0;
+      const dy = sy === -1 ? -(newH - start.height) : 0;
+      useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
     }
     function onUp(ev: PointerEvent) {
       handle.releasePointerCapture(ev.pointerId);
@@ -166,14 +173,25 @@ export function ItemView({
       const state = useUiStore.getState();
       const final = state.resize;
       if (final && (final.width !== item.width || final.height !== item.height)) {
-        const op = {
+        const resizeOp = {
           type: "item.resize",
           itemId: item.id,
           width: final.width,
           height: final.height,
         } as const;
-        applyLocalEcho(op, actor);
-        void sendOp(projectId, actor, op);
+        applyLocalEcho(resizeOp, actor);
+        void sendOp(projectId, actor, resizeOp);
+        // Corners other than SE shift the origin.
+        if (final.dx !== 0 || final.dy !== 0) {
+          const moveOp = {
+            type: "item.move",
+            itemId: item.id,
+            x: Math.round(item.x + final.dx),
+            y: Math.round(item.y + final.dy),
+          } as const;
+          applyLocalEcho(moveOp, actor);
+          void sendOp(projectId, actor, moveOp);
+        }
       }
       state.setResize(null);
     }
@@ -263,7 +281,14 @@ export function ItemView({
         )}
         {worker && <div className="work-sheen" />}
       </div>
-      {soleSelection && !entered && <span className="resize-handle" onPointerDown={onResizeDown} />}
+      {soleSelection && !entered && (
+        <>
+          <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
+          <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />
+          <span className="resize-handle resize-handle-sw" onPointerDown={(e) => onResizeDown("sw", e)} />
+          <span className="resize-handle resize-handle-se" onPointerDown={(e) => onResizeDown("se", e)} />
+        </>
+      )}
     </div>
   );
 }
