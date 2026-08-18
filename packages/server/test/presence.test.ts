@@ -30,6 +30,25 @@ describe("PresenceHub", () => {
     hub.close();
   });
 
+  it("an actor's sessions can be ended at once — the daemon is the truth", () => {
+    // The ghost-cursor case: a CLI whose session pointer was lost cannot end
+    // by id, so it ends by actor — everywhere, on call included. A web tab
+    // held by the same actor is not the CLI's to take down.
+    const hub = new PresenceHub(1000);
+    hub.createSession("prj-1", kenny, "cli", { label: "Kenny 🤖" });
+    hub.createSession("prj-2", kenny, "cli");
+    hub.createOnCall(kenny);
+    const tab = hub.createSession("prj-1", kenny, "web");
+    hub.createSession("prj-1", alice, "cli");
+
+    expect(hub.endActorSessions(kenny.id, "cli")).toBe(3);
+    expect(hub.roster("prj-1").map((s) => s.sessionId).sort()).toEqual(
+      [tab.sessionId, hub.roster("prj-1").find((s) => s.actor.id === alice.id)!.sessionId].sort(),
+    );
+    expect(hub.roster("prj-2")).toEqual([]);
+    hub.close();
+  });
+
   it("a beat re-asserts who is holding the session — renaming is not reconnecting", () => {
     const hub = new PresenceHub(1000);
     const session = hub.createSession("prj", kenny, "web");

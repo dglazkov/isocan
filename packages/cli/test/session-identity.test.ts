@@ -246,6 +246,28 @@ describe("two agents, two faces", () => {
   });
 });
 
+describe("leaving is leaving", () => {
+  it("session end clears the face even when the pointer is lost", async () => {
+    // The transition ghost: sessions started before the per-actor pointer
+    // existed could never be ended by the file — "no active session" — and
+    // the face blinked on until its TTL. End by ACTOR instead: the pointer
+    // is a cache, the daemon is the truth.
+    await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
+    await asAgent(claude("s-1"), "project", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
+    await fs.rm(path.join(home, "sessions"), { recursive: true, force: true });
+
+    const ended = await asAgent(claude("s-1"), "session", "end", "--project", "Surfaces");
+    expect(ended.stdout).toContain("session ended");
+
+    const project = (await projects()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+      r.json(),
+    )) as unknown[];
+    expect(roster).toEqual([]); // nobody left blinking
+  });
+});
+
 describe("agents launched by agents", () => {
   it("the inner one speaks, though it can see the outer one's session too", async () => {
     // Claude Code names itself, then starts codex: the child inherits

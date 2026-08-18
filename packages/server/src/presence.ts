@@ -129,6 +129,38 @@ export class PresenceHub {
   }
 
   /**
+   * Every session an actor holds, ended at once — on every canvas, on call
+   * included. The client's session pointer is a cache; this is the truth. A
+   * pointer lost to a crash or a migration must not leave a face blinking on
+   * a canvas after its agent has left. `kind` narrows the sweep so a CLI
+   * leaving cannot take down the same person's live browser tabs.
+   */
+  endActorSessions(actorId: string, kind?: "web" | "cli"): number {
+    let ended = 0;
+    for (const [projectId, room] of this.rooms) {
+      let changed = false;
+      for (const [sessionId, session] of room) {
+        if (session.actor.id !== actorId) continue;
+        if (kind && session.kind !== kind) continue;
+        room.delete(sessionId);
+        changed = true;
+        ended += 1;
+      }
+      if (changed) this.emit(projectId);
+    }
+    let dropped = false;
+    for (const [sessionId, session] of this.onCall) {
+      if (session.actor.id !== actorId) continue;
+      if (kind && session.kind !== kind) continue;
+      this.onCall.delete(sessionId);
+      dropped = true;
+      ended += 1;
+    }
+    if (dropped) this.emit(null);
+    return ended;
+  }
+
+  /**
    * Who this canvas sees: everyone actually on it, then everyone on call for
    * the home. An actor already here is not listed twice — the session with a
    * cursor is the truer one.

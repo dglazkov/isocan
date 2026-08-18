@@ -240,6 +240,12 @@ export function registerRoutes(
     return { ok: true };
   });
 
+  app.delete("/api/presence/actors/:actorId", async (req) => {
+    const { actorId } = req.params as { actorId: string };
+    const { kind } = req.query as { kind?: "web" | "cli" };
+    return { ended: presence.endActorSessions(actorId, kind) };
+  });
+
   app.delete("/api/presence/oncall/:sid", async (req) => {
     const { sid } = req.params as { sid: string };
     presence.endOnCall(sid);

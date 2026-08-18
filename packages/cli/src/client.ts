@@ -166,6 +166,13 @@ export class DaemonClient {
     return this.request("DELETE", `/api/presence/oncall/${sessionId}`);
   }
 
+  /** End every session an actor holds — the daemon-side truth, for when the
+   * local session pointer has been lost. */
+  endActorSessions(actorId: string, kind?: "web" | "cli"): Promise<{ ended: number }> {
+    const query = kind ? `?kind=${kind}` : "";
+    return this.request("DELETE", `/api/presence/actors/${actorId}${query}`);
+  }
+
   listProjects(): Promise<Project[]> {
     return this.request("GET", "/api/projects");
   }

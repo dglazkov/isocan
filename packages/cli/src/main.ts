@@ -1729,13 +1729,17 @@ session
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const active = await readSessionFile(ctx.home, ctx.actor.id);
-      if (!active) {
-        console.log("no active session");
-        return;
+      if (active) {
+        await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
+        await writeSessionFile(ctx.home, ctx.actor.id, null);
       }
-      await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
-      await writeSessionFile(ctx.home, ctx.actor.id, null);
-      console.log("session ended");
+      // The pointer is a cache; the daemon is the truth. Sweep every CLI
+      // session this actor still holds, so a pointer lost to a crash or a
+      // migration cannot leave a face blinking after its agent has left.
+      const swept = await ctx.client
+        .endActorSessions(ctx.actor.id, "cli")
+        .catch(() => ({ ended: 0 }));
+      console.log(active || swept.ended > 0 ? "session ended" : "no active session");
     }),
   );
 
