@@ -10,6 +10,7 @@ import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
+import { CursorGlow } from "./CursorGlow.tsx";
 
 // WebKit-only trackpad pinch event; not in the standard TS DOM lib.
 interface GestureEvent extends UIEvent {
@@ -350,6 +351,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       }}
       onDrop={onDrop}
     >
+      <CursorGlow />
       <div
         className="world"
         style={{
