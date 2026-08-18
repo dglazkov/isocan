@@ -13,22 +13,22 @@ interface IdentityFile extends Actor {
 }
 
 /**
- * Two parties share this machine, and they are not the same person.
+ * A machine holds one person and any number of agents, and no two of them are
+ * the same person.
  *
- * The HOME identity (`~/.isocan/identity.json`) belongs to whoever owns the
- * machine — you. A DIRECTORY identity (`<dir>/.isocan/identity.json`, found by
- * walking up from the working directory) belongs to the agent working there.
- * Commands speak as the directory identity when there is one, so an agent
- * naming itself never renames the human, and the human's canvas is never
- * created under the agent's name.
+ * Three slots, most specific first. A SESSION identity
+ * (`~/.isocan/agents.json`, keyed by the session id the harness puts in the
+ * environment) is one agent, in whatever directory it happens to work — the
+ * only slot that can tell two agents apart when they share one, because a
+ * directory has a single identity file and both of them would read it. A
+ * DIRECTORY identity (`<dir>/.isocan/identity.json`, found by walking up from
+ * the working directory) belongs to whoever works there. The HOME identity
+ * (`~/.isocan/identity.json`) belongs to whoever owns the machine — you.
  *
- * One slot per machine was the old design, and the skill told agents to claim
- * it — so the last agent to introduce itself became the user.
- *
- * A SESSION identity (`~/.isocan/agents.json`, keyed by the harness session id
- * in the environment) is the third and most specific slot, and the only one
- * that can tell two agents apart when they share a working directory — a
- * directory has one identity file, and both of them would read it.
+ * So an agent naming itself never renames the human, and the human's canvas is
+ * never created under an agent's name. One slot per machine was the old
+ * design, and the skill told agents to claim it — so the last agent to
+ * introduce itself became the user.
  */
 export interface ResolvedIdentity {
   actor: Actor;
