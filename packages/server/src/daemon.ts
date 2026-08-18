@@ -36,6 +36,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const store = new Store(home);
   await store.init();
+  await store.migrateLegacyAgents(); // pre-#57 session bindings, folded in once
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
   const engine = new Engine(store, { liveness: (projectId) => presence.roster(projectId) });

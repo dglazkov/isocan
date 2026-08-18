@@ -1,10 +1,11 @@
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor, ActorClaimOp } from "@isocan/core";
 import { newActorId } from "@isocan/core";
 import { paths } from "@isocan/server";
-import type { DaemonClient } from "./client.ts";
+import { ApiError, type DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
 
 interface IdentityFile extends Actor {
@@ -87,7 +88,8 @@ export async function findSessionIdentity(
   const present = await harnessSessions(home);
   if (present.length === 0) return null;
   await client.ensureDaemon();
-  const bindings = await client.actorBindings(present.map((s) => s.key));
+  const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
+  if (!bindings) return null;
   const newest = [...bindings].sort((a, b) => b.boundAt.localeCompare(a.boundAt))[0];
   if (!newest) return null;
   const harness = present.find((s) => s.key === newest.key)?.harness ?? "unknown";
@@ -129,7 +131,14 @@ export async function claimSessionIdentity(
     );
   }
   await client.ensureDaemon();
-  const bound = new Set((await client.actorBindings(present.map((s) => s.key))).map((b) => b.key));
+  const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
+  if (!bindings) {
+    throw new Error(
+      "the running daemon predates actor.claim and cannot name anyone — `isocan restart` " +
+        "brings up this build's, then try again",
+    );
+  }
+  const bound = new Set(bindings.map((b) => b.key));
   const session = present.find((s) => !bound.has(s.key)) ?? present[0]!;
   const op: ActorClaimOp = {
     type: "actor.claim",
@@ -140,6 +149,60 @@ export async function claimSessionIdentity(
   };
   const { envelope } = await client.claimActor(op);
   return { actor: envelope.actor, harness: session.harness };
+}
+
+/**
+ * GET /api/actors, asked of whatever daemon is running. A daemon from before
+ * #57 has no such route — and no 404 either: its SPA fallback answers 200
+ * with index.html for any unmatched GET, which parses to null. Either shape
+ * means "this daemon has no registry", answered as null so the caller can
+ * degrade while `warnIfStale` tells the user to restart.
+ */
+async function legacyTolerant<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    const result = await request;
+    return Array.isArray(result) ? result : null;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * The directory identity files the deleted slot left behind (#56, #59). One
+ * may be sitting in any checkout an agent ever named itself in — this repo
+ * had the Kenny that caused #55. It no longer speaks for anyone, but it is
+ * also the only local record of which actor id made that directory's
+ * history, so it is renamed aside rather than deleted, with a one-time
+ * notice saying what it was and the deliberate way back (`--as`).
+ */
+export async function retireStrandedIdentities(cwd: string, home: string): Promise<void> {
+  const isocanHome = path.resolve(home);
+  const userHome = path.resolve(os.homedir());
+  let dir = path.resolve(cwd);
+  for (;;) {
+    if (dir !== userHome && path.join(dir, ".isocan") !== isocanHome) {
+      const file = path.join(dir, ".isocan", "identity.json");
+      const stranded = await readFrom(file);
+      if (stranded) {
+        try {
+          await fs.rename(file, `${file}.retired`);
+          console.error(
+            `note: ${file} held a directory identity — "${stranded.name}" ` +
+              `(${stranded.id}). A directory cannot tell one agent from another, so it no ` +
+              `longer speaks for anyone; the file was renamed aside to keep the record. ` +
+              `To be that actor again on purpose: isocan identity --as ${stranded.id} ` +
+              `--name "${stranded.name}"`,
+          );
+        } catch {
+          // Read-only checkout: leave it be. It resolves to nobody either way.
+        }
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir || dir === userHome) return;
+    dir = parent;
+  }
 }
 
 /**

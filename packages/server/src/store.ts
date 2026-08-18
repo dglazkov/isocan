@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { ActorRegistry, LogEntry, Project, ProjectState } from "@isocan/core";
-import { applyOperation, bindClaim, emptyCanvas } from "@isocan/core";
+import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState } from "@isocan/core";
+import { applyOperation, bindClaim, emptyCanvas, newOpId } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 
@@ -172,6 +172,64 @@ export class Store {
 
   async appendActorsLog(entry: LogEntry): Promise<void> {
     await appendLineDurable(p.actorsLogFile(this.home), JSON.stringify(entry));
+  }
+
+  /**
+   * Fold the CLI-era session registry (`agents.json`, pre-#57) into the
+   * actor registry, then move the file aside so this runs once (#59). Actor
+   * ids must survive — they are what the canvases remember — so each binding
+   * becomes a logged reincarnation claim (`as` + name), stamped with its
+   * original boundAt: recency semantics carry over, and a lost snapshot
+   * recovers the imported rows from the jsonl like any other claim. Runs at
+   * daemon startup, before the engine reads the registry.
+   */
+  async migrateLegacyAgents(): Promise<void> {
+    interface LegacyBinding {
+      id?: string;
+      name?: string;
+      boundAt?: string;
+    }
+    const file = p.agentsFile(this.home);
+    let legacy: { sessions?: Record<string, LegacyBinding> };
+    try {
+      legacy = JSON.parse(await fs.readFile(file, "utf8")) as typeof legacy;
+    } catch {
+      return; // no file, or unreadable — nothing to fold in
+    }
+    const { registry, lastSeq } = await this.loadActors();
+    let current = registry;
+    let seq = lastSeq;
+    // Oldest first, so when several keys held one actor (nested sessions),
+    // the newest binding is the one that survives bindClaim's eviction.
+    const sessions = Object.entries(legacy?.sessions ?? {}).sort(([, a], [, b]) =>
+      (a?.boundAt ?? "").localeCompare(b?.boundAt ?? ""),
+    );
+    for (const [key, binding] of sessions) {
+      if (!binding?.id || !binding.name) continue;
+      // The new registry wins: a key or actor already claimed post-#57 is
+      // living its own life, and the legacy row is history.
+      if (current.claims[key]) continue;
+      if (Object.values(current.claims).some((claim) => claim.id === binding.id)) continue;
+      const ts = binding.boundAt ?? new Date().toISOString();
+      const op = {
+        type: "actor.claim",
+        sessionKey: key,
+        name: binding.name,
+        as: binding.id,
+      } as const;
+      const envelope: OpEnvelope = {
+        id: newOpId(),
+        projectId: null,
+        actor: { id: binding.id, name: binding.name },
+        ts,
+        op,
+      };
+      seq += 1;
+      await this.appendActorsLog({ seq, envelope, inverse: null });
+      current = bindClaim(current, { actor: envelope.actor, ts, op });
+    }
+    if (seq !== lastSeq) await this.saveActors(current, seq);
+    await fs.rename(file, `${file}.migrated`).catch(() => {});
   }
 
   // ---- blobs ----

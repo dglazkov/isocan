@@ -43,6 +43,7 @@ import {
   readIdentity,
   claimSessionIdentity,
   resolveIdentity,
+  retireStrandedIdentities,
   writeIdentity,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
@@ -379,6 +380,7 @@ program
       ) => {
         const home = paths.isocanHome();
         const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+        await retireStrandedIdentities(process.cwd(), home);
         // `--session` alone is a claim, not a lookup: "hand me a free name".
         if (opts.name || opts.session || opts.as) {
           const scope = identityTarget(opts);
@@ -429,6 +431,7 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+      await retireStrandedIdentities(process.cwd(), home);
       const resolved = await resolveIdentity(client, home);
       if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
       const suffix = resolved.source === "session" ? " — this agent session" : "";
