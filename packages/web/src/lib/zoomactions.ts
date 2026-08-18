@@ -1,7 +1,7 @@
 import type { CanvasState } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { type Box, fitBounds, itemsBounds, zoomAt } from "./viewport.ts";
+import { type Box, type Viewport, centerOn, fitBounds, itemsBounds, zoomAt } from "./viewport.ts";
 
 /**
  * The navigation verbs, in one place so the zoom controls, the keyboard
@@ -11,6 +11,51 @@ import { type Box, fitBounds, itemsBounds, zoomAt } from "./viewport.ts";
 
 const cx = () => window.innerWidth / 2;
 const cy = () => window.innerHeight / 2;
+
+/** Glide length. Long enough to read as travel, short enough not to be a wait. */
+const GLIDE_MS = 380;
+
+let gliding = 0;
+
+/**
+ * Move the camera to a viewport over a few hundred milliseconds, so a jump
+ * across the canvas reads as travel rather than teleportation — you keep your
+ * bearings because you saw which way you went. A second glide cancels the
+ * first, and anyone who has asked for less motion gets there immediately.
+ */
+export function glideTo(target: Viewport): void {
+  cancelAnimationFrame(gliding);
+  const ui = useUiStore.getState();
+  const from = ui.viewport;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    ui.setViewport(target);
+    return;
+  }
+  const started = performance.now();
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - started) / GLIDE_MS);
+    // easeOutCubic: leaves quickly, arrives gently.
+    const eased = 1 - Math.pow(1 - progress, 3);
+    useUiStore.getState().setViewport({
+      tx: from.tx + (target.tx - from.tx) * eased,
+      ty: from.ty + (target.ty - from.ty) * eased,
+      scale: from.scale + (target.scale - from.scale) * eased,
+    });
+    if (progress < 1) gliding = requestAnimationFrame(step);
+  };
+  gliding = requestAnimationFrame(step);
+}
+
+/** Bring a world point to the middle of the window, gliding there. */
+export function glideToPoint(wx: number, wy: number): void {
+  const { viewport } = useUiStore.getState();
+  glideTo(centerOn(viewport, wx, wy, window.innerWidth, window.innerHeight));
+}
+
+/** Fit a world box, gliding there — the edge radar's cluster jump. */
+export function glideToBox(box: Box): void {
+  glideTo(fitBounds(box, window.innerWidth, window.innerHeight));
+}
 
 /** Zoom about the screen center by a multiplicative factor (buttons, wheel). */
 export function zoomBy(factor: number): void {

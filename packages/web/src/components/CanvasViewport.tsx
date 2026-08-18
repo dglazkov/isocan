@@ -14,6 +14,7 @@ import { CommentLayer } from "./CommentLayer.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 import { InkLayer, SketchBar } from "./InkLayer.tsx";
+import { EdgeRadar } from "./EdgeRadar.tsx";
 
 // WebKit-only trackpad pinch event; not in the standard TS DOM lib.
 interface GestureEvent extends UIEvent {
@@ -457,6 +458,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       <CursorLayer />
       <MarqueeRect />
       <GuideLines />
+      <EdgeRadar projectId={projectId} />
       <SketchBar projectId={projectId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
     </div>
