@@ -16,36 +16,46 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *
  * - RENAME keeps your actor id. Everything you have done stays yours — your
  *   undo stack, the comments addressed to you — you are just called something
- *   else from now on. (`isocan identity --name` does exactly this.)
+ *   else from now on. (`isocan identity --name --session` does exactly this.)
  * - SWITCH adopts an identity this browser has worn before, id and all, so
  *   coming back as yourself really is coming back.
  * - LEAVE clears the current identity and returns you to the door, where the
  *   roster is still waiting.
+ *
+ * All of it is `actor.claim` under the hood (#58): the daemon applies one
+ * continuity rule for every client, and a refusal — a name somebody on a
+ * canvas already answers to — is shown here rather than second-guessed by a
+ * client-side check.
  *
  * Past ops are never rewritten: every op carries the actor as it read at the
  * time, so a rename changes who you ARE, not who you WERE.
  */
 export function IdentityMenu({
   actor,
-  takenNames = [],
   onIdentity,
   onClose,
 }: {
   actor: Actor;
-  /** Names other people on this canvas answer to, for the collision warning. */
-  takenNames?: string[];
   /** null = signed out; App swaps in the door. */
   onIdentity: (actor: Actor | null) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
+  const [error, setError] = useState<string | null>(null);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
-  const collides = takenNames.some(
-    (taken) => taken.trim().toLowerCase() === trimmed.toLowerCase(),
-  );
+
+  const attempt = (claim: Promise<Actor>) => {
+    setError(null);
+    claim
+      .then((who) => {
+        onIdentity(who);
+        onClose();
+      })
+      .catch((err: Error) => setError(err.message));
+  };
 
   return (
     <div
@@ -59,8 +69,7 @@ export function IdentityMenu({
         onSubmit={(e) => {
           e.preventDefault();
           if (!trimmed || trimmed === actor.name) return onClose();
-          onIdentity(renameIdentity(trimmed));
-          onClose();
+          attempt(renameIdentity(trimmed));
         }}
       >
         <input
@@ -74,11 +83,7 @@ export function IdentityMenu({
           Rename
         </button>
       </form>
-      {collides && (
-        <div className="identity-warning">
-          Someone here already answers to “{trimmed}” — @-mentions won't tell you apart.
-        </div>
-      )}
+      {error && <div className="identity-warning">{error}</div>}
       {others.length > 0 && (
         <>
           <div className="identity-menu-head">Switch to</div>
@@ -88,10 +93,7 @@ export function IdentityMenu({
                 key={other.id}
                 className="identity-known-row"
                 title={`Continue as ${other.name} — the same you as before`}
-                onClick={() => {
-                  onIdentity(adoptIdentity(other));
-                  onClose();
-                }}
+                onClick={() => attempt(adoptIdentity(other))}
               >
                 <span className="face-mark" style={{ background: actorColor(other.id) }}>
                   {other.name.charAt(0).toUpperCase()}
