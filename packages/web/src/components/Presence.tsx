@@ -2,7 +2,7 @@ import type { Actor, PresenceSession } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, statusLine } from "../lib/presence.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 
@@ -47,6 +47,7 @@ interface Face {
 const MAX_FACES = 5;
 
 export function Presence({ actor }: { actor: Actor }) {
+  const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const seen = useUnreadStore((s) => s.seen);
@@ -167,7 +168,7 @@ export function Presence({ actor }: { actor: Actor }) {
         >
           {/* The disc, not the button, carries the dimming — a badge on an
               absent author still has to read at full strength. */}
-          <span className="face-mark" style={{ background: actorColor(face.actor.id) }}>
+          <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
             {initial(face.label)}
           </span>
           {face.unread > 0 && <span className="face-badge">{face.unread}</span>}

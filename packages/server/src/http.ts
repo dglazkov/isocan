@@ -56,6 +56,15 @@ export function registerRoutes(
     if (!body.actor) {
       return reply.status(400).send({ error: "actor is required", code: "bad-op" });
     }
+    if (body.op?.type === "actor.setColor") {
+      // Home-scoped like a claim: the registry, not a canvas, is what changes.
+      const entry = await engine.setActorColor({
+        op: body.op,
+        actor: body.actor,
+        ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
+      });
+      return { seq: entry.seq, envelope: entry.envelope };
+    }
     const entry = await engine.submit(body as PostOpRequest & { actor: Actor });
     return { seq: entry.seq, envelope: entry.envelope };
   });
@@ -66,6 +75,10 @@ export function registerRoutes(
     const { keys } = req.query as { keys?: string };
     return engine.actorBindings(keys ? keys.split(",").filter(Boolean) : null);
   });
+
+  /** Chosen identity colors, for clients painting faces before a canvas is
+   * open (the projects page) — everything absent is derived from the id. */
+  app.get("/api/colors", async () => engine.actorColors());
 
   app.get("/api/projects", async () => engine.listProjects());
 

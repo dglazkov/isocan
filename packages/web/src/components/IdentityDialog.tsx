@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
 import { adoptIdentity, enterAs, knownIdentities } from "../lib/identity.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 
 /**
  * The door. First time through it asks for a name; after that it also offers
@@ -12,6 +12,7 @@ import { actorColor } from "../lib/colors.ts";
  * on a canvas) is shown here, not silently overridden.
  */
 export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
+  const colors = useActorColors();
   const [name, setName] = useState("");
   const [known] = useState(knownIdentities);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
                 onClick={() => attempt(adoptIdentity(actor))}
                 title={`Come back as ${actor.name}`}
               >
-                <span className="face-mark" style={{ background: actorColor(actor.id) }}>
+                <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
                   {actor.name.charAt(0).toUpperCase()}
                 </span>
                 {actor.name}

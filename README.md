@@ -77,9 +77,44 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`; double-click to interact).
+- **The Pen (`P`)**: draw freehand on the canvas in your identity color — the
+  same color your cursor and your face in the pile wear, so ink is signed by
+  how it looks; the ink well beside the rail switches to any other color in
+  the palette, and remembers. The nib follows you over items too, so you can
+  circle the thing you mean. A moment after you lift the pen the ink settles
+  into an ordinary item — no commit step to find; strokes drawn in one breath
+  land as one drawing. That item is an `item.add` whose blob is an SVG, so the
+  CLI lists it, `isocan get` hands you a real `.svg`, and it selects, moves,
+  resizes, deletes, undoes, and versions like anything else. It just wears no
+  card: the ink IS the item — and since that makes its box invisible, pointing
+  at a drawing outlines the box you would grab, and `⌥`-click steps down
+  through a stack of them.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
   subtle elevation plies hint at the stack; fan it out (`V`) to preview and
   promote any version.
+- **Your color**: the color you wear — cursor, face in the pile, comment pins,
+  the outline on an item you are holding, and your Pen's default ink. It is
+  derived from your actor id so a new actor has one immediately, and picking
+  another (identity menu, or `isocan identity --color teal`) is
+  `actor.setColor`: it lands in the daemon's actor registry beside your name,
+  so everyone on every canvas sees you change, live, without a reload.
+- **Snapping**: dragging an item shows alignment guides — a line for every
+  edge or center it has settled onto — and the item lands exactly on them. The
+  pull is measured in screen pixels, so it feels the same at any zoom, and
+  holding `⇧` mid-drag makes it markedly more magnetic for when you are aiming
+  at a line rather than a place. A multi-item drag snaps as one shape. Where an
+  axis has no line to claim it, equal spacing does: dropped between two
+  neighbours, the item centers itself and purple measure bars — a rule with end
+  caps across each gap — say the two distances match.
+- **Walking the canvas**: `⌘`/`Ctrl` + an arrow moves the SELECTION to the next
+  item that way — edge distance with a heavy penalty on sideways drift, so a
+  walk stays in its row instead of wandering to whatever is nearest in a
+  straight line. With nothing selected it starts from the item nearest the
+  middle of the screen; the camera pans only as far as it must, so an item
+  already on screen never moves the world.
+- **Nudging**: arrow keys move the selection a world unit at a time, `⇧` ten.
+  A held key is one gesture — the items track the key, and one `items.move` is
+  written when you stop, so it is one line in the log and one undo.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
   drags); create, reply, delete from either surface. Bodies render as
   markdown; `@Name` addresses a collaborator (mentions are resolved when

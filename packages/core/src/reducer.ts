@@ -75,9 +75,10 @@ export function applyOperation(
 
   switch (op.type) {
     case "actor.claim":
-      // Home-scoped: the engine applies claims against the actor registry
-      // and never routes them here. The case exists for exhaustiveness.
-      throw new OpValidationError("bad-op", "actor.claim is not a canvas operation");
+    case "actor.setColor":
+      // Home-scoped: the engine applies these against the actor registry and
+      // never routes them here. The cases exist for exhaustiveness.
+      throw new OpValidationError("bad-op", `${op.type} is not a canvas operation`);
 
     case "project.update":
       return {

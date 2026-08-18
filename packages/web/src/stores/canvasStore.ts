@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Actor,
+  ActorColors,
   CanvasState,
   ClientMessage,
   OpEnvelope,
@@ -25,6 +26,10 @@ interface CanvasStore {
   connection: Connection;
   /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
   sessions: PresenceSession[];
+  /** Chosen identity colors (actor id → hex), from the daemon's actor
+   * registry. Only the exceptions are here: everyone else wears the color
+   * their id implies. See lib/colors.ts. */
+  actorColors: ActorColors;
 }
 
 /**
@@ -40,6 +45,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   lastSeq: 0,
   connection: "connecting",
   sessions: [],
+  actorColors: {},
 }));
 
 // ---- presence publishing (throttled, trailing-edge) ----
@@ -196,6 +202,7 @@ function open(projectId: string): void {
         canvas: message.canvas,
         lastSeq: message.lastSeq,
         connection: "live",
+        actorColors: message.colors,
       });
       syncProject(projectId, message.canvas, presenceActor?.id);
       // Announce this tab's presence immediately so it shows up in rosters
@@ -204,6 +211,7 @@ function open(projectId: string): void {
     } else if (message.type === "presence-roster") {
       useCanvasStore.setState({
         sessions: message.sessions.filter((session) => session.sessionId !== CLIENT_ID),
+        actorColors: message.colors,
       });
     } else if (message.type === "op-applied") {
       const { project, canvas, lastSeq } = useCanvasStore.getState();

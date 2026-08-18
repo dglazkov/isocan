@@ -2,7 +2,9 @@ import type {
   Actor,
   ActorBindingRecord,
   ActorClaimOp,
+  ActorColors,
   ActorRegistry,
+  ActorSetColorOp,
   CanvasSnapshotResponse,
   LogEntry,
   NameHolder,
@@ -16,6 +18,7 @@ import type {
 import {
   INTERNAL_OP_TYPES,
   OpValidationError,
+  applyActorColor,
   applyClaim,
   applyOperation,
   collectCanvasNames,
@@ -93,6 +96,7 @@ export class Engine {
   private actorsRuntime: ActorsRuntime | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
+  private colorListeners = new Set<(colors: ActorColors) => void>();
 
   constructor(
     private readonly store: Store,
@@ -126,7 +130,55 @@ export class Engine {
       project: runtime.state.project,
       canvas: runtime.state.canvas,
       lastSeq: runtime.lastSeq,
+      colors: await this.actorColors(),
     };
+  }
+
+  /** Chosen identity colors, actor id → hex. Everything absent is derived
+   * from the id, so this map is only ever the exceptions. */
+  async actorColors(): Promise<ActorColors> {
+    const { registry } = await this.actors();
+    return registry.colors;
+  }
+
+  /**
+   * Choosing the color you wear. Home-scoped like a claim: it lands in the
+   * actors log, updates the registry, and is not undoable. Any actor can be
+   * addressed — there is no authentication here, and a daemon that only
+   * listens to one machine's people and agents does not pretend otherwise.
+   */
+  setActorColor(request: {
+    op: ActorSetColorOp;
+    actor: Actor;
+    clientId?: string;
+  }): Promise<LogEntry> {
+    return this.enqueue(async () => {
+      const runtime = await this.actors();
+      const ts = new Date().toISOString();
+      const registry = applyActorColor(runtime.registry, request.op);
+      const envelope: OpEnvelope = {
+        id: newOpId(),
+        projectId: null,
+        actor: request.actor,
+        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+        ts,
+        op: request.op,
+      };
+      const seq = runtime.lastSeq + 1;
+      const entry: LogEntry = { seq, envelope, inverse: null };
+      await this.store.appendActorsLog(entry);
+      runtime.registry = registry;
+      runtime.lastSeq = seq;
+      await this.store.saveActors(registry, seq);
+      for (const listener of this.colorListeners) listener(registry.colors);
+      return entry;
+    });
+  }
+
+  /** Told when a color changes, so live canvases can repaint their faces. */
+  onColors(listener: (colors: ActorColors) => void): () => void {
+    this.colorListeners.add(listener);
+    return () => this.colorListeners.delete(listener);
   }
 
   async getLog(projectId: string, sinceSeq = 0): Promise<LogEntry[]> {

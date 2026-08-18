@@ -13,7 +13,7 @@ import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
 import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
@@ -157,6 +157,7 @@ function ThreadPin({
   open: boolean;
   unread: number;
 }) {
+  const colors = useActorColors();
   const first = thread.comments[0]!;
   // Distinct authors in comment order; up to three initials, then a +N chip.
   const authors: Actor[] = [];
@@ -182,7 +183,7 @@ function ThreadPin({
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
       {shown.map((author) => (
-        <span className="pin-avatar" key={author.id} style={{ background: actorColor(author.id) }}>
+        <span className="pin-avatar" key={author.id} style={{ background: actorColorIn(colors, author.id) }}>
           {author.name.charAt(0).toUpperCase()}
         </span>
       ))}

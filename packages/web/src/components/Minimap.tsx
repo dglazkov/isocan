@@ -1,7 +1,7 @@
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
 
 const MAP_W = 168;
@@ -11,6 +11,7 @@ const PAD = 8;
 /** Full-canvas preview: item rects, everyone's presence dot, and the current
  * viewport rectangle. Click or drag to move the view. */
 export function Minimap() {
+  const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
@@ -100,7 +101,7 @@ export function Minimap() {
           cx={mapX(locus.x)}
           cy={mapY(locus.y)}
           r={3}
-          fill={actorColor(session.actor.id)}
+          fill={actorColorIn(colors, session.actor.id)}
           stroke={session.sessionId === followSessionId ? "#1f3fd0" : "#fff"}
           strokeWidth={1.2}
         >
