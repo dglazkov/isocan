@@ -78,7 +78,7 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
   }, [canvas, projectId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
-  // unread badge) lives on the Shelf.
+  // unread badge) is the "Main" button in the top bar's create actions.
   if (!canvas || !open) return null;
   return <Panel projectId={projectId} actor={actor} />;
 }

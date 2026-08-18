@@ -9,11 +9,13 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { ProjectEditor } from "./ProjectEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
+import { CreateActions } from "./CreateActions.tsx";
 
 /**
- * Identity only: where you are, whether you're live, who's here. Everything
- * that ACTS on the canvas lives on the Shelf at the bottom. The one exception
- * is the canvas's own name — you rename it where you read it.
+ * The top bar: where you are (canvas name, whether you're live, who's here) and
+ * what you bring onto the canvas (File, Site, Main). Interaction tools live on
+ * the right rail; navigation (zoom/undo) bottom-right. The canvas's own name is
+ * renamed where you read it.
  */
 export function Toolbar({
   actor,
@@ -69,6 +71,7 @@ export function Toolbar({
           </div>
         )}
       </div>
+      {project && <CreateActions projectId={project.id} actor={actor} />}
       <span className="spacer" />
       <span className={`conn ${connection}`}>{connection}</span>
       <button

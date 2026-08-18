@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
 import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
-import { useUiStore } from "../stores/uiStore.ts";
+import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
+import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
@@ -21,11 +22,17 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
+  const activeTool = useUiStore((s) => s.activeTool);
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
   const [panning, setPanning] = useState(false);
-  const spaceDown = useRef(false);
+  // The tool to restore when a momentary Space-grab ends (null when not held).
+  const spacePrevTool = useRef<Tool | null>(null);
+  // Zoom tool via Z: the tool it interrupted (to restore on a hold-release),
+  // and when Z went down (to tell a quick tap from a hold).
+  const zoomPrevTool = useRef<Tool | null>(null);
+  const zoomDownAt = useRef(0);
 
   // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
   // or a gesture event (Safari). Left alone, the browser zooms the whole page —
@@ -91,15 +98,46 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     };
   }, []);
 
-  // Track spacebar for space-drag panning.
+  // Hold-to-mode keys. Space: a momentary Hand grab — switch to Hand while held,
+  // restore the previous tool on release. Z: the Zoom tool — a quick TAP latches
+  // it (magnifier stays until you use it or press Esc); a HOLD is momentary
+  // (release returns to the previous tool). Either way the pointer becomes a
+  // magnifier: hover an item to focus it and click to fit it, or drag a region
+  // to zoom into it. Actual pointer work happens in onPointerDown.
   useEffect(() => {
     function down(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-      if (e.code === "Space") spaceDown.current = true;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+      if (e.code === "Space" && spacePrevTool.current === null) {
+        const ui = useUiStore.getState();
+        spacePrevTool.current = ui.activeTool; // capture once; keydown repeats while held
+        ui.setActiveTool("hand");
+      }
+      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
+        const ui = useUiStore.getState();
+        if (ui.activeTool !== "zoom") {
+          zoomPrevTool.current = ui.activeTool;
+          zoomDownAt.current = Date.now();
+          ui.setActiveTool("zoom");
+        }
+      }
     }
     function up(e: KeyboardEvent) {
-      if (e.code === "Space") spaceDown.current = false;
+      if (e.code === "Space" && spacePrevTool.current !== null) {
+        useUiStore.getState().setActiveTool(spacePrevTool.current);
+        spacePrevTool.current = null;
+      }
+      if (e.code === "KeyZ") {
+        const ui = useUiStore.getState();
+        // Held long enough to be a hold (not a tap): momentary — leave zoom.
+        if (ui.activeTool === "zoom" && zoomDownAt.current && Date.now() - zoomDownAt.current > 250) {
+          ui.setActiveTool(zoomPrevTool.current ?? "select");
+          zoomPrevTool.current = null;
+        }
+        zoomDownAt.current = 0;
+      }
     }
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -111,7 +149,21 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
 
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
-    const wantsPan = e.button === 1 || (spaceDown.current && e.button === 0);
+    // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
+    // through activeTool too.) The Hand tool pans from anywhere — an item
+    // yields its pointer when it is active — so it is not gated on background.
+    const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
+
+    if (activeTool === "zoom" && e.button === 0) {
+      // Click an item → fit it; drag the background → zoom into that region.
+      const itemId = (e.target as HTMLElement).closest?.("[data-item-id]")?.getAttribute("data-item-id");
+      if (itemId) {
+        zoomToItem(itemId); // sticky tap stays in zoom; a hold reverts on keyup
+        return;
+      }
+      startZoomRegion(e);
+      return;
+    }
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
       const ui = useUiStore.getState();
@@ -147,6 +199,44 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       setPanning(false);
+    }
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+  }
+
+  /** The Zoom tool's drag: rubber-band a region, then fit it and hand the
+   * pointer back to Select. A no-move click does nothing (stays in zoom). */
+  function startZoomRegion(e: React.PointerEvent) {
+    e.preventDefault();
+    const el = ref.current!;
+    el.setPointerCapture(e.pointerId);
+    const startScreen = { x: e.clientX, y: e.clientY };
+    const startWorld = screenToWorld(useUiStore.getState().viewport, e.clientX, e.clientY);
+    let moved = false;
+
+    function onMove(ev: PointerEvent) {
+      if (!moved && Math.hypot(ev.clientX - startScreen.x, ev.clientY - startScreen.y) < 4) return;
+      moved = true;
+      const cur = screenToWorld(useUiStore.getState().viewport, ev.clientX, ev.clientY);
+      useUiStore.getState().setMarquee({ x1: startWorld.x, y1: startWorld.y, x2: cur.x, y2: cur.y });
+    }
+    function onUp(ev: PointerEvent) {
+      el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      const ui = useUiStore.getState();
+      ui.setMarquee(null);
+      if (moved) {
+        const end = screenToWorld(ui.viewport, ev.clientX, ev.clientY);
+        zoomToBox({
+          minX: Math.min(startWorld.x, end.x),
+          minY: Math.min(startWorld.y, end.y),
+          maxX: Math.max(startWorld.x, end.x),
+          maxY: Math.max(startWorld.y, end.y),
+        });
+        ui.setActiveTool("select"); // a region zoom returns you to Select
+        zoomPrevTool.current = null;
+      }
     }
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
@@ -240,7 +330,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}`}
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}`}
       style={{
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
