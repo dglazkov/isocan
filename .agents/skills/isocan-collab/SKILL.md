@@ -41,7 +41,7 @@ isocan project list            # find the canvas; then either:
 isocan use <project>           #   set default, or pass --project <ref> per command
 isocan whoami                  # identity must be YOURS, not the user's
 isocan who --all               # every name the canvas knows — see "Your name"
-isocan identity --name "Kenny" --here   # your name, in THIS directory
+isocan identity --name "Kenny" --session # your name, as THIS agent
 ```
 
 **If `project list` is empty, there is nothing to work on yet.** Canvases are
@@ -60,34 +60,47 @@ You are a collaborator on this canvas, so you need a name of your own — not
 your model's or your vendor's ("Claude", "GPT", "Gemini" are all wrong here,
 and any harness should be able to run this skill), and never the human's.
 
-**Two parties share this machine.** `~/.isocan/identity.json` is the person's
-name; a `.isocan/identity.json` in a working directory is the agent's. Naming
-yourself with `--here` writes the directory one, so you never rename the human
-— that is the whole reason the flag exists. Commands run in that directory
-speak as you; the human's canvases stay theirs.
+**A machine holds one person and any number of agents.** Three slots keep
+them apart, and the most specific one wins. `~/.isocan/identity.json` is the
+person's name. A `.isocan/identity.json` in a working directory belongs to
+whoever works there. A session — the id your harness puts in the environment
+of every command it runs — belongs to you alone, and `--session` claims it.
+
+Prefer `--session`. A directory has only one identity file, so two agents in
+one checkout naming themselves with `--here` end up as one person wearing
+both their names, while under `--session` they are two without having to
+coordinate at all. Reach for `--here` when `--session` reports no harness
+session, or when you want everything done in a directory attributed to you
+however it was run. Neither flag can rename the human — that is the whole
+reason both of them exist.
 
 Names hiding in the letters of "isocan" fit the place: **Isaac, Kenny, Nico,
 Sonia, Iona, Osian, Isao, Cana** — or invent another in the same spirit.
 
 Pick like this, once, before you appear:
 
-1. `isocan whoami` — if it already names you "in this directory", keep that
-   name; a stable name is worth more than a fresh one. A name with no such
-   suffix is the HUMAN's, not yours: pick your own. On a machine where nobody
-   has been named yet it errors with "no identity configured" — that is the
-   answer "nobody, yet", not a broken install; same for an empty
-   `project list`. Neither is a reason to reinstall anything.
+1. `isocan whoami` — if it already names you "this agent session" or "in
+   this directory", keep that name; a stable name is worth more than a fresh
+   one. A name with no such suffix is the HUMAN's, not yours: pick your own.
+   On a machine where nobody has been named yet it errors with "no identity
+   configured" — that is the answer "nobody, yet", not a broken install; same
+   for an empty `project list`. Neither is a reason to reinstall anything.
 2. `isocan who --all --json` — every name the canvas knows, live or not
    (history included: a name someone used once still addresses them).
 3. Take the first name from the roster above that nobody on the canvas
    answers to. If they are all taken, coin a new one from the same letters.
-4. `isocan identity --name "<name>" --here`, then keep it for the whole
-   collaboration — the human will call you back by it, and `@Name` only
-   works if exactly one of you answers to it. The CLI warns you if the name
-   is already taken on that canvas; if it does, pick again.
+4. `isocan identity --name "<name>" --session` (`--here` if it says there is
+   no harness session), then keep it for the whole collaboration — the human
+   will call you back by it, and `@Name` only works if exactly one of you
+   answers to it. The CLI warns you if the name is already taken on that
+   canvas; if it does, pick again.
 
 If the directory belongs to the human's repo, mention that `.isocan/` is
-yours and can be gitignored — don't edit their `.gitignore` yourself.
+yours and can be gitignored — don't edit their `.gitignore` yourself. And if
+`--session` found no harness session, mention that too: a harness isocan has
+not met can opt in for good by exporting `ISOCAN_SESSION_ID` (with
+`ISOCAN_HARNESS` for the label), or by naming its variable once in
+`~/.isocan/config.json` under `harnessVars`.
 
 ## The session protocol
 
