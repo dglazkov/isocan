@@ -25,6 +25,10 @@ export interface ResizeState {
   itemId: string;
   width: number;
   height: number;
+  /** World-space offset from the item's stored origin during the live preview.
+   *  Non-zero when resizing from a corner that moves the origin (NW, NE, SW). */
+  dx: number;
+  dy: number;
 }
 
 export interface PendingComment {
