@@ -46,6 +46,7 @@ import {
   resolveIdentity,
   writeIdentity,
   writeLocalIdentity,
+  writeSessionIdentity,
 } from "./identity.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -355,8 +356,9 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
  */
 async function identityTarget(
   home: string,
-  opts: { here?: boolean; home?: boolean },
-): Promise<{ file: "home" | string; scope: "home" | "directory" }> {
+  opts: { session?: boolean; here?: boolean; home?: boolean },
+): Promise<{ file: "home" | string; scope: "session" | "home" | "directory" }> {
+  if (opts.session) return { file: "session", scope: "session" };
   if (opts.here) return { file: process.cwd(), scope: "directory" };
   if (opts.home) return { file: "home", scope: "home" };
   const local = await findLocalIdentity(process.cwd(), home);
@@ -369,26 +371,37 @@ program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
   .option("--name <name>", "display name")
+  .option(
+    "--session",
+    "name the agent running this command — what tells two agents in ONE directory apart",
+  )
   .option("--here", "name yourself for THIS directory — what an agent does, leaving the human's name alone")
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
   .action(
     run(
       async (
-        opts: { name?: string; here?: boolean; home?: boolean; new?: boolean },
+        opts: { name?: string; session?: boolean; here?: boolean; home?: boolean; new?: boolean },
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
         if (opts.name) {
           const target = await identityTarget(home, opts);
+          const bound =
+            target.scope === "session"
+              ? await writeSessionIdentity(home, opts.name, opts.new ?? false)
+              : null;
           const actor =
-            target.scope === "home"
+            bound?.actor ??
+            (target.scope === "home"
               ? await writeIdentity(home, opts.name, opts.new ?? false)
-              : await writeLocalIdentity(target.file as string, opts.name, opts.new ?? false);
+              : await writeLocalIdentity(target.file as string, opts.name, opts.new ?? false));
           const where =
-            target.scope === "home"
-              ? paths.identityFile(home)
-              : localIdentityFile(target.file as string);
+            target.scope === "session"
+              ? `${paths.agentsFile(home)} (${bound!.harness} session)`
+              : target.scope === "home"
+                ? paths.identityFile(home)
+                : localIdentityFile(target.file as string);
           console.log(`identity saved: ${actor.name} (${actor.id}) → ${where}`);
           if (target.scope === "directory" && !opts.here) {
             console.error(
@@ -409,7 +422,12 @@ program
           printKeyValues({
             id: resolved.actor.id,
             name: resolved.actor.name,
-            scope: resolved.source === "home" ? "this machine's person" : "this directory",
+            scope:
+              resolved.source === "session"
+                ? `this agent session (${resolved.harness})`
+                : resolved.source === "home"
+                  ? "this machine's person"
+                  : "this directory",
             file: resolved.file,
           });
         }
@@ -425,7 +443,12 @@ program
       const home = paths.isocanHome();
       const resolved = await resolveIdentity(home, process.cwd());
       if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
-      const suffix = resolved.source === "directory" ? " — in this directory" : "";
+      const suffix =
+        resolved.source === "session"
+          ? " — this agent session"
+          : resolved.source === "directory"
+            ? " — in this directory"
+            : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
     }),
   );

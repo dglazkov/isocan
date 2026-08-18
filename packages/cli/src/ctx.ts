@@ -6,6 +6,7 @@ import { DEFAULT_PORT } from "@isocan/core";
 import { paths, stalenessOf } from "@isocan/server";
 import { DaemonClient } from "./client.ts";
 import { requireIdentity, resolveIdentity } from "./identity.ts";
+import type { HarnessVarConfig } from "./harness.ts";
 
 export interface Ctx {
   client: DaemonClient;
@@ -73,7 +74,7 @@ async function warnIfStale(client: DaemonClient, home: string): Promise<void> {
   }
 }
 
-interface ConfigFile {
+interface ConfigFile extends HarnessVarConfig {
   defaultProjectId?: string;
 }
 

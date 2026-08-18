@@ -41,7 +41,7 @@ isocan project list            # find the canvas; then either:
 isocan use <project>           #   set default, or pass --project <ref> per command
 isocan whoami                  # identity must be YOURS, not the user's
 isocan who --all               # every name the canvas knows — see "Your name"
-isocan identity --name "Kenny" --here   # your name, in THIS directory
+isocan identity --name "Kenny" --session # your name, as THIS agent
 ```
 
 **If `project list` is empty, there is nothing to work on yet.** Canvases are
@@ -66,14 +66,26 @@ yourself with `--here` writes the directory one, so you never rename the human
 — that is the whole reason the flag exists. Commands run in that directory
 speak as you; the human's canvases stay theirs.
 
+**Use `--session` instead when you can.** It names the agent running the
+command rather than the directory, keyed on the session id your harness
+already puts in the environment. A directory has one identity file, so two
+agents working in one checkout under `--here` are one person wearing both
+their names; under `--session` they are two, with no coordination between
+them. `--here` remains right when you want everything done in a directory
+attributed to you regardless of who runs it, and it is the fallback when
+`--session` reports no harness session — a bare shell, a cron job, a harness
+isocan has not met yet. Such a harness can also opt in for good: export
+`ISOCAN_SESSION_ID` (and `ISOCAN_HARNESS` for the label), or name its variable
+once in `~/.isocan/config.json` as `{"harnessVars": {"<name>": "<VAR>"}}`.
+
 Names hiding in the letters of "isocan" fit the place: **Isaac, Kenny, Nico,
 Sonia, Iona, Osian, Isao, Cana** — or invent another in the same spirit.
 
 Pick like this, once, before you appear:
 
-1. `isocan whoami` — if it already names you "in this directory", keep that
-   name; a stable name is worth more than a fresh one. A name with no such
-   suffix is the HUMAN's, not yours: pick your own. On a machine where nobody
+1. `isocan whoami` — if it already names you "this agent session" or "in this
+   directory", keep that name; a stable name is worth more than a fresh one.
+   A name with no such suffix is the HUMAN's, not yours: pick your own. On a machine where nobody
    has been named yet it errors with "no identity configured" — that is the
    answer "nobody, yet", not a broken install; same for an empty
    `project list`. Neither is a reason to reinstall anything.
@@ -81,7 +93,8 @@ Pick like this, once, before you appear:
    (history included: a name someone used once still addresses them).
 3. Take the first name from the roster above that nobody on the canvas
    answers to. If they are all taken, coin a new one from the same letters.
-4. `isocan identity --name "<name>" --here`, then keep it for the whole
+4. `isocan identity --name "<name>" --session` (`--here` if that says there
+   is no harness session), then keep it for the whole
    collaboration — the human will call you back by it, and `@Name` only
    works if exactly one of you answers to it. The CLI warns you if the name
    is already taken on that canvas; if it does, pick again.
