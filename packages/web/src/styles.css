@@ -34,6 +34,9 @@
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   --radius: 8px;
+  /* Snapping feedback: blue says "aligned to this line", purple says "these
+     two gaps are equal". */
+  --guide-spacing: #8b46e0;
 }
 
 /* Dark: a graphite ground under the same dot grid, slate cards, a brighter
@@ -57,6 +60,7 @@
   --accent-ink: #ffffff;
   --danger: #f26a60;
   --warn: #d99a3a;
+  --guide-spacing: #a672f0;
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
@@ -215,6 +219,27 @@ input, textarea { font: inherit; color: var(--ink); }
 .canvas-viewport.zoom .item:hover {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+/* Pen tool: a nib whose point IS the hotspot, white-bodied so it reads on
+   both the vellum and the graphite ground. The item under it keeps quiet —
+   no grab cursor — because the Pen draws over items rather than moving them. */
+.canvas-viewport.pen { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3.2 20.8l1.5-4.3L15.2 6l2.8 2.8L7.5 19.3z' fill='%23ffffff' stroke='%2323262b' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M16.3 4.9l1.3-1.3a1.5 1.5 0 0 1 2.1 0l0.7 0.7a1.5 1.5 0 0 1 0 2.1l-1.3 1.3z' fill='%2323262b'/%3E%3Ccircle cx='3.2' cy='20.8' r='0.9' fill='%2323262b'/%3E%3C/svg%3E") 3 21, crosshair; }
+.canvas-viewport.pen .item,
+.canvas-viewport.pen .item-titlebar { cursor: inherit; }
+
+/* Wet ink: strokes drawn but not yet placed. It lives inside .world, and
+   InkLayer sizes it (and its viewBox) to the ink's world bounding box, so its
+   coordinates ARE world coordinates. */
+.ink-layer { position: absolute; pointer-events: none; z-index: 3; overflow: visible; }
+
+/* The wet-ink bar: bottom center, between the minimap and the zoom controls. */
+.sketch-bar {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 27;
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
+  background: var(--panel); backdrop-filter: blur(6px);
+  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-pop);
+}
+.sketch-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.sketch-label { font-size: 11.5px; color: var(--ink-muted); white-space: nowrap; }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 
 /* Cursor spotlight: a brighter copy of the dot grid, aligned to the base grid,
@@ -272,6 +297,28 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .item.selected { outline: 2px solid var(--accent); z-index: 1; }
 .item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
+/* Drawings wear no chrome: the ink IS the item. The titlebar floats above the
+   strokes (out of flow, so it never squeezes the picture) and only appears
+   when you point at the drawing or select it. */
+.item.ink { background: transparent; border-color: transparent; box-shadow: none; }
+.item.ink .item-content { border-radius: var(--radius); }
+.item.ink .img-view { background: transparent; }
+.item.ink .ply { background: transparent; border-color: var(--line-soft); }
+.item.ink .item-titlebar {
+  position: absolute; left: 0; right: 0; top: -21px; padding: 0 2px;
+  background: none; border: none; border-radius: 0;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.item.ink:hover .item-titlebar, .item.ink.selected .item-titlebar { opacity: 1; }
+/* Pointing at an item shows the box you would get, in the accent color that
+   means "this one" everywhere else — a dashed preview of the solid outline a
+   click would give it. It matters most for a drawing, whose box is otherwise
+   invisible, but a screenshot or a note earns the same courtesy.
+   (Not while the Pen is up: there you are drawing over items, not aiming.) */
+.canvas-viewport:not(.pen) .item:hover {
+  outline: 1px dashed var(--accent); outline-offset: 2px;
+}
+.canvas-viewport:not(.pen) .item.selected:hover { outline: 2px solid var(--accent); }
 .item-titlebar {
   display: flex; align-items: center; gap: 6px; flex: none;
   padding: 6px 9px; font-size: 11px; color: var(--ink-muted);
@@ -749,6 +796,34 @@ button.mt-card:hover { border-color: var(--accent); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
 
+/* The ink well: the Pen's palette, hung off the rail while the Pen is up.
+   The chip on the button shows what is in the nib right now. */
+.tool-slot { position: relative; display: flex; }
+.ink-chip {
+  position: absolute; right: 5px; bottom: 5px;
+  width: 7px; height: 7px; border-radius: 999px;
+  border: 1.5px solid var(--card);
+}
+.tool-btn.active .ink-chip { border-color: var(--accent); }
+.ink-well {
+  position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 5px; padding: 6px 8px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+.ink-swatch {
+  width: 18px; height: 18px; border-radius: 999px; flex: none;
+  border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line);
+  padding: 0;
+}
+.ink-swatch:hover { transform: scale(1.12); }
+.ink-swatch.active { box-shadow: 0 0 0 2px var(--accent); }
+.ink-swatch.mine { width: 21px; height: 21px; }
+.ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--line); }
+/* The same swatches in the identity menu, where the choice is who you are
+   rather than what the Pen is dipped in. */
+.identity-colors { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
+
 /* ---------- bottom-right navigation (zoom + history) ---------- */
 .zoom-controls {
   position: absolute; right: 14px; bottom: 16px; z-index: 26;
@@ -840,6 +915,28 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 
 /* ---------- marquee ---------- */
+/* Alignment guides (drag): hairlines in the accent color, over the items but
+   under the panels — they are feedback about the gesture, not furniture. */
+.guide { position: absolute; z-index: 16; pointer-events: none; background: var(--accent); }
+.guide-v { top: 0; bottom: 0; width: 1px; }
+.guide-h { left: 0; right: 0; height: 1px; }
+
+/* Equal-spacing measures: a bar with end caps across each of the two gaps
+   that match. Purple, deliberately not the alignment blue — "these distances
+   are equal" is a different claim from "this edge is on that line". */
+.spacing { position: absolute; z-index: 16; pointer-events: none; background: var(--guide-spacing); }
+.spacing::before, .spacing::after {
+  content: ""; position: absolute; background: var(--guide-spacing);
+}
+.spacing-x { height: 2px; }
+.spacing-x::before, .spacing-x::after { top: -5px; width: 2px; height: 12px; }
+.spacing-x::before { left: 0; }
+.spacing-x::after { right: 0; }
+.spacing-y { width: 2px; }
+.spacing-y::before, .spacing-y::after { left: -5px; height: 2px; width: 12px; }
+.spacing-y::before { top: 0; }
+.spacing-y::after { bottom: 0; }
+
 .marquee {
   position: absolute; z-index: 15; pointer-events: none;
   border: 1px solid var(--accent);

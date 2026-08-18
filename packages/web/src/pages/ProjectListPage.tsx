@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { newProjectId } from "@isocan/core";
 import { listProjects, sendOp } from "../lib/api.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { ProjectEditor } from "../components/ProjectEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
@@ -15,6 +15,7 @@ export function ProjectListPage({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
+  const colors = useActorColors();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export function ProjectListPage({
             title="You — rename yourself, or enter as someone else"
             onClick={() => setIdentityOpen(!identityOpen)}
           >
-            <span className="face-mark" style={{ background: actorColor(actor.id) }}>
+            <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
               {actor.name.charAt(0).toUpperCase()}
             </span>
             {actor.name}

@@ -32,6 +32,7 @@ export function invertOperation(
 
   switch (op.type) {
     case "actor.claim":
+    case "actor.setColor":
       return null; // home-scoped and never undoable; never reaches a project
 
     case "project.update":

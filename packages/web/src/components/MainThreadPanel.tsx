@@ -8,7 +8,7 @@ import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
@@ -84,6 +84,7 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
 }
 
 function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
+  const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
   const [draft, setDraft] = useState("");
@@ -158,7 +159,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           )}
           {thread?.comments.map((comment) => (
             <div className="comment" key={comment.id}>
-              <span className="who" style={{ color: actorColor(comment.author.id) }}>
+              <span className="who" style={{ color: actorColorIn(colors, comment.author.id) }}>
                 {comment.author.name}
               </span>
               <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
 import { adoptIdentity, knownIdentities, renameIdentity, signOut } from "../lib/identity.ts";
-import { actorColor } from "../lib/colors.ts";
+import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
+import { setActorColor } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
@@ -21,6 +22,10 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   coming back as yourself really is coming back.
  * - LEAVE clears the current identity and returns you to the door, where the
  *   roster is still waiting.
+ * - COLOR picks the color you wear — cursor, face, pins, and your Pen's
+ *   default ink. It is `actor.setColor`, stored in the daemon's actor
+ *   registry beside your name, because a color only you can see would not be
+ *   an identity: everyone on every canvas sees you change.
  *
  * All of it is `actor.claim` under the hood (#58): the daemon applies one
  * continuity rule for every client, and a refusal — a name somebody on a
@@ -40,6 +45,7 @@ export function IdentityMenu({
   onIdentity: (actor: Actor | null) => void;
   onClose: () => void;
 }) {
+  const colors = useActorColors();
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +101,7 @@ export function IdentityMenu({
                 title={`Continue as ${other.name} — the same you as before`}
                 onClick={() => attempt(adoptIdentity(other))}
               >
-                <span className="face-mark" style={{ background: actorColor(other.id) }}>
+                <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
                   {other.name.charAt(0).toUpperCase()}
                 </span>
                 {other.name}
@@ -104,6 +110,25 @@ export function IdentityMenu({
           </div>
         </>
       )}
+      <div className="identity-menu-head">Your color</div>
+      <div className="identity-colors" role="group" aria-label="Your color">
+        {IDENTITY_COLORS.map((option) => {
+          const active = actorColorIn(colors, actor.id) === option.value;
+          return (
+            <button
+              key={option.value}
+              className={`ink-swatch${active ? " active" : ""}`}
+              style={{ background: option.value }}
+              title={option.name}
+              aria-label={option.name}
+              aria-pressed={active}
+              onClick={() => {
+                void setActorColor(actor, option.value).catch((err: Error) => setError(err.message));
+              }}
+            />
+          );
+        })}
+      </div>
       <div className="identity-menu-head">Theme</div>
       <div className="theme-switch" role="group" aria-label="Theme">
         {THEME_OPTS.map((opt) => (

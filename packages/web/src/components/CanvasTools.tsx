@@ -3,16 +3,22 @@ import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
+import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
  * default (click + marquee); Hand pans on drag (also momentary while Space is
- * held); Comment drops pins. The active tool is the store's `activeTool`; each
- * answers to a letter — Select=V, Hand=H, Zoom=Z, Comment=C — and Esc returns
- * to Select. (Version fan-out, once on V, lives on an item's version badge.)
+ * held); Pen draws freehand ink that settles into an item; Comment drops pins. The active tool is the
+ * store's `activeTool`; each answers to a letter — Select=V, Hand=H, Zoom=Z,
+ * Pen=P, Comment=C — and Esc returns to Select. (Version fan-out, once on V,
+ * lives on an item's version badge.)
  *
  * Below a divider, the upload button opens a file picker to bring files onto
  * the canvas — moved here from the top bar to match the Figma tool rail idiom.
+ *
+ * Picking up the Pen opens the ink well beside it: your identity color first —
+ * the one your cursor and your face in the pile already wear, so ink is signed
+ * by how it looks — then the rest of the palette.
  */
 
 interface ToolDef {
@@ -53,6 +59,13 @@ const ZOOM = (
   </svg>
 );
 
+const PEN = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round">
+    <path d="M2.2 13.8l.9-2.9 7.4-7.4a1.3 1.3 0 0 1 1.9 0l.7.7a1.3 1.3 0 0 1 0 1.9l-7.4 7.4-2.9.9z" />
+    <path d="M9.7 4.3l2.6 2.6" />
+  </svg>
+);
+
 const UPLOAD = (
   <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="12" height="10" rx="1.5" />
@@ -65,13 +78,18 @@ const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
   { tool: "zoom", label: "Zoom", hint: "Zoom — Z (tap to latch, hold to zoom a region)", icon: ZOOM },
+  { tool: "pen", label: "Pen", hint: "Pen — P (draw in your color; ink lands as an item a moment after you lift)", icon: PEN },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 
 export function CanvasTools({ projectId, actor }: { projectId: string; actor: Actor }) {
+  const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
+  const inkColor = useUiStore((s) => s.inkColor);
   const fileInput = useRef<HTMLInputElement>(null);
+  const mine = actorColorIn(colors, actor.id);
+  const ink = inkColor ?? mine;
 
   function createPlacement(): Placement {
     const { selectedItemIds, viewport } = useUiStore.getState();
@@ -92,16 +110,42 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
   return (
     <div className="tool-rail" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
       {TOOLS.map((t) => (
-        <button
-          key={t.tool}
-          className={`tool-btn${activeTool === t.tool ? " active" : ""}`}
-          title={t.hint}
-          aria-label={t.label}
-          aria-pressed={activeTool === t.tool}
-          onClick={() => setActiveTool(t.tool)}
-        >
-          {t.icon}
-        </button>
+        <div key={t.tool} className="tool-slot">
+          <button
+            className={`tool-btn${activeTool === t.tool ? " active" : ""}`}
+            title={t.hint}
+            aria-label={t.label}
+            aria-pressed={activeTool === t.tool}
+            onClick={() => setActiveTool(t.tool)}
+          >
+            {t.icon}
+            {t.tool === "pen" && <span className="ink-chip" style={{ background: ink }} />}
+          </button>
+          {t.tool === "pen" && activeTool === "pen" && (
+            <div className="ink-well" role="group" aria-label="Ink color">
+              <button
+                className={`ink-swatch mine${inkColor === null ? " active" : ""}`}
+                style={{ background: mine }}
+                title={`Your color — ${actor.name}`}
+                aria-label={`Your color, ${actor.name}`}
+                aria-pressed={inkColor === null}
+                onClick={() => useUiStore.getState().setInkColor(null)}
+              />
+              <div className="ink-sep" />
+              {IDENTITY_COLORS.filter((c) => c.value !== mine).map((c) => (
+                <button
+                  key={c.value}
+                  className={`ink-swatch${inkColor === c.value ? " active" : ""}`}
+                  style={{ background: c.value }}
+                  title={c.name}
+                  aria-label={c.name}
+                  aria-pressed={inkColor === c.value}
+                  onClick={() => useUiStore.getState().setInkColor(c.value)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       ))}
       <div className="tool-sep" />
       <button

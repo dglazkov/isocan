@@ -1,6 +1,12 @@
-import type { Actor, Placement } from "@isocan/core";
+import type { Actor, InkStroke, Placement } from "@isocan/core";
 import {
   BROWSER_MIME,
+  DRAWING_FILENAME,
+  DRAWING_MIME,
+  DRAWING_PROPERTIES,
+  DRAWING_TITLE,
+  drawingSvg,
+  inkBounds,
   newItemId,
   newVersionId,
   normalizeSiteUrl,
@@ -104,6 +110,50 @@ export async function addBrowserItem(
     ...BROWSER_SIZE,
     placement,
     title: siteLabel(site),
+  });
+  return itemId;
+}
+
+/**
+ * Dry wet ink into an item: strokes → an SVG blob → `item.add`. The item's
+ * box IS the ink's world bounding box, so the drawing lands exactly where it
+ * was drawn and every other client (and `isocan ls`) sees it there.
+ * Throws on strokes with no points.
+ */
+export async function addDrawing(
+  projectId: string,
+  actor: Actor,
+  strokes: InkStroke[],
+): Promise<string> {
+  const exact = inkBounds(strokes);
+  if (!exact) throw new Error("nothing to place");
+  // Whole world units: the item box and the SVG viewBox must be the same box,
+  // and an item's coordinates are integers everywhere else in the app.
+  const bounds = {
+    minX: Math.floor(exact.minX),
+    minY: Math.floor(exact.minY),
+    maxX: Math.ceil(exact.maxX),
+    maxY: Math.ceil(exact.maxY),
+  };
+  const svg = drawingSvg(strokes, bounds);
+  const blob = new Blob([svg], { type: DRAWING_MIME });
+  const upload = await uploadBlob(projectId, blob, DRAWING_FILENAME);
+  const itemId = newItemId();
+  await sendOp(projectId, actor, {
+    type: "item.add",
+    itemId,
+    version: {
+      id: newVersionId(),
+      blobHash: upload.blobHash,
+      mimeType: DRAWING_MIME,
+      filename: DRAWING_FILENAME,
+      size: upload.size,
+    },
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY,
+    placement: { x: bounds.minX, y: bounds.minY },
+    title: DRAWING_TITLE,
+    properties: DRAWING_PROPERTIES,
   });
   return itemId;
 }

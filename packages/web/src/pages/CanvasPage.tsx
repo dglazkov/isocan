@@ -10,20 +10,44 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
+import { applyLocalEcho } from "../stores/canvasStore.ts";
 import { centerOn, fitBounds, itemsBounds } from "../lib/viewport.ts";
 import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
+import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { CommandBar } from "../components/CommandBar.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
-import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
+import { revealItem, zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
+import { findNextItem, nearestToPoint, type Direction } from "../lib/spatialnav.ts";
+import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
+
+/** Arrow keys → a world-space direction. */
+const NUDGES: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
+/** Shift makes it a stride instead of a step. */
+const NUDGE_BIG = 10;
+
+/** How long after the last arrow press the move is written. */
+const NUDGE_FLUSH_MS = 350;
+
+function moveOp(moves: Array<{ itemId: string; x: number; y: number }>) {
+  return moves.length === 1
+    ? ({ type: "item.move", ...moves[0]! } as const)
+    : ({ type: "items.move", moves } as const);
+}
 
 export function CanvasPage({
   actor,
@@ -43,6 +67,10 @@ export function CanvasPage({
   });
   const [outdated, setOutdated] = useState(false);
   const didFit = useRef(false);
+  // A held arrow key is ONE gesture, not thirty: the replica moves on every
+  // press so the item tracks the key, and the op that records it is written
+  // once the nudging stops. One undo step, one line in the log.
+  const nudgeTimer = useRef<number | null>(null);
   // Who to open a connection as, without making a rename reconnect.
   const actorRef = useRef(actor);
   actorRef.current = actor;
@@ -114,6 +142,14 @@ export function CanvasPage({
     return () => cancelAnimationFrame(raf);
   }, [followSessionId]);
 
+  // Ink is never quietly lost: leaving the canvas places whatever the Pen has
+  // drawn but not yet settled, so the strokes become an item instead of
+  // evaporating with the page's local state.
+  useEffect(() => {
+    if (!projectId) return;
+    return () => placeSketch(projectId, actorRef.current);
+  }, [projectId]);
+
   // A daemon restart is where an upgrade becomes visible: the socket drops,
   // comes back, and the app this tab is running may no longer be the one being
   // served. Check on every reconnect (and once on arrival) rather than polling.
@@ -140,6 +176,82 @@ export function CanvasPage({
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
     if (!projectId) return;
+
+    /** Move the selection by whole world units: 1 per press, 10 with shift. */
+    function nudge(dx: number, dy: number): void {
+      const ids = useUiStore.getState().selectedItemIds;
+      const canvas = useCanvasStore.getState().canvas;
+      if (ids.length === 0 || !canvas) return;
+      const moves = ids
+        .map((id) => canvas.items[id])
+        .filter((item) => item !== undefined)
+        .map((item) => ({ itemId: item.id, x: item.x + dx, y: item.y + dy }));
+      if (moves.length === 0) return;
+      // Optimistic: the replica is what the screen draws, so the item moves
+      // now and the daemon hears about it when the keys stop.
+      applyLocalEcho(moveOp(moves), actor);
+      if (nudgeTimer.current !== null) clearTimeout(nudgeTimer.current);
+      nudgeTimer.current = window.setTimeout(() => {
+        nudgeTimer.current = null;
+        flushNudge();
+      }, NUDGE_FLUSH_MS);
+    }
+
+    /**
+     * Walk the selection one item in a direction. With nothing selected, the
+     * walk starts at whatever is nearest the middle of the screen — the item
+     * you are already looking at.
+     */
+    function jump(direction: Direction): void {
+      const ui = useUiStore.getState();
+      const canvas = useCanvasStore.getState().canvas;
+      if (!canvas) return;
+      const all = Object.values(canvas.items);
+      if (all.length === 0) return;
+      const selected = ui.selectedItemIds;
+
+      if (selected.length === 0) {
+        const middle = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
+        const start = nearestToPoint(all, middle.x, middle.y);
+        if (start) {
+          ui.select(start.id);
+          revealItem(start.id);
+        }
+        return;
+      }
+
+      // A multi-item selection travels as its bounding box, and the items it
+      // is standing on are not candidates — they are not "over there".
+      const held = selected.map((id) => canvas.items[id]).filter((item) => item !== undefined);
+      if (held.length === 0) return;
+      const box = held.length === 1
+        ? held[0]!
+        : {
+            id: "",
+            x: Math.min(...held.map((i) => i.x)),
+            y: Math.min(...held.map((i) => i.y)),
+            width: Math.max(...held.map((i) => i.x + i.width)) - Math.min(...held.map((i) => i.x)),
+            height: Math.max(...held.map((i) => i.y + i.height)) - Math.min(...held.map((i) => i.y)),
+          };
+      const candidates = all.filter((item) => !selected.includes(item.id));
+      const next = findNextItem(box, candidates, direction);
+      if (!next) return; // the edge of the canvas: stay put rather than wrap
+      ui.select(next.id);
+      revealItem(next.id);
+    }
+
+    /** Write where the nudged items actually ended up. Items deleted mid-nudge
+     * are gone from the replica, so they simply drop out of the op. */
+    function flushNudge(): void {
+      const ids = useUiStore.getState().selectedItemIds;
+      const canvas = useCanvasStore.getState().canvas;
+      if (ids.length === 0 || !canvas) return;
+      const moves = ids
+        .map((id) => canvas.items[id])
+        .filter((item) => item !== undefined)
+        .map((item) => ({ itemId: item.id, x: Math.round(item.x), y: Math.round(item.y) }));
+      if (moves.length > 0) void sendOp(projectId!, actor, moveOp(moves));
+    }
     function onKeyDown(e: KeyboardEvent) {
       // ⌘K is global — the lane to your emissary opens from anywhere, even
       // mid-typing in another field.
@@ -173,8 +285,32 @@ export function CanvasPage({
       const ui = useUiStore.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
+        // Ink that has not settled yet undoes locally, one stroke at a time:
+        // it is not in the oplog, so the daemon has nothing to reverse. A
+        // moment later the drawing IS an item and ⌘Z removes the whole thing,
+        // like it removes anything else.
+        if (!e.shiftKey && ui.sketch.length > 0) {
+          ui.undoStroke();
+          return;
+        }
         const action = e.shiftKey ? redo : undo;
         void action(projectId!, actor).catch(() => {}); // 409 = nothing to undo
+      } else if (e.key === "Enter" && ui.sketch.length > 0) {
+        // ⏎ places the drawing now instead of waiting out the settle.
+        e.preventDefault();
+        placeSketch(projectId!, actor);
+      } else if ((e.metaKey || e.ctrlKey) && NUDGES[e.key]) {
+        // ⌘/Ctrl + arrow walks the selection to the next item that way.
+        e.preventDefault();
+        jump(e.key as Direction);
+      } else if (NUDGES[e.key]) {
+        // Arrows nudge the selection; with nothing selected they are the
+        // browser's again (and scrolling a canvas page does nothing anyway).
+        if (ui.selectedItemIds.length === 0) return;
+        e.preventDefault();
+        const [dx, dy] = NUDGES[e.key]!;
+        const step = e.shiftKey ? NUDGE_BIG : 1;
+        nudge(dx * step, dy * step);
       } else if (e.key === "Delete" || e.key === "Backspace") {
         const ids = ui.selectedItemIds;
         if (ids.length > 0) {
@@ -214,12 +350,21 @@ export function CanvasPage({
         zoomToFit();
       } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
+      } else if (e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) {
+        ui.setActiveTool(ui.activeTool === "pen" ? "select" : "pen");
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
       }
     }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (nudgeTimer.current !== null) {
+        clearTimeout(nudgeTimer.current);
+        nudgeTimer.current = null;
+        flushNudge(); // leaving mid-nudge still records where things landed
+      }
+    };
   }, [projectId, actor]);
 
   if (!projectId) return null;

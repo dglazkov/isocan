@@ -1,22 +1,52 @@
-/**
- * Unified actor identity colors: one deterministic color per actor, used for
- * cursors, remote-selection outlines, and comment-pin avatars. A small
- * curated set that sits well on the Drafting Table's vellum — cobalt stays
- * reserved for structure (own selection, primary actions), so it is not here.
- */
-const IDENTITY_COLORS = [
-  "#0f8a80", // teal
-  "#c93a55", // crimson
-  "#7a3fd0", // violet
-  "#b26a00", // amber
-  "#3a7d2c", // forest
-  "#3d63dd", // periwinkle (distinct from action cobalt #1f3fd0)
-];
+import type { ActorColors } from "@isocan/core";
+import { actorColor as derive, IDENTITY_COLORS } from "@isocan/core";
+import { fetchActorColors } from "./api.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 
+/**
+ * Unified actor identity colors: one color per actor, used for cursors,
+ * remote-selection outlines, comment-pin avatars, the facepile, and the Pen's
+ * default ink.
+ *
+ * The palette and the derivation live in core, so the CLI and the web app can
+ * never disagree about what color someone is. What lives HERE is the lookup
+ * into the live registry: a color somebody chose (`actor.setColor`) arrives
+ * with the snapshot and every presence roster, and overrides the color their
+ * id implies.
+ */
+export { IDENTITY_COLORS };
+
+/** The color an actor wears right now. Imperative — for a stroke's ink or a
+ * canvas paint, where a hook cannot go. */
 export function actorColor(actorId: string): string {
-  let hash = 0;
-  for (let i = 0; i < actorId.length; i++) {
-    hash = (hash * 31 + actorId.charCodeAt(i)) >>> 0;
+  return derive(actorId, useCanvasStore.getState().actorColors);
+}
+
+/** The same answer, as a subscription: repaints when somebody picks a color. */
+export function useActorColor(actorId: string): string {
+  return useCanvasStore((s) => derive(actorId, s.actorColors));
+}
+
+/**
+ * The whole map, for a component that paints MANY actors (a facepile, a
+ * thread, a cursor layer). One subscription and a pure lookup per row —
+ * a hook cannot go inside a `.map()`, and this is the shape that works there.
+ */
+export function useActorColors(): ActorColors {
+  return useCanvasStore((s) => s.actorColors);
+}
+
+/** Pure lookup against a map you already hold. */
+export function actorColorIn(colors: ActorColors, actorId: string): string {
+  return derive(actorId, colors);
+}
+
+/** Seed the colors before any canvas is open — the projects page paints faces
+ * too, and the first paint should not be a color somebody replaced. */
+export async function loadActorColors(): Promise<void> {
+  try {
+    useCanvasStore.setState({ actorColors: await fetchActorColors() });
+  } catch {
+    // No daemon yet: derived colors are a perfectly good answer.
   }
-  return IDENTITY_COLORS[hash % IDENTITY_COLORS.length]!;
 }

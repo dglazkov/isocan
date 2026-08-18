@@ -4,7 +4,7 @@ import { mainThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { markRead } from "../stores/unreadStore.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { listeningAgents, postToMain } from "../lib/mainthread.ts";
 
 /**
@@ -19,6 +19,7 @@ import { listeningAgents, postToMain } from "../lib/mainthread.ts";
  * message simply waits on the thread for the next agent to park.
  */
 export function CommandBar({ projectId, actor }: { projectId: string; actor: Actor }) {
+  const colors = useActorColors();
   const open = useUiStore((s) => s.commandBarOpen);
   const setOpen = useUiStore((s) => s.setCommandBarOpen);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -84,7 +85,7 @@ export function CommandBar({ projectId, actor }: { projectId: string; actor: Act
           <div className="cmdbar-thread">
             {recent.map((c) => (
               <div key={c.id} className="cmdbar-msg">
-                <span className="cmdbar-author" style={{ color: actorColor(c.author.id) }}>
+                <span className="cmdbar-author" style={{ color: actorColorIn(colors, c.author.id) }}>
                   {c.author.name}
                 </span>
                 <span className="cmdbar-body">{c.body}</span>

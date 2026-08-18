@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
+import { actorColor } from "../lib/colors.ts";
 import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
+import { placeSketch } from "../lib/sketch.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
+import { InkLayer, SketchBar } from "./InkLayer.tsx";
 
 // WebKit-only trackpad pinch event; not in the standard TS DOM lib.
 interface GestureEvent extends UIEvent {
@@ -24,6 +27,21 @@ interface GestureEvent extends UIEvent {
 // this is roughly 2.5× that. Safari's gesture path is already 1:1 with the
 // physical pinch (e.scale), so it needs no such constant.
 const PINCH_ZOOM_SENSITIVITY = 0.0055;
+
+// The Pen, in SCREEN pixels: how wide a stroke looks under the nib, and how
+// far the pointer must travel before another sample is kept. Both are divided
+// by the zoom to reach world units, so ink drawn at 400% is as fine as it
+// looked while you drew it.
+const INK_WIDTH = 3;
+const INK_MIN_STEP = 2;
+
+// How long the ink stays local after you lift the pen. Strokes drawn inside
+// this window join the same drawing — the gap between two strokes of one
+// scribble is a fraction of a second, the gap between two thoughts is longer —
+// and then it settles into an ordinary item you can select, move, delete, and
+// undo. There is no "commit" for the user to find: drawing on the canvas
+// leaves a drawing on the canvas.
+const INK_SETTLE_MS = 1500;
 
 export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -40,6 +58,8 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   // and when Z went down (to tell a quick tap from a hold).
   const zoomPrevTool = useRef<Tool | null>(null);
   const zoomDownAt = useRef(0);
+  // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
+  const settleTimer = useRef<number | null>(null);
 
   // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
   // or a gesture event (Safari). Left alone, the browser zooms the whole page —
@@ -154,6 +174,24 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     };
   }, []);
 
+  // A stroke in progress postpones the settle; lifting the pen starts the
+  // clock again. Whatever is pending when the canvas unmounts is placed by
+  // CanvasPage, so nothing is ever left un-drawn.
+  function holdSettle() {
+    if (settleTimer.current !== null) {
+      clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+  }
+  function armSettle() {
+    holdSettle();
+    settleTimer.current = window.setTimeout(() => {
+      settleTimer.current = null;
+      placeSketch(projectId, actor);
+    }, INK_SETTLE_MS);
+  }
+  useEffect(() => holdSettle, []);
+
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
@@ -172,6 +210,12 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       return;
     }
 
+    // The Pen draws from anywhere — over items too, so you can annotate one.
+    if (activeTool === "pen" && e.button === 0 && !wantsPan) {
+      startStroke(e);
+      return;
+    }
+
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
@@ -185,6 +229,43 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     } else if (isBackground && e.button === 0) {
       startMarquee(e);
     }
+  }
+
+  /** One stroke, from pen-down to pen-up. Samples land in world coordinates
+   * so the ink is anchored to the canvas, not to the screen; the stroke joins
+   * the wet sketch, which stays this client's until it is placed. */
+  function startStroke(e: React.PointerEvent) {
+    e.preventDefault();
+    const el = ref.current!;
+    el.setPointerCapture(e.pointerId);
+    holdSettle();
+    const ui = useUiStore.getState();
+    ui.beginStroke({
+      points: [screenToWorld(ui.viewport, e.clientX, e.clientY)],
+      color: ui.inkColor ?? actorColor(actor.id),
+      width: INK_WIDTH / ui.viewport.scale,
+    });
+    let last = { x: e.clientX, y: e.clientY };
+
+    function onMove(ev: PointerEvent) {
+      if (Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < INK_MIN_STEP) return;
+      last = { x: ev.clientX, y: ev.clientY };
+      const state = useUiStore.getState();
+      state.extendStroke(screenToWorld(state.viewport, ev.clientX, ev.clientY));
+    }
+    // pointercancel matters here in a way it does not for a pan: a stroke the
+    // browser takes away (palm rejection, a system gesture) would otherwise
+    // leave the sampler attached and keep drawing on every later mouse move.
+    function onUp(ev: PointerEvent) {
+      if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      armSettle();
+    }
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
   }
 
   function startPan(e: React.PointerEvent) {
@@ -337,7 +418,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}`}
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}`}
       style={{
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
@@ -370,12 +451,74 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         {fannedItemId && canvas?.items[fannedItemId] && (
           <VersionFanOut item={canvas.items[fannedItemId]!} projectId={projectId} actor={actor} />
         )}
+        <InkLayer />
       </div>
       <CommentLayer projectId={projectId} actor={actor} />
       <CursorLayer />
       <MarqueeRect />
+      <GuideLines />
+      <SketchBar projectId={projectId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
     </div>
+  );
+}
+
+/**
+ * Alignment guides: while an item is in your hand, a line for every edge or
+ * center it has settled onto. They run the whole viewport rather than just
+ * between the two items — at canvas zooms you are usually aligning something
+ * to a neighbour that is off screen, and a line you cannot see is no help.
+ */
+function GuideLines() {
+  const guides = useUiStore((s) => s.guides);
+  const spacing = useUiStore((s) => s.spacing);
+  const viewport = useUiStore((s) => s.viewport);
+  if (guides.length === 0 && spacing.length === 0) return null;
+  return (
+    <>
+      {spacing.flatMap((measure) =>
+        measure.gaps.map(([from, to], i) => {
+          // A bar with end caps across the gap: the mark that says this
+          // distance and the one on the other side are the same.
+          const a = worldToScreen(
+            viewport,
+            measure.axis === "x" ? from : measure.at,
+            measure.axis === "x" ? measure.at : from,
+          );
+          const b = worldToScreen(
+            viewport,
+            measure.axis === "x" ? to : measure.at,
+            measure.axis === "x" ? measure.at : to,
+          );
+          return (
+            <div
+              key={`${measure.axis}${i}`}
+              className={`spacing spacing-${measure.axis}`}
+              style={
+                measure.axis === "x"
+                  ? { left: a.x, top: a.y, width: Math.max(b.x - a.x, 0) }
+                  : { left: a.x, top: a.y, height: Math.max(b.y - a.y, 0) }
+              }
+            />
+          );
+        }),
+      )}
+      {guides.map((guide) =>
+        guide.axis === "x" ? (
+          <div
+            key={`x${guide.at}`}
+            className="guide guide-v"
+            style={{ left: worldToScreen(viewport, guide.at, 0).x }}
+          />
+        ) : (
+          <div
+            key={`y${guide.at}`}
+            className="guide guide-h"
+            style={{ top: worldToScreen(viewport, 0, guide.at).y }}
+          />
+        ),
+      )}
+    </>
   );
 }
 
