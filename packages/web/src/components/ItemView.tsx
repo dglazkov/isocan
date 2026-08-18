@@ -2,13 +2,19 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
-import { BROWSER_MIME, parseUriList } from "@isocan/core";
+import { BROWSER_MIME, isDrawingItem, parseUriList } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { snapBox, unionBox } from "../lib/snap.ts";
 
 const DRAG_SLOP = 4;
+// How close an edge has to come before it snaps, in SCREEN pixels — the same
+// pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
+// magnetic, for when you are aiming at a line rather than a place.
+const SNAP_PX = 6;
+const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
 const MIN_H = 60;
 
@@ -21,6 +27,7 @@ export function ItemView({
   projectId: string;
   actor: Actor;
 }) {
+  const colors = useActorColors();
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -43,6 +50,9 @@ export function ItemView({
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const stackDepth = Math.min(item.versions.length - 1, 2);
   const isBrowser = current.mimeType === BROWSER_MIME;
+  // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
+  // and the titlebar step aside until you point at it.
+  const isInk = isDrawingItem(item);
   // Bumping this remounts a browser item's iframe — the reload button. Vite
   // sites refresh themselves over HMR; this is for everything that doesn't.
   const [reloadToken, setReloadToken] = useState(0);
@@ -59,10 +69,10 @@ export function ItemView({
     if (entered) return; // entered content owns the pointer
 
     const ui = useUiStore.getState();
-    // Hand and Zoom tools yield the pointer (no stopPropagation) so the gesture
-    // bubbles to the viewport — Hand pans, Zoom fits this item — even though it
-    // started here.
-    if (ui.activeTool === "hand" || ui.activeTool === "zoom") return;
+    // Hand, Zoom, and Pen yield the pointer (no stopPropagation) so the gesture
+    // bubbles to the viewport — Hand pans, Zoom fits this item, the Pen draws
+    // over it — even though it started here.
+    if (ui.activeTool === "hand" || ui.activeTool === "zoom" || ui.activeTool === "pen") return;
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
@@ -79,11 +89,23 @@ export function ItemView({
       return;
     }
 
+    // ⌥-click reaches past whatever is on top. It matters most for drawings:
+    // a chromeless sketch is a big invisible rectangle, so a stack of them
+    // (or ink laid over a note) would otherwise hand every click to the same
+    // topmost box. Each ⌥-click steps one layer deeper, then wraps around.
+    const stack = e.altKey ? itemsUnder(e.clientX, e.clientY) : [];
+    // Step from whatever is selected, not from the item that caught the event:
+    // selecting raises an item's z-index, so paint order would ping-pong
+    // between the top two and never reach the third.
+    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
+    const anchor = from >= 0 ? from : stack.indexOf(item.id);
+    const targetId = stack.length > 1 ? stack[(anchor + 1) % stack.length]! : item.id;
+
     // Dragging a selected item moves the whole selection; dragging an
     // unselected one selects it alone first.
-    const wasInSelection = ui.selectedItemIds.includes(item.id);
-    const dragIds = wasInSelection ? ui.selectedItemIds : [item.id];
-    if (!wasInSelection) ui.select(item.id);
+    const wasInSelection = ui.selectedItemIds.includes(targetId);
+    const dragIds = wasInSelection ? ui.selectedItemIds : [targetId];
+    if (!wasInSelection) ui.select(targetId);
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
@@ -91,21 +113,36 @@ export function ItemView({
     let moved = false;
 
     function onMove(ev: PointerEvent) {
-      const scale = useUiStore.getState().viewport.scale;
+      const ui = useUiStore.getState();
+      const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
       moved = true;
-      useUiStore.getState().setDrag({
-        itemIds: dragIds,
-        dx: (ev.clientX - start.x) / scale,
-        dy: (ev.clientY - start.y) / scale,
-        moved,
-      });
+      let dx = (ev.clientX - start.x) / scale;
+      let dy = (ev.clientY - start.y) / scale;
+
+      // Align to what is already on the canvas. Shift is read from the MOVE,
+      // not the press — a shift-press is "add to selection", so the magnet has
+      // to be something you reach for mid-gesture.
+      const items = useCanvasStore.getState().canvas?.items ?? {};
+      const dragging = dragIds.map((id) => items[id]).filter((one) => one !== undefined);
+      const moving = unionBox(dragging);
+      if (moving) {
+        const others = Object.values(items).filter((other) => !dragIds.includes(other.id));
+        const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
+        const snap = snapBox({ ...moving, x: moving.x + dx, y: moving.y + dy }, others, threshold);
+        dx += snap.dx;
+        dy += snap.dy;
+        ui.setGuides(snap.guides, snap.spacing);
+      }
+      ui.setDrag({ itemIds: dragIds, dx, dy, moved });
     }
     function onUp(ev: PointerEvent) {
-      frame.releasePointerCapture(ev.pointerId);
+      if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
       frame.removeEventListener("pointermove", onMove);
       frame.removeEventListener("pointerup", onUp);
+      frame.removeEventListener("pointercancel", onUp);
       const state = useUiStore.getState();
+      state.setGuides([]); // the lines belong to the gesture, not the canvas
       const final = state.drag;
       if (!moved || !final) {
         state.setDrag(null);
@@ -142,6 +179,9 @@ export function ItemView({
     }
     frame.addEventListener("pointermove", onMove);
     frame.addEventListener("pointerup", onUp);
+    // A gesture the browser takes away must not leave guides on screen or an
+    // item frozen mid-drag.
+    frame.addEventListener("pointercancel", onUp);
   }
 
   function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
@@ -200,12 +240,14 @@ export function ItemView({
   }
 
   function onDoubleClick() {
+    // Two quick dots from the Pen are ink, not a request to enter the item.
+    if (useUiStore.getState().activeTool === "pen") return;
     useUiStore.getState().setEntered(item.id);
   }
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}`}
+      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,
@@ -213,10 +255,10 @@ export function ItemView({
         width,
         height,
         ...(remoteHolder && !selected
-          ? { outline: `2px dashed ${actorColor(remoteHolder)}`, outlineOffset: "1px" }
+          ? { outline: `2px dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "1px" }
           : {}),
         ...(worker
-          ? ({ "--work-color": actorColor(worker.actorId) } as React.CSSProperties)
+          ? ({ "--work-color": actorColorIn(colors, worker.actorId) } as React.CSSProperties)
           : {}),
       }}
       onPointerDown={onPointerDown}
@@ -325,6 +367,23 @@ function useWorkingSession(
   if (!key) return null;
   const [actorId, label, status] = key.split("\u0000");
   return { actorId: actorId!, label: label!, status: status || null };
+}
+
+/**
+ * Every item under a screen point, in DOCUMENT order — deliberately not the
+ * paint order elementsFromPoint reports. Selection changes z-index, so paint
+ * order changes under the very gesture that walks it; document order holds
+ * still, which is what makes ⌥-click a cycle that reaches everything.
+ */
+function itemsUnder(x: number, y: number): string[] {
+  const hit = new Set<string>();
+  for (const el of document.elementsFromPoint(x, y)) {
+    const id = (el as HTMLElement).closest?.("[data-item-id]")?.getAttribute("data-item-id");
+    if (id) hit.add(id);
+  }
+  return [...document.querySelectorAll("[data-item-id]")]
+    .map((el) => el.getAttribute("data-item-id")!)
+    .filter((id) => hit.has(id));
 }
 
 function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {

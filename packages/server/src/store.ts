@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState } from "@isocan/core";
-import { applyOperation, bindClaim, emptyCanvas, newOpId } from "@isocan/core";
+import { applyActorColor, applyOperation, bindClaim, emptyCanvas, newOpId } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 
@@ -144,18 +144,27 @@ export class Store {
    * jsonl the source of truth and actors.json derived, same as a project.
    */
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
-    const snapshot = await readJson<{ lastSeq: number; claims: ActorRegistry["claims"] }>(
-      p.actorsFile(this.home),
-    );
-    let registry: ActorRegistry = { claims: snapshot?.claims ?? {} };
+    const snapshot = await readJson<{
+      lastSeq: number;
+      claims: ActorRegistry["claims"];
+      colors?: ActorRegistry["colors"];
+    }>(p.actorsFile(this.home));
+    // `colors` is absent in files written before identity colors existed —
+    // an old home simply has nobody who has chosen one yet.
+    let registry: ActorRegistry = { claims: snapshot?.claims ?? {}, colors: snapshot?.colors ?? {} };
     let lastSeq = snapshot?.lastSeq ?? 0;
     const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
     let recovered = false;
     for (const entry of entries) {
       if (entry.seq <= lastSeq) continue;
       const op = entry.envelope.op;
-      if (op.type !== "actor.claim") continue;
-      registry = bindClaim(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, op });
+      if (op.type === "actor.claim") {
+        registry = bindClaim(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, op });
+      } else if (op.type === "actor.setColor") {
+        registry = applyActorColor(registry, op);
+      } else {
+        continue;
+      }
       lastSeq = entry.seq;
       recovered = true;
     }
@@ -166,7 +175,7 @@ export class Store {
   async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
     await writeFileAtomic(
       p.actorsFile(this.home),
-      pretty({ lastSeq, claims: registry.claims }),
+      pretty({ lastSeq, claims: registry.claims, colors: registry.colors }),
     );
   }
 

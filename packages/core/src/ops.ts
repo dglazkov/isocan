@@ -67,6 +67,21 @@ export type Operation =
        * purpose, not a collision. */
       fresh?: boolean;
     }
+  | {
+      /**
+       * Choosing the color you wear — cursor, face, pins, and the Pen's
+       * default ink (#identity colors). Home-scoped like `actor.claim`:
+       * `projectId` is null, it lands in the home's actors log, and the
+       * ENGINE applies it against the actor registry. NOT undoable, for the
+       * same reason naming yourself is not.
+       *
+       * `color` is a literal hex; null goes back to the color the actor id
+       * implies, so "unset" and "derived" are one state.
+       */
+      type: "actor.setColor";
+      actorId: string;
+      color: string | null;
+    }
   // ---- projects ----
   | {
       type: "project.create";

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
@@ -29,6 +29,7 @@ interface Anim {
  * working — every client animates it locally at 60fps with zero traffic.
  */
 export function CursorLayer() {
+  const colors = useActorColors();
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
   const animated = useRef(new Map<string, Anim>());
@@ -163,7 +164,7 @@ export function CursorLayer() {
         if (!rec && !fallback) return null;
         const pos = rec ?? fallback!;
         const screen = worldToScreen(viewport, pos.x, pos.y);
-        const color = actorColor(session.actor.id);
+        const color = actorColorIn(colors, session.actor.id);
         const name = session.label ?? session.actor.name;
         // Say only what we know: the session's status if it has one, and
         // for how long it has been quiet once it goes silent — a thinking

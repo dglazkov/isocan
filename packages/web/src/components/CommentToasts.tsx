@@ -3,7 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { dismissNotice, useUnreadStore, type CommentNotice } from "../stores/unreadStore.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 
 const LIFETIME_MS = 12_000; // long enough to read, short enough to forgive
@@ -41,6 +41,7 @@ export function CommentToasts() {
 }
 
 function Toast({ notice }: { notice: CommentNotice }) {
+  const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas?.threads[notice.threadId];
   const item = thread?.anchorItemId ? canvas?.items[thread.anchorItemId] : undefined;
@@ -64,7 +65,7 @@ function Toast({ notice }: { notice: CommentNotice }) {
   return (
     <div className="toast">
       <button className="toast-body" onClick={jump} title="Show me where">
-        <span className="toast-avatar" style={{ background: actorColor(notice.author.id) }}>
+        <span className="toast-avatar" style={{ background: actorColorIn(colors, notice.author.id) }}>
           {notice.author.name.charAt(0).toUpperCase()}
         </span>
         <span className="toast-text">

@@ -2,8 +2,10 @@ import type { Actor } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
 import { newActorId } from "./ids.ts";
+import { type ActorColors, isIdentityColor } from "./identity.ts";
 
 export type ActorClaimOp = Extract<Operation, { type: "actor.claim" }>;
+export type ActorSetColorOp = Extract<Operation, { type: "actor.setColor" }>;
 
 /**
  * The actor registry: which session speaks as whom. Identity used to be the
@@ -33,9 +35,15 @@ export interface ActorBinding extends Actor {
 export interface ActorRegistry {
   /** Keyed by `<harness>:<session id>`. */
   claims: Record<string, ActorBinding>;
+  /** Chosen identity colors, keyed by ACTOR id — deliberately not by session
+   * key and not on the Actor itself: an Actor is stamped onto every op and
+   * every comment, and a color that rode along would be a thousand copies of
+   * a preference, each frozen at the moment it was written. Here it is one
+   * row that answers for all of them, past and future. */
+  colors: ActorColors;
 }
 
-export const emptyActorRegistry = (): ActorRegistry => ({ claims: {} });
+export const emptyActorRegistry = (): ActorRegistry => ({ claims: {}, colors: {} });
 
 /** A key→actor row as served over the API. */
 export interface ActorBindingRecord {
@@ -162,7 +170,26 @@ export function bindClaim(
     claims[key] = binding;
   }
   claims[op.sessionKey] = { id: actor.id, name: actor.name, boundAt: ts };
-  return { claims };
+  return { ...registry, claims };
+}
+
+/**
+ * Choosing the color you wear (`actor.setColor`). Home-scoped like a claim,
+ * applied by the engine against the registry, and NOT undoable — the same
+ * posture as naming yourself. A null color puts you back on the color your id
+ * implies, which is why "no row" and "the derived color" mean the same thing.
+ */
+export function applyActorColor(
+  registry: ActorRegistry,
+  op: ActorSetColorOp,
+): ActorRegistry {
+  if (op.color !== null && !isIdentityColor(op.color)) {
+    throw new OpValidationError("bad-op", `not a color: ${op.color}`);
+  }
+  const colors = { ...registry.colors };
+  if (op.color === null) delete colors[op.actorId];
+  else colors[op.actorId] = op.color;
+  return { ...registry, colors };
 }
 
 /** Deliberate return of an actor whose conversation is gone. Refused while
@@ -246,7 +273,10 @@ function prune(registry: ActorRegistry, now: string): ActorRegistry {
   const claims = Object.fromEntries(
     Object.entries(registry.claims).filter(([, b]) => Date.parse(b.boundAt) >= cutoff),
   );
-  return { claims };
+  // Colors outlive claims: a binding is a session's lease on an actor, but the
+  // color belongs to the actor, and their comments stay on canvases long after
+  // the session that wrote them is pruned.
+  return { ...registry, claims };
 }
 
 function sameName(a: string, b: string): boolean {

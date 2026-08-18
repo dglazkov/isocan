@@ -1,6 +1,7 @@
 import type {
   Actor,
   ActorClaimOp,
+  ActorColors,
   BlobUploadResponse,
   CanvasSnapshotResponse,
   GcReport,
@@ -51,6 +52,11 @@ export function sendOp(
   op: Operation,
 ): Promise<PostOpResponse> {
   return request("POST", "/api/ops", { projectId, actor, clientId: CLIENT_ID, op });
+}
+
+/** Chosen identity colors, actor id → hex. */
+export function fetchActorColors(): Promise<ActorColors> {
+  return request("GET", "/api/colors");
 }
 
 export function listProjects(): Promise<Project[]> {

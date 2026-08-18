@@ -10,7 +10,7 @@ import {
   type UIEvent,
 } from "react";
 import type { ItemRefCandidate, MentionCandidate } from "@isocan/core";
-import { actorColor } from "../lib/colors.ts";
+import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionChipStyle, splitChips } from "../lib/chips.ts";
 import type { MentionPeer } from "../lib/mentions.ts";
 import type { ItemEntry } from "../lib/itemrefs.ts";
@@ -209,6 +209,7 @@ function MentionMenu({
   onHover: (index: number) => void;
   onPick: (option: MenuOption) => void;
 }) {
+  const colors = useActorColors();
   const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -257,7 +258,7 @@ function MentionMenu({
         >
           <span
             className={option.item ? "mention-dot item-dot" : "mention-dot"}
-            style={option.item ? undefined : { background: actorColor(option.id) }}
+            style={option.item ? undefined : { background: actorColorIn(colors, option.id) }}
           />
           <span className="mention-name">
             {char}

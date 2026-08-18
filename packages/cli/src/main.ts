@@ -21,11 +21,13 @@ import type {
 import {
   BROWSER_MIME,
   DEFAULT_PORT,
+  IDENTITY_COLORS,
   collectCanvasActors,
   collectCanvasNames,
   collectItemRefCandidates,
   extractItemRefs,
   extractMentions,
+  isIdentityColor,
   mainThread,
   newCommentId,
   newItemId,
@@ -379,6 +381,18 @@ function identityTarget(opts: { session?: boolean; home?: boolean; as?: string }
   return process.stdin.isTTY ? "home" : "session";
 }
 
+/** A palette name ("teal"), a literal hex, or "none" to go back to derived. */
+function parseIdentityColor(input: string): string | null {
+  const wanted = input.trim().toLowerCase();
+  if (wanted === "none" || wanted === "default") return null;
+  const named = IDENTITY_COLORS.find((c) => c.name.toLowerCase() === wanted);
+  if (named) return named.value;
+  if (isIdentityColor(wanted)) return wanted;
+  throw new Error(
+    `unknown color: ${input} — try ${IDENTITY_COLORS.map((c) => c.name.toLowerCase()).join(", ")}, a #hex, or "none"`,
+  );
+}
+
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
@@ -390,15 +404,45 @@ program
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
   .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
+  .option(
+    "--color <color>",
+    'the color you wear on every canvas — a palette name (e.g. "teal") or a hex, "none" to go back to the one your id implies',
+  )
   .action(
     run(
       async (
-        opts: { name?: string; session?: boolean; home?: boolean; new?: boolean; as?: string },
+        opts: {
+          name?: string;
+          session?: boolean;
+          home?: boolean;
+          new?: boolean;
+          as?: string;
+          color?: string;
+        },
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
         const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
         await retireStrandedIdentities(process.cwd(), home);
+        // Choosing your color is a mutation on the actor registry, the same
+        // one the web app's identity menu sends — so both clients change the
+        // color everyone sees, not a local preference each keeps to itself.
+        if (opts.color !== undefined) {
+          const resolved = await resolveIdentity(client, home);
+          if (!resolved) throw new Error("no identity configured — use --name first");
+          const color = parseIdentityColor(opts.color);
+          await client.sendOp(null, resolved.actor, {
+            type: "actor.setColor",
+            actorId: resolved.actor.id,
+            color,
+          });
+          console.log(
+            color === null
+              ? `${resolved.actor.name} wears the color their id implies again`
+              : `${resolved.actor.name} now wears ${color}`,
+          );
+          if (!opts.name && !opts.session && !opts.as) return;
+        }
         // `--session` alone is a claim, not a lookup: "hand me a free name".
         if (opts.name || opts.session || opts.as) {
           const scope = identityTarget(opts);

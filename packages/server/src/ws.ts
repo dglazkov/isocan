@@ -48,10 +48,22 @@ export function attachWebSockets(
       projectId,
       setTimeout(() => {
         pendingRoster.delete(projectId);
-        broadcast(projectId, { type: "presence-roster", sessions: presence.roster(projectId) });
+        void engine.actorColors().then((colors) => {
+          broadcast(projectId, {
+            type: "presence-roster",
+            sessions: presence.roster(projectId),
+            colors,
+          });
+        });
       }, 40),
     );
   };
+
+  // A chosen identity color repaints faces, cursors, pins, and outlines on
+  // every open canvas — it belongs to the actor, not to one room.
+  engine.onColors(() => {
+    for (const projectId of rooms.keys()) scheduleRoster(projectId);
+  });
   // A null project id is an on-call session coming or going: it belongs to
   // the home, so every open canvas sees its roster change.
   presence.onChange((projectId) => {
@@ -83,6 +95,7 @@ export function attachWebSockets(
       const roster: ServerMessage = {
         type: "presence-roster",
         sessions: presence.roster(projectId),
+        colors: snapshot.colors,
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
