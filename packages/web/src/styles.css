@@ -743,6 +743,7 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .tool-btn:hover { background: var(--chip); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
 
 /* ---------- bottom-right navigation (zoom + history) ---------- */
 .zoom-controls {
