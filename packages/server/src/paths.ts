@@ -26,5 +26,10 @@ export const actorsFile = (home: string) => path.join(home, "actors.json");
 export const actorsLogFile = (home: string) => path.join(home, "actors.jsonl");
 /** The CLI-era session registry (pre-#57); read only to migrate (#59). */
 export const agentsFile = (home: string) => path.join(home, "agents.json");
-export const sessionFile = (home: string) => path.join(home, "session.json");
+/** Pre-facepile-fix single pointer; read by nobody, removed on sight. */
+export const legacySessionFile = (home: string) => path.join(home, "session.json");
+/** One presence-session pointer PER ACTOR — a home-scoped single file was
+ * how two agents ended up beating each other's actor into one session. */
+export const cliSessionFile = (home: string, actorId: string) =>
+  path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");

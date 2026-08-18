@@ -217,6 +217,35 @@ describe("ask, receive", () => {
   });
 });
 
+describe("two agents, two faces", () => {
+  it("presence beats never cross — each agent touches only its own session", async () => {
+    await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
+    await asAgent(claude("s-2"), "identity", "--name", "Osian", "--session");
+    await asAgent(claude("s-1"), "project", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
+    await asAgent(claude("s-2"), "session", "start", "--project", "Surfaces", "--label", "Osian 🤖");
+
+    // The facepile bug: the session pointer was ONE file per home, and every
+    // update re-states who is holding the session — so Iona's next command
+    // read the pointer Osian had just overwritten and beat HER actor into
+    // HIS session: Iona's face under the label "Osian 🤖", while Iona's own
+    // session starved. Narrating commands are the beats that did it.
+    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
+    await asAgent(claude("s-2"), "comment", "list", "--project", "Surfaces");
+    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
+
+    const project = (await projects()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+      r.json(),
+    )) as { sessionId: string; label: string | null; actor: { id: string; name: string } }[];
+
+    expect(roster).toHaveLength(2); // two faces, neither starved out
+    const byLabel = Object.fromEntries(roster.map((s) => [s.label, s.actor.name]));
+    expect(byLabel).toEqual({ "Iona 🤖": "Iona", "Osian 🤖": "Osian" });
+    expect(new Set(roster.map((s) => s.actor.id)).size).toBe(2);
+  });
+});
+
 describe("agents launched by agents", () => {
   it("the inner one speaks, though it can see the outer one's session too", async () => {
     // Claude Code names itself, then starts codex: the child inherits

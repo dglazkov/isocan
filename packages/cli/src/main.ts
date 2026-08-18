@@ -153,6 +153,13 @@ function ctxOf(cmd: Command): Promise<Ctx> {
 }
 
 // ---- presence session (the live cursor) ----
+//
+// The pointer to "my live session" is PER ACTOR (~/.isocan/sessions/
+// <actorId>.json). It used to be one file per home — and since every update
+// re-states who is holding the session, two agents sharing that file beat
+// each other's actor into one session: Iona's face under Osian's label,
+// while Iona's real session starved. One file per actor also means two
+// agents never read-modify-write each other's pointer.
 
 interface SessionFile {
   projectId: string;
@@ -160,25 +167,36 @@ interface SessionFile {
   label?: string;
 }
 
-async function readSessionFile(home: string): Promise<SessionFile | null> {
+async function readSessionFile(home: string, actorId: string): Promise<SessionFile | null> {
+  // The old single-pointer file can't say whose it was — that is the bug —
+  // so nobody reads it; its session expires on its own TTL.
+  await fs.rm(paths.legacySessionFile(home), { force: true }).catch(() => {});
   try {
-    return JSON.parse(await fs.readFile(paths.sessionFile(home), "utf8")) as SessionFile;
+    return JSON.parse(
+      await fs.readFile(paths.cliSessionFile(home, actorId), "utf8"),
+    ) as SessionFile;
   } catch {
     return null;
   }
 }
 
-async function writeSessionFile(home: string, session: SessionFile | null): Promise<void> {
+async function writeSessionFile(
+  home: string,
+  actorId: string,
+  session: SessionFile | null,
+): Promise<void> {
+  const file = paths.cliSessionFile(home, actorId);
   if (session === null) {
-    await fs.rm(paths.sessionFile(home), { force: true });
+    await fs.rm(file, { force: true });
   } else {
-    await fs.writeFile(paths.sessionFile(home), JSON.stringify(session, null, 2));
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, JSON.stringify(session, null, 2));
   }
 }
 
 /** The active session for this project, or an error telling how to start one. */
 async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile> {
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   if (!session || session.projectId !== projectId) {
     throw new Error("no active session on this project — run `isocan session start` first");
   }
@@ -202,7 +220,7 @@ async function touchSession(
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
     const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
-    await writeSessionFile(ctx.home, { ...active, sessionId: created.sessionId });
+    await writeSessionFile(ctx.home, ctx.actor.id, { ...active, sessionId: created.sessionId });
     await ctx.client.updateSession(projectId, created.sessionId, beat);
   }
 }
@@ -220,7 +238,7 @@ async function narrate(
   projectId: string,
   patch: import("@isocan/core").UpdateSessionRequest,
 ): Promise<void> {
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   if (!session || session.projectId !== projectId) return;
   await touchSession(ctx, projectId, { ...patch, statusSource: "inferred" }).catch(() => {});
 }
@@ -233,7 +251,7 @@ function itemCenter(item: Item): { x: number; y: number } {
 async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
-  const session = await readSessionFile(ctx.home);
+  const session = await readSessionFile(ctx.home, ctx.actor.id);
   const clientId =
     session && projectId !== null && session.projectId === projectId
       ? session.sessionId
@@ -330,7 +348,7 @@ async function nameCollision(
 async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
   try {
     const home = paths.isocanHome();
-    const session = await readSessionFile(home);
+    const session = await readSessionFile(home, actor.id);
     if (!session) return;
     const globals = cmd.optsWithGlobals() as { port?: string };
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
@@ -1465,7 +1483,7 @@ comment
       // it walks off the canvas, leaving a human talking to a face that
       // isn't listening. So the last line it reads here is the next move.
       // Only for an agent mid-session: a person replying is just replying.
-      if (await readSessionFile(ctx.home)) {
+      if (await readSessionFile(ctx.home, ctx.actor.id)) {
         console.log(`  → now park: isocan wait --json --timeout <sec>`);
       }
     }),
@@ -1611,12 +1629,12 @@ session
     run(async (opts: { label?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveProject(ctx);
-      const existing = await readSessionFile(ctx.home);
+      const existing = await readSessionFile(ctx.home, ctx.actor.id);
       if (existing) {
         await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
       }
       const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
-      await writeSessionFile(ctx.home, {
+      await writeSessionFile(ctx.home, ctx.actor.id, {
         projectId: p.id,
         sessionId: created.sessionId,
         ...(opts.label !== undefined ? { label: opts.label } : {}),
@@ -1710,13 +1728,13 @@ session
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const active = await readSessionFile(ctx.home);
+      const active = await readSessionFile(ctx.home, ctx.actor.id);
       if (!active) {
         console.log("no active session");
         return;
       }
       await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
-      await writeSessionFile(ctx.home, null);
+      await writeSessionFile(ctx.home, ctx.actor.id, null);
       console.log("session ended");
     }),
   );
@@ -1856,7 +1874,7 @@ async function landPresence(
     activity: null,
     ...(cursor ? { cursor } : {}),
   };
-  const active = await readSessionFile(ctx.home);
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
   if (active && active.projectId === entry.projectId) {
     return touchSession(ctx, entry.projectId, patch);
   }
@@ -1864,7 +1882,7 @@ async function landPresence(
   // the human knows this agent by.
   if (active) await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
   const created = await ctx.client.createSession(entry.projectId, ctx.actor, active?.label);
-  await writeSessionFile(ctx.home, {
+  await writeSessionFile(ctx.home, ctx.actor.id, {
     projectId: entry.projectId,
     sessionId: created.sessionId,
     ...(active?.label !== undefined ? { label: active.label } : {}),
@@ -1941,7 +1959,7 @@ after a wake.`,
       // registers on call, so every canvas can see and summon you. Both are
       // torn down on every way out — a canvas must never show an agent
       // listening when no process is.
-      const session = await readSessionFile(ctx.home);
+      const session = await readSessionFile(ctx.home, ctx.actor.id);
       const label = session?.label;
       const onCall = pinned
         ? null
@@ -1957,7 +1975,7 @@ after a wake.`,
           // Don't resurrect an expired session just to blank it: if it is
           // gone, nothing is left claiming to wait. (Re-read the file: the
           // heartbeat may have revived the session under a new id.)
-          const active = await readSessionFile(ctx.home);
+          const active = await readSessionFile(ctx.home, ctx.actor.id);
           if (active) {
             await ctx.client
               .updateSession(active.projectId, active.sessionId, { status: null })
