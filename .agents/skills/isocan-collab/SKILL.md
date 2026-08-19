@@ -260,6 +260,24 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **One note that changes, not four that pile up.** When work will take more
+  than a moment, post ONE comment and rewrite it as you go:
+
+  ```
+  isocan comment reply <thread> "On it — reading the spec" --json   # → commentId
+  isocan comment edit <thread> <comment> "On it — found the mismatch in the calendar"
+  isocan comment edit <thread> <comment> "Done — spec now matches tracker v3"
+  ```
+
+  A thread that reads "on it" / "still on it" / "found it" / "done" is four
+  comments where one would do, and the human reads every one of them. Only the
+  author may edit a comment — the daemon refuses otherwise — and `comment add`
+  and `comment reply` both hand back the id with `--json`.
+
+  Do NOT write how long you took: the canvas already knows. It shows
+  "edited · 4m" from the comment's own timestamps, which is measured rather
+  than claimed. Say what you did and what you decided; the clock is not yours
+  to report.
 - **Watch one thing, not everything.** A plain `wait` wakes on comments for
   you. `--all-ops` wakes on every change anyone makes, which costs you a turn
   each time to decide you did not care. Say what you are watching instead:

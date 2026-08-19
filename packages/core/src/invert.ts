@@ -148,6 +148,24 @@ export function invertOperation(
       };
     }
 
+    case "comment.update": {
+      const thread = canvas.threads[op.threadId];
+      const existing = thread?.comments.find((c) => c.id === op.commentId);
+      if (!existing) {
+        throw new OpValidationError("unknown-comment", `unknown comment: ${op.commentId}`);
+      }
+      // Undoing an edit is another edit: it puts back exactly the words that
+      // were there, mentions and item references included.
+      return {
+        type: "comment.update",
+        threadId: op.threadId,
+        commentId: op.commentId,
+        body: existing.body,
+        ...(existing.mentions ? { mentions: existing.mentions } : {}),
+        ...(existing.items ? { items: existing.items } : {}),
+      };
+    }
+
     case "comment.remove": {
       const thread = canvas.threads[op.threadId];
       if (!thread) throw new OpValidationError("unknown-thread", `unknown thread: ${op.threadId}`);

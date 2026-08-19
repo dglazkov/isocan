@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
-import { mainThread } from "@isocan/core";
+import { mainThread, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -154,6 +154,11 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
                 {comment.author.name}
               </span>
               <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+              {workedFor(comment) && (
+                <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
+                  edited · {workedFor(comment)}
+                </span>
+              )}
               <div className="body">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
                   {comment.body}

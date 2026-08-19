@@ -310,6 +310,37 @@ export function applyOperation(
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 
+    case "comment.update": {
+      const thread = getThread(op.threadId);
+      const existing = thread.comments.find((c) => c.id === op.commentId);
+      if (!existing) {
+        throw new OpValidationError("unknown-comment", `unknown comment: ${op.commentId}`);
+      }
+      // Your own words only. The single writer is the one place this can be
+      // enforced, so it is enforced here rather than asked of every client.
+      if (existing.author.id !== actor.id) {
+        throw new OpValidationError(
+          "bad-op",
+          `a comment belongs to its author: ${op.commentId} is ${existing.author.name}'s`,
+        );
+      }
+      // Mentions and item refs are re-resolved for the new body, so an edit
+      // that drops a name drops the mention with it.
+      const { mentions: _wasMentions, items: _wasItems, ...bare } = existing;
+      const edited: Comment = {
+        ...bare,
+        body: op.body,
+        ...(op.mentions ? { mentions: op.mentions } : {}),
+        ...(op.items ? { items: op.items } : {}),
+        editedAt: ts,
+      };
+      const next = {
+        ...thread,
+        comments: thread.comments.map((c) => (c.id === op.commentId ? edited : c)),
+      };
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
+    }
+
     case "comment.remove": {
       const thread = getThread(op.threadId);
       if (!thread.comments.some((c) => c.id === op.commentId)) {

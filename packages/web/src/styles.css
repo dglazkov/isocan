@@ -819,6 +819,14 @@ button.mt-card:hover { border-color: var(--accent); }
   50% { r: 4.5; }
 }
 
+/* A note that changed while its author worked: what it says is current, and
+   the canvas says how long that took from its own timestamps. */
+.worked {
+  margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  background: var(--chip); color: var(--ink-soft);
+  font-size: 10px; line-height: 15px; white-space: nowrap;
+}
+
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
 .files-panel {
