@@ -390,9 +390,21 @@ input, textarea { font: inherit; color: var(--ink); }
   color: var(--ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
 .browser-reload:hover { color: var(--ink); }
-.html-hint {
-  position: absolute; inset: auto 0 0 0; text-align: center; font-size: 10px;
-  color: var(--ink-muted); background: var(--panel); padding: 3px;
+/* "double-click to interact" is an instruction, not part of the document — so
+   it hangs UNDER the item rather than lying across the bottom of it, and only
+   while you are pointing at the thing it is talking about. Same bargain as the
+   name above: chrome that holds its size, and stays out of the way. */
+.item-hint {
+  position: absolute; left: 0; right: 0; top: 100%;
+  display: flex; justify-content: center; padding-top: 5px;
+  pointer-events: none; transform-origin: center top;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.item:hover .item-hint { opacity: 1; }
+.item-hint span {
+  padding: 1px 9px; border-radius: 999px;
+  background: var(--chip); border: 1px solid var(--line-soft);
+  color: var(--ink-muted); font-size: 10.5px; line-height: 1.6; white-space: nowrap;
 }
 .file-view { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); font-size: 12px; padding: 12px; text-align: center; }
 

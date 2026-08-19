@@ -389,11 +389,14 @@ export function ItemView({
           entered={entered}
           reloadToken={reloadToken}
         />
-        {(current.mimeType === "text/html" || isBrowser) && !entered && (
-          <div className="html-hint">double-click to interact</div>
-        )}
+
         {worker && <div className="work-sheen" />}
       </div>
+      {(current.mimeType === "text/html" || isBrowser) && !entered && roomy && (
+        <div className="item-hint" style={chrome}>
+          <span>double-click to interact</span>
+        </div>
+      )}
       {soleSelection && !entered && (
         <>
           <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
