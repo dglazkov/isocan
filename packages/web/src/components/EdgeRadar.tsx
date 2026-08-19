@@ -19,16 +19,21 @@ import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
  * answers a different question (where is everything) than this one (what did I
  * just walk away from).
  *
- * The rim clears the furniture rather than sitting under it — the top bar, the
- * tool rail, the zoom controls, the minimap, and the main-thread panel when it
- * is open (see INSETS).
+ * A beacon has to TOUCH an edge or it reads as a stray mark floating in the
+ * canvas. So the rim is flush, and the insets describe only what actually
+ * covers it: the top bar, which is full width and opaque, and the docked panel
+ * when one is open. The tool rail, the zoom controls, and the minimap all float
+ * with a gutter between them and the edge — a 7px bar lives in that gutter
+ * quite happily, and the alternative is a bar hovering in mid-canvas.
  */
 
+const TOOLBAR_HEIGHT = 48;
+
 const INSETS: Insets = {
-  top: 64, // the top bar
-  right: 76, // the tool rail
-  bottom: 72, // zoom controls / minimap
-  left: 24,
+  top: TOOLBAR_HEIGHT,
+  right: 0,
+  bottom: 0,
+  left: 0,
 };
 
 export function EdgeRadar({ projectId }: { projectId: string }) {

@@ -998,13 +998,15 @@ button.mt-card:hover { border-color: var(--accent); }
 .edge-radar { position: absolute; inset: 0; z-index: 18; pointer-events: none; }
 .edge-bar {
   position: absolute; pointer-events: auto; padding: 0; border: none;
-  background: color-mix(in srgb, var(--accent) 38%, transparent);
-  transition: background 0.12s ease;
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
-.edge-bar-left { width: 7px; border-radius: 0 5px 5px 0; }
-.edge-bar-right { width: 7px; border-radius: 5px 0 0 5px; }
-.edge-bar-top { height: 7px; border-radius: 0 0 5px 5px; }
-.edge-bar-bottom { height: 7px; border-radius: 5px 5px 0 0; }
+/* Flush to the edge, so the rounding is on the inward side only — the bar
+   reads as something attached to the rim, not a capsule lying on the canvas. */
+.edge-bar-left { width: 6px; border-radius: 0 4px 4px 0; }
+.edge-bar-right { width: 6px; border-radius: 4px 0 0 4px; }
+.edge-bar-top { height: 6px; border-radius: 0 0 4px 4px; }
+.edge-bar-bottom { height: 6px; border-radius: 4px 4px 0 0; }
 .edge-bar:hover, .edge-bar.hot { background: var(--accent); }
 
 /* Hover card: a row per item this beacon speaks for, nearest first, each one
