@@ -11,8 +11,14 @@ import type { CanvasState, CommentThread, Item } from "@isocan/core";
  *
  * Two rules follow, and both live here so they can be reasoned about without a
  * browser: chrome holds its size (the caller counter-scales), and the badge
- * yields the corner, because a pin marks a place a person chose and the badge
+ * yields its corner, because a pin marks a place a person chose and the badge
  * is ours to move.
+ *
+ * The badge lives at the BOTTOM-right, and the same place on every item — a
+ * count you have to hunt for is worse than one you have to learn once. Bottom
+ * rather than top for two reasons: the top edge already carries the item's
+ * name, and the version plies cascade down and to the right, so the count sits
+ * where the stack it counts is visibly going.
  */
 
 /** How close a pin has to be, in SCREEN pixels, to claim a corner. */
@@ -23,7 +29,7 @@ export const PIN_REACH = 46;
 const MIN_CHROME_WIDTH = 56;
 const MIN_CHROME_HEIGHT = 40;
 
-export type BadgeCorner = "ne" | "se";
+export type BadgeCorner = "se" | "ne";
 
 /** Is the item big enough on screen to wear a label and a badge? */
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
@@ -42,18 +48,20 @@ function pinPositions(canvas: CanvasState): Array<{ x: number; y: number }> {
 }
 
 /**
- * The badge's corner: its usual top-right, or the bottom edge when a pin has
- * taken that corner. The comparison happens in world units, so the pin's
- * screen-space footprint is converted by the zoom — the same pin claims more
- * world the further out you are.
+ * The badge's corner: bottom-right on every item, and top-right only when a pin
+ * has taken the bottom one — which is rare, because people drop comments on the
+ * thing they are talking about rather than under it.
+ *
+ * The comparison happens in world units, so the pin's screen-space footprint is
+ * converted by the zoom: the same pin claims more world the further out you are.
  */
 export function badgeCorner(item: Item, canvas: CanvasState | null, scale: number): BadgeCorner {
-  if (!canvas) return "ne";
+  if (!canvas) return "se";
   const reach = PIN_REACH / scale;
-  const cornerX = item.x + item.width;
-  const cornerY = item.y;
+  const right = item.x + item.width;
+  const bottom = item.y + item.height;
   for (const pin of pinPositions(canvas)) {
-    if (Math.abs(pin.x - cornerX) < reach && Math.abs(pin.y - cornerY) < reach) return "se";
+    if (Math.abs(pin.x - right) < reach && Math.abs(pin.y - bottom) < reach) return "ne";
   }
-  return "ne";
+  return "se";
 }

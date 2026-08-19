@@ -107,9 +107,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
   subtle elevation plies hint at the stack; fan it out to preview and promote
   any version. The count badge is chrome, not content: it holds its size as you
-  zoom, steps to the bottom edge when a comment pin claims its corner (a pin
-  marks a place a person chose; the badge is ours to move), and gets out of the
-  way entirely once an item is too small to wear a label.
+  zoom, sits at the bottom-right of every item — where the plies are already
+  cascading, and the same place every time — and gets out of the way entirely
+  once an item is too small to wear a label. It steps up to the top edge only
+  when a comment pin is literally on it, because a pin marks a place a person
+  chose and the badge is ours to move.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
