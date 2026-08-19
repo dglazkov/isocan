@@ -1,0 +1,59 @@
+import type { CanvasState, CommentThread, Item } from "@isocan/core";
+
+/**
+ * Where an item's own chrome goes, and whether there is room for it at all.
+ *
+ * Item chrome (the name above it, the version count) lives INSIDE the scaled
+ * world, while comment pins are drawn in screen space on a layer above it. So
+ * as the canvas zooms out the chrome shrinks while the pins stay pointer-sized,
+ * and a pin dropped near a corner does not merely crowd the badge — it covers
+ * something it also paints on top of.
+ *
+ * Two rules follow, and both live here so they can be reasoned about without a
+ * browser: chrome holds its size (the caller counter-scales), and the badge
+ * yields the corner, because a pin marks a place a person chose and the badge
+ * is ours to move.
+ */
+
+/** How close a pin has to be, in SCREEN pixels, to claim a corner. */
+export const PIN_REACH = 46;
+
+/** Below this an item is a speck: the plies still say there is a stack, the
+ * pins still say someone spoke, and a label would be bigger than the thing. */
+const MIN_CHROME_WIDTH = 56;
+const MIN_CHROME_HEIGHT = 40;
+
+export type BadgeCorner = "ne" | "se";
+
+/** Is the item big enough on screen to wear a label and a badge? */
+export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
+  return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
+}
+
+/** Every pin's world position — anchored pins ride their item, and the main
+ * thread has no pin at all. */
+function pinPositions(canvas: CanvasState): Array<{ x: number; y: number }> {
+  return Object.values(canvas.threads)
+    .filter((thread: CommentThread) => !thread.main)
+    .map((thread) => {
+      const anchor = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
+      return anchor ? { x: anchor.x + thread.x, y: anchor.y + thread.y } : { x: thread.x, y: thread.y };
+    });
+}
+
+/**
+ * The badge's corner: its usual top-right, or the bottom edge when a pin has
+ * taken that corner. The comparison happens in world units, so the pin's
+ * screen-space footprint is converted by the zoom — the same pin claims more
+ * world the further out you are.
+ */
+export function badgeCorner(item: Item, canvas: CanvasState | null, scale: number): BadgeCorner {
+  if (!canvas) return "ne";
+  const reach = PIN_REACH / scale;
+  const cornerX = item.x + item.width;
+  const cornerY = item.y;
+  for (const pin of pinPositions(canvas)) {
+    if (Math.abs(pin.x - cornerX) < reach && Math.abs(pin.y - cornerY) < reach) return "se";
+  }
+  return "ne";
+}
