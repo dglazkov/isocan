@@ -333,7 +333,7 @@ export function ItemView({
         <button
           className={`version-badge version-badge-${corner}`}
           style={{ ...chrome, transformOrigin: corner === "se" ? "bottom right" : "top right" }}
-          title={`${item.versions.length} versions — fan out (V)`}
+          title={`${item.versions.length} versions — fan out (F)`}
           onClick={(e) => {
             e.stopPropagation();
             const ui = useUiStore.getState();

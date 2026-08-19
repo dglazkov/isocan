@@ -60,6 +60,7 @@ export function EdgeRadar({ projectId }: { projectId: string }) {
         <EdgeBeacon
           key={beacon.primary.id}
           beacon={beacon}
+          insets={insets}
           projectId={projectId}
           hovered={hovered === beacon.primary.id}
           onHover={setHovered}
@@ -77,11 +78,13 @@ const BAR = 7;
 
 function EdgeBeacon({
   beacon,
+  insets,
   projectId,
   hovered,
   onHover,
 }: {
   beacon: Beacon;
+  insets: Insets;
   projectId: string;
   hovered: boolean;
   onHover: (id: string | null) => void;
@@ -110,19 +113,26 @@ function EdgeBeacon({
     });
   }
 
-  // The bar lies flush along its wall and covers the stretch the items out
-  // there would occupy — so the rim reads as a shadow of what is off screen,
-  // and nothing juts into the canvas.
+  // The bar lies along its wall and covers the stretch the items out there
+  // would occupy — so the rim reads as a shadow of what is off screen, and
+  // nothing juts into the canvas.
+  //
+  // "Its wall" is the INSET wall, not the window's edge: the window's top edge
+  // is under the toolbar, its left edge is under whichever panel is docked, and
+  // a beacon painted there is a beacon nobody sees. The insets are the same
+  // ones the ray was clipped to, so the bar lands exactly where the docking
+  // math already put it.
   const length = beacon.span.to - beacon.span.from;
+  const wall = insets[beacon.side];
   const place = vertical
-    ? { top: beacon.span.from, height: length, [beacon.side]: 0 }
-    : { left: beacon.span.from, width: length, [beacon.side]: 0 };
+    ? { top: beacon.span.from, height: length, [beacon.side]: wall }
+    : { left: beacon.span.from, width: length, [beacon.side]: wall };
 
   // The card opens inward from the wall, centered on the bar.
   const middle = beacon.span.from + length / 2;
   const cardPlace = vertical
-    ? { top: middle, [beacon.side === "left" ? "left" : "right"]: BAR + 8 }
-    : { left: middle, [beacon.side === "top" ? "top" : "bottom"]: BAR + 8 };
+    ? { top: middle, [beacon.side === "left" ? "left" : "right"]: wall + BAR + 8 }
+    : { left: middle, [beacon.side === "top" ? "top" : "bottom"]: wall + BAR + 8 };
 
   const shown = beacon.members.slice(0, MAX_ROWS);
   const hidden = count - shown.length;
