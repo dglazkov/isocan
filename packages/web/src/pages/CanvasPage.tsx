@@ -26,6 +26,7 @@ import { findNextItem, nearestToPoint, type Direction } from "../lib/spatialnav.
 import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
+import { FilesPanel } from "../components/FilesPanel.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
@@ -125,7 +126,7 @@ export function CanvasPage({
         ui.setFollow(null); // they left, or lost their place — nothing to watch
         return;
       }
-      const width = window.innerWidth + (ui.mainPanelOpen ? PANEL_WIDTH : 0);
+      const width = window.innerWidth + (ui.mainPanelOpen || ui.filesPanelOpen ? PANEL_WIDTH : 0);
       const target = centerOn(ui.viewport, locus.x, locus.y, width, window.innerHeight);
       const dx = target.tx - ui.viewport.tx;
       const dy = target.ty - ui.viewport.ty;
@@ -407,6 +408,7 @@ export function CanvasPage({
       <Minimap />
       <TrashPanel projectId={projectId} actor={actor} />
       <MainThreadPanel projectId={projectId} actor={actor} />
+      <FilesPanel projectId={projectId} />
       <CommentToasts />
     </div>
   );

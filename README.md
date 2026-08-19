@@ -146,6 +146,12 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
+- **The files panel**: the same dock, showing the canvas as what it is — a
+  directory of files. Grouped by kind (drawings, images, documents, sites),
+  filterable by name, each row carrying the filename, size, and version count.
+  Pointing at a row outlines that item on the canvas; clicking flies to it and
+  fits it in the space the panel leaves, so the thing you asked for never lands
+  underneath the list you asked from. The dock holds one panel at a time.
 - **The main thread**: one thread per canvas can be designated "main"
   (`comment main <thread>`, or "Make main" on a pin's popover; the panel also
   births one from its first message). It docks as a chat panel on the left

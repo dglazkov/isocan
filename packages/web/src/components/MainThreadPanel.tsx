@@ -14,6 +14,7 @@ import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { markRead } from "../stores/unreadStore.ts";
+import { openPanel, storedPanel } from "../lib/panels.ts";
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -23,7 +24,7 @@ import { markRead } from "../stores/unreadStore.ts";
  * `isocan comment main`). Agents always wake on comments landing here.
  */
 
-const openKey = (projectId: string) => `isocan.mainpanel.${projectId}`;
+
 
 /** Must match .main-panel's width in styles.css. */
 export const PANEL_WIDTH = 320;
@@ -45,14 +46,10 @@ function catapultBesidePanel(itemId: string): void {
   ui.select(item.id);
 }
 
-/** Open/close the panel and remember the choice per project. */
+/** Open/close the panel and remember the choice per project. The left dock
+ * holds one panel at a time; opening this one puts the files away. */
 export function openMainPanel(projectId: string, open: boolean): void {
-  try {
-    localStorage.setItem(openKey(projectId), open ? "open" : "closed");
-  } catch {
-    // Private mode — the panel still works, it just forgets.
-  }
-  useUiStore.getState().setMainPanelOpen(open);
+  openPanel(projectId, open ? "main" : null);
 }
 
 export function MainThreadPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
@@ -66,15 +63,9 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
   useEffect(() => {
     if (!canvas || initedFor.current === projectId) return;
     initedFor.current = projectId;
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(openKey(projectId));
-    } catch {
-      // ignore
-    }
-    useUiStore
-      .getState()
-      .setMainPanelOpen(stored ? stored === "open" : mainThread(canvas) !== null);
+    const stored = storedPanel(projectId);
+    // Never chosen here: a canvas that already has a main thread opens with it.
+    openPanel(projectId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored);
   }, [canvas, projectId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the

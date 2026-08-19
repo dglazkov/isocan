@@ -6,6 +6,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { addBrowserItem } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
+import { openFilesPanel } from "./FilesPanel.tsx";
 import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
 /**
@@ -15,6 +16,7 @@ import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
  */
 export function CreateActions({ projectId, actor }: { projectId: string; actor: Actor }) {
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
+  const filesOpen = useUiStore((s) => s.filesPanelOpen);
   const canvas = useCanvasStore((s) => s.canvas);
   const seen = useUnreadStore((s) => s.seen);
   const [siteOpen, setSiteOpen] = useState(false);
@@ -88,6 +90,13 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
       >
         <span className="shelf-glyph">✳</span> Main
         {unread > 0 && <span className="shelf-badge">{unread}</span>}
+      </button>
+      <button
+        className={`btn${filesOpen ? " active" : ""}`}
+        title="Files — everything on this canvas, by kind"
+        onClick={() => openFilesPanel(projectId, !filesOpen)}
+      >
+        <span className="shelf-glyph">▤</span> Files
       </button>
     </div>
   );
