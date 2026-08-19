@@ -357,6 +357,11 @@ input, textarea { font: inherit; color: var(--ink); }
    above the world, so the badge is the one that yields. */
 .version-badge {
   position: absolute; z-index: 3;
+  /* Chrome, not text. It sits OUTSIDE .item-content, so the rule that makes an
+     item's contents unselectable never covered it: you could select "×6", and
+     dragging a selection is a native drag — which is where the browser's copy
+     cursor came from. */
+  user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
   background: var(--accent); color: var(--accent-ink);
   font-size: 10px; font-weight: 700; border-radius: 999px; padding: 3px 7px;
   line-height: 1; border: none;
@@ -396,6 +401,7 @@ input, textarea { font: inherit; color: var(--ink); }
    name above: chrome that holds its size, and stays out of the way. */
 .item-hint {
   position: absolute; left: 0; right: 0; top: 100%;
+  user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
   display: flex; justify-content: center; padding-top: 5px;
   pointer-events: none; transform-origin: center top;
   opacity: 0; transition: opacity 0.12s ease;
