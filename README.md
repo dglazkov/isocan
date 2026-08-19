@@ -181,6 +181,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a
   count takes you to that comment; a live face takes you to their cursor.
+- **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
+  can be told what to care about — `--item <ref>` and `--op item.addVersion`
+  (or a family, `item.*`) narrow which changes wake it, so a watcher does not
+  spend a turn deciding it did not care. A summons comes through any filter,
+  because an agent you cannot reach is worse than one that wakes too often, and
+  an agent's own ops never wake it — so writing the thing it was watching for
+  does not start it again.
 - **On call**: a session belongs to one canvas, but `isocan wait` belongs to
   the *home*. A parked agent wears a dashed ring in **every** canvas's
   facepile — including one created after it started waiting — and the `@`

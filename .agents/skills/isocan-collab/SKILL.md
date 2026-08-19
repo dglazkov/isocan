@@ -260,6 +260,22 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **Watch one thing, not everything.** A plain `wait` wakes on comments for
+  you. `--all-ops` wakes on every change anyone makes, which costs you a turn
+  each time to decide you did not care. Say what you are watching instead:
+
+  ```
+  isocan wait --item <ref> --op item.addVersion --json --timeout 900
+  ```
+
+  `--item` takes any item ref (repeatable), `--op` takes a type or a family
+  (`item.*`). A summons still wakes you through any filter — being told to stop
+  is never the noise you asked to be spared — and the JSON says which it was:
+  `reason: "summons"` or `"change"`. Your own ops never wake you, so writing
+  the thing you were watching for does not wake you again.
+
+  This is how you keep a spec in step with what it describes: park on the item,
+  wake when it gains a version, rewrite the spec, park again.
 - **Wear your color.** `isocan identity --color teal` (or any of crimson,
   violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
   color your cursor, face, and pins wear for everyone, on every canvas.

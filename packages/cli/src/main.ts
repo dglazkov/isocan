@@ -36,6 +36,7 @@ import {
   extractMentions,
   isIdentityColor,
   itemKind,
+  opMatchesFilters,
   renamedFilename,
   mainThread,
   newCommentId,
@@ -2163,6 +2164,18 @@ program
     "Block until someone comments for you on this canvas — the agent's feedback loop",
   )
   .option("--all-ops", "wake on any operation by another actor, not just comments")
+  .option(
+    "--item <ref>",
+    "only wake on changes touching this item (repeatable) — implies --all-ops",
+    (value: string, prev: string[]) => [...prev, value],
+    [],
+  )
+  .option(
+    "--op <type>",
+    'only wake on these operations, e.g. item.addVersion or "item.*" (repeatable) — implies --all-ops',
+    (value: string, prev: string[]) => [...prev, value],
+    [],
+  )
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
   .option("--since <seq>", "wake on anything after this oplog position instead of now")
   .addHelpText(
@@ -2178,6 +2191,15 @@ in or were mentioned in. Everything else — including comments that mention
 nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
 on everything.
 
+--item and --op narrow which CHANGES wake you, so a watcher does not spend a
+turn deciding it does not care:
+
+  isocan wait --item itm_abc --op item.addVersion --json --timeout 900
+
+A summons still wakes you through any filter. Being told to stop is not noise,
+and an agent you cannot reach is worse than one that wakes too often — the
+JSON says which it was (\`reason\`: "summons" or "change").
+
 Run this in the FOREGROUND, as one tool call: the call returning is your
 wake-up. Detached (\`nohup\`, \`&\`, output redirected to a file you poll) it
 still holds your cursor but cannot wake you — a file is not a notification.
@@ -2192,7 +2214,7 @@ command or reply. No \`session start\` needed after a wake.`,
   )
   .action(
     run(async (
-      opts: { allOps?: boolean; timeout?: string; since?: string },
+      opts: { allOps?: boolean; timeout?: string; since?: string; item: string[]; op: string[] },
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
@@ -2205,6 +2227,13 @@ command or reply. No \`session start\` needed after a wake.`,
       // on — even when --since already names the position. Proving it works
       // HERE is what keeps a wait that cannot poll from ever advertising
       // itself as parked: it dies before it touches presence.
+      // Item refs are resolved ONCE, here: a filter naming something that does
+      // not exist is a typo, and finding out by waiting forever is the worst
+      // way to learn it.
+      const snapshot = await ctx.client.snapshot(p.id);
+      const wantedItems = opts.item.map((ref) => resolveItem(snapshot, ref).id);
+      const wantedTypes = opts.op;
+      const filtered = wantedItems.length > 0 || wantedTypes.length > 0;
       const seeded = (await ctx.client.watchLog({ only: [p.id] })).cursors;
       let cursors: Record<string, number> = {
         [p.id]:
@@ -2311,11 +2340,27 @@ command or reply. No \`session start\` needed after a wake.`,
             return pending;
           };
           const matches: WatchedLogEntry[] = [];
+          let summoned = false;
           for (const entry of batch.entries) {
+            // Your own ops never wake you — otherwise an agent that writes
+            // what it was watching for wakes itself, forever.
             if (entry.envelope.actor.id === ctx.actor.id) continue;
-            if (opts.allOps || (await isForMe(entry.envelope.op, snapOf(entry.projectId)))) {
+            const op = entry.envelope.op;
+            // A summons comes through any filter: the human reaching you is
+            // never the noise you asked to be spared.
+            if (await isForMe(op, snapOf(entry.projectId))) {
+              summoned = true;
               matches.push(entry);
+              continue;
             }
+            if (filtered) {
+              const canvas = (await snapOf(entry.projectId)()).canvas;
+              if (opMatchesFilters(op, { items: wantedItems, types: wantedTypes }, canvas)) {
+                matches.push(entry);
+              }
+              continue;
+            }
+            if (opts.allOps) matches.push(entry);
           }
           if (matches.length > 0) {
             // A summons (a comment for me) lands presence on its canvas
@@ -2340,7 +2385,10 @@ command or reply. No \`session start\` needed after a wake.`,
               return printJson({
                 cursors,
                 entries: matches,
-                next: "reply on the thread, then `isocan wait` again — a lap ends parked",
+                reason: summoned ? "summons" : "change",
+                next: summoned
+                  ? "reply on the thread, then `isocan wait` again — a lap ends parked"
+                  : "do the work the change asks for, then `isocan wait` again — a lap ends parked",
               });
             }
             for (const entry of matches) {
