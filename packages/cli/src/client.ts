@@ -149,23 +149,6 @@ export class DaemonClient {
     return this.request("GET", `/api/projects/${projectId}/sessions`);
   }
 
-  // ---- on call: presence that belongs to the home, not to one canvas ----
-
-  createOnCall(actor: Actor, label?: string): Promise<CreateSessionResponse> {
-    return this.request("POST", "/api/presence/oncall", {
-      actor,
-      ...(label !== undefined ? { label } : {}),
-    });
-  }
-
-  touchOnCall(sessionId: string, patch: UpdateSessionRequest): Promise<{ ok: true }> {
-    return this.request("PUT", `/api/presence/oncall/${sessionId}`, patch);
-  }
-
-  endOnCall(sessionId: string): Promise<{ ok: true }> {
-    return this.request("DELETE", `/api/presence/oncall/${sessionId}`);
-  }
-
   /** End every session an actor holds — the daemon-side truth, for when the
    * local session pointer has been lost. */
   endActorSessions(actorId: string, kind?: "web" | "cli"): Promise<{ ended: number }> {

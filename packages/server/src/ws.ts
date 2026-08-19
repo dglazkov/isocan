@@ -64,12 +64,7 @@ export function attachWebSockets(
   engine.onColors(() => {
     for (const projectId of rooms.keys()) scheduleRoster(projectId);
   });
-  // A null project id is an on-call session coming or going: it belongs to
-  // the home, so every open canvas sees its roster change.
-  presence.onChange((projectId) => {
-    if (projectId !== null) return scheduleRoster(projectId);
-    for (const openProjectId of rooms.keys()) scheduleRoster(openProjectId);
-  });
+  presence.onChange((projectId) => scheduleRoster(projectId));
 
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
