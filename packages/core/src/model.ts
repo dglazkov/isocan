@@ -64,6 +64,12 @@ export interface Comment {
    * the live items the author could see. Absent on older comments. */
   items?: string[];
   createdAt: string;
+  /** When the author last rewrote it, if they did. This is what makes a
+   * working note possible: one comment that says "on it", then what it found,
+   * then what it did — instead of three comments saying so. It is also the
+   * honest source for how long that took, since both ends are daemon
+   * timestamps rather than something the author typed. */
+  editedAt?: string;
 }
 
 export interface CommentThread {

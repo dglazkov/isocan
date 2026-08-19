@@ -33,6 +33,7 @@ import {
   ITEM_KINDS,
   alignMoves,
   distributeMoves,
+  elapsedLabel,
   extractMentions,
   isIdentityColor,
   itemKind,
@@ -283,6 +284,7 @@ async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
 
 /** Resolve an item by exact id, id prefix, or title prefix. */
 function resolveItem(snapshot: CanvasSnapshotResponse, ref: string): Item {
+  if (ref.trim() === "") throw new Error("which item? pass an item id or title");
   const items = Object.values(snapshot.canvas.items);
   const exact = items.find((i) => i.id === ref);
   if (exact) return exact;
@@ -300,6 +302,10 @@ function resolveItem(snapshot: CanvasSnapshotResponse, ref: string): Item {
 
 /** Resolve a thread by exact id or id prefix. */
 function resolveThread(snapshot: CanvasSnapshotResponse, ref: string): CommentThread {
+  // Every string starts with "", so a blank ref used to match the FIRST
+  // thread — which is how an agent with an unset variable posts into a
+  // conversation nobody pointed it at.
+  if (ref.trim() === "") throw new Error("which thread? pass a thread id");
   const threads = Object.values(snapshot.canvas.threads);
   const thread =
     threads.find((t) => t.id === ref) ?? threads.find((t) => t.id.startsWith(ref));
@@ -1718,15 +1724,19 @@ comment
         anchorItemId = null;
       }
       const threadId = newThreadId();
+      const first = await newComment(ctx, p.id, snapshot, text);
       await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
         x,
         y,
         anchorItemId,
-        comment: await newComment(ctx, p.id, snapshot, text),
+        comment: first,
       });
-      console.log(`started thread ${threadId}`);
+      // The comment id comes back because a note posted while working is one
+      // you will want to rewrite: `comment edit <thread> <comment> "…"`.
+      if (ctx.json) return printJson({ threadId, commentId: first.id });
+      console.log(`started thread ${threadId} (${first.id})`);
     }),
   );
 
@@ -1738,12 +1748,16 @@ comment
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
+      const comment = await newComment(ctx, p.id, snapshot, text);
       await sendOp(ctx, p.id, {
         type: "thread.reply",
         threadId: thread.id,
-        comment: await newComment(ctx, p.id, snapshot, text),
+        comment,
       });
-      console.log(`replied to ${thread.id}`);
+      if (ctx.json) return printJson({ threadId: thread.id, commentId: comment.id });
+      // The id is here because a note you post while working is one you will
+      // want to rewrite: `comment edit <thread> <comment> "…"`.
+      console.log(`replied to ${thread.id} (${comment.id})`);
       // The receipt is the moment an agent feels finished — and the moment
       // it walks off the canvas, leaving a human talking to a face that
       // isn't listening. So the last line it reads here is the next move.
@@ -1854,6 +1868,33 @@ main. With no argument, prints the current main thread.`,
       const thread = resolveThread(snapshot, threadRef);
       await sendOp(ctx, p.id, { type: "thread.setMain", threadId: thread.id });
       console.log(`main thread: ${thread.id}`);
+    }),
+  );
+
+comment
+  .command("edit <thread> <comment> <text>")
+  .description("Rewrite a comment you wrote — a working note that changes as the work does")
+  .action(
+    run(async (threadRef: string, commentId: string, text: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const thread = resolveThread(snapshot, threadRef);
+      const existing = thread.comments.find((c) => c.id === commentId);
+      if (!existing) throw new Error(`no comment ${commentId} on ${thread.id}`);
+      // Mentions and #refs are resolved against the NEW body, the same way a
+      // fresh comment resolves them.
+      const resolved = await newComment(ctx, p.id, snapshot, text);
+      await sendOp(ctx, p.id, {
+        type: "comment.update",
+        threadId: thread.id,
+        commentId,
+        body: text,
+        ...(resolved.mentions ? { mentions: resolved.mentions } : {}),
+        ...(resolved.items ? { items: resolved.items } : {}),
+      });
+      const took = elapsedLabel(existing.createdAt, new Date().toISOString());
+      if (ctx.json) return printJson({ threadId: thread.id, commentId, took });
+      console.log(`edited ${commentId} — ${took} since it was posted`);
     }),
   );
 

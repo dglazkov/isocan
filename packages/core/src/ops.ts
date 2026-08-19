@@ -180,6 +180,22 @@ export type Operation =
     }
   | { type: "thread.delete"; threadId: string }
   | {
+      /**
+       * Rewrite a comment you wrote. An agent working takes minutes, and a
+       * thread that reads "on it" / "still on it" / "found it" / "done" is
+       * four comments where one would do — so a working note is ONE comment
+       * that changes. Only the author may: nobody else gets to put words in
+       * your mouth, and the reducer refuses rather than trusting a client.
+       */
+      type: "comment.update";
+      threadId: string;
+      commentId: string;
+      body: string;
+      /** Re-resolved for the new body; see NewComment. */
+      mentions?: string[];
+      items?: string[];
+    }
+  | {
       // internal: inverse of thread.reply
       type: "comment.remove";
       threadId: string;

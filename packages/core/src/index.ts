@@ -14,5 +14,6 @@ export * from "./identity.ts";
 export * from "./filenames.ts";
 export * from "./kinds.ts";
 export * from "./touches.ts";
+export * from "./elapsed.ts";
 export * from "./layout.ts";
 export * from "./drawing.ts";

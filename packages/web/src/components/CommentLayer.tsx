@@ -8,6 +8,7 @@ import {
   extractMentions,
   newCommentId,
   newThreadId,
+  workedFor,
 } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -241,6 +242,11 @@ function ThreadPopover({
           <div className="comment" key={comment.id}>
             <span className="who">{comment.author.name}</span>
             <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+            {workedFor(comment) && (
+              <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
+                edited · {workedFor(comment)}
+              </span>
+            )}
             <div className="body">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
                 {comment.body}

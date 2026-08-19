@@ -166,6 +166,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Pointing at a row outlines that item on the canvas; clicking flies to it and
   fits it in the space the panel leaves, so the thing you asked for never lands
   underneath the list you asked from. The dock holds one panel at a time.
+- **Working notes**: a comment can be rewritten by its author (`comment edit`,
+  and only ever your own — the daemon refuses the rest), so an agent that will
+  be a while posts one note and keeps it current instead of narrating into the
+  thread four times. The canvas then says how long that took — "edited · 4m",
+  measured from the comment's own timestamps rather than claimed by whoever
+  wrote it.
 - **The main thread**: one thread per canvas can be designated "main"
   (`comment main <thread>`, or "Make main" on a pin's popover; the panel also
   births one from its first message). It docks as a chat panel on the left
