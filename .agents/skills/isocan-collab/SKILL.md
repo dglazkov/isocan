@@ -37,17 +37,22 @@ carries the `export PATH=…` that reaches it. Prefixing every command with
 isocan status                  # daemon auto-starts on any command if down
                                # says "stale"? `isocan restart` — the daemon is
                                # an older copy than the CLI you just ran
-isocan project list            # find the canvas; then either:
-isocan use <project>           #   set default, or pass --project <ref> per command
 isocan whoami                  # identity must be YOURS, not the user's
-isocan identity --session      # be handed a name, as THIS agent
+isocan identity --session      # be handed a name, as THIS agent — and bind
+                               # this directory to its canvas (see below)
+isocan project list            # the directory's canvas; --all for the home
 ```
 
-**If `project list` is empty, there is nothing to work on yet.** Canvases are
-the human's to make — they pick their name in the web app and create one
-there, which is why `setup` doesn't. Say so and hand them the URL
-(`isocan status` prints it) rather than inventing a canvas they didn't ask
-for; make one yourself only when asked, and it will be stamped as yours.
+**The directory you are in IS the project.** `identity --session` makes sure
+of it: if `<dir>/.isocan/project.json` already names a canvas (the marker is
+committable and resolves by walking up, like `.git`), you are on that canvas;
+if the marker names one this machine has never seen (a fresh clone), your
+first addition materializes it under the same id; if there is no marker, a
+canvas named after the directory is created and bound. So there is always a
+canvas to work on — this directory's. Every command resolves to it on its
+own; pass `--project <ref>` only when deliberately reaching for another
+canvas, and treat the human's other canvases as their business
+(`project list --all` shows them).
 
 Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
@@ -152,9 +157,11 @@ think is the last.
    foreground, as one tool call** — the call returning IS your wake-up (see
    "Parking is a foreground call"). While parked your cursor shows "waiting
    for you…" automatically. On wake, or on a timeout: start the next lap.
-   **Parking puts you on call for the whole home**, not just this canvas —
-   see below. Do NOT pass `--project` to `wait`: that pins you to one canvas
-   and makes you unreachable from every other.
+   `wait` scopes itself by where you stand: in a bound directory it listens
+   to the directory's canvas — which is where your work is, so that is
+   right. Only an agent parked from an UNBOUND directory is on call for the
+   whole home (see below); there is no flag for it, standing there is the
+   choice.
 
 **Going home** is not a step, it is an interruption: run `isocan session end`
 when the human has told you the collaboration is over, and only then. Nothing
@@ -210,21 +217,24 @@ keep item-specific critique on the item's own anchored threads.
 
 ## On call: being summoned to a canvas you've never opened
 
-A session belongs to one canvas; `isocan wait` belongs to the whole home.
-While parked you appear in EVERY canvas's facepile as "on call" — including
-canvases the human creates after you started waiting — so they can reach you
-there by @-mention or by writing in that canvas's main thread. This is how a
-brand-new space gets an agent: you do not have to be invited to it.
+A session belongs to one canvas; a `wait` run from OUTSIDE any bound
+directory belongs to the whole home. While parked that way you appear in
+EVERY canvas's facepile as "on call" — including canvases the human creates
+after you started waiting — so they can reach you there by @-mention or by
+writing in that canvas's main thread. This is how a brand-new space gets an
+agent: you do not have to be invited to it.
 
 When `wait` wakes you on a summons, your presence has already moved: your
 cursor sits on the thread that woke you — on whichever canvas it lives —
 showing "reading your comment…". No `session start` needed. What `wait`
-cannot do for you is retarget your COMMANDS, so when the canvas is not your
-default:
+cannot do for you is retarget your COMMANDS, so when the summons came from a
+canvas that is not this directory's, pass `--project <id>` (from the wake's
+JSON) to each command — do NOT `isocan use` there, which would re-bind the
+directory you are standing in:
 
 ```sh
-isocan use <project>                      # or pass --project to each command
-isocan who --all                          # check your name is free here too
+isocan --project <id> who --all           # check your name is free there too
+isocan --project <id> comment reply …     # and so on, per command
 ```
 
 Then run the loop from step 3 as usual. Your on-call presence ends when

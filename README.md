@@ -206,6 +206,18 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   Trash-empty and project-delete are confirmation-gated and not undoable.
 - **Projects**: each project is its own canvas; create/list/edit/delete from
   either surface.
+- **A directory is its project** (#60): `<dir>/.isocan/project.json` binds a
+  directory (git toplevel when in a repo) to a canvas — identity only, the
+  state stays in `~/.isocan`. Written automatically when an agent names
+  itself (`identity --session` creates the project if needed, named after
+  the directory), or by hand with `isocan use <project>`. Resolution walks
+  up like `.git`; a committed marker means a clone knows which project it
+  is, and a marker this home has never seen is materialized under its own
+  id on the first addition. In a bound directory `project list` and `wait`
+  narrow to that canvas (`--all` widens the list; a `wait` run from an
+  unbound directory is the home-wide, on-call posture — where you stand is
+  the scope). `~/.isocan/dirs.json` is the dir→project roster, a lazily
+  healed cache.
 
 ## CLI surface
 
@@ -213,7 +225,8 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
-isocan project create|list|show|edit|delete · isocan use <project>
+isocan project create|list [--all]|show|edit|delete
+isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
@@ -224,8 +237,8 @@ isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence
-isocan wait [--timeout s] [--all-ops]  # park on call; wake on a comment for
-                                       # you on ANY canvas (--project: one)
+isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
+                                       # this dir's canvas (unbound dir: any)
 isocan tail [-f]                       # print/stream the operation log
 ```
 

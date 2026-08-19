@@ -33,3 +33,9 @@ export const legacySessionFile = (home: string) => path.join(home, "session.json
 export const cliSessionFile = (home: string, actorId: string) =>
   path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");
+/** The directory roster: realpath → projectId, a discovery cache healed by
+ * the CLI whenever a command runs from a bound directory (#60). The
+ * authoritative binding is the `.isocan/project.json` marker in the
+ * directory itself; this file only answers "where on disk does that canvas's
+ * work live" without a filesystem crawl. */
+export const dirsFile = (home: string) => path.join(home, "dirs.json");
