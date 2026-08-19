@@ -206,7 +206,12 @@ export class Engine {
     const wanted = keys ? new Set(keys) : null;
     return Object.entries(registry.claims)
       .filter(([key]) => !wanted || wanted.has(key))
-      .map(([key, { boundAt, ...actor }]) => ({ key, actor, boundAt }));
+      .map(([key, { boundAt, projectId, ...actor }]) => ({
+        key,
+        actor,
+        boundAt,
+        ...(projectId !== undefined ? { projectId } : {}),
+      }));
   }
 
   /**

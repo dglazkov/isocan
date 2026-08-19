@@ -30,6 +30,9 @@ export interface ActorBinding extends Actor {
   /** When this key last claimed. Recency is the liveness proxy for the gap
    * between claiming a name and putting a face on a canvas. */
   boundAt: string;
+  /** The canvas of the directory the claim was made from, when it was bound
+   * at claim time (#60). Informational — which project this agent is of. */
+  projectId?: string;
 }
 
 export interface ActorRegistry {
@@ -50,6 +53,8 @@ export interface ActorBindingRecord {
   key: string;
   actor: Actor;
   boundAt: string;
+  /** See ActorBinding.projectId. */
+  projectId?: string;
 }
 
 /** Somebody a canvas answers to. Not only the faces on it right now: an
@@ -169,7 +174,12 @@ export function bindClaim(
     if (binding.id === actor.id && key !== op.sessionKey) continue;
     claims[key] = binding;
   }
-  claims[op.sessionKey] = { id: actor.id, name: actor.name, boundAt: ts };
+  claims[op.sessionKey] = {
+    id: actor.id,
+    name: actor.name,
+    boundAt: ts,
+    ...(op.projectId !== undefined ? { projectId: op.projectId } : {}),
+  };
   return { ...registry, claims };
 }
 
