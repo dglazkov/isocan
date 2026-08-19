@@ -127,8 +127,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   neighbours, the item centers itself and purple measure bars — a rule with end
   caps across each gap — say the two distances match.
 - **The edge radar**: items that pan out of sight leave a bar lying flush along
-  the rim, where a ray from the middle of the screen leaves the window and as
-  long as the thing out there would be — the edge becomes a shadow of what is
+  the rim — tucked under the top bar, against the window elsewhere, and against
+  the docked panel when one is open — where a ray from the middle of the screen
+  leaves the window and as long as the thing out there would be — the edge becomes a shadow of what is
   off screen, and nothing juts into the canvas. Bars on the same wall that
   overlap merge into one; hovering lists everything that bar speaks for —
   thumbnail, title, and its own distance, nearest first — and any row takes you
