@@ -105,8 +105,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   canvas is what `isocan get` hands you. A name already spoken for on the
   canvas steps aside to `-2`. One op, so name and file undo together.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
-  subtle elevation plies hint at the stack; fan it out (`V`) to preview and
-  promote any version.
+  subtle elevation plies hint at the stack; fan it out to preview and promote
+  any version. The count badge is chrome, not content: it holds its size as you
+  zoom, steps to the bottom edge when a comment pin claims its corner (a pin
+  marks a place a person chose; the badge is ours to move), and gets out of the
+  way entirely once an item is too small to wear a label.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
