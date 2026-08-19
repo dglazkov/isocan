@@ -88,6 +88,12 @@ interface UiStore {
   /** The minimap, which folds away into its corner. Remembered per browser:
    * someone who put it away wants it away tomorrow too. */
   minimapOpen: boolean;
+  /** The docked files panel — the canvas as a list of files. Shares the left
+   * dock with the main thread (see lib/panels.ts). */
+  filesPanelOpen: boolean;
+  /** Item a panel row is pointing at right now: the canvas outlines it, so a
+   * name in a list and a thing on the surface are visibly the same thing. */
+  peekedItemId: string | null;
   /** Session being followed: the camera tracks their locus until the user
    * takes the wheel back (any manual pan/zoom/jump, or Esc). */
   followSessionId: string | null;
@@ -126,6 +132,8 @@ interface UiStore {
   setCommandBarOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
   setMinimapOpen: (open: boolean) => void;
+  setFilesPanelOpen: (open: boolean) => void;
+  setPeeked: (itemId: string | null) => void;
 }
 
 const INK_KEY = "isocan.ink";
@@ -199,6 +207,8 @@ export const useUiStore = create<UiStore>((set) => {
     commandBarOpen: false,
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
+    filesPanelOpen: false,
+    peekedItemId: null,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
     // zoom buttons, a jump) — each one hands the camera back to the user.
@@ -253,6 +263,8 @@ export const useUiStore = create<UiStore>((set) => {
     setIdentityOpen: (identityOpen) => set({ identityOpen }),
     setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
+    setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
+    setPeeked: (peekedItemId) => set({ peekedItemId }),
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);
       set({ minimapOpen });
