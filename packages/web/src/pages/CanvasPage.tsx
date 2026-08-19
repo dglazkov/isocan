@@ -359,6 +359,15 @@ export function CanvasPage({
         zoomToFit();
       } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
+      } else if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey) {
+        // Fan out the selected item's version stack. Not V: that is the Select
+        // tool, and the badge has been promising a key that did nothing.
+        const ids = ui.selectedItemIds;
+        const canvas = useCanvasStore.getState().canvas;
+        if (ids.length === 1 && canvas && (canvas.items[ids[0]!]?.versions.length ?? 0) > 1) {
+          e.preventDefault();
+          ui.setFanned(ui.fannedItemId === ids[0] ? null : ids[0]!);
+        }
       } else if (e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool(ui.activeTool === "pen" ? "select" : "pen");
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {

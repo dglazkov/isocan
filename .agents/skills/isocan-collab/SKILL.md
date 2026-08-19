@@ -241,7 +241,7 @@ that woke you, with no `session start` needed.
   projects the live site onto the canvas as a mini-browser item — vite
   HMR keeps it current on its own; the item's ⟳ reloads anything else.
 - **Versions are the medium for iteration.** "Change X on this item" means
-  `edit` → new version. Mention "vN on the stack — fan out (V) to compare"
+  `edit` → new version. Mention "vN on the stack — fan out (F) to compare"
   in your reply so the human knows the history is there.
 - **Leave the canvas tidy.** What a person does by dragging — edges snapping
   together, gaps evening out — you do with `isocan align <items…> --to

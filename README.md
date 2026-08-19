@@ -105,8 +105,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   canvas is what `isocan get` hands you. A name already spoken for on the
   canvas steps aside to `-2`. One op, so name and file undo together.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
-  subtle elevation plies hint at the stack; fan it out to preview and promote
-  any version. The count badge is chrome, not content: it holds its size as you
+  subtle elevation plies hint at the stack; fan it out (`F`, or the count badge)
+  to preview and promote any version. The count badge is chrome, not content: it holds its size as you
   zoom, sits at the bottom-right of every item — where the plies are already
   cascading, and the same place every time — and gets out of the way entirely
   once an item is too small to wear a label. It steps up to the top edge only
