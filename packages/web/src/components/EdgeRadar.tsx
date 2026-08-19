@@ -34,7 +34,9 @@ const INSETS: Insets = {
 export function EdgeRadar({ projectId }: { projectId: string }) {
   const items = useCanvasStore((s) => s.canvas?.items);
   const viewport = useUiStore((s) => s.viewport);
-  const panelOpen = useUiStore((s) => s.mainPanelOpen);
+  // Either panel holds the same dock, and the rim has to clear whichever
+  // one is showing.
+  const panelOpen = useUiStore((s) => s.mainPanelOpen || s.filesPanelOpen);
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [hovered, setHovered] = useState<string | null>(null);
 

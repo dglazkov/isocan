@@ -52,9 +52,14 @@ export function glideToPoint(wx: number, wy: number): void {
   glideTo(centerOn(viewport, wx, wy, window.innerWidth, window.innerHeight));
 }
 
-/** Fit a world box, gliding there — the edge radar's cluster jump. */
-export function glideToBox(box: Box): void {
-  glideTo(fitBounds(box, window.innerWidth, window.innerHeight));
+/**
+ * Fit a world box, gliding there — the edge radar's cluster jump, and a click
+ * in the files panel. `reserved` is width a dock is holding: fitting into a
+ * wider window than there is pushes the target clear of it, rather than
+ * landing the thing you asked for underneath the list you asked from.
+ */
+export function glideToBox(box: Box, reserved = 0): void {
+  glideTo(fitBounds(box, window.innerWidth + reserved, window.innerHeight));
 }
 
 /** Zoom about the screen center by a multiplicative factor (buttons, wheel). */

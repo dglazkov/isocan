@@ -38,6 +38,7 @@ export function ItemView({
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
+  const peeked = useUiStore((s) => s.peekedItemId === item.id);
   const commentMode = useUiStore((s) => s.commentMode);
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
@@ -301,7 +302,7 @@ export function ItemView({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${renaming ? " renaming" : ""}`}
+      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,
