@@ -60,40 +60,47 @@ describe("hasRoomForChrome", () => {
 });
 
 describe("badgeCorner", () => {
-  const box = item(0, 0); // corner at (200, 0)
+  const box = item(0, 0); // bottom-right at (200, 150)
 
-  it("keeps the top-right corner when nothing is there", () => {
-    expect(badgeCorner(box, canvasWith([thread(-500, -500)]), 1)).toBe("ne");
+  it("is bottom-right, the same place on every item", () => {
+    expect(badgeCorner(box, canvasWith([thread(-500, -500)]), 1)).toBe("se");
+    expect(badgeCorner(item(900, 900), canvasWith([]), 1)).toBe("se");
   });
 
-  it("yields the corner to a pin dropped on it", () => {
-    expect(badgeCorner(box, canvasWith([thread(205, 4)]), 1)).toBe("se");
+  it("leaves a pin dropped on that corner alone and goes up instead", () => {
+    expect(badgeCorner(box, canvasWith([thread(205, 154)]), 1)).toBe("ne");
+  });
+
+  it("stays put for a pin somewhere else on the item", () => {
+    // Top-right, where a pin used to displace it: the badge no longer lives
+    // there, so it has nothing to do.
+    expect(badgeCorner(box, canvasWith([thread(198, 2)]), 1)).toBe("se");
   });
 
   it("follows a pin that rides its anchor item", () => {
     // The thread stores an offset; the pin is wherever the item is now.
-    const anchored = thread(198, 2, "itm_1");
-    expect(badgeCorner(box, canvasWith([anchored], [box]), 1)).toBe("se");
+    const anchored = thread(198, 148, "itm_1");
+    expect(badgeCorner(box, canvasWith([anchored], [box]), 1)).toBe("ne");
     const movedAway = { ...box, x: 900 };
     // Same offset, item elsewhere: the pin went with it, so the corner of the
     // ORIGINAL box is free again.
-    expect(badgeCorner(box, canvasWith([anchored], [movedAway]), 1)).toBe("ne");
+    expect(badgeCorner(box, canvasWith([anchored], [movedAway]), 1)).toBe("se");
   });
 
   it("ignores the main thread, which is a panel and has no pin", () => {
-    expect(badgeCorner(box, canvasWith([thread(205, 4, null, true)]), 1)).toBe("ne");
+    expect(badgeCorner(box, canvasWith([thread(205, 154, null, true)]), 1)).toBe("se");
   });
 
   it("gives a pin more world to claim as you zoom out", () => {
-    // 60 world units away: within a 46px pin at 0.5 zoom (92 world units),
-    // outside it at 1:1.
-    const nearby = canvasWith([thread(200 + 60, 0)]);
-    expect(badgeCorner(box, nearby, 1)).toBe("ne");
-    expect(badgeCorner(box, nearby, 0.5)).toBe("se");
+    // 60 world units below the corner: outside a 46px pin at 1:1, inside it
+    // once the zoom makes that pin worth 92 world units.
+    const nearby = canvasWith([thread(200, 150 + 60)]);
+    expect(badgeCorner(box, nearby, 1)).toBe("se");
+    expect(badgeCorner(box, nearby, 0.5)).toBe("ne");
     expect(PIN_REACH / 0.5).toBeGreaterThan(60);
   });
 
-  it("holds its corner with no canvas to look at", () => {
-    expect(badgeCorner(box, null, 1)).toBe("ne");
+  it("holds its home with no canvas to look at", () => {
+    expect(badgeCorner(box, null, 1)).toBe("se");
   });
 });

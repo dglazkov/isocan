@@ -332,7 +332,7 @@ export function ItemView({
       {item.versions.length > 1 && roomy && (
         <button
           className={`version-badge version-badge-${corner}`}
-          style={{ ...chrome, transformOrigin: corner === "ne" ? "top right" : "bottom right" }}
+          style={{ ...chrome, transformOrigin: corner === "se" ? "bottom right" : "top right" }}
           title={`${item.versions.length} versions — fan out (V)`}
           onClick={(e) => {
             e.stopPropagation();

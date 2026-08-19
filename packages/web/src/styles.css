@@ -362,10 +362,10 @@ input, textarea { font: inherit; color: var(--ink); }
   line-height: 1; border: none;
   transition: top 0.14s ease, bottom 0.14s ease;
 }
-.version-badge-ne { top: -9px; right: -9px; }
-/* Along the bottom edge rather than on the corner: the corner belongs to the
-   resize handle when this item is selected. */
+/* Both sit along the right EDGE rather than on a corner: every corner belongs
+   to a resize handle once the item is selected. */
 .version-badge-se { bottom: -9px; right: 14px; }
+.version-badge-ne { top: -9px; right: 14px; }
 .version-badge:hover { background: var(--accent-hover); }
 
 /* renderers */
