@@ -8,6 +8,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
+import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
 
 const DRAG_SLOP = 4;
 /** Two presses this close together are one double-press. */
@@ -39,6 +40,7 @@ export function ItemView({
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
+  const scale = useUiStore((s) => s.viewport.scale);
   const commentMode = useUiStore((s) => s.commentMode);
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
@@ -55,6 +57,12 @@ export function ItemView({
   const height = resize?.height ?? item.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const stackDepth = Math.min(item.versions.length - 1, 2);
+  // An item's chrome — its name and its version count — is UI, not content:
+  // it should stay the size of a label however far out you zoom, the way the
+  // comment pins do. Inside the scaled world that means counter-scaling.
+  const chrome = { transform: `scale(${1 / scale})` };
+  const roomy = hasRoomForChrome(width, height, scale);
+  const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
   const isBrowser = current.mimeType === BROWSER_MIME;
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
@@ -321,9 +329,10 @@ export function ItemView({
     >
       {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
       {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
-      {item.versions.length > 1 && (
+      {item.versions.length > 1 && roomy && (
         <button
-          className="version-badge"
+          className={`version-badge version-badge-${corner}`}
+          style={{ ...chrome, transformOrigin: corner === "ne" ? "top right" : "bottom right" }}
           title={`${item.versions.length} versions — fan out (V)`}
           onClick={(e) => {
             e.stopPropagation();
@@ -335,7 +344,7 @@ export function ItemView({
           ×{item.versions.length}
         </button>
       )}
-      <div className="item-titlebar">
+      <div className="item-titlebar" style={roomy ? chrome : { display: "none" }}>
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : (

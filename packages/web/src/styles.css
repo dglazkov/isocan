@@ -326,6 +326,7 @@ input, textarea { font: inherit; color: var(--ink); }
   padding: 0 3px; font-size: 11px; color: var(--ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
+  transform-origin: left bottom;
 }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
@@ -350,12 +351,21 @@ input, textarea { font: inherit; color: var(--ink); }
   content: ""; position: absolute; inset: 0; background: var(--card);
   border: 1px solid var(--line); border-radius: var(--radius); z-index: -1;
 }
+/* The version count is chrome, so it holds its size as the canvas zooms
+   (ItemView counter-scales it) and steps to the other corner when a comment
+   pin lands on this one — the pin marks a place a person chose, and it paints
+   above the world, so the badge is the one that yields. */
 .version-badge {
-  position: absolute; top: -9px; right: -9px; z-index: 3;
+  position: absolute; z-index: 3;
   background: var(--accent); color: var(--accent-ink);
   font-size: 10px; font-weight: 700; border-radius: 999px; padding: 3px 7px;
   line-height: 1; border: none;
+  transition: top 0.14s ease, bottom 0.14s ease;
 }
+.version-badge-ne { top: -9px; right: -9px; }
+/* Along the bottom edge rather than on the corner: the corner belongs to the
+   resize handle when this item is selected. */
+.version-badge-se { bottom: -9px; right: 14px; }
 .version-badge:hover { background: var(--accent-hover); }
 
 /* renderers */
