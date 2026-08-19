@@ -21,8 +21,8 @@ export function quietFor(session: PresenceSession, nowMs = Date.now()): string |
 
 /** Where a session stands in the world: the center of the item it declared it
  * is working on, its freestanding work point, or failing those its cursor.
- * Null for a session with no location (an on-call agent parked in the home).
- * The minimap dot and follow mode both aim here, so they always agree. */
+ * Null for a session that has not stood anywhere yet. The minimap dot and
+ * follow mode both aim here, so they always agree. */
 export function sessionLocus(
   session: PresenceSession,
   canvas: CanvasState | null,

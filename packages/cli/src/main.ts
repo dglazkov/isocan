@@ -39,7 +39,17 @@ import {
   siteLabel,
 } from "@isocan/core";
 import { paths, stalenessOf } from "@isocan/server";
-import { type Ctx, makeCtx, metaPatch, readConfig, resolveProject, writeConfig } from "./ctx.ts";
+import {
+  type Ctx,
+  type ResolveOptions,
+  ensureDirBinding,
+  makeCtx,
+  metaPatch,
+  readConfig,
+  resolveProject,
+  writeConfig,
+} from "./ctx.ts";
+import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
 import { ApiError, DaemonClient } from "./client.ts";
 import {
   readIdentity,
@@ -69,7 +79,10 @@ program
   .version("0.1.0")
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
-  .option("--project <ref>", "project id or title prefix (default: `isocan use` setting)")
+  .option(
+    "--project <ref>",
+    "project id or title prefix (default: this directory's binding, then `isocan use --home`)",
+  )
   .addHelpText(
     "after",
     `
@@ -96,7 +109,12 @@ The system:
 
 Conventions:
   <item> and <thread> arguments accept an id, an id prefix, or a title prefix.
-  Set a default project once with \`isocan use <project>\`; --project overrides.
+  A directory is bound to its project by <dir>/.isocan/project.json — written
+  automatically when an agent names itself here (\`identity --session\`), or
+  by hand with \`isocan use <project>\`. Commands run anywhere under it
+  resolve there (nearest marker wins, like .git); the marker is meant to be
+  committed, so a clone knows which project it is. --project overrides per
+  command; \`isocan use <ref> --home\` sets a fallback for unbound dirs.
   Identity stamps every change you make. A person: \`isocan identity --name
   "You" --home\`. An agent: \`isocan identity --session\` — the daemon hands
   out a free name, or asks for yours with --name. Auto-starts when needed.
@@ -121,19 +139,11 @@ Presence (automatic once you have a session):
   isocan who                            see everyone on the canvas right now
   isocan who --all                      every name the canvas knows, live or not
 
-Being on call (how a canvas you've never opened can reach you):
-  A session belongs to ONE canvas. \`isocan wait\` belongs to the HOME: while
-  parked you show up in every canvas's facepile as "on call", so the human
-  can @-mention you — or just write in its main thread — from a space made
-  after you started waiting. \`wait\` then names the canvas that summoned you
-  and hands back a --project command that lands there. Pass --project to
-  wait on one canvas only; you are invisible on the others while you do.
-
 A typical collaboration loop:
   session start → comment list → session work <item> --say "…" → build →
   edit/add/mv/… → comment reply <thread> "…" → \`isocan wait\` (blocks until
-  the next comment that's for you — @-mentions you, lands in a main
-  thread, or is in your thread — on any canvas in the home) → repeat.
+  the next comment that's for you — @-mentions you, lands in the main
+  thread, or is in your thread — on this directory's canvas) → repeat.
   The loop's only exit is the human saying so: \`session end\` is theirs to
   ask for, not yours to decide. Every other lap ends parked on \`wait\`.`,
   );
@@ -299,8 +309,11 @@ function resolveTrashed(snapshot: CanvasSnapshotResponse, ref: string) {
   return entry;
 }
 
-async function projectAndSnapshot(ctx: Ctx): Promise<{ project: Project; snapshot: CanvasSnapshotResponse }> {
-  const project = await resolveProject(ctx);
+async function projectAndSnapshot(
+  ctx: Ctx,
+  opts?: ResolveOptions,
+): Promise<{ project: Project; snapshot: CanvasSnapshotResponse }> {
+  const project = await resolveProject(ctx, opts);
   const snapshot = await ctx.client.snapshot(project.id);
   return { project, snapshot };
 }
@@ -328,6 +341,7 @@ async function nameCollision(
       actor,
       json: false,
       home,
+      binding: await findBinding(process.cwd(), home),
       ...(globals.project !== undefined ? { projectRef: globals.project } : {}),
     };
     const project = await resolveProject(ctx);
@@ -447,15 +461,34 @@ program
         if (opts.name || opts.session || opts.as) {
           const scope = identityTarget(opts);
           if (scope === "session") {
+            const bound = await findBinding(process.cwd(), home);
             const { actor, harness } = await claimSessionIdentity(client, home, {
               ...(opts.name !== undefined ? { name: opts.name } : {}),
               ...(opts.new ? { fresh: true } : {}),
               ...(opts.as !== undefined ? { as: opts.as } : {}),
+              ...(bound ? { projectId: bound.projectId } : {}),
             });
             console.log(
               `identity saved: ${actor.name} (${actor.id}) → ${paths.actorsFile(home)} (${harness} session)`,
             );
             await relabelLiveSession(cmd, actor);
+            // The handshake is the "agent lands in a directory" moment (#60):
+            // make sure the directory has a canvas, creating one if not.
+            // Best-effort — the name was saved either way, and saying why the
+            // binding failed beats failing a command that did its job.
+            try {
+              const landed = await ensureDirBinding(client, home, actor);
+              if (landed) {
+                console.log(
+                  `this directory's canvas: "${landed.project.title}" (${landed.project.id})` +
+                    (landed.created ? ` — created; bound via ${markerFile(landed.root)}` : ""),
+                );
+              }
+            } catch (err) {
+              console.error(
+                `warning: could not bind this directory to a canvas — ${(err as Error).message}`,
+              );
+            }
             return;
           }
           if (!opts.name) throw new Error('a name is required — `isocan identity --name "You" --home`');
@@ -945,11 +978,22 @@ project
 
 project
   .command("list")
-  .description("List projects")
+  .description("List projects — in a bound directory, that directory's project (--all for every one)")
+  .option("--all", "every project in the home, not just this directory's")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { all?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const projects = await ctx.client.listProjects();
+      const all = await ctx.client.listProjects();
+      // A bound directory shows its own canvas: an agent that landed here
+      // should not go wandering through every other project in the home.
+      // Ergonomics, not a wall — same user, same home, --all opens it.
+      const projects =
+        !opts.all && ctx.binding ? all.filter((p) => p.id === ctx.binding!.projectId) : all;
+      if (projects.length < all.length) {
+        console.error(
+          `(this directory's project only — --all for the other ${all.length - projects.length})`,
+        );
+      }
       if (ctx.json) return printJson(projects);
       const config = await readConfig(ctx.home);
       printTable(
@@ -972,12 +1016,20 @@ project
       const ctx = await ctxOf(cmd);
       if (ref !== undefined) ctx.projectRef = ref;
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      if (ctx.json) return printJson({ ...p, itemCount: Object.keys(snapshot.canvas.items).length });
+      const dirs = await dirsOf(ctx.home, p.id);
+      if (ctx.json) {
+        return printJson({
+          ...p,
+          itemCount: Object.keys(snapshot.canvas.items).length,
+          ...(dirs.length > 0 ? { directories: dirs } : {}),
+        });
+      }
       printKeyValues({
         id: p.id,
         title: p.title,
         description: p.description || "(none)",
         properties: formatProps(p.properties) || "(none)",
+        ...(dirs.length > 0 ? { directory: dirs.join(", ") } : {}),
         items: String(Object.keys(snapshot.canvas.items).length),
         threads: String(Object.keys(snapshot.canvas.threads).length),
         trash: String(snapshot.canvas.trash.length),
@@ -1029,20 +1081,43 @@ project
       if (config.defaultProjectId === p.id) {
         await writeConfig(ctx.home, {});
       }
+      // A marker left standing would quietly re-materialize the project on
+      // the next mutating command — deleting the canvas unbinds the dir too.
+      if (ctx.binding?.projectId === p.id) {
+        await fs.rm(markerFile(ctx.binding.root), { force: true }).catch(() => {});
+        console.log(`(unbound ${ctx.binding.root} — removed ${markerFile(ctx.binding.root)})`);
+      }
       console.log(`deleted project ${p.id} (recoverable by hand in deleted-projects/)`);
     }),
   );
 
 program
   .command("use <ref>")
-  .description("Set the default project for subsequent commands")
+  .description("Bind this directory to a project (--home: set the home-wide fallback instead)")
+  .option(
+    "--home",
+    "set the home-wide default, consulted only in directories not bound to a project",
+  )
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
+    run(async (ref: string, opts: { home?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       ctx.projectRef = ref;
       const p = await resolveProject(ctx);
-      await writeConfig(ctx.home, { ...(await readConfig(ctx.home)), defaultProjectId: p.id });
-      console.log(`default project: ${p.id} — "${p.title}"`);
+      if (opts.home) {
+        await writeConfig(ctx.home, { ...(await readConfig(ctx.home)), defaultProjectId: p.id });
+        console.log(`home default project: ${p.id} — "${p.title}"`);
+        return;
+      }
+      const root = await bindableRoot(process.cwd(), ctx.home);
+      if (!root) {
+        throw new Error(
+          "this directory cannot hold a binding (a home directory binds everything under it) — " +
+            "`isocan use <ref> --home` sets the home-wide default instead",
+        );
+      }
+      const file = await writeMarker(root, { projectId: p.id, title: p.title });
+      await recordDir(ctx.home, root, p.id);
+      console.log(`this directory now means "${p.title}" (${p.id}) — bound via ${file}`);
     }),
   );
 
@@ -1098,7 +1173,9 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        // `add` can start an empty canvas, so it may bind this directory to
+        // a fresh project when nothing else answers (#60).
+        const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
         const data = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
@@ -1149,7 +1226,7 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
         const site = normalizeSiteUrl(url);
         const filename = siteFilename(site);
         await narrate(ctx, p.id, { status: `projecting ${truncate(siteLabel(site), 32)}…` });
@@ -1482,7 +1559,7 @@ comment
   .action(
     run(async (text: string, opts: { item?: string; at?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
       let x: number, y: number, anchorItemId: string | null;
       if (opts.item) {
@@ -1672,7 +1749,9 @@ session
   .action(
     run(async (opts: { label?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      // Appearing is the start of work: an unbound directory gets its canvas
+      // here if the handshake didn't already make one (#60).
+      const p = await resolveProject(ctx, { create: true });
       const existing = await readSessionFile(ctx.home, ctx.actor.id);
       if (existing) {
         await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
@@ -1808,9 +1887,6 @@ program
         sessions.map((s) => ({
           who: s.label ?? s.actor.name,
           kind: s.kind,
-          // On call = parked on `isocan wait` somewhere in the home, so
-          // reachable here even though they have never opened this canvas.
-          where: s.scope === "home" ? "on call" : "here",
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: s.activity
@@ -1941,7 +2017,7 @@ async function landPresence(
 program
   .command("wait")
   .description(
-    "Block until someone comments for you, on any canvas — the agent's feedback loop",
+    "Block until someone comments for you on this canvas — the agent's feedback loop",
   )
   .option("--all-ops", "wake on any operation by another actor, not just comments")
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
@@ -1949,10 +2025,9 @@ program
   .addHelpText(
     "after",
     `
-While parked you are ON CALL for the whole home: every canvas can see you in
-its facepile and @-mention you, including one created after you started
-waiting, and a comment on any of them wakes you. Pass --project (or --since)
-to listen to one canvas only — then you are invisible everywhere else.
+The wait is on ONE canvas — this directory's (#60), or the one --project or
+--since names. An agent belongs to the canvas of the directory it works in,
+and that canvas is where the human reaches it.
 
 A comment wakes you when it @-mentions you (identity name or session label),
 lands in a MAIN thread (\`comment main\`), or lands in a thread you wrote
@@ -1969,9 +2044,8 @@ is over — only the human saying so does.
 
 While parked, the cursor you left on the canvas says "waiting for you…";
 waking on a summons then moves your presence for you: your cursor lands on
-the thread that woke you — on whichever canvas it lives — showing "reading
-your comment…" until your next command or reply. No \`session start\` needed
-after a wake.`,
+the thread that woke you, showing "reading your comment…" until your next
+command or reply. No \`session start\` needed after a wake.`,
   )
   .action(
     run(async (
@@ -1979,44 +2053,33 @@ after a wake.`,
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
-      // Scope. Naming a canvas (--project, or --since, which is one canvas's
-      // seq) pins the wait to it. Otherwise you listen to the whole home —
-      // that is what makes you reachable from a canvas you've never opened.
-      const pinned =
-        ctx.projectRef !== undefined || opts.since !== undefined
-          ? await resolveProject(ctx)
-          : null;
+      // ONE canvas, always (#60): the --project/--since one, or whatever
+      // this directory resolves to. There is no home-wide mode — an agent
+      // belongs to the canvas of the directory it works in, and its canvas
+      // is where the human reaches it.
+      const p = await resolveProject(ctx);
       // Seed from the watch route itself — the very call the loop will live
       // on — even when --since already names the position. Proving it works
       // HERE is what keeps a wait that cannot poll from ever advertising
       // itself as parked: it dies before it touches presence.
-      const seeded = (await ctx.client.watchLog(pinned ? { only: [pinned.id] } : {})).cursors;
-      let cursors: Record<string, number> = pinned
-        ? {
-            [pinned.id]:
-              opts.since !== undefined
-                ? Number(opts.since)
-                : (seeded[pinned.id] ?? (await ctx.client.snapshot(pinned.id)).lastSeq),
-          }
-        : seeded; // seed: from now on
+      const seeded = (await ctx.client.watchLog({ only: [p.id] })).cursors;
+      let cursors: Record<string, number> = {
+        [p.id]:
+          opts.since !== undefined
+            ? Number(opts.since)
+            : (seeded[p.id] ?? (await ctx.client.snapshot(p.id)).lastSeq),
+      };
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
 
       // Waiting is presence: show it, and keep it alive while parked. The
       // canvas session — the cursor the human actually sees — says it is
-      // waiting wherever it stands, pinned or not; an unpinned wait also
-      // registers on call, so every canvas can see and summon you. Both are
-      // torn down on every way out — a canvas must never show an agent
-      // listening when no process is.
+      // waiting. Torn down on every way out — a canvas must never show an
+      // agent listening when no process is.
       const session = await readSessionFile(ctx.home, ctx.actor.id);
-      const label = session?.label;
-      const onCall = pinned
-        ? null
-        : (await ctx.client.createOnCall(ctx.actor, label).catch(() => null))?.sessionId ?? null;
-      // Retract everything the wait advertised. On-call sessions have a TTL
-      // to fall back on, but the canvas status is sticky text on a session
-      // that outlives us — nothing clears it but this. A wake that landed a
-      // handoff status is the one exception: that claim is now the truth,
-      // and the daemon retires it when the reply lands.
+      // Retract everything the wait advertised. The canvas status is sticky
+      // text on a session that outlives us — nothing clears it but this. A
+      // wake that landed a handoff status is the one exception: that claim
+      // is now the truth, and the daemon retires it when the reply lands.
       let woken = false;
       const stopPresence = async () => {
         if (session && !woken) {
@@ -2030,7 +2093,6 @@ after a wake.`,
               .catch(() => {});
           }
         }
-        if (onCall) await ctx.client.endOnCall(onCall).catch(() => {});
       };
       for (const signal of ["SIGINT", "SIGTERM"] as const) {
         process.once(signal, () => {
@@ -2047,16 +2109,11 @@ after a wake.`,
             () => {},
           );
         }
-        // An expired on-call session (we thought for longer than the TTL)
-        // just gets minted again: parking is what makes you reachable.
-        if (onCall) {
-          await ctx.client.touchOnCall(onCall, { status, statusSource: "lifecycle" }).catch(() => {});
-        }
       };
 
       // Names I answer to: identity name, plus my session label if any.
       const selfNames: MentionCandidate[] = [ctx.actor];
-      if (label) selfNames.push({ id: ctx.actor.id, name: label });
+      if (session?.label) selfNames.push({ id: ctx.actor.id, name: session.label });
       const addressesMe = (c: NewComment | Comment) =>
         (c.mentions ?? []).includes(ctx.actor.id) ||
         extractMentions(c.body, selfNames).length > 0;
@@ -2102,11 +2159,7 @@ after a wake.`,
             return;
           }
           const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
-          const batch = await ctx.client.watchLog({
-            cursors,
-            waitMs: window,
-            ...(pinned ? { only: [pinned.id] } : {}),
-          });
+          const batch = await ctx.client.watchLog({ cursors, waitMs: window, only: [p.id] });
           cursors = batch.cursors;
           const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
           const snapOf = (projectId: string) => () => {
@@ -2148,20 +2201,16 @@ after a wake.`,
               });
             }
             for (const entry of matches) {
-              // Say WHICH canvas summoned you when you were listening to more
-              // than one — and hand back a command that lands there.
-              const where = pinned ? "" : `[${entry.projectTitle}] `;
-              console.log(`${where}${describeEntry(entry)}`);
+              console.log(describeEntry(entry));
               const op = entry.envelope.op;
               if (op.type === "thread.create" || op.type === "thread.reply") {
-                const project = pinned ? "" : `--project ${entry.projectId} `;
-                console.log(`  → isocan ${project}comment reply ${op.threadId} "…"`);
+                console.log(`  → isocan comment reply ${op.threadId} "…"`);
               }
             }
             if (woken && summons) {
               console.log(
-                `(your cursor already sits on that thread in "${summons.projectTitle}" — ` +
-                  `it shows "reading your comment…" until your next command or reply)`,
+                `(your cursor already sits on that thread — it shows ` +
+                  `"reading your comment…" until your next command or reply)`,
               );
             }
             return;

@@ -184,8 +184,6 @@ interface MenuOption {
   label: string;
   item?: boolean;
   online?: boolean;
-  /** Reachable, but from the home rather than this canvas. */
-  onCall?: boolean;
 }
 
 /**
@@ -264,11 +262,7 @@ function MentionMenu({
             {char}
             {option.label}
           </span>
-          {option.online && (
-            <span className={option.onCall ? "mention-live oncall" : "mention-live"}>
-              {option.onCall ? "on call" : "live"}
-            </span>
-          )}
+          {option.online && <span className="mention-live">live</span>}
         </button>
       ))}
     </div>
@@ -373,12 +367,7 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
       return name.startsWith(needle) || name.split(/\s+/).some((w) => w.startsWith(needle));
     })
     .slice(0, MAX_MATCHES)
-    .map((peer) => ({
-      id: peer.id,
-      label: peer.name,
-      online: peer.online,
-      ...(peer.onCall ? { onCall: true } : {}),
-    }));
+    .map((peer) => ({ id: peer.id, label: peer.name, online: peer.online }));
 }
 
 /** Items whose title — or any word of it — or id starts with the query. */

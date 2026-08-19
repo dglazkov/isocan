@@ -41,11 +41,6 @@ export interface PresenceSession {
   sessionId: string;
   actor: Actor;
   kind: "web" | "cli";
-  /** Where this session lives. "project" — on this canvas, with a cursor.
-   * "home" — ON CALL: parked in a terminal (`isocan wait`) and listening to
-   * the whole home, so it surfaces on EVERY canvas, including ones it has
-   * never touched. That is how a fresh canvas can @-mention an agent. */
-  scope: "project" | "home";
   /** Display override; fall back to actor.name. */
   label: string | null;
   cursor: { x: number; y: number } | null;

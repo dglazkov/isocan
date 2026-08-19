@@ -148,13 +148,12 @@ describe("isocan wait presence", () => {
     expect(waiting(await sessions())).toEqual([]);
   }, 30_000);
 
-  it("never advertises when the daemon cannot watch (unpinned)", async () => {
+  it("never advertises when the daemon cannot watch (plain — resolved from the home's one project)", async () => {
     blockWatch = true;
 
     const run = await isocan("wait", "--timeout", "10");
 
     expect(run.code).toBe(1);
-    // No on-call session either: the whole home must see nobody listening.
     expect(await sessions()).toEqual([]);
   }, 30_000);
 
@@ -188,19 +187,16 @@ describe("isocan wait presence", () => {
     expect(session?.status ?? null).toBeNull();
   }, 30_000);
 
-  it("an UNPINNED wait says 'waiting' on the canvas cursor too — and retracts it", async () => {
+  it("a plain wait says 'waiting' on the canvas cursor — and hands off on the wake", async () => {
     // The failure this guards: agent works on a canvas, parks with a plain
     // `isocan wait` — the roster shows the canvas session (it has the
-    // cursor), so the waiting status must live THERE, not only on the
-    // on-call session hidden behind it.
+    // cursor), so the waiting status must live there.
     await isocan("session", "start", "--project", "prj_1");
     const run = isocan("wait", "--timeout", "20");
 
-    // The VISIBLE session — project scope, the one with the cursor — is the
-    // one that must say "waiting", not just the on-call listener behind it.
     await until(
       sessions,
-      (list) => list.some((s) => s.scope === "project" && s.status?.includes("waiting")),
+      (list) => list.some((s) => s.status?.includes("waiting")),
       "the waiting status on the canvas session",
     );
 
@@ -221,14 +217,13 @@ describe("isocan wait presence", () => {
     // The wake replaced "waiting" with the handoff status on the same face.
     const list = await sessions();
     expect(list.filter((s) => s.actor.id === nico.id)).toHaveLength(1);
-    expect(list[0]!.scope).toBe("project");
     expect(list[0]!.status).toBe("reading your comment…");
   }, 30_000);
 
-  it("waking on a summons lands presence on the summoning canvas", async () => {
-    const run = isocan("wait", "--timeout", "20");
-    await until(sessions, (list) => waiting(list).length === 1, "the on-call session");
-
+  it("waking on a summons lands presence on the summoning thread", async () => {
+    // The summons is already in the log; --since replays it, so the wake is
+    // deterministic even though no presence advertises the park (an agent
+    // that never ran `session start` is honestly invisible while parked).
     await post("/api/ops", {
       projectId: "prj_1",
       actor: dimitri,
@@ -242,28 +237,15 @@ describe("isocan wait presence", () => {
       },
     });
 
-    const done = await run;
+    const done = await isocan("wait", "--since", "0", "--timeout", "20");
     expect(done.code).toBe(0);
     // The wake itself put a cursor on the summoning thread — no `session
     // start` ran, yet the canvas shows the agent reading the feedback.
-    const list = await until(
-      sessions,
-      (l) => l.some((s) => s.scope === "project"),
-      "the landed session",
-    );
-    const landed = list.find((s) => s.scope === "project")!;
-    expect(landed.actor.id).toBe(nico.id);
+    const list = await until(sessions, (l) => l.length > 0, "the landed session");
+    const landed = list.find((s) => s.actor.id === nico.id)!;
     expect(landed.status).toBe("reading your comment…");
     expect(landed.cursor).toEqual({ x: 400, y: 250 });
-    // …and exactly one face: the on-call listener was retired, not doubled.
     expect(list.filter((s) => s.actor.id === nico.id)).toHaveLength(1);
-  }, 30_000);
-
-  it("ends the on-call session when it times out", async () => {
-    const run = await isocan("wait", "--timeout", "1");
-
-    expect(run.code).toBe(2);
-    expect(await sessions()).toEqual([]);
   }, 30_000);
 });
 
@@ -307,9 +289,6 @@ describe("the loop nudges where an agent decides it is finished", () => {
   }, 30_000);
 
   it("the --json wake carries the next move too", async () => {
-    const run = isocan("wait", "--json", "--timeout", "20");
-    await until(sessions, (list) => waiting(list).length === 1, "the on-call session");
-
     await post("/api/ops", {
       projectId: "prj_1",
       actor: dimitri,
@@ -323,7 +302,7 @@ describe("the loop nudges where an agent decides it is finished", () => {
       },
     });
 
-    const done = await run;
+    const done = await isocan("wait", "--json", "--since", "0", "--timeout", "20");
     expect(done.code).toBe(0);
     // --json is the documented way to park, so it cannot be the one path
     // that says nothing about what happens after the reply.

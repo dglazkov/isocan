@@ -232,37 +232,10 @@ export function registerRoutes(
     return presence.roster(id);
   });
 
-  // ---- on call (home-scoped presence: parked agents, reachable everywhere) ----
-
-  app.post("/api/presence/oncall", async (req) => {
-    const body = req.body as import("@isocan/core").CreateSessionRequest;
-    const session = presence.createOnCall(body.actor, {
-      ...(body.label !== undefined ? { label: body.label } : {}),
-    });
-    return { sessionId: session.sessionId, ttlMs: SESSION_TTL_MS };
-  });
-
-  app.put("/api/presence/oncall/:sid", async (req, reply) => {
-    const { sid } = req.params as { sid: string };
-    const body = (req.body ?? {}) as import("@isocan/core").UpdateSessionRequest;
-    if (!presence.touchOnCall(sid, body)) {
-      return reply
-        .status(404)
-        .send({ error: "session expired or unknown", code: "unknown-session" });
-    }
-    return { ok: true };
-  });
-
   app.delete("/api/presence/actors/:actorId", async (req) => {
     const { actorId } = req.params as { actorId: string };
     const { kind } = req.query as { kind?: "web" | "cli" };
     return { ended: presence.endActorSessions(actorId, kind) };
-  });
-
-  app.delete("/api/presence/oncall/:sid", async (req) => {
-    const { sid } = req.params as { sid: string };
-    presence.endOnCall(sid);
-    return { ok: true };
   });
 
   app.post("/api/projects/:id/gc", async (req) => {

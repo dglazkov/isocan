@@ -32,16 +32,15 @@ describe("PresenceHub", () => {
 
   it("an actor's sessions can be ended at once — the daemon is the truth", () => {
     // The ghost-cursor case: a CLI whose session pointer was lost cannot end
-    // by id, so it ends by actor — everywhere, on call included. A web tab
-    // held by the same actor is not the CLI's to take down.
+    // by id, so it ends by actor — on every canvas. A web tab held by the
+    // same actor is not the CLI's to take down.
     const hub = new PresenceHub(1000);
     hub.createSession("prj-1", kenny, "cli", { label: "Kenny 🤖" });
     hub.createSession("prj-2", kenny, "cli");
-    hub.createOnCall(kenny);
     const tab = hub.createSession("prj-1", kenny, "web");
     hub.createSession("prj-1", alice, "cli");
 
-    expect(hub.endActorSessions(kenny.id, "cli")).toBe(3);
+    expect(hub.endActorSessions(kenny.id, "cli")).toBe(2);
     expect(hub.roster("prj-1").map((s) => s.sessionId).sort()).toEqual(
       [tab.sessionId, hub.roster("prj-1").find((s) => s.actor.id === alice.id)!.sessionId].sort(),
     );
@@ -65,40 +64,17 @@ describe("PresenceHub", () => {
     hub.close();
   });
 
-  it("an on-call session is reachable from every canvas, including brand-new ones", () => {
+  it("a session is on ONE canvas — no other roster ever lists it", () => {
+    // On-call (home-wide) presence was retired with #60: an agent belongs to
+    // the canvas of the directory it works in.
     const hub = new PresenceHub(1000);
-    const oncall = hub.createOnCall(kenny, { label: "Kenny 🤖" });
-
-    // No canvas of its own: it surfaces on canvases it has never touched.
-    for (const project of ["prj_old", "prj_born_just_now"]) {
-      const roster = hub.roster(project);
-      expect(roster).toHaveLength(1);
-      expect(roster[0]!.scope).toBe("home");
-      expect(roster[0]!.label).toBe("Kenny 🤖");
-      expect(roster[0]!.cursor).toBeNull();
-    }
-
-    expect(hub.touchOnCall(oncall.sessionId, { status: "waiting…" })).toBe(true);
-    expect(hub.roster("prj_old")[0]!.status).toBe("waiting…");
-
-    hub.endOnCall(oncall.sessionId);
-    expect(hub.roster("prj_old")).toEqual([]);
-    expect(hub.touchOnCall(oncall.sessionId, {})).toBe(false);
-    hub.close();
-  });
-
-  it("standing on a canvas outranks being on call for it — one face, not two", () => {
-    const hub = new PresenceHub(1000);
-    hub.createOnCall(kenny, { label: "Kenny 🤖" });
     const here = hub.createSession("prj_1", kenny, "cli", { label: "Kenny 🤖" });
     hub.touch("prj_1", here.sessionId, { cursor: { x: 3, y: 4 } });
 
     const roster = hub.roster("prj_1");
     expect(roster).toHaveLength(1);
-    expect(roster[0]!.scope).toBe("project");
     expect(roster[0]!.cursor).toEqual({ x: 3, y: 4 });
-    // Everywhere else they are still just on call.
-    expect(hub.roster("prj_2").map((s) => s.scope)).toEqual(["home"]);
+    expect(hub.roster("prj_2")).toEqual([]);
     hub.close();
   });
 
@@ -286,29 +262,9 @@ describe("presence over the daemon", () => {
     expect(roster[0]!.cursor).toEqual({ x: 90, y: 90 }); // item center after move
   });
 
-  it("an on-call agent joins the roster of a canvas created after it parked", async () => {
+  it("the on-call routes are gone — home-wide presence was retired with #60", async () => {
     const created = await post("/api/presence/oncall", { actor: kenny, label: "Kenny 🤖" });
-    expect(created.status).toBe(200);
-    const sid = created.json.sessionId as string;
-
-    // The canvas the human makes AFTER the agent went on call — issue #37.
-    await post("/api/ops", {
-      projectId: null,
-      actor: alice,
-      op: { type: "project.create", projectId: "prj_new", title: "New space" },
-    });
-    const roster = (await (
-      await fetch(`${base}/api/projects/prj_new/sessions`)
-    ).json()) as PresenceSession[];
-    expect(roster).toHaveLength(1);
-    expect(roster[0]!.scope).toBe("home");
-    expect(roster[0]!.label).toBe("Kenny 🤖");
-
-    await fetch(`${base}/api/presence/oncall/${sid}`, { method: "DELETE" });
-    const after = (await (
-      await fetch(`${base}/api/projects/prj_new/sessions`)
-    ).json()) as PresenceSession[];
-    expect(after).toEqual([]);
+    expect(created.status).toBe(404);
   });
 
   it("web presence flows to the roster and other clients", async () => {

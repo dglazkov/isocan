@@ -34,8 +34,6 @@ interface Face {
   /** Presence label if they have a session, else their plain name. */
   label: string;
   live: boolean;
-  /** Listening from the home rather than standing on this canvas. */
-  onCall: boolean;
   kind: PresenceSession["kind"] | null;
   /** What they are up to, for the tooltip. */
   status: string | null;
@@ -67,27 +65,23 @@ export function Presence({ actor }: { actor: Actor }) {
     }
   }
 
-  // People on the canvas first, then whoever is on call for the home, then
-  // whoever only left a comment behind, then you. (The daemon already orders
-  // the roster that way and never lists an actor twice.)
+  // People on the canvas first, then whoever only left a comment behind,
+  // then you. (The daemon never lists an actor twice.)
   const faces: Face[] = [];
   for (const session of sessions) {
     if (faces.some((face) => face.actor.id === session.actor.id)) continue;
-    const onCall = session.scope === "home";
     faces.push({
       actor: session.actor,
       sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
       live: true,
-      onCall,
       kind: session.kind,
-      status: describe(session) ?? (onCall ? "on call — parked in a terminal" : null),
+      status: describe(session),
       cursor: session.cursor,
       unread: unreadBy.get(session.actor.id)?.count ?? 0,
       self: false,
     });
   }
-  faces.sort((a, b) => Number(a.onCall) - Number(b.onCall));
   for (const [id, { actor: author, count }] of unreadBy) {
     if (faces.some((face) => face.actor.id === id)) continue;
     faces.push({
@@ -95,7 +89,6 @@ export function Presence({ actor }: { actor: Actor }) {
       sessionId: null,
       label: author.name,
       live: false,
-      onCall: false,
       kind: null,
       status: "not here — left a comment",
       cursor: null,
@@ -108,7 +101,6 @@ export function Presence({ actor }: { actor: Actor }) {
     sessionId: null,
     label: actor.name,
     live: true,
-    onCall: false,
     kind: "web",
     status: null,
     cursor: null,
@@ -144,10 +136,9 @@ export function Presence({ actor }: { actor: Actor }) {
   }
 
   /** Watch them: the camera tracks their locus until the user pans away.
-   * An on-call face has no place to watch, and watching yourself is a hall
-   * of mirrors. */
+   * Watching yourself is a hall of mirrors. */
   function toggleFollow(face: Face) {
-    if (!face.sessionId || face.onCall || face.self) return;
+    if (!face.sessionId || face.self) return;
     const ui = useUiStore.getState();
     ui.setFollow(ui.followSessionId === face.sessionId ? null : face.sessionId);
   }
@@ -157,7 +148,7 @@ export function Presence({ actor }: { actor: Actor }) {
       {shown.map((face) => (
         <button
           key={face.actor.id}
-          className={`face${face.live ? "" : " away"}${face.onCall ? " oncall" : ""}${
+          className={`face${face.live ? "" : " away"}${
             face.self ? " self" : ""
           }${face.unread > 0 ? " badged" : ""}${
             face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
@@ -198,9 +189,7 @@ function tooltip(face: Face): string {
   if (face.status) parts.push(face.status);
   if (face.unread > 0) parts.push(`${face.unread} new — click to read`);
   else if (face.cursor) parts.push("click to jump to them");
-  // An on-call face has nowhere to jump to — say how to reach them instead.
-  else if (face.onCall) parts.push(`@${face.label} them, or write in the main thread`);
-  if (face.sessionId && !face.onCall && !face.self) parts.push("double-click to watch");
+  if (face.sessionId && !face.self) parts.push("double-click to watch");
   return parts.join(" · ");
 }
 

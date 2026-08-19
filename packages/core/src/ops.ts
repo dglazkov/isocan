@@ -66,6 +66,12 @@ export type Operation =
       /** Mint a NEW actor even if the name is worn: a second Kenny on
        * purpose, not a collision. */
       fresh?: boolean;
+      /** The canvas of the directory this claim was made from, when that
+       * directory was already bound (#60). Informational scope — recorded on
+       * the binding so the registry can say which project an agent is of; it
+       * gates nothing. Absent on the very first handshake in a fresh
+       * directory, whose project is only created after the claim answers. */
+      projectId?: string;
     }
   | {
       /**

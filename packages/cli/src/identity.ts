@@ -103,6 +103,9 @@ export interface ClaimOptions {
   fresh?: boolean;
   /** Resume an existing actor whose conversation (and session id) is gone. */
   as?: string;
+  /** The canvas of the directory the claim is made from, when it is already
+   * bound (#60) — recorded on the binding as informational scope. */
+  projectId?: string;
 }
 
 /**
@@ -146,6 +149,7 @@ export async function claimSessionIdentity(
     ...(options.name !== undefined ? { name: options.name } : {}),
     ...(options.fresh ? { fresh: true } : {}),
     ...(options.as !== undefined ? { as: options.as } : {}),
+    ...(options.projectId !== undefined ? { projectId: options.projectId } : {}),
   };
   const { envelope } = await client.claimActor(op);
   return { actor: envelope.actor, harness: session.harness };

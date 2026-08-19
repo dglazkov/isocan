@@ -506,13 +506,6 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 /* Not here, but they left something behind. */
 .face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
-/* On call: parked in a terminal, listening to every canvas. Held at full
-   color — they can answer you now — but ringed in dashes rather than solid,
-   because they are not standing here. */
-.face.oncall .face-mark {
-  opacity: 0.8;
-  outline: 1.5px dashed var(--ink-muted); outline-offset: -1px;
-}
 .face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
 .face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }
@@ -748,8 +741,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .mention-dot.item-dot { border-radius: 2px; background: var(--accent); }
 .mention-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mention-live { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); }
-/* Reachable, but from the home — not on this canvas. */
-.mention-live.oncall { font-style: italic; text-transform: none; letter-spacing: 0; }
 
 /* ---------- minimap ---------- */
 /* Bottom-left, clearing the right-edge tool rail and zoom cluster. */

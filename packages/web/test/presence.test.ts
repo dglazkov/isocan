@@ -7,7 +7,6 @@ function session(overrides: Partial<PresenceSession>): PresenceSession {
     sessionId: "s1",
     actor: { id: "a1", name: "Ada" },
     kind: "cli",
-    scope: "project",
     label: null,
     cursor: null,
     selection: [],
@@ -43,8 +42,8 @@ describe("sessionLocus", () => {
     expect(sessionLocus(s, canvas)).toEqual({ x: 7, y: 8 });
   });
 
-  it("is null for a session with no place to stand (on call)", () => {
-    expect(sessionLocus(session({ scope: "home" }), canvas)).toBeNull();
+  it("is null for a session that has not stood anywhere yet", () => {
+    expect(sessionLocus(session({}), canvas)).toBeNull();
   });
 });
 
