@@ -21,13 +21,22 @@ import type {
 import {
   BROWSER_MIME,
   DEFAULT_PORT,
+  DRAWING_MIME,
+  DRAWING_PROPERTIES,
+  DRAWING_TITLE,
   IDENTITY_COLORS,
   collectCanvasActors,
   collectCanvasNames,
   collectItemRefCandidates,
   extractItemRefs,
+  ALIGN_EDGES,
+  ITEM_KINDS,
+  alignMoves,
+  distributeMoves,
   extractMentions,
   isIdentityColor,
+  itemKind,
+  renamedFilename,
   mainThread,
   newCommentId,
   newItemId,
@@ -1158,6 +1167,10 @@ program
   .option("--title <title>")
   .option("-d, --description <text>")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
+  .option(
+    "--drawing",
+    "an SVG you drew: lands as ink (no card, no titlebar) like the web app's Pen",
+  )
   .action(
     run(
       async (
@@ -1169,6 +1182,7 @@ program
           title?: string;
           description?: string;
           prop: Record<string, string>;
+          drawing?: boolean;
         },
         cmd: Command,
       ) => {
@@ -1179,9 +1193,15 @@ program
         const data = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
+        if (opts.drawing && mimeType !== DRAWING_MIME) {
+          throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
+        }
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
         const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
 
+        // `kind=drawing` is the convention the web app's Pen writes, and what
+        // both clients read to render ink without a card (core/drawing.ts).
+        const properties = { ...opts.prop, ...(opts.drawing ? DRAWING_PROPERTIES : {}) };
         const { width, height } = sizeFor(opts.size, defaultSize(mimeType));
         const placement = placementFor(snapshot, opts);
         const itemId = newItemId();
@@ -1198,9 +1218,9 @@ program
           width,
           height,
           placement,
-          ...(opts.title !== undefined ? { title: opts.title } : {}),
+          ...(opts.title !== undefined ? { title: opts.title } : opts.drawing ? { title: DRAWING_TITLE } : {}),
           ...(opts.description !== undefined ? { description: opts.description } : {}),
-          ...(Object.keys(opts.prop).length > 0 ? { properties: opts.prop } : {}),
+          ...(Object.keys(properties).length > 0 ? { properties } : {}),
         });
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
         if (ctx.json) return printJson({ itemId, placement: placed });
@@ -1265,18 +1285,35 @@ program
 program
   .command("ls")
   .description("List items on the canvas")
+  .option("--kind <kind>", `only this kind: ${ITEM_KINDS.join(", ")}`)
+  .option("--filter <text>", "only items whose title or filename contains this")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
-      const items = Object.values(snapshot.canvas.items);
-      if (ctx.json) return printJson(items);
+      if (opts.kind && !ITEM_KINDS.includes(opts.kind as never)) {
+        throw new Error(`--kind expects one of ${ITEM_KINDS.join(", ")}, got: ${opts.kind}`);
+      }
+      const needle = opts.filter?.trim().toLowerCase();
+      // The same two questions the web's files panel answers, so a canvas
+      // reads the same way from either side.
+      const items = Object.values(snapshot.canvas.items).filter((item) => {
+        if (opts.kind && itemKind(item) !== opts.kind) return false;
+        if (!needle) return true;
+        const current = item.versions.find((v) => v.id === item.currentVersionId);
+        return (
+          item.title.toLowerCase().includes(needle) ||
+          (current?.filename ?? "").toLowerCase().includes(needle)
+        );
+      });
+      if (ctx.json) return printJson(items.map((item) => ({ ...item, kind: itemKind(item) })));
       printTable(
         items.map((i) => ({
           id: i.id,
           title: truncate(i.title, 24),
-          mime: i.versions.find((v) => v.id === i.currentVersionId)?.mimeType ?? "?",
+          kind: itemKind(i),
+          file: truncate(i.versions.find((v) => v.id === i.currentVersionId)?.filename ?? "?", 22),
           pos: `${i.x},${i.y}`,
           size: `${i.width}x${i.height}`,
           vers: String(i.versions.length),
@@ -1317,16 +1354,95 @@ program
   );
 
 program
-  .command("mv <item> <x> <y>")
-  .description("Move an item")
+  .command("mv <item> [x] [y]")
+  .description("Move an item — to x y, or by a delta with --by")
+  .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
-    run(async (ref: string, x: string, y: string, _opts: unknown, cmd: Command) => {
+    run(
+      async (
+        ref: string,
+        x: string | undefined,
+        y: string | undefined,
+        opts: { by?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const item = resolveItem(snapshot, ref);
+        // Relative is what an agent usually means: nudging a thing clear of a
+        // neighbour, the same gesture the arrow keys make in the web app.
+        const target =
+          opts.by !== undefined
+            ? (() => {
+                const delta = parseXY(opts.by);
+                return { x: item.x + delta.x, y: item.y + delta.y };
+              })()
+            : (() => {
+                if (x === undefined || y === undefined) {
+                  throw new Error("give x and y, or a delta with --by");
+                }
+                return { x: Number(x), y: Number(y) };
+              })();
+        await sendOp(ctx, p.id, { type: "item.move", itemId: item.id, ...target });
+        console.log(`moved ${item.id} to ${target.x},${target.y}`);
+      },
+    ),
+  );
+
+/** Send a tidy as ONE op, so undo takes the whole gesture back. */
+async function applyMoves(
+  ctx: Ctx,
+  projectId: string,
+  moves: Array<{ itemId: string; x: number; y: number }>,
+  done: string,
+): Promise<void> {
+  if (moves.length === 0) {
+    console.log("already there — nothing moved");
+    return;
+  }
+  await sendOp(
+    ctx,
+    projectId,
+    moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+  );
+  console.log(done);
+}
+
+program
+  .command("align <items...>")
+  .description("Line items up on an edge — what the canvas's guides do, as a verb")
+  .requiredOption(
+    "--to <edge>",
+    `left | hcenter | right | top | vcenter | bottom`,
+  )
+  .action(
+    run(async (refs: string[], opts: { to: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      await sendOp(ctx, p.id, { type: "item.move", itemId: item.id, x: Number(x), y: Number(y) });
-      console.log(`moved ${item.id} to ${x},${y}`);
+      const edge = opts.to.toLowerCase();
+      if (!ALIGN_EDGES.includes(edge as never)) {
+        throw new Error(`--to expects one of ${ALIGN_EDGES.join(", ")}, got: ${opts.to}`);
+      }
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      const moves = alignMoves(items, edge as never);
+      await applyMoves(ctx, p.id, moves, `aligned ${items.length} items to ${edge}`);
+    }),
+  );
+
+program
+  .command("distribute <items...>")
+  .description("Even out the gaps between items — the canvas's spacing measures, as a verb")
+  .requiredOption("--axis <h|v>", "h across, v down")
+  .action(
+    run(async (refs: string[], opts: { axis: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const axis = opts.axis.toLowerCase();
+      if (axis !== "h" && axis !== "v") throw new Error(`--axis expects h or v, got: ${opts.axis}`);
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      const moves = distributeMoves(items, axis);
+      await applyMoves(ctx, p.id, moves, `spaced ${items.length} items ${axis === "h" ? "across" : "down"}`);
     }),
   );
 
@@ -1338,11 +1454,22 @@ program
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .option("--rm-prop <key>", "remove a property (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
   .option("--size <WxH>", "resize, e.g. 480x360")
+  .option(
+    "--keep-filename",
+    "rename the item but leave the file under its old name (default: the file follows the title)",
+  )
   .action(
     run(
       async (
         ref: string,
-        opts: { title?: string; description?: string; prop: Record<string, string>; rmProp: string[]; size?: string },
+        opts: {
+          title?: string;
+          description?: string;
+          prop: Record<string, string>;
+          rmProp: string[];
+          size?: string;
+          keepFilename?: boolean;
+        },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -1351,7 +1478,23 @@ program
         const patch = metaPatch(opts);
         let did = false;
         if (Object.keys(patch).length > 0) {
-          await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch });
+          // Renaming an item renames its file — the same act the web app
+          // performs, through the same op, or the two would disagree about
+          // what `isocan get` hands you after a rename.
+          const current = item.versions.find((v) => v.id === item.currentVersionId);
+          const filename =
+            opts.title !== undefined && !opts.keepFilename && current
+              ? renamedFilename(snapshot.canvas, item.id, opts.title, current.filename)
+              : undefined;
+          await sendOp(ctx, p.id, {
+            type: "item.update",
+            itemId: item.id,
+            patch,
+            ...(filename && filename !== current?.filename ? { filename } : {}),
+          });
+          if (filename && filename !== current?.filename) {
+            console.log(`file renamed to ${filename}`);
+          }
           did = true;
         }
         if (opts.size) {

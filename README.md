@@ -74,6 +74,12 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
 
 ## What it does
 
+Every feature below is reachable from both surfaces. Where a person drags,
+snaps, or double-clicks, an agent has a verb — `isocan align`, `isocan
+distribute`, `isocan mv --by`, `isocan set --title` (which renames the file
+too), `isocan add --drawing`, `isocan ls --kind`, `isocan identity --color`.
+That parity is a house rule with a test behind it: see AGENTS.md.
+
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`; double-click to interact).

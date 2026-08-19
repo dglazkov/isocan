@@ -243,6 +243,26 @@ that woke you, with no `session start` needed.
 - **Versions are the medium for iteration.** "Change X on this item" means
   `edit` → new version. Mention "vN on the stack — fan out (V) to compare"
   in your reply so the human knows the history is there.
+- **Leave the canvas tidy.** What a person does by dragging — edges snapping
+  together, gaps evening out — you do with `isocan align <items…> --to
+  left|hcenter|right|top|vcenter|bottom` and `isocan distribute <items…>
+  --axis h|v`. Both are one op, so one undo, and both are no-ops when things
+  are already in place. `isocan mv <item> --by 0,-40` nudges without doing the
+  arithmetic yourself.
+- **Renaming moves the file too.** `isocan set <item> --title "Bass tab v2"`
+  also renames the blob to `bass-tab-v2.png`, stepping aside from any name the
+  canvas already uses — the same act the web app performs, so the two never
+  disagree. `--keep-filename` opts out.
+- **Ink is a kind of item.** If you generate an SVG as annotation rather than
+  as artwork — circling a thing, sketching a flow — `isocan add note.svg
+  --drawing` lands it the way the web app's Pen does: no card, no titlebar,
+  just the strokes. It reads back as `--kind drawing`.
+- **Find things the way the files panel does.** `isocan ls --kind
+  drawing|image|video|document|site|other` and `isocan ls --filter <text>`
+  are the same two questions the human's Files panel answers.
+- **Wear your color.** `isocan identity --color teal` (or any of crimson,
+  violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
+  color your cursor, face, and pins wear for everyone, on every canvas.
 - **Verify before you ship.** HTML items: test logic headlessly (extract the
   script, run in node with DOM stubs). Risky renders: upload the blob alone
   (`POST /api/projects/<id>/blobs`) and eyeball it in a browser before
@@ -261,7 +281,17 @@ that woke you, with no `session start` needed.
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply|anchor`, `session start|work|say|point|end`,
-`who [--all]`,
-`add`, `browse <url>`, `edit`, `mv`, `set`, `ls`, `show`, `versions`, `version promote`,
-`rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`.
+`comment list|add|reply|anchor|main|rm`, `session start|work|say|point|end`,
+`project create|list|show|edit|delete` (delete needs `--force` and is NOT
+undoable — confirm on the thread first, and never delete a canvas you did not
+make),
+`who [--all]`, `whoami`, `identity [--color]`,
+`add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
+`set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
+`rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
+`open`, `setup`.
+
+Every one of these is the same operation the web app sends. If you find
+something a person can do on the canvas that you cannot do from here, that is
+a bug in isocan, not a limit of yours — say so (see "If you hit a product
+bug").

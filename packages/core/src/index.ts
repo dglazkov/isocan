@@ -12,4 +12,6 @@ export * from "./browseritem.ts";
 export * from "./itemrefs.ts";
 export * from "./identity.ts";
 export * from "./filenames.ts";
+export * from "./kinds.ts";
+export * from "./layout.ts";
 export * from "./drawing.ts";

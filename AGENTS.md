@@ -28,3 +28,31 @@ way rather than copying it into a new harness's directory.
 - Mutations are `Operation` values applied by one reducer — if a change makes
   the CLI and the web app able to disagree, it is the wrong change.
 - Presence is honest: never claim work you did not do.
+
+## Done means done on both surfaces
+
+A feature that only a human can reach is half a feature: this is a canvas for
+people AND agents, and an agent's hands are the CLI. Before calling feature
+work finished, walk this list and say which lines you touched and which you
+deliberately did not.
+
+1. **Op vocabulary** — does the change need a new `Operation`, or an extension
+   of one? One op per user-visible act, so it is one undo.
+2. **CLI verb** — can an agent do this without a pointer? A gesture (drag,
+   pinch, hover) does not need a verb, but the INTENT behind it usually does:
+   dragging until edges line up became `isocan align`.
+3. **Skill** — `.agents/skills/isocan-collab/SKILL.md` is what an agent reads
+   before it acts. A verb nobody is told about does not exist. `npm test`
+   fails if a command is missing from the quick reference there.
+4. **Shared helpers in core** — if the web app and the CLI both compute
+   something (a filename from a title, what kind an item is, where "aligned"
+   is), the computation belongs in `@isocan/core`, not in one client.
+5. **README** — the feature list is the product's own description of itself.
+6. **Tests** — pure logic goes in `packages/*/test`. Interaction that only a
+   browser can prove (a drag, a hover) is verified by driving a real browser
+   and SAYING SO in the report, not by asserting nothing.
+
+The forcing function is `packages/cli/test/surface.test.ts`: it reads the
+commands the CLI actually registers and fails when one is missing from the
+skill's quick reference. Adding a verb without telling agents about it breaks
+the build.
