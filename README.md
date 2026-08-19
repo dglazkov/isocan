@@ -82,7 +82,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
-  (`allow-scripts` without `allow-same-origin`; double-click to interact).
+  (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
+  hangs under the item while you point at it, rather than lying across the
+  bottom of the document it is describing.
 - **The Pen (`P`)**: draw freehand on the canvas in your identity color — the
   same color your cursor and your face in the pile wear, so ink is signed by
   how it looks; the ink well beside the rail switches to any other color in
