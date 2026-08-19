@@ -256,6 +256,100 @@ describe("isocan wait presence", () => {
  * These assertions are the point of those strings — if one goes, the nudge
  * went with it.
  */
+describe("filters: what a watcher agreed to wake for", () => {
+  const version = (id: string) => ({
+    id,
+    blobHash: `hash_${id}`,
+    mimeType: "text/markdown",
+    filename: `${id}.md`,
+    size: 4,
+  });
+
+  /** Somebody else acts on the canvas. */
+  const op = (body: unknown, actor: typeof dimitri) =>
+    post("/api/ops", { projectId: "prj_1", actor, op: body });
+
+  /** Two items to tell apart: the watched one and the noise. */
+  beforeEach(async () => {
+    for (const [itemId, versionId] of [
+      ["itm_1", "ver_1"],
+      ["itm_2", "ver_o1"],
+    ]) {
+      await op(
+        {
+          type: "item.add",
+          itemId,
+          version: version(versionId!),
+          width: 10,
+          height: 10,
+          placement: { x: 0, y: 0 },
+        },
+        dimitri,
+      );
+    }
+    // A session so the park is visible to `until` below.
+    await isocan("session", "start", "--project", "prj_1");
+  });
+
+  /** Park a filtered wait, let it settle, then act as somebody else. */
+  async function parked(args: string[], act: () => Promise<void>): Promise<Run> {
+    const run = isocan("wait", "--json", "--timeout", "6", "--project", "prj_1", ...args);
+    await until(sessions, (list) => waiting(list).length === 1, "the wait to advertise");
+    await act();
+    return run;
+  }
+
+  it("wakes on a change to the item it is watching", async () => {
+    const run = await parked(["--item", "itm_1", "--op", "item.addVersion"], async () => {
+      await op(
+        { type: "item.addVersion", itemId: "itm_1", version: version("ver_2") },
+        dimitri,
+      );
+    });
+    const woke = await run;
+    expect(woke.code).toBe(0);
+    const payload = JSON.parse(woke.stdout);
+    expect(payload.reason).toBe("change");
+    expect(payload.entries).toHaveLength(1);
+    expect(payload.entries[0].envelope.op.type).toBe("item.addVersion");
+  }, 20_000);
+
+  it("sleeps through a change to something else — the turn it saves", async () => {
+    const run = await parked(["--item", "itm_1", "--op", "item.addVersion"], async () => {
+      await op({ type: "item.move", itemId: "itm_1", x: 50, y: 50 }, dimitri);
+      await op({ type: "item.addVersion", itemId: "itm_2", version: version("ver_o") }, dimitri);
+    });
+    const woke = await run;
+    // Exit 2 is the timeout: it stayed parked through both, as asked.
+    expect(woke.code).toBe(2);
+  }, 20_000);
+
+  it("still wakes for a person, through any filter", async () => {
+    const run = await parked(["--item", "itm_1", "--op", "item.addVersion"], async () => {
+      await op(
+        {
+          type: "thread.create",
+          threadId: "thr_9",
+          x: 5,
+          y: 5,
+          anchorItemId: null,
+          comment: { id: "cmt_9", body: "@Nico stop what you are doing" },
+        },
+        dimitri,
+      );
+    });
+    const woke = await run;
+    expect(woke.code).toBe(0);
+    expect(JSON.parse(woke.stdout).reason).toBe("summons");
+  }, 20_000);
+
+  it("refuses a filter naming an item that is not there", async () => {
+    const run = await isocan("wait", "--json", "--timeout", "3", "--project", "prj_1", "--item", "itm_nope");
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).toMatch(/itm_nope/);
+  });
+});
+
 describe("the loop nudges where an agent decides it is finished", () => {
   it("a timeout says park again, not goodbye", async () => {
     const run = await isocan("wait", "--timeout", "1");
