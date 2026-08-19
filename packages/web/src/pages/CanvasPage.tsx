@@ -121,7 +121,7 @@ export function CanvasPage({
       const ui = useUiStore.getState();
       const session = sessions.find((s) => s.sessionId === followSessionId);
       const locus = session && current ? sessionLocus(session, current) : null;
-      if (!locus || session!.scope === "home") {
+      if (!locus) {
         ui.setFollow(null); // they left, or lost their place — nothing to watch
         return;
       }

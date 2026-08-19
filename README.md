@@ -213,11 +213,11 @@ from the CLI — both ask the port who it is rather than trusting the pidfile.
   the directory), or by hand with `isocan use <project>`. Resolution walks
   up like `.git`; a committed marker means a clone knows which project it
   is, and a marker this home has never seen is materialized under its own
-  id on the first addition. In a bound directory `project list` and `wait`
-  narrow to that canvas (`--all` widens the list; a `wait` run from an
-  unbound directory is the home-wide, on-call posture — where you stand is
-  the scope). `~/.isocan/dirs.json` is the dir→project roster, a lazily
-  healed cache.
+  id on the first addition. In a bound directory `project list` narrows to
+  that canvas (`--all` widens) and `wait` listens to it alone — there is no
+  home-wide listening; the old "on call" presence was retired with this
+  change. `~/.isocan/dirs.json` is the dir→project roster, a lazily healed
+  cache.
 
 ## CLI surface
 
@@ -238,7 +238,7 @@ isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
-                                       # this dir's canvas (unbound dir: any)
+                                       # this dir's canvas
 isocan tail [-f]                       # print/stream the operation log
 ```
 

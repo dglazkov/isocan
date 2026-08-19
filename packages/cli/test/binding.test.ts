@@ -88,16 +88,6 @@ const marker = (dir: string): Promise<{ projectId: string; title?: string }> =>
     .readFile(path.join(dir, ".isocan", "project.json"), "utf8")
     .then((raw) => JSON.parse(raw) as { projectId: string; title?: string });
 
-async function until<T>(fn: () => Promise<T>, ok: (v: T) => boolean, what: string): Promise<T> {
-  const deadline = Date.now() + 10_000;
-  for (;;) {
-    const value = await fn();
-    if (ok(value)) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 50));
-  }
-}
-
 describe("the handshake binds a directory to its canvas", () => {
   it("identity --session in a fresh directory creates the project, the marker, and the roster row", async () => {
     const run = await cli(work, claude("s-1"), "identity", "--session");
@@ -239,29 +229,30 @@ describe("isocan use and the narrowed defaults", () => {
   }, 30_000);
 });
 
-describe("wait scopes itself by where it stands", () => {
-  it("bound directory: pinned to its canvas; unbound directory: on call for the home", async () => {
-    await cli(work, {}, "project", "create", "Elsewhere");
+describe("wait is on one canvas", () => {
+  it("bound directory: pinned to its canvas; unbound with several projects: refused", async () => {
+    // Two canvases, both born from handshakes (which set no home default) —
+    // so nothing can answer for an unbound directory.
     await cli(work, claude("s-1"), "identity", "--session");
-    const elsewhere = (await projects()).find((p) => p.title === "Elsewhere")!;
-
-    // Bound: the park is project-scoped, so the other canvas sees nobody.
-    const pinned = await cli(work, claude("s-1"), "wait", "--timeout", "1");
-    expect(pinned.code).toBe(2);
-    expect(await sessionsOf(elsewhere.id)).toEqual([]);
-
-    // The same agent parked from an UNBOUND directory is on call everywhere
-    // — the posture is chosen by standing there, not by a flag.
-    const unbound = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binding-concierge-"));
+    const other = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binding-other-"));
+    const unbound = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binding-unbound-wait-"));
     try {
-      const widened = cli(unbound, claude("s-1"), "wait", "--timeout", "3");
-      await until(
-        () => sessionsOf(elsewhere.id),
-        (list) => list.some((s) => s.scope === "home"),
-        "the on-call face on the other canvas",
-      );
-      expect((await widened).code).toBe(2);
+      await cli(other, claude("s-2"), "identity", "--session");
+      const otherId = (await marker(other)).projectId;
+      const elsewhere = (await projects()).find((p) => p.id === otherId)!;
+
+      // Bound: the park is project-scoped, so the other canvas sees nobody.
+      const pinned = await cli(work, claude("s-1"), "wait", "--timeout", "1");
+      expect(pinned.code).toBe(2);
+      expect(await sessionsOf(elsewhere.id)).toEqual([]);
+
+      // Unbound with nothing to resolve: wait refuses rather than listening
+      // home-wide — there is no home-wide mode any more (on-call retired).
+      const refused = await cli(unbound, claude("s-1"), "wait", "--timeout", "1");
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain("--project");
     } finally {
+      await fs.rm(other, { recursive: true, force: true });
       await fs.rm(unbound, { recursive: true, force: true });
     }
   }, 30_000);

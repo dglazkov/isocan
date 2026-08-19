@@ -52,10 +52,10 @@ export async function postToMain(projectId: string, actor: Actor, body: string):
 }
 
 /**
- * Which agents (CLI sessions) can hear a main-thread post right now — the ones
- * standing on this canvas AND the ones parked "on call" in the home. Both wake
- * on main. Web sessions are humans, so they are left out. Used to tell the user
- * whether their emissary is actually listening before they hit enter.
+ * Which agents (CLI sessions) can hear a main-thread post right now — the
+ * ones standing on this canvas. Web sessions are humans, so they are left
+ * out. Used to tell the user whether their emissary is actually listening
+ * before they hit enter.
  */
 export function listeningAgents(sessions: PresenceSession[]): PresenceSession[] {
   return sessions.filter((s) => s.kind === "cli");

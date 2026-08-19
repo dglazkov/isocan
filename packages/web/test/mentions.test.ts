@@ -8,14 +8,12 @@ const alice = { id: "usr_alice", name: "Alice" };
 
 function session(
   actor: { id: string; name: string },
-  scope: "project" | "home",
   label: string | null = null,
 ): PresenceSession {
   return {
-    sessionId: `ses_${actor.id}_${scope}`,
+    sessionId: `ses_${actor.id}`,
     actor,
     kind: "cli",
-    scope,
     label,
     cursor: null,
     selection: [],
@@ -26,20 +24,20 @@ function session(
 }
 
 describe("mention roster", () => {
-  it("offers an on-call agent on a canvas nobody has touched yet", () => {
-    // The issue's canvas: brand new, so its state names nobody at all.
+  it("offers a live agent on a canvas nobody has commented on yet", () => {
+    // A brand-new canvas: its state names nobody at all, so the roster is
+    // fed entirely by presence.
     const { peers, candidates } = mentionRoster(
       emptyCanvas(),
-      [session(kenny, "home", "Kenny 🤖")],
+      [session(kenny, "Kenny 🤖")],
       alice.id,
     );
-    expect(peers).toEqual([{ id: kenny.id, name: "Kenny 🤖", online: true, onCall: true }]);
+    expect(peers).toEqual([{ id: kenny.id, name: "Kenny 🤖", online: true }]);
     // …and the name the menu offers actually resolves when posted.
     expect(extractMentions("@Kenny 🤖 can you look?", candidates)).toEqual([kenny.id]);
   });
 
-  it("orders the menu: here, then on call, then merely remembered", () => {
-    const bob = { id: "usr_bob", name: "Bob" };
+  it("orders the menu: here, then merely remembered", () => {
     const nico = { id: "usr_nico", name: "Nico" };
     const canvas = emptyCanvas();
     canvas.threads["thr_1"] = {
@@ -52,11 +50,7 @@ describe("mention roster", () => {
       createdBy: nico,
       comments: [],
     };
-    const peers = mentionRoster(
-      canvas,
-      [session(kenny, "home"), session(bob, "project")],
-      alice.id,
-    ).peers;
-    expect(peers.map((p) => p.name)).toEqual(["Bob", "Kenny", "Nico"]);
+    const peers = mentionRoster(canvas, [session(kenny)], alice.id).peers;
+    expect(peers.map((p) => p.name)).toEqual(["Kenny", "Nico"]);
   });
 });

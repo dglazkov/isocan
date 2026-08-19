@@ -6,10 +6,10 @@ import { newId } from "@isocan/core";
  * never the oplog, never storage, never undo. Sessions expire on TTL so a
  * crashed agent's cursor evaporates instead of haunting the canvas.
  *
- * Two scopes. A PROJECT session is on one canvas and carries a cursor. An
- * ON-CALL session belongs to the home: an agent parked on `isocan wait` is
- * listening to every canvas, so it surfaces in every canvas's roster — that
- * is what makes it @-mentionable from a space it has never touched.
+ * Every session is on ONE canvas. There used to be a second, home-wide
+ * scope — "on call", an agent parked on `isocan wait` surfacing in every
+ * canvas's roster — retired with #60: an agent belongs to the directory it
+ * works in, and its canvas is where you reach it.
  */
 
 interface SessionState extends PresenceSession {
@@ -27,9 +27,7 @@ const SWEEP_INTERVAL_MS = 10_000;
 
 export class PresenceHub {
   private rooms = new Map<string, Map<string, SessionState>>();
-  /** On call for the whole home — visible from every canvas. */
-  private onCall = new Map<string, SessionState>();
-  private listeners: Array<(projectId: string | null) => void> = [];
+  private listeners: Array<(projectId: string) => void> = [];
   private sweeper: ReturnType<typeof setInterval>;
 
   constructor(private readonly ttlMs = SESSION_TTL_MS) {
@@ -41,12 +39,11 @@ export class PresenceHub {
     clearInterval(this.sweeper);
   }
 
-  /** `null` means every canvas changed — an on-call session came or went. */
-  onChange(listener: (projectId: string | null) => void): void {
+  onChange(listener: (projectId: string) => void): void {
     this.listeners.push(listener);
   }
 
-  private emit(projectId: string | null): void {
+  private emit(projectId: string): void {
     for (const listener of this.listeners) listener(projectId);
   }
 
@@ -65,17 +62,9 @@ export class PresenceHub {
     kind: "web" | "cli",
     options: { label?: string; sessionId?: string } = {},
   ): PresenceSession {
-    const session = blankSession(actor, kind, "project", options);
+    const session = blankSession(actor, kind, options);
     this.room(projectId).set(session.sessionId, session);
     this.emit(projectId);
-    return session;
-  }
-
-  /** Park an actor in the home: reachable from every canvas at once. */
-  createOnCall(actor: Actor, options: { label?: string; sessionId?: string } = {}): PresenceSession {
-    const session = blankSession(actor, "cli", "home", options);
-    this.onCall.set(session.sessionId, session);
-    this.emit(null);
     return session;
   }
 
@@ -102,38 +91,17 @@ export class PresenceHub {
     return true;
   }
 
-  /** Heartbeat for an on-call session. False once it has expired. */
-  touchOnCall(
-    sessionId: string,
-    patch: {
-      actor?: Actor;
-      status?: string | null;
-      statusSource?: "explicit" | "lifecycle" | "inferred";
-      activity?: PresenceActivity | null;
-    } = {},
-  ): boolean {
-    const session = this.onCall.get(sessionId);
-    if (!session) return false;
-    patchSession(session, patch);
-    this.emit(null);
-    return true;
-  }
-
   endSession(projectId: string, sessionId: string): void {
     const room = this.rooms.get(projectId);
     if (room?.delete(sessionId)) this.emit(projectId);
   }
 
-  endOnCall(sessionId: string): void {
-    if (this.onCall.delete(sessionId)) this.emit(null);
-  }
-
   /**
-   * Every session an actor holds, ended at once — on every canvas, on call
-   * included. The client's session pointer is a cache; this is the truth. A
-   * pointer lost to a crash or a migration must not leave a face blinking on
-   * a canvas after its agent has left. `kind` narrows the sweep so a CLI
-   * leaving cannot take down the same person's live browser tabs.
+   * Every session an actor holds, ended at once — on every canvas. The
+   * client's session pointer is a cache; this is the truth. A pointer lost
+   * to a crash or a migration must not leave a face blinking on a canvas
+   * after its agent has left. `kind` narrows the sweep so a CLI leaving
+   * cannot take down the same person's live browser tabs.
    */
   endActorSessions(actorId: string, kind?: "web" | "cli"): number {
     let ended = 0;
@@ -148,28 +116,13 @@ export class PresenceHub {
       }
       if (changed) this.emit(projectId);
     }
-    let dropped = false;
-    for (const [sessionId, session] of this.onCall) {
-      if (session.actor.id !== actorId) continue;
-      if (kind && session.kind !== kind) continue;
-      this.onCall.delete(sessionId);
-      dropped = true;
-      ended += 1;
-    }
-    if (dropped) this.emit(null);
     return ended;
   }
 
-  /**
-   * Who this canvas sees: everyone actually on it, then everyone on call for
-   * the home. An actor already here is not listed twice — the session with a
-   * cursor is the truer one.
-   */
+  /** Who this canvas sees: everyone actually on it. */
   roster(projectId: string): PresenceSession[] {
     const here = [...(this.rooms.get(projectId)?.values() ?? [])];
-    const present = new Set(here.map((session) => session.actor.id));
-    const listening = [...this.onCall.values()].filter((s) => !present.has(s.actor.id));
-    return [...here, ...listening].map(({ lastSeenMs, statusSticky, ...session }) => session);
+    return here.map(({ lastSeenMs, statusSticky, ...session }) => session);
   }
 
   /** Op piggyback: an op whose clientId matches a session moves that
@@ -217,28 +170,18 @@ export class PresenceHub {
       if (room.size === 0) this.rooms.delete(projectId);
       if (changed) this.emit(projectId);
     }
-    let dropped = false;
-    for (const [sessionId, session] of this.onCall) {
-      if (session.lastSeenMs < cutoff) {
-        this.onCall.delete(sessionId);
-        dropped = true;
-      }
-    }
-    if (dropped) this.emit(null);
   }
 }
 
 function blankSession(
   actor: Actor,
   kind: "web" | "cli",
-  scope: "project" | "home",
   options: { label?: string; sessionId?: string },
 ): SessionState {
   return {
     sessionId: options.sessionId ?? newId("ses"),
     actor,
     kind,
-    scope,
     label: options.label ?? null,
     cursor: null,
     selection: [],
