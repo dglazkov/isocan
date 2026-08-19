@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CanvasState, Item } from "@isocan/core";
-import { BROWSER_MIME, isDrawingItem } from "@isocan/core";
+import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
@@ -15,7 +15,9 @@ import { openPanel } from "../lib/panels.ts";
  * about where things are.
  *
  * Grouped by kind rather than by folder: the canvas has no folders, and
- * inventing some here would be a shape the model does not have.
+ * inventing some here would be a shape the model does not have. The kinds
+ * themselves come from core, so this list and `isocan ls --kind` group the
+ * canvas the same way.
  */
 
 /** Open/close the panel and remember it. The left dock holds one panel at a
@@ -24,11 +26,7 @@ export function openFilesPanel(projectId: string, open: boolean): void {
   openPanel(projectId, open ? "files" : null);
 }
 
-type Kind = "drawing" | "image" | "video" | "document" | "site" | "other";
-
-const KIND_ORDER: Kind[] = ["drawing", "image", "video", "document", "site", "other"];
-
-const KIND_LABEL: Record<Kind, string> = {
+const KIND_LABEL: Record<ItemKind, string> = {
   drawing: "Drawings",
   image: "Images",
   video: "Video",
@@ -37,7 +35,7 @@ const KIND_LABEL: Record<Kind, string> = {
   other: "Files",
 };
 
-const KIND_GLYPH: Record<Kind, string> = {
+const KIND_GLYPH: Record<ItemKind, string> = {
   drawing: "✎",
   image: "▣",
   video: "▶",
@@ -45,17 +43,6 @@ const KIND_GLYPH: Record<Kind, string> = {
   site: "◍",
   other: "◇",
 };
-
-function kindOf(item: Item): Kind {
-  if (isDrawingItem(item)) return "drawing";
-  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  const mime = current?.mimeType ?? "";
-  if (mime === BROWSER_MIME) return "site";
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("text/") || mime === "application/pdf") return "document";
-  return "other";
-}
 
 /** Bytes as a person reads them. */
 function formatSize(bytes: number): string {
@@ -68,10 +55,10 @@ interface Row {
   item: Item;
   filename: string;
   size: number;
-  kind: Kind;
+  kind: ItemKind;
 }
 
-function rowsOf(canvas: CanvasState, filter: string): Array<[Kind, Row[]]> {
+function rowsOf(canvas: CanvasState, filter: string): Array<[ItemKind, Row[]]> {
   const needle = filter.trim().toLowerCase();
   const rows: Row[] = [];
   for (const item of Object.values(canvas.items)) {
@@ -84,10 +71,13 @@ function rowsOf(canvas: CanvasState, filter: string): Array<[Kind, Row[]]> {
     ) {
       continue;
     }
-    rows.push({ item, filename: current.filename, size: current.size, kind: kindOf(item) });
+    rows.push({ item, filename: current.filename, size: current.size, kind: itemKind(item) });
   }
   rows.sort((a, b) => a.item.title.localeCompare(b.item.title));
-  return KIND_ORDER.map((kind): [Kind, Row[]] => [kind, rows.filter((row) => row.kind === kind)]).filter(
+  return ITEM_KINDS.map((kind): [ItemKind, Row[]] => [
+    kind,
+    rows.filter((row) => row.kind === kind),
+  ]).filter(
     ([, group]) => group.length > 0,
   );
 }
