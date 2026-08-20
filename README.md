@@ -92,7 +92,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   circle the thing you mean. A moment after you lift the pen the ink settles
   into an ordinary item — no commit step to find; strokes drawn in one breath
   land as one drawing. That item is an `item.add` whose blob is an SVG, so the
-  CLI lists it, `isocan get` hands you a real `.svg`, and it selects, moves,
+  CLI lists it, the blob on disk is a real `.svg`, and it selects, moves,
   resizes, deletes, undoes, and versions like anything else. It just wears no
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
@@ -104,7 +104,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   rename in place — the label itself becomes the field, same type and same
   spot — and the file underneath follows: "Bass tab v2" makes
   `bass-tab-v2.png`, keeping the extension, so what you call a thing on the
-  canvas is what `isocan get` hands you. A name already spoken for on the
+  canvas is the name the blob wears on disk. A name already spoken for on the
   canvas steps aside to `-2`. One op, so name and file undo together.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
   subtle elevation plies hint at the stack; fan it out (`F`, or the count badge)
