@@ -38,6 +38,9 @@ export interface PendingComment {
   x: number;
   y: number;
   anchorItemId: string | null;
+  /** An annotation this comment is about, carried into the posted comment's
+   * item references so an agent can find the ink that prompted it. */
+  aboutItemId?: string;
 }
 
 interface UiStore {

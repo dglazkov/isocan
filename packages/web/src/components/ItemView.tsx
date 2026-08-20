@@ -2,7 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
-import { BROWSER_MIME, isDrawingItem, parseUriList, renamedFilename } from "@isocan/core";
+import {
+  BROWSER_MIME,
+  annotationsOf,
+  isAnnotation,
+  isDrawingItem,
+  parseUriList,
+  renamedFilename,
+} from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
@@ -67,6 +74,9 @@ export function ItemView({
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
   const isInk = isDrawingItem(item);
+  // Ink about something paints over it — a mark under the thing it marks is
+  // not a mark.
+  const isMark = isAnnotation(item);
   // Bumping this remounts a browser item's iframe — the reload button. Vite
   // sites refresh themselves over HMR; this is for everything that doesn't.
   const [reloadToken, setReloadToken] = useState(0);
@@ -140,7 +150,14 @@ export function ItemView({
     // Dragging a selected item moves the whole selection; dragging an
     // unselected one selects it alone first.
     const wasInSelection = ui.selectedItemIds.includes(targetId);
-    const dragIds = wasInSelection ? ui.selectedItemIds : [targetId];
+    const chosen = wasInSelection ? ui.selectedItemIds : [targetId];
+    // What is drawn on a thing travels with it. Otherwise dragging a screen
+    // leaves the X you drew on it behind, which is the moment the mark stops
+    // meaning anything.
+    const canvasNow = useCanvasStore.getState().canvas;
+    const dragIds = canvasNow
+      ? [...new Set(chosen.flatMap((id) => [id, ...annotationsOf(canvasNow, id).map((one) => one.id)]))]
+      : chosen;
     if (!wasInSelection) ui.select(targetId);
 
     const frame = e.currentTarget as HTMLElement;
@@ -310,7 +327,7 @@ export function ItemView({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
+      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,

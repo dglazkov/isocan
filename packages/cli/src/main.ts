@@ -32,6 +32,7 @@ import {
   ALIGN_EDGES,
   ITEM_KINDS,
   alignMoves,
+  annotationsOf,
   distributeMoves,
   elapsedLabel,
   extractMentions,
@@ -1331,6 +1332,33 @@ program
   );
 
 program
+  .command("get <item> [out]")
+  .description("Write an item's file to a path, or to stdout — reading is half of acting")
+  // NOT --version: that is the program's own flag, and a subcommand that
+  // borrows it prints the CLI's version instead of your file.
+  .option("--rev <ref>", "a version id or its number in the stack (default: the current one)")
+  .action(
+    run(async (ref: string, out: string | undefined, opts: { rev?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const version =
+        opts.rev === undefined
+          ? item.versions.find((v) => v.id === item.currentVersionId)
+          : item.versions.find((v) => v.id === opts.rev) ?? item.versions[Number(opts.rev) - 1];
+      if (!version) throw new Error(`no version ${opts.rev} on ${item.id}`);
+      const data = await ctx.client.downloadBlob(p.id, version.blobHash);
+      if (out) {
+        await fs.writeFile(out, data);
+        if (ctx.json) return printJson({ itemId: item.id, versionId: version.id, path: out, bytes: data.length });
+        return console.log(`wrote ${out} (${formatBytes(data.length)} — ${version.filename})`);
+      }
+      // No path: the bytes themselves, so it pipes.
+      process.stdout.write(data);
+    }),
+  );
+
+program
   .command("show <item>")
   .description("Show an item's full metadata and version stack")
   .action(
@@ -1391,8 +1419,24 @@ program
                 }
                 return { x: Number(x), y: Number(y) };
               })();
-        await sendOp(ctx, p.id, { type: "item.move", itemId: item.id, ...target });
-        console.log(`moved ${item.id} to ${target.x},${target.y}`);
+        // What is drawn on a thing travels with it — the same rule the web app's
+        // drag follows, so a move from either side keeps the marks in place.
+        const dx = target.x - item.x;
+        const dy = target.y - item.y;
+        const marks = annotationsOf(snapshot.canvas, item.id);
+        const moves = [
+          { itemId: item.id, ...target },
+          ...marks.map((mark) => ({ itemId: mark.id, x: mark.x + dx, y: mark.y + dy })),
+        ];
+        await sendOp(
+          ctx,
+          p.id,
+          moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+        );
+        console.log(
+          `moved ${item.id} to ${target.x},${target.y}` +
+            (marks.length > 0 ? ` (with ${marks.length} annotation${marks.length === 1 ? "" : "s"})` : ""),
+        );
       },
     ),
   );

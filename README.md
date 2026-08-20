@@ -106,6 +106,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `bass-tab-v2.png`, keeping the extension, so what you call a thing on the
   canvas is the name the blob wears on disk. A name already spoken for on the
   canvas steps aside to `-2`. One op, so name and file undo together.
+- **Annotation**: ink drawn over an item becomes a mark *about* it, not a
+  drawing that happens to sit on top — it carries the item it annotates and the
+  region it covers (in fractions, so it survives a resize), paints above its
+  target, and travels with it when the target moves, from either surface. A
+  composer opens on the spot for what should happen there; posting anchors the
+  thread to the target, so an agent parked on that item wakes, reads the region
+  without parsing a single stroke, rebuilds, and clears the mark. Ink on bare
+  canvas stays a drawing: nobody asked for anything, so there is nothing to
+  clear.
 - **Versions (the 0.5D)**: editing an item stacks a new version on top —
   subtle elevation plies hint at the stack; fan it out (`F`, or the count badge)
   to preview and promote any version. The count badge is chrome, not content: it holds its size as you

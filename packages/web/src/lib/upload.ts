@@ -5,11 +5,13 @@ import {
   DRAWING_MIME,
   DRAWING_PROPERTIES,
   DRAWING_TITLE,
+  annotationProperties,
   drawingSvg,
   inkBounds,
   newItemId,
   newVersionId,
   normalizeSiteUrl,
+  regionOf,
   siteFilename,
   siteLabel,
 } from "@isocan/core";
@@ -124,6 +126,8 @@ export async function addDrawing(
   projectId: string,
   actor: Actor,
   strokes: InkStroke[],
+  /** The item this ink is about, when it was drawn over one. */
+  target?: { id: string; x: number; y: number; width: number; height: number } | null,
 ): Promise<string> {
   const exact = inkBounds(strokes);
   if (!exact) throw new Error("nothing to place");
@@ -153,7 +157,18 @@ export async function addDrawing(
     height: bounds.maxY - bounds.minY,
     placement: { x: bounds.minX, y: bounds.minY },
     title: DRAWING_TITLE,
-    properties: DRAWING_PROPERTIES,
+    properties: target
+      ? {
+          ...DRAWING_PROPERTIES,
+          ...annotationProperties(
+            target.id,
+            regionOf(
+              { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
+              target,
+            ),
+          ),
+        }
+      : DRAWING_PROPERTIES,
   });
   return itemId;
 }

@@ -1,4 +1,6 @@
 import type { Actor, InkStroke } from "@isocan/core";
+import { annotationTargetFor, inkBounds } from "@isocan/core";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { addDrawing } from "./upload.ts";
 
@@ -29,7 +31,18 @@ export async function commitSketch(projectId: string, actor: Actor): Promise<str
 }
 
 async function place(projectId: string, actor: Actor, strokes: InkStroke[]): Promise<string> {
-  const itemId = await addDrawing(projectId, actor, strokes);
+  // Ink drawn over something is ABOUT that something: an annotation, which can
+  // be pointed at, acted on, and cleared. Ink on bare canvas is just a drawing.
+  const canvas = useCanvasStore.getState().canvas;
+  const bounds = inkBounds(strokes);
+  const target =
+    canvas && bounds
+      ? annotationTargetFor(
+          { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
+          Object.values(canvas.items),
+        )
+      : null;
+  const itemId = await addDrawing(projectId, actor, strokes, target);
   // Only drop what we placed: a stroke drawn while the upload was in flight
   // stays wet and becomes the next drawing.
   const { sketch, clearSketch, beginStroke, select } = useUiStore.getState();
@@ -38,6 +51,17 @@ async function place(projectId: string, actor: Actor, strokes: InkStroke[]): Pro
   clearSketch();
   for (const stroke of survivors) beginStroke(stroke);
   select(itemId);
+  // An annotation is half a sentence until you say what it means, so the
+  // composer opens on the spot — anchored to the TARGET, so an agent parked on
+  // that item hears it, and dismissable with Escape if the ink says enough.
+  if (target && bounds) {
+    useUiStore.getState().setPendingComment({
+      x: (bounds.minX + bounds.maxX) / 2 - target.x,
+      y: bounds.minY - target.y,
+      anchorItemId: target.id,
+      aboutItemId: itemId,
+    });
+  }
   return itemId;
 }
 
