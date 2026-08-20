@@ -343,11 +343,14 @@ input, textarea { font: inherit; color: var(--ink); }
      here. Turning the control's appearance off is what stops it. */
   appearance: none; -webkit-appearance: none;
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  /* No border and no focus ring. Every other input in the app gets both, and
+     here they stacked into two rings around eleven-pixel text. This field only
+     exists while it is focused, with its text selected — that IS the edit
+     state, and a box around it says the same thing twice. */
+  border: none;
   border-radius: 3px;
-  outline: none;
 }
-.name-input:focus { border-color: var(--accent); }
+.name-input:focus, .name-input:focus-visible { outline: none; }
 .name-input::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 /* Off-screen twin, same type, so the field can be exactly as wide as its text. */
 .name-sizer {
