@@ -163,7 +163,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 - **The files panel**: the same dock, showing the canvas as what it is — a
   directory of files. Grouped by kind (drawings, images, documents, sites),
   filterable by name, each row carrying the filename, size, and version count.
-  Pointing at a row outlines that item on the canvas; clicking flies to it and
+  Pointing at a row outlines that item on the canvas and opens a peek beside the
+  panel — thumbnail, name, file, size, who touched it last — the same card the
+  edge radar opens off a beacon, because it answers the same question: what is
+  this, before I go to it. Clicking flies to it and
   fits it in the space the panel leaves, so the thing you asked for never lands
   underneath the list you asked from. The dock holds one panel at a time.
 - **Working notes**: a comment can be rewritten by its author (`comment edit`,

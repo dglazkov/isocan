@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import {
@@ -11,6 +10,7 @@ import {
 } from "../lib/edgeradar.ts";
 import { glideToBox, glideToPoint } from "../lib/zoomactions.ts";
 import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
+import { ItemThumb } from "./ItemThumb.tsx";
 
 /**
  * Beacons around the rim for items that have panned out of sight: which way
@@ -156,7 +156,7 @@ function EdgeBeacon({
       />
       {hovered && (
         <div
-          className={`beacon-card beacon-card-${vertical ? "v" : "h"} beacon-card-${beacon.side}`}
+          className={`hover-card beacon-card beacon-card-${vertical ? "v" : "h"} beacon-card-${beacon.side}`}
           style={cardPlace as React.CSSProperties}
           onPointerEnter={() => onHover(item.id)}
           onPointerLeave={() => onHover(null)}
@@ -169,7 +169,7 @@ function EdgeBeacon({
               onClick={() => goTo(member.item)}
               title={`Go to ${member.item.title}`}
             >
-              <Thumbnail projectId={projectId} itemId={member.item.id} />
+              <ItemThumb projectId={projectId} itemId={member.item.id} />
               <span className="beacon-card-text">
                 <b>{member.item.title}</b>
                 <i>{formatDistance(member.distance)}</i>
@@ -181,15 +181,4 @@ function EdgeBeacon({
       )}
     </>
   );
-}
-
-/** A picture if the item is one, otherwise the letter it starts with. */
-function Thumbnail({ projectId, itemId }: { projectId: string; itemId: string }) {
-  const item = useCanvasStore((s) => s.canvas?.items[itemId]);
-  if (!item) return null;
-  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  if (current?.mimeType.startsWith("image/")) {
-    return <img className="beacon-thumb" src={blobUrl(projectId, current.blobHash)} alt="" />;
-  }
-  return <span className="beacon-thumb beacon-thumb-glyph">{item.title.charAt(0).toUpperCase()}</span>;
 }

@@ -5,6 +5,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
+import { ItemThumb } from "./ItemThumb.tsx";
 import { openPanel } from "../lib/panels.ts";
 
 /**
@@ -87,6 +88,9 @@ export function FilesPanel({ projectId }: { projectId: string }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const selected = useUiStore((s) => s.selectedItemIds);
   const [filter, setFilter] = useState("");
+  // What the pointer is resting on, and where that row sits, so the card can
+  // open beside it rather than under the pointer.
+  const [peek, setPeek] = useState<{ row: Row; top: number } | null>(null);
   const groups = useMemo(() => (canvas ? rowsOf(canvas, filter) : []), [canvas, filter]);
 
   if (!open || !canvas) return null;
@@ -146,11 +150,15 @@ export function FilesPanel({ projectId }: { projectId: string }) {
                 key={row.item.id}
                 className={`files-row${selected.includes(row.item.id) ? " active" : ""}`}
                 onClick={() => goTo(row.item)}
-                onPointerEnter={() => useUiStore.getState().setPeeked(row.item.id)}
-                onPointerLeave={() => useUiStore.getState().setPeeked(null)}
-                title={`${row.filename} — ${formatSize(row.size)}, ${row.item.versions.length} version${
-                  row.item.versions.length === 1 ? "" : "s"
-                }`}
+                onPointerEnter={(e) => {
+                  useUiStore.getState().setPeeked(row.item.id);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setPeek({ row, top: rect.top + rect.height / 2 });
+                }}
+                onPointerLeave={() => {
+                  useUiStore.getState().setPeeked(null);
+                  setPeek((current) => (current?.row.item.id === row.item.id ? null : current));
+                }}
               >
                 <span className="files-kind">{KIND_GLYPH[kind]}</span>
                 <span className="files-name">
@@ -166,6 +174,32 @@ export function FilesPanel({ projectId }: { projectId: string }) {
           </section>
         ))}
       </div>
+      {peek && <FileCard projectId={projectId} row={peek.row} top={peek.top} />}
     </aside>
+  );
+}
+
+/**
+ * A peek at the row under the pointer, beside the panel — the same card the
+ * edge radar opens off a beacon, because it answers the same question: what is
+ * this thing, before I go to it.
+ */
+function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: number }) {
+  const versions = row.item.versions.length;
+  // Never off the top or bottom of the window it is meant to be read on.
+  const clamped = Math.min(Math.max(top, 96), window.innerHeight - 96);
+  return (
+    <div className="hover-card file-card" style={{ left: PANEL_WIDTH + 10, top: clamped }}>
+      <ItemThumb projectId={projectId} itemId={row.item.id} />
+      <div className="file-card-text">
+        <b>{row.item.title}</b>
+        <i>{row.filename}</i>
+        <i>
+          {formatSize(row.size)}
+          {versions > 1 && ` · ${versions} versions`}
+          {` · last edit by ${row.item.updatedBy.name}`}
+        </i>
+      </div>
+    </div>
   );
 }
