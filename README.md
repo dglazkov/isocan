@@ -172,8 +172,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
 - **Favourites**: the star at the end of an item's name (it appears when the
-  name does) marks it, and the starred shortlist docks on the right — thumbnail
-  and title, a click away from flying there. The star is a property on the item
+  name does) marks it, and the starred shortlist docks on the right — a click
+  away from flying there. Each entry previews the item itself, rendered small
+  and inert rather than reduced to its first letter, and the rail's star is
+  solid when there is anything in there. The star is a property on the item
   rather than a note in one browser, so it survives a reload, reaches the other
   machine, and tells an agent which screens are actually in play
   (`isocan ls --starred`, `isocan star <item>`).

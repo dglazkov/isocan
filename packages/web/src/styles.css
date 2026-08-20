@@ -1178,10 +1178,13 @@ button.mt-card:hover { border-color: var(--accent); }
   flex: none; width: 34px; height: 34px; border-radius: 6px;
   object-fit: cover; background: var(--chip); border: 1px solid var(--line-soft);
 }
-.item-thumb-glyph {
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-muted); font-size: 13px; font-weight: 600;
+/* A live preview: the item's own renderer, shrunk and inert. */
+.item-thumb-live { overflow: hidden; position: relative; display: block; background: var(--card); }
+.item-thumb-page {
+  position: absolute; left: 0; top: 0; transform-origin: top left;
+  pointer-events: none; overflow: hidden;
 }
+.item-thumb-page .html-view, .item-thumb-page .browser-view { pointer-events: none; }
 
 /* The files panel's peek: fixed beside the panel, centered on its row. */
 .file-card {

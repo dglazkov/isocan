@@ -83,7 +83,7 @@ export function FavouritesBar({ projectId }: { projectId: string }) {
               title={`Go to ${item.title}`}
             >
               <span className="favourite-shot">
-                <ItemThumb projectId={projectId} itemId={item.id} />
+                <ItemThumb projectId={projectId} itemId={item.id} width={200} height={92} />
               </span>
               <span className="favourite-name">
                 <b>★</b>
