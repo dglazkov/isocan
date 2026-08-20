@@ -338,6 +338,10 @@ input, textarea { font: inherit; color: var(--ink); }
 .name-input {
   min-width: 0; max-width: 100%; padding: 0 3px; margin: 0 -3px;
   font: inherit; color: var(--ink);
+  /* A text input still paints its own native field behind a transparent
+     background — that is where the white box came from, not from any rule
+     here. Turning the control's appearance off is what stops it. */
+  appearance: none; -webkit-appearance: none;
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: 3px;
