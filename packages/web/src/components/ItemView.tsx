@@ -6,6 +6,8 @@ import {
   BROWSER_MIME,
   annotationsOf,
   isAnnotation,
+  isStarred,
+  starPatch,
   isDrawingItem,
   parseUriList,
   renamedFilename,
@@ -87,6 +89,7 @@ export function ItemView({
     if (
       target.closest(".resize-handle") ||
       target.closest(".version-badge") ||
+      target.closest(".star-btn") ||
       target.closest(".browser-reload")
     )
       return;
@@ -384,6 +387,24 @@ export function ItemView({
             ⟳
           </button>
         )}
+        <button
+          className={`star-btn${isStarred(item) ? " on" : ""}`}
+          title={isStarred(item) ? "Starred — click to unstar" : "Star this, for the Favourites bar"}
+          aria-label={isStarred(item) ? `Unstar ${item.title}` : `Star ${item.title}`}
+          aria-pressed={isStarred(item)}
+          onClick={(e) => {
+            e.stopPropagation();
+            const op = {
+              type: "item.update",
+              itemId: item.id,
+              patch: starPatch(!isStarred(item)),
+            } as const;
+            applyLocalEcho(op, actor);
+            void sendOp(projectId, actor, op);
+          }}
+        >
+          {isStarred(item) ? "★" : "☆"}
+        </button>
         {worker && (
           <span
             className="work-chip"

@@ -94,6 +94,8 @@ interface UiStore {
   /** The docked files panel — the canvas as a list of files. Shares the left
    * dock with the main thread (see lib/panels.ts). */
   filesPanelOpen: boolean;
+  /** The favourites bar on the right — the shortlist you jump from. */
+  favouritesOpen: boolean;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
    * name in a list and a thing on the surface are visibly the same thing. */
   peekedItemId: string | null;
@@ -136,6 +138,7 @@ interface UiStore {
   setMainPanelOpen: (open: boolean) => void;
   setMinimapOpen: (open: boolean) => void;
   setFilesPanelOpen: (open: boolean) => void;
+  setFavouritesOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
 }
 
@@ -211,6 +214,7 @@ export const useUiStore = create<UiStore>((set) => {
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
     filesPanelOpen: false,
+    favouritesOpen: false,
     peekedItemId: null,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
@@ -267,6 +271,7 @@ export const useUiStore = create<UiStore>((set) => {
     setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
+    setFavouritesOpen: (favouritesOpen) => set({ favouritesOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);

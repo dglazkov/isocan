@@ -3,6 +3,7 @@ import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
+import { openFavourites } from "./FavouritesBar.tsx";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 
 /**
@@ -66,6 +67,12 @@ const PEN = (
   </svg>
 );
 
+const STAR = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+    <path d="M8 2.2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.4l-3.6 1.9.7-4L2.2 6.5l4-.6z" />
+  </svg>
+);
+
 const UPLOAD = (
   <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="12" height="10" rx="1.5" />
@@ -87,6 +94,7 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
   const activeTool = useUiStore((s) => s.activeTool);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
+  const favouritesOpen = useUiStore((s) => s.favouritesOpen);
   const fileInput = useRef<HTMLInputElement>(null);
   const mine = actorColorIn(colors, actor.id);
   const ink = inkColor ?? mine;
@@ -148,6 +156,15 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
         </div>
       ))}
       <div className="tool-sep" />
+      <button
+        className={`tool-btn${favouritesOpen ? " active" : ""}`}
+        title="Favourites — the starred shortlist"
+        aria-label="Favourites"
+        aria-pressed={favouritesOpen}
+        onClick={() => openFavourites(projectId, !favouritesOpen)}
+      >
+        {STAR}
+      </button>
       <button
         className="tool-btn"
         title="Upload files to canvas"

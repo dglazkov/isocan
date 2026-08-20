@@ -18,3 +18,4 @@ export * from "./elapsed.ts";
 export * from "./layout.ts";
 export * from "./drawing.ts";
 export * from "./annotation.ts";
+export * from "./favourites.ts";

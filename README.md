@@ -171,6 +171,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
+- **Favourites**: the star at the end of an item's name (it appears when the
+  name does) marks it, and the starred shortlist docks on the right — thumbnail
+  and title, a click away from flying there. The star is a property on the item
+  rather than a note in one browser, so it survives a reload, reaches the other
+  machine, and tells an agent which screens are actually in play
+  (`isocan ls --starred`, `isocan star <item>`).
 - **The files panel**: the same dock, showing the canvas as what it is — a
   directory of files. Grouped by kind (drawings, images, documents, sites),
   filterable by name, each row carrying the filename, size, and version count.

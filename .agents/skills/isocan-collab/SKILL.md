@@ -260,6 +260,12 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **Stars are the canvas's shortlist.** `isocan ls --starred` is what the
+  person has marked as worth getting back to — the screens actually in play,
+  which nothing else on the canvas tells you. `isocan star <item>` (or
+  `--off`) sets it, and it is an ordinary property, so it undoes like anything
+  else. Star what you build when they asked for it to be easy to find; do not
+  star everything you touch.
 - **A message can come with items attached.** What the person had selected
   travels with their message as ids, in the comment's item references — so
   "make these two match" names its two. Read `comment.items` before you guess
