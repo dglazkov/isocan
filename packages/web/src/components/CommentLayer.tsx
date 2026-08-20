@@ -18,6 +18,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
 import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
+import { submitOnCmdEnter } from "../lib/submit.ts";
 import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
@@ -256,6 +257,7 @@ function ThreadPopover({
         ))}
       </div>
       <form
+        onKeyDown={submitOnCmdEnter}
         onSubmit={async (e) => {
           e.preventDefault();
           const body = reply.trim();
@@ -277,7 +279,7 @@ function ThreadPopover({
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />
-        <button className="btn" type="submit" disabled={!reply.trim()}>
+        <button className="btn" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim()}>
           ↑
         </button>
       </form>
@@ -348,6 +350,7 @@ function ComposePopover({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <form
+        onKeyDown={submitOnCmdEnter}
         onSubmit={async (e) => {
           e.preventDefault();
           const trimmed = body.trim();
@@ -389,7 +392,7 @@ function ComposePopover({
           >
             Cancel
           </button>
-          <button className="btn primary" type="submit" disabled={!body.trim()}>
+          <button className="btn primary" type="submit" title="Comment (⌘⏎)" disabled={!body.trim()}>
             Comment
           </button>
         </div>

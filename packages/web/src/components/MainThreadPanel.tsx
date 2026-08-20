@@ -14,6 +14,7 @@ import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { ItemThumb } from "./ItemThumb.tsx";
+import { submitOnCmdEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
 
@@ -216,6 +217,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
         </div>
       </div>
       <form
+        onKeyDown={submitOnCmdEnter}
         onSubmit={async (e) => {
           e.preventDefault();
           const body = draft.trim();
@@ -235,7 +237,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />
-        <button className="btn primary" type="submit" disabled={!draft.trim()}>
+        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim()}>
           ↑
         </button>
       </form>
