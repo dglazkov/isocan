@@ -27,6 +27,7 @@ import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
 import { FilesPanel } from "../components/FilesPanel.tsx";
+import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 
@@ -79,6 +80,7 @@ export function CanvasPage({
   useEffect(() => {
     if (!projectId) return;
     didFit.current = false;
+    restoreFavourites(projectId);
     connectToProject(projectId, actorRef.current);
     return disconnect;
   }, [projectId]);
@@ -418,6 +420,7 @@ export function CanvasPage({
       <TrashPanel projectId={projectId} actor={actor} />
       <MainThreadPanel projectId={projectId} actor={actor} />
       <FilesPanel projectId={projectId} />
+      <FavouritesBar projectId={projectId} />
       <CommentToasts />
     </div>
   );

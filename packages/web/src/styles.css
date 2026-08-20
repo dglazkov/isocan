@@ -334,6 +334,16 @@ input, textarea { font: inherit; color: var(--ink); }
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
 .item.selected .item-titlebar { color: var(--accent); }
+/* The star lives at the end of the label row, so it appears with the name and
+   goes away with it — nothing sitting on the canvas waiting to be noticed. */
+.star-btn {
+  flex: none; margin-left: auto; padding: 0 2px; line-height: 1;
+  background: none; border: none; color: var(--ink-soft); font-size: 12px;
+  user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+.star-btn:hover { color: var(--ink); }
+.star-btn.on { color: var(--accent); }
+
 /* Renaming in place: the label IS the field. Same type, same spot, a hairline
    to say it is live — no fill, no chunky box, nothing that reads as a form.
    Its width is measured from the text by NameInput. */
@@ -880,6 +890,51 @@ button.mt-card:hover { border-color: var(--accent); }
 .attached-more {
   align-self: center; color: var(--ink-soft); font-size: 10.5px;
 }
+
+/* ---------- the favourites bar (right) ---------- */
+/* Opposite the reading panels: this is a place you leave from, so it sits on
+   the side the tool rail is on and stays out of the canvas's middle. */
+.favourites {
+  position: absolute; top: 48px; right: 76px; bottom: 16px; width: 232px; z-index: 24;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-pop); font-size: 12px; overflow: hidden;
+}
+.favourites header {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  padding: 10px 10px 8px 12px; border-bottom: 1px solid var(--line-soft);
+}
+.favourites header b { font-size: 12.5px; }
+.favourites header .spacer { flex: 1; }
+.favourites-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.favourites-empty {
+  margin: 0; padding: 16px 14px; color: var(--ink-soft); line-height: 1.5;
+}
+.favourites-list {
+  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+}
+.favourite {
+  display: flex; flex-direction: column; gap: 6px; padding: 0; width: 100%;
+  background: none; border: none; text-align: left; color: var(--ink);
+}
+.favourite-shot {
+  display: flex; align-items: center; justify-content: center;
+  height: 92px; border-radius: 9px; background: var(--chip);
+  border: 1px solid var(--line-soft); overflow: hidden;
+}
+.favourite-shot .item-thumb {
+  width: 100%; height: 100%; border: none; border-radius: 0; object-fit: contain;
+  background: none;
+}
+.favourite:hover .favourite-shot { border-color: var(--accent); }
+.favourite.active .favourite-shot { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.favourite-name {
+  display: flex; align-items: center; gap: 5px; padding: 0 2px;
+  font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.favourite-name b { color: var(--accent); font-size: 10px; }
 
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
