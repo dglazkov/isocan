@@ -31,6 +31,22 @@ const MIN_CHROME_HEIGHT = 40;
 
 export type BadgeCorner = "se" | "ne";
 
+/**
+ * Is a comment pin sitting on the item's top-right corner — where the star at
+ * the end of the name row lives? Then the star moves to the other end, for the
+ * same reason the badge moves: a pin is where somebody pointed, and the chrome
+ * is ours.
+ */
+export function pinTakesTopRight(item: Item, canvas: CanvasState | null, scale: number): boolean {
+  if (!canvas) return false;
+  const reach = PIN_REACH / scale;
+  const right = item.x + item.width;
+  const top = item.y;
+  return pinPositions(canvas).some(
+    (pin) => Math.abs(pin.x - right) < reach && Math.abs(pin.y - top) < reach,
+  );
+}
+
 /** Is the item big enough on screen to wear a label and a badge? */
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;

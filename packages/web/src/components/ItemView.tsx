@@ -17,7 +17,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome, pinTakesTopRight } from "../lib/chrome.ts";
 
 const DRAG_SLOP = 4;
 /** Two presses this close together are one double-press. */
@@ -72,6 +72,10 @@ export function ItemView({
   const chrome = { transform: `scale(${1 / scale})` };
   const roomy = hasRoomForChrome(width, height, scale);
   const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
+  // Same rule as the badge, applied to the star: a pin marks a place a person
+  // chose, so the chrome is what moves. Here that means the other end of the
+  // name row rather than another corner.
+  const starFirst = useCanvasStore((s) => pinTakesTopRight(item, s.canvas, scale));
   const isBrowser = current.mimeType === BROWSER_MIME;
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
@@ -364,7 +368,8 @@ export function ItemView({
           ×{item.versions.length}
         </button>
       )}
-      <div className="item-titlebar" style={roomy ? chrome : { display: "none" }}>
+      <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>
+        <span className="chrome-left" style={{ ...chrome, transformOrigin: "left bottom" }}>
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : (
@@ -387,6 +392,11 @@ export function ItemView({
             ⟳
           </button>
         )}
+        </span>
+        <span
+          className={`chrome-right${starFirst ? " first" : ""}`}
+          style={{ ...chrome, transformOrigin: starFirst ? "left bottom" : "right bottom" }}
+        >
         <button
           className={`star-btn${isStarred(item) ? " on" : ""}`}
           title={isStarred(item) ? "Starred — click to unstar" : "Star this, for the Favourites bar"}
@@ -405,6 +415,7 @@ export function ItemView({
         >
           {isStarred(item) ? "★" : "☆"}
         </button>
+        </span>
         {worker && (
           <span
             className="work-chip"
