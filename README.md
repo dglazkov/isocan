@@ -160,7 +160,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   A held key is one gesture — the items track the key, and one `items.move` is
   written when you stop, so it is one line in the log and one undo.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
-  drags); create, reply, delete from either surface. Bodies render as
+  drags); create, reply, delete from either surface. `⌘⏎` sends, in every
+  composer — a box that takes more than one line has to keep `⏎` for newlines,
+  which otherwise leaves the mouse as the only way to post. Bodies render as
   markdown; `@Name` addresses a collaborator (mentions are resolved when
   posted and drive the CLI's `wait` filter) — typing `@` in the web composer
   opens a picker of everyone on the canvas, live sessions first, and resolved

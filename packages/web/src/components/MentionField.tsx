@@ -105,7 +105,7 @@ export function MentionField({
       e.preventDefault();
       const step = e.key === "ArrowDown" ? 1 : matches.length - 1;
       setActive((i) => (i + step) % matches.length);
-    } else if (e.key === "Enter" || e.key === "Tab") {
+    } else if ((e.key === "Enter" || e.key === "Tab") && !(e.metaKey || e.ctrlKey)) {
       e.preventDefault(); // …and so the reply form does not submit
       complete(matches[Math.min(active, matches.length - 1)]!);
     } else if (e.key === "Escape") {
