@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
@@ -413,13 +413,26 @@ export function ItemView({
  * keeps it — the same bargain every rename field in the app makes. */
 function NameInput({ title, onDone }: { title: string; onDone: (next: string) => void }) {
   const [draft, setDraft] = useState(title);
+  const sizer = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState<number | undefined>(undefined);
+
+  // Measured, not estimated. A `ch` count overshoots badly in a proportional
+  // face — "Rules of the Lake (Unified)" claimed a field half again as wide as
+  // its own text, which is what made this look like a form instead of a label
+  // you are editing.
+  useLayoutEffect(() => {
+    if (sizer.current) setWidth(sizer.current.offsetWidth + 2);
+  }, [draft]);
+
   return (
+    <>
+      <span className="name-sizer" ref={sizer} aria-hidden>
+        {draft || " "}
+      </span>
     <input
       className="name-input"
       autoFocus
-      // Sized to what it holds: a full-width field would announce itself as a
-      // form, and this is meant to read as the label you are editing.
-      style={{ width: `${Math.min(Math.max(draft.length, 3) + 1, 40)}ch` }}
+      style={width === undefined ? undefined : { width }}
       value={draft}
       onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
@@ -432,6 +445,7 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
         if (e.key === "Escape") onDone(title);
       }}
     />
+    </>
   );
 }
 

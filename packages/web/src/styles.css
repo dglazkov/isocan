@@ -333,15 +333,23 @@ input, textarea { font: inherit; color: var(--ink); }
 .item.renaming .item-titlebar { opacity: 1; }
 .item.selected .item-titlebar { color: var(--accent); }
 /* Renaming in place: the label IS the field. Same type, same spot, a hairline
-   to say it is live — nothing that reads as a form. */
+   to say it is live — no fill, no chunky box, nothing that reads as a form.
+   Its width is measured from the text by NameInput. */
 .name-input {
   min-width: 0; max-width: 100%; padding: 0 3px; margin: 0 -3px;
   font: inherit; color: var(--ink);
-  background: color-mix(in srgb, var(--card) 94%, transparent);
-  border: 1px solid var(--accent); border-radius: 4px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 3px;
   outline: none;
 }
-.name-input::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.name-input:focus { border-color: var(--accent); }
+.name-input::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+/* Off-screen twin, same type, so the field can be exactly as wide as its text. */
+.name-sizer {
+  position: absolute; visibility: hidden; pointer-events: none;
+  white-space: pre; font: inherit; padding: 0 3px;
+}
 .item-titlebar .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-content { flex: 1; overflow: hidden; position: relative; border-radius: calc(var(--radius) - 1px); }
 .item-content.inert { pointer-events: none; user-select: none; -webkit-user-select: none; }
