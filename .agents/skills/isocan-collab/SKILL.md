@@ -260,6 +260,26 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **A mark on an item is an instruction.** When someone scribbles on a screen
+  and says "delete this and relayout", the ink is a real item: a drawing whose
+  properties say what it is about.
+
+  ```
+  isocan show <ink> --json     # properties: annotates=<itemId>, region=x,y,w,h
+  isocan get <item> out.html   # read the thing being marked up
+  ```
+
+  `region` is the marked area in FRACTIONS of the target — "0.52,0.10,0.43,0.40"
+  is the right-hand block of its upper half — so you can act on where they
+  pointed without parsing the SVG. `isocan get <ink>` if you want to see the
+  marks themselves. The comment that came with it carries the ink in its item
+  references, and the thread is anchored to the TARGET, so `isocan wait --item
+  <target>` hears it.
+- **Clear a mark once you have acted on it; leave a drawing alone.** Ink that
+  annotates an item asked for something — when the new version answers it,
+  `isocan rm <ink>` and say so in your reply, or the screen keeps wearing an X
+  through the change it asked for. Ink on bare canvas asked for nothing: it is
+  someone's drawing, and it is not yours to tidy.
 - **One note that changes, not four that pile up.** When work will take more
   than a moment, post ONE comment and rewrite it as you go:
 

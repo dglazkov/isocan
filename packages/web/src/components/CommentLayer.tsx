@@ -12,7 +12,7 @@ import {
 } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
-import { useUiStore } from "../stores/uiStore.ts";
+import { type PendingComment, useUiStore } from "../stores/uiStore.ts";
 import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
@@ -306,6 +306,14 @@ function ThreadPopover({
   );
 }
 
+/** Carry the annotation into the comment's item references, so whoever picks
+ * this up can find the ink that prompted it without reading coordinates. */
+function withAbout(comment: NewComment, aboutItemId?: string): NewComment {
+  if (!aboutItemId) return comment;
+  const items = [...new Set([...(comment.items ?? []), aboutItemId])];
+  return { ...comment, items };
+}
+
 function ComposePopover({
   projectId,
   actor,
@@ -313,7 +321,7 @@ function ComposePopover({
 }: {
   projectId: string;
   actor: Actor;
-  pending: { x: number; y: number; anchorItemId: string | null };
+  pending: PendingComment;
 }) {
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -351,7 +359,7 @@ function ComposePopover({
             x: pending.x,
             y: pending.y,
             anchorItemId: pending.anchorItemId,
-            comment: makeComment(trimmed),
+            comment: withAbout(makeComment(trimmed), pending.aboutItemId),
           });
         }}
         style={{ display: "block" }}
@@ -359,7 +367,13 @@ function ComposePopover({
         <MentionField
           multiline
           autoFocus
-          placeholder={pending.anchorItemId ? "Comment on this item…" : "Comment here…"}
+          placeholder={
+            pending.aboutItemId
+              ? "What should happen here?"
+              : pending.anchorItemId
+                ? "Comment on this item…"
+                : "Comment here…"
+          }
           value={body}
           onChange={setBody}
           candidates={candidates}

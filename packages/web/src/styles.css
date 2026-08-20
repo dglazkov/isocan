@@ -297,6 +297,8 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .item.selected { outline: 2px solid var(--accent); z-index: 1; }
 .item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
+/* A mark sits over what it marks. */
+.item.annotation { z-index: 3; }
 /* Drawings wear no chrome: the ink IS the item. The titlebar floats above the
    strokes (out of flow, so it never squeezes the picture) and only appears
    when you point at the drawing or select it. */
