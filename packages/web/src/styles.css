@@ -1058,12 +1058,17 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* Hover card: a row per item this beacon speaks for, nearest first, each one
    a way to go there. */
-.beacon-card {
-  position: absolute; pointer-events: auto;
-  display: flex; flex-direction: column; gap: 2px; width: max-content; max-width: 280px;
-  padding: 6px;
+/* One peek card, wherever you peek: off a beacon on the rim, or off a row in
+   the files panel. Both answer the same question — what is this, before I go
+   to it — so they had better not answer it in two different voices. */
+.hover-card {
+  position: absolute; pointer-events: auto; z-index: 28;
+  width: max-content; max-width: 300px; padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop); color: var(--ink); text-align: left;
+}
+.beacon-card {
+  display: flex; flex-direction: column; gap: 2px; max-width: 280px;
 }
 /* Centered on the bar, and never off the screen it is meant to be read on. */
 .beacon-card-v { transform: translateY(-50%); max-height: 70vh; overflow-y: auto; }
@@ -1081,14 +1086,25 @@ button.mt-card:hover { border-color: var(--accent); }
 .beacon-card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .beacon-card-text b { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beacon-card-text i { font-style: normal; font-size: 10.5px; color: var(--ink-muted); }
-.beacon-thumb {
+.item-thumb {
   flex: none; width: 34px; height: 34px; border-radius: 6px;
   object-fit: cover; background: var(--chip); border: 1px solid var(--line-soft);
 }
-.beacon-thumb-glyph {
+.item-thumb-glyph {
   display: flex; align-items: center; justify-content: center;
   color: var(--ink-muted); font-size: 13px; font-weight: 600;
 }
+
+/* The files panel's peek: fixed beside the panel, centered on its row. */
+.file-card {
+  position: fixed; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px;
+  pointer-events: none;
+}
+.file-card .item-thumb { width: 44px; height: 44px; }
+.file-card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.file-card-text b { font-size: 12.5px; font-weight: 600; }
+.file-card-text i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
 
 /* ---------- remote cursors (presence) ---------- */
 .remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
