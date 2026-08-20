@@ -883,7 +883,7 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 3px 4px 3px 3px; border-radius: 999px;
   background: var(--chip); border: 1px solid var(--chip-line);
 }
-.attached-chip .item-thumb { width: 18px; height: 18px; border-radius: 999px; }
+.attached-chip .item-thumb { border-radius: 4px; }
 .attached-chip b {
   font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 140px;
@@ -896,6 +896,15 @@ button.mt-card:hover { border-color: var(--accent); }
 .attached-more {
   align-self: center; color: var(--ink-soft); font-size: 10.5px;
 }
+/* A pill is 18 pixels of a screen; hovering one shows the screen. It opens
+   UPWARD from the chip, because the chips sit at the bottom of the panel. */
+.chip-card {
+  position: fixed; transform: translateY(-100%);
+  display: flex; flex-direction: column; gap: 6px; padding: 6px;
+  pointer-events: none;
+}
+.chip-card b { font-size: 11.5px; font-weight: 600; padding: 0 2px 2px; }
+.chip-card .item-thumb { border-radius: 8px; }
 
 /* ---------- the favourites bar (right) ---------- */
 /* Opposite the reading panels: this is a place you leave from, so it sits on
