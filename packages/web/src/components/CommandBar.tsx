@@ -49,7 +49,9 @@ export function CommandBar({ projectId, actor }: { projectId: string; actor: Act
     if (!body || sending) return;
     setSending(true);
     try {
-      await postToMain(projectId, actor, body);
+      // The same rule as the docked panel: what you have selected is what the
+      // message is about, and it travels as ids.
+      await postToMain(projectId, actor, body, useUiStore.getState().selectedItemIds);
       setDraft("");
     } finally {
       setSending(false);

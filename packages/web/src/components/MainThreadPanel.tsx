@@ -13,6 +13,7 @@ import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
+import { ItemThumb } from "./ItemThumb.tsx";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
 
@@ -28,6 +29,44 @@ import { openPanel, storedPanel } from "../lib/panels.ts";
 
 /** Must match .main-panel's width in styles.css. */
 export const PANEL_WIDTH = 320;
+
+/**
+ * What the message is about: the current selection, shown as chips over the
+ * composer and sent with the message as ids. The chips ARE the selection —
+ * removing one deselects it — so there is one answer to "what am I pointing
+ * at" rather than two that can disagree.
+ */
+function Attached({ projectId }: { projectId: string }) {
+  const selected = useUiStore((s) => s.selectedItemIds);
+  // Subscribe to the canvas, then map OUTSIDE the selector. A selector that
+  // builds an array returns a new reference every call, so the store looks
+  // changed on every render — which is an infinite loop, not a subscription.
+  const canvas = useCanvasStore((s) => s.canvas);
+  const items = selected.map((id) => canvas?.items[id]).filter((item) => item !== undefined);
+  if (items.length === 0) return null;
+  const shown = items.slice(0, 3);
+  return (
+    <div className="attached" aria-label="Items this message is about">
+      {shown.map((item) => (
+        <span key={item.id} className="attached-chip">
+          <ItemThumb projectId={projectId} itemId={item.id} />
+          <b>{item.title}</b>
+          <button
+            type="button"
+            title={`Don't send ${item.title}`}
+            aria-label={`Remove ${item.title}`}
+            onClick={() => useUiStore.getState().toggleSelect(item.id)}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      {items.length > shown.length && (
+        <span className="attached-more">+{items.length - shown.length}</span>
+      )}
+    </div>
+  );
+}
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */
 function catapultBesidePanel(itemId: string): void {
@@ -75,6 +114,9 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
 }
 
 function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
+  // A subscription, not a read: the chips have to appear and vanish as the
+  // selection changes under the pointer.
+  const selected = useUiStore((s) => s.selectedItemIds);
   const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
@@ -101,8 +143,8 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
 
   if (!canvas) return null; // reconnecting — parent unmounts us next render
 
-  async function send(body: string) {
-    await postToMain(projectId, actor, body);
+  async function send(body: string, attached: string[]) {
+    await postToMain(projectId, actor, body, attached);
   }
 
   function chipTarget(e: { target: EventTarget }): string | null {
@@ -178,12 +220,14 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           e.preventDefault();
           const body = draft.trim();
           if (!body) return;
+          const attached = useUiStore.getState().selectedItemIds;
           setDraft("");
-          await send(body);
+          await send(body, attached);
         }}
       >
+        <Attached projectId={projectId} />
         <MentionField
-          placeholder="Message the canvas…"
+          placeholder={selected.length > 0 ? "What should happen to these?" : "Message the canvas…"}
           value={draft}
           onChange={setDraft}
           candidates={candidates}

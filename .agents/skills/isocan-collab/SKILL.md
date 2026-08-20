@@ -260,6 +260,10 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **A message can come with items attached.** What the person had selected
+  travels with their message as ids, in the comment's item references — so
+  "make these two match" names its two. Read `comment.items` before you guess
+  from the words; `isocan comment list --json` has them.
 - **A mark on an item is an instruction.** When someone scribbles on a screen
   and says "delete this and relayout", the ink is a real item: a drawing whose
   properties say what it is about.

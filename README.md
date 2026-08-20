@@ -184,6 +184,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   thread four times. The canvas then says how long that took — "edited · 4m",
   measured from the comment's own timestamps rather than claimed by whoever
   wrote it.
+- **Selection travels with the message**: what you have selected shows as chips
+  over the composer (in the docked panel and behind `⌘K`), and posts as item
+  ids on the comment — so "make these two match" tells an agent which two,
+  exactly, instead of leaving it to read your mind or your words. The chips ARE
+  the selection: removing one deselects it, so there is one answer to "what am
+  I pointing at". On the way back, a message with items renders them as cards
+  that fly you there.
 - **The main thread**: one thread per canvas can be designated "main"
   (`comment main <thread>`, or "Make main" on a pin's popover; the panel also
   births one from its first message). It docks as a chat panel on the left

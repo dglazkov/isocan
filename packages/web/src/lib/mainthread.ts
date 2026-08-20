@@ -13,13 +13,25 @@ import { makeComment } from "../components/CommentLayer.tsx";
  * docked panel and the ⌘K command bar so there is exactly one way to reach the
  * agent, and both create the thread the same way on a virgin canvas.
  */
-export async function postToMain(projectId: string, actor: Actor, body: string): Promise<void> {
+export async function postToMain(
+  projectId: string,
+  actor: Actor,
+  body: string,
+  /** Items the message is about — the selection, carried as ids so an agent
+   * can act on exactly what was on screen rather than guess from the words. */
+  attached: string[] = [],
+): Promise<void> {
+  const withItems = (text: string) => {
+    const comment = makeComment(text);
+    if (attached.length === 0) return comment;
+    return { ...comment, items: [...new Set([...(comment.items ?? []), ...attached])] };
+  };
   const existing = mainThread(useCanvasStore.getState().canvas!);
   if (existing) {
     await sendOp(projectId, actor, {
       type: "thread.reply",
       threadId: existing.id,
-      comment: makeComment(body),
+      comment: withItems(body),
     });
     return;
   }
@@ -35,7 +47,7 @@ export async function postToMain(projectId: string, actor: Actor, body: string):
       y: Math.round(center.y),
       anchorItemId: null,
       main: true,
-      comment: makeComment(body),
+      comment: withItems(body),
     });
   } catch {
     // Lost a birth race ("main-exists") — the winner's thread is the channel
@@ -45,7 +57,7 @@ export async function postToMain(projectId: string, actor: Actor, body: string):
       await sendOp(projectId, actor, {
         type: "thread.reply",
         threadId: winner.id,
-        comment: makeComment(body),
+        comment: withItems(body),
       });
     }
   }
