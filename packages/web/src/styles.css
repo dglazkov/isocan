@@ -324,12 +324,18 @@ input, textarea { font: inherit; color: var(--ink); }
    should read as the sketches, not as a column of the word "Sketch". */
 .item-titlebar {
   position: absolute; left: 1px; right: 1px; top: -20px;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
   padding: 0 3px; font-size: 11px; color: var(--ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
-  transform-origin: left bottom;
 }
+/* Each side holds its size about its OWN edge. Counter-scaling the whole row
+   instead makes the row wider than the item — five times wider at 20% zoom —
+   and anything pushed to its right end lands out in the grid. */
+.chrome-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.chrome-right { display: flex; align-items: center; flex: none; }
+/* When a pin has the top-right, the star takes the other end of the row. */
+.chrome-right.first { order: -1; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
@@ -337,7 +343,7 @@ input, textarea { font: inherit; color: var(--ink); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
 .star-btn {
-  flex: none; margin-left: auto; padding: 0 2px; line-height: 1;
+  flex: none; padding: 0 2px; line-height: 1;
   background: none; border: none; color: var(--ink-soft); font-size: 12px;
   user-select: none; -webkit-user-select: none; cursor: pointer;
 }
@@ -1172,10 +1178,13 @@ button.mt-card:hover { border-color: var(--accent); }
   flex: none; width: 34px; height: 34px; border-radius: 6px;
   object-fit: cover; background: var(--chip); border: 1px solid var(--line-soft);
 }
-.item-thumb-glyph {
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-muted); font-size: 13px; font-weight: 600;
+/* A live preview: the item's own renderer, shrunk and inert. */
+.item-thumb-live { overflow: hidden; position: relative; display: block; background: var(--card); }
+.item-thumb-page {
+  position: absolute; left: 0; top: 0; transform-origin: top left;
+  pointer-events: none; overflow: hidden;
 }
+.item-thumb-page .html-view, .item-thumb-page .browser-view { pointer-events: none; }
 
 /* The files panel's peek: fixed beside the panel, centered on its row. */
 .file-card {
