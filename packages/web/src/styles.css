@@ -645,7 +645,7 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 .main-empty { color: var(--ink-muted); padding-bottom: 6px; }
 .main-panel form {
-  display: flex; gap: 6px; flex: none; padding: 10px 12px;
+  display: flex; flex-wrap: wrap; gap: 6px; flex: none; padding: 10px 12px;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -854,6 +854,31 @@ button.mt-card:hover { border-color: var(--accent); }
   margin-left: 6px; padding: 0 6px; border-radius: 999px;
   background: var(--chip); color: var(--ink-soft);
   font-size: 10px; line-height: 15px; white-space: nowrap;
+}
+
+/* What a message is about, over the composer: the selection, as chips. */
+/* Its own row above the field: the chips say what the message is about, and a
+   column of them beside the input says nothing. */
+.attached {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 5px; padding: 0 2px 2px;
+}
+.attached-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 3px 4px 3px 3px; border-radius: 999px;
+  background: var(--chip); border: 1px solid var(--chip-line);
+}
+.attached-chip .item-thumb { width: 18px; height: 18px; border-radius: 999px; }
+.attached-chip b {
+  font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 140px;
+}
+.attached-chip button {
+  border: none; background: none; padding: 0 3px; line-height: 1;
+  color: var(--ink-soft); font-size: 10px;
+}
+.attached-chip button:hover { color: var(--ink); }
+.attached-more {
+  align-self: center; color: var(--ink-soft); font-size: 10.5px;
 }
 
 /* ---------- the files panel ---------- */
