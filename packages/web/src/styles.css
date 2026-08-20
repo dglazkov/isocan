@@ -357,7 +357,13 @@ input, textarea { font: inherit; color: var(--ink); }
   position: absolute; visibility: hidden; pointer-events: none;
   white-space: pre; font: inherit; padding: 0 3px;
 }
-.item-titlebar .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The name hugs its own text rather than stretching the row, so the cursor can
+   tell the truth about each part: over the words, a double-press edits them;
+   over the bare strip, a press drags the item. */
+.item-titlebar .name {
+  flex: 0 1 auto; min-width: 0; cursor: text;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .item-content { flex: 1; overflow: hidden; position: relative; border-radius: calc(var(--radius) - 1px); }
 .item-content.inert { pointer-events: none; user-select: none; -webkit-user-select: none; }
 
