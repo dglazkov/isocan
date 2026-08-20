@@ -39,6 +39,11 @@ export const PANEL_WIDTH = 320;
  */
 function Attached({ projectId }: { projectId: string }) {
   const selected = useUiStore((s) => s.selectedItemIds);
+  // Which pill the pointer is on, and where it sits, so the bigger look at it
+  // opens over the chip rather than under the pointer.
+  const [peek, setPeek] = useState<{ id: string; title: string; left: number; top: number } | null>(
+    null,
+  );
   // Subscribe to the canvas, then map OUTSIDE the selector. A selector that
   // builds an array returns a new reference every call, so the store looks
   // changed on every render — which is an infinite loop, not a subscription.
@@ -47,10 +52,31 @@ function Attached({ projectId }: { projectId: string }) {
   if (items.length === 0) return null;
   const shown = items.slice(0, 3);
   return (
-    <div className="attached" aria-label="Items this message is about">
+    <div
+      className="attached"
+      aria-label="Items this message is about"
+      // Tracked on the ROW, not per chip: chips sit shoulder to shoulder, and
+      // their previews resize as they load, so per-chip enter/leave pairs churn
+      // and cancel each other. The row only ever sees one pointer.
+      onPointerMove={(e) => {
+        const chip = (e.target as HTMLElement).closest?.("[data-chip-id]");
+        const id = chip?.getAttribute("data-chip-id") ?? null;
+        if (!id) return;
+        if (peek?.id === id) return;
+        const rect = chip!.getBoundingClientRect();
+        const item = items.find((one) => one.id === id);
+        if (!item) return;
+        setPeek({ id, title: item.title, left: rect.left, top: rect.top });
+        useUiStore.getState().setPeeked(id);
+      }}
+      onPointerLeave={() => {
+        setPeek(null);
+        useUiStore.getState().setPeeked(null);
+      }}
+    >
       {shown.map((item) => (
-        <span key={item.id} className="attached-chip">
-          <ItemThumb projectId={projectId} itemId={item.id} />
+        <span key={item.id} className="attached-chip" data-chip-id={item.id}>
+          <ItemThumb projectId={projectId} itemId={item.id} width={18} height={18} />
           <b>{item.title}</b>
           <button
             type="button"
@@ -64,6 +90,15 @@ function Attached({ projectId }: { projectId: string }) {
       ))}
       {items.length > shown.length && (
         <span className="attached-more">+{items.length - shown.length}</span>
+      )}
+      {peek && (
+        <div
+          className="hover-card chip-card"
+          style={{ left: Math.max(8, peek.left), top: peek.top - 8 }}
+        >
+          <ItemThumb projectId={projectId} itemId={peek.id} width={228} height={140} />
+          <b>{peek.title}</b>
+        </div>
       )}
     </div>
   );
