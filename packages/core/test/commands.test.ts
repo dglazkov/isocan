@@ -164,3 +164,50 @@ describe("a command written as a file", () => {
     expect(parsed).toMatchObject(original);
   });
 });
+
+describe("the ported studio commands", () => {
+  const byName = (name: string) => DEFAULT_COMMANDS.find((c) => c.name === name)!;
+
+  it("ship all four", () => {
+    for (const name of ["accessibility-audit", "app-store-assets", "web-assets", "marketing-kit"]) {
+      expect(byName(name), name).toBeTruthy();
+    }
+  });
+
+  it("never ask for a tool an agent here does not have", () => {
+    // These were written for a runtime with generate_image. Ours has a
+    // browser and a text editor, so the instructions must not name a tool
+    // that does not exist — an agent told to call generate_image will either
+    // hallucinate a call or give up, and both look like the command failing.
+    for (const command of DEFAULT_COMMANDS) {
+      expect(command.body, command.name).not.toMatch(/generate_image|save_content/);
+    }
+  });
+
+  it("say where the deliverables land, because a file nobody sees is not a deliverable", () => {
+    for (const name of ["accessibility-audit", "app-store-assets", "web-assets", "marketing-kit"]) {
+      expect(byName(name).body, name).toContain("isocan add");
+      expect(byName(name).body, name).toContain("parent=");
+    }
+  });
+
+  it("point at the guide for how to make a picture, rather than each explaining it", () => {
+    // Four copies of a rendering recipe is four copies to keep in step.
+    for (const name of ["app-store-assets", "web-assets", "marketing-kit"]) {
+      expect(byName(name).body, name).toContain("--agent-help");
+    }
+  });
+
+  it("keep the rule that decides whether the whole thing is honest", () => {
+    // "Do not invent UI" is the difference between a screenshot and a lie.
+    expect(byName("app-store-assets").body).toMatch(/do not (invent|redraw)|Never redraw/i);
+    expect(byName("accessibility-audit").body).toMatch(/HTML/);
+  });
+
+  it("state the sizes the stores actually require", () => {
+    expect(byName("app-store-assets").body).toContain("1024x1024");
+    expect(byName("app-store-assets").body).toContain("1290x2796");
+    expect(byName("web-assets").body).toContain("180x180");
+    expect(byName("marketing-kit").body).toContain("1200x630");
+  });
+});
