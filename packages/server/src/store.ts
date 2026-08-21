@@ -14,6 +14,7 @@ import * as p from "./paths.ts";
  *   oplog.jsonl   — append-only LogEntry per line; the source of truth
  *   blobs/        — content-addressed version content, <sha256>.<ext>
  *   blobs.json    — { [hash]: { file, mimeType, filename, size } }
+ *   mirror.json   — how far this canvas has been published to its remote (#70)
  *
  * The oplog is appended (with fsync) BEFORE snapshots are rewritten, so a
  * crash between writes is always recoverable by replaying the oplog tail past
@@ -31,6 +32,14 @@ export interface BlobMeta {
   mimeType: string;
   filename: string;
   size: number;
+}
+
+/** The mirror's cursor for one canvas (#70). Blobs are tracked here rather
+ * than probed against Cloud Storage: the host already knows what it sent, and
+ * a HEAD per blob per restart asks Google a question the home can answer. */
+export interface MirrorState {
+  lastMirroredSeq: number;
+  uploadedBlobs: string[];
 }
 
 export interface LoadedProject {
@@ -275,6 +284,26 @@ export class Store {
 
   async blobIndex(id: string): Promise<Record<string, BlobMeta>> {
     return (await readJson<Record<string, BlobMeta>>(p.blobsIndexFile(this.home, id))) ?? {};
+  }
+
+  // ---- the mirror's cursor (#70) ----
+
+  /**
+   * How far this canvas has been published to its remote. Derived state, like
+   * `canvas.json`: losing it costs a re-mirror — every write the mirror makes
+   * is addressed by seq or by content hash, so doing one twice is a wasted
+   * round trip and never a wrong document.
+   */
+  async readMirrorState(id: string): Promise<MirrorState> {
+    const raw = await readJson<Partial<MirrorState>>(p.mirrorFile(this.home, id));
+    return {
+      lastMirroredSeq: typeof raw?.lastMirroredSeq === "number" ? raw.lastMirroredSeq : 0,
+      uploadedBlobs: Array.isArray(raw?.uploadedBlobs) ? raw.uploadedBlobs : [],
+    };
+  }
+
+  async writeMirrorState(id: string, state: MirrorState): Promise<void> {
+    await writeFileAtomic(p.mirrorFile(this.home, id), pretty(state));
   }
 
   // ---- garbage collection primitives (composed by Engine.gc) ----

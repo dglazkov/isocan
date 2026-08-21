@@ -7,25 +7,33 @@ import { registerRoutes } from "./http.ts";
 import { attachWebSockets } from "./ws.ts";
 import { Store } from "./store.ts";
 import { PresenceHub } from "./presence.ts";
+import { Mirror, type MirrorOptions } from "./mirror.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 
 export interface DaemonOptions {
   port?: number;
   home?: string;
+  /** The mirror's way out to Google (#70). Tests hand back a Firestore that
+   * lives in a variable; omitted, the mirror builds the real REST client from
+   * the host's service-account key. */
+  remoteFor?: MirrorOptions["remoteFor"];
+  /** Where the daemon narrates (default: stdout). The mirror is the loud one:
+   * an outage is news, and a test driving one should be able to hear it
+   * without shouting into the run's output. */
+  notify?: (message: string) => void;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
   /** Stop whatever daemon is already there and take the port. What `npm run
    * dev` wants: the daemon you just started must be the one being served. */
   takeover?: boolean;
-  /** Where to narrate the takeover (default: stdout). */
-  notify?: (message: string) => void;
 }
 
 export interface Daemon {
   app: FastifyInstance;
   engine: Engine;
   store: Store;
+  mirror: Mirror;
   port: number;
   close: () => Promise<void>;
 }
@@ -39,7 +47,21 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   await store.migrateLegacyAgents(); // pre-#57 session bindings, folded in once
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
-  const engine = new Engine(store, { liveness: (projectId) => presence.roster(projectId) });
+  // gc consults the mirror, which does not exist yet — the two need each other,
+  // and the engine is the one that can be told later.
+  let mirror: Mirror | null = null;
+  const engine = new Engine(store, {
+    liveness: (projectId) => presence.roster(projectId),
+    mirrorPending: (projectId) => mirror?.pending(projectId) ?? Promise.resolve(),
+  });
+  const notify = options.notify ?? ((message: string) => console.log(message));
+  mirror = new Mirror({
+    home,
+    engine,
+    store,
+    notify: (message) => notify(`isocan mirror: ${message}`),
+    ...(options.remoteFor !== undefined ? { remoteFor: options.remoteFor } : {}),
+  });
 
   // Op piggyback: an op bound to a session (clientId === sessionId) moves
   // that session's cursor to the op's locus — presence traces real work.
@@ -62,9 +84,16 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
-  registerRoutes(app, engine, store, presence);
+  registerRoutes(app, engine, store, presence, mirror);
   await app.listen({ port, host: "127.0.0.1" });
   const closeWebSockets = attachWebSockets(app.server, engine, presence);
+
+  // Adopting the canvases this home hosts must not hold up the port: a slow or
+  // unreachable Firestore would otherwise turn "the daemon is starting" into
+  // "the daemon is down", which is the one thing mirroring may never cost.
+  void mirror.start().catch((err) => {
+    notify(`isocan mirror: could not start — ${err instanceof Error ? err.message : err}`);
+  });
 
   await fs.writeFile(
     daemonFile(home),
@@ -74,6 +103,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const close = async () => {
     presence.close();
     closeWebSockets();
+    await mirror.close();
     await app.close();
     // Only remove the pidfile if it is still OURS — a stop-then-serve race
     // otherwise lets the dying daemon delete its replacement's pidfile.
@@ -85,7 +115,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     }
   };
 
-  return { app, engine, store, port, close };
+  return { app, engine, store, mirror, port, close };
 }
 
 // ---------- stale daemons ----------

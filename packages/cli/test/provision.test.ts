@@ -193,6 +193,11 @@ describe("provisioning a canvas's remote", () => {
       remote: { kind: "firestore", firebaseProject: record.firebaseProject },
     });
 
+    // The home records that it HOSTS this canvas — a different fact from the
+    // marker's "this canvas lives there", and the only one that makes this
+    // daemon the mirror's writer (#70).
+    expect(record.canvases).toEqual({ prj_abc: { sharedAt: expect.any(String) } });
+
     // The credential is the daemon's own, and it never leaves the home.
     expect(record.keyFile).toBe(path.join(home, "remotes", `${record.firebaseProject}.key.json`));
     const mode = (await fs.stat(record.keyFile!)).mode & 0o777;
@@ -292,6 +297,13 @@ describe("provisioning a canvas's remote", () => {
         title: "Another Canvas",
         remote: { kind: "firestore", firebaseProject: one.firebaseProject },
       });
+      // And the home knows it hosts BOTH — which is the fact the daemon reads
+      // to decide whose mirror it writes (#70). The marker says where a canvas
+      // lives; this says that we are the ones who put it there.
+      expect(Object.keys((await readRemote(home, one.firebaseProject))!.canvases ?? {})).toEqual([
+        "prj_abc",
+        "prj_second",
+      ]);
     } finally {
       await fs.rm(elsewhere, { recursive: true, force: true });
     }

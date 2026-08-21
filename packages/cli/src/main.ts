@@ -1254,8 +1254,15 @@ program
             : {}),
         });
 
+        // Provisioning ends where mirroring begins (#70). The daemon is already
+        // running — `ctxOf` saw to that — and it is the one holding the
+        // credential, so it is told rather than left to find out.
+        const mirror = await ctx.client.startMirror(p.id).catch(() => null);
+
         const pending = Object.entries(record.manual ?? {});
-        if (ctx.json) return printJson({ ...record, pending: Object.fromEntries(pending) });
+        if (ctx.json) {
+          return printJson({ ...record, pending: Object.fromEntries(pending), mirror });
+        }
 
         const report: Record<string, string> = {
           canvas: `${p.title} (${p.id})`,
@@ -1266,16 +1273,43 @@ program
           ...(record.storageBucket ? { blobs: record.storageBucket } : {}),
           ...(record.keyFile ? { credential: record.keyFile } : {}),
           marker: markerFile(root),
+          ...(mirror && mirror.mirroring
+            ? {
+                mirrored: mirror.parked
+                  ? `STOPPED at op ${mirror.mirroredSeq}`
+                  : mirror.behind
+                    ? `through op ${mirror.mirroredSeq}, still catching up`
+                    : `through op ${mirror.mirroredSeq}${mirror.blobs ? `, ${mirror.blobs} blobs` : ""}`,
+              }
+            : {}),
         };
         printKeyValues(report);
         if (pending.length > 0) {
           console.log("\nStill to do:");
           for (const [step, message] of pending) console.log(`  ${step}: ${message}`);
           console.log("Then run `isocan share` again — it resumes where it stopped.");
+        } else if (mirror && mirror.mirroring && mirror.parked) {
+          // Loud, and never mistakable for progress: a canvas that has stopped
+          // publishing looks exactly like one that is up to date unless it says
+          // so here.
+          console.log(`\nMirroring STOPPED at op ${mirror.mirroredSeq}, and will not retry:`);
+          console.log(`  ${mirror.error}`);
+          console.log("Nothing after that op has been published. Fix it, then `isocan share` again.");
+        } else if (mirror && mirror.mirroring) {
+          console.log(
+            `\nThe daemon is publishing "${p.title}" to ${record.firebaseProject} — ` +
+              "the whole history first, then every op as it lands. " +
+              `\`isocan share\` again to see how far it has got.`,
+          );
+          if (mirror.blobsUnavailable) console.log(`  ${mirror.blobsUnavailable}`);
+          console.log(
+            "Share links land next (#72); until then the rules deployed here let nobody in, " +
+              "so the mirror is a copy with no readers.",
+          );
         } else {
           console.log(
-            "\nThe remote is ready. Mirroring and share links land next — " +
-              "nothing is published to it yet, and the rules deployed here let nobody in.",
+            "\nThe remote is ready, but the daemon is not mirroring to it — " +
+              "`isocan restart`, then `isocan share` again.",
           );
         }
       },

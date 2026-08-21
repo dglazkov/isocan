@@ -98,6 +98,18 @@ export interface RemoteRecord {
   /** Step name → when it finished. A step missing from here is a step the
    * next run does. */
   done: Record<string, string>;
+  /**
+   * The canvases this home has put in this project, and when (#70).
+   *
+   * The marker in the repo is still authoritative for WHICH project hosts a
+   * canvas — it travels with the checkout, so a clone arrives knowing. This is
+   * the other question, the one only the home can answer: which canvases is
+   * this machine the HOST of. The daemon needs that one, because hosting is
+   * what makes it the mirror's writer, and a teammate's clone carries a marker
+   * saying where the canvas lives while holding neither the credential nor the
+   * authority to write there.
+   */
+  canvases?: Record<string, { sharedAt: string }>;
   /** The Google account that provisioned it, for saying so. */
   account?: string;
   /** Where the host daemon's service-account key landed (mode 600). */
@@ -684,6 +696,13 @@ export const STEPS: Step[] = [
         title: run.title,
         remote: { kind: "firestore", firebaseProject: run.record.firebaseProject },
       });
+      // And in the home, where the daemon can read it. The marker says where
+      // the canvas lives; this says that WE are the ones who put it there —
+      // which is the fact that makes this daemon its mirror's writer (#70).
+      run.record.canvases = {
+        ...run.record.canvases,
+        [run.projectId]: { sharedAt: run.record.canvases?.[run.projectId]?.sharedAt ?? run.cloud.now() },
+      };
     },
   },
 ];

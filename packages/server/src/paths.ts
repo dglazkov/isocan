@@ -17,6 +17,11 @@ export const oplogArchiveFile = (home: string, id: string) =>
   path.join(projectDir(home, id), "oplog-archive.jsonl");
 export const blobsDir = (home: string, id: string) => path.join(projectDir(home, id), "blobs");
 export const blobsIndexFile = (home: string, id: string) => path.join(projectDir(home, id), "blobs.json");
+/** How far this canvas has been published to its remote (#70). Derived, like
+ * `canvas.json` — losing it costs a re-mirror, never correctness — and it lives
+ * in the project directory so a soft delete carries it aside with everything
+ * else the canvas owns. */
+export const mirrorFile = (home: string, id: string) => path.join(projectDir(home, id), "mirror.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");

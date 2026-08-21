@@ -53,6 +53,15 @@ export interface EngineOptions {
   /** Who is visibly on a canvas right now — presence, which lives outside
    * the engine. Claims consult it so a live face holds its name. */
   liveness?: (projectId: string) => PresenceSession[];
+  /**
+   * Resolves when the canvas's mirror owes nothing (#70). `gc` waits on it
+   * before sweeping: compaction may freely drop entries the mirror already
+   * holds — the mirror is a superset, which is what a copy for guests should be
+   * — but sweeping a blob that has never been published would strand it where
+   * no guest can ever fetch it. That window is exactly "still catching up", so
+   * that is exactly what gc waits out.
+   */
+  mirrorPending?: (projectId: string) => Promise<void>;
 }
 
 export class ProjectNotFoundError extends Error {
@@ -292,7 +301,12 @@ export class Engine {
    * cannot race a mutation; the mtime grace period covers uploads that have
    * not become items yet. Maintenance, not an Operation — never undoable.
    */
-  gc(projectId: string, options: GcOptions = {}): Promise<GcReport> {
+  async gc(projectId: string, options: GcOptions = {}): Promise<GcReport> {
+    // Waited out BEFORE the queue, not inside it: a first backfill can be a
+    // year of history, and holding the single-writer chain for it would stop
+    // the canvas rather than the sweep. Ops that land in the meantime are safe
+    // — an entry in the retained log makes its blobs reachable by definition.
+    await this.options.mirrorPending?.(projectId);
     return this.enqueue(async () => {
       const runtime = await this.runtime(projectId);
       const keepOps = options.keepOps ?? DEFAULT_KEEP_OPS;
