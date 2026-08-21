@@ -2322,6 +2322,26 @@ session
   );
 
 session
+  .command("on <thread>")
+  .description("Say you have picked up a thread — it shows under the comment that asked")
+  .option("--say <status>", "what you are doing, shown live in the thread")
+  .action(
+    run(async (ref: string, opts: { say?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const thread = resolveThread(snapshot, ref);
+      await touchSession(ctx, p.id, {
+        activity: { kind: "working", threadId: thread.id },
+        cursor: threadLocus(snapshot, thread),
+        ...(opts.say ? { status: opts.say, statusSource: "explicit" as const } : {}),
+      });
+      console.error(
+        `on ${thread.id}${opts.say ? ` — "${opts.say}"` : ""} (posting a reply clears it)`,
+      );
+    }),
+  );
+
+session
   .command("work [item]")
   .description("Show yourself busy — cursor animates around an item (or --at a spot) until you move, finish an op, or go idle")
   .option("--at <x,y>", "work at a freestanding canvas location instead of an item")
@@ -2410,11 +2430,7 @@ program
           kind: s.kind,
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
-          activity: s.activity
-            ? "itemId" in s.activity
-              ? `working on ${s.activity.itemId}`
-              : `working at ${Math.round(s.activity.x)},${Math.round(s.activity.y)}`
-            : "—",
+          activity: describeActivity(s.activity),
           status: s.status ?? "—",
           seen: s.lastSeen,
         })),
@@ -2473,6 +2489,14 @@ program
       );
     }),
   );
+
+/** What a session says it is busy with, for a table. */
+function describeActivity(activity: PresenceSession["activity"]): string {
+  if (!activity) return "—";
+  if ("itemId" in activity) return `working on ${activity.itemId}`;
+  if ("threadId" in activity) return `on thread ${activity.threadId}`;
+  return `working at ${Math.round(activity.x)},${Math.round(activity.y)}`;
+}
 
 /** A name in use on a canvas — from a live session or from its history. Keyed
  * by NAME, not actor: one person can have worked under several, and every one
@@ -2568,7 +2592,11 @@ async function landPresence(
   const patch: import("@isocan/core").UpdateSessionRequest = {
     status: "reading your comment…",
     statusSource: "lifecycle",
-    activity: null,
+    // Claim the thread, not just the spot: the person who asked is looking at
+    // the thread, and "somebody's cursor is near that pin" is a guess the
+    // renderer should not have to make. This is what puts "reading your
+    // comment…" under their message a second after they send it.
+    activity: { kind: "working", threadId: op.threadId },
     ...(cursor ? { cursor } : {}),
   };
   const active = await readSessionFile(ctx.home, ctx.actor.id);

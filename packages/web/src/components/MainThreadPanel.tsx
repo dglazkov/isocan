@@ -17,6 +17,7 @@ import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
+import { OnIt } from "./OnIt.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
@@ -125,6 +126,19 @@ export function CommandChip({ body }: { body: string }) {
 export function withoutCommand(body: string): string {
   const parsed = parseSlashCommand(body);
   return parsed ? body.slice(parsed.end).trimStart() : body;
+}
+
+/**
+ * Is the last word in this thread yours, and unanswered? That is the only
+ * moment "sent — somebody is listening" is worth saying: before you have asked
+ * it is noise, and after somebody has answered it is wrong.
+ */
+export function awaitingReply(
+  thread: { comments: { author: { id: string } }[] },
+  actorId: string,
+): boolean {
+  const last = thread.comments[thread.comments.length - 1];
+  return last !== undefined && last.author.id === actorId;
 }
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */
@@ -277,6 +291,9 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
                 ))}
             </div>
           ))}
+          {thread && (
+            <OnIt threadId={thread.id} waiting={awaitingReply(thread, actor.id)} />
+          )}
         </div>
       </div>
       <form

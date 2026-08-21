@@ -1,4 +1,5 @@
 import type { CanvasState, PresenceSession } from "@isocan/core";
+import { threadWorldPos } from "./viewport.ts";
 
 /**
  * Honest liveness: a connected session that hasn't touched the daemon in a
@@ -12,7 +13,10 @@ export const QUIET_AFTER_MS = 35_000;
 
 /** "40s" / "3m" since the session last touched the daemon, or null while it
  * is fresh (or not an agent). */
-export function quietFor(session: PresenceSession, nowMs = Date.now()): string | null {
+export function quietFor(
+  session: Pick<PresenceSession, "kind" | "lastSeen">,
+  nowMs = Date.now(),
+): string | null {
   if (session.kind !== "cli") return null;
   const ms = nowMs - Date.parse(session.lastSeen);
   if (!Number.isFinite(ms) || ms < QUIET_AFTER_MS) return null;
@@ -31,6 +35,10 @@ export function sessionLocus(
     if ("itemId" in session.activity) {
       const item = canvas?.items[session.activity.itemId];
       if (item) return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
+    } else if ("threadId" in session.activity) {
+      // Working on a thread stands you at its pin — where the question is.
+      const thread = canvas?.threads[session.activity.threadId];
+      if (thread && canvas) return threadWorldPos(canvas, thread);
     } else {
       return { x: session.activity.x, y: session.activity.y };
     }
