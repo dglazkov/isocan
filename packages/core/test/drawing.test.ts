@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
+import { drawingViewBox,
   DRAWING_KIND,
   INK_PADDING,
   drawingSvg,
@@ -108,5 +108,27 @@ describe("isDrawingItem", () => {
     expect(isDrawingItem(state.canvas.items.itm_ink!)).toBe(true);
     // An SVG someone merely uploaded is not ink from the Pen.
     expect(isDrawingItem(state.canvas.items.itm_1!)).toBe(false);
+  });
+});
+
+describe("reading a drawing's world box back", () => {
+  it("returns the viewBox drawingSvg wrote", () => {
+    const strokes = [{ points: [{ x: 10, y: 20 }, { x: 40, y: 60 }], color: "#0f8a80", width: 3 }];
+    const bounds = inkBounds(strokes)!;
+    expect(drawingViewBox(drawingSvg(strokes, bounds))).toEqual(bounds);
+  });
+
+  it("reads a comma-separated viewBox, which is legal SVG", () => {
+    expect(drawingViewBox('<svg viewBox="0,10,100,50"/>')).toEqual({
+      minX: 0, minY: 10, maxX: 100, maxY: 60,
+    });
+  });
+
+  it("says no rather than guessing", () => {
+    // Placement depends on this answer: a wrong box puts the strokes
+    // somewhere other than where they were drawn.
+    for (const svg of ['<svg/>', '<svg viewBox="0 0 100"/>', '<svg viewBox="a b c d"/>', '<svg viewBox="0 0 0 50"/>']) {
+      expect(drawingViewBox(svg), svg).toBeNull();
+    }
   });
 });

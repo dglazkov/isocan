@@ -10,6 +10,8 @@ import type {
   Operation,
   PostOpResponse,
   Project,
+  ActorNames,
+  SlashCommand,
 } from "@isocan/core";
 import { encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
 
@@ -57,6 +59,16 @@ export function sendOp(
 /** Chosen identity colors, actor id → hex. */
 export function fetchActorColors(): Promise<ActorColors> {
   return request("GET", "/api/colors");
+}
+
+/** The name each actor goes by now, actor id → name. */
+export function fetchActorNames(): Promise<ActorNames> {
+  return request("GET", "/api/names");
+}
+
+/** Every slash command available here — built-ins under this home's own. */
+export function fetchCommands(): Promise<SlashCommand[]> {
+  return request("GET", "/api/commands");
 }
 
 export function listProjects(): Promise<Project[]> {

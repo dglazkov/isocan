@@ -33,7 +33,10 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  * client-side check.
  *
  * Past ops are never rewritten: every op carries the actor as it read at the
- * time, so a rename changes who you ARE, not who you WERE.
+ * time. What people are SHOWN is a different question, and the answer is the
+ * registry: a rename reaches the comments you already wrote, because the name
+ * over somebody's words should be the name they answer to (lib/names.ts). The
+ * log keeps what it recorded; nobody reads the log to find out who you are.
  */
 export function IdentityMenu({
   actor,

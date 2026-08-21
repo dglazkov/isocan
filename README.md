@@ -91,12 +91,24 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the palette, and remembers. The nib follows you over items too, so you can
   circle the thing you mean. A moment after you lift the pen the ink settles
   into an ordinary item — no commit step to find; strokes drawn in one breath
-  land as one drawing. That item is an `item.add` whose blob is an SVG, so the
+  land as one drawing. **Hold `P`** when the drawing takes longer than one
+  breath: while the key is down the ink never settles, so a sketch made in
+  passes — draw, stop, pan across, add an arrow — is one drawing however long
+  you take between strokes, and the bar under the canvas counts what is riding
+  on it. Let go and all of it settles as a single SVG. (A tap of `P` latches
+  the Pen as it always has; a hold borrows it and hands your tool back, the
+  same shape as `Z`.) That item is an `item.add` whose blob is an SVG, so the
   CLI lists it, the blob on disk is a real `.svg`, and it selects, moves,
   resizes, deletes, undoes, and versions like anything else. It just wears no
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
   through a stack of them.
+- **What it answers to (`?`)**: every key the canvas takes, in one panel —
+  opened with `?`, or the `?` in the top bar, or by typing `/help`. The list
+  lives in `@isocan/core` and a test checks the letter keys against the code
+  that would have to answer them, because a help panel describing a different
+  app than the one it is in is worse than no help panel. The same panel lists
+  the slash commands available here, including any this home added.
 - **Names**: an item's name sits above it rather than inside a chrome bar —
   the item is the content — and stays hidden until you point at the item or
   select it, so a canvas of sketches reads as the sketches rather than as a
@@ -300,6 +312,11 @@ isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence
+isocan activity [who] [-n N]           # what has been happening here, newest first
+isocan command list|show|add|rm        # slash commands: work a message can ask for
+isocan format [--dry-run]              # tidy the canvas: rows, children, references
+isocan merge <drawings...>             # several drawings into one, exactly
+isocan shortcuts                       # every key the canvas answers to
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
                                        # this dir's canvas
 isocan tail [-f]                       # print/stream the operation log

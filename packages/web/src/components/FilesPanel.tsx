@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CanvasState, Item } from "@isocan/core";
 import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -7,6 +8,7 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
 import { ItemThumb } from "./ItemThumb.tsx";
 import { openPanel } from "../lib/panels.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /**
  * The files on this canvas, docked like the main thread — because every item
@@ -185,10 +187,14 @@ export function FilesPanel({ projectId }: { projectId: string }) {
  * this thing, before I go to it.
  */
 function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: number }) {
+  const names = useActorNames();
   const versions = row.item.versions.length;
   // Never off the top or bottom of the window it is meant to be read on.
   const clamped = Math.min(Math.max(top, 96), window.innerHeight - 96);
-  return (
+  // Portalled for the same reason ItemPeek is: this card hangs outside the
+  // panel, and inside a panel's stacking context no z-index can lift it over
+  // chrome that outranks the panel.
+  return createPortal(
     <div className="hover-card file-card" style={{ left: PANEL_WIDTH + 10, top: clamped }}>
       <ItemThumb projectId={projectId} itemId={row.item.id} />
       <div className="file-card-text">
@@ -197,9 +203,10 @@ function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: n
         <i>
           {formatSize(row.size)}
           {versions > 1 && ` · ${versions} versions`}
-          {` · last edit by ${row.item.updatedBy.name}`}
+          {` · last edit by ${actorNameIn(names, row.item.updatedBy)}`}
         </i>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

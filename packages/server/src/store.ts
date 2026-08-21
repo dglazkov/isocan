@@ -1,8 +1,16 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState } from "@isocan/core";
-import { applyActorColor, applyOperation, bindClaim, emptyCanvas, newOpId } from "@isocan/core";
+import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState, SlashCommand } from "@isocan/core";
+import {
+  applyActorColor,
+  applyOperation,
+  bindClaim,
+  COMMAND_NAME,
+  emptyCanvas,
+  newOpId,
+  parseCommandFile,
+} from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 
@@ -143,6 +151,56 @@ export class Store {
    * logged claim re-applies without re-validation — which is what makes the
    * jsonl the source of truth and actors.json derived, same as a project.
    */
+  /**
+   * The slash commands this home has written. Read from disk every time
+   * rather than cached: these are files a person edits in a text editor, and
+   * an editor save should show up in the next menu they open, not the next
+   * time they restart the daemon.
+   *
+   * A file that does not parse is skipped, not fatal. One malformed command
+   * must not take the menu down with it.
+   */
+  async loadCommands(): Promise<SlashCommand[]> {
+    let names: string[];
+    try {
+      names = await fs.readdir(p.commandsDir(this.home));
+    } catch {
+      return []; // no commands directory yet: the built-ins are the whole set
+    }
+    const commands: SlashCommand[] = [];
+    for (const file of names.sort()) {
+      if (!file.endsWith(".md")) continue;
+      const name = file.slice(0, -3);
+      if (!COMMAND_NAME.test(name)) continue;
+      try {
+        const parsed = parseCommandFile(name, await fs.readFile(p.commandFile(this.home, name), "utf8"));
+        if (parsed) commands.push(parsed);
+      } catch {
+        // Unreadable mid-write, or not a file at all. Skip it.
+      }
+    }
+    return commands;
+  }
+
+  /** Write one, atomically — the menu reads this directory unsynchronised. */
+  async saveCommand(name: string, text: string): Promise<void> {
+    if (!COMMAND_NAME.test(name)) throw new Error(`not a command name: ${name}`);
+    await fs.mkdir(p.commandsDir(this.home), { recursive: true });
+    await writeFileAtomic(p.commandFile(this.home, name), text);
+  }
+
+  /** Remove one. Removing a shadow gives the built-in back, which is why this
+   * says whether a file was actually there. */
+  async deleteCommand(name: string): Promise<boolean> {
+    if (!COMMAND_NAME.test(name)) throw new Error(`not a command name: ${name}`);
+    try {
+      await fs.unlink(p.commandFile(this.home, name));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
     const snapshot = await readJson<{
       lastSeq: number;

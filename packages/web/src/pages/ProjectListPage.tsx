@@ -7,6 +7,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { ProjectEditor } from "../components/ProjectEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 export function ProjectListPage({
   actor,
@@ -16,6 +17,7 @@ export function ProjectListPage({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const colors = useActorColors();
+  const names = useActorNames();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export function ProjectListPage({
                 </h3>
                 <div className="desc">{project.description || "No description"}</div>
                 <div className="meta">
-                  updated {new Date(project.updatedAt).toLocaleString()} by {project.updatedBy.name}
+                  updated {new Date(project.updatedAt).toLocaleString()} by {actorNameIn(names, project.updatedBy)}
                 </div>
                 <div className="row">
                   <Link className="btn" to={`/p/${project.id}`}>

@@ -31,6 +31,31 @@ export const IDENTITY_COLORS: ReadonlyArray<{ name: string; value: string }> = [
 /** Chosen colors, keyed by actor id — the registry's `colors` map. */
 export type ActorColors = Record<string, string>;
 
+/**
+ * Current names, keyed by actor id — the registry's answer for a name that
+ * was stamped onto something months ago.
+ *
+ * Every op and every comment carries the Actor who made it, name included, so
+ * a rename would otherwise leave a thousand frozen copies of the old one on
+ * the canvas: "Dion 2" still talking in a thread after Dion 2 became Di. The
+ * registry is the one row that answers for all of them, past and future —
+ * exactly the argument that keeps colors out of the Actor. The stamped name
+ * stays in the log, because the log records what happened; it is just not what
+ * anyone is shown.
+ */
+export type ActorNames = Record<string, string>;
+
+/** The name this actor goes by NOW, falling back to the one stamped at the
+ * time — an actor the registry has never heard of (another machine's, or one
+ * from before the registry) is still owed a name. */
+export function actorNameIn(
+  names: ActorNames | undefined,
+  actor: { id: string; name: string },
+): string {
+  const current = names?.[actor.id];
+  return current && current.trim() ? current : actor.name;
+}
+
 /** Any color the app is willing to store or draw with: a literal hex. */
 export function isIdentityColor(value: string): boolean {
   return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value);

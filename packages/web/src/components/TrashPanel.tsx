@@ -17,6 +17,9 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`;
 }
 
+/** Must match .trash-panel's width in styles.css. */
+export const TRASH_WIDTH = 300;
+
 export function TrashPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
   const open = useUiStore((s) => s.trashOpen);
   // Select the stable reference; deriving `?? []` in the selector would mint

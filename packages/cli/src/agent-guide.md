@@ -235,10 +235,66 @@ that woke you, with no `session start` needed.
 - **Ink is a kind of item.** If you generate an SVG as annotation rather than
   as artwork — circling a thing, sketching a flow — `isocan add note.svg
   --drawing` lands it the way the web app's Pen does: no card, no titlebar,
-  just the strokes. It reads back as `--kind drawing`.
+  just the strokes. It reads back as `--kind drawing`. One SVG is one drawing
+  however many strokes are in it — a person holding `P` sweeps a whole sketch
+  made in passes into a single item, so do not assume one drawing means one
+  gesture, or that separate marks were made at separate times.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **A message may BE a command.** When a comment starts with `/name` — the
+  first thing in the body, nothing before it — the person did not type prose,
+  they asked for a specific piece of work. Run `isocan command show <name>`:
+  the body it prints is your instructions for this turn, written for someone
+  holding this CLI on this canvas. Follow it, then reply on the thread as
+  usual.
+
+  Everything after the name is the argument, and it is the part they typed by
+  hand, so it OUTRANKS the command's defaults wherever the two disagree. They
+  are looking at the canvas; you are not.
+
+  `/format` halfway through a sentence is somebody TALKING about the command,
+  not asking for it. Only the start of the message counts. If a command names
+  something you cannot find, ask on the thread rather than picking a target —
+  doing the right work to the wrong screen is worse than a question.
+
+  `isocan command list` is the whole menu, and it is the same list the web
+  app's composer offers, so a person and an agent are never looking at
+  different vocabularies. `/help` is answered by the app itself — a person
+  should not wait for you to be told what their own keyboard does — so you
+  will rarely see it from the web app; from a terminal it is a real question,
+  so answer it. A home can add its own commands with `isocan command add`;
+  those live in `~/.isocan/commands/` and shadow a built-in of the same name.
+- **Ink can be swept together.** A person holding `P` draws a whole sketch as
+  one item; `isocan merge <drawings...>` does that to marks already on the
+  canvas. It is exact, not approximate — ink is stored in world coordinates,
+  so merging is concatenating the strokes and taking the union of the boxes,
+  and what comes out is byte-for-byte what went in. The originals go to the
+  trash (`--keep` leaves them), which is two ops and so two undos. It refuses
+  an SVG this canvas did not draw, because moving somebody's artwork silently
+  is worse than saying no.
+- **Tidying is a verb, not a judgement call.** `isocan format` arranges the
+  whole canvas the way `/format` means: screens in a row keeping their reading
+  order, whatever was made FROM a screen in a column under it, images and video
+  gathered below. It is one `items.move`, so it is one undo, and it is a fixed
+  point — running it on a formatted canvas moves nothing. `--dry-run` says what
+  would move. Prefer it over placing items by hand; hand placement is for what
+  the person asked for on top of it.
+- **Say what a thing came from.** When you build an item FROM another one — a
+  variation, a spec written from a sketch, a page split out of a page — add
+  `--prop parent=<source item id>`. It costs one property and it is what makes
+  the canvas a tree instead of a pile: `/format` hangs children under their
+  parent, and anyone can see where a screen came from.
+- **Read the room before you act.** `isocan activity [who]` is what has been
+  happening here, newest first — who made what, who edited it, who said what
+  and where. Running it for the person who summoned you is the cheapest way to
+  find out what they have been working on before you answer them, and running
+  it for yourself is how you check what you actually landed last session. The
+  web app shows the same list under a face in the pile, from the same reader.
+- **The keys the human has.** `isocan shortcuts` prints every key the canvas
+  answers to — the same list their `?` panel shows, from the same source. When
+  somebody asks how to do a thing without a mouse, or you are telling them
+  where to look, name the actual key rather than describing the menu path.
 - **Stars are the canvas's shortlist.** `isocan ls --starred` is what the
   person has marked as worth getting back to — the screens actually in play,
   which nothing else on the canvas tells you. `isocan star <item>` (or
@@ -328,7 +384,8 @@ that woke you, with no `session start` needed.
 `project create|list|show|edit|delete` (delete needs `--force` and is NOT
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
-`who [--all]`, `whoami`, `identity [--color]`,
+`who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
+`command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,

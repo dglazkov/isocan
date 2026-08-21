@@ -18,6 +18,7 @@ import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { badgeCorner, hasRoomForChrome, pinTakesTopRight } from "../lib/chrome.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 const DRAG_SLOP = 4;
 /** Two presses this close together are one double-press. */
@@ -40,6 +41,7 @@ export function ItemView({
   actor: Actor;
 }) {
   const colors = useActorColors();
+  const names = useActorNames();
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -375,7 +377,7 @@ export function ItemView({
         ) : (
           <span
             className="name"
-            title={`${item.title} (${current.filename}) — double-click to rename · last edit by ${item.updatedBy.name}`}
+            title={`${item.title} (${current.filename}) — double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
           >
             {item.title}
           </span>

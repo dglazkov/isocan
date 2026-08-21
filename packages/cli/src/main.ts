@@ -21,11 +21,18 @@ import type {
 import {
   BROWSER_MIME,
   DEFAULT_PORT,
+  DRAWING_FILENAME,
   DRAWING_MIME,
   DRAWING_PROPERTIES,
   DRAWING_TITLE,
+  COMMAND_NAME,
   IDENTITY_COLORS,
+  actorNameIn,
+  commandFileText,
+  findCommand,
+  parseCommandFile,
   collectCanvasActors,
+  recentActivity,
   collectCanvasNames,
   collectItemRefCandidates,
   extractItemRefs,
@@ -34,11 +41,17 @@ import {
   alignMoves,
   annotationsOf,
   distributeMoves,
+  drawingViewBox,
+  SHORTCUTS,
+  formatMoves,
+  shortcutsAsText,
   elapsedLabel,
   extractMentions,
   isIdentityColor,
+  isDrawingItem,
   isStarred,
   itemKind,
+  mergeDrawings,
   opMatchesFilters,
   starPatch,
   renamedFilename,
@@ -1023,13 +1036,16 @@ project
       }
       if (ctx.json) return printJson(projects);
       const config = await readConfig(ctx.home);
+      // Who touched it last, by the name they go by NOW — a project row has no
+      // snapshot to carry the registry, so ask for it.
+      const names = await ctx.client.actorNames();
       printTable(
         projects.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
           description: truncate(p.description, 40),
           updated: p.updatedAt,
-          by: p.updatedBy.name,
+          by: actorNameIn(names, p.updatedBy),
         })),
       );
     }),
@@ -1060,8 +1076,8 @@ project
         items: String(Object.keys(snapshot.canvas.items).length),
         threads: String(Object.keys(snapshot.canvas.threads).length),
         trash: String(snapshot.canvas.trash.length),
-        created: `${p.createdAt} by ${p.createdBy.name}`,
-        updated: `${p.updatedAt} by ${p.updatedBy.name}`,
+        created: `${p.createdAt} by ${actorNameIn(snapshot.names, p.createdBy)}`,
+        updated: `${p.updatedAt} by ${actorNameIn(snapshot.names, p.updatedBy)}`,
       });
     }),
   );
@@ -1220,8 +1236,26 @@ program
         // `kind=drawing` is the convention the web app's Pen writes, and what
         // both clients read to render ink without a card (core/drawing.ts).
         const properties = { ...opts.prop, ...(opts.drawing ? DRAWING_PROPERTIES : {}) };
-        const { width, height } = sizeFor(opts.size, defaultSize(mimeType));
-        const placement = placementFor(snapshot, opts);
+
+        // Ink knows where it goes. A drawing's viewBox IS its world box — that
+        // is the invariant the Pen writes and `merge` reads back — so unless
+        // you say otherwise, ink lands on the coordinates it was drawn at
+        // rather than at the next free slot in a default-sized card. Without
+        // this, an agent's strokes appear somewhere other than where they say
+        // they are, and two of them cannot be merged into one honest picture.
+        const inkBox =
+          opts.drawing && opts.at === undefined && opts.size === undefined
+            ? drawingViewBox(data.toString("utf8"))
+            : null;
+        const { width, height } = inkBox
+          ? {
+              width: Math.ceil(inkBox.maxX) - Math.floor(inkBox.minX),
+              height: Math.ceil(inkBox.maxY) - Math.floor(inkBox.minY),
+            }
+          : sizeFor(opts.size, defaultSize(mimeType));
+        const placement = inkBox
+          ? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) }
+          : placementFor(snapshot, opts);
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -1337,7 +1371,7 @@ program
           pos: `${i.x},${i.y}`,
           size: `${i.width}x${i.height}`,
           vers: String(i.versions.length),
-          "updated by": i.updatedBy.name,
+          "updated by": actorNameIn(snapshot.names, i.updatedBy),
         })),
       );
     }),
@@ -1394,8 +1428,8 @@ program
         size: `${item.width}x${item.height}`,
         properties: formatProps(item.properties) || "(none)",
         versions: `${item.versions.length} (current: ${item.currentVersionId})`,
-        created: `${item.createdAt} by ${item.createdBy.name}`,
-        updated: `${item.updatedAt} by ${item.updatedBy.name}`,
+        created: `${item.createdAt} by ${actorNameIn(snapshot.names, item.createdBy)}`,
+        updated: `${item.updatedAt} by ${actorNameIn(snapshot.names, item.updatedBy)}`,
       });
     }),
   );
@@ -1522,6 +1556,123 @@ program
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const moves = distributeMoves(items, axis);
       await applyMoves(ctx, p.id, moves, `spaced ${items.length} items ${axis === "h" ? "across" : "down"}`);
+    }),
+  );
+
+program
+  .command("merge <items...>")
+  .description("Several drawings into one — what holding P does, as a verb")
+  .option("--title <title>", "name for the merged drawing")
+  .option("--keep", "leave the originals on the canvas instead of trashing them")
+  .action(
+    run(async (refs: string[], opts: { title?: string; keep?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      if (refs.length < 2) throw new Error("merge wants at least two drawings");
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      const notInk = items.filter((item) => !isDrawingItem(item));
+      if (notInk.length > 0) {
+        throw new Error(
+          `not ink: ${notInk.map((i) => i.title).join(", ")} — merge is for drawings (isocan ls --kind drawing)`,
+        );
+      }
+
+      // Read every part before writing anything: a merge that half-happens
+      // leaves a canvas nobody can put back by hand.
+      const parts = [];
+      for (const item of items) {
+        const version = item.versions.find((v) => v.id === item.currentVersionId);
+        if (!version) throw new Error(`${item.title} has no current version`);
+        const blob = await ctx.client.downloadBlob(p.id, version.blobHash);
+        parts.push({ id: item.title, svg: blob.toString("utf8") });
+      }
+      const { svg, bounds } = mergeDrawings(parts);
+
+      await narrate(ctx, p.id, { status: `merging ${items.length} drawings…` });
+      const upload = await ctx.client.uploadBlob(
+        p.id,
+        Buffer.from(svg, "utf8"),
+        DRAWING_MIME,
+        DRAWING_FILENAME,
+      );
+      const itemId = newItemId();
+      // Whole world units, the way the Pen places ink: the item box and the
+      // SVG viewBox must be the same box or the strokes land somewhere else.
+      const x = Math.floor(bounds.minX);
+      const y = Math.floor(bounds.minY);
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version: {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType: DRAWING_MIME,
+          filename: DRAWING_FILENAME,
+          size: upload.size,
+        },
+        width: Math.ceil(bounds.maxX) - x,
+        height: Math.ceil(bounds.maxY) - y,
+        placement: { x, y },
+        title: opts.title ?? DRAWING_TITLE,
+        properties: DRAWING_PROPERTIES,
+      });
+      // Two ops, so two undos — said out loud rather than discovered. The
+      // originals go to the TRASH, not the void: a merge you disagree with is
+      // one `isocan restore` from being reversed.
+      if (!opts.keep) {
+        await sendOp(ctx, p.id, { type: "items.delete", itemIds: items.map((i) => i.id) });
+      }
+      if (ctx.json) return printJson({ itemId, merged: items.map((i) => i.id) });
+      console.error(
+        `${itemId} — ${items.length} drawings in one` +
+          (opts.keep ? " (originals kept)" : `, originals in the trash (isocan restore ${items[0]!.id})`) +
+          (opts.keep ? "" : "\nthat was two ops: undo twice to put it all back"),
+      );
+    }),
+  );
+
+program
+  .command("shortcuts")
+  .description("Every key the canvas answers to — the same list the app's ? panel shows")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      // The list is core's, not the app's: an agent telling somebody which key
+      // to press must be reading the same page they are looking at.
+      if (ctx.json) return printJson(SHORTCUTS);
+      console.log(shortcutsAsText());
+    }),
+  );
+
+program
+  .command("format")
+  .description("Tidy the whole canvas: screens across, children under parents, images gathered")
+  .option("--dry-run", "say what would move, move nothing")
+  .option("--per-row <n>", "images per row in the reference block")
+  .action(
+    run(async (opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
+      if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
+        throw new Error(`--per-row wants a number: ${opts.perRow}`);
+      }
+      const moves = formatMoves(snapshot.canvas, perRow === undefined ? {} : { perRow });
+      if (opts.dryRun) {
+        if (ctx.json) return printJson(moves);
+        if (moves.length === 0) return console.error("already formatted — nothing would move");
+        return printTable(
+          moves.map((m) => ({
+            item: m.itemId,
+            title: truncate(snapshot.canvas.items[m.itemId]?.title ?? "?", 28),
+            from: `${snapshot.canvas.items[m.itemId]?.x},${snapshot.canvas.items[m.itemId]?.y}`,
+            to: `${m.x},${m.y}`,
+          })),
+        );
+      }
+      // One items.move, so the whole tidy is one undo. A tidy you cannot take
+      // back in one press is a tidy nobody dares run.
+      await applyMoves(ctx, p.id, moves, `formatted ${moves.length} items`);
     }),
   );
 
@@ -1665,7 +1816,7 @@ program
           n: String(index + 1),
           filename: v.filename,
           size: String(v.size),
-          created: `${v.createdAt} by ${v.createdBy.name}`,
+          created: `${v.createdAt} by ${actorNameIn(snapshot.names, v.createdBy)}`,
         })),
       );
     }),
@@ -1724,6 +1875,119 @@ program
         await sendOp(ctx, p.id, { type: "items.restore", itemIds: ids });
       }
       console.log(`restored ${ids.join(", ")}`);
+    }),
+  );
+
+/** Everything on stdin — how a command body arrives from a pipe. */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// ---------- slash commands ----------
+
+const command = program
+  .command("command")
+  .description("Slash commands: the work a message can ask for")
+  .addHelpText(
+    "after",
+    `
+A slash command is a message, not a button. "/format tighten the rows" posted
+as a comment is a request an AGENT carries out — which is why the same request
+can be typed into the web app's composer or sent from here with
+\`isocan comment add\`, and why undo, history, and old clients keep working:
+it is text in a comment.
+
+A command's body is its skill: the instructions you follow when you see one.
+When a comment starts with /name, run \`isocan command show <name>\` and do
+what it says.
+
+isocan ships some; this home can add its own (or shadow a built-in) —
+\`isocan command add tidy ./tidy.md\`, which writes ~/.isocan/commands/tidy.md.
+Removing your own gives the built-in back.`,
+  );
+
+command
+  .command("list", { isDefault: true })
+  .description("Every command available here")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const commands = await ctx.client.commands();
+      if (ctx.json) return printJson(commands);
+      printTable(
+        commands.map((c) => ({
+          command: `/${c.name}`,
+          usage: c.usage || "—",
+          does: truncate(c.description, 48),
+          from: c.source,
+        })),
+      );
+    }),
+  );
+
+command
+  .command("show")
+  .description("What a command tells an agent to do — the whole body")
+  .argument("<name>", "command name, with or without the slash")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      const found = findCommand(await ctx.client.commands(), wanted);
+      if (!found) throw new Error(`no command called /${wanted} (isocan command list)`);
+      if (ctx.json) return printJson(found);
+      // The body alone on stdout, so it can be piped into something that
+      // follows it. Everything else goes to stderr.
+      console.error(`/${found.name} ${found.usage} — ${found.description} (${found.source})`);
+      console.log(found.body);
+    }),
+  );
+
+command
+  .command("add")
+  .description("Write a command for this home (shadows a built-in of the same name)")
+  .argument("<name>", "command name: lowercase letters, digits, dashes")
+  .argument("[file]", "markdown file; omit to read stdin")
+  .option("--description <text>", "one line for the menu (when the file has no frontmatter)")
+  .option("--usage <text>", "how the arguments read, e.g. '[note]'")
+  .action(
+    run(async (name: string, file: string | undefined, opts: { description?: string; usage?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      if (!COMMAND_NAME.test(wanted)) {
+        throw new Error(`not a command name: ${wanted} (lowercase letters, digits, dashes)`);
+      }
+      const raw = file ? await fs.readFile(file, "utf8") : await readStdin();
+      if (raw.trim() === "") throw new Error("a command needs instructions — nothing was given");
+      // Frontmatter in the file wins; the flags fill in what it does not say.
+      const parsed = parseCommandFile(wanted, raw);
+      const text =
+        parsed && !opts.description && !opts.usage
+          ? raw
+          : commandFileText({
+              description: opts.description ?? parsed?.description ?? `Run the ${wanted} command`,
+              usage: opts.usage ?? parsed?.usage ?? "",
+              body: parsed?.body ?? raw,
+            });
+      await ctx.client.saveCommand(wanted, text);
+      console.error(`/${wanted} is available here — try it in the composer, or /${wanted} in a comment`);
+    }),
+  );
+
+command
+  .command("rm")
+  .description("Remove one of this home's commands (a shadowed built-in comes back)")
+  .argument("<name>", "command name")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      await ctx.client.deleteCommand(wanted);
+      const back = findCommand(await ctx.client.commands(), wanted);
+      console.error(back ? `/${wanted} is the built-in again` : `/${wanted} is gone`);
     }),
   );
 
@@ -1904,7 +2168,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${c.author.name} · ${c.createdAt}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt}`);
           console.log(`    ${c.body}`);
         }
       }
@@ -2153,6 +2417,58 @@ program
             : "—",
           status: s.status ?? "—",
           seen: s.lastSeen,
+        })),
+      );
+    }),
+  );
+
+program
+  .command("activity")
+  .description("What somebody has been doing on this canvas — newest first")
+  .argument("[who]", "actor id or name (default: everyone, most recent first)")
+  .option("-n, --limit <n>", "how many acts to show", "10")
+  .action(
+    run(async (who: string | undefined, opts: { limit: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const limit = Number(opts.limit);
+      if (!Number.isFinite(limit) || limit < 1) throw new Error(`--limit wants a number: ${opts.limit}`);
+
+      // Which actors to report on. A name is what a person types; an id is what
+      // an op carries — accept either, and say plainly when nobody answers.
+      const everyone = collectCanvasActors(snapshot.canvas);
+      const actors = who
+        ? everyone.filter(
+            (a) =>
+              a.id === who ||
+              actorNameIn(snapshot.names, a).toLowerCase() === who.toLowerCase() ||
+              a.name.toLowerCase() === who.toLowerCase(),
+          )
+        : everyone;
+      if (who && actors.length === 0) {
+        throw new Error(`nobody on ${p.title} answers to ${who} (isocan who --all)`);
+      }
+
+      const rows = actors
+        .flatMap((actor) =>
+          recentActivity(snapshot.canvas, actor.id, limit).map((entry) => ({
+            who: actorNameIn(snapshot.names, actor),
+            ...entry,
+          })),
+        )
+        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+        .slice(0, limit);
+
+      if (ctx.json) return printJson(rows);
+      if (rows.length === 0) return printTable([]);
+      printTable(
+        rows.map((r) => ({
+          when: r.at,
+          who: r.who,
+          did: r.kind,
+          what: truncate(r.subject, 28),
+          ...(r.itemId ? { item: r.itemId } : { item: "—" }),
+          said: r.body ? truncate(r.body.replace(/\s+/g, " "), 40) : "—",
         })),
       );
     }),

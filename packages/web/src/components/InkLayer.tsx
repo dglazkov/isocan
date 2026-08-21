@@ -45,20 +45,39 @@ export function InkLayer() {
 }
 
 /**
- * Ink that could not be placed. Nothing is shown while a drawing settles —
- * strokes simply become an item a moment after you lift the pen — so this bar
- * appears only when that failed: the ink is still on screen, still yours, and
- * one button away from another try.
+ * The bar under the canvas, in the two states where ink needs a word.
+ *
+ * HOLDING P: the ink is being kept open on purpose, so say so and count what
+ * is riding on it. Nothing is shown for an ordinary drawing — strokes simply
+ * become an item a moment after you lift the pen — but a mode you cannot see
+ * is a mode you will not trust with twenty strokes.
+ *
+ * FAILED: the placement did not land. The ink is still on screen, still yours,
+ * and one button away from another try.
  */
 export function SketchBar({ projectId, actor }: { projectId: string; actor: Actor }) {
   const colors = useActorColors();
   const error = useUiStore((s) => s.sketchError);
   const strokes = useUiStore((s) => s.sketch.length);
   const inkColor = useUiStore((s) => s.inkColor);
+  const session = useUiStore((s) => s.penSession);
+  const dot = inkColor ?? actorColorIn(colors, actor.id);
+  if (session && !error) {
+    return (
+      <div className="sketch-bar">
+        <span className="sketch-dot sketch-dot-live" style={{ background: dot }} />
+        <span className="sketch-label">
+          {strokes === 0
+            ? "one drawing — keep holding P"
+            : `one drawing · ${strokes} stroke${strokes === 1 ? "" : "s"} — let go of P to place it`}
+        </span>
+      </div>
+    );
+  }
   if (!error || strokes === 0) return null;
   return (
     <div className="sketch-bar">
-      <span className="sketch-dot" style={{ background: inkColor ?? actorColorIn(colors, actor.id) }} />
+      <span className="sketch-dot" style={{ background: dot }} />
       <span className="sketch-label">
         couldn't place this drawing — {error}
       </span>

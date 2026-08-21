@@ -3,7 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Actor, PostOpRequest, UndoRedoRequest } from "@isocan/core";
-import { decodeFilename, FILENAME_HEADER, OpValidationError } from "@isocan/core";
+import {
+  COMMAND_NAME,
+  decodeFilename,
+  FILENAME_HEADER,
+  OpValidationError,
+  parseCommandFile,
+} from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
@@ -79,6 +85,41 @@ export function registerRoutes(
   /** Chosen identity colors, for clients painting faces before a canvas is
    * open (the projects page) — everything absent is derived from the id. */
   app.get("/api/colors", async () => engine.actorColors());
+
+  /** Current names, for clients rendering words somebody wrote under a name
+   * they no longer use — the projects page paints them too. */
+  app.get("/api/names", async () => engine.actorNames());
+
+  // ---- slash commands: the work a message can ask for ----
+
+  /** Every command available here — built-ins under this home's own. */
+  app.get("/api/commands", async () => engine.commands());
+
+  /** Write one. The body IS the file, so what you PUT is what a text editor
+   * would have written, and `isocan command show` hands it straight back. */
+  app.put("/api/commands/:name", async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const text = typeof req.body === "string" ? req.body : String((req.body as { text?: string })?.text ?? "");
+    if (!COMMAND_NAME.test(name)) {
+      return reply.code(400).send({ error: `not a command name: ${name}` });
+    }
+    if (!parseCommandFile(name, text)) {
+      return reply.code(400).send({ error: "a command needs instructions in its body" });
+    }
+    await engine.saveCommand(name, text);
+    return reply.code(204).send();
+  });
+
+  /** Remove one. Removing a shadow gives the built-in back. */
+  app.delete("/api/commands/:name", async (req, reply) => {
+    const { name } = req.params as { name: string };
+    if (!COMMAND_NAME.test(name)) {
+      return reply.code(400).send({ error: `not a command name: ${name}` });
+    }
+    const removed = await engine.deleteCommand(name);
+    if (!removed) return reply.code(404).send({ error: `no command of this home is called ${name}` });
+    return reply.code(204).send();
+  });
 
   app.get("/api/projects", async () => engine.listProjects());
 

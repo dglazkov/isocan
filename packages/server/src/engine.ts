@@ -3,6 +3,7 @@ import type {
   ActorBindingRecord,
   ActorClaimOp,
   ActorColors,
+  ActorNames,
   ActorRegistry,
   ActorSetColorOp,
   CanvasSnapshotResponse,
@@ -14,11 +15,15 @@ import type {
   Project,
   ProjectState,
   ServerMessage,
+  SlashCommand,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
   OpValidationError,
+  DEFAULT_COMMANDS,
+  actorNames,
   applyActorColor,
+  mergeCommands,
   applyClaim,
   applyOperation,
   collectCanvasNames,
@@ -131,6 +136,7 @@ export class Engine {
       canvas: runtime.state.canvas,
       lastSeq: runtime.lastSeq,
       colors: await this.actorColors(),
+      names: await this.actorNames(),
     };
   }
 
@@ -139,6 +145,34 @@ export class Engine {
   async actorColors(): Promise<ActorColors> {
     const { registry } = await this.actors();
     return registry.colors;
+  }
+
+  /**
+   * Every slash command available here: what isocan ships with, laid under
+   * whatever this home has written. The menu, the CLI, and an agent looking up
+   * what `/format` means all read this one list, or they would disagree about
+   * what a command does — which is the only thing a command must never do.
+   */
+  async commands(): Promise<SlashCommand[]> {
+    return mergeCommands(DEFAULT_COMMANDS, await this.store.loadCommands());
+  }
+
+  /** Write a command for this home. Shadowing a built-in is allowed and is
+   * the point: `rm` gives ours back. */
+  async saveCommand(name: string, text: string): Promise<void> {
+    await this.store.saveCommand(name, text);
+  }
+
+  /** Remove a home command. False when there was no file to remove. */
+  async deleteCommand(name: string): Promise<boolean> {
+    return this.store.deleteCommand(name);
+  }
+
+  /** The name every actor goes by now, actor id → name. What a client shows
+   * instead of the name stamped on a comment when it was written. */
+  async actorNames(): Promise<ActorNames> {
+    const { registry } = await this.actors();
+    return actorNames(registry);
   }
 
   /**
@@ -175,7 +209,8 @@ export class Engine {
     });
   }
 
-  /** Told when a color changes, so live canvases can repaint their faces. */
+  /** Told when identity changes — a color chosen, or a name taken — so live
+   * canvases can repaint their faces and re-letter what people said. */
   onColors(listener: (colors: ActorColors) => void): () => void {
     this.colorListeners.add(listener);
     return () => this.colorListeners.delete(listener);
@@ -377,6 +412,9 @@ export class Engine {
     runtime.registry = registry;
     runtime.lastSeq = seq;
     await this.store.saveActors(registry, seq);
+    // A claim can be a RENAME, and a rename has to reach the comments the
+    // renamed actor wrote before it. Same channel a color change takes.
+    for (const listener of this.colorListeners) listener(registry.colors);
     return entry;
   }
 
