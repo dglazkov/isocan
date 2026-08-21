@@ -1189,6 +1189,24 @@ program
         const root = ctx.binding.root;
         const before = await readRemote(ctx.home, p.id);
 
+        // The marker is the one that knows. A home that has never provisioned
+        // this canvas has no record of it — but the marker travels with the
+        // repo, so a clone arrives already saying where the canvas is hosted.
+        // Sharing from there would mint a SECOND remote and overwrite the
+        // stanza pointing at the first: the host's canvas, quietly relocated
+        // to somewhere they cannot reach, by someone who only meant to help.
+        const claimed = ctx.binding.remote;
+        if (claimed && !before && opts.firebaseProject !== claimed.firebaseProject) {
+          throw new Error(
+            `"${p.title}" is already shared — hosted at ${claimed.firebaseProject}, ` +
+              `which is what ${markerFile(root)} says. Sharing it from here would ` +
+              "create a second remote and point that marker away from the first.\n" +
+              "  If you ARE its host and this machine lost its record: " +
+              `\`isocan share --firebase-project ${claimed.firebaseProject}\` adopts it back.\n` +
+              "  If you are not, what you want is a link from whoever is.",
+          );
+        }
+
         if (!before?.done.project) {
           const target =
             opts.firebaseProject ?? "a new Google Cloud project (isocan-…), on your Google account";
