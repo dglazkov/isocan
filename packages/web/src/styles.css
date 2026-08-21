@@ -111,9 +111,20 @@ input, textarea { font: inherit; color: var(--ink); }
   border: 1px solid var(--chip-line);
 }
 .btn:hover { background: var(--chip-hover); }
-.btn:focus-visible, input:focus-visible, textarea:focus-visible {
+/* A ring is for controls that have no other way to say they are focused. A
+   text field has one: the caret is blinking in it. So typing surfaces get the
+   quietest possible acknowledgement — their own border, a shade firmer — and
+   everything you can only press keeps the ring, because a button has no
+   cursor to show you where you are. */
+button:focus-visible, select:focus-visible, a:focus-visible, [role="button"]:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
+/* Not text fields. A ring exists to say "you are here" to somebody who has no
+   other sign of it — and a text field has one: the caret is blinking in it.
+   Two indicators for one state is just noise, and on a composer the ring is
+   the loudest thing on the panel. (Kept on everything you can only press,
+   where there is no cursor to look for.) */
+input:focus-visible, textarea:focus-visible { outline: none; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.primary:hover { background: var(--accent-hover); }
 .btn.danger { color: var(--danger); }
@@ -1477,7 +1488,8 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 5px 6px; font-size: 15px;
 }
 .cmdbar-form .mention-field .mention-input { border-color: transparent; }
-.cmdbar-form .mention-field .mention-input:focus { outline: none; }
+.cmdbar-form .mention-field .mention-input:focus,
+.cmdbar-form .mention-field .mention-input:focus-visible { outline: none; border-color: transparent; }
 .cmdbar-form .mention-field .mention-input::placeholder { color: var(--ink-soft); }
 
 /* ---------- help (?) ---------- */
