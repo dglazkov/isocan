@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// The canned Firestore rules `isocan share` deploys (#69).
+//
+// Everything a guest could reach is CLOSED here, deliberately. Provisioning
+// lands before link minting does (#72), so a freshly provisioned canvas has no
+// tokens and therefore no legitimate reader — and a store that is open before
+// anyone has been let in is the one failure this design cannot walk back. The
+// capability-token model (#71) opens `members` and `ops`; phases 2 and 4 open
+// `inbox` and `presence`. The match blocks are here already so those phases
+// open a door rather than build one.
+//
+// The host's daemon writes with a service-account credential, which bypasses
+// rules entirely; nothing below is what keeps the mirror honest.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /canvases/{canvasId} {
+
+      // The mirror: the confirmed op log, written only by the host.
+      // #71 opens reads to an unrevoked member.
+      match /ops/{seq} {
+        allow read, write: if false;
+      }
+
+      // The mailbox: guest-proposed ops. Phase 2.
+      match /inbox/{opId} {
+        allow read, write: if false;
+      }
+
+      // Capability tokens. Never client-readable — the doc id IS the secret,
+      // and rules `get()` it on the client's behalf during redemption (#71).
+      match /tokens/{secret} {
+        allow read, write: if false;
+      }
+
+      // Redeemed memberships. #71 opens the create that redeems a token.
+      match /members/{uid} {
+        allow read, write: if false;
+      }
+
+      // Status-level presence — who is here, who is parked. Phase 3.
+      match /presence/{sessionId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Anything the layout does not name is not part of the contract.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

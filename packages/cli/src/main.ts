@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import type {
@@ -75,6 +76,7 @@ import {
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
+import { DEFAULT_LOCATION, provision, readRemote } from "./provision.ts";
 import {
   collectProp,
   formatBytes,
@@ -1134,10 +1136,120 @@ program
             "`isocan use <ref> --home` sets the home-wide default instead",
         );
       }
-      const file = await writeMarker(root, { projectId: p.id, title: p.title });
+      // Re-binding a directory to the canvas it already holds must not lose
+      // where that canvas is SHARED: the remote stanza is the marker's, not
+      // this command's, and rewriting the file is not a reason to drop it.
+      const keep =
+        ctx.binding?.root === root && ctx.binding.projectId === p.id ? ctx.binding.remote : undefined;
+      const file = await writeMarker(root, {
+        projectId: p.id,
+        title: p.title,
+        ...(keep ? { remote: keep } : {}),
+      });
       await recordDir(ctx.home, root, p.id);
       console.log(`this directory now means "${p.title}" (${p.id}) — bound via ${file}`);
     }),
+  );
+
+// ---------- sharing (#68) ----------
+
+/**
+ * `isocan share` — the lazy setup. Nothing about installing isocan or using it
+ * day to day involves Google; the whole Firebase apparatus appears here, the
+ * first time someone wants to hand this canvas to a person who does not run
+ * isocan, and never again. Later runs skip straight past everything already
+ * done — which is also how a dance that died halfway is finished (#69).
+ *
+ * Minting links, listing and revoking them are #72; this command's job ends
+ * with a provisioned remote and a marker that says where it is.
+ */
+program
+  .command("share")
+  .description("Share this canvas: provision its remote (first run takes about 90 seconds)")
+  .option("--location <loc>", `where the data lives (default ${DEFAULT_LOCATION})`)
+  .option("--firebase-project <id>", "use an existing Firebase project instead of creating one")
+  .option("-y, --yes", "don't ask before creating a Google Cloud project")
+  .action(
+    run(
+      async (
+        opts: { location?: string; firebaseProject?: string; yes?: boolean },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const p = await resolveProject(ctx);
+        // The remote stanza belongs beside the project id, in the marker — so
+        // a clone of this repo arrives knowing both which canvas it is and
+        // where its host is reachable. No marker, nowhere to say it.
+        if (!ctx.binding || ctx.binding.projectId !== p.id) {
+          throw new Error(
+            `share records where "${p.title}" is reachable in this directory's marker, ` +
+              `and this directory is not bound to it — \`isocan use ${p.id}\` first`,
+          );
+        }
+        const root = ctx.binding.root;
+        const before = await readRemote(ctx.home, p.id);
+
+        if (!before?.done.project) {
+          const target =
+            opts.firebaseProject ?? "a new Google Cloud project (isocan-…), on your Google account";
+          if (!opts.yes) {
+            if (!process.stdin.isTTY) {
+              throw new Error(
+                `sharing "${p.title}" creates ${target} — re-run with --yes to go ahead`,
+              );
+            }
+            const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+            const answer = (
+              await rl.question(`Share "${p.title}"? This creates ${target}. [y/N] `)
+            ).trim();
+            rl.close();
+            if (!/^y(es)?$/i.test(answer)) throw new Error("nothing was created");
+          }
+          console.error(
+            `isocan: setting up the remote for "${p.title}" — about 90 seconds, once.`,
+          );
+        } else {
+          console.error(`isocan: picking up where the last run left off (${before.firebaseProject}).`);
+        }
+
+        const record = await provision({
+          home: ctx.home,
+          root,
+          projectId: p.id,
+          title: p.title,
+          webDist: path.join(myRoot(), "packages", "web", "dist"),
+          ...(opts.location !== undefined ? { location: opts.location } : {}),
+          ...(opts.firebaseProject !== undefined
+            ? { firebaseProject: opts.firebaseProject }
+            : {}),
+        });
+
+        const pending = Object.entries(record.manual ?? {});
+        if (ctx.json) return printJson({ ...record, pending: Object.fromEntries(pending) });
+
+        const report: Record<string, string> = {
+          canvas: `${p.title} (${p.id})`,
+          remote: record.firebaseProject,
+          data: record.location,
+          ...(record.account ? { account: record.account } : {}),
+          ...(record.hostingUrl ? { app: record.hostingUrl } : {}),
+          ...(record.storageBucket ? { blobs: record.storageBucket } : {}),
+          ...(record.keyFile ? { credential: record.keyFile } : {}),
+          marker: markerFile(root),
+        };
+        printKeyValues(report);
+        if (pending.length > 0) {
+          console.log("\nStill to do:");
+          for (const [step, message] of pending) console.log(`  ${step}: ${message}`);
+          console.log("Then run `isocan share` again — it resumes where it stopped.");
+        } else {
+          console.log(
+            "\nThe remote is ready. Mirroring and share links land next — " +
+              "nothing is published to it yet, and the rules deployed here let nobody in.",
+          );
+        }
+      },
+    ),
   );
 
 // ---------- items ----------

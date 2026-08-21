@@ -21,12 +21,25 @@ import { paths } from "@isocan/server";
  * a person.
  */
 
+/**
+ * Where the host is reachable when a canvas is shared (#68). Identity-adjacent
+ * like the rest of the marker, and safe to commit for the same reason: knowing
+ * WHERE a canvas lives grants nothing without a capability token, and tokens
+ * never enter the repo — the host's live under `~/.isocan`, a guest's lives in
+ * a URL fragment.
+ */
+export interface DirRemote {
+  kind: "firestore";
+  firebaseProject: string;
+}
+
 export interface DirMarker {
   projectId: string;
   /** A hint for materializing the project in a home that has never seen it
    * (a fresh clone): the id is the identity, the title is a good first
    * guess. */
   title?: string;
+  remote?: DirRemote;
 }
 
 export interface DirBinding extends DirMarker {
@@ -43,10 +56,21 @@ async function readMarker(dir: string): Promise<DirMarker | null> {
     return {
       projectId: raw.projectId,
       ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+      ...(isRemote(raw.remote) ? { remote: raw.remote } : {}),
     };
   } catch {
     return null;
   }
+}
+
+function isRemote(value: unknown): value is DirRemote {
+  const remote = value as DirRemote | undefined;
+  return (
+    !!remote &&
+    remote.kind === "firestore" &&
+    typeof remote.firebaseProject === "string" &&
+    remote.firebaseProject.length > 0
+  );
 }
 
 /** A directory the marker must never live in: the user's home directory
