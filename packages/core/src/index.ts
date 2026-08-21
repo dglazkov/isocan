@@ -24,4 +24,5 @@ export * from "./commands.ts";
 export * from "./shortcuts.ts";
 export * from "./format.ts";
 export * from "./merge.ts";
+export * from "./onit.ts";
 export * from "./favourites.ts";

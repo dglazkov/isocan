@@ -242,6 +242,22 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **Say you have it, before you have anything to show.** The moment you pick
+  up a thread, claim it: `isocan session on <thread> --say "reading your
+  comment…"`. It shows live UNDER the comment that asked, so the person stops
+  wondering whether anyone woke. Waking on `wait` does this for you — the
+  summons claims the thread it came from — but a thread you picked up any
+  other way is yours to claim.
+
+  Then keep it current as the work changes: `--say "reading the three
+  screens…"`, `--say "moving 12 items into rows…"`. Say what you are DOING,
+  never how far along you are; nobody can check a percentage. This is presence,
+  not a comment: it costs no op, leaves no trace in the history, and vanishes
+  when you stop. A thread full of "working…" posts is a thread nobody can read
+  next week.
+
+  Posting your reply clears it, which is the right shape: the status is the
+  gap between being asked and answering, and done is done.
 - **A message may BE a command.** When a comment starts with `/name` — the
   first thing in the body, nothing before it — the person did not type prose,
   they asked for a specific piece of work. Run `isocan command show <name>`:
@@ -452,7 +468,7 @@ anyone runs `isocan format`, instead of landing in a folder nobody opens.
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply|anchor|main|rm`, `session start|work|say|point|end`,
+`comment list|add|reply|anchor|main|rm`, `session start|on|work|say|point|end`,
 `project create|list|show|edit|delete` (delete needs `--force` and is NOT
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),

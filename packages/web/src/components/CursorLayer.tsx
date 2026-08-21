@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { worldToScreen } from "../lib/viewport.ts";
+import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
@@ -66,6 +66,11 @@ export function CursorLayer() {
         if (session.activity?.kind === "working") {
           if ("itemId" in session.activity) {
             workingBounds = canvas?.items[session.activity.itemId];
+          } else if ("threadId" in session.activity) {
+            // Around the pin: the thread is what they are working ON.
+            const thread = canvas?.threads[session.activity.threadId];
+            const at = thread && canvas ? threadWorldPos(canvas, thread) : null;
+            if (at) workingBounds = { x: at.x - 90, y: at.y - 60, width: 180, height: 120 };
           } else {
             workingBounds = {
               x: session.activity.x - 110,

@@ -311,7 +311,8 @@ isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
-isocan session start|work|point|move|say|end · isocan who [--all]  # presence
+isocan session start|on|work|point|move|say|end · isocan who   # presence
+isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
 isocan command list|show|add|rm        # slash commands: work a message can ask for
 #   built-in: /help /format /variation /grill-me /accessibility-audit

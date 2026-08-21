@@ -23,7 +23,8 @@ import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { CommandChip, withoutCommand } from "./MainThreadPanel.tsx";
+import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.tsx";
+import { OnIt } from "./OnIt.tsx";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -261,6 +262,7 @@ function ThreadPopover({
             </div>
           </div>
         ))}
+        <OnIt threadId={thread.id} waiting={awaitingReply(thread, actor.id)} />
       </div>
       <form
         onKeyDown={submitOnCmdEnter}

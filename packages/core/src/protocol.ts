@@ -64,7 +64,14 @@ export interface PresenceSession {
 
 export type PresenceActivity =
   | { kind: "working"; itemId: string }
-  | { kind: "working"; x: number; y: number };
+  | { kind: "working"; x: number; y: number }
+  /** On a THREAD: picked up what was asked there and working on it. The other
+   * two say where on the canvas somebody is; this one says what they are
+   * answering, which is the question the person who asked it is waiting on.
+   * Rendering it from the cursor's position instead — "is this dot near that
+   * pin?" — is a guess, and it is wrong the moment the agent goes to look at
+   * the thing it was asked about. */
+  | { kind: "working"; threadId: string };
 
 export interface CreateSessionRequest {
   actor: Actor;
