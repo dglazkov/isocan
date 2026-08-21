@@ -1217,7 +1217,6 @@ program
           root,
           projectId: p.id,
           title: p.title,
-          webDist: path.join(myRoot(), "packages", "web", "dist"),
           ...(opts.location !== undefined ? { location: opts.location } : {}),
           ...(opts.firebaseProject !== undefined
             ? { firebaseProject: opts.firebaseProject }

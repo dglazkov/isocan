@@ -14,8 +14,8 @@ import { writeMarker } from "./binding.ts";
  * at the moment they want it, and never again — which is why this file is a
  * script of steps rather than a subsystem. It creates a Google Cloud project,
  * turns it into a Firebase project, gives the host daemon a credential of its
- * own, deploys the canned (and deliberately closed) rules, and puts the web app
- * on Hosting. About ninety seconds.
+ * own, deploys the canned (and deliberately closed) rules, and puts the
+ * canvas's address on Hosting. About ninety seconds.
  *
  * Two properties do all the work of making that survivable:
  *
@@ -253,8 +253,6 @@ export interface ProvisionOptions {
   /** Adopt an existing Firebase project instead of creating one — a retry
    * after a half-finished dance, or a second canvas in a project you keep. */
   firebaseProject?: string;
-  /** The built web app Hosting serves. Skipped (with a note) when absent. */
-  webDist?: string;
   cloud?: Cloud;
   say?: (line: string) => void;
 }
@@ -626,17 +624,15 @@ export const STEPS: Step[] = [
   },
   {
     name: "hosting",
-    says: "deploying the app",
+    says: "putting the canvas's address up",
     async run(run) {
-      const dist = run.webDist;
-      if (!dist || !(await fileExists(path.join(dist, "index.html")))) {
-        return note(
-          run,
-          "hosting",
-          "the web app is not built here — run `npm run build` in your isocan checkout, " +
-            "then run `isocan share` again",
-        );
-      }
+      // NOT the local web app, though it is built and sitting right there.
+      // That app talks to a daemon at its own origin and there is no daemon
+      // here, so serving it would hand out a link that renders a welcome
+      // screen and then dies on its first API call — a page that looks alive
+      // and is not, which is the one outcome #68 rules out by name. The guest
+      // app that belongs at this address arrives with #73; until it does, the
+      // address explains itself.
       await writeDeployWorkspace(run);
       await firebaseDeploy(run, ["--only", "hosting"]);
       run.record.hostingUrl = `https://${run.record.firebaseProject}.web.app`;
@@ -787,10 +783,10 @@ async function settle(run: Run, operation: any): Promise<any> {
 }
 
 /**
- * The generated deploy workspace: a `firebase.json` and copies of the canned
- * rules, under the home rather than the repo. Generated because the paths in
- * it are absolute-ish (Hosting points at wherever this copy of isocan keeps
- * its built app), and a file like that has no business being committed.
+ * The generated deploy workspace: a `firebase.json`, copies of the canned
+ * rules, and the page Hosting serves — under the home rather than the repo,
+ * because what it points at is per-machine, and a file like that has no
+ * business being committed.
  */
 async function writeDeployWorkspace(run: Run): Promise<string> {
   const dir = paths.remoteDeployDir(run.home, run.record.firebaseProject);
@@ -804,25 +800,19 @@ async function writeDeployWorkspace(run: Run): Promise<string> {
   if (run.record.storageBucket) {
     config.storage = { bucket: run.record.storageBucket, rules: "storage.rules" };
   }
-  // Only when the app is actually built: a hosting stanza pointing at a
-  // directory that is not there fails config validation, and would take the
-  // rules deploy down with it.
-  if (run.webDist && (await fileExists(path.join(run.webDist, "index.html")))) {
-    // Copied in rather than pointed at: firebase-tools refuses any `public`
-    // outside its project directory, and a checkout is always outside this
-    // one. Replaced wholesale each deploy, so yesterday's hashed assets do
-    // not ride along with today's.
-    const publicDir = path.join(dir, "public");
-    await fs.rm(publicDir, { recursive: true, force: true });
-    await fs.cp(run.webDist, publicDir, { recursive: true });
-    config.hosting = {
-      public: "public",
-      ignore: ["firebase.json", "**/.*", "**/node_modules/**"],
-      // The guest link is `/c/<projectId>#<secret>`, and every path under it
-      // is the same single-page app the local daemon already serves.
-      rewrites: [{ source: "**", destination: "/index.html" }],
-    };
-  }
+  // Copied in rather than pointed at: firebase-tools refuses any `public`
+  // outside its project directory. Replaced wholesale each deploy, so
+  // yesterday's files do not ride along with today's.
+  const publicDir = path.join(dir, "public");
+  await fs.rm(publicDir, { recursive: true, force: true });
+  await fs.cp(path.join(cannedRulesDir(), "placeholder"), publicDir, { recursive: true });
+  config.hosting = {
+    public: "public",
+    ignore: ["firebase.json", "**/.*", "**/node_modules/**"],
+    // Every path lands on the one page, the guest link's
+    // `/c/<projectId>#<secret>` included — there is nothing else to serve yet.
+    rewrites: [{ source: "**", destination: "/index.html" }],
+  };
   await fs.writeFile(path.join(dir, "firebase.json"), `${JSON.stringify(config, null, 2)}\n`);
   return dir;
 }

@@ -285,15 +285,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   a bound directory provisions the canvas's own Firebase project end to end —
   one browser tab for `gcloud auth`, then Firestore, the canned (and closed)
   security rules, a credential belonging to the host's daemon alone, and the
-  web app on Hosting — about ninety seconds, once. It is resumable: every step
-  records itself in `~/.isocan/remotes`, so a dance that dies halfway is
+  canvas's address on Hosting — about ninety seconds, once. It is resumable:
+  every step records itself in `~/.isocan/remotes`, so a dance that dies halfway is
   finished by running the command again, and steps that need something from
   you (a billing account before blobs get a bucket) say exactly what and are
   retried next time. The marker gains a `remote` stanza — safe to commit,
   because knowing *where* a canvas lives grants nothing without a capability
-  token, and tokens never enter the repo. Mirroring the oplog (#70) and
-  minting share links (#72) land next; today's remote publishes nothing and
-  admits nobody.
+  token, and tokens never enter the repo. Mirroring the oplog (#70), minting
+  share links (#72) and the guest app itself (#73) land next; today's remote
+  publishes nothing and admits nobody, and its address says so — a page that
+  explains itself, because an address that looks alive and is not would be
+  worse than one that plainly isn't.
 
 ## CLI surface
 

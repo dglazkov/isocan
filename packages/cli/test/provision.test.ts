@@ -26,17 +26,14 @@ import {
 
 let home: string;
 let root: string;
-let webDist: string;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-provision-home-"));
   root = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-provision-work-"));
-  webDist = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-provision-dist-"));
-  await fs.writeFile(path.join(webDist, "index.html"), "<!doctype html>");
 });
 
 afterEach(async () => {
-  for (const dir of [home, root, webDist]) await fs.rm(dir, { recursive: true, force: true });
+  for (const dir of [home, root]) await fs.rm(dir, { recursive: true, force: true });
 });
 
 /* ── a Google that lives in a variable ──────────────────────────────────── */
@@ -134,7 +131,6 @@ const options = (cloud: Cloud) => ({
   root,
   projectId: "prj_abc",
   title: "Kitchen Rebuild",
-  webDist,
   cloud,
   say: () => {},
 });
@@ -246,13 +242,14 @@ describe("provisioning a canvas's remote", () => {
     const config = JSON.parse(await fs.readFile(path.join(deployDir, "firebase.json"), "utf8"));
     expect(config.firestore.rules).toBe("firestore.rules");
     expect(config.hosting.rewrites).toEqual([{ source: "**", destination: "/index.html" }]);
-    // The built app is copied in, not pointed at: firebase-tools refuses any
-    // `public` outside its own project directory, and a checkout is always
-    // outside this one.
+    // What goes up is a page that explains itself, NOT the local web app.
+    // That app talks to a daemon at its own origin and there is no daemon
+    // here, so serving it would hand out a link that renders a welcome screen
+    // and then dies on its first API call (#73 brings the guest app).
     expect(config.hosting.public).toBe("public");
-    expect(await fs.readFile(path.join(deployDir, "public", "index.html"), "utf8")).toBe(
-      "<!doctype html>",
-    );
+    const page = await fs.readFile(path.join(deployDir, "public", "index.html"), "utf8");
+    expect(page).toContain("Nothing is shared here yet");
+    expect(page).not.toContain("<script type=\"module\"");
     const rules = await fs.readFile(path.join(deployDir, "firestore.rules"), "utf8");
     expect(rules).toContain("match /canvases/{canvasId}");
     // Provisioning precedes minting: what it deploys lets nobody in.
@@ -342,19 +339,6 @@ describe("when blobs have nowhere to go yet", () => {
     expect(second.commands.some((line) => line.startsWith("gcloud projects create"))).toBe(false);
   });
 
-  it("says how to build the app rather than deploying an empty site", async () => {
-    const { cloud, commands } = fakeCloud();
-    const record = await provision({ ...options(cloud), webDist: path.join(webDist, "nope") });
-    expect(record.manual?.hosting).toMatch(/npm run build/);
-    expect(record.hostingUrl).toBeUndefined();
-    expect(commands.some((line) => line.includes("--only hosting"))).toBe(false);
-    // The rest of the remote is provisioned regardless — and the workspace the
-    // rules deploy reads never names a directory that is not there.
-    expect(record.done.rules).toBeTruthy();
-    const deployDir = path.join(home, "remotes", `${record.firebaseProject}.deploy`);
-    const config = JSON.parse(await fs.readFile(path.join(deployDir, "firebase.json"), "utf8"));
-    expect(config.hosting).toBeUndefined();
-  });
 });
 
 describe("anonymous sign-in, which is how a link admits anybody", () => {
