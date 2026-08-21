@@ -284,6 +284,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 ## CLI surface
 
 ```
+isocan --agent-help                # the collaboration protocol, for agents
 isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
@@ -377,10 +378,14 @@ two parents — the previous release, and the `main` commit it was built from �
 so the branch never needs a force push and `git log release` answers "which
 build is this?".
 
-Agents working in this repo start at [`AGENTS.md`](AGENTS.md). The skill that
-teaches one to collaborate on a canvas is an
+Agents working in this repo start at [`AGENTS.md`](AGENTS.md). What teaches
+one to collaborate on a canvas is `isocan --agent-help`: the protocol —
+naming yourself, appearing, the comment→build→reply→`wait` lap — shipped
+inside the CLI (`packages/cli/src/agent-guide.md`), so it always describes
+the build in hand rather than whatever was installed months ago (#75). The
 [Agent Skill](https://agentskills.io/specification) at
 `.agents/skills/isocan-collab/` — the location most harnesses discover on
 their own; Claude Code reaches the same file through the committed symlink at
-`.claude/skills/isocan-collab`. Adding a harness means adding a doorway to
-that file, never a second copy of it (`test/skills.test.ts` holds the line).
+`.claude/skills/isocan-collab` — is the doorway that points there. Adding a
+harness means adding a doorway to that file, never a second copy of it
+(`test/skills.test.ts` holds the line).

@@ -5,16 +5,25 @@ the `isocan` CLI are equal clients over one operation vocabulary. `README.md`
 is the orientation; `isocan --help` is the command reference, and it is
 written for you.
 
-## The skill
+## The guide, and the skill that points at it
 
 If you are here to **collaborate on a canvas** — address comments, build or
-edit items, park on `isocan wait` — read
+edit items, park on `isocan wait` — run `isocan --agent-help` first. That is
+the protocol in full, and it lives in
+[`packages/cli/src/agent-guide.md`](packages/cli/src/agent-guide.md): shipped
+with the CLI so an upgrade upgrades the instructions too (#75). Instructions
+about using the CLI belong there, not in the skill.
+
+The skill at
 [`.agents/skills/isocan-collab/SKILL.md`](.agents/skills/isocan-collab/SKILL.md)
-first. It is an [Agent Skill](https://agentskills.io/specification): most
-harnesses discover it themselves under `.agents/skills/`, and Claude Code
-reaches the same file through the committed symlink at
-`.claude/skills/isocan-collab`. One file, many doorways — please keep it that
-way rather than copying it into a new harness's directory.
+is the doorway: what isocan is, how to install the CLI if it is missing, and
+"now go run `isocan --agent-help`". It is an
+[Agent Skill](https://agentskills.io/specification): most harnesses discover
+it themselves under `.agents/skills/`, and Claude Code reaches the same file
+through the committed symlink at `.claude/skills/isocan-collab`. One file,
+many doorways — please keep it that way rather than copying it into a new
+harness's directory, and keep it short: a skill sits in a directory for
+months, so anything it says about the CLI is a copy that ages.
 
 ## House rules
 
@@ -41,9 +50,10 @@ deliberately did not.
 2. **CLI verb** — can an agent do this without a pointer? A gesture (drag,
    pinch, hover) does not need a verb, but the INTENT behind it usually does:
    dragging until edges line up became `isocan align`.
-3. **Skill** — `.agents/skills/isocan-collab/SKILL.md` is what an agent reads
-   before it acts. A verb nobody is told about does not exist. `npm test`
-   fails if a command is missing from the quick reference there.
+3. **Agent guide** — `packages/cli/src/agent-guide.md` (`isocan --agent-help`)
+   is what an agent reads before it acts. A verb nobody is told about does not
+   exist. `npm test` fails if a command is missing from the quick reference
+   there.
 4. **Shared helpers in core** — if the web app and the CLI both compute
    something (a filename from a title, what kind an item is, where "aligned"
    is), the computation belongs in `@isocan/core`, not in one client.
@@ -54,5 +64,5 @@ deliberately did not.
 
 The forcing function is `packages/cli/test/surface.test.ts`: it reads the
 commands the CLI actually registers and fails when one is missing from the
-skill's quick reference. Adding a verb without telling agents about it breaks
-the build.
+agent guide's quick reference. Adding a verb without telling agents about it
+breaks the build.
