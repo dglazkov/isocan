@@ -282,14 +282,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   cache.
 - **Sharing, set up lazily** (#68, in progress): nothing about installing
   isocan or using it day to day involves Google. The first `isocan share` in
-  a bound directory provisions the canvas's own Firebase project end to end —
-  one browser tab for `gcloud auth`, then Firestore, the canned (and closed)
-  security rules, a credential belonging to the host's daemon alone, and the
-  canvas's address on Hosting — about ninety seconds, once. It is resumable:
-  every step records itself in `~/.isocan/remotes`, so a dance that dies halfway is
+  a bound directory provisions your Firebase project end to end — one browser
+  tab for `gcloud auth`, then Firestore, the canned (and closed) security
+  rules, a credential belonging to the host's daemon alone, and the canvas's
+  address on Hosting — about ninety seconds, once. It is resumable: every step
+  records itself in `~/.isocan/remotes`, so a dance that dies halfway is
   finished by running the command again, and steps that need something from
   you (a billing account before blobs get a bucket) say exactly what and are
-  retried next time. The marker gains a `remote` stanza — safe to commit,
+  retried next time. It happens ONCE, not once per canvas: one project holds
+  as many canvases as you share into it (`canvases/{id}` in Firestore,
+  `/c/{id}` in the link), so the second canvas you share costs a marker and a
+  fraction of a second. The marker gains a `remote` stanza — safe to commit,
   because knowing *where* a canvas lives grants nothing without a capability
   token, and tokens never enter the repo. Mirroring the oplog (#70), minting
   share links (#72) and the guest app itself (#73) land next; today's remote
