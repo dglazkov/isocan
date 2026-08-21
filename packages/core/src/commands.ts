@@ -28,6 +28,17 @@ export interface SlashCommand {
   body: string;
   /** Shipped with isocan, or written by this home. */
   source: "built-in" | "home";
+  /**
+   * The app answers this one itself instead of posting it.
+   *
+   * Almost every command is a request an agent carries out, and that is the
+   * point of the design. The exception is a command about the app you are
+   * already holding: making somebody wait for an agent to be told what their
+   * own keyboard does would be silly, and if no agent is parked they would
+   * wait forever. Only built-ins can be local — a home command has no code in
+   * the client to run.
+   */
+  local?: boolean;
 }
 
 /** What a command may be called. Kept narrow so a name is always typeable,
@@ -150,6 +161,30 @@ export function commandFileText(command: Pick<SlashCommand, "description" | "usa
 
 /** The commands isocan ships with. A home can shadow any of them by name. */
 export const DEFAULT_COMMANDS: SlashCommand[] = [
+  {
+    name: "help",
+    description: "Keyboard shortcuts, and what else you can ask for",
+    usage: "",
+    source: "built-in",
+    // Answered where it is typed: the app knows its own keyboard.
+    local: true,
+    body: `Say what can be done here.
+
+Answer with three things, short enough to read in the thread:
+
+1. THE COMMANDS. \`isocan command list\` — every one available on this canvas,
+   including any this home added. Give the name, what it does, and one example
+   of the arguments, e.g. "/variation 3 try a vertical nav".
+2. THE KEYS, if they asked about the web app. \`isocan --help shortcuts\` is not
+   a thing; the list lives in the app's help panel, which opens with ? — say
+   that, and name the two or three that matter for what they are doing.
+3. WHAT YOU CAN DO for them right now, in one line. Not a menu of capabilities
+   — the one or two things that would obviously help on THIS canvas, given
+   what is on it.
+
+If they asked about something specific, answer that instead of reciting the
+list. A person typing /help mid-task has a question, not a curiosity.`,
+  },
   {
     name: "format",
     description: "Tidy the whole canvas into rows, children under parents",

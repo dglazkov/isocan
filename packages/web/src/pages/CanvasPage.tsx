@@ -30,6 +30,7 @@ import { FilesPanel } from "../components/FilesPanel.tsx";
 import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
+import { HelpPanel } from "../components/HelpPanel.tsx";
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -372,6 +373,10 @@ export function CanvasPage({
         }
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
+      } else if (e.key === "?" && !e.metaKey && !e.ctrlKey) {
+        // The key every app with shortcuts has trained people to try.
+        e.preventDefault();
+        ui.setHelpOpen(!ui.helpOpen);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -420,6 +425,7 @@ export function CanvasPage({
       <FilesPanel projectId={projectId} />
       <FavouritesBar projectId={projectId} />
       <CommentToasts />
+      <HelpPanel />
     </div>
   );
 }

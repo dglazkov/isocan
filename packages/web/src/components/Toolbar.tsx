@@ -75,6 +75,18 @@ export function Toolbar({
       >
         🗑{trashCount > 0 ? ` ${trashCount}` : ""}
       </button>
+      {/* A shortcut nobody can find is a shortcut nobody has. */}
+      <button
+        className="btn help-btn"
+        title="What this canvas answers to (?)"
+        aria-label="Help"
+        onClick={() => {
+          const ui = useUiStore.getState();
+          ui.setHelpOpen(!ui.helpOpen);
+        }}
+      >
+        ?
+      </button>
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>

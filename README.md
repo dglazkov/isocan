@@ -103,6 +103,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
   through a stack of them.
+- **What it answers to (`?`)**: every key the canvas takes, in one panel —
+  opened with `?`, or the `?` in the top bar, or by typing `/help`. The list
+  lives in `@isocan/core` and a test checks the letter keys against the code
+  that would have to answer them, because a help panel describing a different
+  app than the one it is in is worse than no help panel. The same panel lists
+  the slash commands available here, including any this home added.
 - **Names**: an item's name sits above it rather than inside a chrome bar —
   the item is the content — and stays hidden until you point at the item or
   select it, so a canvas of sketches reads as the sketches rather than as a

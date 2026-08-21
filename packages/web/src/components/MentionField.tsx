@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   useEffect,
   useLayoutEffect,
@@ -246,7 +247,11 @@ function MentionMenu({
     return () => window.removeEventListener("resize", place);
   });
 
-  return (
+  // Portalled to the body: this menu hangs outside the panel or popover that
+  // opens it, and inside their stacking context no z-index can lift it over
+  // chrome that outranks the panel — the minimap painted straight over it. It
+  // is position: fixed, so leaving changes nothing about where it lands.
+  return createPortal(
     <div
       ref={ref}
       className="mention-menu"
@@ -284,7 +289,8 @@ function MentionMenu({
           {option.online && <span className="mention-live">live</span>}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

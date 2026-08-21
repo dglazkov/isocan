@@ -1454,3 +1454,65 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 /* The body's first paragraph runs on from the chip rather than under it. */
 .body:has(> .command-chip) > .command-chip + * { display: inline; }
+
+/* The ⌘K bar composes with the same field as everywhere else, so @, # and /
+   complete here too. It wears the bar's own type: bigger, and no box —
+   the bar IS the box. */
+.cmdbar-form { display: flex; padding: 8px 9px; }
+.cmdbar-form .mention-field .mention-input,
+.cmdbar-form .mention-field .mention-backdrop {
+  padding: 5px 6px; font-size: 15px;
+}
+.cmdbar-form .mention-field .mention-input { border-color: transparent; }
+.cmdbar-form .mention-field .mention-input:focus { outline: none; }
+.cmdbar-form .mention-field .mention-input::placeholder { color: var(--ink-soft); }
+
+/* ---------- help (?) ---------- */
+.help-btn { font-weight: 700; }
+.help-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: var(--overlay);
+  display: flex; align-items: flex-start; justify-content: center; padding: 8vh 20px 40px;
+}
+.help-panel {
+  width: min(880px, 100%); max-height: 84vh;
+  display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.help-panel header {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-size: 13px;
+}
+.help-panel header .spacer { flex: 1; }
+.help-scroll { overflow-y: auto; padding: 14px 16px 18px; }
+/* Two columns where there is room: the groups are short lists, and a single
+   column would make a keyboard reference a scroll. */
+.help-columns { columns: 2; column-gap: 32px; }
+.help-group { break-inside: avoid; margin-bottom: 18px; }
+.help-group h3 {
+  margin: 0 0 7px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft);
+}
+.help-row {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 3px 0; font-size: 12.5px; break-inside: avoid;
+}
+.help-keys { flex: 0 0 152px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.help-keys kbd {
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 5px;
+  background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink);
+  white-space: nowrap;
+}
+.help-keys em { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+.help-does { flex: 1; min-width: 0; color: var(--ink); }
+/* The part that is not obvious from the name, under the thing it qualifies. */
+.help-does i { display: block; font-style: normal; font-size: 11px; color: var(--ink-muted); }
+.help-commands { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-bottom: 0; }
+.help-lede { margin: 0 0 10px; font-size: 12px; color: var(--ink-muted); max-width: 64ch; }
+.help-lede kbd {
+  font-family: inherit; font-weight: 600; padding: 0 4px;
+  border-radius: 4px; background: var(--chip); border: 1px solid var(--chip-line);
+}
+.help-commands .help-keys { flex-basis: 200px; }

@@ -74,6 +74,8 @@ interface UiStore {
   /** P is down: the ink is being held open, and everything drawn until it
    * comes back up belongs to one drawing. */
   penSession: boolean;
+  /** The help panel (?): what the canvas answers to. */
+  helpOpen: boolean;
   /** The Pen's color, or null for "whatever color I am" — the identity color
    * worn by your cursor and your face in the pile. Remembered per browser. */
   inkColor: string | null;
@@ -125,6 +127,7 @@ interface UiStore {
   setPendingComment: (pending: PendingComment | null) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
+  setHelpOpen: (open: boolean) => void;
   /** Choose the ink; null goes back to your identity color. */
   setInkColor: (color: string | null) => void;
   /** Start a stroke — the pen went down. */
@@ -210,6 +213,7 @@ export const useUiStore = create<UiStore>((set) => {
     sketch: [],
     sketchError: null,
     penSession: false,
+    helpOpen: false,
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
@@ -249,6 +253,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),
+    setHelpOpen: (helpOpen) => set({ helpOpen }),
     setInkColor: (inkColor) => {
       writeInkColor(inkColor);
       set({ inkColor });

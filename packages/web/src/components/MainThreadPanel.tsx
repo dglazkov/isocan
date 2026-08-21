@@ -17,6 +17,8 @@ import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
+import { runLocalCommand } from "../lib/localcommands.ts";
+import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /**
@@ -183,6 +185,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   const [draft, setDraft] = useState("");
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
+  const commands = useCommands();
   const chips = useMemo(
     () => [rehypeChips(candidates, actor.id, itemRoster.candidates)],
     [candidates, actor.id, itemRoster.candidates],
@@ -282,6 +285,12 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           e.preventDefault();
           const body = draft.trim();
           if (!body) return;
+          // /help and its kind are answered here rather than posted: see
+          // lib/localcommands.ts.
+          if (runLocalCommand(body, commands)) {
+            setDraft("");
+            return;
+          }
           const attached = useUiStore.getState().selectedItemIds;
           setDraft("");
           await send(body, attached);

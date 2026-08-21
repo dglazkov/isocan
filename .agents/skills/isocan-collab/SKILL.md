@@ -281,7 +281,10 @@ that woke you, with no `session start` needed.
 
   `isocan command list` is the whole menu, and it is the same list the web
   app's composer offers, so a person and an agent are never looking at
-  different vocabularies. A home can add its own with `isocan command add`;
+  different vocabularies. One command is answered by the app itself — `/help`,
+  since a person should not have to wait for you to be told what their own
+  keyboard does — so you will rarely see it from the web app. You WILL see it
+  from a terminal, and it is a real question: answer it. A home can add its own with `isocan command add`;
   those live in `~/.isocan/commands/` and shadow a built-in of the same name.
 - **Tidying is a verb, not a judgement call.** `isocan format` arranges the
   whole canvas the way `/format` means: screens in a row keeping their reading

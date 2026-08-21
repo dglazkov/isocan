@@ -21,5 +21,6 @@ export * from "./annotation.ts";
 export * from "./activity.ts";
 export * from "./lineage.ts";
 export * from "./commands.ts";
+export * from "./shortcuts.ts";
 export * from "./format.ts";
 export * from "./favourites.ts";
