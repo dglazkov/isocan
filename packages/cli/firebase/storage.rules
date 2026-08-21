@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// The canned Cloud Storage rules `isocan share` deploys (#69). Closed for the
+// same reason the Firestore rules are: provisioning precedes minting, so there
+// is nobody yet who ought to read these bytes.
+//
+// #71 opens `blobs/{hash}` reads to a member, gated by a cross-service
+// `firestore.get()` on the membership doc. Phase 4 opens `pending-blobs`, the
+// staging area where an edit-tier guest leaves bytes the host has not hashed
+// yet — which is why guest uploads never write to `blobs/` directly.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Content-addressed and verified: written only by the host's daemon.
+    match /blobs/{hash} {
+      allow read, write: if false;
+    }
+
+    // Unverified guest bytes, awaiting the host's own hash. Phase 4.
+    match /pending-blobs/{hash} {
+      allow read, write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
