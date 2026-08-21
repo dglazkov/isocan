@@ -292,7 +292,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
             </div>
           ))}
           {thread && (
-            <OnIt threadId={thread.id} waiting={awaitingReply(thread, actor.id)} />
+            <OnIt thread={thread} waiting={awaitingReply(thread, actor.id)} />
           )}
         </div>
       </div>
