@@ -186,6 +186,190 @@ If they asked about something specific, answer that instead of reciting the
 list. A person typing /help mid-task has a question, not a curiosity.`,
   },
   {
+    name: "accessibility-audit",
+    description: "Audit selected screens against WCAG — from the real HTML, not a picture",
+    usage: "[what to focus on]",
+    source: "built-in",
+    body: `Audit the screens for accessibility, and write the report onto the canvas.
+
+READ THE SOURCE, NOT THE SCREENSHOT. \`isocan get <item> screen.html\` gives you
+the actual HTML and CSS. This is the whole reason the audit is worth running
+here rather than by eye: half of accessibility is invisible in a picture — a
+div pretending to be a button looks identical to a button.
+
+WHICH SCREENS: the items attached to the message, the ones #-referenced in it,
+or the selection. If none of those answers, ask.
+
+WHAT TO CHECK, in the order that matters:
+- **Semantic HTML.** Headings in order and not skipping levels; landmarks
+  (header/nav/main/footer); lists that are lists; \`<button>\` for things that
+  do something and \`<a href>\` for things that go somewhere. A clickable div is
+  the single most common finding and the most consequential.
+- **Names.** Every control has an accessible name — visible text, aria-label,
+  or a label element that actually points at it. Icon-only buttons are where
+  this fails.
+- **ARIA.** Roles that match what the element does, aria-describedby that
+  resolves to a real id, no aria-hidden on something focusable. No ARIA is
+  better than wrong ARIA; say so when you find decoration.
+- **Contrast.** Compute the ratio from the CSS rather than judging by eye:
+  4.5:1 for body text, 3:1 for large text and for the boundary of a control.
+  Give the numbers.
+- **Keyboard.** Tab order follows the DOM; nothing is reachable only by hover
+  or pointer; focus is VISIBLE (an \`outline: none\` with no replacement is a
+  finding); no keyboard trap.
+- **Images.** alt text that says what the image is FOR, empty alt on
+  decoration, and no alt that just repeats the filename.
+- **Motion and media**, if any: a \`prefers-reduced-motion\` path, captions.
+
+WRITE IT AS A DOCUMENT, not a chat message. \`isocan add audit.md --title
+"<screen> — accessibility audit" --prop parent=<the screen's item id>\`, so it
+hangs under the screen it is about.
+
+Structure it so somebody can act on it before lunch:
+- A one-paragraph verdict, and a count by severity.
+- Findings ordered by severity, each with: what is wrong, WHERE (the selector,
+  the element, the line if you can), which WCAG criterion it fails (with the
+  number, e.g. 1.4.3 Contrast (Minimum)), and the fix as a diff or a snippet.
+- What you checked and found FINE. A report with no green is a report nobody
+  believes.
+- What you could not check from source — anything that needs a screen reader
+  or a real keyboard — said plainly rather than left implied.
+
+Then reply on the thread with the count, the worst one in a sentence, and
+#the-report. If the person named a focus in the argument, lead with that.`,
+  },
+  {
+    name: "app-store-assets",
+    description: "Icon, three marketing screenshots, and the ASO metadata",
+    usage: "[what to emphasise]",
+    source: "built-in",
+    body: `Produce a full App Store set from the selected screens.
+
+Read "Making an image" in \`isocan --agent-help\` first — it has the three ways
+to make a picture here and a working headless-Chrome recipe. The short version:
+compose in HTML/SVG and render at an exact size. Do not generate UI.
+
+FIVE DELIVERABLES. Produce all five, even for a partial-sounding request; a
+half set is not usable in App Store Connect.
+
+**1. App icon — 1024x1024 PNG.**
+- The whole image IS the icon. No rounded rectangle, no squircle, no container
+  shape, no border, no margin: the store applies the mask itself, and an icon
+  that draws its own corners gets them clipped twice.
+- Full-bleed background, edge to edge — a 2-3 stop gradient from the app's own
+  palette, never a flat fill.
+- One motif, centred, orthographic, generous negative space. Distil what the
+  app IS into a single mark; do not draw a phone, and do not put text in it.
+- Weight and light: a soft top-down specular and a hint of material make it
+  read as an object rather than a sticker.
+
+**2-4. Three marketing screenshots — 1290x2796 PNG** (the 6.7" size; the store
+scales the rest down from it).
+- Put the REAL screen inside the device frame: \`isocan get\` it and drop it in
+  an \`<iframe>\`. Never redraw a UI. This is the rule the whole command hangs
+  on — a screenshot with invented UI is a lie about the product, and it is the
+  one thing reviewers notice.
+- Frame: straight on, no tilt, titanium rim, layered shadow for depth. No
+  hands, no desks, no cafés.
+- Layout: headline in the top fifth, device below it, ~150px of quiet at every
+  edge. Identical headline typography across all three — same face, weight,
+  size, alignment. That consistency is what makes a set read as a set.
+- Each one carries ONE idea: (2) the hook — what this is; (3) the feature that
+  makes it worth having; (4) polish — dark mode or the most visually
+  confident view, on a deep background with a midnight device.
+- The palette evolves gently across the three; it does not change.
+
+**5. ASO metadata — a document on the canvas.** Respect the limits exactly and
+count the characters rather than estimating:
+- App name, 30. Subtitle, 30. Short description, 80. Long description, 4000.
+- Keywords, 100 total, comma-separated, no spaces after commas, and NEVER a
+  word already in the name or subtitle — that is a wasted slot.
+- Category, primary and secondary, with a sentence on why.
+- What's New, 500.
+Lead with benefits, not features. Say what the person gets, not what the app
+contains.
+
+Everything lands on the canvas — \`isocan add icon.png --title "App icon"
+--prop parent=<the screen it came from>\` — so \`isocan format\` hangs the set
+under its source. Finish with one comment:
+the five deliverables, which way each image was made, and two or three
+follow-ups worth doing.`,
+  },
+  {
+    name: "web-assets",
+    description: "Favicon, Apple touch icon, and a manifest.json",
+    usage: "[what to emphasise]",
+    source: "built-in",
+    body: `Produce the web asset set from the selected screens.
+
+Read "Making an image" in \`isocan --agent-help\`. For icons, prefer AUTHORING
+the SVG over rendering or generating: a favicon is geometry, an SVG one is
+sharp at every size, and \`icon.svg\` is a first-class favicon in every current
+browser. Render the PNGs from that same SVG so they cannot drift.
+
+**1. Favicon.** One recognisable mark from the app's branding, on a full-bleed
+background — no squircle, no container shape, no margin. Deliver \`icon.svg\`
+plus \`favicon-32.png\` and \`favicon-192.png\` rendered from it. It has to be
+legible at 16px: if the mark has more than three parts, it is a logo, not a
+favicon.
+
+**2. Apple touch icon — 180x180 PNG.** Same mark, no transparency (iOS
+composites on white and a transparent icon looks broken), no rounded corners —
+iOS applies the mask.
+
+**3. manifest.json.** \`name\`, \`short_name\` (12 chars or it truncates on the
+home screen), \`icons\` covering 192 and 512 with \`purpose: "any maskable"\`,
+\`start_url\`, \`display: "standalone"\`, and \`theme_color\`/\`background_color\`
+taken from the app's actual palette rather than invented — the background
+colour is what people see during the splash, so it must match the app's first
+paint or the launch flashes.
+
+**4. The two lines nobody remembers.** Include the \`<link>\` tags to paste into
+\`<head>\`, since assets with no wiring are assets nobody installs.
+
+Land everything with \`isocan add icon.svg --title "Favicon" --prop
+parent=<the screen it came from>\`. Finish with one comment listing what you
+made, how each was made, and the head snippet.`,
+  },
+  {
+    name: "marketing-kit",
+    description: "Social card, banner, email header, and the copy to go with them",
+    usage: "[the angle to take]",
+    source: "built-in",
+    body: `Produce a marketing set from the selected screens.
+
+Read "Making an image" in \`isocan --agent-help\`. These are compositions —
+type, gradient, geometry, and where it helps a framed shot of the real screen —
+so compose and render rather than generate.
+
+**1. Social card — 1200x630 PNG** (the size Open Graph and Twitter actually
+use; 1:1 is for a feed post, and if they asked for one, do both).
+- It will be seen at 300px wide in a timeline. One idea, six words at most,
+  type large enough to read at a third of this size.
+- The product visible, not described.
+
+**2. Banner — 1600x900 PNG.** 16:9, room for the headline to breathe, safe
+margins so nothing important dies in a crop.
+
+**3. Email header — 1600x900 PNG,** and remember it renders at ~600px wide in
+most clients: no small type, no thin strokes, and legible on a white ground
+since half of clients strip backgrounds.
+
+**4. The copy, as HTML on the canvas.** A headline, a subhead, three short
+benefit lines, and one call to action. Reference the email header with a
+relative \`<img>\` so the document is self-contained on the canvas. Write like a
+person: no "revolutionise", no "seamless", no "unlock the power of". Say what
+it does and who it is for.
+
+ONE VOICE ACROSS ALL FOUR. Same palette, same type, same claim. A kit whose
+pieces argue with each other is worse than one piece.
+
+Land everything with \`isocan add card.png --title "Social card" --prop
+parent=<the screen it came from>\`. Finish with one comment: the four
+deliverables, how each image was made, and the single sentence you would lead
+with if you only got one.`,
+  },
+  {
     name: "format",
     description: "Tidy the whole canvas into rows, children under parents",
     usage: "[note]",

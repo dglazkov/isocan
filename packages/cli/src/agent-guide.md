@@ -377,6 +377,78 @@ that woke you, with no `session start` needed.
 - **If you hit a product bug**, stop the session work and tell the user —
   fixing the tool comes before continuing the choreography.
 
+## Making an image
+
+Several commands ask for pictures — an app icon, a marketing screenshot, a
+social card. You almost certainly have no image model, and for most of this
+work that is not the handicap it sounds like. Three ways, in the order to try
+them:
+
+**1. Author it.** Write the asset as SVG or HTML/CSS. This is the right answer
+for icons, favicons, social cards, banners, and anything else that is DESIGNED
+rather than photographed: gradients, specular highlights, glass, type,
+geometry — all of it is a CSS property or a path. The output is editable,
+diffable, and versioned, which a raster is not.
+
+**2. Render it.** Compose in HTML and screenshot it with headless Chrome at an
+exact pixel size. This is how you make a PNG when a PNG is required (an app
+icon must be 1024x1024; an App Store screenshot must be 1290x2796), and it is
+the ONLY way to put a real screen inside a device frame. The canvas's screens
+are already HTML — `isocan get <item> screen.html` and drop it in an
+`<iframe>`. A generated image would be a drawing OF the screen; this IS the
+screen.
+
+```js
+// render.mjs — HTML file in, PNG out, at exactly the size asked for.
+import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+const [, , file, out, w, h] = process.argv;
+const port = 9222 + Math.floor(process.pid % 500);
+const chrome = spawn(process.env.CHROME ?? "google-chrome", [
+  "--headless=new", `--remote-debugging-port=${port}`, `--window-size=${w},${h}`,
+  "--hide-scrollbars", "--no-first-run", "--force-device-scale-factor=1", "about:blank",
+], { stdio: "ignore" });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let target = null;
+for (let i = 0; i < 60 && !target; i++) {
+  await sleep(200);
+  try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === "page"); } catch {}
+}
+const { WebSocket } = await import("ws");
+const ws = new WebSocket(target.webSocketDebuggerUrl, { maxPayload: 1 << 28 });
+await new Promise((r) => ws.once("open", r));
+let id = 0; const pending = new Map();
+ws.on("message", (d) => { const m = JSON.parse(d.toString()); pending.get(m.id)?.(m.result); pending.delete(m.id); });
+const send = (method, params = {}) => new Promise((res) => { const mid = ++id; pending.set(mid, res); ws.send(JSON.stringify({ id: mid, method, params })); });
+await send("Page.enable");
+await send("Emulation.setDeviceMetricsOverride", { width: +w, height: +h, deviceScaleFactor: 1, mobile: false });
+await send("Page.navigate", { url: file.startsWith("file://") ? file : `file://${file}` });
+await sleep(1500); // let fonts and images land
+const { data } = await send("Page.captureScreenshot", { format: "png" });
+writeFileSync(out, Buffer.from(data, "base64"));
+ws.close(); chrome.kill();
+```
+
+On macOS, `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
+`ws` comes with isocan, so `node --input-type=module` from the isocan checkout
+finds it; anywhere else, `npm i ws` first. If there is no Chrome, say so and
+deliver the SVG — a real vector asset with a note beats a missing one.
+
+**3. Generate it.** If you have an image model, use it — but only where it
+earns its place: photoreal or textured backgrounds. Do not generate a picture
+of a screen you could have rendered, and never generate UI. Every one of these
+commands says "do not invent UI", and inventing it is the failure mode a model
+falls into by design.
+
+Whichever you used, SAY WHICH in your reply. "Composed as SVG" and "rendered
+from your actual screen" and "generated" are three different claims about how
+faithful the thing is, and the person deserves to know which one they are
+holding.
+
+Put every asset on the canvas — `isocan add icon.png --title "App icon"
+--prop parent=<the screen it came from>` — so it hangs under its source when
+anyone runs `isocan format`, instead of landing in a folder nobody opens.
+
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
