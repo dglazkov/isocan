@@ -31,6 +31,7 @@ import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.ts
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
+import { isTyping } from "../lib/keys.ts";
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -282,10 +283,7 @@ export function CanvasPage({
         zoomToFit();
         return;
       }
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        return;
-      }
+      if (isTyping(e.target)) return;
       const ui = useUiStore.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
