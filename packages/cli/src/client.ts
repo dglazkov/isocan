@@ -139,7 +139,7 @@ export class DaemonClient {
     projectId: string,
     sessionId: string,
     patch: UpdateSessionRequest,
-  ): Promise<{ ok: true }> {
+  ): Promise<{ ok: true; cancelled?: { threadId: string; by: string; at: string } }> {
     return this.request("PUT", `/api/projects/${projectId}/sessions/${sessionId}`, patch);
   }
 

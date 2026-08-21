@@ -285,6 +285,18 @@ that woke you, with no `session start` needed.
   It is a floor, not taste: clearing it makes a screen unembarrassing, not
   good. Good comes from the house style being specific and from the person
   rejecting drafts.
+- **Stop when you are told to stop.** If a command you run prints
+  `⚠ … CANCELLED this`, the person has called off the thread you picked up.
+  That is the whole instruction: stop building, say where you got to in one
+  comment, leave nothing half-made on the canvas (finish the one step that
+  makes a thing stand on its own, or `isocan rm` it and say which), and do not
+  finish the last bit because you were nearly done. `isocan command show
+  cancel` is the long version.
+
+  You will see it on the output of whatever command you happened to run,
+  because that is the only thing that reaches you mid-turn — you are not
+  watching the canvas while you work. It is said once, so do not wait for it
+  to be repeated.
 - **A message may BE a command.** When a comment starts with `/name` — the
   first thing in the body, nothing before it — the person did not type prose,
   they asked for a specific piece of work. Run `isocan command show <name>`:

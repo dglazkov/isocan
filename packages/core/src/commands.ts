@@ -517,6 +517,39 @@ anything they did not ask for. A canvas whose menu is forty commands nobody
 chose is worse than one with eight.`,
   },
   {
+    name: "cancel",
+    description: "Call off what was asked here — stop, say where you got to",
+    usage: "[why, or what to do instead]",
+    source: "built-in",
+    body: `Stop what you are doing on this thread.
+
+They have called it off. That is a complete instruction and it does not need
+justifying — do not argue with it, do not finish the last bit because you were
+nearly done, and do not ask whether they are sure.
+
+WHAT TO DO, in order:
+
+1. **Stop.** No more building, no more ops beyond the ones below.
+2. **Say where you got to**, precisely, in one comment: what you finished, what
+   is half done, and what you were about to do. "Stopped" is not enough; they
+   are cancelling because something changed, and what to do with the pieces is
+   their decision.
+3. **Leave the canvas consistent.** Anything you added that is only half a
+   thing — an item with placeholder content, a screen that references a file
+   you never wrote — either finish that ONE step so it stands on its own, or
+   remove it (\`isocan rm\`, which is the trash, so it is recoverable) and say
+   which you did. Never leave something on the canvas that looks finished and
+   is not.
+4. **Put the thread down**: posting your reply does this by itself.
+
+If they said what to do instead, that is a new request, not a continuation.
+Treat it as one: read it fresh, and if it is unclear, ask rather than assume it
+resembles what you were doing.
+
+If you had not started, say so in one line. That is the best possible outcome
+of a cancellation and it costs them nothing to hear.`,
+  },
+  {
     name: "format",
     description: "Tidy the whole canvas into rows, children under parents",
     usage: "[note]",

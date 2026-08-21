@@ -267,6 +267,8 @@ function MentionMenu({
       const card = cardRef.current;
       if (!card) return;
       const row = menu.children[active] as HTMLElement | undefined;
+      // A list long enough to scroll can walk the highlight out of sight.
+      row?.scrollIntoView({ block: "nearest" });
       const rowTop = row ? row.getBoundingClientRect().top : top;
       const fitsRight =
         left + menu.offsetWidth + CARD_GAP + CARD_WIDTH <= window.innerWidth - MENU_EDGE;
@@ -441,6 +443,15 @@ function findTrigger(value: string, caret: number): Trigger | null {
 }
 
 const MAX_MATCHES = 6;
+/**
+ * Commands get a longer list than people or items do, and the difference is
+ * real: the @ and # menus are filters over something you already know exists,
+ * so six is plenty to narrow with. The command menu is the MENU — typing "/"
+ * is how you find out what there is — and cutting it at six meant a command
+ * simply did not exist for anyone who never typed its first letter. It
+ * scrolls, and the arrows keep the active row in view.
+ */
+const MAX_COMMANDS = 14;
 
 /** Peers whose name — or any word of it — starts with the query. */
 function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
@@ -457,7 +468,7 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
 /** The commands worth offering — core decides, so the menu and
  * `isocan command list` can never disagree about what exists. */
 function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption[] {
-  return matchCommands(commands, query, MAX_MATCHES).map((command) => ({
+  return matchCommands(commands, query, MAX_COMMANDS).map((command) => ({
     id: command.name,
     label: command.name,
     hint: command.description,

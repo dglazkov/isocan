@@ -1,3 +1,4 @@
+import { parseSlashCommand } from "./commands.ts";
 import type { PresenceSession } from "./protocol.ts";
 
 /**
@@ -74,4 +75,47 @@ export function summonedBy(
   if (thread.main) return agents;
   const addressed = new Set(last.mentions ?? []);
   return agents.filter((session) => addressed.has(session.actor.id));
+}
+
+
+/**
+ * Calling something off.
+ *
+ * Two different acts wear the word "cancel". Before anybody picks it up, the
+ * fix is to RETRACT: posting a comment is undoable (`thread.reply` inverts to
+ * `comment.remove`), so the request simply stops existing. Once an agent has
+ * it, the request is already being acted on and cannot be unsaid — the only
+ * honest move is to ask them to stop, which is a message like any other.
+ *
+ * So a cancellation is a comment reading `/cancel`, and that is not a
+ * workaround: it lands in the history where "why did this stop halfway" gets
+ * answered later, it reaches every surface, and it needs no new op.
+ */
+export const CANCEL_COMMAND = "cancel";
+
+/** The most recent cancellation in this thread, if any. */
+export function latestCancel(thread: {
+  comments: { id: string; body: string; author: { id: string; name: string }; createdAt: string }[];
+}): { id: string; author: { id: string; name: string }; createdAt: string } | null {
+  for (let i = thread.comments.length - 1; i >= 0; i--) {
+    const comment = thread.comments[i]!;
+    const parsed = parseSlashCommand(comment.body);
+    if (parsed?.name === CANCEL_COMMAND) return comment;
+  }
+  return null;
+}
+
+/**
+ * Was this thread called off AFTER somebody picked it up? The comparison is
+ * the whole point: a cancellation from last week is history, and one from a
+ * minute ago is an instruction to stop what you are doing right now.
+ */
+export function cancelledSince(
+  thread: Parameters<typeof latestCancel>[0],
+  sinceISO: string | null,
+): ReturnType<typeof latestCancel> {
+  const cancel = latestCancel(thread);
+  if (!cancel) return null;
+  if (sinceISO && cancel.createdAt <= sinceISO) return null;
+  return cancel;
 }

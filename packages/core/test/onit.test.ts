@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { listeners, summonedBy, workersOn, type PresenceSession } from "../src/index.ts";
+import {
+  cancelledSince,
+  latestCancel,
+  listeners,
+  summonedBy,
+  workersOn,
+  type PresenceSession,
+} from "../src/index.ts";
 
 const session = (over: Partial<PresenceSession>): PresenceSession => ({
   sessionId: "ses_1", actor: { id: "usr_1", name: "Fable" }, kind: "cli", label: null,
@@ -111,5 +118,35 @@ describe("who the last message woke", () => {
 
   it("says nobody for an empty thread", () => {
     expect(summonedBy([session({})], thread({ main: true }))).toEqual([]);
+  });
+});
+
+describe("calling something off", () => {
+  const comment = (id: string, body: string, createdAt: string) => ({
+    id, body, author: { id: "usr_di", name: "Di" }, createdAt,
+  });
+
+  it("finds a /cancel in the thread", () => {
+    const thread = { comments: [comment("c1", "do the thing", "2026-08-21T10:00:00.000Z"), comment("c2", "/cancel", "2026-08-21T10:01:00.000Z")] };
+    expect(latestCancel(thread)?.id).toBe("c2");
+  });
+
+  it("takes the most recent one", () => {
+    const thread = { comments: [comment("c1", "/cancel", "2026-08-21T10:00:00.000Z"), comment("c2", "actually go on", "2026-08-21T10:01:00.000Z"), comment("c3", "/cancel no really", "2026-08-21T10:02:00.000Z")] };
+    expect(latestCancel(thread)?.id).toBe("c3");
+  });
+
+  it("is not a message ABOUT cancelling", () => {
+    // Same rule every command follows: only the start of the message counts.
+    const thread = { comments: [comment("c1", "I nearly typed /cancel there", "2026-08-21T10:00:00.000Z")] };
+    expect(latestCancel(thread)).toBeNull();
+  });
+
+  it("only counts a cancellation that came after the work started", () => {
+    // Last week's cancellation is history; a minute ago is an instruction.
+    const thread = { comments: [comment("c1", "/cancel", "2026-08-21T10:00:00.000Z")] };
+    expect(cancelledSince(thread, "2026-08-21T09:00:00.000Z")?.id).toBe("c1");
+    expect(cancelledSince(thread, "2026-08-21T11:00:00.000Z")).toBeNull();
+    expect(cancelledSince(thread, null)?.id).toBe("c1");
   });
 });
