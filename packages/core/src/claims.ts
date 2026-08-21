@@ -2,7 +2,7 @@ import type { Actor } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
 import { newActorId } from "./ids.ts";
-import { type ActorColors, isIdentityColor } from "./identity.ts";
+import { type ActorColors, type ActorNames, isIdentityColor } from "./identity.ts";
 
 export type ActorClaimOp = Extract<Operation, { type: "actor.claim" }>;
 export type ActorSetColorOp = Extract<Operation, { type: "actor.setColor" }>;
@@ -200,6 +200,26 @@ export function applyActorColor(
   if (op.color === null) delete colors[op.actorId];
   else colors[op.actorId] = op.color;
   return { ...registry, colors };
+}
+
+/**
+ * The name every actor goes by now, keyed by actor id.
+ *
+ * Built from the claims rather than stored: a claim IS the act of taking a
+ * name, so the registry already knows. An actor can hold more than one session
+ * key (a second machine, an `as` reincarnation), and then the most recent
+ * claim wins — a rename is the newest claim by construction.
+ */
+export function actorNames(registry: ActorRegistry): ActorNames {
+  const names: ActorNames = {};
+  const claimedAt: Record<string, string> = {};
+  for (const binding of Object.values(registry.claims)) {
+    const seen = claimedAt[binding.id];
+    if (seen !== undefined && seen >= binding.boundAt) continue;
+    names[binding.id] = binding.name;
+    claimedAt[binding.id] = binding.boundAt;
+  }
+  return names;
 }
 
 /** Deliberate return of an actor whose conversation is gone. Refused while

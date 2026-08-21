@@ -25,6 +25,7 @@ import {
   DRAWING_PROPERTIES,
   DRAWING_TITLE,
   IDENTITY_COLORS,
+  actorNameIn,
   collectCanvasActors,
   collectCanvasNames,
   collectItemRefCandidates,
@@ -1015,13 +1016,16 @@ project
       }
       if (ctx.json) return printJson(projects);
       const config = await readConfig(ctx.home);
+      // Who touched it last, by the name they go by NOW — a project row has no
+      // snapshot to carry the registry, so ask for it.
+      const names = await ctx.client.actorNames();
       printTable(
         projects.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
           description: truncate(p.description, 40),
           updated: p.updatedAt,
-          by: p.updatedBy.name,
+          by: actorNameIn(names, p.updatedBy),
         })),
       );
     }),
@@ -1052,8 +1056,8 @@ project
         items: String(Object.keys(snapshot.canvas.items).length),
         threads: String(Object.keys(snapshot.canvas.threads).length),
         trash: String(snapshot.canvas.trash.length),
-        created: `${p.createdAt} by ${p.createdBy.name}`,
-        updated: `${p.updatedAt} by ${p.updatedBy.name}`,
+        created: `${p.createdAt} by ${actorNameIn(snapshot.names, p.createdBy)}`,
+        updated: `${p.updatedAt} by ${actorNameIn(snapshot.names, p.updatedBy)}`,
       });
     }),
   );
@@ -1329,7 +1333,7 @@ program
           pos: `${i.x},${i.y}`,
           size: `${i.width}x${i.height}`,
           vers: String(i.versions.length),
-          "updated by": i.updatedBy.name,
+          "updated by": actorNameIn(snapshot.names, i.updatedBy),
         })),
       );
     }),
@@ -1386,8 +1390,8 @@ program
         size: `${item.width}x${item.height}`,
         properties: formatProps(item.properties) || "(none)",
         versions: `${item.versions.length} (current: ${item.currentVersionId})`,
-        created: `${item.createdAt} by ${item.createdBy.name}`,
-        updated: `${item.updatedAt} by ${item.updatedBy.name}`,
+        created: `${item.createdAt} by ${actorNameIn(snapshot.names, item.createdBy)}`,
+        updated: `${item.updatedAt} by ${actorNameIn(snapshot.names, item.updatedBy)}`,
       });
     }),
   );
@@ -1657,7 +1661,7 @@ program
           n: String(index + 1),
           filename: v.filename,
           size: String(v.size),
-          created: `${v.createdAt} by ${v.createdBy.name}`,
+          created: `${v.createdAt} by ${actorNameIn(snapshot.names, v.createdBy)}`,
         })),
       );
     }),
@@ -1896,7 +1900,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${c.author.name} · ${c.createdAt}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt}`);
           console.log(`    ${c.body}`);
         }
       }

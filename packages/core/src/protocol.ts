@@ -1,4 +1,4 @@
-import type { ActorColors } from "./identity.ts";
+import type { ActorColors, ActorNames } from "./identity.ts";
 import type { Actor, CanvasState, Project } from "./model.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 
@@ -15,6 +15,9 @@ export type ServerMessage =
       lastSeq: number;
       /** Chosen identity colors, so the first paint is already right. */
       colors: ActorColors;
+      /** Current names (actor id → name), so a rename reaches the words
+       * somebody wrote before it. Absent entries keep the stamped name. */
+      names: ActorNames;
     }
   | { type: "op-applied"; entry: LogEntry }
   | { type: "project-deleted" }
@@ -22,7 +25,12 @@ export type ServerMessage =
    * as often as who is here, and every client that needs one is already
    * listening. A color nobody else can see is not an identity, so it travels
    * on the same channel as the faces it paints. */
-  | { type: "presence-roster"; sessions: PresenceSession[]; colors: ActorColors };
+  | {
+      type: "presence-roster";
+      sessions: PresenceSession[];
+      colors: ActorColors;
+      names: ActorNames;
+    };
 
 /** Client → server. Presence is the ephemeral plane: daemon memory + WS
  * fan-out only — never the oplog, never storage, never undo. */
@@ -177,6 +185,9 @@ export interface CanvasSnapshotResponse {
   lastSeq: number;
   /** Chosen identity colors (actor id → hex); absent entries are derived. */
   colors: ActorColors;
+  /** Current names (actor id → name); absent entries keep the name that
+   * was stamped on the comment or op being rendered. */
+  names: ActorNames;
 }
 
 export interface HealthResponse {

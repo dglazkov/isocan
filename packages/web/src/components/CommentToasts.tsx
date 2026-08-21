@@ -5,6 +5,7 @@ import { dismissNotice, useUnreadStore, type CommentNotice } from "../stores/unr
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 const LIFETIME_MS = 12_000; // long enough to read, short enough to forgive
 
@@ -42,6 +43,7 @@ export function CommentToasts() {
 
 function Toast({ notice }: { notice: CommentNotice }) {
   const colors = useActorColors();
+  const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas?.threads[notice.threadId];
   const item = thread?.anchorItemId ? canvas?.items[thread.anchorItemId] : undefined;
@@ -66,11 +68,11 @@ function Toast({ notice }: { notice: CommentNotice }) {
     <div className="toast">
       <button className="toast-body" onClick={jump} title="Show me where">
         <span className="toast-avatar" style={{ background: actorColorIn(colors, notice.author.id) }}>
-          {notice.author.name.charAt(0).toUpperCase()}
+          {actorNameIn(names, notice.author).charAt(0).toUpperCase()}
         </span>
         <span className="toast-text">
           <span className="toast-who">
-            {notice.author.name} commented{item ? ` on ${item.title}` : ""}
+            {actorNameIn(names, notice.author)} commented{item ? ` on ${item.title}` : ""}
           </span>
           <span className="toast-said">{notice.body}</span>
         </span>

@@ -10,6 +10,7 @@ import type {
   Operation,
   PostOpResponse,
   Project,
+  ActorNames,
 } from "@isocan/core";
 import { encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
 
@@ -57,6 +58,11 @@ export function sendOp(
 /** Chosen identity colors, actor id → hex. */
 export function fetchActorColors(): Promise<ActorColors> {
   return request("GET", "/api/colors");
+}
+
+/** The name each actor goes by now, actor id → name. */
+export function fetchActorNames(): Promise<ActorNames> {
+  return request("GET", "/api/names");
 }
 
 export function listProjects(): Promise<Project[]> {

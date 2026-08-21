@@ -10,6 +10,7 @@ import type {
   Project,
   ProjectState,
   ServerMessage,
+  ActorNames,
 } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
 import { CLIENT_ID } from "../lib/api.ts";
@@ -30,6 +31,10 @@ interface CanvasStore {
    * registry. Only the exceptions are here: everyone else wears the color
    * their id implies. See lib/colors.ts. */
   actorColors: ActorColors;
+  /** The name each actor goes by NOW (actor id → name), from the same
+   * registry. A comment carries the name its author wore when they wrote it;
+   * this is what we show instead. See lib/names.ts. */
+  actorNames: ActorNames;
 }
 
 /**
@@ -46,6 +51,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   connection: "connecting",
   sessions: [],
   actorColors: {},
+  actorNames: {},
 }));
 
 // ---- presence publishing (throttled, trailing-edge) ----
@@ -203,6 +209,7 @@ function open(projectId: string): void {
         lastSeq: message.lastSeq,
         connection: "live",
         actorColors: message.colors,
+        actorNames: message.names,
       });
       syncProject(projectId, message.canvas, presenceActor?.id);
       // Announce this tab's presence immediately so it shows up in rosters
@@ -212,6 +219,7 @@ function open(projectId: string): void {
       useCanvasStore.setState({
         sessions: message.sessions.filter((session) => session.sessionId !== CLIENT_ID),
         actorColors: message.colors,
+        actorNames: message.names,
       });
     } else if (message.type === "op-applied") {
       const { project, canvas, lastSeq } = useCanvasStore.getState();

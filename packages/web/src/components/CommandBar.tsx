@@ -6,6 +6,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { listeningAgents, postToMain } from "../lib/mainthread.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /**
  * The friction-free lane (⌘K): a floating bar to talk to your emissary from
@@ -20,6 +21,7 @@ import { listeningAgents, postToMain } from "../lib/mainthread.ts";
  */
 export function CommandBar({ projectId, actor }: { projectId: string; actor: Actor }) {
   const colors = useActorColors();
+  const names = useActorNames();
   const open = useUiStore((s) => s.commandBarOpen);
   const setOpen = useUiStore((s) => s.setCommandBarOpen);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -88,7 +90,7 @@ export function CommandBar({ projectId, actor }: { projectId: string; actor: Act
             {recent.map((c) => (
               <div key={c.id} className="cmdbar-msg">
                 <span className="cmdbar-author" style={{ color: actorColorIn(colors, c.author.id) }}>
-                  {c.author.name}
+                  {actorNameIn(names, c.author)}
                 </span>
                 <span className="cmdbar-body">{c.body}</span>
               </div>

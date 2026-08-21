@@ -48,19 +48,23 @@ export function attachWebSockets(
       projectId,
       setTimeout(() => {
         pendingRoster.delete(projectId);
-        void engine.actorColors().then((colors) => {
-          broadcast(projectId, {
-            type: "presence-roster",
-            sessions: presence.roster(projectId),
-            colors,
-          });
-        });
+        void Promise.all([engine.actorColors(), engine.actorNames()]).then(
+          ([colors, names]) => {
+            broadcast(projectId, {
+              type: "presence-roster",
+              sessions: presence.roster(projectId),
+              colors,
+              names,
+            });
+          },
+        );
       }, 40),
     );
   };
 
-  // A chosen identity color repaints faces, cursors, pins, and outlines on
-  // every open canvas — it belongs to the actor, not to one room.
+  // A chosen color repaints faces, cursors, pins, and outlines on every open
+  // canvas, and a new name re-letters everything that actor ever said. Both
+  // belong to the actor, not to one room.
   engine.onColors(() => {
     for (const projectId of rooms.keys()) scheduleRoster(projectId);
   });
@@ -91,6 +95,7 @@ export function attachWebSockets(
         type: "presence-roster",
         sessions: presence.roster(projectId),
         colors: snapshot.colors,
+        names: snapshot.names,
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {

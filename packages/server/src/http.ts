@@ -80,6 +80,10 @@ export function registerRoutes(
    * open (the projects page) — everything absent is derived from the id. */
   app.get("/api/colors", async () => engine.actorColors());
 
+  /** Current names, for clients rendering words somebody wrote under a name
+   * they no longer use — the projects page paints them too. */
+  app.get("/api/names", async () => engine.actorNames());
+
   app.get("/api/projects", async () => engine.listProjects());
 
   app.get("/api/projects/:id", async (req) => {

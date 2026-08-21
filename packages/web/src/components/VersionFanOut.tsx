@@ -3,6 +3,7 @@ import type { Actor, Item } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 const FAN_SCALE = 0.62;
 const FAN_GAP = 18;
@@ -21,6 +22,7 @@ export function VersionFanOut({
   actor: Actor;
 }) {
   const setFanned = useUiStore((s) => s.setFanned);
+  const names = useActorNames();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));
@@ -61,7 +63,7 @@ export function VersionFanOut({
           >
             <div className="fan-label">
               <b>v{item.versions.indexOf(version) + 1}</b>
-              <span>{version.createdBy.name}</span>
+              <span>{actorNameIn(names, version.createdBy)}</span>
               <span>{new Date(version.createdAt).toLocaleDateString()}</span>
             </div>
             <div className="fan-body">

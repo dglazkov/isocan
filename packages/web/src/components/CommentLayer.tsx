@@ -22,6 +22,7 @@ import { submitOnCmdEnter } from "../lib/submit.ts";
 import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -160,6 +161,7 @@ function ThreadPin({
   unread: number;
 }) {
   const colors = useActorColors();
+  const names = useActorNames();
   const first = thread.comments[0]!;
   // Distinct authors in comment order; up to three initials, then a +N chip.
   const authors: Actor[] = [];
@@ -178,15 +180,15 @@ function ThreadPin({
       style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
       title={
         unread > 0
-          ? `${unread} new from ${newest.author.name} — ${newest.body.slice(0, 60)}`
-          : `${authors.map((author) => author.name).join(", ")} — ${first.body.slice(0, 60)}`
+          ? `${unread} new from ${actorNameIn(names, newest.author)} — ${newest.body.slice(0, 60)}`
+          : `${authors.map((author) => actorNameIn(names, author)).join(", ")} — ${first.body.slice(0, 60)}`
       }
       onPointerDown={(e) => e.stopPropagation()}
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
       {shown.map((author) => (
         <span className="pin-avatar" key={author.id} style={{ background: actorColorIn(colors, author.id) }}>
-          {author.name.charAt(0).toUpperCase()}
+          {actorNameIn(names, author).charAt(0).toUpperCase()}
         </span>
       ))}
       {overflow > 0 && <span className="pin-avatar pin-more">+{overflow}</span>}
@@ -207,6 +209,8 @@ function ThreadPopover({
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
+  // The registry names people, not the comment: see lib/names.ts.
+  const names = useActorNames();
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const chips = useMemo(
@@ -241,7 +245,7 @@ function ThreadPopover({
       >
         {thread.comments.map((comment) => (
           <div className="comment" key={comment.id}>
-            <span className="who">{comment.author.name}</span>
+            <span className="who">{actorNameIn(names, comment.author)}</span>
             <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
             {workedFor(comment) && (
               <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>

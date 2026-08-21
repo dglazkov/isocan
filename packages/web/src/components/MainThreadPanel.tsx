@@ -17,6 +17,7 @@ import { ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -154,6 +155,9 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   // selection changes under the pointer.
   const selected = useUiStore((s) => s.selectedItemIds);
   const colors = useActorColors();
+  // Names come from the registry, not from the comment: a rename has to reach
+  // what its author said before it (lib/names.ts).
+  const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
   const [draft, setDraft] = useState("");
@@ -229,7 +233,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           {thread?.comments.map((comment) => (
             <div className="comment" key={comment.id}>
               <span className="who" style={{ color: actorColorIn(colors, comment.author.id) }}>
-                {comment.author.name}
+                {actorNameIn(names, comment.author)}
               </span>
               <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
               {workedFor(comment) && (

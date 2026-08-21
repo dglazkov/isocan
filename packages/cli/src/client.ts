@@ -20,6 +20,7 @@ import type {
   UpdateSessionRequest,
   WatchLogRequest,
   WatchLogResponse,
+  ActorNames,
 } from "@isocan/core";
 import { encodeFilename, FILENAME_HEADER } from "@isocan/core";
 import type { BuildStamp } from "@isocan/server";
@@ -162,6 +163,12 @@ export class DaemonClient {
 
   snapshot(projectId: string): Promise<CanvasSnapshotResponse> {
     return this.request("GET", `/api/projects/${projectId}/canvas`);
+  }
+
+  /** The name each actor goes by now. A snapshot already carries this; it is
+   * fetched on its own for commands that print names without one. */
+  actorNames(): Promise<ActorNames> {
+    return this.request("GET", "/api/names");
   }
 
   /** With waitMs, the daemon long-polls: holds until an entry lands past
