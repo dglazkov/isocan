@@ -51,6 +51,9 @@ const CORE_SERVICES = [
   "identitytoolkit.googleapis.com",
   "cloudbilling.googleapis.com",
   "iam.googleapis.com",
+  // Enabled on a new project already, but it is what makes the project
+  // nameable as a quota project — and nothing works if it is not.
+  "serviceusage.googleapis.com",
 ];
 
 /** Enabled inside the storage step instead, once billing is known to be
@@ -178,6 +181,11 @@ export interface Cloud {
     url: string,
     token: string,
     body?: unknown,
+    /** Whose quota to spend. A token minted by `gcloud auth print-access-token`
+     * is a PERSON's credential and carries no project of its own, and the
+     * Firebase APIs refuse to guess one — so every call names the project it
+     * is about. */
+    quotaProject?: string,
   ): Promise<{ status: number; body: any }>;
   sleep(ms: number): Promise<void>;
   now(): string;
@@ -209,11 +217,12 @@ export const systemCloud: Cloud = {
       child.on("close", (code) => resolve(code ?? 1));
     });
   },
-  async request(method, url, token, body) {
+  async request(method, url, token, body, quotaProject) {
     const res = await fetch(url, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
+        ...(quotaProject ? { "x-goog-user-project": quotaProject } : {}),
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
@@ -291,26 +300,42 @@ export const STEPS: Step[] = [
     name: "account",
     says: "checking your Google account",
     async run(run) {
-      const active = await gcloud(run, [
-        "auth",
-        "list",
-        "--filter=status:ACTIVE",
-        "--format=value(account)",
-      ]);
-      if (active) {
-        run.record.account = active.split("\n")[0]!.trim();
-        run.say(`    signed in as ${run.record.account}`);
-        return;
+      // `gcloud auth list` will happily name an ACTIVE account whose
+      // credentials expired months ago — the name is cached, the token is not.
+      // So the only honest check is asking for a token, which is the thing
+      // every later step actually spends.
+      const named = async () =>
+        (
+          await gcloud(run, ["auth", "list", "--filter=status:ACTIVE", "--format=value(account)"])
+        )
+          .split("\n")[0]
+          ?.trim() ?? "";
+      let who = await named();
+      let probe = await run.cloud.exec("gcloud", ["auth", "print-access-token"]);
+      if (!who || probe.status !== 0) {
+        run.say(
+          who
+            ? `    ${who} needs to sign in again — opening a browser tab`
+            : "    no account yet — opening a browser tab to sign in",
+        );
+        const code = await run.cloud.attach("gcloud", ["auth", "login"]);
+        if (code !== 0) {
+          throw new ProvisionError(
+            "`gcloud auth login` did not complete. It needs a terminal it can prompt in — " +
+              "run it yourself, then run `isocan share` again.",
+          );
+        }
+        who = await named();
+        probe = await run.cloud.exec("gcloud", ["auth", "print-access-token"]);
+        if (probe.status !== 0) {
+          throw new ProvisionError(
+            `gcloud still cannot mint a token:\n${indent(probe.stderr || probe.stdout)}`,
+          );
+        }
       }
-      run.say("    no account yet — opening a browser tab to sign in");
-      const code = await run.cloud.attach("gcloud", ["auth", "login"]);
-      if (code !== 0) throw new ProvisionError("`gcloud auth login` did not complete");
-      const signed = (
-        await gcloud(run, ["auth", "list", "--filter=status:ACTIVE", "--format=value(account)"])
-      )
-        .split("\n")[0]
-        ?.trim();
-      if (signed) run.record.account = signed;
+      if (who) run.say(`    signed in as ${who}`);
+      if (who) run.record.account = who;
+      run.token = probe.stdout.trim();
     },
   },
   {
@@ -464,18 +489,51 @@ export const STEPS: Step[] = [
       const id = run.record.firebaseProject;
       // Guests are admitted by a link, not by an account: the browser signs in
       // anonymously and silently, and the capability token does the rest.
-      const done = await api(
+      //
+      // A project that has never had Auth turned on has no config to patch —
+      // it answers CONFIGURATION_NOT_FOUND, not "anonymous is off" — so the
+      // config has to be brought into existence first. That call is Identity
+      // Platform's, and Identity Platform is a paid feature, which is the one
+      // place this dance asks a Spark-plan host for a click.
+      const config = await api(
+        run,
+        "GET",
+        `${IDENTITY_API}/admin/v2/projects/${id}/config`,
+        undefined,
+        { tolerate: [400, 403, 404] },
+      );
+      if (!config) {
+        const started = await api(
+          run,
+          "POST",
+          `${IDENTITY_API}/v2/projects/${id}/identityPlatform:initializeAuth`,
+          {},
+          { tolerate: [400, 403, 404, 409] },
+        );
+        if (!started) {
+          return note(
+            run,
+            "signin",
+            "anonymous sign-in is what admits someone holding a link, and this project " +
+              "has never had Auth turned on. One click, free: " +
+              `https://console.firebase.google.com/project/${id}/authentication/providers ` +
+              "(Anonymous → Enable). Linking a billing account does it from here instead. " +
+              "Either way, run `isocan share` again afterwards.",
+          );
+        }
+      }
+      const enabled = await api(
         run,
         "PATCH",
         `${IDENTITY_API}/admin/v2/projects/${id}/config?updateMask=signIn.anonymous.enabled`,
         { signIn: { anonymous: { enabled: true } } },
-        { tolerate: [403, 404] },
+        { tolerate: [400, 403, 404] },
       );
-      if (done) return;
+      if (enabled) return;
       return note(
         run,
         "signin",
-        `anonymous sign-in could not be turned on from here — enable it at ` +
+        "Auth is on, but anonymous sign-in would not enable from here — turn it on at " +
           `https://console.firebase.google.com/project/${id}/authentication/providers ` +
           "(Anonymous → Enable), then run `isocan share` again",
       );
@@ -533,25 +591,34 @@ export const STEPS: Step[] = [
         );
       }
       await gcloud(run, ["services", "enable", ...STORAGE_SERVICES, "--project", id, "--quiet"]);
-      const bucket = `${id}.firebasestorage.app`;
-      await gcloud(
-        run,
-        [
+      // Not `gcloud storage buckets create`: the bucket a Firebase project
+      // keeps its blobs in lives under `firebasestorage.app`, a domain Google
+      // owns, so raw Cloud Storage refuses to make one there ("another user
+      // owns the domain"). Firebase's own default-bucket call is the door —
+      // and it registers the bucket with Firebase in the same breath.
+      const url = `${STORAGE_API}/v1beta/projects/${id}/defaultBucket`;
+      const read = () => api(run, "GET", url, undefined, { tolerate: [400, 403, 404] });
+      let info = await read();
+      if (!info?.bucket?.name) {
+        const made = await api(
+          run,
+          "POST",
+          url,
+          { location: storageLocation(run.record.location) },
+          { tolerate: [400, 409] },
+        );
+        info = made?.bucket?.name ? made : await read();
+      }
+      const bucket = String(info?.bucket?.name ?? "").split("/").pop();
+      if (!bucket) {
+        return note(
+          run,
           "storage",
-          "buckets",
-          "create",
-          `gs://${bucket}`,
-          "--location",
-          storageLocation(run.record.location),
-          "--uniform-bucket-level-access",
-          "--project",
-          id,
-        ],
-        { tolerate: /already exists|409/i },
-      );
-      await api(run, "POST", `${STORAGE_API}/v1beta/projects/${id}/buckets/${bucket}:addFirebase`, {}, {
-        tolerate: [409],
-      });
+          "the blob bucket could not be created from here — make one at " +
+            `https://console.firebase.google.com/project/${id}/storage ` +
+            "(any location), then run `isocan share` again",
+        );
+      }
       run.record.storageBucket = bucket;
       await writeDeployWorkspace(run);
       await firebaseDeploy(run, ["--only", "storage"]);
@@ -657,16 +724,24 @@ async function gcloud(
   throw new ProvisionError(`\`gcloud ${args.slice(0, 3).join(" ")}\` failed:\n${indent(message)}`);
 }
 
-/** IAM and freshly created projects are eventually consistent; the first
- * answer is sometimes "no such thing" about a thing that exists. */
+/**
+ * The two ways IAM says "ask me again". A freshly created service account is
+ * eventually consistent, so the first answer is sometimes "no such thing"
+ * about a thing that exists — and binding several roles in a row is several
+ * read-modify-writes of one policy, which collide with each other and with
+ * whatever Google is doing to a project it has just finished making. Both are
+ * transient, and both want backoff rather than a louder try.
+ */
+const TRANSIENT =
+  /does not exist|not found|NOT_FOUND|propagat|concurrent policy changes|ETag|conflict|ABORTED/i;
+
 async function withRetry<T>(run: Run, attempt: () => Promise<T>): Promise<T> {
   for (let tries = 1; ; tries++) {
     try {
       return await attempt();
     } catch (err) {
-      const message = (err as Error).message;
-      if (tries >= 5 || !/does not exist|not found|NOT_FOUND|propagat/i.test(message)) throw err;
-      await run.cloud.sleep(3000);
+      if (tries >= 6 || !TRANSIENT.test((err as Error).message)) throw err;
+      await run.cloud.sleep(1000 * 2 ** (tries - 1));
     }
   }
 }
@@ -683,7 +758,13 @@ async function api(
   body?: unknown,
   opts: { tolerate?: number[] } = {},
 ): Promise<any> {
-  const res = await run.cloud.request(method, url, await token(run), body);
+  const res = await run.cloud.request(
+    method,
+    url,
+    await token(run),
+    body,
+    run.record.firebaseProject,
+  );
   if (res.status >= 200 && res.status < 300) return res.body;
   if (opts.tolerate?.includes(res.status)) return null;
   const detail =
@@ -713,7 +794,7 @@ async function settle(run: Run, operation: any): Promise<any> {
  */
 async function writeDeployWorkspace(run: Run): Promise<string> {
   const dir = paths.remoteDeployDir(run.home, run.record.firebaseProject);
-  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  await fs.mkdir(path.join(dir, "config"), { recursive: true, mode: 0o700 });
   for (const file of ["firestore.rules", "storage.rules", "firestore.indexes.json"]) {
     await fs.copyFile(path.join(cannedRulesDir(), file), path.join(dir, file));
   }
@@ -727,8 +808,15 @@ async function writeDeployWorkspace(run: Run): Promise<string> {
   // directory that is not there fails config validation, and would take the
   // rules deploy down with it.
   if (run.webDist && (await fileExists(path.join(run.webDist, "index.html")))) {
+    // Copied in rather than pointed at: firebase-tools refuses any `public`
+    // outside its project directory, and a checkout is always outside this
+    // one. Replaced wholesale each deploy, so yesterday's hashed assets do
+    // not ride along with today's.
+    const publicDir = path.join(dir, "public");
+    await fs.rm(publicDir, { recursive: true, force: true });
+    await fs.cp(run.webDist, publicDir, { recursive: true });
     config.hosting = {
-      public: path.relative(dir, run.webDist),
+      public: "public",
       ignore: ["firebase.json", "**/.*", "**/node_modules/**"],
       // The guest link is `/c/<projectId>#<secret>`, and every path under it
       // is the same single-page app the local daemon already serves.
@@ -749,6 +837,14 @@ function cannedRulesDir(): string {
  * as a person: the credential the daemon will use for the mirror is the same
  * one that deploys, so there is exactly one thing to keep and one thing to
  * revoke — and no second browser tab.
+ *
+ * Which takes one more step than setting `GOOGLE_APPLICATION_CREDENTIALS`.
+ * firebase-tools prefers its OWN cached login to that variable, and will sit
+ * there refusing to refresh a user token from a year ago rather than notice
+ * the service account under its nose. So it gets a config directory of its
+ * own, inside the deploy workspace, where there is no cached login to prefer.
+ * That also means these deploys neither depend on nor disturb whatever
+ * `firebase login` the person at this machine keeps for their own work.
  */
 async function firebaseDeploy(run: Run, args: string[]): Promise<void> {
   const dir = paths.remoteDeployDir(run.home, run.record.firebaseProject);
@@ -766,6 +862,7 @@ async function firebaseDeploy(run: Run, args: string[]): Promise<void> {
     {
       cwd: dir,
       env: {
+        XDG_CONFIG_HOME: path.join(dir, "config"),
         ...(run.record.keyFile ? { GOOGLE_APPLICATION_CREDENTIALS: run.record.keyFile } : {}),
       },
     },

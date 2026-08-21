@@ -47,19 +47,28 @@ interface FakeOptions {
   billed?: boolean;
   /** Commands whose first matching invocation fails, to kill the dance. */
   fail?: RegExp;
+  /** No terminal to hand over: `gcloud auth login` cannot prompt. */
+  attachFails?: boolean;
+  /** Commands that fail the first N times with a transient IAM answer. */
+  flaky?: { match: RegExp; times: number; stderr: string };
+  /** Identity Platform is a paid feature: no billing, no Auth from here. */
+  authUninitializable?: boolean;
 }
 
 function fakeCloud(opts: FakeOptions = {}) {
   const commands: string[] = [];
   const requests: string[] = [];
+  const envs: Record<string, string>[] = [];
   const ok = (stdout = ""): ExecResult => ({ status: 0, stdout, stderr: "" });
   const nope = (stderr = "not found"): ExecResult => ({ status: 1, stdout: "", stderr });
 
   const cloud: Cloud = {
-    async exec(command, args) {
+    async exec(command, args, execOpts) {
       const line = [command, ...args].join(" ");
       commands.push(line);
+      if (execOpts?.env) envs.push(execOpts.env);
       if (opts.fail?.test(line)) return nope("the cloud said no");
+      if (opts.flaky?.match.test(line) && opts.flaky.times-- > 0) return nope(opts.flaky.stderr);
       if (/^gcloud auth list/.test(line)) return ok("host@example.com\n");
       if (/^gcloud auth print-access-token/.test(line)) return ok("ya29.token\n");
       if (/^gcloud projects describe/.test(line)) {
@@ -79,16 +88,35 @@ function fakeCloud(opts: FakeOptions = {}) {
     },
     async attach(command, args) {
       commands.push(`<attached> ${[command, ...args].join(" ")}`);
-      return 0;
+      return opts.attachFails ? 1 : 0;
     },
-    async request(method, url, _token, _body) {
-      requests.push(`${method} ${url.replace(/^https:\/\//, "").split("?")[0]}`);
+    async request(method, url, _token, _body, quotaProject) {
+      requests.push(
+        `${method} ${url.replace(/^https:\/\//, "").split("?")[0]} quota=${quotaProject ?? "none"}`,
+      );
       if (/webApps$/.test(url) && method === "GET") return { status: 200, body: { apps: [] } };
       if (/webApps$/.test(url) && method === "POST") {
         return {
           status: 200,
           body: { name: "operations/app", done: true, response: { name: "projects/1/webApps/a" } },
         };
+      }
+      if (/defaultBucket$/.test(url)) {
+        // The bucket lives under a Google-owned domain, so only Firebase can
+        // make one: GET says "not yet", POST makes it and names it.
+        if (method === "GET") return { status: 404, body: { error: { message: "NOT_FOUND" } } };
+        return {
+          status: 200,
+          body: { bucket: { name: "projects/isocan-x/buckets/isocan-x.firebasestorage.app" } },
+        };
+      }
+      if (/identitytoolkit/.test(url)) {
+        // A project that has never had Auth turned on has no config to patch.
+        if (method === "GET") return { status: 404, body: { error: { message: "NOT_FOUND" } } };
+        if (opts.authUninitializable && /initializeAuth/.test(url)) {
+          return { status: 400, body: { error: { message: "BILLING_NOT_ENABLED" } } };
+        }
+        return { status: 200, body: {} };
       }
       if (/\/config$/.test(url)) {
         return { status: 200, body: { projectId: "isocan-x", apiKey: "AIza-fake" } };
@@ -98,7 +126,7 @@ function fakeCloud(opts: FakeOptions = {}) {
     async sleep() {},
     now: () => "2026-08-20T00:00:00.000Z",
   };
-  return { cloud, commands, requests };
+  return { cloud, commands, requests, envs };
 }
 
 const options = (cloud: Cloud) => ({
@@ -184,12 +212,16 @@ describe("provisioning a canvas's remote", () => {
 
     expect(commands.join("\n")).toContain(`gcloud projects create ${record.firebaseProject}`);
     expect(requests.join("\n")).toContain(":addFirebase");
+    // A token from `gcloud auth print-access-token` is a PERSON's credential
+    // and carries no project — the Firebase APIs 403 unless every call names
+    // the project whose quota it is spending.
+    for (const request of requests) expect(request).toContain(`quota=${record.firebaseProject}`);
     expect(record.hostingUrl).toBe(`https://${record.firebaseProject}.web.app`);
     expect(record.webConfig).toMatchObject({ apiKey: "AIza-fake" });
   });
 
   it("deploys rules and hosting as the host's own service account", async () => {
-    const { cloud, commands } = fakeCloud();
+    const { cloud, commands, envs } = fakeCloud();
     const record = await provision(options(cloud));
     const deploys = commands.filter((line) => line.includes("deploy"));
     expect(deploys.some((line) => line.includes("--only firestore"))).toBe(true);
@@ -197,13 +229,30 @@ describe("provisioning a canvas's remote", () => {
     expect(deploys.some((line) => line.includes("--only hosting"))).toBe(true);
     for (const line of deploys) expect(line).toContain(`--project ${record.firebaseProject}`);
 
+    // firebase-tools prefers its own cached login to GOOGLE_APPLICATION_
+    // CREDENTIALS, and will sit refusing to refresh a year-old user token
+    // rather than notice the service account. A config directory of its own
+    // leaves it nothing to prefer — and leaves the person's own
+    // `firebase login` alone.
+    const deployEnv = envs.find((env) => env.GOOGLE_APPLICATION_CREDENTIALS)!;
+    expect(deployEnv.GOOGLE_APPLICATION_CREDENTIALS).toBe(record.keyFile);
+    expect(deployEnv.XDG_CONFIG_HOME).toBe(
+      path.join(home, "remotes", `${record.firebaseProject}.deploy`, "config"),
+    );
+
     // The generated workspace is what firebase-tools reads: rules copied out
     // of this build, hosting pointed at the built app.
     const deployDir = path.join(home, "remotes", `${record.firebaseProject}.deploy`);
     const config = JSON.parse(await fs.readFile(path.join(deployDir, "firebase.json"), "utf8"));
     expect(config.firestore.rules).toBe("firestore.rules");
-    expect(path.resolve(deployDir, config.hosting.public)).toBe(webDist);
     expect(config.hosting.rewrites).toEqual([{ source: "**", destination: "/index.html" }]);
+    // The built app is copied in, not pointed at: firebase-tools refuses any
+    // `public` outside its own project directory, and a checkout is always
+    // outside this one.
+    expect(config.hosting.public).toBe("public");
+    expect(await fs.readFile(path.join(deployDir, "public", "index.html"), "utf8")).toBe(
+      "<!doctype html>",
+    );
     const rules = await fs.readFile(path.join(deployDir, "firestore.rules"), "utf8");
     expect(rules).toContain("match /canvases/{canvasId}");
     // Provisioning precedes minting: what it deploys lets nobody in.
@@ -264,13 +313,13 @@ describe("a dance that dies halfway", () => {
 
 describe("when blobs have nowhere to go yet", () => {
   it("provisions everything free, says what billing is for, and finishes", async () => {
-    const { cloud, commands } = fakeCloud({ billed: false });
+    const { cloud, requests } = fakeCloud({ billed: false });
     const record = await provision(options(cloud));
 
     expect(record.storageBucket).toBeUndefined();
     expect(record.done.storage).toBeUndefined();
     expect(record.manual?.storage).toMatch(/billing account/);
-    expect(commands.some((line) => line.startsWith("gcloud storage buckets create"))).toBe(false);
+    expect(requests.some((line) => line.includes("defaultBucket"))).toBe(false);
 
     // A missing bucket is not a broken canvas: hosting, rules and the marker
     // all landed, so the remote is real — it just cannot serve bytes yet.
@@ -285,7 +334,7 @@ describe("when blobs have nowhere to go yet", () => {
 
     const second = fakeCloud({ billed: true });
     const record = await provision(options(second.cloud));
-    expect(record.storageBucket).toBe(`${record.firebaseProject}.firebasestorage.app`);
+    expect(record.storageBucket).toBe("isocan-x.firebasestorage.app");
     expect(record.done.storage).toBeTruthy();
     expect(record.manual?.storage).toBeUndefined();
     // Only the storage step, and the deploy it owns, ran the second time.
@@ -305,6 +354,69 @@ describe("when blobs have nowhere to go yet", () => {
     const deployDir = path.join(home, "remotes", `${record.firebaseProject}.deploy`);
     const config = JSON.parse(await fs.readFile(path.join(deployDir, "firebase.json"), "utf8"));
     expect(config.hosting).toBeUndefined();
+  });
+});
+
+describe("anonymous sign-in, which is how a link admits anybody", () => {
+  it("brings Auth into existence before patching it", async () => {
+    // A project that has never had Auth turned on answers
+    // CONFIGURATION_NOT_FOUND to the patch — not "anonymous is off" — so the
+    // config has to be created first or the step never succeeds, billing or no.
+    const { cloud, requests } = fakeCloud();
+    const record = await provision(options(cloud));
+    const identity = requests.filter((line) => line.includes("identitytoolkit"));
+    expect(identity[0]).toMatch(/GET .*\/config/);
+    expect(identity[1]).toMatch(/POST .*identityPlatform:initializeAuth/);
+    expect(identity[2]).toMatch(/PATCH .*\/config/);
+    expect(record.done.signin).toBeTruthy();
+  });
+
+  it("hands back the free click when Identity Platform wants billing", async () => {
+    const { cloud } = fakeCloud({ authUninitializable: true });
+    const record = await provision(options(cloud));
+    expect(record.done.signin).toBeUndefined();
+    expect(record.manual?.signin).toMatch(/One click, free/);
+    expect(record.manual?.signin).toMatch(/billing account does it from here instead/);
+    // And the rest of the remote still lands.
+    expect(record.done.marker).toBeTruthy();
+  });
+});
+
+describe("IAM saying ask me again", () => {
+  it("backs off and retries the binding rather than failing the dance", async () => {
+    // Binding three roles is three read-modify-writes of one policy, and they
+    // collide — with each other, and with whatever Google is still doing to a
+    // project it has just finished making.
+    const { cloud, commands } = fakeCloud({
+      flaky: {
+        match: /add-iam-policy-binding/,
+        times: 2,
+        stderr: "There were concurrent policy changes. The request's ETag did not match",
+      },
+    });
+    const record = await provision(options(cloud));
+    expect(record.done.credential).toBeTruthy();
+    expect(commands.filter((line) => line.includes("add-iam-policy-binding")).length).toBe(5);
+  });
+
+  it("gives up on an answer that is not going to change", async () => {
+    const { cloud } = fakeCloud({ fail: /add-iam-policy-binding/ });
+    await expect(provision(options(cloud))).rejects.toThrow(/add-iam-policy-binding/);
+  });
+});
+
+describe("the Google account", () => {
+  it("is checked by asking for a token, not by reading a cached name", async () => {
+    // gcloud names an ACTIVE account long after its credentials went stale;
+    // every later step spends a token, so a token is what gets checked.
+    const { cloud, commands } = fakeCloud({ fail: /^gcloud auth print-access-token/ });
+    await expect(provision(options(cloud))).rejects.toThrow(/still cannot mint a token/);
+    expect(commands.some((line) => line === "<attached> gcloud auth login")).toBe(true);
+  });
+
+  it("says to go run the login itself when there is no terminal to prompt in", async () => {
+    const { cloud } = fakeCloud({ fail: /print-access-token|auth login/, attachFails: true });
+    await expect(provision(options(cloud))).rejects.toThrow(/run it yourself/);
   });
 });
 
