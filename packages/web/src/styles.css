@@ -761,6 +761,11 @@ input, textarea { font: inherit; color: var(--ink); }
 }
 button.mt-card:hover { border-color: var(--accent); }
 .mt-card.gone { color: var(--ink-muted); box-shadow: none; border-style: dashed; }
+/* The item's own content, letterbox-free, with the card's rounding. */
+.mt-card .item-thumb {
+  flex: none; border-radius: 6px; border: 1px solid var(--line-soft); background: var(--card);
+}
+/* Still a glyph for an item that is gone: there is nothing left to show. */
 .mt-glyph {
   width: 28px; height: 28px; border-radius: 6px; flex: none;
   display: flex; align-items: center; justify-content: center;
@@ -989,13 +994,25 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 /* A pill is 18 pixels of a screen; hovering one shows the screen. It opens
    UPWARD from the chip, because the chips sit at the bottom of the panel. */
-.chip-card {
-  position: fixed; transform: translateY(-100%);
-  display: flex; flex-direction: column; gap: 6px; padding: 6px;
+/* One card for "what is this item", wherever it is asked from: a chip over the
+   composer, a card in a message, a row in a panel. Positioned by whoever opens
+   it — only they know what it hangs off — and inert, because it is an answer,
+   not a place to go. */
+.hover-card.item-peek {
+  position: fixed;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  width: max-content; max-width: 260px;
   pointer-events: none;
 }
-.chip-card b { font-size: 11.5px; font-weight: 600; padding: 0 2px 2px; }
-.chip-card .item-thumb { border-radius: 8px; }
+.item-peek b {
+  font-size: 11.5px; font-weight: 600; padding: 0 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 248px;
+}
+.item-peek i {
+  font-style: normal; font-size: 10.5px; color: var(--ink-muted); padding: 0 2px 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 248px;
+}
+.item-peek .item-thumb { border-radius: 8px; }
 
 /* ---------- the favourites bar (right) ---------- */
 /* Opposite the reading panels: this is a place you leave from, so it sits on

@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import { itemKind } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -60,5 +62,46 @@ export function ItemThumb({
         />
       </span>
     </span>
+  );
+}
+
+/**
+ * A look at an item before you go to it: the thing itself, big, with its name
+ * and what it is. The same card the edge radar opens off a beacon and the
+ * files panel opens off a row — one question ("what is this?") deserves one
+ * answer, in one voice, wherever it is asked.
+ *
+ * The caller places it, because only the caller knows what it is hanging off.
+ *
+ * It is PORTALLED to the body, and that is not a detail. This card hangs
+ * outside the panel that opens it, and a panel is a stacking context: inside
+ * one, no z-index can lift the card above chrome that outranks the panel —
+ * the minimap simply painted over it. Leaving the panel is the only fix; the
+ * card is position: fixed, so its placement does not change.
+ */
+export function ItemPeek({
+  projectId,
+  itemId,
+  style,
+}: {
+  projectId: string;
+  itemId: string;
+  style: React.CSSProperties;
+}) {
+  const item = useCanvasStore((s) => s.canvas?.items[itemId]);
+  if (!item) return null;
+  const filename = item.versions.find((v) => v.id === item.currentVersionId)?.filename;
+  return createPortal(
+    <div className="hover-card item-peek" style={style}>
+      <ItemThumb projectId={projectId} itemId={itemId} width={240} height={150} />
+      <b>{item.title}</b>
+      <i>
+        {/* The filename says what it is more precisely than the kind word
+            does, and says it in the vocabulary the file list uses. */}
+        {filename ?? itemKind(item)}
+        {item.versions.length > 1 ? ` · v${item.versions.length}` : ""}
+      </i>
+    </div>,
+    document.body,
   );
 }

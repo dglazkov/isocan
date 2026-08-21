@@ -13,7 +13,7 @@ import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
-import { ItemThumb } from "./ItemThumb.tsx";
+import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
@@ -93,13 +93,11 @@ function Attached({ projectId }: { projectId: string }) {
         <span className="attached-more">+{items.length - shown.length}</span>
       )}
       {peek && (
-        <div
-          className="hover-card chip-card"
-          style={{ left: Math.max(8, peek.left), top: peek.top - 8 }}
-        >
-          <ItemThumb projectId={projectId} itemId={peek.id} width={228} height={140} />
-          <b>{peek.title}</b>
-        </div>
+        <ItemPeek
+          projectId={projectId}
+          itemId={peek.id}
+          style={{ left: Math.max(8, peek.left), top: peek.top - 8, transform: "translateY(-100%)" }}
+        />
       )}
     </div>
   );
@@ -249,7 +247,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
               {(comment.items ?? [])
                 .filter((id, i, all) => all.indexOf(id) === i)
                 .map((itemId) => (
-                  <ItemCard key={itemId} itemId={itemId} />
+                  <ItemCard key={itemId} projectId={projectId} itemId={itemId} />
                 ))}
             </div>
           ))}
@@ -285,11 +283,14 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
 }
 
 /**
- * A #-referenced item rendered as a card (the Claude-Artifact idiom the
- * issue asks for): glyph, title, what it is — clicking flies you to it.
+ * A #-referenced item rendered as a card (the Claude-Artifact idiom the issue
+ * asks for): what it looks like, its name, what it is — clicking flies you to
+ * it, and pointing at it opens the same peek the panel and the rim open,
+ * beside the panel, while the item itself lights up on the canvas.
  */
-function ItemCard({ itemId }: { itemId: string }) {
+function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
+  const [peekTop, setPeekTop] = useState<number | null>(null);
   if (!item) {
     return (
       <div className="mt-card gone">
@@ -299,17 +300,45 @@ function ItemCard({ itemId }: { itemId: string }) {
     );
   }
   return (
-    <button className="mt-card" onClick={() => catapultBesidePanel(itemId)} title="Fly to this item">
-      <span className="mt-glyph">▦</span>
-      <span className="mt-text">
-        <span className="mt-title">{item.title}</span>
-        <span className="mt-meta">
-          {kindOf(item)}
-          {item.versions.length > 1 ? ` · v${item.versions.length}` : ""}
+    <>
+      <button
+        className="mt-card"
+        onClick={() => catapultBesidePanel(itemId)}
+        aria-label={`Fly to ${item.title}`}
+        onPointerEnter={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setPeekTop(rect.top + rect.height / 2);
+          useUiStore.getState().setPeeked(itemId);
+        }}
+        onPointerLeave={() => {
+          setPeekTop(null);
+          useUiStore.getState().setPeeked(null);
+        }}
+      >
+        <ItemThumb projectId={projectId} itemId={itemId} width={44} height={34} />
+        <span className="mt-text">
+          <span className="mt-title">{item.title}</span>
+          <span className="mt-meta">
+            {kindOf(item)}
+            {item.versions.length > 1 ? ` · v${item.versions.length}` : ""}
+          </span>
         </span>
-      </span>
-      <span className="mt-go">➜</span>
-    </button>
+        <span className="mt-go">➜</span>
+      </button>
+      {peekTop !== null && (
+        <ItemPeek
+          projectId={projectId}
+          itemId={itemId}
+          // Beside the panel, centred on the card, never off the window it is
+          // meant to be read on — the files panel's peek, in the other panel.
+          style={{
+            left: PANEL_WIDTH + 10,
+            top: Math.min(Math.max(peekTop, 110), window.innerHeight - 110),
+            transform: "translateY(-50%)",
+          }}
+        />
+      )}
+    </>
   );
 }
 
