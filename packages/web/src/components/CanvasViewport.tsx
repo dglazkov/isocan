@@ -8,6 +8,7 @@ import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
+import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
@@ -36,13 +37,6 @@ const PINCH_ZOOM_SENSITIVITY = 0.0055;
 const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
-// How long the ink stays local after you lift the pen. Strokes drawn inside
-// this window join the same drawing — the gap between two strokes of one
-// scribble is a fraction of a second, the gap between two thoughts is longer —
-// and then it settles into an ordinary item you can select, move, delete, and
-// undo. There is no "commit" for the user to find: drawing on the canvas
-// leaves a drawing on the canvas.
-const INK_SETTLE_MS = 1500;
 
 export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -59,6 +53,12 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   // and when Z went down (to tell a quick tap from a hold).
   const zoomPrevTool = useRef<Tool | null>(null);
   const zoomDownAt = useRef(0);
+  // Holding P: the tool it interrupted, when it went down, and whether it is
+  // down NOW — that last one is the whole feature. While it is true the ink
+  // does not settle, so every stroke of the hold lands in one drawing.
+  const penPrevTool = useRef<Tool | null>(null);
+  const penDownAt = useRef(0);
+  const penHeld = useRef(false);
   // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
   const settleTimer = useRef<number | null>(null);
 
@@ -132,7 +132,30 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   // (release returns to the previous tool). Either way the pointer becomes a
   // magnifier: hover an item to focus it and click to fit it, or drag a region
   // to zoom into it. Actual pointer work happens in onPointerDown.
+  //
+  // P is the same tap/hold shape, and the hold carries a second promise: the
+  // ink stays wet for the whole press, so a drawing made in passes — sketch,
+  // stop, pan, add an arrow — is ONE drawing instead of one per pause.
   useEffect(() => {
+    /** Let go of P: hand the tool back if this was a hold, and let the drawing
+     * settle — all of it, as one item. A tap keeps the old toggle. */
+    function endPenHold() {
+      const ui = useUiStore.getState();
+      const held = wasHeld(penDownAt.current, Date.now());
+      penHeld.current = false;
+      penDownAt.current = 0;
+      ui.setPenSession(false);
+      if (held) {
+        // Momentary: you borrowed the Pen, here is your tool back.
+        ui.setActiveTool(penPrevTool.current ?? "select");
+      } else {
+        // A tap toggles, the way P always has.
+        ui.setActiveTool(penPrevTool.current === "pen" ? "select" : "pen");
+      }
+      penPrevTool.current = null;
+      armSettle();
+    }
+
     function down(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
@@ -142,6 +165,17 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         const ui = useUiStore.getState();
         spacePrevTool.current = ui.activeTool; // capture once; keydown repeats while held
         ui.setActiveTool("hand");
+      }
+      if (e.code === "KeyP" && !e.metaKey && !e.ctrlKey && !e.repeat) {
+        const ui = useUiStore.getState();
+        penPrevTool.current = ui.activeTool;
+        penDownAt.current = Date.now();
+        penHeld.current = true;
+        // Any ink still waiting to settle joins this session rather than
+        // becoming a drawing of its own a moment from now.
+        holdSettle();
+        ui.setActiveTool("pen");
+        ui.setPenSession(true);
       }
       if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
         const ui = useUiStore.getState();
@@ -157,6 +191,9 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         useUiStore.getState().setActiveTool(spacePrevTool.current);
         spacePrevTool.current = null;
       }
+      if (e.code === "KeyP") {
+        endPenHold();
+      }
       if (e.code === "KeyZ") {
         const ui = useUiStore.getState();
         // Held long enough to be a hold (not a tap): momentary — leave zoom.
@@ -167,11 +204,19 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         zoomDownAt.current = 0;
       }
     }
+    // A keyup that never comes is the failure mode: press P, switch windows,
+    // and the release lands somewhere else while your drawing stays wet and
+    // invisible to everyone. Losing the window ends the hold and settles it.
+    function onBlur() {
+      if (penHeld.current) endPenHold();
+    }
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", onBlur);
     };
   }, []);
 
@@ -186,10 +231,13 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   }
   function armSettle() {
     holdSettle();
+    const delay = settleDelay({ holdingPen: penHeld.current });
+    // Held: the drawing is not finished, and no timer gets to decide it is.
+    if (delay === null) return;
     settleTimer.current = window.setTimeout(() => {
       settleTimer.current = null;
       placeSketch(projectId, actor);
-    }, INK_SETTLE_MS);
+    }, delay);
   }
   useEffect(() => holdSettle, []);
 

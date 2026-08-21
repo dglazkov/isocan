@@ -91,7 +91,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the palette, and remembers. The nib follows you over items too, so you can
   circle the thing you mean. A moment after you lift the pen the ink settles
   into an ordinary item — no commit step to find; strokes drawn in one breath
-  land as one drawing. That item is an `item.add` whose blob is an SVG, so the
+  land as one drawing. **Hold `P`** when the drawing takes longer than one
+  breath: while the key is down the ink never settles, so a sketch made in
+  passes — draw, stop, pan across, add an arrow — is one drawing however long
+  you take between strokes, and the bar under the canvas counts what is riding
+  on it. Let go and all of it settles as a single SVG. (A tap of `P` latches
+  the Pen as it always has; a hold borrows it and hands your tool back, the
+  same shape as `Z`.) That item is an `item.add` whose blob is an SVG, so the
   CLI lists it, the blob on disk is a real `.svg`, and it selects, moves,
   resizes, deletes, undoes, and versions like anything else. It just wears no
   card: the ink IS the item — and since that makes its box invisible, pointing

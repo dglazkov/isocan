@@ -71,6 +71,9 @@ interface UiStore {
   /** Why the last attempt to place a drawing failed, if it did. The ink stays
    * on screen and the bar offers a retry — a dropped daemon must not eat it. */
   sketchError: string | null;
+  /** P is down: the ink is being held open, and everything drawn until it
+   * comes back up belongs to one drawing. */
+  penSession: boolean;
   /** The Pen's color, or null for "whatever color I am" — the identity color
    * worn by your cursor and your face in the pile. Remembered per browser. */
   inkColor: string | null;
@@ -121,6 +124,7 @@ interface UiStore {
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
   setSketchError: (message: string | null) => void;
+  setPenSession: (open: boolean) => void;
   /** Choose the ink; null goes back to your identity color. */
   setInkColor: (color: string | null) => void;
   /** Start a stroke — the pen went down. */
@@ -205,6 +209,7 @@ export const useUiStore = create<UiStore>((set) => {
     pendingComment: null,
     sketch: [],
     sketchError: null,
+    penSession: false,
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
@@ -243,6 +248,7 @@ export const useUiStore = create<UiStore>((set) => {
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setSketchError: (sketchError) => set({ sketchError }),
+    setPenSession: (penSession) => set({ penSession }),
     setInkColor: (inkColor) => {
       writeInkColor(inkColor);
       set({ inkColor });

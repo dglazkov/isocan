@@ -370,8 +370,6 @@ export function CanvasPage({
           e.preventDefault();
           ui.setFanned(ui.fannedItemId === ids[0] ? null : ids[0]!);
         }
-      } else if (e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) {
-        ui.setActiveTool(ui.activeTool === "pen" ? "select" : "pen");
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
       }

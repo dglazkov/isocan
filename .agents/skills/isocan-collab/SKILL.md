@@ -256,7 +256,10 @@ that woke you, with no `session start` needed.
 - **Ink is a kind of item.** If you generate an SVG as annotation rather than
   as artwork — circling a thing, sketching a flow — `isocan add note.svg
   --drawing` lands it the way the web app's Pen does: no card, no titlebar,
-  just the strokes. It reads back as `--kind drawing`.
+  just the strokes. It reads back as `--kind drawing`. One SVG is one drawing
+  however many strokes are in it — a person holding `P` sweeps a whole sketch
+  made in passes into a single item, so do not assume one drawing means one
+  gesture, or that separate marks were made at separate times.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
