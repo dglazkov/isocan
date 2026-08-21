@@ -265,6 +265,14 @@ that woke you, with no `session start` needed.
   will rarely see it from the web app; from a terminal it is a real question,
   so answer it. A home can add its own commands with `isocan command add`;
   those live in `~/.isocan/commands/` and shadow a built-in of the same name.
+- **Ink can be swept together.** A person holding `P` draws a whole sketch as
+  one item; `isocan merge <drawings...>` does that to marks already on the
+  canvas. It is exact, not approximate — ink is stored in world coordinates,
+  so merging is concatenating the strokes and taking the union of the boxes,
+  and what comes out is byte-for-byte what went in. The originals go to the
+  trash (`--keep` leaves them), which is two ops and so two undos. It refuses
+  an SVG this canvas did not draw, because moving somebody's artwork silently
+  is worse than saying no.
 - **Tidying is a verb, not a judgement call.** `isocan format` arranges the
   whole canvas the way `/format` means: screens in a row keeping their reading
   order, whatever was made FROM a screen in a column under it, images and video
@@ -377,7 +385,7 @@ that woke you, with no `session start` needed.
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
-`command list|show|add|rm`, `format [--dry-run]`, `shortcuts`,
+`command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,

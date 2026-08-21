@@ -56,6 +56,25 @@ export interface InkBounds {
   maxY: number;
 }
 
+/**
+ * The world box an ink SVG claims — its viewBox, which for a drawing IS its
+ * place on the canvas. Null when there is no legible viewBox, which is the
+ * honest answer for an SVG this canvas did not draw.
+ *
+ * Both directions of the invariant need this: `drawingSvg` writes the box in,
+ * and anything placing or merging ink has to read the same box back, or the
+ * strokes end up somewhere other than where they were drawn.
+ */
+export function drawingViewBox(svg: string): InkBounds | null {
+  const match = /viewBox\s*=\s*"([-\d.eE\s,]+)"/.exec(svg);
+  if (!match) return null;
+  const parts = match[1]!.trim().split(/[\s,]+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [x, y, width, height] = parts as [number, number, number, number];
+  if (width <= 0 || height <= 0) return null;
+  return { minX: x, minY: y, maxX: x + width, maxY: y + height };
+}
+
 /** Is this item a drawing (as opposed to any other SVG on the canvas)? */
 export function isDrawingItem(item: Item): boolean {
   return item.properties.kind === DRAWING_KIND;

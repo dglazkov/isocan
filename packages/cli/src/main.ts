@@ -21,6 +21,7 @@ import type {
 import {
   BROWSER_MIME,
   DEFAULT_PORT,
+  DRAWING_FILENAME,
   DRAWING_MIME,
   DRAWING_PROPERTIES,
   DRAWING_TITLE,
@@ -40,12 +41,17 @@ import {
   alignMoves,
   annotationsOf,
   distributeMoves,
+  drawingViewBox,
+  SHORTCUTS,
   formatMoves,
+  shortcutsAsText,
   elapsedLabel,
   extractMentions,
   isIdentityColor,
+  isDrawingItem,
   isStarred,
   itemKind,
+  mergeDrawings,
   opMatchesFilters,
   starPatch,
   renamedFilename,
@@ -1230,8 +1236,26 @@ program
         // `kind=drawing` is the convention the web app's Pen writes, and what
         // both clients read to render ink without a card (core/drawing.ts).
         const properties = { ...opts.prop, ...(opts.drawing ? DRAWING_PROPERTIES : {}) };
-        const { width, height } = sizeFor(opts.size, defaultSize(mimeType));
-        const placement = placementFor(snapshot, opts);
+
+        // Ink knows where it goes. A drawing's viewBox IS its world box — that
+        // is the invariant the Pen writes and `merge` reads back — so unless
+        // you say otherwise, ink lands on the coordinates it was drawn at
+        // rather than at the next free slot in a default-sized card. Without
+        // this, an agent's strokes appear somewhere other than where they say
+        // they are, and two of them cannot be merged into one honest picture.
+        const inkBox =
+          opts.drawing && opts.at === undefined && opts.size === undefined
+            ? drawingViewBox(data.toString("utf8"))
+            : null;
+        const { width, height } = inkBox
+          ? {
+              width: Math.ceil(inkBox.maxX) - Math.floor(inkBox.minX),
+              height: Math.ceil(inkBox.maxY) - Math.floor(inkBox.minY),
+            }
+          : sizeFor(opts.size, defaultSize(mimeType));
+        const placement = inkBox
+          ? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) }
+          : placementFor(snapshot, opts);
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -1532,6 +1556,91 @@ program
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const moves = distributeMoves(items, axis);
       await applyMoves(ctx, p.id, moves, `spaced ${items.length} items ${axis === "h" ? "across" : "down"}`);
+    }),
+  );
+
+program
+  .command("merge <items...>")
+  .description("Several drawings into one — what holding P does, as a verb")
+  .option("--title <title>", "name for the merged drawing")
+  .option("--keep", "leave the originals on the canvas instead of trashing them")
+  .action(
+    run(async (refs: string[], opts: { title?: string; keep?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      if (refs.length < 2) throw new Error("merge wants at least two drawings");
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      const notInk = items.filter((item) => !isDrawingItem(item));
+      if (notInk.length > 0) {
+        throw new Error(
+          `not ink: ${notInk.map((i) => i.title).join(", ")} — merge is for drawings (isocan ls --kind drawing)`,
+        );
+      }
+
+      // Read every part before writing anything: a merge that half-happens
+      // leaves a canvas nobody can put back by hand.
+      const parts = [];
+      for (const item of items) {
+        const version = item.versions.find((v) => v.id === item.currentVersionId);
+        if (!version) throw new Error(`${item.title} has no current version`);
+        const blob = await ctx.client.downloadBlob(p.id, version.blobHash);
+        parts.push({ id: item.title, svg: blob.toString("utf8") });
+      }
+      const { svg, bounds } = mergeDrawings(parts);
+
+      await narrate(ctx, p.id, { status: `merging ${items.length} drawings…` });
+      const upload = await ctx.client.uploadBlob(
+        p.id,
+        Buffer.from(svg, "utf8"),
+        DRAWING_MIME,
+        DRAWING_FILENAME,
+      );
+      const itemId = newItemId();
+      // Whole world units, the way the Pen places ink: the item box and the
+      // SVG viewBox must be the same box or the strokes land somewhere else.
+      const x = Math.floor(bounds.minX);
+      const y = Math.floor(bounds.minY);
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version: {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType: DRAWING_MIME,
+          filename: DRAWING_FILENAME,
+          size: upload.size,
+        },
+        width: Math.ceil(bounds.maxX) - x,
+        height: Math.ceil(bounds.maxY) - y,
+        placement: { x, y },
+        title: opts.title ?? DRAWING_TITLE,
+        properties: DRAWING_PROPERTIES,
+      });
+      // Two ops, so two undos — said out loud rather than discovered. The
+      // originals go to the TRASH, not the void: a merge you disagree with is
+      // one `isocan restore` from being reversed.
+      if (!opts.keep) {
+        await sendOp(ctx, p.id, { type: "items.delete", itemIds: items.map((i) => i.id) });
+      }
+      if (ctx.json) return printJson({ itemId, merged: items.map((i) => i.id) });
+      console.error(
+        `${itemId} — ${items.length} drawings in one` +
+          (opts.keep ? " (originals kept)" : `, originals in the trash (isocan restore ${items[0]!.id})`) +
+          (opts.keep ? "" : "\nthat was two ops: undo twice to put it all back"),
+      );
+    }),
+  );
+
+program
+  .command("shortcuts")
+  .description("Every key the canvas answers to — the same list the app's ? panel shows")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      // The list is core's, not the app's: an agent telling somebody which key
+      // to press must be reading the same page they are looking at.
+      if (ctx.json) return printJson(SHORTCUTS);
+      console.log(shortcutsAsText());
     }),
   );
 
