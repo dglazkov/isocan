@@ -21,6 +21,7 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
+  SlashCommand,
 } from "@isocan/core";
 import { encodeFilename, FILENAME_HEADER } from "@isocan/core";
 import type { BuildStamp } from "@isocan/server";
@@ -169,6 +170,21 @@ export class DaemonClient {
    * fetched on its own for commands that print names without one. */
   actorNames(): Promise<ActorNames> {
     return this.request("GET", "/api/names");
+  }
+
+  /** Every slash command available here: built-ins under this home's own. */
+  commands(): Promise<SlashCommand[]> {
+    return this.request("GET", `/api/commands`);
+  }
+
+  /** Write one for this home. `text` is the file, frontmatter and all. */
+  saveCommand(name: string, text: string): Promise<void> {
+    return this.request("PUT", `/api/commands/${encodeURIComponent(name)}`, { text });
+  }
+
+  /** Remove one of this home's; the built-in of that name comes back. */
+  deleteCommand(name: string): Promise<void> {
+    return this.request("DELETE", `/api/commands/${encodeURIComponent(name)}`);
   }
 
   /** With waitMs, the daemon long-polls: holds until an entry lands past

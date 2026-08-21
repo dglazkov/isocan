@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
-import { mainThread, workedFor } from "@isocan/core";
+import { mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -101,6 +101,28 @@ function Attached({ projectId }: { projectId: string }) {
       )}
     </div>
   );
+}
+
+/**
+ * A message that asked for a known piece of work wears the command as a chip:
+ * the words after it are the instruction, and the chip is the part an agent
+ * will look up. Rendering it as a chip and dropping it from the markdown keeps
+ * it said once — the body below is what they typed on top of the request.
+ */
+export function CommandChip({ body }: { body: string }) {
+  const parsed = parseSlashCommand(body);
+  if (!parsed) return null;
+  return (
+    <span className="command-chip" title={`Asks an agent to run /${parsed.name}`}>
+      /{parsed.name}
+    </span>
+  );
+}
+
+/** The message without its command word — what they typed on top of it. */
+export function withoutCommand(body: string): string {
+  const parsed = parseSlashCommand(body);
+  return parsed ? body.slice(parsed.end).trimStart() : body;
 }
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */
@@ -240,8 +262,9 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
                 </span>
               )}
               <div className="body">
+                <CommandChip body={comment.body} />
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
-                  {comment.body}
+                  {withoutCommand(comment.body)}
                 </ReactMarkdown>
               </div>
               {(comment.items ?? [])

@@ -263,6 +263,38 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **A message may BE a command.** When a comment starts with `/name` — the
+  first thing in the body, nothing before it — the person did not type prose,
+  they asked for a specific piece of work. Run `isocan command show <name>`:
+  the body it prints is your instructions for this turn, written for someone
+  holding this CLI on this canvas. Follow it, then reply on the thread as
+  usual.
+
+  Everything after the name is the argument, and it is the part they typed by
+  hand, so it OUTRANKS the command's defaults wherever the two disagree. They
+  are looking at the canvas; you are not.
+
+  `/format` halfway through a sentence is somebody TALKING about the command,
+  not asking for it. Only the start of the message counts. If a command names
+  something you cannot find, ask on the thread rather than picking a target —
+  doing the right work to the wrong screen is worse than a question.
+
+  `isocan command list` is the whole menu, and it is the same list the web
+  app's composer offers, so a person and an agent are never looking at
+  different vocabularies. A home can add its own with `isocan command add`;
+  those live in `~/.isocan/commands/` and shadow a built-in of the same name.
+- **Tidying is a verb, not a judgement call.** `isocan format` arranges the
+  whole canvas the way `/format` means: screens in a row keeping their reading
+  order, whatever was made FROM a screen in a column under it, images and video
+  gathered below. It is one `items.move`, so it is one undo, and it is a fixed
+  point — running it on a formatted canvas moves nothing. `--dry-run` says what
+  would move. Prefer it over placing items by hand; hand placement is for what
+  the person asked for on top of it.
+- **Say what a thing came from.** When you build an item FROM another one — a
+  variation, a spec written from a sketch, a page split out of a page — add
+  `--prop parent=<source item id>`. It costs one property and it is what makes
+  the canvas a tree instead of a pile: `/format` hangs children under their
+  parent, and anyone can see where a screen came from.
 - **Read the room before you act.** `isocan activity [who]` is what has been
   happening here, newest first — who made what, who edited it, who said what
   and where. Running it for the person who summoned you is the cheapest way to
@@ -359,6 +391,7 @@ that woke you, with no `session start` needed.
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
+`command list|show|add|rm`, `format [--dry-run]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,

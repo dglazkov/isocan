@@ -9,17 +9,22 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
-import type { ItemRefCandidate, MentionCandidate } from "@isocan/core";
+import type { ItemRefCandidate, MentionCandidate, SlashCommand } from "@isocan/core";
+import { matchCommands } from "@isocan/core";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionChipStyle, splitChips } from "../lib/chips.ts";
 import type { MentionPeer } from "../lib/mentions.ts";
 import type { ItemEntry } from "../lib/itemrefs.ts";
+import { useCommands } from "../lib/commands.ts";
 
 /**
  * A comment composer that knows about people and items.
  *
  * Typing "@" opens a menu of everyone on the canvas (live sessions first);
- * "#" opens a menu of the canvas's items (most recently touched first).
+ * "#" opens a menu of the canvas's items (most recently touched first); "/"
+ * at the START of the message opens the slash commands — only at the start,
+ * because that is the only place a command is recognised, and a menu that
+ * offers what will not happen is worse than no menu.
  * ↑/↓ walks it, Enter/Tab completes, Esc dismisses. Resolved references are
  * painted as chips by a backdrop layer that mirrors the field's text exactly
  * and sits behind it — the field stays a plain <input>/<textarea>, so
@@ -54,12 +59,15 @@ export function MentionField({
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const pendingCaret = useRef<number | null>(null);
 
+  const commands = useCommands();
   const trigger = findTrigger(value, caret);
   const matches =
     trigger && trigger.at !== dismissedAt
       ? trigger.char === "@"
         ? matchPeers(peers, trigger.query)
-        : matchItems(items, trigger.query)
+        : trigger.char === "/"
+          ? matchSlashCommands(commands, trigger.query)
+          : matchItems(items, trigger.query)
       : [];
   const open = matches.length > 0;
 
@@ -184,6 +192,9 @@ interface MenuOption {
   label: string;
   item?: boolean;
   online?: boolean;
+  /** Shown after the name, greyed: what the command does, how it reads. */
+  hint?: string;
+  usage?: string;
 }
 
 /**
@@ -254,14 +265,22 @@ function MentionMenu({
           onMouseEnter={() => onHover(i)}
           onClick={() => onPick(option)}
         >
-          <span
-            className={option.item ? "mention-dot item-dot" : "mention-dot"}
-            style={option.item ? undefined : { background: actorColorIn(colors, option.id) }}
-          />
+          {char === "/" ? (
+            <span className="mention-dot command-dot">/</span>
+          ) : (
+            <span
+              className={option.item ? "mention-dot item-dot" : "mention-dot"}
+              style={option.item ? undefined : { background: actorColorIn(colors, option.id) }}
+            />
+          )}
           <span className="mention-name">
-            {char}
+            {/* For a command the dot IS the slash, so the name must not carry
+                one too — the row read "//format" before this. */}
+            {char === "/" ? "" : char}
             {option.label}
+            {option.usage ? <em className="mention-usage"> {option.usage}</em> : null}
           </span>
+          {option.hint && <span className="mention-hint">{option.hint}</span>}
           {option.online && <span className="mention-live">live</span>}
         </button>
       ))}
@@ -332,9 +351,9 @@ function cssVars(style: string): CSSProperties {
 }
 
 interface Trigger {
-  /** Index of the "@" or "#". */
+  /** Index of the character that opened the menu. */
   at: number;
-  char: "@" | "#";
+  char: "@" | "#" | "/";
   /** Text typed since, which the menu filters on. */
   query: string;
 }
@@ -345,6 +364,13 @@ const MAX_QUERY = 40; // past this, they're writing prose, not a name
  * contain spaces, so the query runs to the caret; it ends at a newline,
  * another trigger, or nothing. */
 function findTrigger(value: string, caret: number): Trigger | null {
+  // "/" is a command only as the first thing in the message — that is where
+  // parseSlashCommand looks, so it is the only place the menu may promise
+  // anything. A path or a date typed mid-sentence opens nothing.
+  const lead = value.length - value.trimStart().length;
+  if (value[lead] === "/" && caret > lead && !value.slice(lead, caret).includes(" ")) {
+    return { at: lead, char: "/", query: value.slice(lead + 1, caret) };
+  }
   for (let i = caret - 1; i >= 0 && caret - i <= MAX_QUERY + 1; i--) {
     const ch = value[i]!;
     if (ch === "\n") return null;
@@ -368,6 +394,17 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
     })
     .slice(0, MAX_MATCHES)
     .map((peer) => ({ id: peer.id, label: peer.name, online: peer.online }));
+}
+
+/** The commands worth offering — core decides, so the menu and
+ * `isocan command list` can never disagree about what exists. */
+function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption[] {
+  return matchCommands(commands, query, MAX_MATCHES).map((command) => ({
+    id: command.name,
+    label: command.name,
+    hint: command.description,
+    usage: command.usage,
+  }));
 }
 
 /** Items whose title — or any word of it — or id starts with the query. */

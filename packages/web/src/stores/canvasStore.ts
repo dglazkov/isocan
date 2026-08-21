@@ -11,6 +11,7 @@ import type {
   ProjectState,
   ServerMessage,
   ActorNames,
+  SlashCommand,
 } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
 import { CLIENT_ID } from "../lib/api.ts";
@@ -35,6 +36,9 @@ interface CanvasStore {
    * registry. A comment carries the name its author wore when they wrote it;
    * this is what we show instead. See lib/names.ts. */
   actorNames: ActorNames;
+  /** The slash-command menu, from the daemon. Null = not asked yet; the
+   * built-ins stand in until it lands (lib/commands.ts). */
+  commands: SlashCommand[] | null;
 }
 
 /**
@@ -52,6 +56,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   sessions: [],
   actorColors: {},
   actorNames: {},
+  commands: null,
 }));
 
 // ---- presence publishing (throttled, trailing-edge) ----

@@ -19,4 +19,7 @@ export * from "./layout.ts";
 export * from "./drawing.ts";
 export * from "./annotation.ts";
 export * from "./activity.ts";
+export * from "./lineage.ts";
+export * from "./commands.ts";
+export * from "./format.ts";
 export * from "./favourites.ts";

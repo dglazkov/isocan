@@ -900,6 +900,21 @@ button.mt-card:hover { border-color: var(--accent); }
 .mention-dot.item-dot { border-radius: 2px; background: var(--accent); }
 .mention-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mention-live { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); }
+/* Commands in the "/" menu: the slash itself, not a colour that means nobody. */
+.mention-dot.command-dot {
+  width: auto; height: auto; border-radius: 0;
+  color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1;
+}
+/* The row is wider here: a command is a name you may not know, so the menu has
+   to say what it does rather than trusting the name to. */
+.mention-menu:has(.command-dot) { min-width: 320px; max-width: 420px; }
+/* The name and its usage keep the room: they are what you are typing. */
+.mention-menu:has(.command-dot) .mention-name { flex: 1.5; }
+.mention-name .mention-usage { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.mention-hint {
+  flex: 1.4; min-width: 0; font-size: 11px; color: var(--ink-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;
+}
 
 /* ---------- minimap ---------- */
 /* Bottom-left, clearing the right-edge tool rail and zoom cluster. */
@@ -1415,3 +1430,27 @@ button.mt-card:hover { border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- slash commands ---------- */
+/* A message that asked for a known piece of work. The chip is the part an
+   agent looks up; the words after it are what the person added on top. */
+.command-chip {
+  display: inline-block; margin-right: 6px; padding: 1px 6px;
+  border-radius: 5px; background: var(--accent); color: var(--accent-ink);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
+  vertical-align: baseline;
+}
+/* The body's first paragraph runs on from the chip rather than under it. */
+.body:has(> .command-chip) > .command-chip + * { display: inline; }
+
+/* ---------- slash commands ---------- */
+/* A message that asked for a known piece of work. The chip is the part an
+   agent looks up; the words after it are what the person added on top. */
+.command-chip {
+  display: inline-block; margin-right: 6px; padding: 1px 6px;
+  border-radius: 5px; background: var(--accent); color: var(--accent-ink);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
+  vertical-align: baseline;
+}
+/* The body's first paragraph runs on from the chip rather than under it. */
+.body:has(> .command-chip) > .command-chip + * { display: inline; }

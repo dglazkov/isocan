@@ -33,6 +33,11 @@ export const legacySessionFile = (home: string) => path.join(home, "session.json
 export const cliSessionFile = (home: string, actorId: string) =>
   path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");
+/** Slash commands this home has written: one markdown file per command, named
+ * by the command. A home file shadows the built-in of the same name. */
+export const commandsDir = (home: string) => path.join(home, "commands");
+export const commandFile = (home: string, name: string) =>
+  path.join(commandsDir(home), `${name}.md`);
 /** The directory roster: realpath → projectId, a discovery cache healed by
  * the CLI whenever a command runs from a bound directory (#60). The
  * authoritative binding is the `.isocan/project.json` marker in the

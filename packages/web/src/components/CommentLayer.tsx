@@ -23,6 +23,7 @@ import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { CommandChip, withoutCommand } from "./MainThreadPanel.tsx";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -253,8 +254,9 @@ function ThreadPopover({
               </span>
             )}
             <div className="body">
+              <CommandChip body={comment.body} />
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
-                {comment.body}
+                {withoutCommand(comment.body)}
               </ReactMarkdown>
             </div>
           </div>

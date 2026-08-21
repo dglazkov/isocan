@@ -24,8 +24,12 @@ import {
   DRAWING_MIME,
   DRAWING_PROPERTIES,
   DRAWING_TITLE,
+  COMMAND_NAME,
   IDENTITY_COLORS,
   actorNameIn,
+  commandFileText,
+  findCommand,
+  parseCommandFile,
   collectCanvasActors,
   recentActivity,
   collectCanvasNames,
@@ -36,6 +40,7 @@ import {
   alignMoves,
   annotationsOf,
   distributeMoves,
+  formatMoves,
   elapsedLabel,
   extractMentions,
   isIdentityColor,
@@ -1523,6 +1528,38 @@ program
   );
 
 program
+  .command("format")
+  .description("Tidy the whole canvas: screens across, children under parents, images gathered")
+  .option("--dry-run", "say what would move, move nothing")
+  .option("--per-row <n>", "images per row in the reference block")
+  .action(
+    run(async (opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
+      if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
+        throw new Error(`--per-row wants a number: ${opts.perRow}`);
+      }
+      const moves = formatMoves(snapshot.canvas, perRow === undefined ? {} : { perRow });
+      if (opts.dryRun) {
+        if (ctx.json) return printJson(moves);
+        if (moves.length === 0) return console.error("already formatted — nothing would move");
+        return printTable(
+          moves.map((m) => ({
+            item: m.itemId,
+            title: truncate(snapshot.canvas.items[m.itemId]?.title ?? "?", 28),
+            from: `${snapshot.canvas.items[m.itemId]?.x},${snapshot.canvas.items[m.itemId]?.y}`,
+            to: `${m.x},${m.y}`,
+          })),
+        );
+      }
+      // One items.move, so the whole tidy is one undo. A tidy you cannot take
+      // back in one press is a tidy nobody dares run.
+      await applyMoves(ctx, p.id, moves, `formatted ${moves.length} items`);
+    }),
+  );
+
+program
   .command("set <item>")
   .description("Update an item's title/description/properties; --size resizes it")
   .option("--title <title>")
@@ -1721,6 +1758,119 @@ program
         await sendOp(ctx, p.id, { type: "items.restore", itemIds: ids });
       }
       console.log(`restored ${ids.join(", ")}`);
+    }),
+  );
+
+/** Everything on stdin — how a command body arrives from a pipe. */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// ---------- slash commands ----------
+
+const command = program
+  .command("command")
+  .description("Slash commands: the work a message can ask for")
+  .addHelpText(
+    "after",
+    `
+A slash command is a message, not a button. "/format tighten the rows" posted
+as a comment is a request an AGENT carries out — which is why the same request
+can be typed into the web app's composer or sent from here with
+\`isocan comment add\`, and why undo, history, and old clients keep working:
+it is text in a comment.
+
+A command's body is its skill: the instructions you follow when you see one.
+When a comment starts with /name, run \`isocan command show <name>\` and do
+what it says.
+
+isocan ships some; this home can add its own (or shadow a built-in) —
+\`isocan command add tidy ./tidy.md\`, which writes ~/.isocan/commands/tidy.md.
+Removing your own gives the built-in back.`,
+  );
+
+command
+  .command("list", { isDefault: true })
+  .description("Every command available here")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const commands = await ctx.client.commands();
+      if (ctx.json) return printJson(commands);
+      printTable(
+        commands.map((c) => ({
+          command: `/${c.name}`,
+          usage: c.usage || "—",
+          does: truncate(c.description, 48),
+          from: c.source,
+        })),
+      );
+    }),
+  );
+
+command
+  .command("show")
+  .description("What a command tells an agent to do — the whole body")
+  .argument("<name>", "command name, with or without the slash")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      const found = findCommand(await ctx.client.commands(), wanted);
+      if (!found) throw new Error(`no command called /${wanted} (isocan command list)`);
+      if (ctx.json) return printJson(found);
+      // The body alone on stdout, so it can be piped into something that
+      // follows it. Everything else goes to stderr.
+      console.error(`/${found.name} ${found.usage} — ${found.description} (${found.source})`);
+      console.log(found.body);
+    }),
+  );
+
+command
+  .command("add")
+  .description("Write a command for this home (shadows a built-in of the same name)")
+  .argument("<name>", "command name: lowercase letters, digits, dashes")
+  .argument("[file]", "markdown file; omit to read stdin")
+  .option("--description <text>", "one line for the menu (when the file has no frontmatter)")
+  .option("--usage <text>", "how the arguments read, e.g. '[note]'")
+  .action(
+    run(async (name: string, file: string | undefined, opts: { description?: string; usage?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      if (!COMMAND_NAME.test(wanted)) {
+        throw new Error(`not a command name: ${wanted} (lowercase letters, digits, dashes)`);
+      }
+      const raw = file ? await fs.readFile(file, "utf8") : await readStdin();
+      if (raw.trim() === "") throw new Error("a command needs instructions — nothing was given");
+      // Frontmatter in the file wins; the flags fill in what it does not say.
+      const parsed = parseCommandFile(wanted, raw);
+      const text =
+        parsed && !opts.description && !opts.usage
+          ? raw
+          : commandFileText({
+              description: opts.description ?? parsed?.description ?? `Run the ${wanted} command`,
+              usage: opts.usage ?? parsed?.usage ?? "",
+              body: parsed?.body ?? raw,
+            });
+      await ctx.client.saveCommand(wanted, text);
+      console.error(`/${wanted} is available here — try it in the composer, or /${wanted} in a comment`);
+    }),
+  );
+
+command
+  .command("rm")
+  .description("Remove one of this home's commands (a shadowed built-in comes back)")
+  .argument("<name>", "command name")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const wanted = name.replace(/^\//, "").toLowerCase();
+      await ctx.client.deleteCommand(wanted);
+      const back = findCommand(await ctx.client.commands(), wanted);
+      console.error(back ? `/${wanted} is the built-in again` : `/${wanted} is gone`);
     }),
   );
 

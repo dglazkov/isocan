@@ -15,12 +15,15 @@ import type {
   Project,
   ProjectState,
   ServerMessage,
+  SlashCommand,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
   OpValidationError,
+  DEFAULT_COMMANDS,
   actorNames,
   applyActorColor,
+  mergeCommands,
   applyClaim,
   applyOperation,
   collectCanvasNames,
@@ -142,6 +145,27 @@ export class Engine {
   async actorColors(): Promise<ActorColors> {
     const { registry } = await this.actors();
     return registry.colors;
+  }
+
+  /**
+   * Every slash command available here: what isocan ships with, laid under
+   * whatever this home has written. The menu, the CLI, and an agent looking up
+   * what `/format` means all read this one list, or they would disagree about
+   * what a command does — which is the only thing a command must never do.
+   */
+  async commands(): Promise<SlashCommand[]> {
+    return mergeCommands(DEFAULT_COMMANDS, await this.store.loadCommands());
+  }
+
+  /** Write a command for this home. Shadowing a built-in is allowed and is
+   * the point: `rm` gives ours back. */
+  async saveCommand(name: string, text: string): Promise<void> {
+    await this.store.saveCommand(name, text);
+  }
+
+  /** Remove a home command. False when there was no file to remove. */
+  async deleteCommand(name: string): Promise<boolean> {
+    return this.store.deleteCommand(name);
   }
 
   /** The name every actor goes by now, actor id → name. What a client shows

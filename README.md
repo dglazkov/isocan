@@ -306,6 +306,8 @@ isocan undo · redo · trash list|restore|empty --force
 isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
 isocan session start|work|point|move|say|end · isocan who [--all]  # presence
 isocan activity [who] [-n N]           # what has been happening here, newest first
+isocan command list|show|add|rm        # slash commands: work a message can ask for
+isocan format [--dry-run]              # tidy the canvas: rows, children, references
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
                                        # this dir's canvas
 isocan tail [-f]                       # print/stream the operation log
