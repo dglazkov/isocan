@@ -28,12 +28,7 @@ export interface Worker {
 /** Sessions that have claimed this thread, in the order they arrived. */
 export function workersOn(sessions: PresenceSession[], threadId: string): Worker[] {
   return sessions
-    .filter(
-      (session) =>
-        session.activity !== null &&
-        "threadId" in session.activity &&
-        session.activity.threadId === threadId,
-    )
+    .filter((session) => session.onThread === threadId)
     .map((session) => ({
       sessionId: session.sessionId,
       actorId: session.actor.id,
@@ -54,4 +49,29 @@ export function workersOn(sessions: PresenceSession[], threadId: string): Worker
  */
 export function listeners(sessions: PresenceSession[]): PresenceSession[] {
   return sessions.filter((session) => session.kind === "cli");
+}
+
+/**
+ * Who the last thing said here reached.
+ *
+ * The rung between "sent" and "somebody has it": an agent that has been woken
+ * but has not said anything yet. Naming it is the difference between "did that
+ * go anywhere?" and "Fable has it, give it a second" — and it needs nothing
+ * from the agent, which matters, because an agent parked on an older build
+ * will never claim a thread and should still not read as silence.
+ *
+ * A comment in the MAIN thread wakes every parked agent; anywhere else it
+ * wakes the ones it @-mentions. Both are the daemon's own rules, restated
+ * here so a client can say who is coming before anybody arrives.
+ */
+export function summonedBy(
+  sessions: PresenceSession[],
+  thread: { main?: boolean; comments: { author: { id: string }; mentions?: string[] }[] },
+): PresenceSession[] {
+  const last = thread.comments[thread.comments.length - 1];
+  if (!last) return [];
+  const agents = listeners(sessions).filter((session) => session.actor.id !== last.author.id);
+  if (thread.main) return agents;
+  const addressed = new Set(last.mentions ?? []);
+  return agents.filter((session) => addressed.has(session.actor.id));
 }

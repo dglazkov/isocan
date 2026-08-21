@@ -262,7 +262,7 @@ function ThreadPopover({
             </div>
           </div>
         ))}
-        <OnIt threadId={thread.id} waiting={awaitingReply(thread, actor.id)} />
+        <OnIt thread={thread} waiting={awaitingReply(thread, actor.id)} />
       </div>
       <form
         onKeyDown={submitOnCmdEnter}

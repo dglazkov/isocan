@@ -1,4 +1,4 @@
-import { listeners, workersOn } from "@isocan/core";
+import { listeners, summonedBy, workersOn, type CommentThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor } from "../lib/presence.ts";
@@ -21,10 +21,10 @@ import { quietFor } from "../lib/presence.ts";
  * When nobody has picked it up, it says whether anybody COULD — an agent
  * parked on `wait` is a different silence from an empty room.
  */
-export function OnIt({ threadId, waiting }: { threadId: string; waiting: boolean }) {
+export function OnIt({ thread, waiting }: { thread: CommentThread; waiting: boolean }) {
   const sessions = useCanvasStore((s) => s.sessions);
   const colors = useActorColors();
-  const working = workersOn(sessions, threadId);
+  const working = workersOn(sessions, thread.id);
 
   if (working.length > 0) {
     return (
@@ -48,6 +48,26 @@ export function OnIt({ threadId, waiting }: { threadId: string; waiting: boolean
 
   // Nothing has been asked, or it has already been answered.
   if (!waiting) return null;
+
+  // Woken, but not a word yet. Worth saying on its own: it is the difference
+  // between "did that go anywhere?" and "give it a second". It also needs
+  // nothing from the agent, so an older build that never claims a thread
+  // still does not read as silence.
+  const woken = summonedBy(sessions, thread);
+  if (woken.length > 0) {
+    const names = woken.map((session) => session.label ?? session.actor.name);
+    return (
+      <div className="onit waiting" aria-live="polite">
+        <div className="onit-row">
+          <span className="onit-dot idle" />
+          <span>
+            {names.join(", ")} {names.length === 1 ? "was" : "were"} woken — waiting for{" "}
+            {names.length === 1 ? "them" : "one of them"} to pick this up.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const parked = listeners(sessions).length;
   return (

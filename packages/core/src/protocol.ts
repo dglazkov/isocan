@@ -59,6 +59,20 @@ export interface PresenceSession {
    * explicit cursor commands and by any piggybacked op (working resolves
    * into done). */
   activity: PresenceActivity | null;
+  /**
+   * The thread this session is answering, if it has picked one up.
+   *
+   * Deliberately NOT part of `activity`. That field says where somebody is
+   * STANDING, and it changes constantly — an agent answering a thread spends
+   * most of its time working on the items the thread is about, and every
+   * `session work`, every `point`, and every applied op moves it. What it is
+   * ANSWERING does not change when it walks across the canvas to do the work.
+   * Folding the two together meant an agent vanished from the thread the
+   * instant it started working, which is exactly when you most want to see it.
+   *
+   * Cleared by the receipt — posting a comment — because that is the answer.
+   */
+  onThread: string | null;
   lastSeen: string;
 }
 
@@ -98,6 +112,9 @@ export interface UpdateSessionRequest {
    * from what a command is doing; never displaces an explicit status. */
   statusSource?: "explicit" | "lifecycle" | "inferred";
   activity?: PresenceActivity | null;
+  /** Pick up a thread, or (null) put it down. Omit to leave it alone: the
+   * whole point is that it survives everything else a session does. */
+  onThread?: string | null;
 }
 
 // ---- watching the whole home ----

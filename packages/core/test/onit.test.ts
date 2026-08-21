@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { listeners, workersOn, type PresenceSession } from "../src/index.ts";
+import { listeners, summonedBy, workersOn, type PresenceSession } from "../src/index.ts";
 
 const session = (over: Partial<PresenceSession>): PresenceSession => ({
   sessionId: "ses_1", actor: { id: "usr_1", name: "Fable" }, kind: "cli", label: null,
-  cursor: null, selection: [], status: null, activity: null,
+  cursor: null, selection: [], status: null, activity: null, onThread: null,
   lastSeen: "2026-08-21T12:00:00.000Z", ...over,
 });
 
 describe("who has picked up a thread", () => {
   it("finds the sessions that claimed it, and no others", () => {
     const sessions = [
-      session({ sessionId: "a", activity: { kind: "working", threadId: "t1" } }),
-      session({ sessionId: "b", activity: { kind: "working", threadId: "t2" } }),
+      session({ sessionId: "a", onThread: "t1" }),
+      session({ sessionId: "b", onThread: "t2" }),
       session({ sessionId: "c", activity: null }),
     ];
     expect(workersOn(sessions, "t1").map((w) => w.sessionId)).toEqual(["a"]);
   });
 
   it("does not mistake working on an ITEM for working on a thread", () => {
-    // The other activity kinds say where somebody is standing. Only this one
-    // says what they are answering.
+    // `activity` says where somebody is standing; `onThread` says what they
+    // are answering. Reading the first as the second is how an agent vanished
+    // from the thread the moment it started doing the work.
     const sessions = [
       session({ activity: { kind: "working", itemId: "t1" } }),
       session({ activity: { kind: "working", x: 10, y: 10 } }),
@@ -27,9 +28,18 @@ describe("who has picked up a thread", () => {
     expect(workersOn(sessions, "t1")).toEqual([]);
   });
 
+  it("keeps the thread while the agent walks off to work on an item", () => {
+    // The whole reason these are two fields. An agent answering a thread
+    // spends most of its time working on the items the thread is about.
+    const sessions = [
+      session({ onThread: "t1", activity: { kind: "working", itemId: "itm_9" }, status: "wireframing…" }),
+    ];
+    expect(workersOn(sessions, "t1")[0]).toMatchObject({ status: "wireframing…" });
+  });
+
   it("carries the status through — that is the whole point", () => {
     const sessions = [
-      session({ status: "moving 12 items into rows…", activity: { kind: "working", threadId: "t1" } }),
+      session({ status: "moving 12 items into rows…", onThread: "t1" }),
     ];
     expect(workersOn(sessions, "t1")[0]).toMatchObject({
       name: "Fable",
@@ -39,15 +49,15 @@ describe("who has picked up a thread", () => {
 
   it("prefers the label the person knows them by", () => {
     const sessions = [
-      session({ label: "Fable 🤖", activity: { kind: "working", threadId: "t1" } }),
+      session({ label: "Fable 🤖", onThread: "t1" }),
     ];
     expect(workersOn(sessions, "t1")[0]!.name).toBe("Fable 🤖");
   });
 
   it("reports several, because two agents can take the same thread", () => {
     const sessions = [
-      session({ sessionId: "a", activity: { kind: "working", threadId: "t1" } }),
-      session({ sessionId: "b", activity: { kind: "working", threadId: "t1" } }),
+      session({ sessionId: "a", onThread: "t1" }),
+      session({ sessionId: "b", onThread: "t1" }),
     ];
     expect(workersOn(sessions, "t1")).toHaveLength(2);
   });
@@ -63,5 +73,43 @@ describe("who could pick something up", () => {
 
   it("says nobody when nobody is parked", () => {
     expect(listeners([session({ kind: "web" })])).toEqual([]);
+  });
+});
+
+describe("who the last message woke", () => {
+  const thread = (over: object) => ({ main: false, comments: [], ...over }) as never;
+  const asked = (mentions?: string[]) => ({
+    author: { id: "usr_di" }, ...(mentions ? { mentions } : {}),
+  });
+
+  it("names the agents a comment @-mentioned", () => {
+    const sessions = [
+      session({ actor: { id: "usr_fable", name: "Fable" }, label: "Fable 🤖" }),
+      session({ actor: { id: "usr_andy", name: "Wise Andy" } }),
+    ];
+    const woken = summonedBy(sessions, thread({ comments: [asked(["usr_fable"])] }));
+    expect(woken.map((s) => s.actor.name)).toEqual(["Fable"]);
+  });
+
+  it("wakes every parked agent in the MAIN thread, mention or not", () => {
+    // The daemon's rule, restated so a client can say who is coming.
+    const sessions = [session({ actor: { id: "usr_fable", name: "Fable" } })];
+    expect(summonedBy(sessions, thread({ main: true, comments: [asked()] }))).toHaveLength(1);
+    expect(summonedBy(sessions, thread({ main: false, comments: [asked()] }))).toEqual([]);
+  });
+
+  it("never says an agent woke itself", () => {
+    const sessions = [session({ actor: { id: "usr_fable", name: "Fable" } })];
+    const own = { author: { id: "usr_fable" } };
+    expect(summonedBy(sessions, thread({ main: true, comments: [own] }))).toEqual([]);
+  });
+
+  it("does not count people watching", () => {
+    const sessions = [session({ kind: "web", actor: { id: "usr_p", name: "Di" } })];
+    expect(summonedBy(sessions, thread({ main: true, comments: [asked()] }))).toEqual([]);
+  });
+
+  it("says nobody for an empty thread", () => {
+    expect(summonedBy([session({})], thread({ main: true }))).toEqual([]);
   });
 });

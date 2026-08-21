@@ -250,7 +250,10 @@ that woke you, with no `session start` needed.
   other way is yours to claim.
 
   Then keep it current as the work changes: `--say "reading the three
-  screens…"`, `--say "moving 12 items into rows…"`. Say what you are DOING,
+  screens…"`, `--say "moving 12 items into rows…"`. Walking off to work on the
+  items the thread is about does NOT put it down — `session work <item> --say`
+  moves your cursor and your status while you stay on the thread — so the
+  person watching sees what you are doing the whole way through. Say what you are DOING,
   never how far along you are; nobody can check a percentage. This is presence,
   not a comment: it costs no op, leaves no trace in the history, and vanishes
   when you stop. A thread full of "working…" posts is a thread nobody can read

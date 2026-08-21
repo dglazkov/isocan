@@ -2332,6 +2332,9 @@ session
       const thread = resolveThread(snapshot, ref);
       await touchSession(ctx, p.id, {
         activity: { kind: "working", threadId: thread.id },
+        // The thread you are ANSWERING, which survives walking off to work on
+        // the items it is about — unlike `activity`, which is where you stand.
+        onThread: thread.id,
         cursor: threadLocus(snapshot, thread),
         ...(opts.say ? { status: opts.say, statusSource: "explicit" as const } : {}),
       });
@@ -2597,6 +2600,7 @@ async function landPresence(
     // renderer should not have to make. This is what puts "reading your
     // comment…" under their message a second after they send it.
     activity: { kind: "working", threadId: op.threadId },
+    onThread: op.threadId,
     ...(cursor ? { cursor } : {}),
   };
   const active = await readSessionFile(ctx.home, ctx.actor.id);

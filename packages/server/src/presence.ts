@@ -82,6 +82,7 @@ export class PresenceHub {
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
+      onThread?: string | null;
     } = {},
   ): boolean {
     const session = this.rooms.get(projectId)?.get(sessionId);
@@ -153,6 +154,10 @@ export class PresenceHub {
       activity: null,
       status: null,
       statusSource: receipt ? "lifecycle" : "inferred",
+      // Only the receipt puts the thread down. Every other op is the WORK —
+      // adding the item, moving the screens — and an agent doing the thing it
+      // was asked for is still on the thread that asked.
+      ...(receipt ? { onThread: null } : {}),
       ...(locus ? { cursor: locus } : {}),
     });
   }
@@ -187,6 +192,7 @@ function blankSession(
     selection: [],
     status: null,
     activity: null,
+    onThread: null,
     lastSeen: new Date().toISOString(),
     lastSeenMs: Date.now(),
     statusSticky: false,
@@ -202,6 +208,7 @@ function patchSession(
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
+    onThread?: string | null;
   },
 ): void {
   // Presence is client-asserted, but a half-formed actor would leave a face
@@ -219,6 +226,7 @@ function patchSession(
     }
   }
   if (patch.activity !== undefined) session.activity = patch.activity;
+  if (patch.onThread !== undefined) session.onThread = patch.onThread;
   session.lastSeenMs = Date.now();
   session.lastSeen = new Date().toISOString();
 }
