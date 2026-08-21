@@ -907,13 +907,26 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 /* The row is wider here: a command is a name you may not know, so the menu has
    to say what it does rather than trusting the name to. */
-.mention-menu:has(.command-dot) { min-width: 320px; max-width: 420px; }
-/* The name and its usage keep the room: they are what you are typing. */
-.mention-menu:has(.command-dot) .mention-name { flex: 1.5; }
+/* Names only. The explanation moved to a card beside the menu — a sentence in
+   a menu row is a sentence with a "…" in it. */
+.mention-menu:has(.command-dot) { min-width: 232px; max-width: 340px; }
 .mention-name .mention-usage { font-style: normal; font-weight: 400; color: var(--ink-soft); }
-.mention-hint {
-  flex: 1.4; min-width: 0; font-size: 11px; color: var(--ink-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;
+
+/* What the highlighted command is, in full, beside the row it belongs to. It
+   follows the selection whether you walked here with the keyboard or the
+   pointer, and it is inert: an explanation, not somewhere to go. */
+.hover-card.command-card {
+  position: fixed; width: 248px; padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 5px;
+  pointer-events: none;
+}
+.command-card b { font-size: 12px; font-weight: 700; color: var(--accent); }
+.command-card b em { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.command-card span { font-size: 12px; line-height: 1.45; color: var(--ink); }
+.command-card i {
+  font-style: normal; font-size: 10.5px; color: var(--ink-muted);
+  border-top: 1px solid var(--line-soft); padding-top: 5px;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- minimap ---------- */
