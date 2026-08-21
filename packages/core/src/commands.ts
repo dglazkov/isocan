@@ -528,39 +528,58 @@ you saw.`,
   },
   {
     name: "grill-me",
-    description: "Interview the user, then write the spec it produces",
+    description: "A relentless interview that ends in a spec, not a vibe",
     usage: "[what you want to build]",
     source: "built-in",
-    body: `Interview them, then write the spec.
+    body: `Interview them until nothing is left silently assumed, then write the spec.
 
-They have asked to be questioned because they know what they want and have not
-said it yet. Your job is to find the decisions that are still open and get them
-made — not to collect requirements politely.
+The procedure is Matt Pocock's \`grilling\` skill (github.com/mattpocock/skills,
+MIT), adapted to a canvas thread. If you already have that skill, use it and
+apply the thread notes at the bottom.
 
-HOW TO ASK:
-- ONE question per comment. A list of six gets one answer to the easiest.
-- Ask what is undecided, not what is written down. If the canvas already says
-  it, read the canvas: \`isocan ls\`, \`isocan get\`, \`isocan activity\`.
-- Prefer a question with named options over an open one. "Grid or list?" gets
-  an answer; "how should it look?" gets a shrug.
-- Follow the answer that surprises you. That is where the real spec is.
-- Keep count out loud: "3 of about 6" costs nothing and tells them how long
+THE TREE AND THE FRONTIER. Map the work as a design tree: every decision
+branches into the decisions that hang off it. The FRONTIER is every decision
+whose prerequisites are already settled — the questions you can ask NOW without
+guessing at answers you have not heard. A question whose answer depends on
+another question still open belongs to a LATER round, not this one.
+
+WORK IN ROUNDS. Ask the WHOLE frontier in one comment, numbered, each with your
+recommended answer:
+
+    ❓ **Q1** — **<title>**: <the question, with options where there are any>
+
+    ➡️ <what you would do, and why in one line>
+
+    ---
+
+    ❓ **Q2** — **<title>**: …
+
+Then \`isocan wait --timeout 900\` and stop. Their answers reshape the tree:
+settled decisions push the frontier outward and unblock what depended on them.
+Recompute and ask the next round.
+
+FINDING FACTS IS YOUR JOB, NEVER THEIRS. If a question needs something the
+canvas can answer — what is already built, what a screen does, what the house
+style says — go and look: \`isocan ls\`, \`isocan get\`, \`isocan style\`,
+\`isocan activity\`. Asking somebody what is on their own canvas wastes the one
+thing this costs, which is their attention. The DECISIONS are theirs; put each
+one to them and wait.
+
+ON A CANVAS, TWO CHANGES TO THE ABOVE:
+- One comment per ROUND, not per question. Every round costs them a trip back
+  to the thread, and every wait costs you a turn.
+- Say where you are: "Round 2 of about 4" costs nothing and tells them how long
   this is.
-- Stop when the next question would not change what gets built. Usually five
-  to eight. Do not pad.
 
-BETWEEN QUESTIONS: post the question with \`isocan comment reply\` on this
-thread, then \`isocan wait --timeout 900\`. They may take a while; that is what
-waiting is for. If they answer two questions at once, do not re-ask the one
-they already answered.
+DONE IS AN EMPTY FRONTIER. Then write the spec as an item —
+\`isocan add spec.md --title "<what it is> — spec" --prop parent=<the screen
+it is about, if there is one>\` — covering what is being built and for whom,
+every decision they made and WHY in their own words, what is explicitly out of
+scope, and what is still open. Reply with #the-spec and the one thing to do
+first.
 
-WHEN YOU ARE DONE: write the spec as an item on the canvas —
-\`isocan add spec.md --title "<what it is> — spec"\` — covering what is being
-built, who for, the decisions they made and WHY (in their words, quoted where
-they were vivid), what is explicitly out of scope, and what remains open. Then
-reply on the thread with #the-spec and one line on what to do next.
-
-The value is in the decisions, not the prose. A spec that says "clean, modern"
+Do not start building until they confirm you have understood the same thing.
+The value is in the decisions, not the prose: a spec that says "clean, modern"
 recorded nothing.`,
   },
 ];
