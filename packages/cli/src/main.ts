@@ -79,6 +79,7 @@ import {
   retireStrandedIdentities,
   writeIdentity,
 } from "./identity.ts";
+import { agentGuide } from "./agent-guide.ts";
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
@@ -100,6 +101,7 @@ program
   .version("0.1.0")
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
+  .option("--agent-help", "how to collaborate on a canvas as an agent: the whole protocol")
   .option(
     "--project <ref>",
     "project id or title prefix (default: this directory's binding, then `isocan use --home`)",
@@ -107,6 +109,11 @@ program
   .addHelpText(
     "after",
     `
+Agents, start here:
+  \`isocan --agent-help\` is the collaboration protocol in full — naming
+  yourself, appearing on the canvas, answering comments, parking on \`wait\`.
+  It ships inside this build, so it always describes the commands below.
+
 The system:
   A local daemon owns the state; this CLI and the web app are equal clients.
   Every command here sends the same operation the web app would, so changes
@@ -966,7 +973,8 @@ program
         printKeyValues(report);
         console.log(
           `\nOpen ${client.base} — pick your name, make a canvas — then tell your agent` +
-            "\nto use the isocan-collab skill.",
+            "\nto use the isocan-collab skill (or to run `isocan --agent-help`, which is" +
+            "\nthe same instructions, shipped with this build).",
         );
       },
     ),
@@ -2861,7 +2869,15 @@ trash
     }),
   );
 
-program.parseAsync().catch((err: unknown) => {
-  console.error(`error: ${(err as Error).message}`);
-  process.exit(1);
-});
+// `--agent-help` is answered before commander parses anything, so it means the
+// same thing wherever it is typed (`isocan --agent-help`, `isocan comment
+// --agent-help`): stop, and print how to work here. Nothing above this line
+// has run anything — the definitions are registrations only.
+if (process.argv.slice(2).includes("--agent-help")) {
+  console.log(agentGuide());
+} else {
+  program.parseAsync().catch((err: unknown) => {
+    console.error(`error: ${(err as Error).message}`);
+    process.exit(1);
+  });
+}
