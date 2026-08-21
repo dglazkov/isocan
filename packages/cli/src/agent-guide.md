@@ -303,7 +303,11 @@ that woke you, with no `session start` needed.
 
   `isocan command list` is the whole menu, and it is the same list the web
   app's composer offers, so a person and an agent are never looking at
-  different vocabularies. `/help` is answered by the app itself — a person
+  different vocabularies. A command is just a markdown skill, so any published
+  one becomes available here in a single pipe — `… | isocan command add
+  <name>` reads stdin, frontmatter and all. If you already hold a skill a
+  command names, use the skill: the command body is the adaptation to this
+  canvas, not a replacement for it. `/help` is answered by the app itself — a person
   should not wait for you to be told what their own keyboard does — so you
   will rarely see it from the web app; from a terminal it is a real question,
   so answer it. A home can add its own commands with `isocan command add`;
