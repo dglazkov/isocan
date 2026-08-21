@@ -9,6 +9,7 @@ import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
+import { isTyping } from "../lib/keys.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
@@ -157,10 +158,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     }
 
     function down(e: KeyboardEvent) {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        return;
-      }
+      if (isTyping(e.target)) return;
       if (e.code === "Space" && spacePrevTool.current === null) {
         const ui = useUiStore.getState();
         spacePrevTool.current = ui.activeTool; // capture once; keydown repeats while held
@@ -191,7 +189,12 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         useUiStore.getState().setActiveTool(spacePrevTool.current);
         spacePrevTool.current = null;
       }
-      if (e.code === "KeyP") {
+      if (e.code === "KeyP" && penDownAt.current !== 0) {
+        // Only a press we started. Typing "p" in a comment box was ignored on
+        // the way down and reached for the Pen on the way up, because a keyup
+        // with no keydown behind it still ran the tap branch. Guarding on the
+        // TARGET would be wrong in the other direction: press P on the canvas,
+        // click into a field, let go — that release is still ours.
         endPenHold();
       }
       if (e.code === "KeyZ") {
