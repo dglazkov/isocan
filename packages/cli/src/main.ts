@@ -52,6 +52,11 @@ import {
   isIdentityColor,
   isDrawingItem,
   isStarred,
+  skillNameFrom,
+  // This file already has a `skillSource`: the directory of the skill this
+  // build ships. Core's answers a different question — where a PUBLISHED
+  // skill lives — so it comes in under a name that says which.
+  skillSource as publishedSkill,
   itemKind,
   mergeDrawings,
   opMatchesFilters,
@@ -2041,13 +2046,59 @@ command
 command
   .command("add")
   .description("Write a command for this home (shadows a built-in of the same name)")
-  .argument("<name>", "command name: lowercase letters, digits, dashes")
+  .argument("[name]", "command name: lowercase letters, digits, dashes")
   .argument("[file]", "markdown file; omit to read stdin")
+  .option("--from <ref>", "a published skill: owner/repo/path/SKILL.md, or an https URL")
+  .option("--yes", "with --from: install it, having read what it says")
   .option("--description <text>", "one line for the menu (when the file has no frontmatter)")
   .option("--usage <text>", "how the arguments read, e.g. '[note]'")
+  .addHelpText(
+    "after",
+    `
+--from fetches a published skill and PRINTS IT, and installs nothing until you
+run it again with --yes. That gate is deliberate: a command's body is read as
+instructions by every future agent on this canvas, so "what does it say" and
+"where did it come from" get answered before it lands, not after.
+
+  isocan command add --from mattpocock/skills/skills/productivity/grilling/SKILL.md
+  isocan command add --from <same> --yes`,
+  )
   .action(
-    run(async (name: string, file: string | undefined, opts: { description?: string; usage?: string }, cmd: Command) => {
+    run(async (name: string | undefined, file: string | undefined, opts: { from?: string; yes?: boolean; description?: string; usage?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+
+      if (opts.from) {
+        const source = publishedSkill(opts.from);
+        if (!source) {
+          throw new Error(
+            `cannot tell where "${opts.from}" comes from — use owner/repo/path/SKILL.md or an https URL`,
+          );
+        }
+        const res = await fetch(source.url);
+        if (!res.ok) throw new Error(`${source.url} — HTTP ${res.status}`);
+        const text = await res.text();
+        const asName = (name ?? skillNameFrom(opts.from) ?? "").replace(/^\//, "").toLowerCase();
+        if (!COMMAND_NAME.test(asName)) {
+          throw new Error(`could not name this skill from its path — pass one: isocan command add <name> --from …`);
+        }
+        const parsed = parseCommandFile(asName, text);
+        if (!parsed) throw new Error(`${source.url} has no instructions in it`);
+        if (!opts.yes) {
+          // Show the whole thing. A skill you have not read is a stranger you
+          // have given a seat at your canvas.
+          console.error(`/${asName} — from ${source.label}\n${source.url}\n`);
+          console.log(text);
+          console.error(
+            `\nread that? then: isocan command add ${asName} --from ${opts.from} --yes`,
+          );
+          return;
+        }
+        await ctx.client.saveCommand(asName, text);
+        console.error(`/${asName} installed from ${source.label} (isocan command rm ${asName})`);
+        return;
+      }
+
+      if (!name) throw new Error("pass a name, or --from <ref> to fetch a published skill");
       const wanted = name.replace(/^\//, "").toLowerCase();
       if (!COMMAND_NAME.test(wanted)) {
         throw new Error(`not a command name: ${wanted} (lowercase letters, digits, dashes)`);

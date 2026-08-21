@@ -303,11 +303,21 @@ that woke you, with no `session start` needed.
 
   `isocan command list` is the whole menu, and it is the same list the web
   app's composer offers, so a person and an agent are never looking at
-  different vocabularies. A command is just a markdown skill, so any published
-  one becomes available here in a single pipe — `… | isocan command add
-  <name>` reads stdin, frontmatter and all. If you already hold a skill a
-  command names, use the skill: the command body is the adaptation to this
-  canvas, not a replacement for it. `/help` is answered by the app itself — a person
+  different vocabularies. If you already hold a skill a command names, use the
+  skill: the command body is the adaptation to this canvas, not a replacement
+  for it.
+- **A command is a skill, so published ones drop straight in.**
+  `isocan command add --from <owner/repo/path/SKILL.md>` fetches it and PRINTS
+  it; `--yes` installs it. The two steps are the point, and they are enforced
+  by the command rather than asked of you: a body you install is read as
+  instructions by every future agent on this canvas, so nothing lands unread.
+  Show the person what it says — at minimum what it instructs an agent to DO
+  and anything reaching outside this canvas — and let them decide. `/skill` is
+  the same act from a composer, and `/skill find` looks for one without
+  installing anything.
+
+  Never add a skill nobody asked for, and never add several to be helpful. A
+  menu of forty commands nobody chose is worse than one with eight. `/help` is answered by the app itself — a person
   should not wait for you to be told what their own keyboard does — so you
   will rarely see it from the web app; from a terminal it is a real question,
   so answer it. A home can add its own commands with `isocan command add`;
