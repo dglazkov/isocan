@@ -32,6 +32,22 @@ export interface Health extends Partial<BuildStamp> {
   startedAt: string;
 }
 
+/** What the daemon says about a canvas's mirror — either it is mirroring and
+ * this is how far it has got, or it isn't and says so. */
+export type MirrorReport =
+  | { projectId: string; mirroring: false }
+  | {
+      mirroring: true;
+      projectId: string;
+      firebaseProject: string;
+      mirroredSeq: number;
+      blobs: number;
+      behind: boolean;
+      parked?: true;
+      error?: string;
+      blobsUnavailable?: string;
+    };
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -187,6 +203,17 @@ export class DaemonClient {
 
   gc(projectId: string, request: GcRequest): Promise<GcReport> {
     return this.request("POST", `/api/projects/${projectId}/gc`, request);
+  }
+
+  /** Tell the daemon this canvas is shared now, so it starts mirroring (#70).
+   * The daemon holds the credential and the engine; the CLI never writes to
+   * Firestore itself. */
+  startMirror(projectId: string): Promise<MirrorReport> {
+    return this.request("POST", `/api/projects/${projectId}/mirror`);
+  }
+
+  mirrorStatus(projectId: string): Promise<MirrorReport> {
+    return this.request("GET", `/api/projects/${projectId}/mirror`);
   }
 
   async uploadBlob(

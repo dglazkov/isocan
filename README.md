@@ -294,11 +294,28 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `/c/{id}` in the link), so the second canvas you share costs a marker and a
   fraction of a second. The marker gains a `remote` stanza — safe to commit,
   because knowing *where* a canvas lives grants nothing without a capability
-  token, and tokens never enter the repo. Mirroring the oplog (#70), minting
-  share links (#72) and the guest app itself (#73) land next; today's remote
-  publishes nothing and admits nobody, and its address says so — a page that
-  explains itself, because an address that looks alive and is not would be
-  worse than one that plainly isn't.
+  token, and tokens never enter the repo. Once a canvas is shared, **the daemon
+  mirrors it**: the whole oplog and every blob it names go up to Firestore and
+  Cloud Storage, and from then on each confirmed op follows within seconds. The
+  documents carry the full log entry — envelope and stored inverse — so a guest
+  replays them through the same `@isocan/core` reducer the local app uses, and
+  a remote actor's undo works identically. Mirroring is a follower, never a
+  step: it hangs off the engine's op event rather than its write chain, keeps
+  its own cursor in `mirror.json`, and publishes bytes before the op that names
+  them. An entry too big to be a Firestore document — Firestore refuses a
+  property over 1,048,487 bytes, and the inverse of a delete that took thousands
+  of items with it can exceed that — goes to Cloud Storage instead, and its
+  document carries the address; one such entry used to stop a canvas mirroring
+  forever. Firestore can be down for a day without the canvas noticing — behind
+  is a state, broken is not, and a mirror that has genuinely given up says
+  STOPPED rather than letting itself be read as caught up — and `isocan gc`
+  waits for a canvas that is still
+  catching up before it sweeps, then compacts the local log alone, leaving the
+  mirror holding the history the host gave up. Minting share links (#72) and the
+  guest app itself (#73) land next; until they do the rules deployed here admit
+  nobody, so the mirror is a copy with no readers, and the address says so — a
+  page that explains itself, because an address that looks alive and is not
+  would be worse than one that plainly isn't.
 
 ## CLI surface
 

@@ -7,6 +7,7 @@ import { decodeFilename, FILENAME_HEADER, OpValidationError } from "@isocan/core
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
+import type { Mirror } from "./mirror.ts";
 import { buildStamp } from "./build.ts";
 
 const STARTED_AT = new Date().toISOString();
@@ -16,6 +17,7 @@ export function registerRoutes(
   engine: Engine,
   store: Store,
   presence: PresenceHub,
+  mirror: Mirror,
 ): void {
   // Raw bodies for blob uploads; JSON stays JSON.
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
@@ -242,6 +244,24 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
     return engine.gc(id, body);
+  });
+
+  /**
+   * "This canvas is shared now" (#70). `isocan share` runs in the CLI process,
+   * so a daemon that was already up when the dance finished has no way to know
+   * — it is told, rather than left to notice, and both surfaces (#74's panel
+   * included) say it through the same door.
+   */
+  app.post("/api/projects/:id/mirror", async (req) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id); // 404 for unknown projects
+    return (await mirror.notice(id)) ?? { projectId: id, mirroring: false };
+  });
+
+  app.get("/api/projects/:id/mirror", async (req) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    return mirror.status(id) ?? { projectId: id, mirroring: false };
   });
 
   app.post("/api/projects/:id/blobs", async (req, reply) => {
