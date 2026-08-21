@@ -185,6 +185,11 @@ export function MentionField({
 
 const MENU_GAP = 3; // hairline between the typed line and the menu
 const MENU_EDGE = 8; // keep the menu off the window edges
+/** The explanation card beside the command menu. */
+const CARD_WIDTH = 248;
+const CARD_GAP = 8;
+/** Keep the card clear of the bottom edge — it is a few lines tall. */
+const CARD_REACH = 180;
 
 /** One row of the completion menu — a person or an item. */
 interface MenuOption {
@@ -193,9 +198,11 @@ interface MenuOption {
   label: string;
   item?: boolean;
   online?: boolean;
-  /** Shown after the name, greyed: what the command does, how it reads. */
+  /** Shown in the card beside the menu: what the command does. */
   hint?: string;
   usage?: string;
+  /** The card's last line: where this goes when you send it. */
+  foot?: string;
 }
 
 /**
@@ -220,11 +227,22 @@ function MentionMenu({
   onPick: (option: MenuOption) => void;
 }) {
   const colors = useActorColors();
-  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Only a command carries an explanation worth a card; a name is its own.
+  const describing = char === "/" ? matches[Math.min(active, matches.length - 1)] : undefined;
 
-  // No dep array: the trigger moves as text wraps, the field scrolls, or the
-  // popover shifts — every render re-measures. setBox bails when nothing moved.
+  /**
+   * Placement is written to the DOM, not held in state.
+   *
+   * This has to re-measure on every render — the trigger moves as text wraps,
+   * the field scrolls, the popover shifts — and a measure that ends in
+   * setState is a render that ends in another measure. It settles on the right
+   * numbers immediately and still dispatches on every pass, which React counts
+   * as nested updates until it gives up ("Maximum update depth exceeded",
+   * which is what adding the card did). Assigning the style has the same
+   * effect on screen and cannot loop: nothing here schedules a render.
+   */
   useLayoutEffect(() => {
     const place = () => {
       const menu = ref.current;
@@ -240,7 +258,25 @@ function MentionMenu({
         below + menu.offsetHeight <= window.innerHeight - MENU_EDGE
           ? below
           : Math.max(MENU_EDGE, at.top - MENU_GAP - menu.offsetHeight);
-      setBox((prev) => (prev?.left === left && prev.top === top ? prev : { left, top }));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+      menu.style.visibility = "visible";
+
+      // The card hangs off the ACTIVE row, not off the menu, so it follows the
+      // selection whether you walked here with the keyboard or the pointer.
+      const card = cardRef.current;
+      if (!card) return;
+      const row = menu.children[active] as HTMLElement | undefined;
+      const rowTop = row ? row.getBoundingClientRect().top : top;
+      const fitsRight =
+        left + menu.offsetWidth + CARD_GAP + CARD_WIDTH <= window.innerWidth - MENU_EDGE;
+      card.style.left = `${
+        fitsRight
+          ? left + menu.offsetWidth + CARD_GAP
+          : Math.max(MENU_EDGE, left - CARD_GAP - CARD_WIDTH)
+      }px`;
+      card.style.top = `${Math.max(MENU_EDGE, Math.min(rowTop - 6, window.innerHeight - CARD_REACH))}px`;
+      card.style.visibility = "visible";
     };
     place();
     window.addEventListener("resize", place);
@@ -252,11 +288,13 @@ function MentionMenu({
   // chrome that outranks the panel — the minimap painted straight over it. It
   // is position: fixed, so leaving changes nothing about where it lands.
   return createPortal(
+    <>
     <div
       ref={ref}
       className="mention-menu"
       role="listbox"
-      style={{ ...box, visibility: box ? "visible" : "hidden" }}
+      // Hidden until the effect has measured, or it flashes at the corner.
+      style={{ visibility: "hidden" }}
       // Keep focus in the field: mousedown would blur it before the click.
       onMouseDown={(e) => e.preventDefault()}
     >
@@ -285,11 +323,25 @@ function MentionMenu({
             {option.label}
             {option.usage ? <em className="mention-usage"> {option.usage}</em> : null}
           </span>
-          {option.hint && <span className="mention-hint">{option.hint}</span>}
           {option.online && <span className="mention-live">live</span>}
         </button>
       ))}
-    </div>,
+    </div>
+    {/* A SIBLING of the menu, never a child: inside it, `children[active]`
+        would sometimes measure the card. Beside the menu, because a sentence
+        in a menu row is a sentence with a "…" in it. Inert: an explanation,
+        not a place to go. */}
+    {describing && (
+      <div ref={cardRef} className="hover-card command-card" style={{ visibility: "hidden" }}>
+        <b>
+          /{describing.label}
+          {describing.usage ? <em> {describing.usage}</em> : null}
+        </b>
+        <span>{describing.hint}</span>
+        {describing.foot && <i>{describing.foot}</i>}
+      </div>
+    )}
+    </>,
     document.body,
   );
 }
@@ -410,6 +462,14 @@ function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption
     label: command.name,
     hint: command.description,
     usage: command.usage,
+    // Whether sending this will DO something or ASK for something — the one
+    // thing about a command you cannot guess from its name.
+    foot:
+      command.local === true
+        ? "answered here · nothing is posted"
+        : command.source === "home"
+          ? `yours · ~/.isocan/commands/${command.name}.md`
+          : "posted as a comment · an agent does it",
   }));
 }
 
