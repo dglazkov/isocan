@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Actor, PostOpRequest, UndoRedoRequest } from "@isocan/core";
 import {
+  cancelledSince,
   COMMAND_NAME,
   decodeFilename,
   FILENAME_HEADER,
@@ -258,7 +259,28 @@ export function registerRoutes(
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }
-    return { ok: true };
+    // Every command an agent runs beats on this endpoint, which makes it the
+    // one place a cancellation can reach something MID-TURN. An agent is not
+    // polling the canvas while it works — but it is running tools, and this is
+    // what its tools already call.
+    const on = presence.onThreadOf(id, sid);
+    if (!on) return { ok: true };
+    try {
+      const { canvas } = await engine.getSnapshot(id);
+      const thread = canvas.threads[on.threadId];
+      const cancel = thread ? cancelledSince(thread, on.since) : null;
+      if (!cancel) return { ok: true };
+      return {
+        ok: true,
+        cancelled: {
+          threadId: on.threadId,
+          by: cancel.author.name,
+          at: cancel.createdAt,
+        },
+      };
+    } catch {
+      return { ok: true }; // a canvas mid-delete cancels nothing
+    }
   });
 
   app.delete("/api/projects/:id/sessions/:sid", async (req) => {

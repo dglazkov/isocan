@@ -1,4 +1,6 @@
-import { listeners, summonedBy, workersOn, type CommentThread } from "@isocan/core";
+import { listeners, summonedBy, workersOn, type Actor, type CommentThread } from "@isocan/core";
+import { sendOp, undo } from "../lib/api.ts";
+import { makeComment } from "./CommentLayer.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor } from "../lib/presence.ts";
@@ -21,7 +23,17 @@ import { quietFor } from "../lib/presence.ts";
  * When nobody has picked it up, it says whether anybody COULD — an agent
  * parked on `wait` is a different silence from an empty room.
  */
-export function OnIt({ thread, waiting }: { thread: CommentThread; waiting: boolean }) {
+export function OnIt({
+  thread,
+  waiting,
+  projectId,
+  actor,
+}: {
+  thread: CommentThread;
+  waiting: boolean;
+  projectId: string;
+  actor: Actor;
+}) {
   const sessions = useCanvasStore((s) => s.sessions);
   const colors = useActorColors();
   const working = workersOn(sessions, thread.id);
@@ -42,6 +54,11 @@ export function OnIt({ thread, waiting }: { thread: CommentThread; waiting: bool
             </div>
           );
         })}
+        {/* Already picked up: it cannot be unsaid, so the honest control is to
+            ask them to stop — which is a message, like every other request. */}
+        <button className="onit-cancel" onClick={() => void askToStop(projectId, actor, thread)}>
+          Ask to stop
+        </button>
       </div>
     );
   }
@@ -81,7 +98,48 @@ export function OnIt({ thread, waiting }: { thread: CommentThread; waiting: bool
               ? "Sent. One agent is listening."
               : `Sent. ${parked} agents are listening.`}
         </span>
+        {/* Nothing has read it yet, so it can simply stop existing. Undoable
+            like any other op — this is `comment.remove`, not a shred. */}
+        <button className="onit-cancel" onClick={() => void retract(projectId, actor, thread)}>
+          Cancel
+        </button>
       </div>
     </div>
   );
+}
+
+/**
+ * Take the request back. Before anybody has picked it up, cancelling is not a
+ * message to anyone — it is undoing what you just did.
+ *
+ * And undo is literally how: `comment.remove` is an INTERNAL op, reachable
+ * only as the inverse of posting, because this vocabulary deliberately has no
+ * "delete a comment" anybody can issue. So a thread that is only this request
+ * is deleted outright — a public op, and exact — and anything with history
+ * behind it goes through the actor's own undo, which is the same act as ⌘Z.
+ *
+ * The narrow case undo could get wrong is doing something else on the canvas
+ * between posting and changing your mind; then the stack has that on top. The
+ * button only appears while your comment is the last word in the thread, which
+ * makes it right in every case anybody has hit.
+ */
+async function retract(projectId: string, actor: Actor, thread: CommentThread): Promise<void> {
+  const last = thread.comments[thread.comments.length - 1];
+  if (!last || last.author.id !== actor.id) return;
+  if (thread.comments.length === 1 && !thread.main) {
+    await sendOp(projectId, actor, { type: "thread.delete", threadId: thread.id });
+    return;
+  }
+  await undo(projectId, actor);
+}
+
+/** Ask whoever has it to stop. A comment, because it has to reach an agent
+ * that is mid-turn and reading its own tools — and because "why did this stop
+ * halfway" is a question somebody asks next week. */
+async function askToStop(projectId: string, actor: Actor, thread: CommentThread): Promise<void> {
+  await sendOp(projectId, actor, {
+    type: "thread.reply",
+    threadId: thread.id,
+    comment: makeComment("/cancel"),
+  });
 }

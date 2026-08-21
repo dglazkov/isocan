@@ -1556,3 +1556,12 @@ button.mt-card:hover { border-color: var(--accent); }
   50% { opacity: 0.4; transform: scale(0.78); }
 }
 @media (prefers-reduced-motion: reduce) { .onit-dot { animation: none; } }
+/* Calling it off. Quiet until you want it: the common case is that the work
+   goes ahead, and a loud Cancel beside a working agent reads as a warning. */
+.onit-cancel {
+  margin-left: auto; flex: none; padding: 2px 8px;
+  border: 1px solid var(--chip-line); border-radius: 999px;
+  background: var(--card); color: var(--ink-muted);
+  font: inherit; font-size: 10.5px; cursor: pointer;
+}
+.onit-cancel:hover { border-color: var(--danger); color: var(--danger); }

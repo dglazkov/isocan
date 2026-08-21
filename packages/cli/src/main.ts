@@ -28,6 +28,7 @@ import {
   COMMAND_NAME,
   IDENTITY_COLORS,
   actorNameIn,
+  cancelledSince,
   commandFileText,
   findCommand,
   parseCommandFile,
@@ -218,6 +219,12 @@ interface SessionFile {
   projectId: string;
   sessionId: string;
   label?: string;
+  /** The thread this session picked up, and when. Kept HERE as well as in the
+   * daemon so that any command which reads the canvas can notice a
+   * cancellation without a second round trip — the snapshot it already
+   * fetched has the thread in it. */
+  onThread?: string;
+  onThreadAt?: string;
 }
 
 async function readSessionFile(home: string, actorId: string): Promise<SessionFile | null> {
@@ -269,13 +276,35 @@ async function touchSession(
   // name standing until the session expires.
   const beat = { actor: ctx.actor, ...patch };
   try {
-    await ctx.client.updateSession(projectId, active.sessionId, beat);
+    announceCancel(await ctx.client.updateSession(projectId, active.sessionId, beat));
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
     const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
     await writeSessionFile(ctx.home, ctx.actor.id, { ...active, sessionId: created.sessionId });
-    await ctx.client.updateSession(projectId, created.sessionId, beat);
+    announceCancel(await ctx.client.updateSession(projectId, created.sessionId, beat));
   }
+}
+
+/**
+ * The thread you are working on has been called off — said loudly, on the
+ * output of whatever command you just ran.
+ *
+ * This is the only way a cancellation reaches an agent MID-TURN. It is not
+ * watching the canvas while it works; it is running tools, and every tool
+ * beats on presence, so presence is where the news can find it. Said once per
+ * cancellation, because a warning repeated on every command is a warning
+ * nobody reads.
+ */
+let announcedCancel: string | null = null;
+function announceCancel(res: { cancelled?: { threadId: string; by: string; at: string } }): void {
+  const cancel = res.cancelled;
+  if (!cancel || announcedCancel === `${cancel.threadId}@${cancel.at}`) return;
+  announcedCancel = `${cancel.threadId}@${cancel.at}`;
+  console.error(
+    `\n⚠ ${cancel.by} CANCELLED this (${cancel.threadId}). Stop now: say where you got to, ` +
+      `leave nothing half-made on the canvas, and do not finish the last bit.\n` +
+      `  isocan command show cancel\n`,
+  );
 }
 
 /**
@@ -361,7 +390,40 @@ async function projectAndSnapshot(
 ): Promise<{ project: Project; snapshot: CanvasSnapshotResponse }> {
   const project = await resolveProject(ctx, opts);
   const snapshot = await ctx.client.snapshot(project.id);
+  // A cancellation has to reach an agent MID-TURN, and an agent mid-turn is
+  // not watching the canvas — it is running commands. Nearly all of them come
+  // through here with the whole canvas in hand, so the check costs nothing:
+  // no extra request, and it works for `ls` and `get` as well as for the
+  // commands that happen to touch presence.
+  await noticeCancel(ctx, project.id, snapshot);
   return { project, snapshot };
+}
+
+/** Note locally which thread we are answering, so a later command can date a
+ * cancellation without asking the daemon what it already told us. */
+async function rememberThread(ctx: Ctx, projectId: string, threadId: string | null): Promise<void> {
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
+  if (!active || active.projectId !== projectId) return;
+  const { onThread: _was, onThreadAt: _when, ...rest } = active;
+  await writeSessionFile(ctx.home, ctx.actor.id, {
+    ...rest,
+    ...(threadId ? { onThread: threadId, onThreadAt: new Date().toISOString() } : {}),
+  });
+}
+
+/** Say it once, loudly, on the output of whatever they just ran. */
+async function noticeCancel(
+  ctx: Ctx,
+  projectId: string,
+  snapshot: CanvasSnapshotResponse,
+): Promise<void> {
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
+  if (!active?.onThread || active.projectId !== projectId) return;
+  const thread = snapshot.canvas.threads[active.onThread];
+  if (!thread) return;
+  const cancel = cancelledSince(thread, active.onThreadAt ?? null);
+  if (!cancel || cancel.author.id === ctx.actor.id) return;
+  announceCancel({ cancelled: { threadId: thread.id, by: cancel.author.name, at: cancel.createdAt } });
 }
 
 // ---------- identity & daemon lifecycle ----------
@@ -2473,6 +2535,7 @@ session
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const thread = resolveThread(snapshot, ref);
+      await rememberThread(ctx, p.id, thread.id);
       await touchSession(ctx, p.id, {
         activity: { kind: "working", threadId: thread.id },
         // The thread you are ANSWERING, which survives walking off to work on

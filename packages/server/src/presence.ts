@@ -18,6 +18,9 @@ interface SessionState extends PresenceSession {
    * narration must not displace it. Cleared when working resolves into a
    * posted comment. */
   statusSticky: boolean;
+  /** When `onThread` was taken up. Server-side only: it exists to date a
+   * cancellation against, not to be rendered. */
+  onThreadAt: string | null;
 }
 
 // Long enough for an agent to think between commands; ops auto-revive
@@ -123,7 +126,14 @@ export class PresenceHub {
   /** Who this canvas sees: everyone actually on it. */
   roster(projectId: string): PresenceSession[] {
     const here = [...(this.rooms.get(projectId)?.values() ?? [])];
-    return here.map(({ lastSeenMs, statusSticky, ...session }) => session);
+    return here.map(({ lastSeenMs, statusSticky, onThreadAt, ...session }) => session);
+  }
+
+  /** What this session says it is answering, and since when. */
+  onThreadOf(projectId: string, sessionId: string): { threadId: string; since: string | null } | null {
+    const session = this.rooms.get(projectId)?.get(sessionId);
+    if (!session?.onThread) return null;
+    return { threadId: session.onThread, since: session.onThreadAt };
   }
 
   /** Op piggyback: an op whose clientId matches a session moves that
@@ -193,6 +203,7 @@ function blankSession(
     status: null,
     activity: null,
     onThread: null,
+    onThreadAt: null,
     lastSeen: new Date().toISOString(),
     lastSeenMs: Date.now(),
     statusSticky: false,
@@ -226,7 +237,11 @@ function patchSession(
     }
   }
   if (patch.activity !== undefined) session.activity = patch.activity;
-  if (patch.onThread !== undefined) session.onThread = patch.onThread;
+  if (patch.onThread !== undefined && patch.onThread !== session.onThread) {
+    session.onThread = patch.onThread;
+    // When it was picked up, so a cancellation can be told from history.
+    session.onThreadAt = patch.onThread === null ? null : new Date().toISOString();
+  }
   session.lastSeenMs = Date.now();
   session.lastSeen = new Date().toISOString();
 }
