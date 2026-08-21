@@ -467,10 +467,10 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
   const sizer = useRef<HTMLSpanElement>(null);
   const [width, setWidth] = useState<number | undefined>(undefined);
 
-  // Measured, not estimated. A `ch` count overshoots badly in a proportional
-  // face — "Rules of the Lake (Unified)" claimed a field half again as wide as
-  // its own text, which is what made this look like a form instead of a label
-  // you are editing.
+  // Measured, not estimated. A `ch` count is the width of a ZERO, which
+  // overshoots badly in a proportional face: a 28-character title claimed a
+  // field half again as wide as its own text, which is what made this look
+  // like a form instead of a label you are editing.
   useLayoutEffect(() => {
     if (sizer.current) setWidth(sizer.current.offsetWidth + 2);
   }, [draft]);

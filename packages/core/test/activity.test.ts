@@ -24,7 +24,7 @@ describe("what somebody has been up to", () => {
   it("reports making an item, editing it, and saying something — newest first", () => {
     const state = canvas({
       items: {
-        a: item("a", "Rules of the Lake", {
+        a: item("a", "Pricing page", {
           at: "2026-08-19T10:00:00.000Z",
           versions: [version("2026-08-19T10:00:00.000Z"), version("2026-08-20T10:00:00.000Z", DI, "ver_2")],
         }),
@@ -32,13 +32,13 @@ describe("what somebody has been up to", () => {
       threads: {
         t1: {
           id: "t1", x: 0, y: 0, anchorItemId: "a", main: false,
-          comments: [{ id: "c1", body: "moved the map up", author: DI, createdAt: "2026-08-21T09:00:00.000Z" }],
+          comments: [{ id: "c1", body: "moved the table up", author: DI, createdAt: "2026-08-21T09:00:00.000Z" }],
         } as CanvasState["threads"][string],
       },
     });
     const out = recentActivity(state, DI.id);
     expect(out.map((e) => e.kind)).toEqual(["said", "edited", "made"]);
-    expect(out[0]).toMatchObject({ threadId: "t1", itemId: "a", subject: "Rules of the Lake", body: "moved the map up" });
+    expect(out[0]).toMatchObject({ threadId: "t1", itemId: "a", subject: "Pricing page", body: "moved the table up" });
   });
 
   it("counts the first version as the making, not as an edit", () => {

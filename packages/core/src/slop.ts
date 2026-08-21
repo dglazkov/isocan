@@ -61,7 +61,7 @@ export const SLOP_RULES: SlopRule[] = [
   {
     name: "Generic call to action",
     spot: "button text of 'Get Started', 'Learn More', 'Click Here', or 'Discover'",
-    instead: "Say what happens: 'Book the lake house', 'See the calendar'. A CTA that fits any product is a CTA for none.",
+    instead: "Say what happens: 'Send the invite', 'See this month's bill'. A CTA that fits any product is a CTA for none.",
   },
   {
     name: "Three feature cards, always three",
