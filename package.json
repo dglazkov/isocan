@@ -1,7 +1,7 @@
 {
   "name": "isocan",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "An isomorphic canvas: one 2.5D surface, driven from a web app and a terminal",
   "bin": {

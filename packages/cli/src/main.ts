@@ -90,7 +90,7 @@ const program = new Command();
 program
   .name("isocan")
   .description("Isomorphic canvas — same operations as the web app, from your terminal")
-  .version("0.1.0")
+  .version("0.2.0")
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
   .option(
