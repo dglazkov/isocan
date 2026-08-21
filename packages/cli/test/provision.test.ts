@@ -7,7 +7,8 @@ import {
   type ExecResult,
   DEFAULT_LOCATION,
   ProvisionError,
-  firebaseProjectIdFor,
+  firebaseProjectId,
+  listRemotes,
   provision,
   readRemote,
   storageLocation,
@@ -141,23 +142,14 @@ async function marker(): Promise<any> {
 
 /* ── naming, which is the part with rules ───────────────────────────────── */
 
-describe("the project id a canvas gets", () => {
-  it("is recognizable, legal, and unique", () => {
-    const id = firebaseProjectIdFor("Kitchen Rebuild", "a1b2c3");
-    expect(id).toBe("isocan-kitchen-rebuild-a1b2c3");
-    expect(id.length).toBeLessThanOrEqual(30);
-  });
-
-  it("stays inside Google's 30 characters however long the title is", () => {
-    const id = firebaseProjectIdFor("A canvas about absolutely everything", "a1b2c3");
+describe("the project id a host's canvases get", () => {
+  it("says whose it is, not which canvas happened to be first", () => {
+    // A project holds however many canvases the host shares, so naming it
+    // after one of them is a name that starts out charming and becomes a lie.
+    const id = firebaseProjectId("a1b2c3d4");
+    expect(id).toBe("isocan-a1b2c3d4");
     expect(id.length).toBeLessThanOrEqual(30);
     expect(id).toMatch(/^[a-z][a-z0-9-]*[a-z0-9]$/);
-  });
-
-  it("survives a title with nothing usable in it", () => {
-    expect(firebaseProjectIdFor("🎨 ✨", "a1b2c3")).toBe("isocan-canvas-a1b2c3");
-    // A truncation that lands on a hyphen must not leave one dangling.
-    expect(firebaseProjectIdFor("kitchen rebuild now", "a1b2c3")).toMatch(/[a-z0-9]-a1b2c3$/);
   });
 
   it("translates Firestore's multi-regions into bucket locations", () => {
@@ -174,8 +166,10 @@ describe("provisioning a canvas's remote", () => {
     const { cloud, commands, requests } = fakeCloud();
     const record = await provision(options(cloud));
 
-    expect(record.firebaseProject).toMatch(/^isocan-kitchen-rebuild-/);
+    expect(record.firebaseProject).toMatch(/^isocan-[0-9a-f]{8}$/);
     expect(record.location).toBe(DEFAULT_LOCATION);
+    // Every step but the marker: attaching a canvas is a fact about a canvas,
+    // so it is never recorded as done on the project.
     expect(Object.keys(record.done)).toEqual([
       "tools",
       "account",
@@ -189,7 +183,6 @@ describe("provisioning a canvas's remote", () => {
       "rules",
       "storage",
       "hosting",
-      "marker",
     ]);
     expect(record.manual ?? {}).toEqual({});
 
@@ -263,16 +256,65 @@ describe("provisioning a canvas's remote", () => {
     expect(commands.some((line) => line.includes("isocan-kept-one"))).toBe(true);
   });
 
-  it("refuses to move a canvas that is already provisioned somewhere", async () => {
+  it("dances once: a second canvas goes into the project the first one made", async () => {
+    // The point of the whole thing. `isocan share` promises the Firebase
+    // apparatus appears "the moment you want it, and never again" — so the
+    // host's second canvas must cost no project, no dance, and no billing
+    // link. One project holds many canvases; that is what `canvases/{id}` in
+    // Firestore and `/c/{id}` in the guest link are for.
     const first = fakeCloud();
-    const record = await provision(options(first.cloud));
+    const one = await provision(options(first.cloud));
+
+    const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-provision-two-"));
+    try {
+      const second = fakeCloud();
+      const two = await provision({
+        ...options(second.cloud),
+        root: elsewhere,
+        projectId: "prj_second",
+        title: "Another Canvas",
+      });
+
+      expect(two.firebaseProject).toBe(one.firebaseProject);
+      expect(second.commands.some((line) => line.startsWith("gcloud projects create"))).toBe(false);
+      expect(second.commands.some((line) => line.includes("deploy"))).toBe(false);
+      expect(second.requests).toEqual([]);
+      // One remote in the home, not two.
+      expect((await listRemotes(home)).map((r) => r.firebaseProject)).toEqual([
+        one.firebaseProject,
+      ]);
+      // And the second canvas's own marker points at it.
+      const attached = JSON.parse(
+        await fs.readFile(path.join(elsewhere, ".isocan", "project.json"), "utf8"),
+      );
+      expect(attached).toEqual({
+        projectId: "prj_second",
+        title: "Another Canvas",
+        remote: { kind: "firestore", firebaseProject: one.firebaseProject },
+      });
+    } finally {
+      await fs.rm(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  it("asks which one when the host keeps more than one project", async () => {
+    const first = fakeCloud();
+    await provision(options(first.cloud));
+    const second = fakeCloud();
+    await provision({ ...options(second.cloud), firebaseProject: "isocan-work-one" });
+
+    const third = fakeCloud();
+    await expect(provision(options(third.cloud))).rejects.toThrow(/more than one isocan project/);
+  });
+
+  it("will not pretend Firestore can be moved after the fact", async () => {
+    const first = fakeCloud();
+    const one = await provision(options(first.cloud));
     const second = fakeCloud();
     await expect(
-      provision({ ...options(second.cloud), firebaseProject: "isocan-somewhere-else" }),
-    ).rejects.toThrow(/already provisioned into/);
-    expect(await readRemote(home, "prj_abc")).toMatchObject({
-      firebaseProject: record.firebaseProject,
-    });
+      provision({ ...options(second.cloud), location: "eur3" }),
+    ).rejects.toThrow(/cannot be moved after the fact/);
+    expect(one.location).toBe(DEFAULT_LOCATION);
   });
 });
 
@@ -281,7 +323,7 @@ describe("a dance that dies halfway", () => {
     const dying = fakeCloud({ fail: /firestore databases create/ });
     await expect(provision(options(dying.cloud))).rejects.toThrow(ProvisionError);
 
-    const halfway = await readRemote(home, "prj_abc");
+    const halfway = (await listRemotes(home))[0];
     expect(Object.keys(halfway!.done)).toEqual(["tools", "account", "project", "apis", "firebase"]);
     // Nothing claims the canvas is shared until it is.
     await expect(marker()).rejects.toThrow();
@@ -295,7 +337,7 @@ describe("a dance that dies halfway", () => {
     expect(resumed.commands.some((line) => line.includes("firebasehosting.googleapis.com"))).toBe(
       false,
     );
-    expect(record.done.marker).toBeTruthy();
+    expect((await marker()).remote.firebaseProject).toBe(record.firebaseProject);
   });
 
   it("does nothing at all when everything is already done", async () => {
@@ -321,7 +363,7 @@ describe("when blobs have nowhere to go yet", () => {
     // A missing bucket is not a broken canvas: hosting, rules and the marker
     // all landed, so the remote is real — it just cannot serve bytes yet.
     expect(record.done.hosting).toBeTruthy();
-    expect(record.done.marker).toBeTruthy();
+    expect((await marker()).remote.firebaseProject).toBe(record.firebaseProject);
     expect(record.hostingUrl).toBeTruthy();
   });
 
@@ -362,7 +404,7 @@ describe("anonymous sign-in, which is how a link admits anybody", () => {
     expect(record.manual?.signin).toMatch(/One click, free/);
     expect(record.manual?.signin).toMatch(/billing account does it from here instead/);
     // And the rest of the remote still lands.
-    expect(record.done.marker).toBeTruthy();
+    expect((await marker()).remote.firebaseProject).toBe(record.firebaseProject);
   });
 });
 

@@ -76,7 +76,7 @@ import {
 import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
-import { DEFAULT_LOCATION, provision, readRemote } from "./provision.ts";
+import { DEFAULT_LOCATION, listRemotes, provision, readRemote } from "./provision.ts";
 import {
   collectProp,
   formatBytes,
@@ -1187,16 +1187,16 @@ program
           );
         }
         const root = ctx.binding.root;
-        const before = await readRemote(ctx.home, p.id);
 
-        // The marker is the one that knows. A home that has never provisioned
-        // this canvas has no record of it — but the marker travels with the
-        // repo, so a clone arrives already saying where the canvas is hosted.
-        // Sharing from there would mint a SECOND remote and overwrite the
-        // stanza pointing at the first: the host's canvas, quietly relocated
-        // to somewhere they cannot reach, by someone who only meant to help.
+        // The marker is the one that knows where a canvas is hosted: it
+        // travels with the repo, so a clone arrives already saying so. If it
+        // names a project this home has never provisioned, whoever is standing
+        // here is not the host — and sharing would mint a second remote and
+        // point the marker away from the first, quietly relocating someone
+        // else's canvas somewhere they cannot reach.
         const claimed = ctx.binding.remote;
-        if (claimed && !before && opts.firebaseProject !== claimed.firebaseProject) {
+        const claimedHere = claimed ? await readRemote(ctx.home, claimed.firebaseProject) : null;
+        if (claimed && !claimedHere && opts.firebaseProject !== claimed.firebaseProject) {
           throw new Error(
             `"${p.title}" is already shared — hosted at ${claimed.firebaseProject}, ` +
               `which is what ${markerFile(root)} says. Sharing it from here would ` +
@@ -1207,7 +1207,21 @@ program
           );
         }
 
-        if (!before?.done.project) {
+        // A host's SECOND canvas costs nothing: the project is already there,
+        // and all that is left is to say which canvas is going into it. Only
+        // the first one dances, which is what "and never again" means.
+        const reusing =
+          claimedHere ??
+          (opts.firebaseProject ? await readRemote(ctx.home, opts.firebaseProject) : null) ??
+          (await listRemotes(ctx.home).then((all) => (all.length === 1 ? all[0]! : null)));
+
+        if (reusing?.done.project) {
+          console.error(
+            reusing.done.hosting
+              ? `isocan: putting "${p.title}" into ${reusing.firebaseProject}, already set up.`
+              : `isocan: picking up where the last run left off (${reusing.firebaseProject}).`,
+          );
+        } else {
           const target =
             opts.firebaseProject ?? "a new Google Cloud project (isocan-…), on your Google account";
           if (!opts.yes) {
@@ -1224,10 +1238,9 @@ program
             if (!/^y(es)?$/i.test(answer)) throw new Error("nothing was created");
           }
           console.error(
-            `isocan: setting up the remote for "${p.title}" — about 90 seconds, once.`,
+            `isocan: setting up the remote for "${p.title}" — about 90 seconds, once. ` +
+              "\n       Canvases you share later go into this same project, in seconds.",
           );
-        } else {
-          console.error(`isocan: picking up where the last run left off (${before.firebaseProject}).`);
         }
 
         const record = await provision({

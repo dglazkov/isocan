@@ -42,10 +42,15 @@ export const configFile = (home: string) => path.join(home, "config.json");
  * service-account key, and the provisioning record whose half-finished state
  * is what makes `isocan share` resumable. */
 export const remotesDir = (home: string) => path.join(home, "remotes");
-/** One record per CANVAS: the remote it was provisioned into, and how far the
- * dance got. Several canvases may name one Firebase project. */
-export const remoteFile = (home: string, projectId: string) =>
-  path.join(remotesDir(home), `${projectId}.json`);
+/**
+ * One record per FIREBASE PROJECT: how far its provisioning got, and what came
+ * out of it. Provisioning belongs to the project rather than to any one canvas
+ * — a project hosts however many canvases the host puts in it (`canvases/{id}`
+ * in Firestore, `/c/{id}` in the guest link), and the dance happens the first
+ * time, not every time. Which canvas lives where is the marker's business.
+ */
+export const remoteFile = (home: string, firebaseProject: string) =>
+  path.join(remotesDir(home), `${firebaseProject}.json`);
 /** One credential per FIREBASE PROJECT — it is the project that grants, and a
  * second canvas in the same project reuses it rather than minting another. */
 export const remoteKeyFile = (home: string, firebaseProject: string) =>

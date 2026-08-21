@@ -78,9 +78,20 @@ export class ProvisionError extends Error {}
 
 /* ── the record ─────────────────────────────────────────────────────────── */
 
+/**
+ * One Firebase project, and how far its provisioning got.
+ *
+ * Keyed by the FIREBASE project, not by a canvas. Provisioning is a property
+ * of the place, and the place holds as many canvases as the host puts in it —
+ * that is what `canvases/{projectId}` in Firestore and `/c/{projectId}` in the
+ * guest link are for. Keying this by canvas is how the second `isocan share`
+ * ended up minting a second Google Cloud project, against a design that says
+ * the dance happens "the moment you want it, and never again".
+ *
+ * Which canvas lives in which project is the marker's business, not this
+ * file's: it travels with the repo, where a clone can read it.
+ */
 export interface RemoteRecord {
-  /** The canvas this remote backs. */
-  projectId: string;
   kind: "firestore";
   firebaseProject: string;
   location: string;
@@ -102,10 +113,13 @@ export interface RemoteRecord {
   manual?: Record<string, string>;
 }
 
-export async function readRemote(home: string, projectId: string): Promise<RemoteRecord | null> {
+export async function readRemote(
+  home: string,
+  firebaseProject: string,
+): Promise<RemoteRecord | null> {
   try {
     const raw = JSON.parse(
-      await fs.readFile(paths.remoteFile(home, projectId), "utf8"),
+      await fs.readFile(paths.remoteFile(home, firebaseProject), "utf8"),
     ) as RemoteRecord;
     return raw && typeof raw.firebaseProject === "string" ? raw : null;
   } catch {
@@ -118,35 +132,52 @@ export async function writeRemote(home: string, record: RemoteRecord): Promise<v
   // says where to spend it.
   await fs.mkdir(paths.remotesDir(home), { recursive: true, mode: 0o700 });
   await fs.writeFile(
-    paths.remoteFile(home, record.projectId),
+    paths.remoteFile(home, record.firebaseProject),
     `${JSON.stringify(record, null, 2)}\n`,
     { mode: 0o600 },
   );
 }
 
+/** Every Firebase project this home has provisioned, oldest name first. The
+ * directory listing IS the registry — there is no separate index to drift. */
+export async function listRemotes(home: string): Promise<RemoteRecord[]> {
+  let names: string[];
+  try {
+    names = await fs.readdir(paths.remotesDir(home));
+  } catch {
+    return [];
+  }
+  const records: RemoteRecord[] = [];
+  for (const name of names.sort()) {
+    // `<project>.key.json` and `<project>.deploy` live here too.
+    if (!name.endsWith(".json") || name.endsWith(".key.json")) continue;
+    const record = await readRemote(home, name.slice(0, -".json".length));
+    if (record) records.push(record);
+  }
+  return records;
+}
+
 /* ── pure helpers, so the naming rules are testable without a cloud ─────── */
 
 /**
- * A Google Cloud project id for a canvas: globally unique, 6–30 characters,
- * lowercase, starting with a letter. The title is in there because the host
- * will read this id in a console one day and should recognize it; the random
- * tail is there because project ids are claimed worldwide, first come.
+ * A Google Cloud project id for a HOST's canvases: globally unique, 6–30
+ * characters, lowercase, starting with a letter.
+ *
+ * Deliberately not named after a canvas. This project holds however many
+ * canvases the host shares, so borrowing the first one's title would be a name
+ * that starts out charming and becomes a lie — "isocan-kitchen-rebuild"
+ * quietly hosting nine other things. What a host needs to recognize in a
+ * console list is that the project is isocan's; the tail is there because
+ * project ids are claimed worldwide, first come.
  */
-export function firebaseProjectIdFor(title: string, suffix: string): string {
-  const room = 30 - "isocan-".length - 1 - suffix.length;
-  const slug =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, Math.max(room, 0))
-      .replace(/-+$/g, "") || "canvas";
-  return `isocan-${slug}-${suffix}`;
+export function firebaseProjectId(suffix: string): string {
+  return `isocan-${suffix}`;
 }
 
-/** Six characters of unguessable-enough tail. Not a secret — a tiebreaker. */
+/** Eight characters of tail. Not a secret — a tiebreaker against the whole
+ * world's project ids, so it is worth more than a couple of them. */
 export function projectSuffix(): string {
-  return randomBytes(4).toString("hex").slice(0, 6);
+  return randomBytes(4).toString("hex");
 }
 
 /**
@@ -271,6 +302,11 @@ type Outcome = void | "pending";
 interface Step {
   name: string;
   says: string;
+  /** Runs for every canvas, not once for the project — so it is never
+   * recorded as done, because "done" is a fact about the project and this is
+   * a fact about a canvas. The second canvas into a provisioned project runs
+   * only these. */
+  perCanvas?: true;
   run: (run: Run) => Promise<Outcome>;
 }
 
@@ -641,6 +677,7 @@ export const STEPS: Step[] = [
   {
     name: "marker",
     says: "recording the remote in this directory",
+    perCanvas: true,
     async run(run) {
       await writeMarker(run.root, {
         projectId: run.projectId,
@@ -658,34 +695,25 @@ export const STEPS: Step[] = [
 export async function provision(opts: ProvisionOptions): Promise<RemoteRecord> {
   const cloud = opts.cloud ?? systemCloud;
   const say = opts.say ?? ((line: string) => console.error(line));
-  const existing = await readRemote(opts.home, opts.projectId);
-  const record: RemoteRecord = existing ?? {
-    projectId: opts.projectId,
-    kind: "firestore",
-    firebaseProject:
-      opts.firebaseProject ?? firebaseProjectIdFor(opts.title, projectSuffix()),
-    location: opts.location ?? DEFAULT_LOCATION,
-    done: {},
-  };
-  // An explicit --firebase-project retargets a record that has not committed
-  // to a project yet; once the project step has run, the record IS the project.
-  if (opts.firebaseProject && opts.firebaseProject !== record.firebaseProject) {
-    if (record.done.project) {
-      throw new ProvisionError(
-        `this canvas is already provisioned into ${record.firebaseProject}; ` +
-          "`isocan unshare` before moving it somewhere else",
-      );
-    }
-    record.firebaseProject = opts.firebaseProject;
+  const record = await resolveRemote(opts);
+  if (opts.location && opts.location !== record.location && record.done.firestore) {
+    // Firestore's database location cannot be changed once the database
+    // exists, and the database belongs to the project — so where the bytes
+    // live is a decision the host makes once, not once per canvas.
+    throw new ProvisionError(
+      `${record.firebaseProject} keeps its data in ${record.location}, and Firestore ` +
+        "cannot be moved after the fact — `isocan share --firebase-project <new>` " +
+        `to put this canvas somewhere in ${opts.location} instead`,
+    );
   }
   const run: Run = { ...opts, cloud, say, record };
 
   for (const step of STEPS) {
-    if (record.done[step.name]) continue;
+    if (!step.perCanvas && record.done[step.name]) continue;
     say(`  ${step.says}…`);
     try {
       const outcome = await step.run(run);
-      if (outcome !== "pending") {
+      if (outcome !== "pending" && !step.perCanvas) {
         record.done[step.name] = cloud.now();
         if (record.manual) delete record.manual[step.name];
       }
@@ -696,6 +724,42 @@ export async function provision(opts: ProvisionOptions): Promise<RemoteRecord> {
     }
   }
   return record;
+}
+
+/**
+ * Which Firebase project this canvas is going into.
+ *
+ * The reuse rule and the resume rule turn out to be one rule. A host who has
+ * already provisioned a project should not dance again — that is the whole
+ * "and never again" promise — and a host whose dance died halfway should pick
+ * up in the project it died in. Both are "use the remote this home already
+ * has", and both fall out of asking the home what it has.
+ *
+ * Explicit beats implicit: `--firebase-project` names one outright, whether it
+ * exists here yet or not (adopting a project provisioned on another machine,
+ * or one this home lost the record of). Several remotes and no flag is the one
+ * case that has to ask — the home cannot know which of your places this canvas
+ * belongs in.
+ */
+async function resolveRemote(opts: ProvisionOptions): Promise<RemoteRecord> {
+  const fresh = (firebaseProject: string): RemoteRecord => ({
+    kind: "firestore",
+    firebaseProject,
+    location: opts.location ?? DEFAULT_LOCATION,
+    done: {},
+  });
+  if (opts.firebaseProject) {
+    return (await readRemote(opts.home, opts.firebaseProject)) ?? fresh(opts.firebaseProject);
+  }
+  const existing = await listRemotes(opts.home);
+  if (existing.length === 1) return existing[0]!;
+  if (existing.length > 1) {
+    throw new ProvisionError(
+      "this machine hosts more than one isocan project — say which this canvas belongs in:\n" +
+        existing.map((r) => `  isocan share --firebase-project ${r.firebaseProject}`).join("\n"),
+    );
+  }
+  return fresh(firebaseProjectId(projectSuffix()));
 }
 
 /* ── the plumbing the steps stand on ────────────────────────────────────── */
