@@ -32,6 +32,8 @@ import {
   findCommand,
   parseCommandFile,
   collectCanvasActors,
+  houseStyle,
+  houseStyleProperties,
   recentActivity,
   collectCanvasNames,
   collectItemRefCandidates,
@@ -1885,6 +1887,96 @@ async function readStdin(): Promise<string> {
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
 }
+
+// ---------- the house style ----------
+
+const style = program
+  .command("style")
+  .description("What this canvas has decided things look like")
+  .addHelpText(
+    "after",
+    `
+The house style is an ITEM on the canvas, not a file in a repo: it sits beside
+the designs it governs, both surfaces can read it, and it versions like
+everything else. Read it before you build a screen, and cite it when you do.
+
+  isocan style                 # print it
+  isocan style set style.md    # write it (a new version if one exists)
+
+No house style yet? \`/house-style\` in a composer asks an agent to derive one
+from the screens already on the canvas — what they ALREADY do, rather than a
+system somebody invented and imposed.`,
+  );
+
+style
+  .command("show", { isDefault: true })
+  .description("Print the house style")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const item = houseStyle(snapshot.canvas);
+      if (!item) {
+        throw new Error(
+          `${p.title} has no house style yet — write one with \`isocan style set <file>\`, ` +
+            `or ask for /house-style and an agent will derive it from the screens already here`,
+        );
+      }
+      const version = item.versions.find((v) => v.id === item.currentVersionId);
+      if (!version) throw new Error(`${item.title} has no current version`);
+      const data = await ctx.client.downloadBlob(p.id, version.blobHash);
+      if (ctx.json) {
+        return printJson({ itemId: item.id, title: item.title, versions: item.versions.length, body: data.toString("utf8") });
+      }
+      // The body alone on stdout so it can be piped into something that
+      // follows it; everything else goes to stderr.
+      console.error(`${item.title} (${item.id}, v${item.versions.length})`);
+      console.log(data.toString("utf8"));
+    }),
+  );
+
+style
+  .command("set")
+  .description("Write the house style (a new version when one already exists)")
+  .argument("<file>", "markdown or CSS describing the system")
+  .option("--title <title>", "name for the item", "House style")
+  .action(
+    run(async (file: string, opts: { title: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
+      const data = await fs.readFile(file);
+      const filename = path.basename(file);
+      const mimeType = mimeFor(filename);
+      const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
+      const version = {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType,
+        filename,
+        size: upload.size,
+      };
+      const existing = houseStyle(snapshot.canvas);
+      if (existing) {
+        // A version, never a replacement: the style you are moving away from
+        // is the thing you will want to compare against tomorrow.
+        await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
+        console.error(`${existing.id} — house style v${existing.versions.length + 1} (F fans the stack)`);
+        return;
+      }
+      const itemId = newItemId();
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version,
+        width: 560,
+        height: 720,
+        placement: placementFor(snapshot, {}),
+        title: opts.title,
+        properties: houseStyleProperties(),
+      });
+      console.error(`${itemId} — house style for ${p.title} (isocan style)`);
+    }),
+  );
 
 // ---------- slash commands ----------
 

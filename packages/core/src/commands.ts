@@ -1,3 +1,4 @@
+import { slopRulesAsText } from "./slop.ts";
 /**
  * Slash commands: a message that asks for a known piece of work.
  *
@@ -368,6 +369,100 @@ Land everything with \`isocan add card.png --title "Social card" --prop
 parent=<the screen it came from>\`. Finish with one comment: the four
 deliverables, how each image was made, and the single sentence you would lead
 with if you only got one.`,
+  },
+  {
+    name: "design-audit",
+    description: "Review a screen's craft against the house style and the usual tells",
+    usage: "[what to look at]",
+    source: "built-in",
+    body: `Audit the design of the selected screens, from the source.
+
+READ TWO THINGS FIRST.
+
+1. THE HOUSE STYLE: \`isocan style\`. If this canvas has one, it is the
+   standard — its type scale, its palette, its spacing unit, its rules. A
+   finding is "this is not the scale" and not "I would have chosen otherwise".
+   If there is no house style, say so once at the top and audit against the
+   list below alone; do not invent a system and then grade against it.
+2. THE SCREEN: \`isocan get <item> screen.html\`. Audit the HTML and CSS, not a
+   picture of them. A ratio you computed beats a colour you looked at, and
+   half of what matters here — the scale, the spacing unit, the focus states —
+   is invisible in a screenshot.
+
+WHAT TO LOOK FOR, in this order:
+
+**Conformance.** Where the screen departs from the house style. Cite the
+declared value and the one it should have been.
+
+**The usual tells.** These are the moves a generated interface reaches for.
+Each one says how to spot it, so report it only when you can point at the
+line:
+
+${slopRulesAsText()}
+
+**Craft, in the parts a list cannot hold.** Hierarchy (does the eye land on
+the right thing first?), rhythm (do the gaps mean something?), and whether the
+copy says anything. Be specific or say nothing: "the hero and the first card
+compete because both are 32px semibold" is worth reading; "improve visual
+hierarchy" is not.
+
+WRITE IT AS A DOCUMENT: \`isocan add design-audit.md --title "<screen> —
+design audit" --prop parent=<the screen's item id>\`, so it hangs under what it
+is about.
+
+Structure it to be acted on:
+- One paragraph of verdict, and the single change that would help most.
+- Findings worst first, each with the selector or element, what is wrong, and
+  the fix as a snippet or a diff — a value, not an adjective.
+- What is GOOD, named specifically. A report with no green is a report the
+  person stops believing, and it tells them what to keep.
+- What you could not judge from source.
+
+This list is a FLOOR, not taste. Removing every item on it makes a screen
+unembarrassing, not good; say plainly which findings are hygiene and which are
+the one or two that would actually make it better.
+
+Then reply on the thread with the verdict, the top fix, and #the-report.`,
+  },
+  {
+    name: "house-style",
+    description: "Write down what this canvas has decided things look like",
+    usage: "[what to change]",
+    source: "built-in",
+    body: `Write or update this canvas's house style.
+
+It is an item on the canvas, not a file in a repo — so it sits beside the
+designs it governs, versions like everything else, and the person can read it
+without knowing it exists. \`isocan style\` prints the current one.
+
+IF THERE IS NONE, DERIVE IT FROM WHAT IS ALREADY THERE. Do not invent a system
+and impose it: \`isocan ls --kind site --kind document\`, \`isocan get\` the two
+or three screens that look most like what they want, and write down what they
+ALREADY do. Where the screens disagree, pick the one that appears most, and
+say in the document that you did.
+
+WHAT IT MUST CONTAIN — numbers, not adjectives. "Clean and modern" describes
+nothing and grades nothing:
+- **Type.** The faces, with fallbacks, and what each is for. The scale as
+  actual values. Line heights. The one or two weights in use.
+- **Colour.** Every colour as a hex with a name and a job (ground, ink, muted
+  ink, accent, accent ink, line, danger). Both themes if the canvas has two.
+- **Space.** The unit, and the steps taken from it. What separates sections,
+  what separates related things.
+- **Shape.** Radii and what each is for. Borders. Shadows, if any, and what
+  they mean.
+- **Rules this project actually cares about.** Three to six, in the
+  imperative, each one falsifiable: "body text is left-aligned", "one accent
+  per screen", "no shadow without overlap".
+
+Keep it under two pages. A style guide nobody finishes is a style guide nobody
+follows.
+
+SAVE IT: \`isocan style set style.md\` — that creates the item, or adds a
+version to the existing one, so the old style is still there to compare
+against. Then reply with what you wrote down and, honestly, where the existing
+screens disagree with each other — that disagreement is the decision the
+person now gets to make.`,
   },
   {
     name: "format",

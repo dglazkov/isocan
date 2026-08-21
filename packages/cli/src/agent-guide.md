@@ -261,6 +261,30 @@ that woke you, with no `session start` needed.
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
+- **Read the house style before you build a screen.** `isocan style` prints
+  what this canvas has decided things look like: the type scale, the palette
+  as hex values, the spacing unit, and the handful of rules the project cares
+  about. It is an ITEM on the canvas, so it versions and both surfaces can see
+  it — not a dotfile nobody updates.
+
+  Build to it, and say in your reply which parts of it you used. If it does
+  not cover something you had to decide, say THAT too: the gaps are what the
+  next version of the style should close. If the canvas has no house style,
+  `/house-style` derives one from the screens already there — what they
+  already do, rather than a system you invented and imposed.
+
+  Designing from scratch each time is why a canvas ends up with six type
+  scales and four blues, each screen fine on its own.
+- **Know what a generated interface looks like, and stop doing it.** There is
+  a short list of moves that machine-made design reaches for — the purple-to-
+  blue hero, the italic serif headline, glassmorphism over nothing, three
+  equal feature cards, "Get Started", one radius for every object, emoji as
+  section markers. `/design-audit` checks a screen against the list and
+  against the house style, from the SOURCE, and cites the line.
+
+  It is a floor, not taste: clearing it makes a screen unembarrassing, not
+  good. Good comes from the house style being specific and from the person
+  rejecting drafts.
 - **A message may BE a command.** When a comment starts with `/name` — the
   first thing in the body, nothing before it — the person did not type prose,
   they asked for a specific piece of work. Run `isocan command show <name>`:
@@ -477,6 +501,7 @@ undoable — confirm on the thread first, and never delete a canvas you did not
 make),
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
+`style [set]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
