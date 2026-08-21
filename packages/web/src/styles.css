@@ -1145,8 +1145,17 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Every verb in one dock at bottom center: create · converse · history ·
    navigate, separated by hairlines. The toolbar above holds identity only. */
 /* ---------- top-bar create actions ---------- */
-.create-actions { display: flex; align-items: center; gap: 8px; }
 .create-site { position: relative; }
+
+/* Which panel the left dock is showing. One control, two settings: they share
+   a border and sit flush, because they cannot both be on and buttons that
+   merely happen to disagree do not say that. */
+.panel-switch { display: flex; align-items: center; }
+.panel-switch .btn { border-radius: 0; margin-left: -1px; }
+.panel-switch .btn:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.panel-switch .btn:last-child { border-radius: 0 6px 6px 0; }
+/* The active half owns the seam it shares with its neighbour. */
+.panel-switch .btn.active { position: relative; z-index: 1; }
 /* "＋ Site": ask for the address right below the button that asked. */
 .site-popover {
   position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-popover);
