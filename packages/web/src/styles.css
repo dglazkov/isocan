@@ -79,6 +79,28 @@ body {
 button { font: inherit; cursor: pointer; }
 input, textarea { font: inherit; color: var(--ink); }
 
+/* ---------- layers ----------
+   One scale for everything that floats over the canvas, so "what covers what"
+   is settled here instead of argued one number at a time. Two rules:
+
+   - Anything a click opened outranks anything docked. A menu hanging off the
+     top bar has to cover the panel beneath it, or the click did nothing.
+   - A popover inherits its OWNER's layer, because z-index only competes inside
+     the nearest stacking context. A menu at 40 inside a bar at 20 still loses
+     to a panel at 25 — the panel never sees the menu, only the bar. So the
+     thing that OWNS a popover sits at --z-bar, and the popover rides along. */
+:root {
+  --z-canvas: 15;    /* guides, marquee, spacing bars: over items, under chrome */
+  --z-dock: 25;      /* panels docked to an edge: main, files, favourites, trash */
+  --z-float: 26;     /* chrome floating over the canvas with a gutter around it */
+  --z-bar: 30;       /* chrome that owns a popover: the top bar, the rails */
+  --z-popover: 40;   /* menus, thread popovers, peek cards — a click opened it */
+  --z-toast: 45;
+  --z-overlay: 50;   /* drop target: the whole window is the answer */
+  --z-modal: 90;     /* ⌘K, with its own backdrop */
+  --z-dialog: 100;   /* who-are-you: the one thing nothing else outranks */
+}
+
 /* ---------- shared controls ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -105,7 +127,7 @@ input, textarea { font: inherit; color: var(--ink); }
 /* ---------- identity dialog ---------- */
 .identity-backdrop {
   position: fixed; inset: 0; background: var(--overlay);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
+  display: flex; align-items: center; justify-content: center; z-index: var(--z-dialog);
 }
 .identity-dialog {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -144,7 +166,7 @@ input, textarea { font: inherit; color: var(--ink); }
    rename in place, return as someone this browser already knows, or leave. */
 .identity-anchor { position: relative; display: flex; align-items: center; }
 .identity-popover {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   width: 260px; padding: 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
@@ -233,7 +255,7 @@ input, textarea { font: inherit; color: var(--ink); }
 
 /* The wet-ink bar: bottom center, between the minimap and the zoom controls. */
 .sketch-bar {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 27;
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: var(--z-float);
   display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
   background: var(--panel); backdrop-filter: blur(6px);
   border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-pop);
@@ -256,7 +278,7 @@ input, textarea { font: inherit; color: var(--ink); }
 
 /* ---------- toolbar ---------- */
 .toolbar {
-  position: absolute; top: 0; left: 0; right: 0; height: 48px; z-index: 20;
+  position: absolute; top: 0; left: 0; right: 0; height: 48px; z-index: var(--z-bar);
   display: flex; align-items: center; gap: 8px; padding: 0 12px;
   background: var(--panel); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
@@ -273,7 +295,7 @@ input, textarea { font: inherit; color: var(--ink); }
 .toolbar .title:disabled { cursor: default; }
 /* The rename popover hangs under the name it renames. */
 .project-popover {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: var(--z-popover);
   width: 300px; padding: 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
@@ -588,7 +610,7 @@ input, textarea { font: inherit; color: var(--ink); }
 /* max-height comes from the placement hook: the popover is clamped to the
    window and the comment list — not the reply box — takes the scroll. */
 .thread-popover {
-  position: absolute; width: 240px; z-index: 30;
+  position: absolute; width: 240px; z-index: var(--z-popover);
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-pop); padding: 10px 12px; font-size: 12px;
   display: flex; flex-direction: column; min-height: 0;
@@ -636,7 +658,7 @@ input, textarea { font: inherit; color: var(--ink); }
    mirror; messages hug the bottom, chat-style; #item references render as
    cards (ItemCard). Collapsed, it is a pill above the zoom chip. */
 .main-panel {
-  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: 25;
+  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
   background: var(--card); border-right: 1px solid var(--line);
   box-shadow: 12px 0 24px -18px rgba(30, 34, 40, 0.3);
   display: flex; flex-direction: column; font-size: 12px;
@@ -688,7 +710,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- arriving-comment toasts ---------- */
 .toasts {
-  position: absolute; top: 58px; right: 14px; z-index: 45;
+  position: absolute; top: 58px; right: 14px; z-index: var(--z-toast);
   display: flex; flex-direction: column; gap: 8px; width: 280px;
 }
 /* The settled state IS the base state; the keyframes are only an entrance, so
@@ -791,7 +813,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .mention-field .item-ref { color: transparent; font-weight: inherit; text-decoration: none; }
 
 .mention-menu {
-  position: fixed; z-index: 60; padding: 4px; min-width: 168px; max-width: 260px;
+  position: fixed; z-index: var(--z-popover); padding: 4px; min-width: 168px; max-width: 260px;
   max-height: 196px; overflow-y: auto;
   display: flex; flex-direction: column;
   background: var(--card); border: 1px solid var(--line); border-radius: 6px;
@@ -814,7 +836,11 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The minimap folds into its corner. The dock is the anchor both states share:
    the map slides down and out of it, the handle fades up in its place, so the
    two read as one thing changing shape rather than two things swapping. */
-.minimap-dock { position: absolute; left: 14px; bottom: 16px; z-index: 20; }
+.minimap-dock {
+  position: absolute; bottom: 16px; z-index: var(--z-float);
+  /* left comes from the component: it steps aside for a docked panel. */
+  transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
 .minimap-panel {
   transform-origin: 0 100%;
   transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.18s ease;
@@ -910,7 +936,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Opposite the reading panels: this is a place you leave from, so it sits on
    the side the tool rail is on and stays out of the canvas's middle. */
 .favourites {
-  position: absolute; top: 48px; right: 76px; bottom: 16px; width: 232px; z-index: 24;
+  position: absolute; top: 48px; right: 76px; bottom: 16px; width: 232px; z-index: calc(var(--z-dock) - 1);
   display: flex; flex-direction: column; gap: 2px;
   background: var(--panel); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 14px;
@@ -954,7 +980,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
 .files-panel {
-  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: 25;
+  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
   background: var(--card); border-right: 1px solid var(--line);
   box-shadow: 12px 0 24px -18px rgba(30, 34, 40, 0.3);
   display: flex; flex-direction: column; font-size: 12px;
@@ -1002,7 +1028,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .create-site { position: relative; }
 /* "＋ Site": ask for the address right below the button that asked. */
 .site-popover {
-  position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-popover);
   display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop); white-space: nowrap;
@@ -1023,7 +1049,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- right tool rail (pointer modes, Figma-style) ---------- */
 .tool-rail {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: 26;
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: var(--z-bar);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: var(--shadow-pop);
@@ -1067,7 +1093,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- bottom-right navigation (zoom + history) ---------- */
 .zoom-controls {
-  position: absolute; right: 14px; bottom: 16px; z-index: 26;
+  position: absolute; right: 14px; bottom: 16px; z-index: var(--z-bar);
   display: flex; align-items: center; gap: 5px; padding: 5px 7px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop);
@@ -1085,7 +1111,7 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .zoom-pct:hover, .zoom-pct.active { border-color: var(--accent); }
 .zoom-menu {
-  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40;
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   min-width: 216px; padding: 5px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
@@ -1101,7 +1127,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- trash panel ---------- */
 .trash-panel {
-  position: absolute; top: 48px; right: 0; bottom: 0; width: 300px; z-index: 25;
+  position: absolute; top: 48px; right: 0; bottom: 0; width: 300px; z-index: var(--z-dock);
   background: var(--card); border-left: 1px solid var(--line);
   box-shadow: -12px 0 24px -18px rgba(30, 34, 40, 0.3);
   display: flex; flex-direction: column;
@@ -1125,7 +1151,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* "Watching ⟨name⟩" — the one banner that means the camera is not yours.
    Cobalt like the rest of the chrome: this is structure, not identity. */
 .follow-banner {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 26;
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: var(--z-float);
   padding: 5px 12px; border: none; border-radius: 999px;
   background: var(--accent); color: var(--accent-ink);
   font-size: 11.5px; font-weight: 600; white-space: nowrap;
@@ -1139,7 +1165,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A bar lies flush along the wall, as long as the thing it stands for would
    be if you could see it — the rim becomes a shadow of what is off screen.
    Nothing juts into the canvas, so a busy canvas stays a canvas. */
-.edge-radar { position: absolute; inset: 0; z-index: 18; pointer-events: none; }
+.edge-radar { position: absolute; inset: 0; z-index: var(--z-bar); pointer-events: none; }
 .edge-bar {
   position: absolute; pointer-events: auto; padding: 0; border: none;
   background: color-mix(in srgb, var(--accent) 32%, transparent);
@@ -1159,7 +1185,7 @@ button.mt-card:hover { border-color: var(--accent); }
    the files panel. Both answer the same question — what is this, before I go
    to it — so they had better not answer it in two different voices. */
 .hover-card {
-  position: absolute; pointer-events: auto; z-index: 28;
+  position: absolute; pointer-events: auto; z-index: var(--z-popover);
   width: max-content; max-width: 300px; padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop); color: var(--ink); text-align: left;
@@ -1229,14 +1255,14 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- marquee ---------- */
 /* Alignment guides (drag): hairlines in the accent color, over the items but
    under the panels — they are feedback about the gesture, not furniture. */
-.guide { position: absolute; z-index: 16; pointer-events: none; background: var(--accent); }
+.guide { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--accent); }
 .guide-v { top: 0; bottom: 0; width: 1px; }
 .guide-h { left: 0; right: 0; height: 1px; }
 
 /* Equal-spacing measures: a bar with end caps across each of the two gaps
    that match. Purple, deliberately not the alignment blue — "these distances
    are equal" is a different claim from "this edge is on that line". */
-.spacing { position: absolute; z-index: 16; pointer-events: none; background: var(--guide-spacing); }
+.spacing { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--guide-spacing); }
 .spacing::before, .spacing::after {
   content: ""; position: absolute; background: var(--guide-spacing);
 }
@@ -1250,7 +1276,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .spacing-y::after { bottom: 0; }
 
 .marquee {
-  position: absolute; z-index: 15; pointer-events: none;
+  position: absolute; z-index: var(--z-canvas); pointer-events: none;
   border: 1px solid var(--accent);
   background: rgba(31, 63, 208, 0.08);
   border-radius: 2px;
@@ -1258,7 +1284,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- drop overlay & misc ---------- */
 .drop-overlay {
-  position: absolute; inset: 8px; z-index: 40; pointer-events: none;
+  position: absolute; inset: 8px; z-index: var(--z-overlay); pointer-events: none;
   border: 2px dashed var(--accent); border-radius: 12px;
   background: rgba(31, 63, 208, 0.05);
   display: flex; align-items: center; justify-content: center;
@@ -1271,7 +1297,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- ⌘K command bar: the lane to your emissary ---------- */
 .cmdbar-backdrop {
-  position: fixed; inset: 0; z-index: 90;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; justify-content: center; align-items: flex-start;
   padding-top: 14vh;
 }

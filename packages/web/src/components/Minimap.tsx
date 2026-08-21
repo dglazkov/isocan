@@ -3,6 +3,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
+import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
 
 const MAP_W = 168;
 const MAP_H = 108;
@@ -23,6 +24,10 @@ export function Minimap() {
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
   const followSessionId = useUiStore((s) => s.followSessionId);
+  // A docked panel takes the corner the map stands in, and a map behind a
+  // panel is a control you cannot see or click. Same answer the edge radar
+  // gives: stand at the wall the panel leaves, not at the window's.
+  const panelOpen = useUiStore((s) => s.mainPanelOpen || s.filesPanelOpen);
   if (!canvas) return null;
 
   // Everyone with a place to stand — an on-call session has none.
@@ -81,7 +86,10 @@ export function Minimap() {
   }
 
   return (
-    <div className={`minimap-dock${open ? "" : " folded"}`}>
+    <div
+      className={`minimap-dock${open ? "" : " folded"}`}
+      style={{ left: (panelOpen ? PANEL_WIDTH : 0) + 14 }}
+    >
       <button
         className="minimap-handle"
         title="Show the minimap"

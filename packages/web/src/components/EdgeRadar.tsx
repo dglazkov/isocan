@@ -10,6 +10,7 @@ import {
 } from "../lib/edgeradar.ts";
 import { glideToBox, glideToPoint } from "../lib/zoomactions.ts";
 import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
+import { TRASH_WIDTH } from "./TrashPanel.tsx";
 import { ItemThumb } from "./ItemThumb.tsx";
 
 /**
@@ -21,8 +22,9 @@ import { ItemThumb } from "./ItemThumb.tsx";
  *
  * A beacon has to TOUCH an edge or it reads as a stray mark floating in the
  * canvas. So the rim is flush, and the insets describe only what actually
- * covers it: the top bar, which is full width and opaque, and the docked panel
- * when one is open. The tool rail, the zoom controls, and the minimap all float
+ * covers it: the top bar, which is full width and opaque, and a docked panel
+ * when one is open — the thread/files dock on the left, the trash on the right.
+ * The tool rail, the zoom controls, and the minimap all float
  * with a gutter between them and the edge — a 7px bar lives in that gutter
  * quite happily, and the alternative is a bar hovering in mid-canvas.
  */
@@ -42,6 +44,8 @@ export function EdgeRadar({ projectId }: { projectId: string }) {
   // Either panel holds the same dock, and the rim has to clear whichever
   // one is showing.
   const panelOpen = useUiStore((s) => s.mainPanelOpen || s.filesPanelOpen);
+  // The trash docks to the right wall, full height, opaque: same rule.
+  const trashOpen = useUiStore((s) => s.trashOpen);
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -55,7 +59,11 @@ export function EdgeRadar({ projectId }: { projectId: string }) {
   const all = Object.values(items);
   if (all.length === 0) return null;
 
-  const insets: Insets = panelOpen ? { ...INSETS, left: INSETS.left + PANEL_WIDTH } : INSETS;
+  const insets: Insets = {
+    ...INSETS,
+    left: INSETS.left + (panelOpen ? PANEL_WIDTH : 0),
+    right: INSETS.right + (trashOpen ? TRASH_WIDTH : 0),
+  };
   const beacons = edgeBeacons(all, viewport, size.width, size.height, insets);
   if (beacons.length === 0) return null;
 
