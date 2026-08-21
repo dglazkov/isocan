@@ -353,10 +353,7 @@ make),
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
-`open`, `setup`,
-`share` (provisions this canvas's remote so people outside isocan can be given
-a link — it creates a Google Cloud project on the human's own account, so it is
-theirs to run: point them at it, never run it unasked).
+`open`, `setup`.
 
 Every one of these is the same operation the web app sends. If you find
 something a person can do on the canvas that you cannot do from here, that is
