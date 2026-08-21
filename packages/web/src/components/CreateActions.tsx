@@ -15,16 +15,9 @@ import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
  * File upload has moved to the right tool rail (CanvasTools).
  */
 export function CreateActions({ projectId, actor }: { projectId: string; actor: Actor }) {
-  const mainOpen = useUiStore((s) => s.mainPanelOpen);
-  const filesOpen = useUiStore((s) => s.filesPanelOpen);
-  const canvas = useCanvasStore((s) => s.canvas);
-  const seen = useUnreadStore((s) => s.seen);
   const [siteOpen, setSiteOpen] = useState(false);
   const [siteUrl, setSiteUrl] = useState("");
   const [siteError, setSiteError] = useState<string | null>(null);
-
-  const main = canvas ? mainThread(canvas) : null;
-  const unread = main ? unreadCount(main, seen, actor.id) : 0;
 
   // A single selected item anchors placement (left of it); otherwise the
   // viewport center.
@@ -49,7 +42,7 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
   }
 
   return (
-    <div className="create-actions">
+    <>
       <div className="create-site">
         <button
           className={`btn${siteOpen ? " active" : ""}`}
@@ -83,8 +76,32 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
           </form>
         )}
       </div>
+    </>
+  );
+}
+
+/**
+ * Which panel the left dock is showing — and it can only be showing one, so
+ * the two read as one control with two settings rather than as two buttons
+ * that happen to disagree.
+ *
+ * They used to sit beside "＋ Site", which is a different kind of thing
+ * altogether: a panel toggle says what you are LOOKING at and stays where you
+ * put it; an action makes something and is over. Mixing the two in one cluster
+ * is why the row never quite parsed.
+ */
+export function PanelSwitch({ projectId, actor }: { projectId: string; actor: Actor }) {
+  const mainOpen = useUiStore((s) => s.mainPanelOpen);
+  const filesOpen = useUiStore((s) => s.filesPanelOpen);
+  const canvas = useCanvasStore((s) => s.canvas);
+  const seen = useUnreadStore((s) => s.seen);
+  const main = canvas ? mainThread(canvas) : null;
+  const unread = main ? unreadCount(main, seen, actor.id) : 0;
+  return (
+    <div className="panel-switch" role="group" aria-label="Left panel">
       <button
         className={`btn${mainOpen ? " active" : ""}`}
+        aria-pressed={mainOpen}
         title="Main thread — the canvas's direct channel"
         onClick={() => openMainPanel(projectId, !mainOpen)}
       >
@@ -93,6 +110,7 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
       </button>
       <button
         className={`btn${filesOpen ? " active" : ""}`}
+        aria-pressed={filesOpen}
         title="Files — everything on this canvas, by kind"
         onClick={() => openFilesPanel(projectId, !filesOpen)}
       >

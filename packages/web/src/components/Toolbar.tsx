@@ -8,7 +8,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { ProjectEditor } from "./ProjectEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
-import { CreateActions } from "./CreateActions.tsx";
+import { CreateActions, PanelSwitch } from "./CreateActions.tsx";
 
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
@@ -66,9 +66,15 @@ export function Toolbar({
           </div>
         )}
       </div>
-      {project && <CreateActions projectId={project.id} actor={actor} />}
+      {/* LEFT: what you are looking at. Both toggles drive the same dock and
+          only one can win, so they read as one control with two settings. */}
+      {project && <PanelSwitch projectId={project.id} actor={actor} />}
       <span className="spacer" />
       <span className={`conn ${connection}`}>{connection}</span>
+      {/* RIGHT: things you DO, and things you look up. An action makes
+          something and is over; it does not belong beside a toggle that stays
+          where you put it. */}
+      {project && <CreateActions projectId={project.id} actor={actor} />}
       <button
         className={`btn${trashOpen ? " active" : ""}`}
         onClick={() => useUiStore.getState().setTrashOpen(!trashOpen)}
