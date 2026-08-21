@@ -1,8 +1,11 @@
-import type { Actor, PresenceSession } from "@isocan/core";
+import { useState } from "react";
+import type { Actor, ActivityEntry, PresenceSession } from "@isocan/core";
+import { elapsedLabel, recentActivity } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { quietFor, statusLine } from "../lib/presence.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 
@@ -46,6 +49,9 @@ const MAX_FACES = 5;
 
 export function Presence({ actor }: { actor: Actor }) {
   const colors = useActorColors();
+  const names = useActorNames();
+  // Which face the pointer is on. Not per-face hover state: see the row.
+  const [peek, setPeek] = useState<string | null>(null);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const seen = useUnreadStore((s) => s.seen);
@@ -143,17 +149,31 @@ export function Presence({ actor }: { actor: Actor }) {
     ui.setFollow(ui.followSessionId === face.sessionId ? null : face.sessionId);
   }
 
+  const peeked = shown.find((face) => face.actor.id === peek) ?? null;
+
   return (
-    <div className="facepile">
+    <div
+      className="facepile"
+      // Tracked on the ROW rather than per face: the faces sit shoulder to
+      // shoulder, and per-face enter/leave pairs interleave and cancel. The
+      // card is inside this element, so moving onto it is not leaving.
+      onPointerMove={(e) => {
+        const button = (e.target as HTMLElement).closest?.("[data-face-id]");
+        const id = button?.getAttribute("data-face-id") ?? null;
+        if (id && id !== peek) setPeek(id);
+      }}
+      onPointerLeave={() => setPeek(null)}
+    >
       {shown.map((face) => (
         <button
           key={face.actor.id}
+          data-face-id={face.actor.id}
           className={`face${face.live ? "" : " away"}${
             face.self ? " self" : ""
           }${face.unread > 0 ? " badged" : ""}${
             face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
           }`}
-          title={tooltip(face)}
+          aria-label={tooltip(face)}
           onClick={() => goTo(face)}
           onDoubleClick={() => toggleFollow(face)}
         >
@@ -170,8 +190,110 @@ export function Presence({ actor }: { actor: Actor }) {
           <span className="face-mark face-more">+{overflow}</span>
         </span>
       )}
+      {peeked && <FaceCard face={peeked} names={names} colors={colors} onGo={goTo} />}
     </div>
   );
+}
+
+/**
+ * Who this is, what they are doing, and what they have been doing — under the
+ * face, in the card the rest of the canvas peeks with.
+ *
+ * The status line is the live half and the activity list is the remembered
+ * half, and both are worth more than the name alone: a facepile tells you
+ * somebody is here, and the next thing you want to know is whether they have
+ * been anywhere near what you are working on. Every row is a way to go there.
+ */
+function FaceCard({
+  face,
+  names,
+  colors,
+  onGo,
+}: {
+  face: Face;
+  names: ReturnType<typeof useActorNames>;
+  colors: ReturnType<typeof useActorColors>;
+  onGo: (face: Face) => void;
+}) {
+  const canvas = useCanvasStore((s) => s.canvas);
+  const recent = canvas ? recentActivity(canvas, face.actor.id, 5) : [];
+  // Stamped once per open: "4m ago" that re-renders into "4m ago" is noise,
+  // and the card does not live long enough for the number to go stale.
+  const now = new Date().toISOString();
+  const name = actorNameIn(names, face.actor);
+  return (
+    <div className="hover-card face-card" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="face-card-head">
+        <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
+          {initial(face.label)}
+        </span>
+        <span className="face-card-who">
+          <b>{name}</b>
+          <span className="face-card-kind">
+            {face.self ? "you" : face.live ? (face.kind === "cli" ? "terminal" : "here") : "away"}
+          </span>
+        </span>
+      </div>
+      {/* The live half: what they say they are doing, right now. */}
+      <div className={`face-card-status${face.status ? "" : " idle"}`}>
+        {face.status ?? (face.self ? "click to rename or switch" : "nothing to report")}
+      </div>
+      {face.unread > 0 && (
+        <button className="face-card-unread" onClick={() => onGo(face)}>
+          {face.unread} unread — go and read {face.unread === 1 ? "it" : "them"}
+        </button>
+      )}
+      {recent.length > 0 && (
+        <>
+          <div className="face-card-head-label">Recently</div>
+          <div className="face-card-list">
+            {recent.map((entry, i) => (
+              <button
+                key={`${entry.at}-${i}`}
+                className="face-card-row"
+                onClick={() => goToActivity(entry)}
+                title={`Go to ${entry.subject}`}
+              >
+                <span className="face-card-verb">{VERB[entry.kind]}</span>
+                <span className="face-card-subject">{entry.subject}</span>
+                {/* Before the body: the body spans the row below it, and grid
+                    auto-placement would push the time onto a third line. */}
+                <span className="face-card-when">{elapsedLabel(entry.at, now)}</span>
+                {entry.body && <span className="face-card-body">{entry.body}</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {face.sessionId && !face.self && (
+        <div className="face-card-foot">double-click the face to watch them</div>
+      )}
+    </div>
+  );
+}
+
+const VERB: Record<ActivityEntry["kind"], string> = {
+  said: "said",
+  made: "made",
+  edited: "edited",
+};
+
+/** Go to what they did: the thread they said it in, or the item itself. */
+function goToActivity(entry: ActivityEntry): void {
+  const canvas = useCanvasStore.getState().canvas;
+  if (!canvas) return;
+  const ui = useUiStore.getState();
+  const item = entry.itemId ? canvas.items[entry.itemId] : undefined;
+  const thread = entry.threadId ? canvas.threads[entry.threadId] : undefined;
+  const target = item
+    ? { x: item.x + item.width / 2, y: item.y + item.height / 2 }
+    : thread
+      ? threadWorldPos(canvas, thread)
+      : null;
+  if (!target) return;
+  ui.setViewport(centerOn(ui.viewport, target.x, target.y, window.innerWidth, window.innerHeight));
+  if (entry.threadId) ui.setOpenThread(entry.threadId);
+  else if (entry.itemId) ui.select(entry.itemId);
 }
 
 function describe(session: PresenceSession): string | null {

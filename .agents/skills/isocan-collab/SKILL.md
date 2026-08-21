@@ -263,6 +263,12 @@ that woke you, with no `session start` needed.
 - **Find things the way the files panel does.** `isocan ls --kind
   drawing|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
+- **Read the room before you act.** `isocan activity [who]` is what has been
+  happening here, newest first — who made what, who edited it, who said what
+  and where. Running it for the person who summoned you is the cheapest way to
+  find out what they have been working on before you answer them, and running
+  it for yourself is how you check what you actually landed last session. The
+  web app shows the same list under a face in the pile, from the same reader.
 - **Stars are the canvas's shortlist.** `isocan ls --starred` is what the
   person has marked as worth getting back to — the screens actually in play,
   which nothing else on the canvas tells you. `isocan star <item>` (or
@@ -352,7 +358,7 @@ that woke you, with no `session start` needed.
 `project create|list|show|edit|delete` (delete needs `--force` and is NOT
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
-`who [--all]`, `whoami`, `identity [--color]`,
+`who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,

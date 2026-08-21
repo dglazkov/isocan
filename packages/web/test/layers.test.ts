@@ -91,9 +91,16 @@ describe("the layer scale", () => {
       expect(z, `${selector} has no z-index`).toBeTruthy();
       return z![1]!.trim();
     };
-    for (const owner of [".toolbar", ".tool-rail", ".zoom-controls", ".edge-radar"]) {
-      expect(layerOf(owner), `${owner} owns a popover, so it belongs on --z-bar`).toBe(
-        "var(--z-bar)",
+    // The top bar's menus fall PAST the floating rails on their way down, and
+    // the rim's peek cards open across the shortlist, so both outrank them.
+    for (const owner of [".toolbar", ".edge-radar"]) {
+      expect(layerOf(owner), `${owner}'s popovers cross other chrome`).toBe("var(--z-bar)");
+    }
+    // The rails' own menus open into empty canvas: clearing a dock is enough,
+    // and putting them level with the bar is what buried the identity menu.
+    for (const owner of [".tool-rail", ".zoom-controls"]) {
+      expect(layerOf(owner), `${owner} floats; its menus only clear a dock`).toBe(
+        "var(--z-float)",
       );
     }
     for (const dock of [".main-panel", ".files-panel", ".trash-panel"]) {

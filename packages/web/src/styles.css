@@ -92,8 +92,10 @@ input, textarea { font: inherit; color: var(--ink); }
 :root {
   --z-canvas: 15;    /* guides, marquee, spacing bars: over items, under chrome */
   --z-dock: 25;      /* panels docked to an edge: main, files, favourites, trash */
-  --z-float: 26;     /* chrome floating over the canvas with a gutter around it */
-  --z-bar: 30;       /* chrome that owns a popover: the top bar, the rails */
+  --z-float: 26;     /* chrome floating over the canvas with a gutter around it,
+                        and the menus it opens — they only have to clear a dock */
+  --z-bar: 30;       /* chrome whose popovers hang ACROSS the floating chrome:
+                        the top bar (its menus fall past the rails) and the rim */
   --z-popover: 40;   /* menus, thread popovers, peek cards — a click opened it */
   --z-toast: 45;
   --z-overlay: 50;   /* drop target: the whole window is the answer */
@@ -585,7 +587,62 @@ input, textarea { font: inherit; color: var(--ink); }
 .facepile {
   display: flex; align-items: center; gap: 6px; margin-left: 6px; padding-left: 10px;
   border-left: 1px solid var(--line);
+  /* The peek card hangs from here, so the pile is what it is measured against. */
+  position: relative;
 }
+
+/* Who somebody is, what they are doing, and what they have done — under their
+   face, in the same card the radar and the files panel peek with. It is a
+   child of the pile so that moving onto it is not leaving the face. */
+/* Wins on specificity over .hover-card's own width, which is declared later
+   in this file — a peek at a person is a fixed column, not a shrink-wrap. */
+.hover-card.face-card {
+  top: calc(100% + 8px); right: 0;
+  width: 288px; max-width: calc(100vw - 24px); padding: 10px 12px;
+  max-height: min(70vh, 440px);
+  display: flex; flex-direction: column; gap: 8px;
+  font-weight: 400; cursor: default;
+}
+.face-card-head { display: flex; align-items: center; gap: 8px; }
+.face-card-who { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.face-card-who b { font-size: 13px; }
+.face-card-kind {
+  font-size: 10.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.face-card-status { font-size: 12px; color: var(--ink); }
+.face-card-status.idle { color: var(--ink-muted); font-style: italic; }
+.face-card-unread {
+  align-self: flex-start; padding: 3px 8px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); border: none;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.face-card-head-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--ink-soft); border-top: 1px solid var(--line-soft); padding-top: 8px;
+}
+.face-card-list {
+  display: flex; flex-direction: column; gap: 1px; margin: -2px -6px;
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+}
+/* One line per act: verb, what it was to, and when. The body of a comment
+   gets the second line and one line only — this is a glance, not the thread. */
+.face-card-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 4px 6px;
+  align-items: baseline; text-align: left;
+  padding: 5px 6px; border: none; border-radius: 6px; background: transparent;
+  color: inherit; font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.face-card-row:hover { background: var(--chip); }
+.face-card-verb { color: var(--ink-muted); }
+.face-card-subject {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.face-card-when { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.face-card-body {
+  grid-column: 2 / 4; color: var(--ink-muted);
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }
 /* Faces sit side by side rather than overlapping Figma-style: at this size an
    overlap buries the unread badge under the next person's disc. */
 .face {
@@ -1057,7 +1114,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- right tool rail (pointer modes, Figma-style) ---------- */
 .tool-rail {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: var(--z-bar);
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: var(--z-float);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: var(--shadow-pop);
@@ -1101,7 +1158,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- bottom-right navigation (zoom + history) ---------- */
 .zoom-controls {
-  position: absolute; right: 14px; bottom: 16px; z-index: var(--z-bar);
+  position: absolute; right: 14px; bottom: 16px; z-index: var(--z-float);
   display: flex; align-items: center; gap: 5px; padding: 5px 7px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop);

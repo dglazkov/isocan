@@ -27,6 +27,7 @@ import {
   IDENTITY_COLORS,
   actorNameIn,
   collectCanvasActors,
+  recentActivity,
   collectCanvasNames,
   collectItemRefCandidates,
   extractItemRefs,
@@ -2149,6 +2150,58 @@ program
             : "—",
           status: s.status ?? "—",
           seen: s.lastSeen,
+        })),
+      );
+    }),
+  );
+
+program
+  .command("activity")
+  .description("What somebody has been doing on this canvas — newest first")
+  .argument("[who]", "actor id or name (default: everyone, most recent first)")
+  .option("-n, --limit <n>", "how many acts to show", "10")
+  .action(
+    run(async (who: string | undefined, opts: { limit: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const limit = Number(opts.limit);
+      if (!Number.isFinite(limit) || limit < 1) throw new Error(`--limit wants a number: ${opts.limit}`);
+
+      // Which actors to report on. A name is what a person types; an id is what
+      // an op carries — accept either, and say plainly when nobody answers.
+      const everyone = collectCanvasActors(snapshot.canvas);
+      const actors = who
+        ? everyone.filter(
+            (a) =>
+              a.id === who ||
+              actorNameIn(snapshot.names, a).toLowerCase() === who.toLowerCase() ||
+              a.name.toLowerCase() === who.toLowerCase(),
+          )
+        : everyone;
+      if (who && actors.length === 0) {
+        throw new Error(`nobody on ${p.title} answers to ${who} (isocan who --all)`);
+      }
+
+      const rows = actors
+        .flatMap((actor) =>
+          recentActivity(snapshot.canvas, actor.id, limit).map((entry) => ({
+            who: actorNameIn(snapshot.names, actor),
+            ...entry,
+          })),
+        )
+        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+        .slice(0, limit);
+
+      if (ctx.json) return printJson(rows);
+      if (rows.length === 0) return printTable([]);
+      printTable(
+        rows.map((r) => ({
+          when: r.at,
+          who: r.who,
+          did: r.kind,
+          what: truncate(r.subject, 28),
+          ...(r.itemId ? { item: r.itemId } : { item: "—" }),
+          said: r.body ? truncate(r.body.replace(/\s+/g, " "), 40) : "—",
         })),
       );
     }),
