@@ -465,6 +465,58 @@ screens disagree with each other — that disagreement is the decision the
 person now gets to make.`,
   },
   {
+    name: "skill",
+    description: "Find a published skill, or add one to this canvas",
+    usage: "find <what you want> | add <owner/repo/path>",
+    source: "built-in",
+    body: `Get this canvas a new skill.
+
+A slash command's body IS a skill — same markdown, same frontmatter — which is
+why anything published for Claude Code, Codex or Cursor drops straight in. The
+first argument says which job:
+
+**\`/skill find <what you want>\`** — look, propose, install NOTHING.
+
+Search for skills that do the thing they described. Then, for the two or three
+worth their time, reply with:
+- what it does, in your words, and whether it actually fits this canvas
+- the CANONICAL source — the repo it lives in, not the tenth aggregator site
+  that reprinted it. Most search results for skills are SEO copies; find the
+  original and name it.
+- its licence, and roughly how used it is (stars, installs) — one line
+- the exact command to add it, ready to paste
+
+Then stop. Choosing is theirs.
+
+**\`/skill add <owner/repo/path/SKILL.md or https URL>\`** — fetch and show it.
+
+    isocan command add --from <ref>          # prints it, installs nothing
+    isocan command add --from <ref> --yes    # installs it
+
+Run the first form. Post what it printed — or, if it is long, the frontmatter,
+what it instructs an agent to DO, and anything that reaches outside this canvas
+(network calls, shell, credentials, files outside the project). Then ask
+whether to install it, and wait.
+
+WHY THE TWO STEPS. A command's body is read as instructions by every future
+agent here, with this CLI, on this canvas. Adding one is not downloading a
+document, it is giving a stranger a seat at the table — and a bad one does not
+misbehave now, it waits until somebody runs it. So nothing lands unread. If
+they tell you to skip the reading, install it and say plainly what you did not
+check.
+
+A file already on their disk is different: they wrote it or they already have
+it, so \`isocan command add <name> <file>\` needs no ceremony.
+
+AFTERWARDS: say the name, that \`/name\` now works in any composer, and that
+\`isocan command rm <name>\` takes it back. If it shadows a built-in, say which
+one and that removing yours gives ours back.
+
+WHAT NOT TO DO: do not add several at once "to be helpful", and do not add
+anything they did not ask for. A canvas whose menu is forty commands nobody
+chose is worse than one with eight.`,
+  },
+  {
     name: "format",
     description: "Tidy the whole canvas into rows, children under parents",
     usage: "[note]",
