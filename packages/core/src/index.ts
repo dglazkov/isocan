@@ -25,4 +25,6 @@ export * from "./shortcuts.ts";
 export * from "./format.ts";
 export * from "./merge.ts";
 export * from "./onit.ts";
+export * from "./slop.ts";
+export * from "./housestyle.ts";
 export * from "./favourites.ts";

@@ -314,9 +314,11 @@ isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable bl
 isocan session start|on|work|point|move|say|end · isocan who   # presence
 isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
+isocan style · isocan style set <file>  # the canvas's own design system
 isocan command list|show|add|rm        # slash commands: work a message can ask for
 #   built-in: /help /format /variation /grill-me /accessibility-audit
 #             /app-store-assets /web-assets /marketing-kit
+#             /design-audit /house-style
 isocan format [--dry-run]              # tidy the canvas: rows, children, references
 isocan merge <drawings...>             # several drawings into one, exactly
 isocan shortcuts                       # every key the canvas answers to
