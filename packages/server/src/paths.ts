@@ -17,11 +17,6 @@ export const oplogArchiveFile = (home: string, id: string) =>
   path.join(projectDir(home, id), "oplog-archive.jsonl");
 export const blobsDir = (home: string, id: string) => path.join(projectDir(home, id), "blobs");
 export const blobsIndexFile = (home: string, id: string) => path.join(projectDir(home, id), "blobs.json");
-/** How far this canvas has been published to its remote (#70). Derived, like
- * `canvas.json` — losing it costs a re-mirror, never correctness — and it lives
- * in the project directory so a soft delete carries it aside with everything
- * else the canvas owns. */
-export const mirrorFile = (home: string, id: string) => path.join(projectDir(home, id), "mirror.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");
@@ -38,32 +33,6 @@ export const legacySessionFile = (home: string) => path.join(home, "session.json
 export const cliSessionFile = (home: string, actorId: string) =>
   path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");
-
-/* ── remotes: where a shared canvas is reachable, and what proves it (#68) ──
- *
- * The marker in the repo says WHICH Firebase project backs a canvas — safe to
- * commit, because location grants nothing. Everything that grants something
- * lives here, in the home, and never leaves the machine: the host daemon's
- * service-account key, and the provisioning record whose half-finished state
- * is what makes `isocan share` resumable. */
-export const remotesDir = (home: string) => path.join(home, "remotes");
-/**
- * One record per FIREBASE PROJECT: how far its provisioning got, and what came
- * out of it. Provisioning belongs to the project rather than to any one canvas
- * — a project hosts however many canvases the host puts in it (`canvases/{id}`
- * in Firestore, `/c/{id}` in the guest link), and the dance happens the first
- * time, not every time. Which canvas lives where is the marker's business.
- */
-export const remoteFile = (home: string, firebaseProject: string) =>
-  path.join(remotesDir(home), `${firebaseProject}.json`);
-/** One credential per FIREBASE PROJECT — it is the project that grants, and a
- * second canvas in the same project reuses it rather than minting another. */
-export const remoteKeyFile = (home: string, firebaseProject: string) =>
-  path.join(remotesDir(home), `${firebaseProject}.key.json`);
-/** Scratch for the deploys: a firebase.json and the rules it points at, kept
- * out of the repo because it is generated per machine (absolute paths). */
-export const remoteDeployDir = (home: string, firebaseProject: string) =>
-  path.join(remotesDir(home), `${firebaseProject}.deploy`);
 /** The directory roster: realpath → projectId, a discovery cache healed by
  * the CLI whenever a command runs from a bound directory (#60). The
  * authoritative binding is the `.isocan/project.json` marker in the

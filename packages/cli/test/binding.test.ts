@@ -83,16 +83,10 @@ const sessionsOf = (projectId: string): Promise<PresenceSession[]> =>
     (res) => res.json() as Promise<PresenceSession[]>,
   );
 
-interface Marker {
-  projectId: string;
-  title?: string;
-  remote?: { kind: string; firebaseProject: string };
-}
-
-const marker = (dir: string): Promise<Marker> =>
+const marker = (dir: string): Promise<{ projectId: string; title?: string }> =>
   fs
     .readFile(path.join(dir, ".isocan", "project.json"), "utf8")
-    .then((raw) => JSON.parse(raw) as Marker);
+    .then((raw) => JSON.parse(raw) as { projectId: string; title?: string });
 
 describe("the handshake binds a directory to its canvas", () => {
   it("identity --session in a fresh directory creates the project, the marker, and the roster row", async () => {
@@ -215,24 +209,6 @@ describe("isocan use and the narrowed defaults", () => {
     } finally {
       await fs.rm(other, { recursive: true, force: true });
     }
-  }, 30_000);
-
-  it("re-binding keeps the remote: where a canvas is shared is the marker's, not use's", async () => {
-    await cli(work, {}, "project", "create", "Roadmap");
-    await cli(work, {}, "use", "Roadmap");
-    const bound = await marker(work);
-    // Stand in for a provisioned canvas (#69 writes this stanza itself).
-    await fs.writeFile(
-      path.join(work, ".isocan", "project.json"),
-      JSON.stringify({ ...bound, remote: { kind: "firestore", firebaseProject: "isocan-road-1" } }),
-    );
-
-    const again = await cli(work, {}, "use", "Roadmap");
-    expect(again.code).toBe(0);
-    expect((await marker(work)).remote).toEqual({
-      kind: "firestore",
-      firebaseProject: "isocan-road-1",
-    });
   }, 30_000);
 
   it("project list narrows to the directory's project; --all opens the home back up", async () => {

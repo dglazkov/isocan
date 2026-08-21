@@ -280,42 +280,6 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   home-wide listening; the old "on call" presence was retired with this
   change. `~/.isocan/dirs.json` is the dir→project roster, a lazily healed
   cache.
-- **Sharing, set up lazily** (#68, in progress): nothing about installing
-  isocan or using it day to day involves Google. The first `isocan share` in
-  a bound directory provisions your Firebase project end to end — one browser
-  tab for `gcloud auth`, then Firestore, the canned (and closed) security
-  rules, a credential belonging to the host's daemon alone, and the canvas's
-  address on Hosting — about ninety seconds, once. It is resumable: every step
-  records itself in `~/.isocan/remotes`, so a dance that dies halfway is
-  finished by running the command again, and steps that need something from
-  you (a billing account before blobs get a bucket) say exactly what and are
-  retried next time. It happens ONCE, not once per canvas: one project holds
-  as many canvases as you share into it (`canvases/{id}` in Firestore,
-  `/c/{id}` in the link), so the second canvas you share costs a marker and a
-  fraction of a second. The marker gains a `remote` stanza — safe to commit,
-  because knowing *where* a canvas lives grants nothing without a capability
-  token, and tokens never enter the repo. Once a canvas is shared, **the daemon
-  mirrors it**: the whole oplog and every blob it names go up to Firestore and
-  Cloud Storage, and from then on each confirmed op follows within seconds. The
-  documents carry the full log entry — envelope and stored inverse — so a guest
-  replays them through the same `@isocan/core` reducer the local app uses, and
-  a remote actor's undo works identically. Mirroring is a follower, never a
-  step: it hangs off the engine's op event rather than its write chain, keeps
-  its own cursor in `mirror.json`, and publishes bytes before the op that names
-  them. An entry too big to be a Firestore document — Firestore refuses a
-  property over 1,048,487 bytes, and the inverse of a delete that took thousands
-  of items with it can exceed that — goes to Cloud Storage instead, and its
-  document carries the address; one such entry used to stop a canvas mirroring
-  forever. Firestore can be down for a day without the canvas noticing — behind
-  is a state, broken is not, and a mirror that has genuinely given up says
-  STOPPED rather than letting itself be read as caught up — and `isocan gc`
-  waits for a canvas that is still
-  catching up before it sweeps, then compacts the local log alone, leaving the
-  mirror holding the history the host gave up. Minting share links (#72) and the
-  guest app itself (#73) land next; until they do the rules deployed here admit
-  nobody, so the mirror is a copy with no readers, and the address says so — a
-  page that explains itself, because an address that looks alive and is not
-  would be worse than one that plainly isn't.
 
 ## CLI surface
 
@@ -325,8 +289,6 @@ isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
-isocan share [--location <loc>] [--firebase-project <id>] [-y]
-                                   # provision this canvas's remote (once, ~90s)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
