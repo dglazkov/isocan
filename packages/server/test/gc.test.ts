@@ -19,6 +19,7 @@ beforeEach(async () => {
   daemon = await startDaemon({ port: 0, home });
   base = baseOf(daemon);
   badge = await mintTestBadge(base);
+  await badge.speakAs(alice); // a badge speaks only for actors it claims
 });
 
 afterEach(async () => {

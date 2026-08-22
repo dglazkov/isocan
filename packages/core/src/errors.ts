@@ -11,6 +11,10 @@ export type OpErrorCode =
   | "main-exists"
   | "name-taken"
   | "unknown-actor"
+  /** The speaker named an actor its badge does not claim (the identity desk's
+   * mechanism 5). The remedy is always the same and always available: claim
+   * the actor first. */
+  | "not-your-actor"
   | "internal-op"
   | "unknown-op"
   | "bad-op";

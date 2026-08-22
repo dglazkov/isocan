@@ -109,15 +109,11 @@ async function migrateLegacyAgents(home: string, store: Store, desk: Desk): Prom
     return; // no file, or unreadable — nothing to fold in
   }
   const { registry, lastSeq } = await store.loadActors();
-  const claimed = await desk.claims();
+  // Asked row by row rather than by reading the whole table: the desk's
+  // claim reads are queries now (phase 3), and a migration bounded by the
+  // number of legacy sessions can afford one lookup each.
   const spokenFor = new Set<string>();
   const keysTaken = new Set<string>();
-  for (const rows of Object.values(claimed)) {
-    for (const row of rows) {
-      spokenFor.add(row.actorId);
-      if (row.sessionKey) keysTaken.add(row.sessionKey);
-    }
-  }
 
   let current = registry;
   let seq = lastSeq;
@@ -131,8 +127,8 @@ async function migrateLegacyAgents(home: string, store: Store, desk: Desk): Prom
     if (!binding?.id || !binding.name) continue;
     // The new registry wins: a key or actor already claimed post-#57 is
     // living its own life, and the legacy row is history.
-    if (keysTaken.has(key)) continue;
-    if (spokenFor.has(binding.id)) continue;
+    if (keysTaken.has(key) || (await desk.holdersOf(key)).length > 0) continue;
+    if (spokenFor.has(binding.id) || (await desk.claimants(binding.id)).length > 0) continue;
     const ts = binding.boundAt ?? new Date().toISOString();
     const op = {
       type: "actor.claim",

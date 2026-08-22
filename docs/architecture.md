@@ -154,17 +154,21 @@ two-ledger rule:
 - `badges/{badgeId}` — `{secretHash, kind, createdAt, lastSeen,
   admissions: [{canvasId, provenance, at}],
   claims: [{actorId, boundAt, sessionKey?, projectId?}],
-  claimIds: [actorId],
+  claimIds: [actorId], claimKeys: [sessionKey], admittedTo: [canvasId],
   attestations: [{attribute, verifiedVia, at}]}`. The badge secret is
   256-bit random and stored **hashed** — the desk keeps no secret it
   doesn't have to, so a leaked ledger leaks no bearer tokens. A claim is a
   **row, not an id**: it carries `boundAt` (the 30-minute
   claim-stands window `reincarnate` judges an `as` against) and the
   demoted `sessionKey` — which of this badge's claims a client means, an
-  index the home never trusts. `claimIds` is the same actor ids
-  denormalized, because "who claims this actor?" is a
-  `where("claimIds", "array-contains", …)` here and a whole-table scan
-  everywhere else. On a FileStore home the desk is
+  index the home never trusts. The three flat arrays are the same data
+  denormalized, one per question the desk is actually asked, because each
+  is an `array-contains` here and a whole-table scan everywhere else:
+  `claimIds` answers "who claims this actor?" (global — ids never
+  recycle), `claimKeys` answers "who holds this session key?" (the
+  lost-badge recovery route), and `admittedTo` answers "whose rosters does
+  this badge share?" — the admission scope mechanism 10 judges names
+  against. On a FileStore home the desk is
   `~/.isocan/desk/` — `badges.json` snapshot over an append-only
   `badges.jsonl`; the claims half is logged and fsynced (a claim carries
   authorization, so one lost file must not cost somebody their own name),

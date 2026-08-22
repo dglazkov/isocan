@@ -1,7 +1,6 @@
 import type { Actor } from "./model.ts";
 import type { Operation } from "./ops.ts";
-import type { ActorClaim, ClaimTable } from "./badge.ts";
-import { SHELF } from "./badge.ts";
+import type { ActorClaim } from "./badge.ts";
 import { OpValidationError } from "./errors.ts";
 import { newActorId } from "./ids.ts";
 import { type ActorColors, type ActorNames, isIdentityColor } from "./identity.ts";
@@ -39,10 +38,11 @@ export type ActorSetColorOp = Extract<Operation, { type: "actor.setColor" }>;
  * whose conversation is truly gone is `as`, which is reincarnation, not a
  * coincidence of spelling.
  *
- * Trust: as of the badge, the home knows WHO IS ASKING (a badge it minted),
- * and nothing more. Whether a badge may speak as an actor it does not claim
- * is mechanism 5's question, in the next phase; here a claim is still granted
- * to whoever asks for it, which is recognition, not policy.
+ * Trust: the home knows WHO IS ASKING (a badge it minted), and — as of
+ * mechanism 5 — whether the actor a request names is one that badge claims.
+ * That check is `claimsActor` below: one line, run by the engine inside the
+ * single-writer chain, and deliberately desk-blind. Nothing in this file has
+ * ever heard of a badge record; it is handed claim ROWS and judges actors.
  */
 
 /** The name one actor goes by now, and when they took it. */
@@ -125,19 +125,41 @@ const CLAIM_STANDS_MS = 30 * 60 * 1000;
 export interface ClaimContext {
   registry: ActorRegistry;
   /**
-   * Every badge's claims — the desk's whole table, including the migration
-   * shelf under `SHELF`. Whole-table is deliberately the shape the code
-   * already had (`applyClaim` was handed the whole registry), and it keeps
-   * this reducer pure and testable with no daemon. It is a file-backing
-   * affordance with a known expiry: a Firestore backing cannot do a
-   * whole-table read, so phase 3 — which narrows name checks to the claiming
-   * badge's admissions — is where it becomes `claimants(actorId)`.
+   * The presenting badge's own claims. Its rows are what "mine" means: a
+   * session key found here is this holder resuming itself.
    */
-  claims: ClaimTable;
-  /** The badge presenting this claim. Its own row is what "mine" means. */
-  badgeId: string;
-  /** Everyone every canvas answers to — live faces AND names remembered from
-   * history, the same set an @-mention resolves against. */
+  own: readonly ActorClaim[];
+  /**
+   * The pre-badge shelf row for THIS claim's session key, if the one-time
+   * migration left one. Counts as "mine" exactly once; adopting it is the
+   * caller's job (see `ClaimResult.adopted`).
+   */
+  shelved?: ActorClaim;
+  /**
+   * Every claim a NAME may be judged against — mechanism 10's narrowing.
+   * The presenting badge's own rows, the rows of badges admitted where this
+   * one is admitted, and the migration shelf. NOT the whole home: name
+   * uniqueness exists so `@`-mentions resolve and the facepile reads, which
+   * are roster needs, so the question is asked of exactly the rosters this
+   * badge can see. Two strangers on unrelated canvases can both have an
+   * Isaac, and neither ever hears about the other.
+   *
+   * The solo home degenerates correctly: a local daemon's badge is admitted
+   * to the canvases it works on, so this is the whole table again — the same
+   * code, with the scope emerging from the badge rather than hard-coded.
+   */
+  scoped: readonly ActorClaim[];
+  /**
+   * Every claim on the actor `as` names, from ANYWHERE on the desk. Actor ids
+   * are global and never recycled (mechanism 10), so "is somebody already
+   * this actor" is a global question even though "is this name taken" is not
+   * — otherwise a stranger could reincarnate a live actor merely by being
+   * admitted somewhere else.
+   */
+  claimants: readonly ActorClaim[];
+  /** Everyone the canvases IN SCOPE answer to — live faces AND names
+   * remembered from history, the same set an @-mention resolves against.
+   * Scoped to the claiming badge's admissions, for mechanism 10's reason. */
   held: readonly NameHolder[];
   /** The envelope timestamp — claims are pure; the caller owns the clock. */
   now: string;
@@ -170,13 +192,13 @@ export interface ClaimResult {
  */
 export function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimResult {
   const mint = ctx.mintId ?? newActorId;
-  const own = ctx.claims[ctx.badgeId] ?? [];
+  const own = ctx.own;
   // "Mine" is this badge's row under this session key. A shelved legacy row
   // for the same key counts as mine too, once: a client presenting the
   // sessionKey it always presented is handed its actor exactly as it was
   // before the badge existed — today's posture, preserved for one hop and
   // then extinguished, because adoption deletes the shelf row.
-  const shelved = ctx.claims[SHELF]?.find((row) => row.sessionKey === op.sessionKey);
+  const shelved = ctx.shelved;
   const claimed = own.find((row) => row.sessionKey === op.sessionKey);
   const mine = claimed ?? shelved;
   const adopted = !claimed && shelved ? op.sessionKey : undefined;
@@ -268,6 +290,39 @@ export function bindClaim(
 }
 
 /**
+ * The membership check — mechanism 5, entire.
+ *
+ * Everywhere an actor is named, the name must be one the speaker's badge
+ * vouches for: ops, undo/redo (or you could undo someone else's work by
+ * naming them), and every presence beat, including a daemon's RELAYED
+ * presence, where one connection carries several actors and each of them must
+ * be in the badge's claims.
+ *
+ * It takes claim ROWS, not a badge — this file has never heard of badges and
+ * must not start now. That is the trick of the whole mechanism: the reducer
+ * keeps judging actors and the oplog keeps carrying `actor` and `clientId`
+ * with badge ids nowhere in it, while enforcement lands UNDER the vocabulary.
+ * The rules that already looked like authorization — `comment.update`'s "only
+ * the author", actor-scoped undo — become authorization the moment an actor
+ * means something, with the isomorphism contract untouched.
+ */
+export function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean {
+  return claims.some((row) => row.actorId === actorId);
+}
+
+/** The refusal, in one voice wherever the check runs. The honest client's
+ * remedy is always the same and always available — claim first, which the
+ * agent guide already teaches as the first act. */
+export function notYourActor(actorId: string): OpValidationError {
+  return new OpValidationError(
+    "not-your-actor",
+    `this badge does not speak for ${actorId} — claim that actor first ` +
+      "(`isocan identity --session`, or the web app's identity dialog); " +
+      "`--as <actor id>` is how a holder that lost its badge comes back",
+  );
+}
+
+/**
  * Choosing the color you wear (`actor.setColor`). Home-scoped like a claim,
  * applied by the engine against the registry, and NOT undoable — the same
  * posture as naming yourself. A null color puts you back on the color your id
@@ -325,7 +380,7 @@ function reincarnate(
   // session key are excluded wherever they sit: a browser persona resuming
   // itself sends `as` AND its own key, and must not be refused as theft by its
   // own past self.
-  const otherSession = everyClaim(ctx).some(
+  const otherSession = ctx.claimants.some(
     (row) =>
       row.sessionKey !== op.sessionKey &&
       row.actorId === as &&
@@ -353,7 +408,7 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
   // by a session that is not this one. A name row alone does not reserve a
   // name — an actor nobody speaks as any more is a name that was used, and
   // `held` already remembers those.
-  const bound = everyClaim(ctx).find(
+  const bound = ctx.scoped.find(
     (row) =>
       row.sessionKey !== op.sessionKey &&
       row.actorId !== selfId &&
@@ -377,18 +432,13 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
 function allocateName(ctx: ClaimContext): string {
   const taken = new Set<string>();
   for (const holder of ctx.held) taken.add(holder.actor.name.trim().toLowerCase());
-  for (const row of everyClaim(ctx)) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
+  for (const row of ctx.scoped) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
   for (let round = 1; ; round++) {
     for (const base of ISOCAN_NAMES) {
       const name = round === 1 ? base : `${base} ${round}`;
       if (!taken.has(name.toLowerCase())) return name;
     }
   }
-}
-
-/** Every claim on the desk, badge by badge, shelf included. */
-function everyClaim(ctx: ClaimContext): ActorClaim[] {
-  return Object.values(ctx.claims).flat();
 }
 
 /** What an actor is called now. An actor with a claim but no name row is one

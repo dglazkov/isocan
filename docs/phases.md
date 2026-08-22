@@ -34,9 +34,8 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 2 is closed — Phase 3, actor binding and registry
-scope, is next.** This line moves as phases close; a clean session starts
-by believing it.
+**Where we are: Phase 3 is closed — Phase 4, CloudStore, is next.** This
+line moves as phases close; a clean session starts by believing it.
 
 ---
 
@@ -222,7 +221,68 @@ someone else's op, relay a foreign actor's presence — all refused; the
 honest paths all still pass; a two-tenant test proves name checks and
 color repaints never cross admission lines.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-22 — "A local daemon's badge is admitted to everything on
+  it" is false, and mechanism 10 leaned on it.** Admissions are earned
+  per visit, so a badge that has been nowhere has an *empty* name scope
+  — which is more permissive than the home-wide walk it replaced, not
+  less. The visible case is the front door: the identity dialog opens
+  before the router mounts, so a fresh browser names itself with a badge
+  that has been nowhere, and a second Kenny walks straight in beside the
+  first. The fix uses what was already in the vocabulary — `actor.claim`
+  carries a `projectId`, so the claim names the canvas in the address
+  bar and is judged against that roster. It grants no admission, and
+  today it can only reach a canvas the address would have admitted the
+  asker to anyway. Under a grant it must be admission-checked, or "is
+  this name taken here" becomes a probe into a room you were never let
+  into — written into Phase 7's Work.
+- **2026-08-22 — The presence check is deliberately off the
+  single-writer chain.** Mechanism 5 puts the membership check inside
+  it, and for ops, undo/redo and `setColor` that is where it runs. Not
+  for presence beats: `putBlob` is on that queue, and a 30 MiB upload
+  would stall every cursor in the room behind it. So a beat's check is a
+  desk read beside the chain, memoized per socket per actor — a cursor
+  flood costs one read, a persona switch is a new question. The race it
+  admits is small and self-correcting: a beat can be judged against
+  claims a hair stale, and a refused beat is *dropped rather than
+  fatal*, because the tab may be mid-claim. Correctness of ops is
+  untouched; this is presence, which was always the honest-but-soft
+  half.
+- **2026-08-22 — `actor.setColor` got a check the design does not
+  name, on both of its actors.** Mechanism 5 lists ops, undo/redo and
+  presence. `setColor` is an op, so it is checked — but it names an
+  actor *twice*, once as the speaker and once as `op.actorId`, and
+  repainting somebody else's face is impersonation even when you are
+  honestly yourself. Its own comment used to say "any actor can be
+  addressed — there is no authentication here". There is now.
+- **2026-08-22 — The blob route stays open, and this is the ruling
+  Phase 2 asked for rather than another deferral.** The hash *is* the
+  capability: 256 bits of content address, obtainable only from canvas
+  state that already required admission, on a route that physically
+  cannot carry a badge (a sandboxed blob has an opaque origin and a null
+  site-for-cookies). Closing it would break every HTML blob with a
+  relative asset reference and buy nothing the canvas link does not
+  already give away. The limit is honest and now written where it will
+  matter: a Phase 9 sweep that expels somebody does not expel the hashes
+  they wrote down, so that phase decides whether revocation means that
+  too.
+- **2026-08-22 — Narrowing the colour broadcast by presence would have
+  been the wrong narrowing, quietly.** A colour change repaints the
+  rooms where an actor *appears* — and a rename travels the same
+  channel, which has to re-letter comments an absent author wrote months
+  ago. Scope by who is connected and the rename silently stops reaching
+  the rooms that need it most. "Appears" is history *and* presence, and
+  the test that says so is the one worth keeping.
+- **2026-08-22 — The seam needed four queries, not the two predicted.**
+  Phase 2 guessed `claimants(actorId)` and `claimsOf(badgeId)` would
+  replace the whole-table read. They do not cover "who holds this
+  session key" (the lost-badge recovery Phase 2 itself built) or "whose
+  rosters do I share" (the admission scope this phase needed), so there
+  are four. Each is one document read or one `array-contains`, and the
+  [map](architecture.md) now names the three denormalized arrays that
+  answer them — with the warning that a CloudDesk which fails to write
+  them passes the suite on a FileDesk and answers nothing in the cloud.
 
 ## Phase 4 — CloudStore
 
@@ -231,7 +291,15 @@ color repaints never cross admission lines.
 blob meta docs, the actors pattern likewise. Boot is the existing
 snapshot-plus-tail recovery, reading from the cloud. The blob path
 splits by size — small blobs through the daemon as today, large ones
-by daemon-minted signed PUT URL (the map's 32 MiB answer).
+by daemon-minted signed PUT URL (the map's 32 MiB answer). **The desk's
+backing comes with it, and phase 3 shaped the seam for it in advance:**
+`Desk.claims()` is gone, replaced by `claimsOf(badgeId)`,
+`claimants(actorId)`, `holdersOf(sessionKey)` and `claimsIn(canvasIds)` —
+one document read and three `array-contains` queries, against the
+`claimIds` / `claimKeys` / `admittedTo` arrays the
+[map](architecture.md) now names on the badge document. A CloudDesk that
+does not write those three arrays on every claim and every admission
+passes the suite on a FileDesk and answers nothing in the cloud.
 
 **Outcome:** The same engine runs against either backing with
 identical behavior, and two writers cannot interleave an oplog — the
@@ -286,7 +354,18 @@ the lid-close/reopen beat played with Chrome and the CLI.
 dialog and roster driving the grant API (button and verb, one
 endpoint); arrival thin — actor minted at the door, never provisioned;
 cross-internet toasts, badges, and the `@` picker; a parked agent
-woken through the relay.
+woken through the relay. **Phase 3 left two marked lines waiting for
+this phase and one hole for it to close.** The lines are the policy
+points: `admit()` in `http.ts` and the WS upgrade in `ws.ts` each check
+`projectId ∈ badge.admissions` and, when it is absent, apply today's
+policy — the address admits — and write the admission down. Each is
+commented as the place the grant lookup goes, and replacing them is how
+the check becomes a refusal without any route having to be found and
+edited. The hole is `actor.claim`'s `projectId`: a claim widens its own
+name-check scope by naming the canvas it is made from, which today can
+only reach a canvas the address would have admitted the asker to anyway.
+Under a grant it must be admission-checked, or "is this name taken here"
+becomes a probe into a room you were never let into.
 
 **Outcome:** Scenes 1 through 4 play on dev: Priya shares, Jordan
 arrives thin, correspondence runs cursor-to-cursor, Isaac wakes on his
@@ -318,7 +397,14 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
 as the floor, Google, GitHub); attestations written onto badges;
 `email:` and `repo:` grants; the provenance sweep with re-rooting;
 kill-a-badge; person resumption across browsers. Provisioning: Identity
-Platform enabled in the dev project.
+Platform enabled in the dev project. **What revocation does not
+reach, decided in phase 3:** the blob route is deliberately open — a
+sandboxed HTML blob has an opaque origin and physically cannot carry a
+badge, so the 256-bit content hash is the capability. That is sound
+while admission is the only gate, but a sweep that expels somebody does
+*not* expel the hashes they wrote down. Either accept it in writing as
+the limit of revocation, or give blob URLs a short-lived token — but
+decide it here, where expulsion is supposed to mean something.
 
 **Outcome:** Revoking Jordan's email grant expels tab, daemon, and
 agent in one sweep; turning off the link stops strangers without

@@ -159,6 +159,10 @@ describe("the registry is logged and recoverable", () => {
   it("claims are not canvas ops and cannot arrive with a projectId actor path", async () => {
     // Submitting through the canvas door is refused: the engine's claim()
     // is the one way in, and /api/ops routes there by op type.
+    // A badge speaks only for actors it claims (mechanism 5), so X says who
+    // it is before it makes a canvas — which is a claim, and therefore
+    // arrives through the same door this test is about.
+    await badge.speakAs({ id: "usr_x", name: "X" });
     const res = await fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },

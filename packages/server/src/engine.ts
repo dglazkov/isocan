@@ -7,6 +7,7 @@ import type {
   ActorRegistry,
   ActorSetColorOp,
   CanvasSnapshotResponse,
+  ClaimContext,
   LogEntry,
   NameHolder,
   OpEnvelope,
@@ -26,10 +27,13 @@ import {
   mergeCommands,
   applyClaim,
   applyOperation,
+  claimsActor,
   collectCanvasNames,
   invertOperation,
   newOpId,
+  notYourActor,
   resolvePlacement,
+  SHELF,
 } from "@isocan/core";
 import type { Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
@@ -80,6 +84,16 @@ export interface SubmitRequest {
   actor: Actor;
   clientId?: string;
   op: Operation;
+  /**
+   * The badge that presented this request — resolved by the transport and
+   * handed to the engine BESIDE the request, never inside it (mechanism 5).
+   *
+   * It stops here. `envelope()` builds the log entry field by field and this
+   * is not one of them: the oplog is shared state every replica sees, and
+   * which badge issued which op is the home's private audit, not the canvas's
+   * history. Same instinct as "the oplog never records grants".
+   */
+  badgeId: string;
 }
 
 export interface ClaimRequest {
@@ -105,7 +119,7 @@ export class Engine {
   private actorsRuntime: ActorsRuntime | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
-  private colorListeners = new Set<(colors: ActorColors) => void>();
+  private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
 
   constructor(
     private readonly store: Store,
@@ -184,16 +198,25 @@ export class Engine {
 
   /**
    * Choosing the color you wear. Home-scoped like a claim: it lands in the
-   * actors log, updates the registry, and is not undoable. Any actor can be
-   * addressed — there is no authentication here, and a daemon that only
-   * listens to one machine's people and agents does not pretend otherwise.
+   * actors log, updates the registry, and is not undoable.
+   *
+   * BOTH actors are checked, and they are two different assertions: `actor`
+   * is who is speaking and `op.actorId` is whose face changes. A badge may
+   * repaint only actors it claims — a color is the actor's own choice, and
+   * choosing it for somebody else is exactly the impersonation mechanism 5
+   * exists to stop.
    */
   setActorColor(request: {
     op: ActorSetColorOp;
     actor: Actor;
     clientId?: string;
+    badgeId: string;
   }): Promise<LogEntry> {
     return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      if (request.op.actorId !== request.actor.id) {
+        await this.requireActor(request.badgeId, request.op.actorId);
+      }
       const runtime = await this.actors();
       const ts = new Date().toISOString();
       const registry = applyActorColor(runtime.registry, request.op);
@@ -211,16 +234,69 @@ export class Engine {
       runtime.registry = registry;
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
-      for (const listener of this.colorListeners) listener(registry.colors);
+      this.identityChanged(registry.colors, request.op.actorId);
       return entry;
     });
   }
 
-  /** Told when identity changes — a color chosen, or a name taken — so live
-   * canvases can repaint their faces and re-letter what people said. */
-  onColors(listener: (colors: ActorColors) => void): () => void {
+  /**
+   * Told when identity changes — a color chosen, or a name taken — so live
+   * canvases can repaint their faces and re-letter what people said.
+   *
+   * The listener is told WHICH ACTOR changed, and that is mechanism 10's one
+   * behavioral narrowing: a color travels with its actor (global, per actor),
+   * but the BROADCAST does not. This used to flood every room on the home;
+   * the transport now asks `appearances()` which of its open rooms that actor
+   * is actually in, and repaints those. On a solo home that is every room it
+   * was before; on a multi-tenant one it is the difference between a repaint
+   * and a roster leak.
+   */
+  onColors(listener: (colors: ActorColors, actorId: string) => void): () => void {
     this.colorListeners.add(listener);
     return () => this.colorListeners.delete(listener);
+  }
+
+  private identityChanged(colors: ActorColors, actorId: string): void {
+    for (const listener of this.colorListeners) listener(colors, actorId);
+  }
+
+  /**
+   * Which of these canvases that actor APPEARS on — the rooms a color change
+   * or a rename has any business repainting (mechanism 10).
+   *
+   * Appearance is deliberately wider than presence. A rename has to reach the
+   * comments the renamed actor wrote before it, in rooms where nobody by that
+   * name is currently connected — so history counts: the canvas's authors,
+   * every name the canvas remembers, and the live roster.
+   */
+  async appearances(actorId: string, projectIds: Iterable<string>): Promise<string[]> {
+    const found: string[] = [];
+    for (const projectId of projectIds) {
+      let state: ProjectState;
+      try {
+        state = (await this.runtime(projectId)).state;
+      } catch {
+        continue; // a canvas mid-delete has nobody on it
+      }
+      const here =
+        state.project.createdBy.id === actorId ||
+        state.project.updatedBy.id === actorId ||
+        collectCanvasNames(state.canvas).some((known) => known.id === actorId) ||
+        (this.options.liveness?.(projectId) ?? []).some((s) => s.actor.id === actorId);
+      if (here) found.push(projectId);
+    }
+    return found;
+  }
+
+  /**
+   * Mechanism 5's membership check, at the one place the claims registry
+   * lives. Public because presence beats are checked too and presence does
+   * not live on this chain; the op paths call it INSIDE their queued work, so
+   * a claim and an op racing serialize like everything else.
+   */
+  async requireActor(badgeId: string, actorId: string): Promise<void> {
+    if (claimsActor(await this.desk.claimsOf(badgeId), actorId)) return;
+    throw notYourActor(actorId);
   }
 
   async getLog(projectId: string, sinceSeq = 0): Promise<LogEntry[]> {
@@ -229,7 +305,10 @@ export class Engine {
   }
 
   submit(request: SubmitRequest): Promise<LogEntry> {
-    return this.enqueue(() => this.applyAndPersist(request, undefined));
+    return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      return this.applyAndPersist(request, undefined);
+    });
   }
 
   /**
@@ -259,15 +338,13 @@ export class Engine {
   async actorBindings(badgeId: string, keys?: string[] | null): Promise<ActorBindingRecord[]> {
     const { registry } = await this.actors();
     if (keys) {
-      const held = new Set(
-        ((await this.desk.badge(badgeId))?.claims ?? []).map((row) => row.sessionKey),
-      );
+      const held = new Set((await this.desk.claimsOf(badgeId)).map((row) => row.sessionKey));
       for (const key of keys) {
         if (!held.has(key)) await this.desk.adopt(key, badgeId);
       }
     }
     const wanted = keys ? new Set(keys) : null;
-    const claims = (await this.desk.badge(badgeId))?.claims ?? [];
+    const claims = await this.desk.claimsOf(badgeId);
     const records: ActorBindingRecord[] = [];
     for (const row of claims) {
       if (row.sessionKey === undefined) continue;
@@ -296,14 +373,13 @@ export class Engine {
    */
   async orphanedClaims(badgeId: string, keys: string[]): Promise<ActorBindingRecord[]> {
     if (keys.length === 0) return [];
-    const wanted = new Set(keys);
     const { registry } = await this.actors();
-    const table = await this.desk.claims();
     const records: ActorBindingRecord[] = [];
-    for (const [holder, rows] of Object.entries(table)) {
-      if (holder === badgeId) continue;
-      for (const row of rows) {
-        if (row.sessionKey === undefined || !wanted.has(row.sessionKey)) continue;
+    // Key by key, which is what makes the narrowing structural: there is no
+    // shape of this call that could ever list the home.
+    for (const key of new Set(keys)) {
+      for (const { badgeId: holder, claim: row } of await this.desk.holdersOf(key)) {
+        if (holder === badgeId || row.sessionKey === undefined) continue;
         records.push({
           key: row.sessionKey,
           actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
@@ -337,8 +413,12 @@ export class Engine {
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
+  undo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
+      // Checked here as well as on `submit`, and for a reason of its own:
+      // undo is actor-scoped, so naming somebody else is not a slip, it is
+      // undoing their work.
+      await this.requireActor(badgeId, actor.id);
       const runtime = await this.runtime(projectId);
       for (;;) {
         const targetSeq = runtime.undo.nextUndoTarget(actor.id);
@@ -348,7 +428,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "undo", targetSeq },
             );
           } catch (err) {
@@ -362,8 +442,9 @@ export class Engine {
     });
   }
 
-  redo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
+  redo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
+      await this.requireActor(badgeId, actor.id);
       const runtime = await this.runtime(projectId);
       for (;;) {
         const next = runtime.undo.nextRedoTarget(actor.id);
@@ -374,7 +455,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "redo", targetSeq: next.targetSeq },
             );
           } catch (err) {
@@ -461,13 +542,7 @@ export class Engine {
     const runtime = await this.actors();
     const ts = new Date().toISOString();
     const { registry, actor, claims, adopted } = applyClaim(
-      {
-        registry: runtime.registry,
-        claims: await this.desk.claims(),
-        badgeId: request.badgeId,
-        held: await this.heldNames(),
-        now: ts,
-      },
+      await this.claimContext(request, runtime.registry, ts),
       request.op,
     );
     const envelope: OpEnvelope = {
@@ -491,19 +566,69 @@ export class Engine {
     await this.desk.setClaims(request.badgeId, claims);
     // A claim can be a RENAME, and a rename has to reach the comments the
     // renamed actor wrote before it. Same channel a color change takes.
-    for (const listener of this.colorListeners) listener(registry.colors);
+    this.identityChanged(registry.colors, actor.id);
     return entry;
   }
 
   /**
-   * Everyone every canvas answers to — live faces (and their labels) plus
-   * every name remembered in history, the same set an @-mention resolves
+   * Everything `applyClaim` is allowed to see, gathered at the single writer.
+   *
+   * The GATHERING is where mechanism 10 lives, and it lives here rather than
+   * in the reducer on purpose: `claims.ts` has never heard of a badge record
+   * or an admission, and judging a name against "everyone in scope" is the
+   * same code whatever the scope turns out to be. What changed in phase 3 is
+   * only what gets put in front of it.
+   */
+  private async claimContext(
+    request: ClaimRequest,
+    registry: ActorRegistry,
+    now: string,
+  ): Promise<ClaimContext> {
+    const badge = await this.desk.badge(request.badgeId);
+    const canvasIds = (badge?.admissions ?? []).map((a) => a.canvasId);
+    // The room this name is being taken in counts even before the badge has
+    // been let into it — a browser names itself at the identity dialog,
+    // before it has fetched anything. See `ActorClaimOp.projectId`.
+    const from = request.op.projectId;
+    if (from !== undefined && !canvasIds.includes(from)) canvasIds.push(from);
+    const own = await this.desk.claimsOf(request.badgeId);
+    // Own rows first, then the neighbours: a badge with no admissions yet is
+    // still in its own scope, which is what keeps two agents on one machine
+    // from taking one name while their badge is still fresh.
+    const scoped = [...own, ...(await this.desk.claimsIn(canvasIds))];
+    const shelved = (await this.desk.holdersOf(request.op.sessionKey)).find(
+      (row) => row.badgeId === SHELF,
+    )?.claim;
+    return {
+      registry,
+      own,
+      ...(shelved !== undefined ? { shelved } : {}),
+      scoped,
+      // Only `as` asks a global question, so only `as` pays for one.
+      claimants: request.op.as ? await this.desk.claimants(request.op.as) : [],
+      held: await this.heldNames(canvasIds),
+      now,
+    };
+  }
+
+  /**
+   * Everyone the canvases IN SCOPE answer to — live faces (and their labels)
+   * plus every name remembered in history, the same set an @-mention resolves
    * against. This is what `heldNames()` in the CLI used to reconstruct by
    * polling; here it is a read the single writer takes mid-claim.
+   *
+   * It used to walk the whole home. Mechanism 10 stops it at the claiming
+   * badge's admissions: name uniqueness is a ROSTER property, so it is asked
+   * of exactly the rosters that badge can see. A solo home degenerates to the
+   * old walk, because a local daemon's badge is admitted to the canvases it
+   * works on — the same code, with the scope emerging from the badge instead
+   * of being hard-coded.
    */
-  private async heldNames(): Promise<NameHolder[]> {
+  private async heldNames(canvasIds: readonly string[]): Promise<NameHolder[]> {
+    const inScope = new Set(canvasIds);
     const holders: NameHolder[] = [];
     for (const project of await this.listProjects()) {
+      if (!inScope.has(project.id)) continue;
       let state: ProjectState;
       try {
         state = (await this.runtime(project.id)).state;

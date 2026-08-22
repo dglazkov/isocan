@@ -66,11 +66,21 @@ export function attachWebSockets(
     );
   };
 
-  // A chosen color repaints faces, cursors, pins, and outlines on every open
-  // canvas, and a new name re-letters everything that actor ever said. Both
-  // belong to the actor, not to one room.
-  engine.onColors(() => {
-    for (const projectId of rooms.keys()) scheduleRoster(projectId);
+  // A chosen color repaints faces, cursors, pins, and outlines, and a new
+  // name re-letters everything that actor ever said. Both belong to the
+  // actor, not to one room — but not to every room either: this used to
+  // repaint every open canvas on the home, which on a multi-tenant home is a
+  // stranger's identity arriving in your room (mechanism 10). It now reaches
+  // exactly the rooms where that actor appears — by history as well as by
+  // presence, because a rename has to reach the comments they wrote before
+  // it. On a solo home every room is one of theirs, so nothing changes.
+  engine.onColors((_colors, actorId) => {
+    void engine
+      .appearances(actorId, [...rooms.keys()])
+      .then((projectIds) => {
+        for (const projectId of projectIds) scheduleRoster(projectId);
+      })
+      .catch(() => {});
   });
   presence.onChange((projectId) => scheduleRoster(projectId));
 
@@ -92,22 +102,30 @@ export function attachWebSockets(
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") return; // let other handlers (e.g. Vite HMR proxy) pass
+    const projectId = url.searchParams.get("projectId");
     void (async () => {
-      const refusal = await refuse(request);
+      const badge = await admitted(request, projectId);
       wss.handleUpgrade(request, socket, head, (ws) => {
-        if (refusal !== null) {
+        if ("code" in badge) {
           ws.on("error", () => {});
-          ws.close(refusal.code, refusal.reason);
+          ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, url.searchParams.get("projectId"));
+        void handleConnection(ws, projectId, badge.badgeId);
       });
     })();
   });
 
-  async function refuse(
+  /**
+   * The upgrade's own door check, plus mechanism 5's `projectId ∈
+   * admissions`: a socket is a project-scoped route that happens to stay
+   * open, so it re-asks the door's test exactly like the HTTP routes do.
+   * Today the address admits, so being here writes the admission down.
+   */
+  async function admitted(
     request: IncomingMessage,
-  ): Promise<{ code: number; reason: string } | null> {
+    projectId: string | null,
+  ): Promise<{ badgeId: string } | { code: number; reason: string }> {
     const presented = presentedBadge(request.headers);
     if (presented?.carrier !== "bearer") {
       const secure = isSecureRequest(
@@ -129,10 +147,18 @@ export function attachWebSockets(
     const badge = await resolveBadge(desk, presented);
     if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
     await desk.touch(badge.badgeId, new Date().toISOString());
-    return null;
+    if (projectId && !badge.admissions.some((a) => a.canvasId === projectId)) {
+      // ---- the policy point, as in http.ts. Phase 7: refuse instead. ----
+      await desk.admit(badge.badgeId, projectId, { root: "link" });
+    }
+    return { badgeId: badge.badgeId };
   }
 
-  async function handleConnection(ws: WebSocket, projectId: string | null): Promise<void> {
+  async function handleConnection(
+    ws: WebSocket,
+    projectId: string | null,
+    badgeId: string,
+  ): Promise<void> {
     // Without a listener, an abrupt client death (ECONNRESET) raises an
     // unhandled 'error' event on the EventEmitter and would crash the daemon.
     // 'close' always follows, which is where cleanup lives.
@@ -166,6 +192,17 @@ export function attachWebSockets(
     // This connection's presence session, created lazily on its first
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
+    /**
+     * The actors this socket has already been shown to speak for.
+     *
+     * Relayed presence is checked PER ACTOR — one connection may carry
+     * several, and each of them has to be in the badge's claims (mechanism
+     * 5). Cursor beats arrive by the hundred under one unchanging actor, so
+     * the answer is remembered: the check costs a desk read the first time an
+     * actor appears on this socket and nothing after that. Switching persona
+     * names a new actor, which is a new question.
+     */
+    const vouched = new Set<string>();
 
     ws.on("message", (data) => {
       let message: ClientMessage;
@@ -175,17 +212,31 @@ export function attachWebSockets(
         return;
       }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
-      if (sessionId === null) {
-        sessionId = message.sessionId;
-        presence.createSession(projectId!, message.actor, "web", { sessionId });
-      }
-      presence.touch(projectId!, sessionId, {
-        // Every beat re-asserts who is holding the tab, so renaming yourself
-        // or switching identities re-labels the face live (#43).
-        actor: message.actor,
-        cursor: message.cursor,
-        selection: Array.isArray(message.selection) ? message.selection : [],
-      });
+      const actor = message.actor;
+      const beat = () => {
+        if (sessionId === null) {
+          sessionId = message.sessionId;
+          presence.createSession(projectId!, actor, "web", { sessionId });
+        }
+        presence.touch(projectId!, sessionId, {
+          // Every beat re-asserts who is holding the tab, so renaming
+          // yourself or switching identities re-labels the face live (#43).
+          actor,
+          cursor: message.cursor,
+          selection: Array.isArray(message.selection) ? message.selection : [],
+        });
+      };
+      if (vouched.has(actor.id)) return beat();
+      void engine
+        .requireActor(badgeId, actor.id)
+        .then(() => {
+          vouched.add(actor.id);
+          beat();
+        })
+        // A beat naming an actor this badge does not claim is DROPPED, not a
+        // closed socket: the tab is mid-claim, or its badge was replaced and
+        // it is on its way back to the door. The face simply does not go up.
+        .catch(() => {});
     });
 
     ws.on("close", () => {

@@ -125,6 +125,7 @@ describe("isocan setup", () => {
     // them, not a directory-shaped guess owned by a passing agent.
     await isocan("setup", "--no-install", "--no-open");
     const badge = await mintTestBadge(`http://127.0.0.1:${port}`);
+    await badge.speakAs(nico); // a badge speaks only for actors it claims
     await fetch(`http://127.0.0.1:${port}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },

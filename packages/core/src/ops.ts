@@ -81,11 +81,24 @@ export type Operation =
       /** Mint a NEW actor even if the name is worn: a second Kenny on
        * purpose, not a collision. */
       fresh?: boolean;
-      /** The canvas of the directory this claim was made from, when that
-       * directory was already bound (#60). Informational scope — recorded on
-       * the binding so the registry can say which project an agent is of; it
-       * gates nothing. Absent on the very first handshake in a fresh
-       * directory, whose project is only created after the claim answers. */
+      /**
+       * The canvas this claim is made FROM — the bound directory for a CLI
+       * (#60), the canvas in the address bar for a browser. Recorded on the
+       * binding so the registry can say which project an agent is of.
+       *
+       * It is also the ROOM this name is being taken in, and mechanism 10
+       * makes that count: name uniqueness is judged against the rosters the
+       * claiming badge can see, and a surface that has not been anywhere yet
+       * — a browser naming itself at the identity dialog, before it has
+       * fetched a thing — would otherwise be judged against nobody and walk
+       * in wearing a name somebody on that very canvas already answers to.
+       *
+       * It widens the QUESTION, never the answer: it grants no admission and
+       * carries no authority, and today it can only reach a canvas the
+       * address would have admitted the asker to anyway. Absent on the very
+       * first handshake in a fresh directory, whose project is only created
+       * after the claim answers.
+       */
       projectId?: string;
     }
   | {

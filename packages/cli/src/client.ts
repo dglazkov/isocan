@@ -59,16 +59,38 @@ export class DaemonClient {
   /** Loaded once per process, from `identity.json`'s `auth` block. */
   private badge: StoredBadge | null | undefined;
 
+  /**
+   * How to make the home vouch for whoever this command speaks as: claim the
+   * actor under the session key it belongs to. Registered by
+   * `resolveIdentity` — knowing who you are is knowing how to prove it.
+   *
+   * Two refusals need it, and they are the two landmines mechanism 5 laid:
+   *
+   * - **401.** The door mints a badge whose claims are EMPTY, and the request
+   *   about to be replayed asserts an actor. Re-claim, then replay.
+   * - **`not-your-actor`.** The home identity in `~/.isocan/identity.json` is
+   *   a local file that nothing ever claimed — so the first time a machine
+   *   speaks for its person, the home has never heard the claim. Making it on
+   *   demand is what turns "refused, for every solo human at once" into one
+   *   extra round trip, once per badge, that nobody sees.
+   */
+  private reclaim: (() => Promise<void>) | null = null;
+  private reclaiming = false;
+
   constructor(
     readonly base: string,
     readonly home: string,
   ) {}
 
   /**
-   * Every request carries the badge, and a refused one goes to the door and
-   * comes straight back. This is what makes the door NOT a breaking change:
-   * a CLI that has never seen a badge, or whose home was wiped, heals itself
-   * in one extra round trip with nobody told anything.
+   * Every request carries the badge, and a refused one heals itself and comes
+   * straight back. This is what makes neither the door nor the membership
+   * check a breaking change: a CLI that has never seen a badge, whose home was
+   * wiped, or whose person the home has never been told about, recovers in one
+   * extra round trip with nobody told anything.
+   *
+   * Exactly one recovery per request, and never a loop: a 401 goes to the
+   * door (which re-claims on the way back), and a `not-your-actor` claims.
    */
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
     const send = async () => {
@@ -81,8 +103,15 @@ export class DaemonClient {
       });
     };
     let res = await send();
-    if (res.status === 401 && (await this.reBadge())) res = await send();
-    const json = (await res.json().catch(() => null)) as any;
+    let json = (await res.json().catch(() => null)) as any;
+    const recovered =
+      res.status === 401
+        ? await this.reBadge()
+        : json?.code === "not-your-actor" && (await this.reclaimIdentity());
+    if (recovered) {
+      res = await send();
+      json = (await res.json().catch(() => null)) as any;
+    }
     if (!res.ok) {
       throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     }
@@ -120,9 +149,39 @@ export class DaemonClient {
       };
       this.badge = badge;
       await writeBadge(this.home, this.base, badge);
+      // Re-claim, THEN replay. Without this the recovery path is a 401
+      // followed by a `not-your-actor`: the door mints a badge whose claims
+      // are empty while the client goes on asserting the actor it has held
+      // all along.
+      await this.reclaimIdentity();
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /** How to prove who this command speaks as, if the home asks. Registered by
+   * `resolveIdentity` the moment that is known. */
+  reclaimWith(reclaim: () => Promise<void>): void {
+    this.reclaim = reclaim;
+  }
+
+  /** Claim the identity this command speaks as. False when there is nothing
+   * to claim or the home refused, so a caller does not replay into the same
+   * refusal twice. The guard is against the claim's OWN request coming back
+   * around here. */
+  private async reclaimIdentity(): Promise<boolean> {
+    if (!this.reclaim || this.reclaiming) return false;
+    this.reclaiming = true;
+    try {
+      await this.reclaim();
+      return true;
+    } catch {
+      // The actor is somebody else's now, or the name collides. The replay's
+      // refusal says so in the caller's own words rather than this one's.
+      return false;
+    } finally {
+      this.reclaiming = false;
     }
   }
 

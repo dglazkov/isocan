@@ -11,6 +11,7 @@ import { emptyCanvas } from "@isocan/core";
 
 const alice = { id: "usr_alice", name: "Alice" };
 const kenny = { id: "usr_kenny", name: "Kenny" };
+const nico = { id: "usr_nico", name: "Nico" };
 
 describe("PresenceHub", () => {
   it("creates, touches, ends, and expires sessions", () => {
@@ -173,6 +174,10 @@ describe("presence over the daemon", () => {
     const address = daemon.app.server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     badge = await mintTestBadge(base);
+    // One badge, three faces — a browser wearing a roster of personas plus
+    // the CLI session beside it. Relayed presence is checked PER ACTOR, so
+    // each of them has to be a claim on this badge.
+    for (const who of [alice, kenny, nico]) await badge.speakAs(who);
     await post("/api/ops", {
       projectId: null,
       actor: alice,
@@ -309,7 +314,7 @@ describe("presence over the daemon", () => {
       JSON.stringify({
         type: "presence",
         sessionId: "cli_tab1",
-        actor: { id: "usr_nico", name: "Nico" },
+        actor: nico,
         cursor: { x: 7, y: 8 },
         selection: [],
       }),

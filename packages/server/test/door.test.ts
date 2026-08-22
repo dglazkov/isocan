@@ -26,6 +26,9 @@ import { mintTestBadge } from "./badge.ts";
  * before the desk opened loses it.
  */
 
+/** Somebody for a fixture canvas to belong to. */
+const usrA = { id: "usr_a", name: "A" };
+
 let home: string;
 let daemon: Daemon;
 let base: string;
@@ -173,12 +176,13 @@ describe("both carriers are one badge", () => {
 
   it("carries on the WebSocket upgrade, and the badge-less handshake is closed", async () => {
     const badge = await mintTestBadge(base);
+    await badge.speakAs(usrA); // a badge speaks only for actors it claims
     await fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
         projectId: null,
-        actor: { id: "usr_a", name: "A" },
+        actor: usrA,
         op: { type: "project.create", projectId: "prj_1", title: "P" },
       }),
     });
@@ -277,12 +281,13 @@ describe("the badge-less are refused, actionably", () => {
     // This assertion exists so that closing the hole is a deliberate act:
     // whoever closes it has to come here and say so.
     const badge = await mintTestBadge(base);
+    await badge.speakAs(usrA); // a badge speaks only for actors it claims
     await fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
         projectId: null,
-        actor: { id: "usr_a", name: "A" },
+        actor: usrA,
         op: { type: "project.create", projectId: "prj_1", title: "P" },
       }),
     });
@@ -436,12 +441,13 @@ describe("what a badge holds", () => {
     // instead of assumed, so phase 3's `projectId ∈ admissions` is a check
     // rather than a backfill.
     const creator = await mintTestBadge(base);
+    await creator.speakAs(usrA);
     await fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...creator.headers },
       body: JSON.stringify({
         projectId: null,
-        actor: { id: "usr_a", name: "A" },
+        actor: usrA,
         op: { type: "project.create", projectId: "prj_1", title: "P" },
       }),
     });

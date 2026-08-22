@@ -24,6 +24,11 @@ beforeEach(async () => {
   const port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
   badge = await mintTestBadge(base);
+  // One machine's badge, vouching for the two people on it. A badge speaks
+  // only for actors it claims (mechanism 5), so a file that posts as Alice
+  // and Bob says who they are first.
+  await badge.speakAs(alice);
+  await badge.speakAs(bob);
 });
 
 afterEach(async () => {

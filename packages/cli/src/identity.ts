@@ -54,7 +54,29 @@ export interface ResolvedIdentity {
   file: string;
   /** The harness that named this session, when `source` is "session". */
   harness?: string;
+  /** The session key this actor is claimed under — the harness conversation's
+   * for an agent, the home slot's for the human. What a re-claim presents. */
+  key: string;
 }
+
+/**
+ * The session key the HUMAN's actor is claimed under.
+ *
+ * `~/.isocan/identity.json` is a local file, and until mechanism 5 it was
+ * ASSERTED in every request body and claimed by nothing — so the moment the
+ * membership check went live it would have been refused with
+ * `not-your-actor`, for every solo human on every machine, at once. The fix
+ * is not to grandfather asserted actors (that hole never closes); it is to
+ * make the human's actor a real claim on the machine's badge, minted the
+ * first time that machine speaks for them.
+ *
+ * It is a key like any other, so everything downstream already works: one
+ * actor per key per badge, `whoami` can find it, and a rename is the same
+ * rename an agent does. The prefix cannot collide with a harness key —
+ * `harnessSessions` builds `<harness>:<conversation id>`, and no harness is
+ * called "home".
+ */
+export const HOME_CLAIM_KEY = "home:person";
 
 async function readFrom(file: string): Promise<Actor | null> {
   try {
@@ -94,7 +116,7 @@ export async function readIdentity(home: string): Promise<Actor | null> {
 export async function findSessionIdentity(
   client: DaemonClient,
   home: string,
-): Promise<{ actor: Actor; harness: string } | null> {
+): Promise<{ actor: Actor; harness: string; key: string } | null> {
   const present = await harnessSessions(home);
   if (present.length === 0) return null;
   await client.ensureDaemon();
@@ -103,7 +125,7 @@ export async function findSessionIdentity(
   const newest = [...bindings].sort((a, b) => b.boundAt.localeCompare(a.boundAt))[0];
   if (!newest) return null;
   const harness = present.find((s) => s.key === newest.key)?.harness ?? "unknown";
-  return { actor: newest.actor, harness };
+  return { actor: newest.actor, harness, key: newest.key };
 }
 
 export interface ClaimOptions {
@@ -275,15 +297,62 @@ export async function resolveIdentity(
   home: string,
 ): Promise<ResolvedIdentity | null> {
   const session = await findSessionIdentity(client, home);
-  if (session)
-    return {
-      actor: session.actor,
-      source: "session",
-      file: paths.actorsFile(home),
-      harness: session.harness,
-    };
-  const actor = await readIdentity(home);
-  return actor ? { actor, source: "home", file: paths.identityFile(home) } : null;
+  const resolved: ResolvedIdentity | null = session
+    ? {
+        actor: session.actor,
+        source: "session",
+        file: paths.actorsFile(home),
+        harness: session.harness,
+        key: session.key,
+      }
+    : await readIdentity(home).then((actor) =>
+        actor
+          ? ({
+              actor,
+              source: "home",
+              file: paths.identityFile(home),
+              key: HOME_CLAIM_KEY,
+            } as const)
+          : null,
+      );
+  // Knowing who you are is knowing how to prove it: every caller that
+  // resolves an identity gets the recovery wired, so no command has to
+  // remember to. Registration only — nothing is sent until the home asks.
+  if (resolved) client.reclaimWith(() => reclaimIdentity(client, resolved));
+  return resolved;
+}
+
+/**
+ * Claim the actor this command speaks as — landmine one and landmine two,
+ * both defused by one act.
+ *
+ * The home identity is a local file that nothing ever claimed, so the first
+ * time a machine speaks for its person the home refuses with
+ * `not-your-actor`; a badge replaced at the door holds no claims at all, so
+ * the first act after any recovery is refused the same way. Both are answered
+ * by claiming, and `DaemonClient` calls this on exactly those two refusals —
+ * which is why it costs nothing at all on the commands that do not need it,
+ * and one invisible round trip on the ones that do.
+ *
+ * `as` + the name is the right instrument and not a loophole. It is the same
+ * claim a browser persona sends to resume itself, and it is still judged:
+ * refused while the actor is visibly somebody else, refused if the name now
+ * answers to another actor this badge can see. What it does NOT do is mint
+ * anybody — the id in the file is the id that lands on the badge, so an
+ * upgraded human keeps their history instead of quietly becoming new. And a
+ * same-key claim on a dead badge never trips the claim-stands window, because
+ * `reincarnate` excludes the caller's own session key.
+ */
+export async function reclaimIdentity(
+  client: DaemonClient,
+  identity: { actor: Actor; key: string },
+): Promise<void> {
+  await client.claimActor({
+    type: "actor.claim",
+    sessionKey: identity.key,
+    as: identity.actor.id,
+    name: identity.actor.name,
+  });
 }
 
 /** Read-merge, never clobber. The file holds the badge too now, and a write

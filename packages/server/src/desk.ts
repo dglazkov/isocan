@@ -1,4 +1,4 @@
-import type { ActorClaim, ClaimTable } from "@isocan/core";
+import type { ActorClaim } from "@isocan/core";
 
 /**
  * The desk: the home's PRIVATE ledgers — who holds a badge, what it has been
@@ -19,9 +19,10 @@ import type { ActorClaim, ClaimTable } from "@isocan/core";
  * edit can quietly re-couple them.
  *
  * Phase 4 gives this a Firestore backing: one document per badge at
- * `badges/{badgeId}`, exactly the architecture's shape. Everything here is a
- * document read or write except `claims()`, which is a whole-table read a
- * cloud backing cannot do — see its comment.
+ * `badges/{badgeId}`, exactly the architecture's shape. Every method here is
+ * a document read, a document write, or one indexed query — phase 3 retired
+ * the whole-table `claims()` read that phase 2 left standing, because
+ * narrowing name checks to a badge's admissions is the same motion.
  */
 
 /** Why a badge is in a canvas. Phase 2 writes it and enforces nothing: the
@@ -101,19 +102,56 @@ export interface Desk {
    * what `applyClaim` returned. */
   setClaims(badgeId: string, claims: ActorClaim[]): Promise<void>;
 
-  /**
-   * The whole claims table, badgeId → claims, with the migration shelf under
-   * `SHELF`. What `applyClaim` needs to answer "is this name taken" and "was
-   * this actor claimed just now".
+  /* ---- reading claims: four questions, four queries ----
    *
-   * A FILE-BACKING AFFORDANCE WITH A KNOWN EXPIRY, recorded here so phase 4
-   * is not surprised: Firestore cannot serve a whole-table read, so this
-   * becomes `claimants(actorId)` (a `where("claimIds", "array-contains", …)`
-   * over a denormalized id list) and `claimsOf(badgeId)`. Phase 3, which
-   * narrows name checks to the claiming badge's admissions, is the phase that
-   * naturally introduces them.
+   * These replace phase 2's whole-table `claims()`. Each one is a shape a
+   * cloud backing can actually serve — a document read, or one indexed query
+   * over a denormalized array — and each one answers a DIFFERENT question,
+   * which is the point: mechanism 10's lesson is that "the registry" is three
+   * kinds of fact with three different scopes, and a single whole-table read
+   * hid that by answering all of them at once.
+   *
+   * The migration shelf rides along in `claimants`, `holdersOf` and
+   * `claimsIn` exactly as it rode inside the old table, so a legacy row is
+   * seen by "is this name taken" and "was this actor claimed just now" the
+   * way it was before the re-key. It belongs to no badge and therefore to no
+   * admission, so it is in every scope on the one home that has one.
    */
-  claims(): Promise<ClaimTable>;
+
+  /** One badge's claims — its own row, and the definition of "mine". */
+  claimsOf(badgeId: string): Promise<ActorClaim[]>;
+
+  /**
+   * Every claim on one actor, anywhere on the desk, shelf included. Actor ids
+   * are global and never recycled, so this question is deliberately NOT
+   * admission-scoped: reincarnating a live actor must be refused however far
+   * away its holder sits. Firestore: `where("claimIds", "array-contains",
+   * actorId)` over the denormalized id list on each badge.
+   */
+  claimants(actorId: string): Promise<ActorClaim[]>;
+
+  /**
+   * Who holds a claim under this session key — the badge id beside the row,
+   * with `SHELF` for a row still on the migration shelf. Answers "is this key
+   * claimed on a badge that is not mine?" (the lost-badge recovery route) and
+   * "has this legacy key been collected?" (the `agents.json` migration).
+   * Firestore: `where("claimKeys", "array-contains", sessionKey)`.
+   */
+  holdersOf(sessionKey: string): Promise<{ badgeId: string; claim: ActorClaim }[]>;
+
+  /**
+   * Every claim held by a badge admitted to any of these canvases, plus the
+   * shelf — mechanism 10's name scope. Firestore:
+   * `where("admittedTo", "array-contains-any", …)` over the badges.
+   *
+   * Empty list in, shelf only out: a badge that has never been in a canvas
+   * shares a roster with nobody, so there is nobody for its names to collide
+   * with. That is the design's answer, not an oversight — late collisions are
+   * survivable by construction, because the vocabulary already mints
+   * deliberate duplicates (`actor.claim` with `fresh:`) and every client
+   * already renders two same-named actors distinguishably.
+   */
+  claimsIn(canvasIds: readonly string[]): Promise<ActorClaim[]>;
 
   /** Record that this badge has been in this canvas. Policy-free in phase 2
    * — everyone is admitted; this only writes down that they were. */

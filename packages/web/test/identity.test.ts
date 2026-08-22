@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DOOR_ROUTE, formatBadgeToken } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
+import { mintTestBadge } from "./badge.ts";
 import {
   adoptIdentity,
   enterAs,
@@ -128,17 +129,24 @@ describe("web identity", () => {
 
   it("a name somebody ELSE answers to is refused, not quietly become", async () => {
     // Kenny exists on a canvas, made there by someone who is not this
-    // browser: the door must not hand this browser his actor — or a fresh
-    // one wearing his name.
+    // browser — a CLI on the same machine, with a badge of its own: the door
+    // must not hand this browser his actor, or a fresh one wearing his name.
+    const cli = await mintTestBadge(base);
+    await cli.speakAs({ id: "usr_cli_kenny", name: "Kenny" });
     await realFetch(`${base}/api/ops`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...auth },
+      headers: { "Content-Type": "application/json", ...cli.headers },
       body: JSON.stringify({
         projectId: null,
         actor: { id: "usr_cli_kenny", name: "Kenny" },
         op: { type: "project.create", projectId: "prj_1", title: "Kenny's" },
       }),
     });
+    // And this browser is in that room. A real one is there by its URL —
+    // `claimInto` sends the canvas from the address bar — but there is no
+    // address bar in node, so it arrives the other way a browser does: it
+    // opened the canvas.
+    await realFetch(`${base}/api/projects/prj_1/canvas`, { headers: auth });
 
     await expect(enterAs("Kenny")).rejects.toThrow(/taken here/);
     expect(readIdentity()).toBeNull(); // still at the door

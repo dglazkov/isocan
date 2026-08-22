@@ -20,6 +20,7 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   badge = await mintTestBadge(base);
+  await badge.speakAs(alice); // a badge speaks only for actors it claims
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },

@@ -40,6 +40,9 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   badge = await mintTestBadge(base);
+  // A badge speaks only for actors it claims (mechanism 5), and this one
+  // seeds the canvas and posts as the human throughout.
+  await badge.speakAs(dimitri);
 
   blockWatch = false;
   proxy = http.createServer((req, res) => {

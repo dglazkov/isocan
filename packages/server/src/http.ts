@@ -50,6 +50,12 @@ const STARTED_AT = new Date().toISOString();
  * rather than by somebody remembering. */
 const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
 
+/** Every route that is ABOUT one canvas, by its shape rather than by a list —
+ * so `projectId ∈ admissions` is re-asked on all of them, including the ones
+ * a later phase adds. `/api/ops` is deliberately not here: its canvas is in
+ * the body, and it says so itself. */
+const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
+
 function isOpen(method: string, pathname: string): boolean {
   if (pathname === "/healthz") return true;
   if (!pathname.startsWith("/api/")) return true; // the web app and its assets
@@ -140,6 +146,12 @@ export function registerRoutes(
 
     if (req.badge) {
       await desk.touch(req.badge.badgeId, new Date().toISOString());
+      // The door's test, re-asked. One hook rather than a call in each
+      // handler, for the same reason the badge check is one hook: a
+      // project-scoped route added later is covered by DEFAULT instead of by
+      // somebody remembering.
+      const scoped = PROJECT_ROUTE.exec(pathname)?.[1];
+      if (scoped) await admit(req, decodeSegment(scoped));
       return;
     }
     if (isOpen(req.method, pathname)) return;
@@ -177,12 +189,32 @@ export function registerRoutes(
     return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
   });
 
-  /** Write down that this badge has been in this canvas. Unenforced in phase
-   * 2 — "the address still admits", recorded as data instead of assumed —
-   * which is what makes phase 3's `projectId ∈ admissions` cheap instead of a
-   * backfill under a live check. */
+  /**
+   * `projectId ∈ badge.admissions`, re-asked on every project-scoped route —
+   * the door's test, taken cheaply on each request rather than only at entry
+   * (mechanism 5).
+   *
+   * Today it always passes, and saying so plainly is more useful than hiding
+   * it: the door's POLICY is that the address admits, so a badge that is not
+   * yet admitted here is admitted NOW and the admission is written down.
+   * Phase 7 replaces the one marked line with the canvas's link grant, and
+   * this becomes a refusal without another route having to be found and
+   * edited.
+   *
+   * The payoff is already real, though, and it is mechanism 10's: because
+   * every project-scoped route passes through here, a badge's admissions are
+   * an accurate record of where it has been — which is exactly the scope the
+   * narrowed name check and the narrowed color broadcast are judged against.
+   */
   const admit = async (req: FastifyRequest, canvasId: string, provenance: Provenance = { root: "link" }) => {
-    if (req.badge) await desk.admit(req.badge.badgeId, canvasId, provenance);
+    if (!req.badge) return; // an open route (the blob GET); nothing to admit
+    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) return;
+    // ---- the policy point. Phase 7: consult the grant, and refuse. ----
+    await desk.admit(req.badge.badgeId, canvasId, provenance);
+    req.badge.admissions = [
+      ...req.badge.admissions,
+      { canvasId, provenance, at: new Date().toISOString() },
+    ];
   };
 
   app.post("/api/ops", async (req, reply) => {
@@ -207,11 +239,15 @@ export function registerRoutes(
       const entry = await engine.setActorColor({
         op: body.op,
         actor: body.actor,
+        badgeId: req.badge!.badgeId,
         ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
       });
       return { seq: entry.seq, envelope: entry.envelope };
     }
-    const entry = await engine.submit(body as PostOpRequest & { actor: Actor });
+    const entry = await engine.submit({
+      ...(body as PostOpRequest & { actor: Actor }),
+      badgeId: req.badge!.badgeId,
+    });
     if (body.op?.type === "project.create") {
       // The bootstrap badge's first admission: it earned this one by making
       // the canvas, which is the only provenance that is not "somebody let
@@ -296,9 +332,9 @@ export function registerRoutes(
 
   app.get("/api/projects/:id/canvas", async (req) => {
     const { id } = req.params as { id: string };
-    const snapshot = await engine.getSnapshot(id);
-    await admit(req, id);
-    return snapshot;
+    // No `admit` here any more: the hook took the door's test on the way in,
+    // for this route and every other one shaped like it.
+    return engine.getSnapshot(id);
   });
 
   app.get("/api/projects/:id/oplog", async (req) => {
@@ -398,13 +434,13 @@ export function registerRoutes(
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.undo(id, body.actor, body.clientId);
+    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId);
   });
 
   app.post("/api/projects/:id/redo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.redo(id, body.actor, body.clientId);
+    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId);
   });
 
   // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
@@ -413,6 +449,8 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id); // 404 unknown projects
     const body = req.body as import("@isocan/core").CreateSessionRequest;
+    // A face is an assertion about who is here, so it is checked like an op.
+    await engine.requireActor(req.badge!.badgeId, body.actor.id);
     const session = presence.createSession(id, body.actor, "cli", {
       ...(body.label !== undefined ? { label: body.label } : {}),
     });
@@ -422,6 +460,9 @@ export function registerRoutes(
   app.put("/api/projects/:id/sessions/:sid", async (req, reply) => {
     const { id, sid } = req.params as { id: string; sid: string };
     const body = (req.body ?? {}) as import("@isocan/core").UpdateSessionRequest;
+    // Every beat re-asserts who is holding the face (that is what makes a
+    // rename re-label it live), so every beat is checked.
+    if (body.actor) await engine.requireActor(req.badge!.badgeId, body.actor.id);
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }
@@ -451,6 +492,10 @@ export function registerRoutes(
 
   app.delete("/api/projects/:id/sessions/:sid", async (req) => {
     const { id, sid } = req.params as { id: string; sid: string };
+    // Taking a face DOWN names an actor too. A session that is already gone
+    // names nobody, and ending it stays the no-op it has always been.
+    const standing = presence.roster(id).find((session) => session.sessionId === sid);
+    if (standing) await engine.requireActor(req.badge!.badgeId, standing.actor.id);
     presence.endSession(id, sid);
     return { ok: true };
   });
@@ -464,6 +509,10 @@ export function registerRoutes(
   app.delete("/api/presence/actors/:actorId", async (req) => {
     const { actorId } = req.params as { actorId: string };
     const { kind } = req.query as { kind?: "web" | "cli" };
+    // Ending an actor's sessions everywhere is as much an assertion about who
+    // you are as putting a face up: without the check, one request would
+    // silently blank anybody's face on any canvas.
+    await engine.requireActor(req.badge!.badgeId, actorId);
     return { ended: presence.endActorSessions(actorId, kind) };
   });
 
@@ -502,6 +551,17 @@ export function registerRoutes(
   });
 
   registerStaticWebApp(app, desk);
+}
+
+/** The canvas id out of a path segment. A malformed percent escape is not
+ * worth a 500 from a hook: it is not a canvas id either way, and the route
+ * behind it will say so. */
+function decodeSegment(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /** Is this daemon listening only to its own machine? Mechanism 5's "within a

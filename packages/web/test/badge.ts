@@ -1,12 +1,14 @@
 import { DOOR_ROUTE, formatBadgeToken, type DoorResponse } from "@isocan/core";
 
 /**
- * A badge, for tests that are about something else.
+ * A badge, for web tests that need a SECOND holder — a CLI on the same
+ * machine, a stranger on another canvas — beside the browser under test.
  *
- * The daemon refuses badge-less requests now, so every test that talks to it
- * over HTTP needs one — which is fixture work, not a change in what those
- * tests assert. Node's `fetch` has no cookie jar, so tests use the bearer
- * carrier; both carriers are accepted from anyone, so this is not a fiction.
+ * A third copy of the same fifteen lines, and deliberately so: each package's
+ * tests import their own, the way `cli/test` and `server/test` already do,
+ * rather than reaching across a package boundary for a fixture. Node's
+ * `fetch` has no cookie jar, so tests use the bearer carrier; both carriers
+ * are accepted from anyone, so this is not a fiction.
  */
 export interface TestBadge {
   badgeId: string;

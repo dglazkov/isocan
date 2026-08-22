@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import type { ActorClaim, ClaimTable } from "@isocan/core";
+import type { ActorClaim } from "@isocan/core";
 import { SHELF } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
@@ -111,14 +111,46 @@ export class FileDesk implements Desk {
     });
   }
 
-  async claims(): Promise<ClaimTable> {
-    const table: ClaimTable = {};
-    for (const [badgeId, badge] of Object.entries(this.state.badges)) {
-      table[badgeId] = badge.claims;
+  async claimsOf(badgeId: string): Promise<ActorClaim[]> {
+    return [...(this.state.badges[badgeId]?.claims ?? [])];
+  }
+
+  async claimants(actorId: string): Promise<ActorClaim[]> {
+    const rows: ActorClaim[] = [];
+    for (const badge of Object.values(this.state.badges)) {
+      for (const row of badge.claims) if (row.actorId === actorId) rows.push(row);
     }
-    const shelved = Object.values(this.state.shelf);
-    if (shelved.length > 0) table[SHELF] = shelved;
-    return table;
+    for (const row of Object.values(this.state.shelf)) {
+      if (row.actorId === actorId) rows.push(row);
+    }
+    return rows;
+  }
+
+  async holdersOf(sessionKey: string): Promise<{ badgeId: string; claim: ActorClaim }[]> {
+    const held: { badgeId: string; claim: ActorClaim }[] = [];
+    for (const [badgeId, badge] of Object.entries(this.state.badges)) {
+      for (const row of badge.claims) {
+        if (row.sessionKey === sessionKey) held.push({ badgeId, claim: row });
+      }
+    }
+    const shelved = this.state.shelf[sessionKey];
+    if (shelved) held.push({ badgeId: SHELF, claim: shelved });
+    return held;
+  }
+
+  async claimsIn(canvasIds: readonly string[]): Promise<ActorClaim[]> {
+    // A whole-table scan on a file backing is the honest implementation of a
+    // query; what matters is that the SEAM is the query, so the cloud backing
+    // can serve it with an index instead of a walk.
+    const wanted = new Set(canvasIds);
+    const rows: ActorClaim[] = [...Object.values(this.state.shelf)];
+    if (wanted.size > 0) {
+      for (const badge of Object.values(this.state.badges)) {
+        if (!badge.admissions.some((a) => wanted.has(a.canvasId))) continue;
+        rows.push(...badge.claims);
+      }
+    }
+    return rows;
   }
 
   async admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
