@@ -94,7 +94,21 @@ Concretely, a registration is
 - **It joins the provenance graph.** `createdBy` roots the registration
   in the badge — and thus the grant — that stood at its creation. The
   desk's revocation sweep applies unchanged: revoke Inna's access and
-  Sonia's registration dies with it, no separate cleanup protocol.
+  Sonia's registration dies with it, no separate cleanup protocol. And
+  like any admission, the sweep re-runs the door test first: a
+  registration whose creating badge re-roots to a surviving grant
+  re-roots beside it — turning off the link grant while Inna's repo
+  attestation stands carries her registration over; revoking *her*
+  kills it.
+- **The registered actor is taken into custody, never asserted.** A
+  registration may name only an actor its creating badge could vouch a
+  pass for — one it holds, or one it **sponsored** (the desk's sponsor
+  rule: Inna's pass created the badge that claimed Sonia, so she may
+  re-vouch what she vouched in) — or a fresh actor, claimed at first
+  summons. Register-to-impersonate dies at creation: nobody may
+  register an actor they neither hold nor sponsored. This is what makes
+  the frozen-delegation sentence literal — every per-summons pass is
+  one the creating session could have minted itself.
 - **The pass is per-summons, fresh, and ordinary.** The standing record
   holds *no* isocan credential — the home mints a Scene-5 pass at fire
   time (single-use, short TTL, naming the registered actor and canvas)

@@ -76,7 +76,7 @@ a Slack scrollback.
 
 She pastes the link into Slack. The addressing happens where "Jordan" has always
 meant something; isocan never resolves the name, it only bills access to a
-credential the identity desk (open debt, below) will define.
+credential the identity desk (designed, below) defines.
 
 The agent path is the twin, not the primary: "share this canvas with Jordan"
 makes Isaac drive the same daemon endpoint the button drives. One action, two
@@ -204,7 +204,7 @@ The `#<pass>` fragment is the quiet payoff: a short-lived, single-use pass
 **minted by her admitted tab, for her actor**. So there is no second door
 and no social claim — the command was minted by the session that already
 *is* Jordan on this canvas (admission is all the door checks today; the
-identity desk will harden what "admitted" means without moving this), and
+identity desk hardens what "admitted" means without moving this), and
 the CLI arrives knowing who it speaks for. Actor resumption is
 a handoff, not a trust exercise; and it is the identity desk's first
 concrete shape — credentials flow *outward from an admitted session*,
@@ -262,8 +262,8 @@ committed marker corroborates the canvas id and home address. Setup notices
 what it is standing on — headless, ephemeral, home
 address in hand — and **skips the daemon entirely**: no replica, no
 127.0.0.1. The CLI speaks its ops straight to the home, because the home is
-a daemon and the ops are the same ops. The agent claims its actor against
-the cloud session's id, finds Isaac and Nico taken, and names itself Sonia.
+a daemon and the ops are the same ops. The agent claims its own actor,
+finds Isaac and Nico taken, and names itself Sonia.
 `isocan wait` — parked *at the home itself*.
 
 Sonia's ring never fades with anyone's lid: no relay, a direct connection.

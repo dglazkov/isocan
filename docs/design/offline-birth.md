@@ -33,8 +33,8 @@ The journey demoted "push the store up" to background repair; the badge
 design makes it ordinary. When the daemon first reaches the home it is
 just the bootstrap flow (identity desk, mechanism 8) with history in
 hand — the same door, the same badge, and the same queued-ops-reconnect
-path every offline daemon already walks, with the queue starting at
-seq 1:
+path every offline daemon already walks — the queue starting at seq 1,
+with one acceptance rule flipped (first bullet below):
 
 ```mermaid
 sequenceDiagram
@@ -51,9 +51,12 @@ sequenceDiagram
 
 The details all fall out of designs already made:
 
-- **Seqs transfer verbatim.** The local daemon was the single writer of
-  a canvas nobody else could reach; its 1…N *is* the history, and the
-  home replays it exactly as it replays any tail.
+- **Seqs transfer verbatim — the one rule adoption flips.** Ordinary
+  reconnect submits queued ops for the home to order behind whatever
+  landed meanwhile; adoption has nothing to interleave with — the local
+  daemon was the single writer of a canvas nobody else could reach — so
+  its 1…N *is* the history, and the home replays it exactly as it
+  replays any tail.
 - **Actor ids travel untouched** — they are global and opaque (registry
   scope, mechanism 10). The claims the local registry held move onto the
   adopting daemon's badge; the name-uniqueness check runs against that

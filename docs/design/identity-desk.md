@@ -179,7 +179,10 @@ sequenceDiagram
   single-use, minted by badge A; redeeming it mints badge B carrying the
   admissions and the *named* claim. A pass names which of the minting
   badge's claims it endows — a daemon badge vouches for several actors,
-  and a pass hands over one identity, not the household. The claim slot
+  and a pass hands over one identity, not the household — though
+  mechanism 3 widens the mintable set by exactly one hop: for an
+  *agent's* actor, a badge may also endow a claim it sponsored (see
+  resumption there). The claim slot
   is **optional**: an admission-only pass admits a surface that will
   claim its *own* actor — Scene 6's instruction line (Sonia claims
   fresh, never Inna), and day-one `isocan open`, before the human has an
@@ -225,7 +228,7 @@ sequenceDiagram
       P->>H: GET /c/7f3a… (isocan open)
       H-->>P: web app + Set-Cookie: badge B₁
       P->>H: actor.claim "Priya" (carries B₁)
-      Note over H: B₀ relays the machine (Priya's CLI, Isaac).<br/>B₁ is her tab. Two badges before anyone shared.
+      Note over H: the name's first claim — no badge holds "Priya" yet,<br/>so no vouch is owed (a later machine resumes her via<br/>isocan open's pass — mech 2). B₀ relays the machine's<br/>agents; B₁ is her tab. Two badges before anyone shared.
   ```
 - **Kill-a-badge** is revocation's enforcement primitive (4): not yet
   "revoke Jordan," but "end that holder's recognition" exists.
@@ -324,8 +327,11 @@ One subtlety the diagram bakes in: `isocan open` appends a pass minted by
 her daemon's badge — Scene 5's outward flow, pointed the other way. Under
 the default link grant Priya's plain GET would admit her browser anyway;
 the pass matters twice over: it keeps her own surfaces working when she
-turns the link off, and it carries her *actor*, so picking "Priya" in the
-dialog is a resume, never a re-mint or a refusal. Admission spreads
+turns the link off, and it carries whatever actor claim her daemon's
+badge holds — on a pass-enrolled machine, herself — so picking "Priya"
+in the dialog is a resume, never a re-mint or a refusal. (On the
+bootstrap machine her tab's claim is the name's *first* and needs no
+vouch — mechanism 1's diagram plays that beat.) Admission spreads
 badge-to-badge among your own surfaces; grants exist for strangers.
 
 **Provenance is revocation's grip (4).** Every admission records its root:
@@ -351,11 +357,20 @@ The two compose.
   as the badge that claimed an actor may *resume* that actor — Jordan's
   phone verifies jordan@…, and picking "Jordan" is a resume, not a
   refusal. The `as:` lever stops being open assertion: resuming an actor
-  now requires a vouch — a matching attestation for a person's actor, a
-  pass (or a badge already holding the claim) for an agent's, since
-  agents have no inbox. How the home's badge-level membership check and
-  the local daemon's finer per-conversation discipline divide that
-  enforcement is mechanism 5's detail to settle.
+  now requires a vouch. A badge already holding the claim vouches for
+  anyone — `isocan open`'s pass at work. Past that, the routes split by
+  what the actor has: a person's actor resumes on a matching attestation
+  (a person has an inbox); an agent's on a pass — minted by a holder, or
+  by the badge that **sponsored** the holder into existence, the
+  provenance parent whose pass vouched it in. A sponsor already
+  authored that agent's whole existence, so re-vouching it grants
+  nothing new — and it is what survives a thin agent's death: Sonia's
+  claim sits on a badge whose bearer secret died with the sandbox, and
+  Inna, who sponsored that badge, can mint the pass that resumes her
+  (Scene 7's registrations lean on exactly this — mechanism 11). How
+  the home's badge-level membership check and the local daemon's finer
+  per-conversation discipline divide that enforcement is mechanism 5's
+  detail to settle.
 - **Repo membership (9)** is subject type `repo`, done.
 - **Scene 3 gains one honest beat, only when the link grant is off**: a
   stranger arriving without attestation is asked to verify their email at
@@ -414,8 +429,9 @@ actors and each must be in the badge's claims. Alongside actor checks,
 every project-scoped route checks `projectId ∈ badge.admissions` — the
 door's test, re-asked cheaply on each request rather than only at entry.
 Resume vouches (`as:`) are enforced in the same place claims apply:
-attestation match for a person's actor, a pass or an already-claiming
-badge for an agent's.
+attestation match for a person's actor, a pass (holder- or
+sponsor-minted — mechanism 3's rule) or an already-claiming badge for
+an agent's.
 
 **Two things deliberately stay desk-blind:**
 
