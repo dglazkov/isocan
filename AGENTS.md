@@ -25,6 +25,15 @@ many doorways — please keep it that way rather than copying it into a new
 harness's directory, and keep it short: a skill sits in a directory for
 months, so anything it says about the CLI is a copy that ages.
 
+## The multiuser build
+
+The hosted/multiuser work has its own docs, read in this order:
+[`docs/multiuser-journey.md`](docs/multiuser-journey.md) (the
+experience, ground truth), [`docs/design/`](docs/design/) (the
+mechanisms), [`docs/architecture.md`](docs/architecture.md) (the
+physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
+"where we are" line says which phase is next; start there).
+
 ## House rules
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done.

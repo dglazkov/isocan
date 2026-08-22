@@ -7,11 +7,24 @@ demonstrated true when the phase closes, and the demonstration is named
 up front. The [journey](multiuser-journey.md) is the acceptance suite:
 a phase that claims a scene is done only when the scene plays.
 
-**How the work runs.** Claude does all of it: writes the code and the
-tests, actuates Chrome to drive the web UI (two browser profiles are
-two people), and provisions Google Cloud — provisioning steps are
-marked **⚑ provision** and each one is asked for out loud before it
-runs.
+**How the work runs.** Claude does all of it, and a working session is
+a **conductor**: it does not write the code itself. It reads the
+"where we are" line below, spawns a subagent on the next phase —
+handing it the phase's section, the docs it cites, and `AGENTS.md`'s
+house rules — and the subagent does the work: code, tests, Chrome
+actuation to drive the web UI (two browser profiles are two people).
+The conductor then **verifies the named proof itself** — runs the
+suite, replays the scene, drives the browser — never taking the
+subagent's word for it; the proofs are named up front precisely so
+review is mechanical. Work that fails review goes back down: adjust
+the instructions, respawn, re-review. When the proof holds, the
+conductor writes the Findings, moves the status line, edits the
+[map](architecture.md) if a finding redrew it, commits the phase
+whole, and repeats. Phases run in order — each stands on the last;
+parallel subagents belong *inside* a phase, never across phases.
+Provisioning steps are marked **⚑ provision** and each one is asked
+of the user out loud before it runs: the conductor spawns workers
+freely, but never a cloud resource without permission.
 
 **How this doc lives.** The surprise log lives here now, folded into
 the phases: each phase carries a **Findings** section that accumulates
@@ -20,6 +33,9 @@ the map edits [architecture.md](architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
+
+**Where we are: nothing started — Phase 1 is next.** This line moves
+as phases close; a clean session starts by believing it.
 
 ---
 

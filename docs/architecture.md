@@ -39,7 +39,7 @@ in the same change.
 | attesters | **Firebase Auth** — magic-link email (the floor), Google, GitHub |
 | front door | global external HTTPS load balancer + Cloud CDN + managed cert → serverless NEG → the Cloud Run service |
 | secrets | Secret Manager (GitHub app credentials and kin) |
-| deploy | **Cloud Build triggers** on the GitHub repo — push to `main` builds and deploys dev, the `release` branch (already the distribution branch) promotes prod; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
+| deploy | **Cloud Build triggers** on the GitHub repo — push to `main` builds and deploys dev; prod promotes only by an explicit gesture (a `prod` tag, moved deliberately) — NOT the `release` branch, which CI regenerates from every main commit: it is the CLI distribution branch, not a gate; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
 | environments | two GCP projects: `isocan-dev` at dev.isocan.io, `isocan-prod` at isocan.io |
 | observability | Cloud Logging + Error Reporting, uptime check on `/healthz` |
 | infra as code | `infra/` — small idempotent gcloud scripts; Terraform waits for a second operator |
