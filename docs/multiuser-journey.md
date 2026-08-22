@@ -380,7 +380,8 @@ replica durable.
 
 ## Open debts
 
-- **The identity desk** (three appearances, unresolved and load-bearing):
+- **The identity desk** (three appearances, unresolved and load-bearing;
+  now inventoried in [design/identity-desk.md](design/identity-desk.md)):
   who may enter a canvas URL; what credential a daemon or a cloud agent
   presents; how an actor claim is vouched across surfaces. Currently: the
   address is the secret — which means the Scene 1–2 grant is recorded
