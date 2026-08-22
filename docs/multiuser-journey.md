@@ -221,9 +221,22 @@ Inna is a repo member, thick like Priya — and every morning her agent's ring
 has faded at 6pm with summonses queued behind it. "I don't want my laptop
 closing to stop the work."
 
-She starts a cloud session pointed at the **project repo**. The workspace
-clones it; the committed marker tells the agent the canvas id and home
-address. Setup notices what it is standing on — headless, ephemeral, home
+The canvas teaches this door like the others. She clicks **her own face**
+in the pile; beside "Work from your terminal…" sits its sibling — **"Run an
+agent in the cloud…"** (both are *extend my reach*, minted from an admitted
+session). The dialog says the sentence of concept — *an agent that outlives
+your lid needs to run somewhere that doesn't close* — and hands her a
+copy-able instruction line, pass included:
+
+> use isocan — the canvas is at isocan.io/c/7f3a…#\<pass\>. Park and handle
+> summonses.
+
+isocan never runs compute; the harness does. So she goes to her harness's
+cloud — concretely, claude.ai/code: **New session** → pick the **project
+repo** (the GitHub app already has access) → paste the line as the prompt →
+**Start**. Four clicks and a paste. The workspace clones the repo; the
+committed marker corroborates the canvas id and home address. Setup notices
+what it is standing on — headless, ephemeral, home
 address in hand — and **skips the daemon entirely**: no replica, no
 127.0.0.1. The CLI speaks its ops straight to the home, because the home is
 a daemon and the ops are the same ops. The agent claims its actor against
@@ -249,18 +262,66 @@ fades truthfully; summonses queue in the oplog; a restarted session re-parks
 and drains them. Sonia holds no replica, so a dead sandbox loses nothing —
 her entire state was always the home's.
 
-## The three seats
+## Scene 7 — Agent-on-demand
 
-People turned out to have one seat, not two. Every person sits in the
-browser at the home origin, and the service worker makes that tab
-offline-capable on its own. Thickness is a property of machines and
-agents, never of people:
+Scene 6 works, but the bill tells on it: Sonia's sandbox runs all night to
+be awake for four minutes of summonses, and when the harness times out the
+idle session her ring fades until a human notices. Always-on was never the
+requirement — **always-answerable** was.
+
+**Park becomes registration.** The "Run an agent in the cloud…" dialog
+grows a second lane: *"…or let the canvas start one on demand."* What gets
+created (one concrete instantiation — the hook is the contract, the vendor
+isn't): a workflow file in the repo — `.github/workflows/sonia.yml`, a
+`workflow_dispatch` with a `summons` input whose job runs the harness
+headless: *use isocan, canvas at `…#<pass>`, address the summons, exit when
+done* — and a **registration at the home**: actor + dispatch hook + a token
+scoped to firing it. Inna writes no YAML; her laptop agent does ("set Sonia
+up on-demand"), or the dialog offers the file ready to commit. `isocan
+wait` has split into its two halves: a **park** is a process holding a
+connection; a **registration** is a standing rule the home holds for an
+agent that isn't running.
+
+**The pile learns a third truth.** A ring would lie (nothing is connected);
+plain dimming undersells (calling her works). So a third state: the
+**spark** — *not here, starts when called*. The presence grammar is three
+honest words: **ring** = live connection; **dim** = addressable, delivery
+deferred; **spark** = a summons will launch her.
+
+**The summons.** 11pm, Jordan circles a card: "@Sonia re-cut these." The
+home checks parked waiters — none — then registrations: match. It fires
+the dispatch with the thread ref, and the thread says so — *"Sonia
+summoned — starting…"*, the spark pulsing. Cold start is real and
+unhidden: sandbox boots, repo clones, CLI dials the home, and about a
+minute later `session on <thread> --say "on it"` lands — the spark
+brightens into a live ring *because now it is true*. She works the lap —
+reads the region, re-cuts, `isocan edit`, replies with the receipt — and
+**exits**. Ring fades, spark remains. Nothing idled; the minutes billed
+were the minutes worked.
+
+**Failure may not be silent.** The dispatch is refused, or the workflow
+goes red: the summons does not vanish. It queues like any faded agent's,
+the spark shows broken, and the thread carries "Sonia couldn't start." The
+pile may say *not here*, *starting*, or *broken* — the one thing it may
+never do is say nothing.
+
+The lap — comment → build → reply — needed zero changes; only how the
+agent comes to exist changed. What it opens: **launch custody** — the home
+now holds a token that can start compute in someone's account, which lands
+squarely in the innkeeper debt's lap.
+
+## The seats
+
+People turned out to have exactly one seat: the browser at the home origin,
+its service worker making the tab offline-capable on its own. Thickness —
+and now existence itself — is a property agents vary in, never people:
 
 | seat | who | wiring |
 | --- | --- | --- |
 | person | Priya, Jordan, Inna | browser → home; the service worker caches the shell, keeps a durable replica, queues ops offline |
 | agent, thick | Isaac, Nico | CLI → local daemon (replica in `~/.isocan`, files, `wait`) → home |
 | agent, thin | Sonia | CLI → home directly; no replica, nothing to lose |
+| agent, on-demand | Sonia, later | no process at all until summoned; the home fires a launch hook, the agent runs thin, then exits |
 
 No seat needed new architecture. The home is a real isocan daemon — same
 reducer, same op vocabulary, same WS — and the web client was already a
@@ -308,10 +369,10 @@ replica durable.
   worth remembering.
 - **Sync cadence** — when daemons speak to the home (per-op, timer, wake) —
   is tuning, not structure.
-- **Agent-on-demand** (a named door, not walked through): once waits park at
-  the home, the home could hold a wait for an agent that isn't running and
-  *launch* it on summons. Nobody pays for 3am idle; Sonia begins when
-  circled. Big enough to be its own scene.
+- **Launch custody** (agent-on-demand itself is played — Scene 7): the home
+  holds hooks and scoped tokens that start compute in other people's
+  accounts. Revocation, audit, and blast radius of those tokens are the
+  innkeeper debt wearing its sharpest edge.
 
 ## Lessons banked along the way
 
