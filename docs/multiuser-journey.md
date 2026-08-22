@@ -26,8 +26,19 @@ they do not depend on where it runs.
 
 ## Scene 0 — Solo
 
-Priya runs the three steps in her project directory: `npx skills add
-dglazkov/isocan`, launch an agent, "use isocan." Setup brings up her local
+Even the first user arrives from somewhere: Priya hears about isocan and
+visits **isocan.io**. What she finds is not a brochure standing apart from
+the product — it is the home origin itself, the same address every canvas
+lives at, wearing its front page. The page says the idea in a few
+sentences — one canvas, driven from a web app and a terminal, your agent
+working beside you on it — and then does what every door in this journey
+does: hands her the exact next move where she is already standing. Three
+steps, with a copy button on the one that is a command: `npx skills add
+dglazkov/isocan`, launch an agent, "use isocan." (Scene 5 will name this
+rule — *the canvas teaches its own escalation* — but the front page obeys
+it first: nobody is ever sent away to documentation to learn how to enter.)
+
+She runs the three steps in her project directory. Setup brings up her local
 daemon — and **creates the canvas at its hosted home at birth**. The
 committed `.isocan/project.json` marker carries the canvas id *and* the
 home's address from day one. Her daemon is, from the first minute, a syncing
