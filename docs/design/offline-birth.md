@@ -23,9 +23,10 @@ Two consequences, both already accepted:
   browser cannot visit a canvas whose origin has never held it.
 - A teammate who clones the repo *during* the interval and asks the home
   gets a distinct answer: **"not yet arrived"** — a promise pending, not
-  a 404. The home can say this honestly because the marker's address
-  names it: being named a home is checkable even before the store shows
-  up.
+  a 404. The honesty is the asker's, not the home's: the home cannot
+  verify it was ever named and answers only "no store here"; it is the
+  marker in the asker's own clone, naming this address, that turns
+  that answer into a promise pending rather than a wrong address.
 
 ## Adoption is the reconnect path, started from seq 1
 
@@ -85,7 +86,10 @@ sovereignty gesture: a thick replica offers its store to a *new* home
 and rewrites the marker. The flow is identical — hello, badge, offer,
 replay. What must be said out loud is what does **not** travel: the
 desk's ledgers are innkeeper-private, so badges, attestations, grants,
-and registrations stay behind. Re-homing moves the *work*; the roster
+registrations — and the claims binding actors to badges — stay behind.
+The registry's public face (ids, names, colors) is canvas state and
+travels with the store, so moved history keeps its authors; what
+re-forms is who may speak as them. Re-homing moves the *work*; the roster
 re-forms at the new address — grants are re-spoken, people re-enter
 through new links, agents re-enroll by pass. Sovereignty by replica is
 sovereignty of the canvas, not of the guest book — which is honest:

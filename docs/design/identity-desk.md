@@ -105,7 +105,9 @@ ever after. (Not "session": the code already has presence sessions, which
 are a different, ephemeral thing. A badge is the desk's own word.)
 
 **The shape.** One server-side record — `{badgeId, secret, kind, createdAt,
-lastSeen, admissions, claims}` — with two carriers for one artifact:
+lastSeen, admissions, claims}`, the secret stored hashed at rest (the
+[architecture](../architecture.md)'s refinement: the desk keeps no
+secret it doesn't have to) — with two carriers for one artifact:
 browsers hold it as an HTTP-only cookie at the home origin (the one-origin
 rule means exactly one cookie jar — that decision pays again here);
 daemons and CLIs hold it as a bearer token in the `auth` block
@@ -379,8 +381,10 @@ The two compose.
   trade. The journey's door stays the journey's door until somebody locks
   it.
 
-**Not yet decided here:** which attesters ship first (magic-link email is
-the floor — it borrows only an inbox); whether grants may carry roles
+**Since decided elsewhere:** which attesters ship first — the
+[architecture](../architecture.md) borrows Firebase Auth as the bench:
+magic-link email (the floor — it borrows only an inbox), Google, and
+GitHub. **Not yet decided here:** whether grants may carry roles
 (viewer/editor) — the journey never played a read-only member, so that
 waits for a scene that forces it; and the registry-scope question (10),
 which admissions narrow but do not settle.

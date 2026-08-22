@@ -33,7 +33,11 @@ can offer its store to a *new* home and rewrite the marker. Leaving the
 innkeeper is a push, not an export request — though it moves the work,
 not the desk's ledgers: the roster re-forms at the new address (the
 offline-birth doc says what does and does not travel). (A browser-only
-canvas has no thick replica — its members' sovereignty is only as good
+canvas has no thick replica — the tab's service-worker replica is real
+but does not qualify: browser storage is the browser's to evict, holds
+the working set rather than the whole store, and cannot stand as an
+adoption source. Durable enough to work offline, never durable enough
+to answer for the canvas — so its members' sovereignty is only as good
 as the innkeeper. The UI should say so where it counts: escalation,
 Scene 5, is also the sovereignty gesture.)
 
@@ -45,10 +49,15 @@ is what makes it a home — so end-to-end encryption of canvas content is
 off the table by design, not by oversight. What the innkeeper holds
 falls in two ledgers with different rules:
 
-- **Canvas state** — oplogs, snapshots, blobs. Replicated to every
-  admitted badge; the innkeeper's copy is authoritative for order, not
-  the only copy.
-- **The desk's ledgers** — badges, attestations (emails: the desk
+- **Canvas state** — oplogs, snapshots, blobs, and the actor
+  registry's public face: ids, names, colors. Ops name actors and
+  every replica renders them, so who an actor *is* travels with the
+  work — which is what lets re-homed history keep its authors.
+  Replicated to every admitted badge; the innkeeper's copy is
+  authoritative for order, not the only copy.
+- **The desk's ledgers** — badges, the claims table binding actors to
+  badges (who may *speak as* an actor — the registry's private half),
+  attestations (emails: the desk
   brought PII with it), grants, provenance, registrations and their
   launch tokens, the badge-to-op audit log. **Innkeeper-private, never
   replicated**: no client, thick or thin, ever syncs another holder's
@@ -99,13 +108,24 @@ Concretely, a registration is
   registration whose creating badge re-roots to a surviving grant
   re-roots beside it — turning off the link grant while Inna's repo
   attestation stands carries her registration over; revoking *her*
-  kills it.
+  kills it. The badge itself is only the root's carrier: a
+  registration outlives its creating badge — a cleared cookie, a
+  killed badge — so long as the grant beneath it stands. Kill-a-badge
+  ends a holder's recognition, not the standing rules it created; the
+  private ledger's `createdBy` is how an operator reviews what a
+  compromised badge left behind.
 - **The registered actor is taken into custody, never asserted.** A
   registration may name only an actor its creating badge could vouch a
   pass for — one it holds, or one it **sponsored** (the desk's sponsor
   rule: Inna's pass created the badge that claimed Sonia, so she may
-  re-vouch what she vouched in) — or a fresh actor, claimed at first
-  summons. Register-to-impersonate dies at creation: nobody may
+  re-vouch what she vouched in) — or a fresh actor, claimed **at
+  registration, never at first summons**: a summons is a mention, and
+  mentions resolve only against actors that exist, so an actor that
+  waited for its first summons could never receive one. For a fresh
+  actor the registration *is* the arrival — the spark in the pile is
+  its face from that moment — which keeps the minted-on-arrival rule
+  intact rather than excepted. Register-to-impersonate dies at
+  creation: nobody may
   register an actor they neither hold nor sponsored. This is what makes
   the frozen-delegation sentence literal — every per-summons pass is
   one the creating session could have minted itself.
@@ -154,6 +174,9 @@ sequenceDiagram
   operator, a terms document, and pricing are product work this doc only
   obligates.
 - **Encryption at rest and key custody** for the desk's ledgers —
-  implementation of the two-ledger rule, not a change to it.
+  implementation of the two-ledger rule, not a change to it; since
+  answered in the [architecture](../architecture.md): the ledger
+  store's own encryption at rest beneath, the launch tokens
+  additionally KMS-wrapped, badge secrets stored only hashed.
 - **Quotas and rate limits** — tuning; the door and GC already give the
   levers.
