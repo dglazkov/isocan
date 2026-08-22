@@ -398,9 +398,10 @@ replica durable.
   it holds *unshared* canvases too. That makes isocan a hosted product
   with a local-first cache, and that posture should be chosen out loud,
   not inherited.
-- **Offline birth.** A canvas created on a plane births locally and adopts
-  a home on first reconnect — the one surviving remnant of "push the store
-  up," demoted to background repair. With no person-facing door on the
+- **Offline birth** (designed in
+  [design/offline-birth.md](design/offline-birth.md)). A canvas created on
+  a plane births locally and adopts a home on first reconnect — the one
+  surviving remnant of "push the store up," demoted to background repair. With no person-facing door on the
   daemon, that interval is CLI-and-agent only: a browser cannot visit a
   canvas whose origin has never been reachable. Acceptable for the edge,
   worth remembering.

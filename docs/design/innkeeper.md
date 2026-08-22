@@ -28,9 +28,11 @@ What keeps commitment 2 true is **sovereignty by replica**: a thick
 daemon's `~/.isocan` holds the full store — oplog and blobs — so any
 canvas with at least one thick member has a complete copy outside the
 innkeeper's walls, kept current by ordinary sync. Re-homing is the
-offline-birth debt's "adopt a home on first reconnect" flow, generalized:
-a replica can offer its store to a *new* home and rewrite the marker.
-Leaving the innkeeper is a push, not an export request. (A browser-only
+[offline-birth](offline-birth.md) adoption flow, generalized: a replica
+can offer its store to a *new* home and rewrite the marker. Leaving the
+innkeeper is a push, not an export request — though it moves the work,
+not the desk's ledgers: the roster re-forms at the new address (the
+offline-birth doc says what does and does not travel). (A browser-only
 canvas has no thick replica — its members' sovereignty is only as good
 as the innkeeper. The UI should say so where it counts: escalation,
 Scene 5, is also the sovereignty gesture.)
