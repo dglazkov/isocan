@@ -76,6 +76,21 @@ export function itemsBounds(canvas: CanvasState): Box | null {
 }
 
 /** Fit a world box into a viewport of the given pixel size, with padding. */
+/**
+ * Fit a box into a RECT of the window rather than the whole of it — the part
+ * the canvas actually has once the docked chrome is out of the way. The offset
+ * is the whole point: fitting into the right width and then drawing from x=0
+ * lands the left edge of everything underneath the panel.
+ */
+export function fitInto(
+  box: Box,
+  stage: { x: number; y: number; width: number; height: number },
+  padding = 64,
+): Viewport {
+  const at = fitBounds(box, stage.width, stage.height, padding);
+  return { ...at, tx: at.tx + stage.x, ty: at.ty + stage.y };
+}
+
 export function fitBounds(
   box: Box,
   viewWidth: number,

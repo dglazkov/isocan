@@ -54,7 +54,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["←", "→", "↑", "↓"], does: "Nudge the selection", group: "Items" },
   { keys: ["Shift-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
   { keys: ["F2", "Double-click the name"], does: "Rename — the file follows the title", group: "Items" },
-  { keys: ["S"], does: "Show this item's versions — the stack fans out", group: "Items", note: "On an item with more than one version; Escape closes it" },
+  { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },

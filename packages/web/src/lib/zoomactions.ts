@@ -1,7 +1,8 @@
 import type { CanvasState } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { type Box, type Viewport, centerOn, fitBounds, itemsBounds, zoomAt } from "./viewport.ts";
+import { type Box, type Viewport, centerOn, fitInto, itemsBounds, zoomAt } from "./viewport.ts";
+import { stageRect } from "./stage.ts";
 
 /**
  * The navigation verbs, in one place so the zoom controls, the keyboard
@@ -9,8 +10,8 @@ import { type Box, type Viewport, centerOn, fitBounds, itemsBounds, zoomAt } fro
  * reads the live stores and hands the camera back to the user via setViewport.
  */
 
-const cx = () => window.innerWidth / 2;
-const cy = () => window.innerHeight / 2;
+const cx = () => stageRect().x + stageRect().width / 2;
+const cy = () => stageRect().y + stageRect().height / 2;
 
 /** Glide length. Long enough to read as travel, short enough not to be a wait. */
 const GLIDE_MS = 380;
@@ -46,20 +47,26 @@ export function glideTo(target: Viewport): void {
   gliding = requestAnimationFrame(step);
 }
 
-/** Bring a world point to the middle of the window, gliding there. */
+/** Bring a world point to the middle of the VISIBLE canvas, gliding there. */
 export function glideToPoint(wx: number, wy: number): void {
   const { viewport } = useUiStore.getState();
-  glideTo(centerOn(viewport, wx, wy, window.innerWidth, window.innerHeight));
+  const stage = stageRect();
+  const at = centerOn(viewport, wx, wy, stage.width, stage.height);
+  glideTo({ ...at, tx: at.tx + stage.x, ty: at.ty + stage.y });
 }
 
 /**
  * Fit a world box, gliding there — the edge radar's cluster jump, and a click
- * in the files panel. `reserved` is width a dock is holding: fitting into a
- * wider window than there is pushes the target clear of it, rather than
- * landing the thing you asked for underneath the list you asked from.
+ * in the files panel. It aims at the visible canvas, so the thing you asked
+ * for does not land underneath the list you asked from.
  */
-export function glideToBox(box: Box, reserved = 0): void {
-  glideTo(fitBounds(box, window.innerWidth + reserved, window.innerHeight));
+export function glideToBox(box: Box): void {
+  glideTo(fitOnStage(box));
+}
+
+/** Fit a box into the part of the window the canvas actually has. */
+function fitOnStage(box: Box): Viewport {
+  return fitInto(box, stageRect());
 }
 
 /** Zoom about the screen center by a multiplicative factor (buttons, wheel). */
@@ -76,7 +83,7 @@ export function zoomTo100(): void {
 
 function fitBox(box: Box | null): void {
   if (!box) return;
-  useUiStore.getState().setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
+  useUiStore.getState().setViewport(fitOnStage(box));
 }
 
 /** Fit an arbitrary world box — the Zoom tool's drag-a-region gesture. */

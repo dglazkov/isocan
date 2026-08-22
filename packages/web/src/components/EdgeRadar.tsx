@@ -9,8 +9,7 @@ import {
   type RadarItem,
 } from "../lib/edgeradar.ts";
 import { glideToBox, glideToPoint } from "../lib/zoomactions.ts";
-import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
-import { TRASH_WIDTH } from "./TrashPanel.tsx";
+import { stageInsets } from "../lib/stage.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
 
 /**
@@ -29,23 +28,9 @@ import { ItemThumb } from "./ItemThumb.tsx";
  * quite happily, and the alternative is a bar hovering in mid-canvas.
  */
 
-const TOOLBAR_HEIGHT = 48;
-
-const INSETS: Insets = {
-  top: TOOLBAR_HEIGHT,
-  right: 0,
-  bottom: 0,
-  left: 0,
-};
-
 export function EdgeRadar({ projectId }: { projectId: string }) {
   const items = useCanvasStore((s) => s.canvas?.items);
   const viewport = useUiStore((s) => s.viewport);
-  // Either panel holds the same dock, and the rim has to clear whichever
-  // one is showing.
-  const panelOpen = useUiStore((s) => s.mainPanelOpen || s.filesPanelOpen);
-  // The trash docks to the right wall, full height, opaque: same rule.
-  const trashOpen = useUiStore((s) => s.trashOpen);
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -59,11 +44,8 @@ export function EdgeRadar({ projectId }: { projectId: string }) {
   const all = Object.values(items);
   if (all.length === 0) return null;
 
-  const insets: Insets = {
-    ...INSETS,
-    left: INSETS.left + (panelOpen ? PANEL_WIDTH : 0),
-    right: INSETS.right + (trashOpen ? TRASH_WIDTH : 0),
-  };
+  // The same fact the framing actions use: what the canvas actually has.
+  const insets: Insets = stageInsets();
   const beacons = edgeBeacons(all, viewport, size.width, size.height, insets);
   if (beacons.length === 0) return null;
 
