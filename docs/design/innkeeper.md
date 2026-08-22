@@ -174,6 +174,9 @@ sequenceDiagram
   operator, a terms document, and pricing are product work this doc only
   obligates.
 - **Encryption at rest and key custody** for the desk's ledgers —
-  implementation of the two-ledger rule, not a change to it.
+  implementation of the two-ledger rule, not a change to it; since
+  answered in the [architecture](../architecture.md): the ledger
+  store's own encryption at rest beneath, the launch tokens
+  additionally KMS-wrapped, badge secrets stored only hashed.
 - **Quotas and rate limits** — tuning; the door and GC already give the
   levers.
