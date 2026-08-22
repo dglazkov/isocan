@@ -32,8 +32,8 @@ reopen:
   grants.
 - **Presence tells the truth** — which, at a shared home, quietly depends
   on this desk (mechanism 5).
-- Lean, not yet a decision: **borrow accounts rather than mint them.**
-  Mechanism 3 is where it must become one.
+- Lean at first, **decided in mechanism 3**: borrow accounts rather than
+  mint them.
 
 ## Where the desk stands today
 
@@ -54,41 +54,44 @@ handed. Concretely, in code:
 
 ## The missing mechanisms
 
-Numbered for cross-reference; each names the scenes that need it.
+Numbered for cross-reference; each names the scenes that need it. These
+are the *original problem statements*, kept as written; the designs below
+answer 1, 2, and 3 directly and collapse 4, 6, 7, 8, and 9 into them —
+each item's fate is tagged.
 
-1. **A session the home can recognize.** Some artifact minted at admission
+1. **A session the home can recognize.** *(→ the badge, below)* Some artifact minted at admission
    that the home can check later. Upstream of everything below — passes
    (Scene 5), grants (Scenes 1–2), and registrations (Scene 7) all say
    "admitted session," and no such checkable thing exists.
-2. **A door that can tell holders apart.** Enforcement of grants needs
+2. **A door that can tell holders apart.** *(→ the door, below)* Enforcement of grants needs
    per-caller credentials at entry — a different door than address-as-
    secret, not a hardened one. Until it exists, the Scene 1–2 grant stays
    recorded intent.
-3. **A grant subject type.** Something a grant binds to — account, email,
+3. **A grant subject type.** *(→ grants + attestations, below)* Something a grant binds to — account, email,
    key — so "revoke Jordan" can point at anything. This is where the
    borrow-vs-mint-accounts lean becomes a decision.
-4. **Revocation.** Un-share, expel, rotate. Structurally impossible under
+4. **Revocation.** *(collapsed: provenance sweep, below)* Un-share, expel, rotate. Structurally impossible under
    address-as-secret; becomes possible only after 2 and 3.
-5. **Server-side actor binding.** The home stamps ops and presence with who
+5. **Server-side actor binding.** *(outlined under the badge; details open)* The home stamps ops and presence with who
    the *connection* is, instead of trusting the asserted `actor` field.
    Turns `comment.update`'s "only the author," actor-scoped undo, and
    honest presence from conventions into enforcement.
-6. **Person resumption across browsers.** A way for Jordan's phone to *be*
+6. **Person resumption across browsers.** *(collapsed: email attestation)* A way for Jordan's phone to *be*
    Jordan. Today the honest path is refused (name taken) and the dishonest
    one (`as:`) is open to anyone — exactly backwards.
-7. **Pass → durable credential exchange.** The Scene 5 pass is single-use
+7. **Pass → durable credential exchange.** *(collapsed: the pass mints a badge)* The Scene 5 pass is single-use
    and short-lived; the daemon it enrolls reconnects for months. What the
    pass exchanges into — lifetime, storage, scope, revocation — is unnamed.
-8. **A bootstrap credential.** Scene 0 reaches the home before any admitted
+8. **A bootstrap credential.** *(collapsed: the door badges everyone)* Scene 0 reaches the home before any admitted
    session exists; the flow-outward rule cannot mint its own first link.
-9. **A repo-membership check.** Scene 6's "the committed marker admitted
+9. **A repo-membership check.** *(collapsed: subject type `repo`)* Scene 6's "the committed marker admitted
    her" currently reduces to URL-knowledge; "can read the repo ⇒ admitted"
    needs a real mechanism.
-10. **Scoped registry / tenancy.** The actor registry (names, claims,
+10. **Scoped registry / tenancy.** *(open)* The actor registry (names, claims,
     colors) is per-home, and claims consult every project on it
     (`Engine.heldNames()`). On a multi-tenant home that is cross-tenant
     name collision and leakage. The registry's scope must be chosen.
-11. **Bounded standing mint** (Scene 7). Registrations mint passes with
+11. **Bounded standing mint** (Scene 7). *(open)* Registrations mint passes with
     nobody present. Scope and revocation of that power is this desk's half
     of the launch-custody debt.
 
@@ -172,8 +175,11 @@ sequenceDiagram
 
 - The Scene 5 **pass becomes a badge-minting voucher**: short-lived,
   single-use, minted by badge A; redeeming it mints badge B carrying the
-  same actor binding and admissions. Mechanism 7's "durable exchange" is
-  just this — the pass was never the credential, the badge it mints is.
+  admissions and the *named* claim. A pass names which of the minting
+  badge's claims it endows — a daemon badge vouches for several actors,
+  and a pass hands over one identity, not the household. Mechanism 7's
+  "durable exchange" is just this — the pass was never the credential,
+  the badge it mints is.
 
   ```mermaid
   sequenceDiagram
@@ -243,8 +249,11 @@ Whoever arrives first bootstraps; everyone after is vouched for.
 code, per the deployment-detail thesis) grows a door endpoint that mints
 badges; HTTP routes and the WS upgrade read cookie-or-bearer; the actor
 registry's claims re-key to badge ids with a one-time migration of
-existing `sessionKey` bindings. Nothing yet *enforces* beyond "present a
-badge" — enforcement is mechanisms 2 and 5, standing on this.
+existing `sessionKey` bindings. The cookie carrier ships with its
+standard defenses — `SameSite` plus an Origin check on API and
+WS-upgrade requests (browsers do not enforce CORS on WebSockets) — so a
+foreign site cannot ride the cookie. Nothing yet *enforces* beyond
+"present a badge" — enforcement is mechanisms 2 and 5, standing on this.
 
 ## Mechanisms 3 + 2, designed: grants, attestations, and the door
 
@@ -278,9 +287,10 @@ daemon API — never an op, per the journey's rule 5.
 `{attribute, verifiedVia, at}`. Attesters are borrowed: an OIDC sign-in
 (Google, GitHub) attests an email; a magic link to the inbox attests it
 with no IdP at all; a GitHub token check attests repo read access — how
-Inna's cloud agent proves Scene 6's standing grant covers it. Verifying
-never *creates* anything; it decorates the badge the holder already
-carries.
+*Inna herself* qualifies under Scene 6's standing grant when she arrives
+from the committed marker (her cloud agent enters by pass, as the journey
+plays it). Verifying never *creates* anything; it decorates the badge the
+holder already carries.
 
 **The door, then, is one test.** A badge asking after a canvas is admitted
 if any of three things holds — and everything the desk has built so far is
@@ -298,21 +308,26 @@ flowchart TD
     ADD --> OK
 ```
 
-One subtlety the diagram bakes in: Priya's own browser at her own
-unshared canvas is admitted by **pass**, not by grant — `isocan open`
-appends a pass minted by her daemon's badge, the same outward flow as
-Scene 5, pointed the other way. No grant needs to exist on an unshared
-canvas beyond the (default, revocable) link grant; admission spreads
-badge-to-badge among your own surfaces and grants exist for strangers.
+One subtlety the diagram bakes in: `isocan open` appends a pass minted by
+her daemon's badge — Scene 5's outward flow, pointed the other way. Under
+the default link grant Priya's plain GET would admit her browser anyway;
+the pass matters twice over: it keeps her own surfaces working when she
+turns the link off, and it carries her *actor*, so picking "Priya" in the
+dialog is a resume, never a re-mint or a refusal. Admission spreads
+badge-to-badge among your own surfaces; grants exist for strangers.
 
 **Provenance is revocation's grip (4).** Every admission records its root:
 `created`, `grant g`, or `pass from badge B` — and a pass-derived
 admission inherits the *root* of the badge that minted the pass. Revoking
-a grant then sweeps every admission rooted in it, however many pass-hops
-away: revoke Jordan's email grant and her tab, her daemon, and Nico all
-lose the canvas in one pass. Kill-a-badge (mechanism 1) handles the
-stolen-laptop case; grant revocation handles the un-invite. The two
-compose.
+a grant sweeps every admission rooted in it, however many pass-hops away —
+but the sweep **re-runs the door test first**: a badge whose attestations
+satisfy a surviving grant re-roots instead of dropping. So revoking
+Jordan's email grant expels her tab, her daemon, and Nico in one pass —
+while turning off the *link* grant expels only those no other grant
+covers: it stops strangers without expelling the invited, which is the
+semantics every sharing product has taught. Kill-a-badge (mechanism 1)
+handles the stolen-laptop case; grant revocation handles the un-invite.
+The two compose.
 
 **What this collapses downstream:**
 
@@ -323,8 +338,12 @@ compose.
   person-level key the badge never was. A badge attesting the same email
   as the badge that claimed an actor may *resume* that actor — Jordan's
   phone verifies jordan@…, and picking "Jordan" is a resume, not a
-  refusal. The `as:` impersonation lever closes at the same stroke: resume
-  requires the attestation, not just the assertion.
+  refusal. The `as:` lever stops being open assertion: resuming an actor
+  now requires a vouch — a matching attestation for a person's actor, a
+  pass (or a badge already holding the claim) for an agent's, since
+  agents have no inbox. How the home's badge-level membership check and
+  the local daemon's finer per-conversation discipline divide that
+  enforcement is mechanism 5's detail to settle.
 - **Repo membership (9)** is subject type `repo`, done.
 - **Scene 3 gains one honest beat, only when the link grant is off**: a
   stranger arriving without attestation is asked to verify their email at
