@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PresenceSession } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * `wait` advertises itself as parked. These tests are about the retraction:
@@ -23,6 +24,8 @@ let home: string;
 let daemon: Daemon;
 let base: string;
 /** The stale-daemon simulation: a proxy that can 404 the watch route. */
+/** The CLI badges itself; a test poking the daemon directly needs its own. */
+let badge: TestBadge;
 let proxy: http.Server;
 let proxyPort: number;
 let blockWatch = false;
@@ -36,6 +39,7 @@ beforeEach(async () => {
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  badge = await mintTestBadge(base);
 
   blockWatch = false;
   proxy = http.createServer((req, res) => {
@@ -49,9 +53,16 @@ beforeEach(async () => {
     req.on("end", () => {
       const body = Buffer.concat(chunks);
       const type = req.headers["content-type"];
+      const auth = req.headers.authorization;
       void fetch(`${base}${req.url}`, {
         method: req.method ?? "GET",
-        ...(type ? { headers: { "content-type": type } } : {}),
+        // A proxy forwards the credential. Without this the CLI's badge is
+        // stripped in flight and every request through here is refused —
+        // which is the proxy lying, not the door.
+        headers: {
+          ...(type ? { "content-type": type } : {}),
+          ...(auth ? { authorization: auth } : {}),
+        },
         ...(body.length > 0 ? { body } : {}),
       })
         .then(async (upstream) => {
@@ -84,14 +95,14 @@ afterEach(async () => {
 async function post(url: string, body: unknown): Promise<any> {
   const res = await fetch(`${base}${url}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify(body),
   });
   return res.json().catch(() => null);
 }
 
 function sessions(): Promise<PresenceSession[]> {
-  return fetch(`${base}/api/projects/prj_1/sessions`).then(
+  return fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<PresenceSession[]>,
   );
 }

@@ -7,6 +7,9 @@ import { registerRoutes } from "./http.ts";
 import { attachWebSockets } from "./ws.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
+import { FileDesk } from "./file-desk.ts";
+import type { Desk } from "./desk.ts";
+import { runMigrations } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 
@@ -27,6 +30,9 @@ export interface Daemon {
   app: FastifyInstance;
   engine: Engine;
   store: Store;
+  /** The home's private ledgers. Two seams, side by side: canvas state
+   * replicates through the store, the desk's ledgers never leave. */
+  desk: Desk;
   port: number;
   close: () => Promise<void>;
 }
@@ -35,12 +41,17 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
 
+  // The composition root, and the ONE place either backing is named.
   const store = new FileStore(home);
+  const desk = new FileDesk(home);
   await store.init();
-  await store.migrateLegacyAgents(); // pre-#57 session bindings, folded in once
+  await desk.init();
+  // Both one-time migrations, composed across the two ledgers: the pre-badge
+  // claims table and the pre-#57 `agents.json`, folded in once each.
+  await runMigrations(home, store, desk);
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
-  const engine = new Engine(store, { liveness: (projectId) => presence.roster(projectId) });
+  const engine = new Engine(store, desk, { liveness: (projectId) => presence.roster(projectId) });
 
   // Op piggyback: an op bound to a session (clientId === sessionId) moves
   // that session's cursor to the op's locus — presence traces real work.
@@ -63,9 +74,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
-  registerRoutes(app, engine, store, presence);
+  registerRoutes(app, engine, store, desk, presence);
   await app.listen({ port, host: "127.0.0.1" });
-  const closeWebSockets = attachWebSockets(app.server, engine, presence);
+  const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
 
   await fs.writeFile(
     daemonFile(home),
@@ -86,7 +97,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     }
   };
 
-  return { app, engine, store, port, close };
+  return { app, engine, store, desk, port, close };
 }
 
 // ---------- stale daemons ----------

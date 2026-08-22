@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import { BROWSER_MIME } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * `isocan browse` projects a live site as an ordinary item whose blob is a
@@ -22,6 +23,8 @@ let home: string;
 let daemon: Daemon;
 let base: string;
 let port: number;
+/** The CLI badges itself; a test poking the daemon directly needs its own. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-browse-"));
@@ -33,10 +36,11 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
 
   await fetch(`${base}/api/ops`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
       projectId: null,
       actor: nico,
@@ -68,7 +72,7 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
 }
 
 function snapshot(): Promise<CanvasSnapshotResponse> {
-  return fetch(`${base}/api/projects/prj_1/canvas`).then(
+  return fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<CanvasSnapshotResponse>,
   );
 }

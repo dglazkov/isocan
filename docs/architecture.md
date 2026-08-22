@@ -152,10 +152,24 @@ The desk's ledgers are ordinary collections, innkeeper-private per the
 two-ledger rule:
 
 - `badges/{badgeId}` — `{secretHash, kind, createdAt, lastSeen,
-  admissions: [{canvasId, provenance}], claims: [actorId],
+  admissions: [{canvasId, provenance, at}],
+  claims: [{actorId, boundAt, sessionKey?, projectId?}],
+  claimIds: [actorId],
   attestations: [{attribute, verifiedVia, at}]}`. The badge secret is
   256-bit random and stored **hashed** — the desk keeps no secret it
-  doesn't have to, so a leaked ledger leaks no bearer tokens.
+  doesn't have to, so a leaked ledger leaks no bearer tokens. A claim is a
+  **row, not an id**: it carries `boundAt` (the 30-minute
+  claim-stands window `reincarnate` judges an `as` against) and the
+  demoted `sessionKey` — which of this badge's claims a client means, an
+  index the home never trusts. `claimIds` is the same actor ids
+  denormalized, because "who claims this actor?" is a
+  `where("claimIds", "array-contains", …)` here and a whole-table scan
+  everywhere else. On a FileStore home the desk is
+  `~/.isocan/desk/` — `badges.json` snapshot over an append-only
+  `badges.jsonl`; the claims half is logged and fsynced (a claim carries
+  authorization, so one lost file must not cost somebody their own name),
+  while `lastSeen` and `admissions` are not, because the address admits and
+  a returning badge re-admits itself.
 - `grants/{id}` — `{canvasId, subject, grantedBy, at}`.
 - `registrations/{id}` — frozen delegation's record; the scoped launch
   token is KMS-wrapped at write and unwrapped only at fire time.

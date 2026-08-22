@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { PresenceSession, Project } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * A directory IS its project (#60).
@@ -27,6 +28,8 @@ let work: string;
 let daemon: Daemon;
 let base: string;
 let port: number;
+/** The CLI badges itself; a test poking the daemon directly needs its own. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binding-"));
@@ -39,6 +42,7 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
 });
 
 afterEach(async () => {
@@ -76,10 +80,10 @@ function cli(cwd: string, session: Record<string, string>, ...args: string[]): P
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
 
 const projects = (): Promise<Project[]> =>
-  fetch(`${base}/api/projects`).then((res) => res.json() as Promise<Project[]>);
+  fetch(`${base}/api/projects`, { headers: badge.headers }).then((res) => res.json() as Promise<Project[]>);
 
 const sessionsOf = (projectId: string): Promise<PresenceSession[]> =>
-  fetch(`${base}/api/projects/${projectId}/sessions`).then(
+  fetch(`${base}/api/projects/${projectId}/sessions`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<PresenceSession[]>,
   );
 

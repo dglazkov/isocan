@@ -1,27 +1,86 @@
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { FastifyInstance } from "fastify";
-import type { Actor, PostOpRequest, UndoRedoRequest } from "@isocan/core";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Actor, DoorRequest, DoorResponse, PostOpRequest, UndoRedoRequest } from "@isocan/core";
 import {
+  BADGE_RESTART_HINT,
   cancelledSince,
   COMMAND_NAME,
   decodeFilename,
+  DOOR_ROUTE,
   FILENAME_HEADER,
   OpValidationError,
   parseCommandFile,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import type { Store } from "./store.ts";
+import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
+import {
+  badgeCookie,
+  isSecureRequest,
+  mintBadge,
+  originAllowed,
+  presentedBadge,
+  resolveBadge,
+} from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    /** The badge this request presented, resolved once by the door hook. */
+    badge: BadgeRecord | null;
+  }
+}
+
 const STARTED_AT = new Date().toISOString();
+
+/** Routes that answer without a badge, and why each one cannot close.
+ *
+ * `/healthz` is the load balancer's probe and, internally, what `daemonPidOn`,
+ * `ensureDaemon`'s startup poll, `warnIfStale` and `stopDaemons` all call —
+ * before any badge could exist. The door obviously cannot ask for what it
+ * hands out. The static web app is the page that SETS the cookie; closing it
+ * is a bootstrap paradox. And the blob GET is the one named hole — see
+ * `blobRoute` below.
+ *
+ * Everything else under `/api/*` and the `/ws` upgrade is refused, by one
+ * hook with one allowlist, so a route added later is refused by DEFAULT
+ * rather than by somebody remembering. */
+const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
+
+function isOpen(method: string, pathname: string): boolean {
+  if (pathname === "/healthz") return true;
+  if (!pathname.startsWith("/api/")) return true; // the web app and its assets
+  if (method === "POST" && pathname === DOOR_ROUTE) return true;
+  /**
+   * The sandboxed HTML blob, deliberately. `ItemView` renders a blob in an
+   * iframe with `sandbox="allow-scripts"` and no `allow-same-origin`, which
+   * gives that document an OPAQUE ORIGIN — and a document with an opaque
+   * origin has a null site-for-cookies, so nothing it then requests (a
+   * relative `<img>`, a stylesheet, a `fetch`) carries a `SameSite` cookie at
+   * all. The security comment in `ItemView.tsx` says this out loud as a
+   * feature, and it is right; it just means an HTML blob with relative asset
+   * references breaks the moment this route wants a badge.
+   *
+   * So it stays open, in writing. It is open today, so this changes nothing,
+   * and the phase's outcome is recognition rather than policy. The honest
+   * long-term answer is that a blob hash IS a capability — 256 bits of
+   * content address, unguessable, already how the route is reasoned about —
+   * and PHASE 3, which re-asks `projectId ∈ admissions` per route, is the
+   * phase that decides whether that is capability enough or whether HTML
+   * blobs get a per-blob token in the URL.
+   */
+  if (method === "GET" && BLOB_ROUTE.test(pathname)) return true;
+  return false;
+}
 
 export function registerRoutes(
   app: FastifyInstance,
   engine: Engine,
   store: Store,
+  desk: Desk,
   presence: PresenceHub,
 ): void {
   // Raw bodies for blob uploads; JSON stays JSON.
@@ -49,13 +108,93 @@ export function registerRoutes(
     ...buildStamp(),
   }));
 
+  // ---- the door (identity desk, mechanism 1) ----
+
+  app.decorateRequest("badge", null);
+
+  /**
+   * One hook, run before every route: resolve the carrier, judge the Origin,
+   * refuse the badge-less. Policy is untouched — the address still admits,
+   * and getting a badge is free — so what this changes is RECOGNITION: from
+   * here on trust attaches to the badge and never to the address again.
+   */
+  app.addHook("onRequest", async (req, reply) => {
+    const pathname = (req.url ?? "/").split("?")[0]!;
+    const presented = presentedBadge(req.headers);
+    req.badge = await resolveBadge(desk, presented);
+
+    // The Origin check, as the belt to SameSite's braces. Cookie-carried and
+    // badge-less requests are judged; a bearer is exempt, because an
+    // attacker's page cannot read a bearer token and so has nothing to ride.
+    if (pathname.startsWith("/api/") && presented?.carrier !== "bearer") {
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      const allowed = originAllowed(
+        Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin,
+        { host: req.headers.host, secure },
+        { loopback: loopbackBound(app) },
+      );
+      if (!allowed) {
+        return reply.status(403).send({ error: "origin not allowed here", code: "bad-origin" });
+      }
+    }
+
+    if (req.badge) {
+      await desk.touch(req.badge.badgeId, new Date().toISOString());
+      return;
+    }
+    if (isOpen(req.method, pathname)) return;
+    return presented
+      ? reply
+          .status(401)
+          .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" })
+      : reply
+          .status(401)
+          .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+  });
+
+  /**
+   * Mint a badge. `carrier` is STATED, never sniffed: `Origin` presence and
+   * `Sec-Fetch-Mode` are guessable and wrong at the edges, and one field in a
+   * body is honest and costs nothing.
+   *
+   * The door mints only for the badge-less. A caller that already holds a
+   * valid badge is told its own id and handed no new secret, so a refresh
+   * storm or a retry loop cannot mint a badge per request.
+   */
+  app.post(DOOR_ROUTE, async (req, reply) => {
+    if (req.badge) return { badgeId: req.badge.badgeId } satisfies DoorResponse;
+    const carrier = ((req.body ?? {}) as DoorRequest).carrier ?? "bearer";
+    const { record, token } = mintBadge(carrier === "cookie" ? "cookie" : "bearer");
+    await desk.put(record);
+    if (carrier === "cookie") {
+      // The secret is NEVER in the body for the cookie carrier: the whole
+      // value of HttpOnly is that page JavaScript cannot read the credential,
+      // and returning it in JSON hands it straight back.
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      reply.header("Set-Cookie", badgeCookie(token, secure));
+      return { badgeId: record.badgeId } satisfies DoorResponse;
+    }
+    return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
+  });
+
+  /** Write down that this badge has been in this canvas. Unenforced in phase
+   * 2 — "the address still admits", recorded as data instead of assumed —
+   * which is what makes phase 3's `projectId ∈ admissions` cheap instead of a
+   * backfill under a live check. */
+  const admit = async (req: FastifyRequest, canvasId: string, provenance: Provenance = { root: "link" }) => {
+    if (req.badge) await desk.admit(req.badge.badgeId, canvasId, provenance);
+  };
+
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
     if (body.op?.type === "actor.claim") {
       // A claim resolves who is speaking, so it is the one op that arrives
-      // without an actor; the response envelope carries the answer.
+      // without an actor; the response envelope carries the answer. It is
+      // also "add an actor to THIS badge's claims", which is why the badge
+      // travels with it.
       const entry = await engine.claim({
         op: body.op,
+        badgeId: req.badge!.badgeId,
         ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
       });
       return { seq: entry.seq, envelope: entry.envelope };
@@ -73,14 +212,39 @@ export function registerRoutes(
       return { seq: entry.seq, envelope: entry.envelope };
     }
     const entry = await engine.submit(body as PostOpRequest & { actor: Actor });
+    if (body.op?.type === "project.create") {
+      // The bootstrap badge's first admission: it earned this one by making
+      // the canvas, which is the only provenance that is not "somebody let
+      // me in".
+      await admit(req, body.op.projectId, { root: "created" });
+    } else if (body.projectId) {
+      await admit(req, body.projectId);
+    }
     return { seq: entry.seq, envelope: entry.envelope };
   });
 
   // ---- the actor registry: who a session key speaks as (#57) ----
 
+  /** Badge-scoped: a holder sees its own claims and nobody else's. */
   app.get("/api/actors", async (req) => {
     const { keys } = req.query as { keys?: string };
-    return engine.actorBindings(keys ? keys.split(",").filter(Boolean) : null);
+    return engine.actorBindings(req.badge!.badgeId, keys ? keys.split(",").filter(Boolean) : null);
+  });
+
+  /**
+   * The recovery question, asked only about session keys the caller already
+   * holds: is this key claimed on a badge that is not mine? A client whose
+   * badge was lost or wiped is otherwise told it has no identity, while its
+   * actor sits on an orphaned badge — true, useless, and pointing at `--name`,
+   * which would mint a stranger. Answering does not adopt anything; coming
+   * back is `--as`, and it stays deliberate.
+   */
+  app.get("/api/actors/orphaned", async (req) => {
+    const { keys } = req.query as { keys?: string };
+    return engine.orphanedClaims(
+      req.badge!.badgeId,
+      keys ? keys.split(",").filter(Boolean) : [],
+    );
   });
 
   /** Chosen identity colors, for clients painting faces before a canvas is
@@ -132,7 +296,9 @@ export function registerRoutes(
 
   app.get("/api/projects/:id/canvas", async (req) => {
     const { id } = req.params as { id: string };
-    return engine.getSnapshot(id);
+    const snapshot = await engine.getSnapshot(id);
+    await admit(req, id);
+    return snapshot;
   });
 
   app.get("/api/projects/:id/oplog", async (req) => {
@@ -335,11 +501,20 @@ export function registerRoutes(
       .send(createReadStream(blob.path));
   });
 
-  registerStaticWebApp(app);
+  registerStaticWebApp(app, desk);
+}
+
+/** Is this daemon listening only to its own machine? Mechanism 5's "within a
+ * machine, localhost trust stands" needs to know, and the hosted home (bound
+ * to 0.0.0.0) must not take the clause. */
+function loopbackBound(app: FastifyInstance): boolean {
+  const address = app.server.address();
+  if (!address || typeof address === "string") return false;
+  return address.address === "127.0.0.1" || address.address === "::1";
 }
 
 /** Serve packages/web/dist (if built) so `isocan open` works without Vite. */
-function registerStaticWebApp(app: FastifyInstance): void {
+function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(here, "../../web/dist");
   if (!existsSync(path.join(dist, "index.html"))) return;
@@ -362,6 +537,19 @@ function registerStaticWebApp(app: FastifyInstance): void {
     const resolved = path.resolve(dist, url);
     if (resolved.startsWith(dist) && url && existsSync(resolved)) {
       return send(reply, resolved);
+    }
+    // The browser is badged on the PAGE LOAD, not on a round trip — the
+    // desk's Scene 3 diagram is literal about it: `GET /c/7f3a… → web app +
+    // Set-Cookie`. So the app is badged before its first fetch, and the
+    // 401-and-recover path in `api.ts` is belt-and-braces rather than the
+    // way in. The guard matters: this handler is the SPA fallback for any
+    // unmatched GET, so minting unconditionally would mint a badge per
+    // stray asset request.
+    if (!req.badge) {
+      const { record, token } = mintBadge("cookie");
+      await desk.put(record);
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      reply.header("Set-Cookie", badgeCookie(token, secure));
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback
   });

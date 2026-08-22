@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { PresenceSession, Project } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * Two parties share a machine: the person who owns it, and the agents working
@@ -23,6 +24,8 @@ let work: string;
 let daemon: Daemon;
 let base: string;
 let port: number;
+/** The CLI badges itself; a test poking the daemon directly needs its own. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-identity-"));
@@ -35,10 +38,11 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
 
   await fetch(`${base}/api/ops`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
       projectId: null,
       actor: nico,
@@ -89,13 +93,13 @@ const homeIdentity = () =>
     .then((raw) => JSON.parse(raw) as { id: string; name: string });
 
 function roster(): Promise<PresenceSession[]> {
-  return fetch(`${base}/api/projects/prj_1/sessions`).then(
+  return fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<PresenceSession[]>,
   );
 }
 
 const projects = (): Promise<Project[]> =>
-  fetch(`${base}/api/projects`).then((r) => r.json() as Promise<Project[]>);
+  fetch(`${base}/api/projects`, { headers: badge.headers }).then((r) => r.json() as Promise<Project[]>);
 
 describe("two parties, two identity slots", () => {
   it("an automated caller with no session is refused a name, not handed a slot", async () => {
@@ -156,5 +160,90 @@ describe("a rename reaches the live face", () => {
     expect(renamed.code).toBe(0);
     expect(renamed.stdout).toContain("Solo");
     expect(await roster()).toEqual([]);
+  });
+});
+
+describe("the auth block", () => {
+  /**
+   * `identity.json` holds two things that are not the same thing: the human's
+   * name, and the MACHINE's badge. Both writers read-merge, because a write
+   * that rebuilt the file from its own half would silently delete the other —
+   * and a deleted badge is a client that has to go back to the door on its
+   * next command, quietly re-badging a machine every time somebody renames
+   * themselves.
+   */
+  const read = async () =>
+    JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      id?: string;
+      name?: string;
+      auth?: Record<string, { badgeId: string; secret: string }>;
+    };
+
+  it("survives a rename, and the rename survives the badge", async () => {
+    // Any command that reaches the daemon goes through the door and keeps
+    // what it is handed. (`whoami` for a bare shell answers offline from the
+    // home file, so it never asks — which is itself the right behaviour.)
+    await isocan({}, "project", "list");
+    const before = await read();
+    const slot = `http://127.0.0.1:${port}`;
+    expect(before.auth?.[slot]?.badgeId).toMatch(/^bdg_/);
+    expect(before.name).toBe("Nico");
+
+    await isocan({}, "identity", "--name", "Nico G", "--home");
+    const after = await read();
+    expect(after.name).toBe("Nico G");
+    expect(after.id).toBe(before.id); // the id is the stable key, as ever
+    expect(after.auth?.[slot]).toEqual(before.auth?.[slot]); // the badge stayed
+
+    // And the next command presents that same badge rather than minting one.
+    await isocan({}, "whoami");
+    expect((await read()).auth?.[slot]).toEqual(before.auth?.[slot]);
+  });
+});
+
+describe("a machine that lost its badge", () => {
+  /**
+   * The claims are still on the desk; the badge holding them is not — a
+   * cleared `auth` block, a wiped home, a client that re-badged itself. The
+   * old refusal said "no identity configured", which is true of the badge and
+   * false of the home, and sent the reader to `--name`: a brand new actor, and
+   * everything they had done left behind under the old one.
+   */
+  /** An agent-only machine: nobody has named the human, so there is no home
+   * identity to fall back to — which is the arrangement the desk creates on a
+   * machine an agent set up for itself. */
+  const loseTheBadge = async () => {
+    await fs.rm(path.join(home, "identity.json")); // the name AND the badge
+    await isocan(claude("s-1"), "project", "list"); // heals itself onto a NEW badge
+  };
+
+  it("says what actually happened, and names the actor to come back as", async () => {
+    const named = await isocan(claude("s-1"), "identity", "--name", "Isaac", "--session");
+    const isaac = /\((usr_[^)]+)\)/.exec(named.stdout)![1]!;
+    await loseTheBadge();
+
+    const lost = await isocan(claude("s-1"), "whoami");
+    expect(lost.code).not.toBe(0);
+    expect(lost.stderr).toContain("no identity here");
+    expect(lost.stderr).toMatch(/badge \(bdg_/); // the badge it does hold
+    expect(lost.stderr).toContain(`Isaac (${isaac})`); // the actor it does not
+    expect(lost.stderr).toContain(`--as ${isaac}`); // typed exactly as printed
+    expect(lost.stderr).toContain("somebody new"); // and why --name is the wrong door
+
+    // And the way out works on the spot, with the same id and the same history.
+    const back = await isocan(claude("s-1"), "identity", "--session", "--as", isaac);
+    expect(back.code).toBe(0);
+    expect(back.stdout).toContain(`Isaac (${isaac})`);
+    expect((await isocan(claude("s-1"), "whoami")).stdout).toContain(`Isaac (${isaac})`);
+  });
+
+  it("still says 'no identity configured' when the home really is blank", async () => {
+    // A different situation, and it keeps its own message: nobody has ever
+    // named themselves here, so there is nothing to come back as.
+    await fs.rm(path.join(home, "identity.json"));
+    const fresh = await isocan(claude("s-nobody"), "whoami");
+    expect(fresh.code).not.toBe(0);
+    expect(fresh.stderr).toContain("no identity configured");
+    expect(fresh.stderr).not.toContain("--as");
   });
 });

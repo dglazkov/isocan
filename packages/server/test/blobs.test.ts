@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { encodeFilename } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 import * as p from "../src/paths.ts";
 
 const alice = { id: "usr_alice", name: "Alice" };
@@ -11,15 +12,17 @@ const alice = { id: "usr_alice", name: "Alice" };
 let home: string;
 let daemon: Daemon;
 let base: string;
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-blobs-"));
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  badge = await mintTestBadge(base);
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
       projectId: null,
       actor: alice,
@@ -37,7 +40,7 @@ afterEach(async () => {
 async function upload(content: string, filename: string): Promise<string> {
   const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
     method: "POST",
-    headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": filename },
+    headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": filename, ...badge.headers },
     body: content,
   });
   expect(res.status).toBe(200);
@@ -98,7 +101,7 @@ describe("filenames that are not ByteStrings", () => {
   async function uploadNamed(name: string, encoded: string): Promise<Record<string, { filename: string }>> {
     const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",
-      headers: { "Content-Type": "image/png", "X-Isocan-Filename": encoded },
+      headers: { "Content-Type": "image/png", "X-Isocan-Filename": encoded, ...badge.headers },
       body: `bytes of ${name}`,
     });
     expect(res.status).toBe(200);

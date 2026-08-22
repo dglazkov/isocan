@@ -13,7 +13,7 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
+import { DOOR_ROUTE, encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
 export const CLIENT_ID = newClientId();
@@ -29,13 +29,36 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Go to the door and be handed a cookie. The page load already badges this
+ * browser — the daemon sets the cookie on the HTML document — so this is
+ * belt-and-braces: it heals a cookie that was cleared mid-session, and the
+ * visible property is that NOTHING is visible. One 401 in the network log,
+ * one door call, the retried request at 200, and the canvas does not flinch.
+ */
+export async function knockOnDoor(): Promise<boolean> {
+  try {
+    const res = await fetch(DOOR_ROUTE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carrier: "cookie" }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    ...(body !== undefined
-      ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-      : {}),
-  });
+  const send = () =>
+    fetch(url, {
+      method,
+      ...(body !== undefined
+        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        : {}),
+    });
+  let res = await send();
+  if (res.status === 401 && (await knockOnDoor())) res = await send();
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as T;
@@ -92,14 +115,19 @@ export async function uploadBlob(
   file: File | Blob,
   filename: string,
 ): Promise<BlobUploadResponse> {
-  const res = await fetch(`/api/projects/${projectId}/blobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      [FILENAME_HEADER]: encodeFilename(filename),
-    },
-    body: file,
-  });
+  // Bypasses `request` (raw bytes), so the recovery retry is spelled out —
+  // a 401 here would read as a drop that silently failed.
+  const send = () =>
+    fetch(`/api/projects/${projectId}/blobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+        [FILENAME_HEADER]: encodeFilename(filename),
+      },
+      body: file,
+    });
+  let res = await send();
+  if (res.status === 401 && (await knockOnDoor())) res = await send();
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as BlobUploadResponse;

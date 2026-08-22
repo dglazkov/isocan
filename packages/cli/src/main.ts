@@ -94,6 +94,7 @@ import { ApiError, DaemonClient } from "./client.ts";
 import {
   readIdentity,
   claimSessionIdentity,
+  noIdentityHere,
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity,
@@ -556,7 +557,7 @@ program
         // color everyone sees, not a local preference each keeps to itself.
         if (opts.color !== undefined) {
           const resolved = await resolveIdentity(client, home);
-          if (!resolved) throw new Error("no identity configured — use --name first");
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
           const color = parseIdentityColor(opts.color);
           await client.sendOp(null, resolved.actor, {
             type: "actor.setColor",
@@ -617,7 +618,7 @@ program
           }
         } else {
           const resolved = await resolveIdentity(client, home);
-          if (!resolved) throw new Error("no identity configured — use --name");
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
           printKeyValues({
             id: resolved.actor.id,
             name: resolved.actor.name,
@@ -641,9 +642,15 @@ program
       const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
       await retireStrandedIdentities(process.cwd(), home);
       const resolved = await resolveIdentity(client, home);
-      if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
+      if (!resolved) throw new Error(await noIdentityHere(client, home));
       const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
+      // The badge, never its secret. Nothing is DONE to a badge in this phase
+      // — getting one is automatic and invisible, which is the point of it —
+      // but when a 401 shows up, "am I recognized here, and as which holder?"
+      // is the one question a person or an agent genuinely needs answered.
+      const badgeId = await client.badgeId();
+      if (badgeId) console.log(`badge ${badgeId} at ${client.base}`);
     }),
   );
 

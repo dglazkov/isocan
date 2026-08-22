@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DOOR_ROUTE, formatBadgeToken } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import {
   adoptIdentity,
@@ -37,6 +38,12 @@ function stubStorage(): void {
 let home: string;
 let daemon: Daemon;
 let base: string;
+/** The cookie carrier needs a cookie jar, and node's `fetch` has none — so
+ * this browser presents its badge as a bearer instead. Both carriers are
+ * accepted from anyone, so it is a different envelope around the same badge,
+ * not a fiction: what a real Chrome does with the cookie is the phase's
+ * browser proof, and it says so. */
+let auth: Record<string, string>;
 const realFetch = globalThis.fetch;
 
 beforeEach(async () => {
@@ -45,11 +52,18 @@ beforeEach(async () => {
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  const door = await realFetch(`${base}${DOOR_ROUTE}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ carrier: "bearer" }),
+  });
+  const { badgeId, secret } = (await door.json()) as { badgeId: string; secret: string };
+  auth = { Authorization: `Bearer ${formatBadgeToken(badgeId, secret)}` };
   // The app fetches same-origin ("/api/…"); in node the daemon is the origin.
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
     realFetch(
       typeof input === "string" && input.startsWith("/") ? `${base}${input}` : input,
-      init,
+      { ...init, headers: { ...(init?.headers as Record<string, string>), ...auth } },
     )) as typeof fetch;
 });
 
@@ -59,9 +73,10 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true });
 });
 
-/** The daemon's registry, as the API serves it. */
+/** This browser's claims, as the API serves them — badge-scoped, so the
+ * badge has to be the same one the app is presenting. */
 const bindings = (): Promise<{ key: string; actor: { id: string; name: string } }[]> =>
-  realFetch(`${base}/api/actors`).then((r) => r.json() as Promise<any>);
+  realFetch(`${base}/api/actors`, { headers: auth }).then((r) => r.json() as Promise<any>);
 
 describe("web identity", () => {
   it("mints an id on first entry, remembers it, and the daemon holds the claim", async () => {
@@ -117,7 +132,7 @@ describe("web identity", () => {
     // one wearing his name.
     await realFetch(`${base}/api/ops`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({
         projectId: null,
         actor: { id: "usr_cli_kenny", name: "Kenny" },

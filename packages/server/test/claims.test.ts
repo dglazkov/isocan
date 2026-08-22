@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ActorClaimOp } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 import * as p from "../src/paths.ts";
 
 /**
@@ -16,6 +17,10 @@ let home: string;
 let daemon: Daemon;
 let base: string;
 let port: number;
+/** One badge for the whole file: a machine has one, and its claims are the
+ * agents on it. Two agents on one machine are two claims under one badge,
+ * which is exactly the shape the re-key is for. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-claims-"));
@@ -23,6 +28,7 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
 });
 
 afterEach(async () => {
@@ -35,7 +41,7 @@ async function claim(
 ): Promise<{ status: number; actor?: { id: string; name: string }; error?: string; code?: string }> {
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({ projectId: null, op: { type: "actor.claim", ...op } }),
   });
   const json = (await res.json().catch(() => null)) as any;
@@ -97,20 +103,27 @@ describe("a key is an agent", () => {
 describe("reincarnation is deliberate", () => {
   it("`as` binds a new key to an old actor and unseats the dead session", async () => {
     const first = await claim({ sessionKey: "claude-code:s-1", name: "Kenny" });
-    // Age the binding out of the claim-stands window by editing the snapshot
-    // under a stopped daemon — which also proves the registry survives one.
+    // Age the binding out of the claim-stands window by editing the DESK's
+    // snapshot under a stopped daemon — which also proves the claims table
+    // survives one. The claim moved out of `actors.json` and onto the badge;
+    // what is asserted below did not move.
     await daemon.close();
-    const file = p.actorsFile(home);
-    const reg = JSON.parse(await fs.readFile(file, "utf8"));
-    reg.claims["claude-code:s-1"].boundAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    await fs.writeFile(file, JSON.stringify(reg));
+    const file = p.badgesFile(home);
+    const desk = JSON.parse(await fs.readFile(file, "utf8"));
+    const rows = desk.badges[badge.badgeId].claims as { sessionKey: string; boundAt: string }[];
+    rows.find((row) => row.sessionKey === "claude-code:s-1")!.boundAt = new Date(
+      Date.now() - 60 * 60 * 1000,
+    ).toISOString();
+    await fs.writeFile(file, JSON.stringify(desk));
     daemon = await startDaemon({ port, home });
 
     const back = await claim({ sessionKey: "claude-code:s-9", as: first.actor!.id });
     expect(back.status).toBe(200);
     expect(back.actor).toEqual(first.actor);
 
-    const bindings = (await (await fetch(`${base}/api/actors`)).json()) as { key: string }[];
+    const bindings = (await (
+      await fetch(`${base}/api/actors`, { headers: badge.headers })
+    ).json()) as { key: string }[];
     expect(bindings.map((b) => b.key)).toEqual(["claude-code:s-9"]);
   });
 
@@ -148,7 +161,7 @@ describe("the registry is logged and recoverable", () => {
     // is the one way in, and /api/ops routes there by op type.
     const res = await fetch(`${base}/api/ops`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
         projectId: null,
         actor: { id: "usr_x", name: "X" },
@@ -159,7 +172,7 @@ describe("the registry is logged and recoverable", () => {
 
     const noActor = await fetch(`${base}/api/ops`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({ projectId: "prj_1", op: { type: "trash.empty" } }),
     });
     expect(noActor.status).toBe(400); // everything but a claim still needs an actor

@@ -32,6 +32,7 @@ import {
   resolvePlacement,
 } from "@isocan/core";
 import type { Store } from "./store.ts";
+import type { Desk } from "./desk.ts";
 import { UndoStacks } from "./undo.ts";
 import {
   DEFAULT_GRACE_MS,
@@ -84,6 +85,9 @@ export interface SubmitRequest {
 export interface ClaimRequest {
   op: ActorClaimOp;
   clientId?: string;
+  /** The badge presenting the claim. `actor.claim` is "add an actor to THIS
+   * badge's claims", so the transport has to say which badge. */
+  badgeId: string;
 }
 
 type EventListener = (projectId: string, message: ServerMessage) => void;
@@ -105,6 +109,9 @@ export class Engine {
 
   constructor(
     private readonly store: Store,
+    /** The desk. The engine writes the claims half through it and never
+     * touches the transport's half (badges, secrets, admissions). */
+    private readonly desk: Desk,
     private readonly options: EngineOptions = {},
   ) {}
 
@@ -235,18 +242,77 @@ export class Engine {
     return this.enqueue(() => this.applyClaimAndPersist(request));
   }
 
-  /** Who the given session keys (or everyone, when omitted) speak as. */
-  async actorBindings(keys?: string[] | null): Promise<ActorBindingRecord[]> {
+  /**
+   * Who the given session keys (or all of them, when omitted) speak as —
+   * SCOPED TO ONE BADGE. A badge sees its own claims and nobody else's, which
+   * is the re-key showing up on the wire: `sessionKey` is a client's index
+   * into its own list, so an answer that crossed badges would be answering a
+   * question nobody asked.
+   *
+   * Naming a key is also how a legacy claim is COLLECTED. A resuming client
+   * asks "who is claude-code:s-1?" before it claims anything — `whoami` never
+   * writes — so if adoption only happened inside `applyClaim`, every upgraded
+   * agent's first command would resolve to the human instead of itself. A
+   * named key is a presentation of that key, which is exactly what the shelf
+   * waits for; adoption is still one-time and first-come.
+   */
+  async actorBindings(badgeId: string, keys?: string[] | null): Promise<ActorBindingRecord[]> {
     const { registry } = await this.actors();
+    if (keys) {
+      const held = new Set(
+        ((await this.desk.badge(badgeId))?.claims ?? []).map((row) => row.sessionKey),
+      );
+      for (const key of keys) {
+        if (!held.has(key)) await this.desk.adopt(key, badgeId);
+      }
+    }
     const wanted = keys ? new Set(keys) : null;
-    return Object.entries(registry.claims)
-      .filter(([key]) => !wanted || wanted.has(key))
-      .map(([key, { boundAt, projectId, ...actor }]) => ({
-        key,
-        actor,
-        boundAt,
-        ...(projectId !== undefined ? { projectId } : {}),
-      }));
+    const claims = (await this.desk.badge(badgeId))?.claims ?? [];
+    const records: ActorBindingRecord[] = [];
+    for (const row of claims) {
+      if (row.sessionKey === undefined) continue;
+      if (wanted && !wanted.has(row.sessionKey)) continue;
+      records.push({
+        key: row.sessionKey,
+        actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
+        boundAt: row.boundAt,
+        ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+      });
+    }
+    return records;
+  }
+
+  /**
+   * Claims on this home that match the given session keys but are held by a
+   * DIFFERENT badge — the answer to "I have no identity here; is there an
+   * actor I should be resuming?".
+   *
+   * Deliberately key-scoped rather than a listing of the home. A client asking
+   * about `claude-code:s-1` is asking about a conversation it is already
+   * inside; a client that could ask "who is on this home?" would be handed a
+   * roster of actors to impersonate, and the answer would encourage exactly
+   * the mistake `--as` exists to prevent. Nothing here is adopted: the claim
+   * stays where it is, and coming back is a deliberate act.
+   */
+  async orphanedClaims(badgeId: string, keys: string[]): Promise<ActorBindingRecord[]> {
+    if (keys.length === 0) return [];
+    const wanted = new Set(keys);
+    const { registry } = await this.actors();
+    const table = await this.desk.claims();
+    const records: ActorBindingRecord[] = [];
+    for (const [holder, rows] of Object.entries(table)) {
+      if (holder === badgeId) continue;
+      for (const row of rows) {
+        if (row.sessionKey === undefined || !wanted.has(row.sessionKey)) continue;
+        records.push({
+          key: row.sessionKey,
+          actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
+          boundAt: row.boundAt,
+          ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+        });
+      }
+    }
+    return records.sort((a, b) => b.boundAt.localeCompare(a.boundAt));
   }
 
   /**
@@ -394,8 +460,14 @@ export class Engine {
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
     const runtime = await this.actors();
     const ts = new Date().toISOString();
-    const { registry, actor } = applyClaim(
-      { registry: runtime.registry, held: await this.heldNames(), now: ts },
+    const { registry, actor, claims, adopted } = applyClaim(
+      {
+        registry: runtime.registry,
+        claims: await this.desk.claims(),
+        badgeId: request.badgeId,
+        held: await this.heldNames(),
+        now: ts,
+      },
       request.op,
     );
     const envelope: OpEnvelope = {
@@ -412,6 +484,11 @@ export class Engine {
     runtime.registry = registry;
     runtime.lastSeq = seq;
     await this.store.saveActors(registry, seq);
+    // Two ledgers, two writes. The public half is a logged, replayable op;
+    // the private half is written straight to the desk, because the oplog
+    // must not learn that badges exist (mechanism 5).
+    if (adopted !== undefined) await this.desk.adopt(adopted, request.badgeId);
+    await this.desk.setClaims(request.badgeId, claims);
     // A claim can be a RENAME, and a rename has to reach the comments the
     // renamed actor wrote before it. Same channel a color change takes.
     for (const listener of this.colorListeners) listener(registry.colors);

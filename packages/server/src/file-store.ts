@@ -1,14 +1,13 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState, SlashCommand } from "@isocan/core";
+import type { ActorRegistry, LogEntry, Project, ProjectState, SlashCommand } from "@isocan/core";
 import {
   applyActorColor,
   applyOperation,
-  bindClaim,
+  bindName,
   COMMAND_NAME,
   emptyCanvas,
-  newOpId,
   parseCommandFile,
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
@@ -189,20 +188,27 @@ export class FileStore implements Store {
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
     const snapshot = await readJson<{
       lastSeq: number;
-      claims: ActorRegistry["claims"];
+      names?: ActorRegistry["names"];
       colors?: ActorRegistry["colors"];
     }>(p.actorsFile(this.home));
     // `colors` is absent in files written before identity colors existed —
-    // an old home simply has nobody who has chosen one yet.
-    let registry: ActorRegistry = { claims: snapshot?.claims ?? {}, colors: snapshot?.colors ?? {} };
-    let lastSeq = snapshot?.lastSeq ?? 0;
+    // an old home simply has nobody who has chosen one yet. `names` is absent
+    // in files written before the badge; `migrations.ts` rewrites those at
+    // startup, and a file that somehow reached here unmigrated rebuilds its
+    // names from the log below rather than refusing to boot.
+    let registry: ActorRegistry = { names: snapshot?.names ?? {}, colors: snapshot?.colors ?? {} };
+    let lastSeq = snapshot?.names === undefined ? 0 : (snapshot?.lastSeq ?? 0);
     const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
     let recovered = false;
     for (const entry of entries) {
       if (entry.seq <= lastSeq) continue;
       const op = entry.envelope.op;
       if (op.type === "actor.claim") {
-        registry = bindClaim(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, op });
+        // Only the PUBLIC half replays. The claims table keys on badge ids
+        // and badge ids stay out of the oplog (mechanism 5), so it is not
+        // reconstructible from here at all — it is desk state, written
+        // directly, and `file-desk.ts` has its own log for it.
+        registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts });
       } else if (op.type === "actor.setColor") {
         registry = applyActorColor(registry, op);
       } else {
@@ -218,70 +224,12 @@ export class FileStore implements Store {
   async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
     await writeFileAtomic(
       p.actorsFile(this.home),
-      pretty({ lastSeq, claims: registry.claims, colors: registry.colors }),
+      pretty({ lastSeq, names: registry.names, colors: registry.colors }),
     );
   }
 
   async appendActorsLog(entry: LogEntry): Promise<void> {
     await appendLineDurable(p.actorsLogFile(this.home), JSON.stringify(entry));
-  }
-
-  /**
-   * Fold the CLI-era session registry (`agents.json`, pre-#57) into the
-   * actor registry, then move the file aside so this runs once (#59). Actor
-   * ids must survive — they are what the canvases remember — so each binding
-   * becomes a logged reincarnation claim (`as` + name), stamped with its
-   * original boundAt: recency semantics carry over, and a lost snapshot
-   * recovers the imported rows from the jsonl like any other claim. Runs at
-   * daemon startup, before the engine reads the registry.
-   */
-  async migrateLegacyAgents(): Promise<void> {
-    interface LegacyBinding {
-      id?: string;
-      name?: string;
-      boundAt?: string;
-    }
-    const file = p.agentsFile(this.home);
-    let legacy: { sessions?: Record<string, LegacyBinding> };
-    try {
-      legacy = JSON.parse(await fs.readFile(file, "utf8")) as typeof legacy;
-    } catch {
-      return; // no file, or unreadable — nothing to fold in
-    }
-    const { registry, lastSeq } = await this.loadActors();
-    let current = registry;
-    let seq = lastSeq;
-    // Oldest first, so when several keys held one actor (nested sessions),
-    // the newest binding is the one that survives bindClaim's eviction.
-    const sessions = Object.entries(legacy?.sessions ?? {}).sort(([, a], [, b]) =>
-      (a?.boundAt ?? "").localeCompare(b?.boundAt ?? ""),
-    );
-    for (const [key, binding] of sessions) {
-      if (!binding?.id || !binding.name) continue;
-      // The new registry wins: a key or actor already claimed post-#57 is
-      // living its own life, and the legacy row is history.
-      if (current.claims[key]) continue;
-      if (Object.values(current.claims).some((claim) => claim.id === binding.id)) continue;
-      const ts = binding.boundAt ?? new Date().toISOString();
-      const op = {
-        type: "actor.claim",
-        sessionKey: key,
-        name: binding.name,
-        as: binding.id,
-      } as const;
-      const envelope: OpEnvelope = {
-        id: newOpId(),
-        projectId: null,
-        actor: { id: binding.id, name: binding.name },
-        ts,
-        op,
-      };
-      seq += 1;
-      await this.appendActorsLog({ seq, envelope, inverse: null });
-      current = bindClaim(current, { actor: envelope.actor, ts, op });
-    }
-    if (seq !== lastSeq) await this.saveActors(current, seq);
-    await fs.rename(file, `${file}.migrated`).catch(() => {});
   }
 
   // ---- blobs ----

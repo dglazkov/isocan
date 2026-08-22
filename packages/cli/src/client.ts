@@ -23,7 +23,8 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER } from "@isocan/core";
+import type { DoorResponse } from "@isocan/core";
+import { BADGE_SCHEME, DOOR_ROUTE, encodeFilename, FILENAME_HEADER, formatBadgeToken } from "@isocan/core";
 import type { BuildStamp } from "@isocan/server";
 import { paths } from "@isocan/server";
 
@@ -45,24 +46,90 @@ export class ApiError extends Error {
   }
 }
 
+/** One badge, as `identity.json`'s `auth` block holds it. Keyed by home
+ * address, so phase 6's second badge — a local daemon's badge TO the home —
+ * has a slot waiting instead of needing a second file. */
+interface StoredBadge {
+  badgeId: string;
+  secret: string;
+  at: string;
+}
+
 export class DaemonClient {
+  /** Loaded once per process, from `identity.json`'s `auth` block. */
+  private badge: StoredBadge | null | undefined;
+
   constructor(
     readonly base: string,
     readonly home: string,
   ) {}
 
+  /**
+   * Every request carries the badge, and a refused one goes to the door and
+   * comes straight back. This is what makes the door NOT a breaking change:
+   * a CLI that has never seen a badge, or whose home was wiped, heals itself
+   * in one extra round trip with nobody told anything.
+   */
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${this.base}${url}`, {
-      method,
-      ...(body !== undefined
-        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-        : {}),
-    });
+    const send = async () => {
+      const headers: Record<string, string> = { ...(await this.authHeader()) };
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      return fetch(`${this.base}${url}`, {
+        method,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    };
+    let res = await send();
+    if (res.status === 401 && (await this.reBadge())) res = await send();
     const json = (await res.json().catch(() => null)) as any;
     if (!res.ok) {
       throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     }
     return json as T;
+  }
+
+  /** `Authorization: Bearer <badgeId>.<secret>`, when we hold one. */
+  private async authHeader(): Promise<Record<string, string>> {
+    const badge = await this.storedBadge();
+    if (!badge) return {};
+    return { Authorization: `${BADGE_SCHEME} ${formatBadgeToken(badge.badgeId, badge.secret)}` };
+  }
+
+  private async storedBadge(): Promise<StoredBadge | null> {
+    if (this.badge === undefined) this.badge = await readBadge(this.home, this.base);
+    return this.badge;
+  }
+
+  /** Go to the door and keep what it hands over. Returns false if the door
+   * itself refused, so a caller does not loop. */
+  private async reBadge(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.base}${DOOR_ROUTE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carrier: "bearer" }),
+      });
+      if (!res.ok) return false;
+      const door = (await res.json()) as DoorResponse;
+      if (!door.secret) return false;
+      const badge: StoredBadge = {
+        badgeId: door.badgeId,
+        secret: door.secret,
+        at: new Date().toISOString(),
+      };
+      this.badge = badge;
+      await writeBadge(this.home, this.base, badge);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The badge this client is presenting, for `whoami` to print. Never the
+   * secret. */
+  async badgeId(): Promise<string | null> {
+    return (await this.storedBadge())?.badgeId ?? null;
   }
 
   async health(timeoutMs = 300): Promise<boolean> {
@@ -110,6 +177,14 @@ export class DaemonClient {
   actorBindings(keys?: string[]): Promise<ActorBindingRecord[]> {
     const query = keys?.length ? `?keys=${keys.map(encodeURIComponent).join(",")}` : "";
     return this.request("GET", `/api/actors${query}`);
+  }
+
+  /** Claims for these session keys held by a badge that is not this one —
+   * what a client whose badge was lost needs in order to be told the truth
+   * about why it has no identity. Never adopts; only reports. */
+  orphanedActors(keys: string[]): Promise<ActorBindingRecord[]> {
+    const query = keys.length ? `?keys=${keys.map(encodeURIComponent).join(",")}` : "";
+    return this.request("GET", `/api/actors/orphaned${query}`);
   }
 
   sendOp(
@@ -218,19 +293,70 @@ export class DaemonClient {
     mimeType: string,
     filename: string,
   ): Promise<BlobUploadResponse> {
-    const res = await fetch(`${this.base}/api/projects/${projectId}/blobs`, {
-      method: "POST",
-      headers: { "Content-Type": mimeType, [FILENAME_HEADER]: encodeFilename(filename) },
-      body: new Uint8Array(data),
-    });
+    // Blobs bypass `request` (raw bytes, no JSON), so they need the badge and
+    // the recovery retry spelled out — easy to miss, and a 401 on an upload
+    // would read as a broken drop.
+    const send = async () =>
+      fetch(`${this.base}/api/projects/${projectId}/blobs`, {
+        method: "POST",
+        headers: {
+          ...(await this.authHeader()),
+          "Content-Type": mimeType,
+          [FILENAME_HEADER]: encodeFilename(filename),
+        },
+        body: new Uint8Array(data),
+      });
+    let res = await send();
+    if (res.status === 401 && (await this.reBadge())) res = await send();
     const json = (await res.json().catch(() => null)) as any;
     if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     return json as BlobUploadResponse;
   }
 
   async downloadBlob(projectId: string, blobHash: string): Promise<Buffer> {
-    const res = await fetch(`${this.base}/api/projects/${projectId}/blobs/${blobHash}`);
+    const send = async () =>
+      fetch(`${this.base}/api/projects/${projectId}/blobs/${blobHash}`, {
+        headers: await this.authHeader(),
+      });
+    let res = await send();
+    if (res.status === 401 && (await this.reBadge())) res = await send();
     if (!res.ok) throw new ApiError(res.status, `blob not found: ${blobHash}`);
     return Buffer.from(await res.arrayBuffer());
   }
+}
+
+/**
+ * The `auth` block `identity.json` has stubbed since the beginning, filled
+ * in. It sits beside the human's name because a machine's credential belongs
+ * beside the machine's person — one badge per client home directory, holding
+ * the human's claim and each of its agents'.
+ */
+async function readBadge(home: string, base: string): Promise<StoredBadge | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(paths.identityFile(home), "utf8")) as {
+      auth?: Record<string, StoredBadge>;
+    };
+    const badge = raw.auth?.[base];
+    return badge?.badgeId && badge.secret ? badge : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read-merge, never clobber: `identity.json` also holds the human's name,
+ * and a badge write that rewrote the file from scratch would delete it (and
+ * the mirror bug — `isocan identity --name` deleting the badge — is why
+ * `writeIdentity` merges too). */
+async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
+  await fs.mkdir(home, { recursive: true });
+  let current: Record<string, unknown> = {};
+  try {
+    current = JSON.parse(await fs.readFile(paths.identityFile(home), "utf8")) as Record<string, unknown>;
+  } catch {
+    // No identity yet: an agent-only machine gets a file holding just its
+    // badge. `readIdentity` returns null without id/name, so nothing
+    // mis-resolves.
+  }
+  const auth = { ...((current.auth as Record<string, StoredBadge>) ?? {}), [base]: badge };
+  await fs.writeFile(paths.identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
 }

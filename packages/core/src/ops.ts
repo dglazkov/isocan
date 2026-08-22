@@ -54,8 +54,23 @@ export type Operation =
        * actor, which is how the caller learns who it is.
        */
       type: "actor.claim";
-      /** `<harness>:<session id>` — the one key one agent holds, durable
-       * across resume because harnesses name conversations, not processes. */
+      /**
+       * `<harness>:<session id>` — which of the PRESENTING BADGE's claims
+       * this is. Durable across resume because harnesses name conversations,
+       * not processes, so an agent that comes back presents the same key and
+       * is handed the same actor.
+       *
+       * DEMOTED, and the demotion is the vocabulary change the badge makes:
+       * this used to be the key of the whole claims table, and the home
+       * believed it from anyone. Claims key on badge ids now, and this is a
+       * discriminator INSIDE one badge's list — never trusted, only indexed.
+       * A browser wears several personas under one cookie and a machine's
+       * badge vouches for its human and each of its agents; both need to say
+       * which claim they mean, and neither is asserting a credential by
+       * doing so. The op itself is unchanged: naming yourself is the same
+       * user-visible act, so it is the same one op and the same (absent)
+       * undo.
+       */
       sessionKey: string;
       /** The name asked for. Omitted: the daemon allocates the next free
        * isocan name — ask, receive. */

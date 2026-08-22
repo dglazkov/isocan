@@ -56,17 +56,18 @@ export interface Store {
    * whether one was actually there. */
   deleteCommand(name: string): Promise<boolean>;
 
-  // ---- the actor registry (home-scoped; see core/claims.ts) ----
+  // ---- the actor registry's PUBLIC face (home-scoped; see core/claims.ts) ----
+  //
+  // Ids, names, colors — canvas state, replicated. The claims half lives
+  // behind the desk (`desk.ts`) and never travels: two ledgers, two seams,
+  // and which module a type is imported from is the answer to "does this
+  // replicate?".
 
   loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }>;
 
   saveActors(registry: ActorRegistry, lastSeq: number): Promise<void>;
 
   appendActorsLog(entry: LogEntry): Promise<void>;
-
-  /** One-time fold-in of the CLI-era `agents.json` (#59). File-shaped: only a
-   * disk backing has ever had such a file. */
-  migrateLegacyAgents(): Promise<void>;
 
   // ---- blobs ----
 

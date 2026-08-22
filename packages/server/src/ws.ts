@@ -1,7 +1,10 @@
-import type { Server } from "node:http";
+import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "@isocan/core";
+import { WS_BAD_ORIGIN, WS_NO_BADGE } from "@isocan/core";
 import { Engine, ProjectNotFoundError } from "./engine.ts";
+import type { Desk } from "./desk.ts";
+import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
 
 /**
@@ -15,6 +18,7 @@ import { PresenceHub } from "./presence.ts";
 export function attachWebSockets(
   server: Server,
   engine: Engine,
+  desk: Desk,
   presence: PresenceHub,
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
@@ -70,13 +74,63 @@ export function attachWebSockets(
   });
   presence.onChange((projectId) => scheduleRoster(projectId));
 
+  /**
+   * The upgrade carries the badge like every other request. A browser CANNOT
+   * set headers on a WebSocket handshake at all, so the cookie is its only
+   * carrier here — which is the other reason that cookie is `Path=/`. CLIs and
+   * daemons set `Authorization`.
+   *
+   * The Origin check matters more here than anywhere: browsers do not enforce
+   * CORS on WebSockets, so this is the one case the same-origin machinery does
+   * not cover on its own.
+   *
+   * Refusal upgrades first and then closes with a code, rather than writing a
+   * raw `HTTP/1.1 401`: it matches this file's existing 4400/4404/4500
+   * convention, and the web client's reconnect loop can read it and go to the
+   * door.
+   */
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") return; // let other handlers (e.g. Vite HMR proxy) pass
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      void handleConnection(ws, url.searchParams.get("projectId"));
-    });
+    void (async () => {
+      const refusal = await refuse(request);
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        if (refusal !== null) {
+          ws.on("error", () => {});
+          ws.close(refusal.code, refusal.reason);
+          return;
+        }
+        void handleConnection(ws, url.searchParams.get("projectId"));
+      });
+    })();
   });
+
+  async function refuse(
+    request: IncomingMessage,
+  ): Promise<{ code: number; reason: string } | null> {
+    const presented = presentedBadge(request.headers);
+    if (presented?.carrier !== "bearer") {
+      const secure = isSecureRequest(
+        request.headers,
+        Boolean((request.socket as { encrypted?: boolean }).encrypted),
+      );
+      const address = server.address();
+      const loopback =
+        !!address &&
+        typeof address !== "string" &&
+        (address.address === "127.0.0.1" || address.address === "::1");
+      const origin = Array.isArray(request.headers.origin)
+        ? request.headers.origin[0]
+        : request.headers.origin;
+      if (!originAllowed(origin, { host: request.headers.host, secure }, { loopback })) {
+        return { code: WS_BAD_ORIGIN, reason: "origin" };
+      }
+    }
+    const badge = await resolveBadge(desk, presented);
+    if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
+    await desk.touch(badge.badgeId, new Date().toISOString());
+    return null;
+  }
 
   async function handleConnection(ws: WebSocket, projectId: string | null): Promise<void> {
     // Without a listener, an abrupt client death (ECONNRESET) raises an

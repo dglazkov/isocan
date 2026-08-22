@@ -34,8 +34,9 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 1 is closed — Phase 2, the badge, is next.** This
-line moves as phases close; a clean session starts by believing it.
+**Where we are: Phase 2 is closed — Phase 3, actor binding and registry
+scope, is next.** This line moves as phases close; a clean session starts
+by believing it.
 
 ---
 
@@ -87,6 +88,13 @@ untouched, which is the entire point of the phase.
   lives in the engine, and Phase 4 must move that loop behind the seam
   before the schema means anything. [architecture.md](architecture.md)
   now says so where the blob row is.
+- **2026-08-22 (phase 2) — one of the three debts is already paid.**
+  `migrateLegacyAgents()` has left the `Store` interface. It produced
+  *claims*, and phase 2 made claims desk state, so it walked out on its
+  own rather than being cleaned up: both one-time migrations now live in
+  `migrations.ts` and write two ledgers. Two file-shaped methods remain
+  on the seam — `getBlob`'s path return and the whole-index blob
+  handoff — and the second is still Phase 4's real work.
 
 ## Phase 2 — The badge
 
@@ -104,7 +112,78 @@ unchanged — the address still admits.
 Chrome confirms the web app lives through the cookie flow; the CLI
 lives through the bearer flow.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-22 — The trap: once claims key on badges, the claims table
+  is no longer reconstructible from the oplog.** Badge ids stay out of
+  envelopes (mechanism 5 says so), and `loadActors` rebuilt the claims
+  table by replaying `actors.jsonl` — so a re-key that left `claims`
+  inside `ActorRegistry` would have broken crash recovery *silently*.
+  The fix is not a fix: it is the two-ledger rule asserting itself. The
+  registry split in half — the public face (ids, names, colors) stays
+  in the `Store`, replicates, and replays; the claims table is desk
+  state, written directly, never replayed. The architecture had already
+  drawn this line in its storage table; the phase discovered it is not
+  a preference but a constraint.
+- **2026-08-22 — A name was silently lost every thirty days, and
+  nobody knew.** `prune()` dropped an aged claim, `actorNames()`
+  derived names *from* claims, so an actor whose only claim aged out
+  reverted to whatever name was stamped on each op — "Dion 2" still
+  talking in a thread after Dion 2 became Di, the exact failure the
+  registry exists to prevent. The split fixes it as a side effect,
+  which is precisely how a fix ships untested: the first attempt was a
+  tautology that never removed a claim. The real proof runs end to end
+  through a daemon — rename an actor so the stamped and registry names
+  genuinely differ, delete the claim row, reboot, and the canvas still
+  shows the stale name while the registry answers with the true one.
+- **2026-08-22 — `prune()` is retired, and it is this phase's one
+  exception to "Policy unchanged."** A claim row now carries
+  authorization, and silently expiring authorization at thirty days
+  would quietly unvoice a daemon that "reconnects for months". The
+  price, stated rather than smuggled: names stop being freed after
+  thirty days. It is smaller than it sounds — `heldNames()` already
+  made any name ever used on a canvas permanently taken, so pruning
+  only ever freed names for actors that claimed and never touched
+  anything — but the Outcome line says policy is unchanged, and here
+  it changed.
+- **2026-08-22 — The blob route cannot carry a badge, so it stays
+  open, and there is now a test that says so on purpose.** A sandboxed
+  HTML blob is served with `sandbox allow-scripts` and no
+  `allow-same-origin`, which gives it an *opaque origin* and a null
+  site-for-cookies: its subresource requests carry no `SameSite`
+  cookie at all. The route is open today, so nothing regressed — but
+  the hole is now asserted rather than assumed, and Phase 3, which
+  re-asks `projectId ∈ admissions` per route, is where it gets decided
+  whether a 256-bit content address is capability enough.
+- **2026-08-22 — Dev had lost its WebSocket the moment the cookie
+  arrived.** `wsUrl()` hardcoded `127.0.0.1` while Vite serves the page
+  from `localhost`, and cookies are scoped by *host*, ignoring port —
+  so the handshake would have arrived badge-less. Two words fixed it
+  (`location.hostname`). Recorded because no test exercises a dev-mode
+  socket: it is reasoned, driven by hand, and still the least-covered
+  line in the phase.
+- **2026-08-22 — Losing a badge strands your claim, and the CLI used
+  to lie about it.** A re-badged machine holds no claims, so identity
+  resolution came up empty and said "no identity configured — run
+  `isocan identity --name`" — which would mint a stranger and leave
+  your history behind, the exact mistake `--as` exists to prevent. The
+  claim is recoverable *immediately* (`reincarnate` excludes the
+  caller's own `sessionKey`, so a same-key claim on a dead badge never
+  trips the thirty-minute window); nothing was telling anyone. The
+  refusal now names the badge, the actor, and the `--as` that works.
+  One narrowing worth keeping: the route answering this is
+  **key-scoped** — it reports only about session keys the caller
+  already presents. A home-wide answer would say "there is an Isaac
+  here, come back as him" to a conversation that is not Isaac, which is
+  an impersonation aid and a roster leak in the same breath.
+- **2026-08-22 — Badges are keyed by home *address*, not by home.** A
+  scratch daemon left running on `127.0.0.1:4441` was talked to by a
+  CLI whose `ISOCAN_HOME` pointed somewhere else entirely — the auth
+  block matched on the address, so the badge crossed. Pre-existing
+  (one default port has always been a footgun) and harmless on a real
+  machine that runs one daemon, but Phase 6 gives every local daemon a
+  *second* badge for the remote home, and address-keying is the slot
+  it will be stored in. Worth knowing before that phase, not during.
 
 ## Phase 3 — Actor binding and registry scope
 
@@ -116,7 +195,22 @@ refusal. And mechanism 10, which the same registry work has open on
 the table: name uniqueness judged against the claiming badge's
 admissions (`heldNames()` stops walking the home) and the color
 broadcast narrowed to the rooms where that actor appears — both leaks
-that turn real the day phase 5 makes the home multi-tenant.
+that turn real the day phase 5 makes the home multi-tenant. **The
+landmine to defuse first, found in phase 2:** the human's actor in
+`~/.isocan/identity.json` is *asserted* in the request body and never
+claimed by anything, so the moment the membership check goes live it is
+refused with `not-your-actor` — for every solo human on every machine,
+at once. This phase must either claim the home identity onto the
+machine's badge on first use, or grandfather it. Phase 2 deliberately
+did not pre-solve it, because that would have been policy; it is written
+down here so this phase does not discover it. **A second one, found
+while driving phase 2's proofs:** the recovery path re-badges but does
+not re-claim. Delete a browser's badge, act on the canvas, and the door
+mints a fresh badge whose `claims` list is empty — while the client
+happily goes on asserting the actor it held all along. Harmless under
+phase 2, where nothing enforces; the day the membership check lands,
+the first op after *any* badge recovery is refused. Both clients'
+401-to-door paths need to re-claim before they replay.
 
 **Outcome:** "Only the author" and actor-scoped undo become
 enforcement; a request naming an unclaimed actor is refused everywhere,
