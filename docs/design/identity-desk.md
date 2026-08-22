@@ -7,8 +7,9 @@ how an actor claim is vouched across surfaces. It is written as an
 inventory of **missing mechanisms**: the things that must exist for the
 scenes to be true, none of which exist yet.
 
-Status: **inventory**. Nothing here is designed; this is the work list and
-the constraints it must be designed under.
+Status: mechanism 1 is **designed** (the badge, below); the rest is
+**inventory** — the work list and the constraints it must be designed
+under.
 
 ## What the journey already fixed
 
@@ -90,6 +91,160 @@ Numbered for cross-reference; each names the scenes that need it.
 11. **Bounded standing mint** (Scene 7). Registrations mint passes with
     nobody present. Scope and revocation of that power is this desk's half
     of the launch-custody debt.
+
+## Mechanism 1, designed: the badge
+
+The desk needs something to check, so the desk hands something out: a
+**badge** — a secret the home mints at the door and the caller presents
+ever after. (Not "session": the code already has presence sessions, which
+are a different, ephemeral thing. A badge is the desk's own word.)
+
+**The shape.** One server-side record — `{badgeId, secret, kind, createdAt,
+lastSeen, admissions, claims}` — with two carriers for one artifact:
+browsers hold it as an HTTP-only cookie at the home origin (the one-origin
+rule means exactly one cookie jar — that decision pays again here);
+daemons and CLIs hold it as a bearer token in the `auth` block
+`identity.json` already stubs, presented on every request and on the WS
+upgrade. The home refuses badge-less requests; getting a badge is free
+today, so this refusal changes recognition, not policy.
+
+```mermaid
+flowchart LR
+    subgraph holders["badge holders"]
+        tab["browser<br/>(carrier: cookie)"]
+        daemon["local daemon<br/>(carrier: bearer token)"]
+        cli["thin CLI<br/>(carrier: bearer token)"]
+    end
+    tab -- presents --> B
+    daemon -- presents --> B
+    cli -- presents --> B
+    subgraph home["the home checks ONE record type"]
+        B["badge<br/>badgeId · secret · kind · lastSeen"]
+        B -- "admitted to" --> A["admissions:<br/>canvas 7f3a…, …"]
+        B -- "may speak as (via actor.claim)" --> AC["claims:<br/>a browser's personas, or<br/>everyone a daemon relays"]
+    end
+```
+
+**Deliberately policy-free.** The door's *policy* is untouched — the
+address still admits (changing who gets in is mechanism 2). What changes is
+that admission now *produces* something. Trust attaches to the badge from
+then on, never to the address again. This is the layering that lets 1 ship
+before the borrow-accounts decision (3) is made.
+
+**Badge and actor are different axes — and not 1:1.** A badge is a holder
+the home recognizes; an actor is who it speaks as; one badge may hold
+*several* claims. The thick daemon forces this: Priya's daemon carries one
+connection to the home on behalf of her CLI self AND Isaac, so its badge
+must vouch for both. The browser needs it too — a browser wears a roster
+of personas (#43) under one cookie. So `actor.claim` becomes "add an actor
+to this badge's claims" — at the single writer, as it already is — with
+the claim table re-keyed from client-chosen `sessionKey` strings to badge
+ids. The `sessionKey` survives demoted: a client's local index for
+*finding its own stored badge* (a harness resuming a conversation looks up
+the badge that conversation holds), never something the home trusts.
+
+**Admissions ride the badge.** The record lists the canvases this badge
+was admitted to; entering another canvas URL adds to the list. What a
+badge can see is its admissions, not the home — which is mechanism 10's
+tenancy handle, and makes "who has been here" a per-canvas listing of
+badges.
+
+The whole life of a badge, at the door and after — this is Scene 3, Jordan
+arriving (Scene 0's bootstrap goes through the same door but starts from a
+terminal; see the bootstrap bullet below):
+
+```mermaid
+sequenceDiagram
+    participant J as Jordan's browser
+    participant H as home daemon
+    J->>H: GET /c/7f3a… (no badge yet)
+    Note over H: door policy unchanged:<br/>knowing the address admits (mech 2 later)
+    H-->>J: web app + Set-Cookie: badge B₂
+    Note over H: record: B₂ {admissions: [7f3a…], claims: []}
+    J->>H: actor.claim "Jordan" (carries B₂)
+    H-->>J: actor jordan — added to B₂'s claims at the single writer
+    Note over H: B₂ {admissions: [7f3a…], claims: [jordan]}
+    J->>H: WS connect, every op, every presence beat (carries B₂)
+    Note over H: an op names its actor — the home verifies it is one of<br/>B₂'s claims (mech 5, a membership check, not trust)
+```
+
+**What it collapses downstream:**
+
+- The Scene 5 **pass becomes a badge-minting voucher**: short-lived,
+  single-use, minted by badge A; redeeming it mints badge B carrying the
+  same actor binding and admissions. Mechanism 7's "durable exchange" is
+  just this — the pass was never the credential, the badge it mints is.
+
+  ```mermaid
+  sequenceDiagram
+      participant T as Jordan's tab (badge B₂)
+      participant H as home daemon
+      participant D as Jordan's new local daemon
+      T->>H: mint a pass (carries B₂)
+      H-->>T: pass p — single-use, short-lived,<br/>remembers B₂'s actor + admissions
+      T-->>D: setup command with #p<br/>(copy button → terminal — the only hop outside the home)
+      D->>H: redeem pass p
+      H-->>D: badge B₃ {admissions: [7f3a…], claims: [jordan]}
+      Note over H: p is dead. B₃ is durable —<br/>two badges, one actor: Jordan's tab and her daemon
+      D->>H: reconnects for months (bearer B₃)
+  ```
+- **Bootstrap (8)** stops being special — but note it starts in a
+  *terminal*, not a browser. `npx skills add` never touches the home; the
+  home's first caller is setup, run by Priya's agent, arriving badge-less
+  with no pass in existence (there is no admitted anything yet to mint
+  one). The door hands it a badge like anyone — a bearer token, since
+  there is no cookie jar here — and the canvas is created under it: that
+  badge holds the first admission. Priya's *browser* gets its own cookie
+  badge later, entering through the canvas URL like any person. Two
+  badges before anyone shared. The flow-outward rule's first link is the
+  door doing what doors do.
+
+  ```mermaid
+  sequenceDiagram
+      participant S as setup (Priya's agent, terminal)
+      participant H as home daemon
+      participant P as Priya's browser (later)
+      Note over S: npx skills add → "use isocan" → setup runs.<br/>No browser, no pass, nothing admitted anywhere.
+      S->>H: hello (no badge yet)
+      H-->>S: badge B₀ (bearer token → daemon's auth block)
+      S->>H: project.create (carries B₀)
+      H-->>S: canvas 7f3a… born
+      Note over H: B₀ {admissions: [7f3a…]} — the first admission.<br/>The id + home address land in the committed marker
+      P->>H: GET /c/7f3a… (isocan open)
+      H-->>P: web app + Set-Cookie: badge B₁
+      P->>H: actor.claim "Priya" (carries B₁)
+      Note over H: B₀ relays the machine (Priya's CLI, Isaac).<br/>B₁ is her tab. Two badges before anyone shared.
+  ```
+- **Kill-a-badge** is revocation's enforcement primitive (4): not yet
+  "revoke Jordan," but "end that holder's recognition" exists.
+- **Server-side actor binding (5)** gets its anchor: once claims key on
+  badges, an op still names its actor (a daemon's badge vouches for
+  several), but the home *verifies the named actor is among the badge's
+  claims* instead of believing the request body — a membership check, not
+  a redesign.
+
+**One door; badges differ only in dowry.** It can look like Priya and
+Jordan enter differently — terminal-first versus browser-first. They
+don't: the door does exactly one thing, hand a badge to whoever arrives,
+and both women's *browsers* walk through it identically (B₁ and B₂ are the
+same flow). What differs is what a badge starts out knowing. A bootstrap
+badge is born knowing nothing and earns its first admission by creating
+the canvas; a pass-endowed badge is born knowing its person, because it
+arrived late to an existing identity and the only honest way to be "the
+same Jordan" is to be handed that by a session that already is her —
+self-claiming a worn name is either refused or impersonation. So the split
+is not Priya versus Jordan; it is *first surface versus every later
+surface of the same person*. Priya's second machine enrolls by pass
+exactly like Jordan's first (Scene 5 says so), and a canvas born in a
+browser would send the creator's own later terminal down Jordan's flow.
+Whoever arrives first bootstraps; everyone after is vouched for.
+
+**What changes in code, minimally:** the daemon (local and hosted — same
+code, per the deployment-detail thesis) grows a door endpoint that mints
+badges; HTTP routes and the WS upgrade read cookie-or-bearer; the actor
+registry's claims re-key to badge ids with a one-time migration of
+existing `sessionKey` bindings. Nothing yet *enforces* beyond "present a
+badge" — enforcement is mechanisms 2 and 5, standing on this.
 
 ## Order of attack
 
