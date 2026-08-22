@@ -9,8 +9,9 @@ scenes to be true, none of which exist yet.
 
 Status: mechanisms 1, 2, 3, 5, and 10 are **designed** (the badge;
 grants, attestations, and the door; actor binding; registry scope —
-below); 4, 6, 7, 8, and 9 collapsed into them. Only 11 remains open, and
-it is deferred to the innkeeper debt's doc, where it belongs.
+below); 4, 6, 7, 8, and 9 collapsed into them; 11 is designed in
+[innkeeper.md](innkeeper.md) (frozen delegation), where it belongs. The
+desk's design is complete.
 
 ## What the journey already fixed
 
@@ -92,7 +93,7 @@ each item's fate is tagged.
     colors) is per-home, and claims consult every project on it
     (`Engine.heldNames()`). On a multi-tenant home that is cross-tenant
     name collision and leakage. The registry's scope must be chosen.
-11. **Bounded standing mint** (Scene 7). *(open — deferred to the innkeeper doc)* Registrations mint passes with
+11. **Bounded standing mint** (Scene 7). *(→ designed in [innkeeper.md](innkeeper.md))* Registrations mint passes with
     nobody present. Scope and revocation of that power is this desk's half
     of the launch-custody debt.
 
@@ -162,7 +163,7 @@ sequenceDiagram
     participant J as Jordan's browser
     participant H as home daemon
     J->>H: GET /c/7f3a… (no badge yet)
-    Note over H: door policy unchanged:<br/>knowing the address admits (mech 2 later)
+    Note over H: door policy unchanged:<br/>knowing the address admits (the link grant, mech 2)
     H-->>J: web app + Set-Cookie: badge B₂
     Note over H: record: B₂ {admissions: [7f3a…], claims: []}
     J->>H: actor.claim "Jordan" (carries B₂)
@@ -178,7 +179,11 @@ sequenceDiagram
   single-use, minted by badge A; redeeming it mints badge B carrying the
   admissions and the *named* claim. A pass names which of the minting
   badge's claims it endows — a daemon badge vouches for several actors,
-  and a pass hands over one identity, not the household. Mechanism 7's
+  and a pass hands over one identity, not the household. The claim slot
+  is **optional**: an admission-only pass admits a surface that will
+  claim its *own* actor — Scene 6's instruction line (Sonia claims
+  fresh, never Inna), and day-one `isocan open`, before the human has an
+  actor to resume. Mechanism 7's
   "durable exchange" is just this — the pass was never the credential,
   the badge it mints is.
 
@@ -279,7 +284,13 @@ just a secret.
   something; what isocan records is the attribute Jordan can prove.
 - **`repo:<host>/<owner>/<name>`** — Scene 6's sentence made checkable:
   committing the marker was a grant to whoever can read the repo, so the
-  subject *is* "can read the repo."
+  subject *is* "can read the repo." One mechanism note the scene hides:
+  the commit is a *git* act the home never sees — it distributes the
+  address but writes no grant. The sentence must also be spoken to the
+  home, and the gesture that writes the marker is its natural speaker
+  (setup offers the grant as it stages the marker). Until it is spoken,
+  repo members enter on the link grant like anyone — which is why the
+  scene worked before the desk existed.
 
 A grant is `{canvasId, subject, grantedBy, at}`, written through the
 daemon API — never an op, per the journey's rule 5.
@@ -467,8 +478,7 @@ from the badge rather than hard-coded.
 **1, 3, 2, 5, and 10 are designed above.** Of the rest: 4 falls out of
 2+3 (provenance sweep with re-rooting); 6 collapsed into email
 attestation; 7 and 8 collapsed into the badge; 9 is subject type `repo`,
-done. The one remaining item, **11** (bounded standing mint), is the
-identity desk's edge of launch custody and cannot be designed apart from
-who runs the home — it moves to the innkeeper debt's design doc, which
-should link back here. With that handoff, **the desk's design is
-complete** and implementation can be sequenced.
+done. The one item that could not be designed apart from who runs the
+home, **11** (bounded standing mint), is designed as *frozen delegation*
+in [innkeeper.md](innkeeper.md). **The desk's design is complete** and
+implementation can be sequenced.

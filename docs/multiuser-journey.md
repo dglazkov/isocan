@@ -380,21 +380,24 @@ replica durable.
 
 ## Open debts
 
-- **The identity desk** (three appearances, unresolved and load-bearing;
-  now inventoried in [design/identity-desk.md](design/identity-desk.md)):
-  who may enter a canvas URL; what credential a daemon or a cloud agent
-  presents; how an actor claim is vouched across surfaces. Currently: the
-  address is the secret — which means the Scene 1–2 grant is recorded
-  intent, not enforcement: the door checks only the address, and the grant
-  is what the desk will one day enforce. One concrete lead exists — the
-  escalation pass (Scene 5): credentials minted *outward from an admitted
-  session*, which already covers actor resumption and second machines. Still open: the
-  first admission (who may open the URL at all), and revocation. The real
-  answer probably borrows accounts rather than minting them.
-- **The innkeeper.** Someone runs the home, pays for it, answers for uptime,
-  abuse, and privacy — and with birth-at-home, it holds *unshared* canvases
-  too. That makes isocan a hosted product with a local-first cache, and that
-  posture should be chosen out loud, not inherited.
+- **The identity desk** (three appearances, load-bearing; now **designed**
+  in [design/identity-desk.md](design/identity-desk.md)): who may enter a
+  canvas URL; what credential a daemon or a cloud agent presents; how an
+  actor claim is vouched across surfaces. The desk answered with the
+  badge (a home-minted secret every surface carries), grants over
+  provable attributes — address-as-secret demoted to a default, revocable
+  *link* grant, so every scene above plays unchanged until an owner
+  tightens the door — attestations borrowed from accounts rather than
+  minted, and a provenance sweep for revocation. The lead paid off as
+  predicted: the escalation pass (Scene 5) grew into the general vouching
+  flow. What the scenes required holds: admission is still all the door
+  checks; only what "admitted" means hardened.
+- **The innkeeper** (posture now chosen in
+  [design/innkeeper.md](design/innkeeper.md)). Someone runs the home, pays
+  for it, answers for uptime, abuse, and privacy — and with birth-at-home,
+  it holds *unshared* canvases too. That makes isocan a hosted product
+  with a local-first cache, and that posture should be chosen out loud,
+  not inherited.
 - **Offline birth.** A canvas created on a plane births locally and adopts
   a home on first reconnect — the one surviving remnant of "push the store
   up," demoted to background repair. With no person-facing door on the
@@ -403,7 +406,9 @@ replica durable.
   worth remembering.
 - **Sync cadence** — when daemons speak to the home (per-op, timer, wake) —
   is tuning, not structure.
-- **Launch custody** (agent-on-demand itself is played — Scene 7): the home
+- **Launch custody** (agent-on-demand itself is played — Scene 7; the
+  desk's half is designed as frozen delegation in
+  [design/innkeeper.md](design/innkeeper.md)): the home
   holds hooks and scoped tokens that start compute in other people's
   accounts — and it now mints passes with nobody at the keyboard: Scene 5's
   rule was credentials flowing outward from an admitted session, and the
