@@ -314,7 +314,9 @@ isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable bl
 isocan session start|on|work|point|move|say|end · isocan who   # presence
 isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
-isocan style · isocan style set <file>  # the canvas's own design system
+isocan style [--css|--tokens] · style set <file> · style check
+#   the canvas's own design system: a DESIGN.md whose front matter is
+#   typed design tokens (W3C-compatible) and whose sections are the reasoning
 isocan command list|show|add|rm        # slash commands: work a message can ask for
 #   built-in: /help /format /variation /grill-me /accessibility-audit
 #             /app-store-assets /web-assets /marketing-kit

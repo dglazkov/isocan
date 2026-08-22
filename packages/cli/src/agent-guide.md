@@ -261,11 +261,22 @@ that woke you, with no `session start` needed.
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
-- **Read the house style before you build a screen.** `isocan style` prints
-  what this canvas has decided things look like: the type scale, the palette
-  as hex values, the spacing unit, and the handful of rules the project cares
-  about. It is an ITEM on the canvas, so it versions and both surfaces can see
-  it — not a dotfile nobody updates.
+- **Read the design system before you build a screen.** `isocan style` prints
+  it: a DESIGN.md (github.com/google-labs-code/design.md) whose front matter
+  carries typed tokens and whose sections carry the reasoning. It is an ITEM on
+  the canvas, so it versions and both surfaces can see it — not a dotfile
+  nobody updates.
+
+  Two flags save you from retyping values into a screen and getting one wrong:
+  `isocan style --css` gives you custom properties to paste, and `isocan style
+  --tokens` gives you W3C design tokens for anything downstream (Figma, Style
+  Dictionary, a Tailwind theme). Build against the variables rather than the
+  literals; a screen full of hex codes is a screen that cannot follow the
+  system when it changes.
+
+  `isocan style check` says whether the system itself holds up — references to
+  tokens nobody kept, values that are not colours, contrast that fails. Run it
+  before you grade a screen against it, and before you hand a system back.
 
   Build to it, and say in your reply which parts of it you used. If it does
   not cover something you had to decide, say THAT too: the gaps are what the

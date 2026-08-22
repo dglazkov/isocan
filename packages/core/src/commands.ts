@@ -379,11 +379,14 @@ with if you only got one.`,
 
 READ TWO THINGS FIRST.
 
-1. THE HOUSE STYLE: \`isocan style\`. If this canvas has one, it is the
-   standard — its type scale, its palette, its spacing unit, its rules. A
-   finding is "this is not the scale" and not "I would have chosen otherwise".
-   If there is no house style, say so once at the top and audit against the
-   list below alone; do not invent a system and then grade against it.
+1. THE DESIGN SYSTEM: \`isocan style\` for the whole thing, \`isocan style
+   --tokens\` for just the values, \`isocan style --css\` for the custom
+   properties. If this canvas has one it is the standard, and the tokens are
+   the normative half: a finding is "16px is not in the scale (12, 14, 18, 27)"
+   and not "I would have chosen otherwise". Run \`isocan style check\` first —
+   if the system itself is broken, say so before grading anything against it.
+   If there is no design system, say so once at the top and audit against the
+   list below alone; do not invent one and then grade against it.
 2. THE SCREEN: \`isocan get <item> screen.html\`. Audit the HTML and CSS, not a
    picture of them. A ratio you computed beats a colour you looked at, and
    half of what matters here — the scale, the spacing unit, the focus states —
@@ -429,11 +432,18 @@ Then reply on the thread with the verdict, the top fix, and #the-report.`,
     description: "Write down what this canvas has decided things look like",
     usage: "[what to change]",
     source: "built-in",
-    body: `Write or update this canvas's house style.
+    body: `Write or update this canvas's design system.
+
+The format is DESIGN.md (github.com/google-labs-code/design.md): YAML front
+matter carrying typed design tokens, then markdown sections carrying the
+reasoning. Use it — it converts to and from \`tokens.json\`, Figma variables
+and Tailwind themes, so what you write here does not stop at the edge of this
+canvas. \`isocan style\` prints the current one, \`--tokens\` and \`--css\`
+give you its machine-readable halves, and \`isocan style check\` grades it.
 
 It is an item on the canvas, not a file in a repo — so it sits beside the
 designs it governs, versions like everything else, and the person can read it
-without knowing it exists. \`isocan style\` prints the current one.
+without knowing it exists.
 
 IF THERE IS NONE, DERIVE IT FROM WHAT IS ALREADY THERE. Do not invent a system
 and impose it: \`isocan ls --kind site --kind document\`, \`isocan get\` the two
@@ -441,26 +451,49 @@ or three screens that look most like what they want, and write down what they
 ALREADY do. Where the screens disagree, pick the one that appears most, and
 say in the document that you did.
 
-WHAT IT MUST CONTAIN — numbers, not adjectives. "Clean and modern" describes
-nothing and grades nothing:
-- **Type.** The faces, with fallbacks, and what each is for. The scale as
-  actual values. Line heights. The one or two weights in use.
-- **Colour.** Every colour as a hex with a name and a job (ground, ink, muted
-  ink, accent, accent ink, line, danger). Both themes if the canvas has two.
-- **Space.** The unit, and the steps taken from it. What separates sections,
-  what separates related things.
-- **Shape.** Radii and what each is for. Borders. Shadows, if any, and what
-  they mean.
-- **Rules this project actually cares about.** Three to six, in the
-  imperative, each one falsifiable: "body text is left-aligned", "one accent
-  per screen", "no shadow without overlap".
+FRONT MATTER — the normative half. Numbers, not adjectives:
+
+    ---
+    version: alpha
+    name: <what this system is called>
+    colors:            # at least \`primary\`; \`neutral\` is the ground
+      primary: "#1c1c1c"
+    typography:        # 4–12 levels, each with a real fontSize
+      body:
+        fontFamily: ...
+        fontSize: 14px
+        lineHeight: 1.5
+    spacing:           # one unit and its steps
+      md: 16px
+    rounded:
+      md: 10px
+    components:        # references, not repeats: "{colors.tertiary}"
+      button-primary:
+        background: "{colors.tertiary}"
+    ---
+
+Quote hex values and references — unquoted, a \`#\` is a YAML comment and
+\`{…}\` is a mapping. A section you deliberately have no tokens for goes in
+\`omitted\` so the linter stays quiet about it.
+
+SECTIONS — the reasoning, in this order: Overview, Colors, Typography, Layout,
+Elevation & Depth, Shapes, Components, Do's and Don'ts. Skip what does not
+apply. The prose says WHY and WHEN; the tokens say what. Do not restate the
+hex values in sentences — say what each colour is for.
+
+Finish with rules the project actually cares about: three to six, imperative,
+each one falsifiable. "Body text is left-aligned." "One accent per screen."
+"No shadow without overlap." An unfalsifiable rule ("keep it clean") grades
+nothing and will be ignored.
 
 Keep it under two pages. A style guide nobody finishes is a style guide nobody
 follows.
 
-SAVE IT: \`isocan style set style.md\` — that creates the item, or adds a
-version to the existing one, so the old style is still there to compare
-against. Then reply with what you wrote down and, honestly, where the existing
+THEN: \`isocan style set DESIGN.md\` — a new version when one exists, so the
+style you are moving away from is still there to compare against. Run
+\`isocan style check\` and fix what it finds before you reply; it catches
+references to tokens nobody kept, values that are not colours, and contrast
+that fails. Then say what you wrote down and, honestly, where the existing
 screens disagree with each other — that disagreement is the decision the
 person now gets to make.`,
   },

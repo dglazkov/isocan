@@ -33,8 +33,13 @@ import {
   findCommand,
   parseCommandFile,
   collectCanvasActors,
+  bySeverity,
+  checkDesign,
   houseStyle,
   houseStyleProperties,
+  parseDesign,
+  toCss,
+  toDtcg,
   recentActivity,
   collectCanvasNames,
   collectItemRefCandidates,
@@ -1977,9 +1982,11 @@ system somebody invented and imposed.`,
 
 style
   .command("show", { isDefault: true })
-  .description("Print the house style")
+  .description("Print the design system (--css or --tokens for the machine-readable halves)")
+  .option("--css", "custom properties, ready to paste into the screen you are building")
+  .option("--tokens", "W3C design tokens (designtokens.org) — Figma, Style Dictionary, Tailwind")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { css?: boolean; tokens?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
       const item = houseStyle(snapshot.canvas);
@@ -1991,14 +1998,60 @@ style
       }
       const version = item.versions.find((v) => v.id === item.currentVersionId);
       if (!version) throw new Error(`${item.title} has no current version`);
-      const data = await ctx.client.downloadBlob(p.id, version.blobHash);
+      const text = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
+      const doc = parseDesign(text);
+
+      // The machine-readable halves. A design system nobody can export stops
+      // at the edge of this canvas.
+      if (opts.css) return console.log(toCss(doc.tokens));
+      if (opts.tokens) return printJson(toDtcg(doc.tokens));
       if (ctx.json) {
-        return printJson({ itemId: item.id, title: item.title, versions: item.versions.length, body: data.toString("utf8") });
+        return printJson({
+          itemId: item.id,
+          title: item.title,
+          versions: item.versions.length,
+          tokens: doc.tokens,
+          sections: doc.sections.map((section) => section.title),
+          body: text,
+        });
       }
       // The body alone on stdout so it can be piped into something that
       // follows it; everything else goes to stderr.
       console.error(`${item.title} (${item.id}, v${item.versions.length})`);
-      console.log(data.toString("utf8"));
+      console.log(text);
+    }),
+  );
+
+style
+  .command("check")
+  .description("Is the design system usable — references, colours, contrast, sections")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const item = houseStyle(snapshot.canvas);
+      if (!item) {
+        throw new Error(
+          `${p.title} has no design system — isocan style set <file>, or ask for /house-style`,
+        );
+      }
+      const version = item.versions.find((v) => v.id === item.currentVersionId);
+      if (!version) throw new Error(`${item.title} has no current version`);
+      const text = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
+      const findings = bySeverity(checkDesign(parseDesign(text)));
+      if (ctx.json) return printJson(findings);
+      if (findings.length === 0) return console.error(`${item.title}: nothing to fix`);
+      printTable(
+        findings.map((f) => ({
+          "": f.severity === "error" ? "✗" : f.severity === "warning" ? "!" : "·",
+          where: f.where,
+          what: truncate(f.what, 52),
+          fix: truncate(f.fix ?? "—", 44),
+        })),
+      );
+      // An error is something WRONG, not something that could be better — so
+      // only errors fail a script that runs this.
+      if (findings.some((f) => f.severity === "error")) process.exitCode = 1;
     }),
   );
 
