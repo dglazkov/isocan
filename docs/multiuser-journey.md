@@ -52,14 +52,13 @@ home already exists and is already current, sharing is **pure permission**:
 grant + URL. No store to push, no home to create. The dialog hands back the
 two things Priya actually needs:
 
-- the canvas's address — `isocan.io/c/7f3a…` — with a copy button, and
-- a paste-able invitation for the human channel:
+the canvas's address — `isocan.io/c/7f3a…` — with a copy button. That is
+the whole invitation: *"here's the canvas."* It carries no installation
+instructions, because the canvas teaches its own escalation (Scene 5) to
+whoever wants it, whenever they reach for it — nothing needs to survive in
+a Slack scrollback.
 
-> Open isocan.io/c/7f3a… — that's the canvas. If you want your own agent on
-> it: in any directory, `npx skills add dglazkov/isocan`, then tell your
-> agent "use isocan — the canvas is at isocan.io/c/7f3a…".
-
-She pastes it into Slack. The addressing happens where "Jordan" has always
+She pastes the link into Slack. The addressing happens where "Jordan" has always
 meant something; isocan never resolves the name, it only bills access to a
 credential the identity desk (open debt, below) will define.
 
@@ -156,21 +155,36 @@ Rules this scene set:
 Thin guests consume agency — every "rebuild this" so far has run on Priya's
 machine. Escalation retires that.
 
-Jordan makes an empty directory, runs the two commands from the week-old
-Slack message, and tells her agent: "use isocan — the canvas is at
-isocan.io/c/7f3a…". Setup brings up her local daemon; the marker is written
-with id and address; her daemon dials the home, presents what her browser
-has been presenting all week, says **"I have nothing,"** and replicates the
-store — oplog streamed, blobs by hash — into her `~/.isocan`. The canvas now
-exists on her machine; offline capability arrived as a side effect.
+Jordan is already standing on the canvas, in a tab the home admitted — so
+the escalation comes from the canvas itself, not from a scrollback. She
+clicks **her own face** in the pile; the menu that owns "how I'm connected
+here" (rename, leave) has one more entry: **"Work from your terminal…"**.
+The dialog explains the one sentence of concept — *your machine gets its
+own copy; your own agent can join* — and shows a single command with a copy
+button:
 
-Two doors, one Jordan: "Jordan" already exists — minted at the home's web
-door. The CLI door therefore offers **resumption**: it lists the canvas's
-known actors and she picks herself. Today that claim is vouched by nothing
-but the same trust the web door runs on, and it is *visible* — the claim is
-an op everyone can see. Cryptographic vouching is the identity desk's job,
-not a new mechanism. (The rule that authenticated identity "only changes how
-an Actor is minted" was built for this moment.)
+```
+npx github:dglazkov/isocan#release setup isocan.io/c/7f3a…#<pass>
+```
+
+She pastes it into a terminal in an empty directory. One command: skill,
+CLI, local daemon, marker written with id and address; her daemon dials the
+home, says **"I have nothing,"** and replicates the store — oplog streamed,
+blobs by hash — into her `~/.isocan`. The canvas now exists on her machine;
+offline capability arrived as a side effect. Then she launches her agent
+and says "use isocan" — the marker already knows the rest.
+
+The `#<pass>` fragment is the quiet payoff: a short-lived, single-use pass
+**minted by her signed-in tab, for her actor**. So there is no second door
+and no social claim — the command was minted by a session that already *is*
+Jordan, and the CLI arrives knowing who it speaks for. Actor resumption is
+a handoff, not a trust exercise; and it is the identity desk's first
+concrete shape — credentials flow *outward from an admitted session*,
+rather than being typed inward at doors. (The rule that authenticated
+identity "only changes how an Actor is minted" was built for this moment.)
+Isomorphism holds: the dialog is the button surface, and any admitted
+session can mint the same pass from the CLI — how Priya would enroll her
+own second machine.
 
 Her agent claims its own actor against its session id, checks `isocan who
 --all` against the replicated roster — Isaac taken — and names itself Nico.
@@ -187,8 +201,9 @@ tabs on one laptop always have; undo stays four separate stacks.
 home, so per-viewer read state doesn't follow a tab switch. Cosmetic, known,
 not a bug.)
 
-Escalation is the same three steps as arrival, aimed at an address instead
-of a repo.
+Escalation is one command, and the canvas itself hands it to you — arriving
+thin is the front door, and the UI offers thick the moment you reach for
+it.
 
 ## Scene 6 — Inna sends Sonia to the cloud
 
@@ -255,8 +270,11 @@ same reducer, same op vocabulary, same WS — covered all four.
 - **The identity desk** (three appearances, unresolved and load-bearing):
   who may enter a canvas URL; what credential a daemon or a cloud agent
   presents; how an actor claim is vouched across surfaces. Currently: the
-  address is the secret, and claims are social-but-visible. The real answer
-  probably borrows accounts rather than minting them.
+  address is the secret. One concrete lead exists — the escalation pass
+  (Scene 5): credentials minted *outward from an admitted session*, which
+  already covers actor resumption and second machines. Still open: the
+  first admission (who may open the URL at all), and revocation. The real
+  answer probably borrows accounts rather than minting them.
 - **The innkeeper.** Someone runs the home, pays for it, answers for uptime,
   abuse, and privacy — and with birth-at-home, it holds *unshared* canvases
   too. That makes isocan a hosted product with a local-first cache, and that
