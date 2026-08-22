@@ -315,7 +315,13 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
       >
         <Attached projectId={projectId} />
         <MentionField
-          placeholder={selected.length > 0 ? "What should happen to these?" : "Message the canvas…"}
+          // One placeholder, both states: what the CHANNEL is beats what the
+          // moment is. Everything typed here reaches every agent listening
+          // unless a name is called, and that is the thing worth knowing
+          // before you type; the chips above already say what it is about.
+          // (No "@name to target" tail: it needs 285px in a 236px field, and
+          // a hint that ellipsises is worse than no hint. ⌘K and ? carry it.)
+          placeholder="Broadcast message to agents"
           value={draft}
           onChange={setDraft}
           candidates={candidates}
