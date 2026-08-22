@@ -45,10 +45,7 @@ export function FavouritesBar({ projectId }: { projectId: string }) {
     useUiStore.getState().select(item.id);
     // Fit into the canvas this bar leaves visible, so the thing you asked for
     // does not land underneath the list you asked from.
-    glideToBox(
-      { minX: item.x, minY: item.y, maxX: item.x + item.width, maxY: item.y + item.height },
-      -FAVOURITES_WIDTH,
-    );
+    glideToBox({ minX: item.x, minY: item.y, maxX: item.x + item.width, maxY: item.y + item.height });
   }
 
   return (

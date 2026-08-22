@@ -38,10 +38,11 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Z"], does: "Zoom — click an item to fit it, or drag a region", group: "Tools", note: "Tap to keep it, hold to borrow it" },
   { keys: ["P"], does: "Pen — draw on the canvas", group: "Tools", note: "HOLD P and everything you draw is ONE drawing, however long you take between strokes" },
   { keys: ["C"], does: "Comment — click anywhere to start a thread", group: "Tools" },
-  { keys: ["Esc"], does: "Back out: stop watching, close a popover, drop the tool, deselect", group: "Tools", note: "One layer per press, outermost first" },
+  { keys: ["Esc"], does: "Back out: stop watching, close a popover, drop the tool, deselect", group: "Tools", note: "One layer per press, outermost first — and how you get back to Select" },
 
   // ---- Moving around ----
   { keys: ["⌘+", "⌘−"], does: "Zoom in and out", group: "Moving around", note: "The canvas, never the browser" },
+  { keys: ["F"], does: "Focus — fill the screen with the selection", group: "Moving around", note: "With nothing selected, fits everything" },
   { keys: ["⌘0", "0"], does: "Fit everything on screen", group: "Moving around" },
   { keys: ["Shift 0"], does: "Actual size (100%)", group: "Moving around" },
   { keys: ["Shift 1"], does: "Fit everything", group: "Moving around" },
@@ -53,7 +54,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["←", "→", "↑", "↓"], does: "Nudge the selection", group: "Items" },
   { keys: ["Shift-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
   { keys: ["F2", "Double-click the name"], does: "Rename — the file follows the title", group: "Items" },
-  { keys: ["F"], does: "Fan out the version stack", group: "Items", note: "On an item with more than one version" },
+  { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },

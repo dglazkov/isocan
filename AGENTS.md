@@ -46,6 +46,11 @@ physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
 - Mutations are `Operation` values applied by one reducer — if a change makes
   the CLI and the web app able to disagree, it is the wrong change.
 - Presence is honest: never claim work you did not do.
+- Fixtures and examples are SYNTHETIC. Test against a real canvas all you
+  like — it is the fastest way to find real bugs — but never carry its names
+  into the repo. A screen title from the canvas you happened to be using ends
+  up in a fixture, then in a shipped example, and the product starts looking
+  like it was built for one customer. "Acme", "Test", a made-up title: always.
 
 ## Done means done on both surfaces
 

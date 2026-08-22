@@ -372,7 +372,7 @@ with if you only got one.`,
   },
   {
     name: "design-audit",
-    description: "Review a screen's craft against the house style and the usual tells",
+    description: "Review a screen's craft against the design system and the usual tells",
     usage: "[what to look at]",
     source: "built-in",
     body: `Audit the design of the selected screens, from the source.
@@ -394,7 +394,7 @@ READ TWO THINGS FIRST.
 
 WHAT TO LOOK FOR, in this order:
 
-**Conformance.** Where the screen departs from the house style. Cite the
+**Conformance.** Where the screen departs from the design system. Cite the
 declared value and the one it should have been.
 
 **The usual tells.** These are the moves a generated interface reaches for.
@@ -428,8 +428,8 @@ the one or two that would actually make it better.
 Then reply on the thread with the verdict, the top fix, and #the-report.`,
   },
   {
-    name: "house-style",
-    description: "Write down what this canvas has decided things look like",
+    name: "design-system",
+    description: "Write down what this canvas has decided things look like — a DESIGN.md",
     usage: "[what to change]",
     source: "built-in",
     body: `Write or update this canvas's design system.
@@ -489,7 +489,7 @@ nothing and will be ignored.
 Keep it under two pages. A style guide nobody finishes is a style guide nobody
 follows.
 
-THEN: \`isocan style set DESIGN.md\` — a new version when one exists, so the
+THEN: \`isocan design set DESIGN.md\` — a new version when one exists, so the
 style you are moving away from is still there to compare against. Run
 \`isocan style check\` and fix what it finds before you reply; it catches
 references to tokens nobody kept, values that are not colours, and contrast

@@ -35,8 +35,8 @@ import {
   collectCanvasActors,
   bySeverity,
   checkDesign,
-  houseStyle,
-  houseStyleProperties,
+  designSystem,
+  designSystemProperties,
   parseDesign,
   toCss,
   toDtcg,
@@ -1960,24 +1960,33 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// ---------- the house style ----------
+// ---------- the design system ----------
 
 const style = program
-  .command("style")
-  .description("What this canvas has decided things look like")
+  .command("design")
+  // What this was called for an afternoon. Muscle memory is cheap to keep and
+  // expensive to break; the NAME is `design`, and the docs only say that.
+  .alias("style")
+  .description("This canvas's design system — a DESIGN.md, tokens and all")
   .addHelpText(
     "after",
     `
-The house style is an ITEM on the canvas, not a file in a repo: it sits beside
-the designs it governs, both surfaces can read it, and it versions like
+The design system is an ITEM on the canvas, not a file in a repo: it sits
+beside the designs it governs, both surfaces can read it, and it versions like
 everything else. Read it before you build a screen, and cite it when you do.
 
-  isocan style                 # print it
-  isocan style set style.md    # write it (a new version if one exists)
+The format is DESIGN.md (github.com/google-labs-code/design.md): typed design
+tokens in the front matter, the reasoning in the sections.
 
-No house style yet? \`/house-style\` in a composer asks an agent to derive one
-from the screens already on the canvas — what they ALREADY do, rather than a
-system somebody invented and imposed.`,
+  isocan design                  # print it
+  isocan design --css            # custom properties, ready to paste
+  isocan design --tokens         # W3C design tokens, for anything downstream
+  isocan design check            # references, colours, contrast, sections
+  isocan design set DESIGN.md    # write it (a new version if one exists)
+
+None yet? \`/design-system\` in a composer asks an agent to derive one from the
+screens already on the canvas — what they ALREADY do, rather than a system
+somebody invented and imposed.`,
   );
 
 style
@@ -1989,11 +1998,11 @@ style
     run(async (opts: { css?: boolean; tokens?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const item = houseStyle(snapshot.canvas);
+      const item = designSystem(snapshot.canvas);
       if (!item) {
         throw new Error(
-          `${p.title} has no house style yet — write one with \`isocan style set <file>\`, ` +
-            `or ask for /house-style and an agent will derive it from the screens already here`,
+          `${p.title} has no design system yet — write one with \`isocan design set DESIGN.md\`, ` +
+            `or ask for /design-system and an agent will derive it from the screens already here`,
         );
       }
       const version = item.versions.find((v) => v.id === item.currentVersionId);
@@ -2029,10 +2038,10 @@ style
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { project: p, snapshot } = await projectAndSnapshot(ctx);
-      const item = houseStyle(snapshot.canvas);
+      const item = designSystem(snapshot.canvas);
       if (!item) {
         throw new Error(
-          `${p.title} has no design system — isocan style set <file>, or ask for /house-style`,
+          `${p.title} has no design system — isocan design set DESIGN.md, or ask for /design-system`,
         );
       }
       const version = item.versions.find((v) => v.id === item.currentVersionId);
@@ -2057,9 +2066,9 @@ style
 
 style
   .command("set")
-  .description("Write the house style (a new version when one already exists)")
+  .description("Write the design system (a new version when one already exists)")
   .argument("<file>", "markdown or CSS describing the system")
-  .option("--title <title>", "name for the item", "House style")
+  .option("--title <title>", "name for the item", "Design system")
   .action(
     run(async (file: string, opts: { title: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -2075,12 +2084,12 @@ style
         filename,
         size: upload.size,
       };
-      const existing = houseStyle(snapshot.canvas);
+      const existing = designSystem(snapshot.canvas);
       if (existing) {
         // A version, never a replacement: the style you are moving away from
         // is the thing you will want to compare against tomorrow.
         await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
-        console.error(`${existing.id} — house style v${existing.versions.length + 1} (F fans the stack)`);
+        console.error(`${existing.id} — design system v${existing.versions.length + 1} (V shows the stack)`);
         return;
       }
       const itemId = newItemId();
@@ -2092,9 +2101,9 @@ style
         height: 720,
         placement: placementFor(snapshot, {}),
         title: opts.title,
-        properties: houseStyleProperties(),
+        properties: designSystemProperties(),
       });
-      console.error(`${itemId} — house style for ${p.title} (isocan style)`);
+      console.error(`${itemId} — design system for ${p.title} (isocan design)`);
     }),
   );
 

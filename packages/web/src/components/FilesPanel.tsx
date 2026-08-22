@@ -104,10 +104,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
     ui.select(item.id);
     // Fit the item in the canvas the panel leaves visible, so the thing you
     // asked for does not land underneath the list you asked from.
-    glideToBox(
-      { minX: item.x, minY: item.y, maxX: item.x + item.width, maxY: item.y + item.height },
-      PANEL_WIDTH,
-    );
+    glideToBox({ minX: item.x, minY: item.y, maxX: item.x + item.width, maxY: item.y + item.height });
   }
 
   return (

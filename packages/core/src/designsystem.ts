@@ -1,7 +1,7 @@
 import type { CanvasState, Item } from "./model.ts";
 
 /**
- * The house style: what this canvas has decided things look like.
+ * The design system: what this canvas has decided things look like.
  *
  * Every agent that builds a screen is otherwise designing from scratch, which
  * is why a canvas fills up with screens that are individually fine and
@@ -20,25 +20,29 @@ import type { CanvasState, Item } from "./model.ts";
  */
 
 export const ROLE_PROP = "role";
-export const HOUSE_STYLE_ROLE = "house-style";
+export const DESIGN_SYSTEM_ROLE = "design-system";
+/** What this was called for an afternoon. Canvases written in that window
+ * still say it, and a rename that orphans somebody's file is not a rename. */
+export const LEGACY_DESIGN_ROLE = "house-style";
 
-/** The properties that make an item the house style. */
-export function houseStyleProperties(): Record<string, string> {
-  return { [ROLE_PROP]: HOUSE_STYLE_ROLE };
+/** The properties that make an item this canvas's design system. */
+export function designSystemProperties(): Record<string, string> {
+  return { [ROLE_PROP]: DESIGN_SYSTEM_ROLE };
 }
 
-export function isHouseStyle(item: Item): boolean {
-  return item.properties[ROLE_PROP] === HOUSE_STYLE_ROLE;
+export function isDesignSystem(item: Item): boolean {
+  const role = item.properties[ROLE_PROP];
+  return role === DESIGN_SYSTEM_ROLE || role === LEGACY_DESIGN_ROLE;
 }
 
 /**
- * The canvas's house style, if it has one. Most recently updated wins: two
+ * The canvas's design system, if it has one. Most recently updated wins: two
  * are a mistake rather than a feature, and the newest is the likelier answer
  * to "which one is real".
  */
-export function houseStyle(canvas: CanvasState): Item | null {
+export function designSystem(canvas: CanvasState): Item | null {
   const found = Object.values(canvas.items)
-    .filter(isHouseStyle)
+    .filter(isDesignSystem)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
   return found[0] ?? null;
 }

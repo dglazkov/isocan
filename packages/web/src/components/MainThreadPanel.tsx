@@ -8,6 +8,7 @@ import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
+import { stageRect } from "../lib/stage.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
@@ -146,15 +147,9 @@ function catapultBesidePanel(itemId: string): void {
   const item = useCanvasStore.getState().canvas?.items[itemId];
   if (!item) return;
   const ui = useUiStore.getState();
-  ui.setViewport(
-    centerOn(
-      ui.viewport,
-      item.x + item.width / 2,
-      item.y + item.height / 2,
-      window.innerWidth + PANEL_WIDTH,
-      window.innerHeight,
-    ),
-  );
+  const stage = stageRect();
+  const at = centerOn(ui.viewport, item.x + item.width / 2, item.y + item.height / 2, stage.width, stage.height);
+  ui.setViewport({ ...at, tx: at.tx + stage.x, ty: at.ty + stage.y });
   ui.select(item.id);
 }
 

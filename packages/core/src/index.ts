@@ -27,7 +27,7 @@ export * from "./merge.ts";
 export * from "./onit.ts";
 export * from "./slop.ts";
 export * from "./skillsource.ts";
-export * from "./housestyle.ts";
+export * from "./designsystem.ts";
 export * from "./designmd.ts";
 export * from "./contrast.ts";
 export * from "./designcheck.ts";

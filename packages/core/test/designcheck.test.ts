@@ -5,7 +5,7 @@ const check = (text: string) => checkDesign(parseDesign(text));
 const found = (text: string, where: string) => check(text).filter((f) => f.where === where);
 
 const GOOD = `---
-name: Lake House
+name: Acme Field Notes
 colors:
   primary: "#1A1C1E"
   neutral: "#F7F5F2"
