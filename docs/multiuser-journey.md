@@ -38,8 +38,10 @@ always enter through the one origin — and its service worker makes the tab
 itself offline-capable: app shell cached, a small durable replica in the
 browser, ops applied optimistically by the same shared reducer and queued
 when the network is gone. Her daemon's replica serves the other half of her
-life: her agent and her files. What she *does* notice: her laptop and her desktop show the same canvas, because
-multi-device fell out before multi-user started.
+life: her agent and her files.
+
+What she *does* notice: her laptop and her desktop show the same canvas,
+because multi-device fell out before multi-user started.
 
 Solo is the multiuser journey with one member. There is no second topology
 and no migration moment later.
@@ -53,7 +55,7 @@ subject: the facepile is *who's here*, Share is *who may be here*. The dialog
 has one field (who) and, below it, the canvas's current roster. Because the
 home already exists and is already current, sharing is **pure permission**:
 grant + URL. No store to push, no home to create. The dialog hands back the
-two things Priya actually needs:
+one thing Priya actually needs:
 
 the canvas's address — `isocan.io/c/7f3a…` — with a copy button. That is
 the whole invitation: *"here's the canvas."* It carries no installation
@@ -140,12 +142,14 @@ Beat by beat:
    *and Isaac's ring* — fade from Jordan's pile. Honest: a sleeping
    laptop's agent cannot wake, so a ring that said "summonable" would lie.
    Jordan keeps working against the home. At 9pm Priya reopens the lid:
-   her tab and her daemon each say **"I have through 214"** — the browser
+   her tab and her daemon each say **"I have through 241"** — the browser
    replica and the home-connection replica carry the same kind of seq
    cursor — and the home streams the tail, replayed through the reducer
-   exactly like crash recovery, because it is that code path. Unread
-   badges and a dimmed face-with-a-count tell her the evening; no toast
-   queue replays.
+   exactly like crash recovery, because it is that code path. (Had she
+   worked offline instead of sleeping, her queued ops would have gone up
+   the same socket first, landing in the home's order before the tail came
+   down.) Unread badges and a dimmed face-with-a-count tell her the
+   evening; no toast queue replays.
 
 Rules this scene set:
 
@@ -176,17 +180,21 @@ button:
 npx github:dglazkov/isocan#release setup isocan.io/c/7f3a…#<pass>
 ```
 
-She pastes it into a terminal in an empty directory. One command: skill,
-CLI, local daemon, marker written with id and address; her daemon dials the
-home, says **"I have nothing,"** and replicates the store — oplog streamed,
-blobs by hash — into her `~/.isocan`. The canvas now exists on her machine;
+She pastes it into a terminal in an empty directory. One command — Priya's
+three steps collapsed to a line, because the address carries everything
+setup would otherwise ask — skill, CLI, local daemon, marker written with
+id and address; her daemon dials the home, says **"I have nothing,"** and
+replicates the store — oplog streamed, blobs by hash — into her
+`~/.isocan`. The canvas now exists on her machine;
 offline capability arrived as a side effect. Then she launches her agent
 and says "use isocan" — the marker already knows the rest.
 
 The `#<pass>` fragment is the quiet payoff: a short-lived, single-use pass
-**minted by her signed-in tab, for her actor**. So there is no second door
-and no social claim — the command was minted by a session that already *is*
-Jordan, and the CLI arrives knowing who it speaks for. Actor resumption is
+**minted by her admitted tab, for her actor**. So there is no second door
+and no social claim — the command was minted by the session that already
+*is* Jordan on this canvas (admission is all the door checks today; the
+identity desk will harden what "admitted" means without moving this), and
+the CLI arrives knowing who it speaks for. Actor resumption is
 a handoff, not a trust exercise; and it is the identity desk's first
 concrete shape — credentials flow *outward from an admitted session*,
 rather than being typed inward at doors. (The rule that authenticated
@@ -217,9 +225,13 @@ it.
 
 ## Scene 6 — Inna sends Sonia to the cloud
 
-Inna is a repo member, thick like Priya — and every morning her agent's ring
-has faded at 6pm with summonses queued behind it. "I don't want my laptop
-closing to stop the work."
+Inna is a repo member; the committed marker is what admitted her — checking
+`.isocan/project.json` into the repo was itself a "share it with the team"
+sentence, a standing grant to whoever can read the repo. Her rig is thick
+like Priya's, and she wants an agent on the work — but she has watched what
+lids do to agents: every evening Isaac's and Nico's rings fade, summonses
+queueing behind them. "I don't want my laptop closing to stop the work," so
+her agent's first home will not be her laptop at all.
 
 The canvas teaches this door like the others. She clicks **her own face**
 in the pile; beside "Work from your terminal…" sits its sibling — **"Run an
@@ -274,26 +286,34 @@ grows a second lane: *"…or let the canvas start one on demand."* What gets
 created (one concrete instantiation — the hook is the contract, the vendor
 isn't): a workflow file in the repo — `.github/workflows/sonia.yml`, a
 `workflow_dispatch` with a `summons` input whose job runs the harness
-headless: *use isocan, canvas at `…#<pass>`, address the summons, exit when
-done* — and a **registration at the home**: actor + dispatch hook + a token
-scoped to firing it. Inna writes no YAML; her laptop agent does ("set Sonia
-up on-demand"), or the dialog offers the file ready to commit. `isocan
+headless: *use isocan, canvas and pass in the summons input, address it,
+exit when done* — and a **registration at the home**: actor + dispatch
+hook + a token scoped to firing it. The committed file holds no secret —
+Scene 5's pass is single-use and short-lived, so a standing file cannot
+carry one; the home mints a fresh pass per summons and sends it in the
+dispatch payload. Inna writes no YAML; she asks an agent ("set Sonia up
+on-demand"), or the dialog offers the file ready to commit. `isocan
 wait` has split into its two halves: a **park** is a process holding a
 connection; a **registration** is a standing rule the home holds for an
 agent that isn't running.
 
 **The pile learns a third truth.** A ring would lie (nothing is connected);
 plain dimming undersells (calling her works). So a third state: the
-**spark** — *not here, starts when called*. The presence grammar is three
-honest words: **ring** = live connection; **dim** = addressable, delivery
-deferred; **spark** = a summons will launch her.
+**spark** — *not here, starts when called*. Naming it exposes that the
+grammar was always two axes, not one: the ring tells connection (solid for
+a live session, dashed for a parked agent, gone when the link dies), and
+dimming tells attention — which is how Isaac could sit dimmed *and*
+dash-ringed in Scene 4. The spark extends the connection axis: **ring** =
+connected now; **no ring** = addressable, delivery deferred; **spark** =
+not running, but a summons will launch her.
 
 **The summons.** 11pm, Jordan circles a card: "@Sonia re-cut these." The
 home checks parked waiters — none — then registrations: match. It fires
-the dispatch with the thread ref, and the thread says so — *"Sonia
-summoned — starting…"*, the spark pulsing. Cold start is real and
+the dispatch, thread ref and a fresh single-use pass in the payload, and
+the thread says so — *"Sonia summoned — starting…"*, the spark pulsing.
+Cold start is real and
 unhidden: sandbox boots, repo clones, CLI dials the home, and about a
-minute later `session on <thread> --say "on it"` lands — the spark
+minute later `isocan session on <thread> --say "on it"` lands — the spark
 brightens into a live ring *because now it is true*. She works the lap —
 reads the region, re-cuts, `isocan edit`, replies with the receipt — and
 **exits**. Ring fades, spark remains. Nothing idled; the minutes billed
@@ -352,9 +372,11 @@ replica durable.
 - **The identity desk** (three appearances, unresolved and load-bearing):
   who may enter a canvas URL; what credential a daemon or a cloud agent
   presents; how an actor claim is vouched across surfaces. Currently: the
-  address is the secret. One concrete lead exists — the escalation pass
-  (Scene 5): credentials minted *outward from an admitted session*, which
-  already covers actor resumption and second machines. Still open: the
+  address is the secret — which means the Scene 1–2 grant is recorded
+  intent, not enforcement: the door checks only the address, and the grant
+  is what the desk will one day enforce. One concrete lead exists — the
+  escalation pass (Scene 5): credentials minted *outward from an admitted
+  session*, which already covers actor resumption and second machines. Still open: the
   first admission (who may open the URL at all), and revocation. The real
   answer probably borrows accounts rather than minting them.
 - **The innkeeper.** Someone runs the home, pays for it, answers for uptime,
@@ -371,8 +393,11 @@ replica durable.
   is tuning, not structure.
 - **Launch custody** (agent-on-demand itself is played — Scene 7): the home
   holds hooks and scoped tokens that start compute in other people's
-  accounts. Revocation, audit, and blast radius of those tokens are the
-  innkeeper debt wearing its sharpest edge.
+  accounts — and it now mints passes with nobody at the keyboard: Scene 5's
+  rule was credentials flowing outward from an admitted session, and the
+  registration has them flowing from a standing rule instead. Revocation,
+  audit, and blast radius of those tokens are the innkeeper debt wearing
+  its sharpest edge.
 
 ## Lessons banked along the way
 
