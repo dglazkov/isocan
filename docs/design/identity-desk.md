@@ -7,9 +7,9 @@ how an actor claim is vouched across surfaces. It is written as an
 inventory of **missing mechanisms**: the things that must exist for the
 scenes to be true, none of which exist yet.
 
-Status: mechanisms 1, 2, and 3 are **designed** (the badge; grants,
-attestations, and the door — below); the rest is **inventory** — the work
-list and the constraints it must be designed under.
+Status: mechanisms 1, 2, 3, and 5 are **designed** (the badge; grants,
+attestations, and the door; actor binding — below); 4, 6, 7, 8, and 9
+collapsed into them; 10 and 11 remain open inventory.
 
 ## What the journey already fixed
 
@@ -72,7 +72,7 @@ each item's fate is tagged.
    borrow-vs-mint-accounts lean becomes a decision.
 4. **Revocation.** *(collapsed: provenance sweep, below)* Un-share, expel, rotate. Structurally impossible under
    address-as-secret; becomes possible only after 2 and 3.
-5. **Server-side actor binding.** *(outlined under the badge; details open)* The home stamps ops and presence with who
+5. **Server-side actor binding.** *(→ actor binding, below)* The home stamps ops and presence with who
    the *connection* is, instead of trusting the asserted `actor` field.
    Turns `comment.update`'s "only the author," actor-scoped undo, and
    honest presence from conventions into enforcement.
@@ -358,13 +358,72 @@ the floor — it borrows only an inbox); whether grants may carry roles
 waits for a scene that forces it; and the registry-scope question (10),
 which admissions narrow but do not settle.
 
+## Mechanism 5, designed: actor binding
+
+The badge made "who is connected" checkable; this makes "who is speaking"
+checkable — everywhere an actor is named, the name must be one the
+speaker's badge vouches for.
+
+**The rule: each hop vouches for what only it can see.** The home cannot
+tell Isaac's process from any other process on Priya's machine — both
+arrive through her daemon's one connection — and it should not pretend
+to. So enforcement splits along the line of sight:
+
+- **The local daemon** verifies *session-level*: an op from a local
+  client must name an actor that client's `sessionKey` claimed. It knows
+  which conversation is which; the home never will.
+- **The home** verifies *badge-level*: the op's named actor must be among
+  the presenting badge's claims. Coarser, and honestly so.
+- **Within a machine, localhost trust stands** — processes stating their
+  own `sessionKey` is today's posture, unchanged. What the badge adds is
+  a boundary: **a badge bounds a compromise.** A stolen machine can speak
+  only as the actors its badge claims, on the canvases its badge is
+  admitted to — never as Jordan, never elsewhere.
+
+```mermaid
+flowchart LR
+    I["Isaac's process<br/>(sessionKey claude:abc)"] -- "op as isaac" --> LD["Priya's daemon<br/>checks: claude:abc<br/>claimed isaac here"]
+    LD -- "op as isaac (bearer B₀)" --> H["home<br/>checks: isaac ∈ B₀.claims"]
+    H --> E["engine applies —<br/>the reducer judges actors,<br/>never badges"]
+```
+
+**Where the check lives.** The transport layer resolves the badge
+(cookie or bearer) and hands it to the engine beside the request; the
+membership check runs inside the single-writer chain, where the claims
+registry already lives — so a claim and an op racing serialize, like
+everything else. Refusal is a validation error (`not-your-actor`); the
+honest client's remedy is to claim first, which the agent guide already
+teaches as the first act.
+
+**What gets checked, uniformly:** ops, undo/redo (or you could undo
+someone else's work by naming them), and every presence beat — including
+a daemon's *relayed* presence, where one connection carries several
+actors and each must be in the badge's claims. Alongside actor checks,
+every project-scoped route checks `projectId ∈ badge.admissions` — the
+door's test, re-asked cheaply on each request rather than only at entry.
+Resume vouches (`as:`) are enforced in the same place claims apply:
+attestation match for a person's actor, a pass or an already-claiming
+badge for an agent's.
+
+**Two things deliberately stay desk-blind:**
+
+- **The reducer.** It keeps judging actors — `comment.update`'s "only the
+  author," actor-scoped undo — and never learns badges exist. Enforcement
+  lands *under* the vocabulary, in the pipeline; the isomorphism contract
+  is untouched, which is the whole trick: the rules that looked like
+  authorization become authorization the moment actors mean something.
+- **The oplog.** Envelopes keep `actor` and `clientId`; badge ids stay
+  out. The oplog is shared state that every replica sees — the badge
+  table is the desk's private ledger, and which badge issued which op is
+  the home's audit log, not the canvas's history. (Same instinct as "the
+  oplog never records grants.")
+
 ## Order of attack
 
-**1, 3, and 2 are designed above.** Next is **5** (actor stamping as a
-membership check against the badge's claims — designed in outline under
-mechanism 1, needs its op-pipeline and presence details). Of the rest: 4
-falls out of 2+3 (provenance sweep, designed in outline); 6 collapsed
-into email attestation; 7 and 8 collapsed into the badge; 9 is subject
-type `repo`, done. Still genuinely open: **10** (registry scope — 
-admissions narrow it but the name-uniqueness scope must be chosen) and
-**11** (bounded standing mint, waiting on the innkeeper posture).
+**1, 3, 2, and 5 are designed above.** Of the rest: 4 falls out of 2+3
+(provenance sweep with re-rooting); 6 collapsed into email attestation;
+7 and 8 collapsed into the badge; 9 is subject type `repo`, done. Still
+genuinely open: **10** (registry scope — admissions narrow it but the
+name-uniqueness scope must be chosen) and **11** (bounded standing mint,
+waiting on the innkeeper posture). When those two close, the desk's
+design is complete and implementation can be sequenced.
