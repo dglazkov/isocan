@@ -17,8 +17,9 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome, pinTakesTopRight } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useDismissOnOutside } from "../lib/dismiss.ts";
 
 const DRAG_SLOP = 4;
 /** Two presses this close together are one double-press. */
@@ -30,6 +31,9 @@ const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
 const MIN_H = 60;
+
+const STAR_ROOM = 26;
+const MIN_NAME_ROOM = 48;
 
 export function ItemView({
   item,
@@ -71,13 +75,14 @@ export function ItemView({
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
+  // The room the star keeps at the other end of the row, and the least the
+  // name is ever given, both in screen pixels.
   const chrome = { transform: `scale(${1 / scale})` };
   const roomy = hasRoomForChrome(width, height, scale);
   const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
   // name row rather than another corner.
-  const starFirst = useCanvasStore((s) => pinTakesTopRight(item, s.canvas, scale));
   const isBrowser = current.mimeType === BROWSER_MIME;
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
@@ -359,7 +364,7 @@ export function ItemView({
         <button
           className={`version-badge version-badge-${corner}`}
           style={{ ...chrome, transformOrigin: corner === "se" ? "bottom right" : "top right" }}
-          title={`${item.versions.length} versions — fan out (F)`}
+          title={`${item.versions.length} versions — show them (S)`}
           onClick={(e) => {
             e.stopPropagation();
             const ui = useUiStore.getState();
@@ -371,7 +376,17 @@ export function ItemView({
         </button>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>
-        <span className="chrome-left" style={{ ...chrome, transformOrigin: "left bottom" }}>
+        <span
+          className="chrome-left"
+          style={{
+            ...chrome,
+            transformOrigin: "left bottom",
+            // The item's width in the label's own units — screen pixels, since
+            // the label is counter-scaled — less the room the star needs at the
+            // other end. The name stretches to here and stops.
+            maxWidth: Math.max(MIN_NAME_ROOM, item.width * scale - STAR_ROOM),
+          }}
+        >
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : (
@@ -396,8 +411,13 @@ export function ItemView({
         )}
         </span>
         <span
-          className={`chrome-right${starFirst ? " first" : ""}`}
-          style={{ ...chrome, transformOrigin: starFirst ? "left bottom" : "right bottom" }}
+          className="chrome-right"
+          // Always the right edge. It used to swap to the LEFT when a comment
+          // pin sat on the corner, which also pushed the name to the right end
+          // of the row — and a name that grows rightward from there runs off
+          // the item entirely once the chrome is counter-scaled. A pin can
+          // overlap the star; a title spilling across the canvas cannot.
+          style={{ ...chrome, transformOrigin: "right bottom" }}
         >
         <button
           className={`star-btn${isStarred(item) ? " on" : ""}`}
@@ -466,6 +486,18 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
   const [draft, setDraft] = useState(title);
   const sizer = useRef<HTMLSpanElement>(null);
   const [width, setWidth] = useState<number | undefined>(undefined);
+  // Finish once. Blur and an outside press can both land for one gesture, and
+  // finishing twice would send two renames for one edit.
+  const finished = useRef(false);
+  const finish = (next: string) => {
+    if (finished.current) return;
+    finished.current = true;
+    onDone(next);
+  };
+  // A press on the canvas cannot blur this field — the canvas calls
+  // preventDefault on its own pointerdown, so focus never moves and the edit
+  // used to sit there open. Clicking away should mean the same as Escape.
+  const outside = useDismissOnOutside<HTMLInputElement>(true, () => finish(draft));
 
   // Measured, not estimated. A `ch` count is the width of a ZERO, which
   // overshoots badly in a proportional face: a 28-character title claimed a
@@ -481,6 +513,7 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
         {draft || " "}
       </span>
     <input
+      ref={outside}
       className="name-input"
       autoFocus
       style={width === undefined ? undefined : { width }}
@@ -489,11 +522,11 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
       onChange={(e) => setDraft(e.target.value)}
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
-      onBlur={() => onDone(draft)}
+      onBlur={() => finish(draft)}
       onKeyDown={(e) => {
         e.stopPropagation(); // the canvas's shortcuts are not for this field
-        if (e.key === "Enter") onDone(draft);
-        if (e.key === "Escape") onDone(title);
+        if (e.key === "Enter") finish(draft);
+        if (e.key === "Escape") finish(title);
       }}
     />
     </>

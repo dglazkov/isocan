@@ -11,7 +11,7 @@ import type { DesignTokens, DesignTypography } from "./designmd.ts";
  * export is a design system that stops at the edge of this canvas.
  *
  * CSS is the one that changes an agent's day: `isocan style --css` gives it
- * something to paste into the screen it is building, so "use the house style"
+ * something to paste into the screen it is building, so "use the design system"
  * stops meaning "read the prose and try".
  */
 

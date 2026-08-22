@@ -345,8 +345,6 @@ export function CanvasPage({
         else if (ui.fannedItemId) ui.setFanned(null);
         else if (ui.enteredItemId) ui.setEntered(null);
         else ui.select(null);
-      } else if (e.key.toLowerCase() === "v" && !e.metaKey && !e.ctrlKey) {
-        ui.setActiveTool("select"); // V selects the Select tool (Figma-standard)
       } else if (e.shiftKey && e.code === "Digit0") {
         e.preventDefault();
         zoomTo100();
@@ -358,11 +356,21 @@ export function CanvasPage({
         zoomToSelection();
       } else if (e.key === "0") {
         zoomToFit();
+      } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        ui.setActiveTool("select"); // V is Select, the way every canvas has it
       } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
       } else if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey) {
-        // Fan out the selected item's version stack. Not V: that is the Select
-        // tool, and the badge has been promising a key that did nothing.
+        // Focus: fill the screen with what you are looking at. With nothing
+        // selected there is only one honest reading of "focus" — everything.
+        e.preventDefault();
+        if (ui.selectedItemIds.length > 0) zoomToSelection();
+        else zoomToFit();
+      } else if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey) {
+        // S fans out the version Stack — which is what the badge and the UI
+        // have always called it. V went back to Select, where every canvas
+        // tool puts it; a single letter beats a modified one for something
+        // you press while looking straight at the item.
         const ids = ui.selectedItemIds;
         const canvas = useCanvasStore.getState().canvas;
         if (ids.length === 1 && canvas && (canvas.items[ids[0]!]?.versions.length ?? 0) > 1) {

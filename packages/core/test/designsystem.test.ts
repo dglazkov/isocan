@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  HOUSE_STYLE_ROLE,
+  DESIGN_SYSTEM_ROLE,
   SLOP_RULES,
-  houseStyle,
-  houseStyleProperties,
-  isHouseStyle,
+  designSystem,
+  designSystemProperties,
+  isDesignSystem,
   slopRulesAsText,
   type CanvasState,
 } from "../src/index.ts";
@@ -21,28 +21,28 @@ const canvas = (items: ReturnType<typeof item>[]): CanvasState => ({
 
 describe("the house style", () => {
   it("is an ordinary item wearing one property", () => {
-    const styled = item("a", houseStyleProperties());
-    expect(isHouseStyle(styled)).toBe(true);
-    expect(styled.properties.role).toBe(HOUSE_STYLE_ROLE);
+    const styled = item("a", designSystemProperties());
+    expect(isDesignSystem(styled)).toBe(true);
+    expect(styled.properties.role).toBe(DESIGN_SYSTEM_ROLE);
   });
 
   it("is not every markdown file on the canvas", () => {
-    expect(isHouseStyle(item("a", {}))).toBe(false);
-    expect(isHouseStyle(item("a", { role: "spec" }))).toBe(false);
+    expect(isDesignSystem(item("a", {}))).toBe(false);
+    expect(isDesignSystem(item("a", { role: "spec" }))).toBe(false);
   });
 
   it("is found on a canvas that has one, and null on one that does not", () => {
-    expect(houseStyle(canvas([item("a", {}), item("b", houseStyleProperties())]))?.id).toBe("b");
-    expect(houseStyle(canvas([item("a", {})]))).toBeNull();
+    expect(designSystem(canvas([item("a", {}), item("b", designSystemProperties())]))?.id).toBe("b");
+    expect(designSystem(canvas([item("a", {})]))).toBeNull();
   });
 
   it("takes the most recently updated when somebody made two", () => {
     // Two is a mistake, not a feature; the newest is the likelier answer to
     // "which one is real".
-    const old = item("old", houseStyleProperties(), "2026-08-01T10:00:00.000Z");
-    const now = item("now", houseStyleProperties(), "2026-08-21T10:00:00.000Z");
-    expect(houseStyle(canvas([now, old]))?.id).toBe("now");
-    expect(houseStyle(canvas([old, now]))?.id).toBe("now");
+    const old = item("old", designSystemProperties(), "2026-08-01T10:00:00.000Z");
+    const now = item("now", designSystemProperties(), "2026-08-21T10:00:00.000Z");
+    expect(designSystem(canvas([now, old]))?.id).toBe("now");
+    expect(designSystem(canvas([old, now]))?.id).toBe("now");
   });
 });
 

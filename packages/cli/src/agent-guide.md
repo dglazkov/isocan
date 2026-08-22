@@ -261,27 +261,27 @@ that woke you, with no `session start` needed.
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
-- **Read the design system before you build a screen.** `isocan style` prints
+- **Read the design system before you build a screen.** `isocan design` prints
   it: a DESIGN.md (github.com/google-labs-code/design.md) whose front matter
   carries typed tokens and whose sections carry the reasoning. It is an ITEM on
   the canvas, so it versions and both surfaces can see it — not a dotfile
   nobody updates.
 
   Two flags save you from retyping values into a screen and getting one wrong:
-  `isocan style --css` gives you custom properties to paste, and `isocan style
+  `isocan design --css` gives you custom properties to paste, and `isocan design
   --tokens` gives you W3C design tokens for anything downstream (Figma, Style
   Dictionary, a Tailwind theme). Build against the variables rather than the
   literals; a screen full of hex codes is a screen that cannot follow the
   system when it changes.
 
-  `isocan style check` says whether the system itself holds up — references to
+  `isocan design check` says whether the system itself holds up — references to
   tokens nobody kept, values that are not colours, contrast that fails. Run it
   before you grade a screen against it, and before you hand a system back.
 
   Build to it, and say in your reply which parts of it you used. If it does
   not cover something you had to decide, say THAT too: the gaps are what the
-  next version of the style should close. If the canvas has no house style,
-  `/house-style` derives one from the screens already there — what they
+  next version of the style should close. If the canvas has no design system,
+  `/design-system` derives one from the screens already there — what they
   already do, rather than a system you invented and imposed.
 
   Designing from scratch each time is why a canvas ends up with six type
@@ -291,10 +291,10 @@ that woke you, with no `session start` needed.
   blue hero, the italic serif headline, glassmorphism over nothing, three
   equal feature cards, "Get Started", one radius for every object, emoji as
   section markers. `/design-audit` checks a screen against the list and
-  against the house style, from the SOURCE, and cites the line.
+  against the design system, from the SOURCE, and cites the line.
 
   It is a floor, not taste: clearing it makes a screen unembarrassing, not
-  good. Good comes from the house style being specific and from the person
+  good. Good comes from the design system being specific and from the person
   rejecting drafts.
 - **Stop when you are told to stop.** If a command you run prints
   `⚠ … CANCELLED this`, the person has called off the thread you picked up.
@@ -538,7 +538,7 @@ undoable — confirm on the thread first, and never delete a canvas you did not
 make),
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
-`style [set]`,
+`design [--css|--tokens] [set|check]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,

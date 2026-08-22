@@ -8,7 +8,7 @@
  * writing down and worth automating: an audit can cite the line.
  *
  * It is a FLOOR, not taste. Removing these reliably stops the bad thing; it
- * does not produce the good thing. The good thing comes from the house style
+ * does not produce the good thing. The good thing comes from the design system
  * being specific (housestyle.ts) and from somebody rejecting drafts.
  *
  * Every rule has to say how to SPOT it, or an agent will report a vibe.
@@ -86,7 +86,7 @@ export const SLOP_RULES: SlopRule[] = [
   {
     name: "Type with no scale",
     spot: "font-size values that do not follow a ratio, or more than six distinct sizes on one page",
-    instead: "A scale, stated in the house style, and every size taken from it.",
+    instead: "A scale, stated in the design system, and every size taken from it.",
   },
   {
     name: "Spacing by eyeball",
