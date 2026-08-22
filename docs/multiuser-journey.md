@@ -33,9 +33,12 @@ committed `.isocan/project.json` marker carries the canvas id *and* the
 home's address from day one. Her daemon is, from the first minute, a syncing
 replica of a home that happens to have one member.
 
-She never notices the topology. Her tab talks to her daemon; ops apply to
-the replica first; everything is local-speed and works offline. What she
-*does* notice: her laptop and her desktop show the same canvas, because
+She never notices the topology. Her tab is the home's web app — people
+always enter through the one origin — and its service worker makes the tab
+itself offline-capable: app shell cached, a small durable replica in the
+browser, ops applied optimistically by the same shared reducer and queued
+when the network is gone. Her daemon's replica serves the other half of her
+life: her agent and her files. What she *does* notice: her laptop and her desktop show the same canvas, because
 multi-device fell out before multi-user started.
 
 Solo is the multiuser journey with one member. There is no second topology
@@ -92,11 +95,13 @@ they've never entered — you invite them through the outside channel.
 
 The wiring, stated once:
 
-- **Jordan (thin):** browser WS → home.
-- **Priya (thick):** browser WS → her local daemon; the daemon holds one
-  persistent client connection to the home carrying two planes — **ops**
-  (persisted, seq-numbered) and **presence** (ephemeral, relayed, never
-  written).
+- **Jordan:** browser WS → home.
+- **Priya:** browser WS → home too — people always sit at the one origin.
+  What makes her "thick" stands *beside* the tab, not under it: her local
+  daemon holds a replica and one persistent client connection to the home,
+  carrying two planes — **ops** (persisted, seq-numbered) and **presence**
+  (ephemeral, relayed, never written) — on behalf of her agent and her
+  filesystem.
 - **Isaac:** a terminal process on Priya's machine, blocked in `isocan wait`
   against her local daemon.
 
@@ -108,16 +113,17 @@ Beat by beat:
    Isaac shows dimmed with a dashed ring (parked, not present). She picks
    Priya, types her question, `⌘⏎`. The home's single-writer pipeline
    appends the ops — seq 214 — and broadcasts.
-2. **Two hops, under a second.** Home → Priya's daemon (applies through the
-   shared reducer, appends locally) → Priya's tab. A toast names Jordan; the
-   pin lands wearing an unread badge; Jordan's live face joins the pile —
-   her cursor rides the relayed presence plane. Isaac does not stir: the
-   comment names Priya, and `wait` wakes only for its own name or the main
-   thread.
+2. **One hop, under a second.** The home broadcasts; Priya's tab receives
+   seq 214 directly — both women's tabs sit on the same daemon, so cursors
+   and toasts are cursor-to-cursor live. A toast names Jordan; the pin
+   lands wearing an unread badge; Jordan's face joins the pile. In
+   parallel the same broadcast reaches Priya's daemon, which applies it to
+   the replica. Isaac does not stir: the comment names Priya, and `wait`
+   wakes only for its own name or the main thread.
 3. **Priya answers.** Click the toast, fly to the pin, reply — mentioning
    Isaac from the picker (dimmed entries are pickable; that is the point of
-   them). Her screen updates instantly from her own daemon; the op climbs to
-   the home and comes down to Jordan as a toast.
+   them). Her own screen updates optimistically as she posts; the op lands
+   at the home and comes down to Jordan as a toast.
 4. **The agent wakes.** The same broadcast reaches Priya's daemon, which
    checks its parked waiters: a comment mentioning Isaac, on this canvas.
    `wait` returns. Isaac reads the thread — the circled region arrives as
@@ -129,14 +135,17 @@ Beat by beat:
 6. **The work, watched.** Isaac rebuilds and runs `isocan edit`; Jordan
    watches the version badge tick, taps `F`, fans the versions, clicks
    Promote. The promote wakes nobody — it mentions nobody.
-7. **The lid closes.** Priya shuts her laptop; her daemon's connection dies;
-   one presence-TTL later her face — *and Isaac's ring* — fade from
-   Jordan's pile. Honest: a sleeping laptop's agent cannot wake, so a ring
-   that said "summonable" would lie. Jordan keeps working against the home.
-   At 9pm Priya reopens the lid: her daemon says **"I have through 214"**
-   and the home streams the tail, replayed through the reducer exactly like
-   crash recovery — because it is that code path. Unread badges and a
-   dimmed face-with-a-count tell her the evening; no toast queue replays.
+7. **The lid closes.** Priya shuts her laptop; her tab's socket and her
+   daemon's connection die together; one presence-TTL later her face —
+   *and Isaac's ring* — fade from Jordan's pile. Honest: a sleeping
+   laptop's agent cannot wake, so a ring that said "summonable" would lie.
+   Jordan keeps working against the home. At 9pm Priya reopens the lid:
+   her tab and her daemon each say **"I have through 214"** — the browser
+   replica and the home-connection replica carry the same kind of seq
+   cursor — and the home streams the tail, replayed through the reducer
+   exactly like crash recovery, because it is that code path. Unread
+   badges and a dimmed face-with-a-count tell her the evening; no toast
+   queue replays.
 
 Rules this scene set:
 
@@ -197,9 +206,10 @@ under Jordan's roof; the asymmetry is gone. Two agents work at once, their
 ops interleaving through the home's single-writer pipeline exactly as two
 tabs on one laptop always have; undo stays four separate stacks.
 
-(Small true detail: `localhost:4441` is a different browser origin than the
-home, so per-viewer read state doesn't follow a tab switch. Cosmetic, known,
-not a bug.)
+(Her browser life doesn't move an inch: the home origin remains the only
+door for people — the daemon serves ops to CLIs, never pages to persons —
+so per-viewer state like read badges has exactly one place to live and no
+second origin to get lost in.)
 
 Escalation is one command, and the canvas itself hands it to you — arriving
 thin is the front door, and the UI offers thick the moment you reach for
@@ -239,17 +249,23 @@ fades truthfully; summonses queue in the oplog; a restarted session re-parks
 and drains them. Sonia holds no replica, so a dead sandbox loses nothing —
 her entire state was always the home's.
 
-## The four seats
+## The three seats
 
-Every participant is one of four shapes, and every cell has a played scene:
+People turned out to have one seat, not two. Every person sits in the
+browser at the home origin, and the service worker makes that tab
+offline-capable on its own. Thickness is a property of machines and
+agents, never of people:
 
-|              | **to the home directly (thin)**   | **via a local daemon (thick)**    |
-| ------------ | --------------------------------- | --------------------------------- |
-| **person**   | Jordan: browser → home            | Priya: tab → daemon → home        |
-| **agent**    | Sonia: CLI → home, no replica     | Isaac, Nico: CLI → daemon → home  |
+| seat | who | wiring |
+| --- | --- | --- |
+| person | Priya, Jordan, Inna | browser → home; the service worker caches the shell, keeps a durable replica, queues ops offline |
+| agent, thick | Isaac, Nico | CLI → local daemon (replica in `~/.isocan`, files, `wait`) → home |
+| agent, thin | Sonia | CLI → home directly; no replica, nothing to lose |
 
-No cell needed new architecture. The home being a real isocan daemon —
-same reducer, same op vocabulary, same WS — covered all four.
+No seat needed new architecture. The home is a real isocan daemon — same
+reducer, same op vocabulary, same WS — and the web client was already a
+replica applying the shared reducer; the service worker only makes that
+replica durable.
 
 ## What the scenes force (the load-bearing minimum)
 
@@ -264,6 +280,11 @@ same reducer, same op vocabulary, same WS — covered all four.
    tail, replay through the reducer.
 5. **Sharing is daemon-API parity, not an op.** Button and verb drive one
    endpoint; the oplog never records grants.
+6. **People enter through one origin, always.** The local daemon serves ops
+   to CLIs, never pages to persons; offline in the browser is the service
+   worker's job — cached shell, durable browser replica, queued ops — so
+   per-viewer state has exactly one home, and every replica (tab or
+   daemon) reconnects with the same seq-cursor gesture.
 
 ## Open debts
 
@@ -281,7 +302,10 @@ same reducer, same op vocabulary, same WS — covered all four.
   posture should be chosen out loud, not inherited.
 - **Offline birth.** A canvas created on a plane births locally and adopts
   a home on first reconnect — the one surviving remnant of "push the store
-  up," demoted to background repair.
+  up," demoted to background repair. With no person-facing door on the
+  daemon, that interval is CLI-and-agent only: a browser cannot visit a
+  canvas whose origin has never been reachable. Acceptable for the edge,
+  worth remembering.
 - **Sync cadence** — when daemons speak to the home (per-op, timer, wake) —
   is tuning, not structure.
 - **Agent-on-demand** (a named door, not walked through): once waits park at
@@ -302,3 +326,7 @@ same reducer, same op vocabulary, same WS — covered all four.
 - The isomorphism thesis pays at the infrastructure layer: because every
   client speaks the same ops to any daemon, "hosted" is a deployment detail
   of code that already exists.
+- The localhost web door was habit, not design: once the canvas is born at
+  the home, serving pages from the daemon just mints a second browser
+  origin for per-viewer state to get lost in. One door for people; the
+  service worker does offline.
