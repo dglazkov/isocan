@@ -7,9 +7,10 @@ how an actor claim is vouched across surfaces. It is written as an
 inventory of **missing mechanisms**: the things that must exist for the
 scenes to be true, none of which exist yet.
 
-Status: mechanisms 1, 2, 3, and 5 are **designed** (the badge; grants,
-attestations, and the door; actor binding — below); 4, 6, 7, 8, and 9
-collapsed into them; 10 and 11 remain open inventory.
+Status: mechanisms 1, 2, 3, 5, and 10 are **designed** (the badge;
+grants, attestations, and the door; actor binding; registry scope —
+below); 4, 6, 7, 8, and 9 collapsed into them. Only 11 remains open, and
+it is deferred to the innkeeper debt's doc, where it belongs.
 
 ## What the journey already fixed
 
@@ -87,11 +88,11 @@ each item's fate is tagged.
 9. **A repo-membership check.** *(collapsed: subject type `repo`)* Scene 6's "the committed marker admitted
    her" currently reduces to URL-knowledge; "can read the repo ⇒ admitted"
    needs a real mechanism.
-10. **Scoped registry / tenancy.** *(open)* The actor registry (names, claims,
+10. **Scoped registry / tenancy.** *(→ registry scope, below)* The actor registry (names, claims,
     colors) is per-home, and claims consult every project on it
     (`Engine.heldNames()`). On a multi-tenant home that is cross-tenant
     name collision and leakage. The registry's scope must be chosen.
-11. **Bounded standing mint** (Scene 7). *(open)* Registrations mint passes with
+11. **Bounded standing mint** (Scene 7). *(open — deferred to the innkeeper doc)* Registrations mint passes with
     nobody present. Scope and revocation of that power is this desk's half
     of the launch-custody debt.
 
@@ -418,12 +419,56 @@ badge for an agent's.
   the home's audit log, not the canvas's history. (Same instinct as "the
   oplog never records grants.")
 
+## Mechanism 10, designed: registry scope
+
+The registry holds three different kinds of fact, and the scoping answer
+is different for each — the mistake would be scoping "the registry" as
+one thing.
+
+- **Actor ids: global, forever.** Opaque, minted once, never recycled,
+  never scoped. Continuity across canvases — the same Isaac on every
+  canvas Priya's machine touches — is the point of the id, and mentions,
+  authorship, and undo all key on it. Ids cannot collide, so they need no
+  tenancy.
+- **Colors: per actor, global.** A color is the actor's own choice and
+  travels with it. What scopes is the *broadcast*: a color change repaints
+  the rooms of canvases where that actor appears, not every room on the
+  home (`engine.onColors` currently floods home-wide — that is the one
+  behavior that must narrow).
+- **Names: judged against the claiming badge's admissions.** Name
+  uniqueness was never a global property — it exists so `@`-mentions
+  resolve and the facepile reads, which are *roster* needs. So "is this
+  name taken" consults exactly the rosters and live sessions of the
+  canvases the claiming badge is admitted to — `heldNames()` stops
+  walking the home and walks the badge's admissions instead. Two
+  strangers on unrelated canvases can both have an Isaac; neither ever
+  hears about the other.
+
+That scoping also closes the leak for free: a refusal can only name
+holders the claimant could already see, because the check never consulted
+anyone else.
+
+**Late collisions are survivable by construction.** Two neighborhoods can
+meet: a canvas gets shared into a group that already has its own Isaac,
+and now one roster wears the name twice. This is not a new problem — the
+vocabulary already mints deliberate duplicates (`actor.claim` with
+`fresh:` — "a second Kenny on purpose"), so every client must already
+render two same-named actors distinguishably (color, id-derived
+disambiguation). A cross-tenant meeting degrades to exactly that handled
+case; nobody is renamed on entry.
+
+**The solo home degenerates correctly.** A local daemon's badge is
+admitted to everything on it, so admission-scoped checks collapse to
+today's walk-the-home behavior — the same code, with the scope emerging
+from the badge rather than hard-coded.
+
 ## Order of attack
 
-**1, 3, 2, and 5 are designed above.** Of the rest: 4 falls out of 2+3
-(provenance sweep with re-rooting); 6 collapsed into email attestation;
-7 and 8 collapsed into the badge; 9 is subject type `repo`, done. Still
-genuinely open: **10** (registry scope — admissions narrow it but the
-name-uniqueness scope must be chosen) and **11** (bounded standing mint,
-waiting on the innkeeper posture). When those two close, the desk's
-design is complete and implementation can be sequenced.
+**1, 3, 2, 5, and 10 are designed above.** Of the rest: 4 falls out of
+2+3 (provenance sweep with re-rooting); 6 collapsed into email
+attestation; 7 and 8 collapsed into the badge; 9 is subject type `repo`,
+done. The one remaining item, **11** (bounded standing mint), is the
+identity desk's edge of launch custody and cannot be designed apart from
+who runs the home — it moves to the innkeeper debt's design doc, which
+should link back here. With that handoff, **the desk's design is
+complete** and implementation can be sequenced.
