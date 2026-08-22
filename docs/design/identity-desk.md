@@ -7,9 +7,9 @@ how an actor claim is vouched across surfaces. It is written as an
 inventory of **missing mechanisms**: the things that must exist for the
 scenes to be true, none of which exist yet.
 
-Status: mechanism 1 is **designed** (the badge, below); the rest is
-**inventory** — the work list and the constraints it must be designed
-under.
+Status: mechanisms 1, 2, and 3 are **designed** (the badge; grants,
+attestations, and the door — below); the rest is **inventory** — the work
+list and the constraints it must be designed under.
 
 ## What the journey already fixed
 
@@ -246,10 +246,106 @@ registry's claims re-key to badge ids with a one-time migration of
 existing `sessionKey` bindings. Nothing yet *enforces* beyond "present a
 badge" — enforcement is mechanisms 2 and 5, standing on this.
 
+## Mechanisms 3 + 2, designed: grants, attestations, and the door
+
+Mechanism 3 asks what a grant binds to; mechanism 2 asks how the door
+checks it. One design, two halves.
+
+**The decision: borrow, never mint.** isocan holds no passwords and no
+user table. A grant's subject is a **provable attribute** — something the
+holder can demonstrate by borrowing an attester they already have. The
+badge stays the only account-shaped thing isocan itself issues, and it is
+just a secret.
+
+**Three subject types, v1:**
+
+- **`link`** — anyone presenting the address. This is the status quo
+  *demoted to data*: every canvas born today carries a standing link
+  grant, so "the address is the secret" stops being a regime and becomes
+  one revocable row. Turning it off is the familiar "anyone with the link"
+  toggle every sharing product has taught.
+- **`email:<addr>`** — the Share dialog's one "who" field takes an email.
+  The name "Jordan" still resolves in Slack, where it always meant
+  something; what isocan records is the attribute Jordan can prove.
+- **`repo:<host>/<owner>/<name>`** — Scene 6's sentence made checkable:
+  committing the marker was a grant to whoever can read the repo, so the
+  subject *is* "can read the repo."
+
+A grant is `{canvasId, subject, grantedBy, at}`, written through the
+daemon API — never an op, per the journey's rule 5.
+
+**Attestations ride the badge.** A badge accumulates verified attributes:
+`{attribute, verifiedVia, at}`. Attesters are borrowed: an OIDC sign-in
+(Google, GitHub) attests an email; a magic link to the inbox attests it
+with no IdP at all; a GitHub token check attests repo read access — how
+Inna's cloud agent proves Scene 6's standing grant covers it. Verifying
+never *creates* anything; it decorates the badge the holder already
+carries.
+
+**The door, then, is one test.** A badge asking after a canvas is admitted
+if any of three things holds — and everything the desk has built so far is
+one of them:
+
+```mermaid
+flowchart TD
+    R["request arrives, carrying its badge"] --> C{"badge already admitted<br/>to this canvas?"}
+    C -- yes --> OK["proceed"]
+    C -- no --> D{"the door"}
+    D -- "it is creating the canvas<br/>(bootstrap)" --> ADD
+    D -- "it bears a valid pass<br/>(vouched by an admitted badge)" --> ADD
+    D -- "an attestation satisfies a grant<br/>(link · email · repo)" --> ADD["admission recorded on the badge,<br/>with provenance: created · pass from B · grant g"]
+    D -- "none of these" --> REF["refused — the door offers the attesters:<br/>verify an email, connect GitHub"]
+    ADD --> OK
+```
+
+One subtlety the diagram bakes in: Priya's own browser at her own
+unshared canvas is admitted by **pass**, not by grant — `isocan open`
+appends a pass minted by her daemon's badge, the same outward flow as
+Scene 5, pointed the other way. No grant needs to exist on an unshared
+canvas beyond the (default, revocable) link grant; admission spreads
+badge-to-badge among your own surfaces and grants exist for strangers.
+
+**Provenance is revocation's grip (4).** Every admission records its root:
+`created`, `grant g`, or `pass from badge B` — and a pass-derived
+admission inherits the *root* of the badge that minted the pass. Revoking
+a grant then sweeps every admission rooted in it, however many pass-hops
+away: revoke Jordan's email grant and her tab, her daemon, and Nico all
+lose the canvas in one pass. Kill-a-badge (mechanism 1) handles the
+stolen-laptop case; grant revocation handles the un-invite. The two
+compose.
+
+**What this collapses downstream:**
+
+- **Revocation (4)** is now designed in outline: delete the grant, sweep
+  by provenance. "Turn off the link" is the same gesture on the link
+  grant.
+- **Person resumption across browsers (6)**: a verified email is the
+  person-level key the badge never was. A badge attesting the same email
+  as the badge that claimed an actor may *resume* that actor — Jordan's
+  phone verifies jordan@…, and picking "Jordan" is a resume, not a
+  refusal. The `as:` impersonation lever closes at the same stroke: resume
+  requires the attestation, not just the assertion.
+- **Repo membership (9)** is subject type `repo`, done.
+- **Scene 3 gains one honest beat, only when the link grant is off**: a
+  stranger arriving without attestation is asked to verify their email at
+  the door. Default posture preserves the journey exactly — link grant on
+  at birth, Scene 3 friction-free; tightening is the owner's explicit
+  trade. The journey's door stays the journey's door until somebody locks
+  it.
+
+**Not yet decided here:** which attesters ship first (magic-link email is
+the floor — it borrows only an inbox); whether grants may carry roles
+(viewer/editor) — the journey never played a read-only member, so that
+waits for a scene that forces it; and the registry-scope question (10),
+which admissions narrow but do not settle.
+
 ## Order of attack
 
-**1 first** — everything leans on "admitted session" being real. Then **3
-and 2** (choose the subject, then build the door that checks it), then
-**5** (bind actors to connections). The rest hang off those: 4 falls out of
-2+3; 6, 7, and 8 are shapes of 1; 9 is a special credential under 2; 10 is
-a scoping decision 1 forces anyway; 11 waits on 7's credential shape.
+**1, 3, and 2 are designed above.** Next is **5** (actor stamping as a
+membership check against the badge's claims — designed in outline under
+mechanism 1, needs its op-pipeline and presence details). Of the rest: 4
+falls out of 2+3 (provenance sweep, designed in outline); 6 collapsed
+into email attestation; 7 and 8 collapsed into the badge; 9 is subject
+type `repo`, done. Still genuinely open: **10** (registry scope — 
+admissions narrow it but the name-uniqueness scope must be chosen) and
+**11** (bounded standing mint, waiting on the innkeeper posture).
