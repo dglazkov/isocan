@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { LogEntry, OpEnvelope, Operation, ProjectState } from "@isocan/core";
 import { applyOperation, invertOperation } from "@isocan/core";
-import { Store } from "../src/store.ts";
+import { FileStore } from "../src/file-store.ts";
 import * as p from "../src/paths.ts";
 
 const actor = { id: "usr_test", name: "Tester" };
@@ -22,11 +22,11 @@ function envelope(op: Operation): OpEnvelope {
 }
 
 let home: string;
-let store: Store;
+let store: FileStore;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-store-"));
-  store = new Store(home);
+  store = new FileStore(home);
   await store.init();
 });
 

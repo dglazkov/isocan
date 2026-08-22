@@ -1,38 +1,4 @@
-import { promises as fs } from "node:fs";
-import { createHash } from "node:crypto";
-import path from "node:path";
-import type { ActorRegistry, LogEntry, OpEnvelope, Project, ProjectState, SlashCommand } from "@isocan/core";
-import {
-  applyActorColor,
-  applyOperation,
-  bindClaim,
-  COMMAND_NAME,
-  emptyCanvas,
-  newOpId,
-  parseCommandFile,
-} from "@isocan/core";
-import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
-import * as p from "./paths.ts";
-
-/**
- * Persistence for one isocan home. Layout per project:
- *   project.json  — Project metadata
- *   canvas.json   — { lastSeq, items, threads } derived snapshot
- *   trash.json    — TrashEntry[] derived snapshot
- *   oplog.jsonl   — append-only LogEntry per line; the source of truth
- *   blobs/        — content-addressed version content, <sha256>.<ext>
- *   blobs.json    — { [hash]: { file, mimeType, filename, size } }
- *
- * The oplog is appended (with fsync) BEFORE snapshots are rewritten, so a
- * crash between writes is always recoverable by replaying the oplog tail past
- * canvas.json's lastSeq.
- */
-
-interface CanvasSnapshotFile {
-  lastSeq: number;
-  items: ProjectState["canvas"]["items"];
-  threads: ProjectState["canvas"]["threads"];
-}
+import type { ActorRegistry, LogEntry, Project, ProjectState, SlashCommand } from "@isocan/core";
 
 export interface BlobMeta {
   file: string;
@@ -50,346 +16,84 @@ export interface LoadedProject {
   recoveredSeqs: number[];
 }
 
-export class Store {
-  constructor(readonly home: string) {}
+/**
+ * Persistence for one isocan home — the seam the engine mutates through, and
+ * the only thing it knows about storage. `FileStore` (see `file-store.ts`) is
+ * the default backing and stays so forever: any innkeeper with a disk runs a
+ * complete home. A second backing implements this same set.
+ *
+ * The durability contract lives here rather than in any one backing: an op is
+ * durable BEFORE it is broadcast, so `appendLog` must not resolve until the
+ * entry survives a crash. Snapshots are derived; the log is the truth.
+ */
+export interface Store {
+  init(): Promise<void>;
 
-  async init(): Promise<void> {
-    await fs.mkdir(p.projectsDir(this.home), { recursive: true });
-    await fs.mkdir(p.deletedProjectsDir(this.home), { recursive: true });
-  }
+  listProjects(): Promise<Project[]>;
 
-  async listProjects(): Promise<Project[]> {
-    let ids: string[];
-    try {
-      ids = await fs.readdir(p.projectsDir(this.home));
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw err;
-    }
-    const projects: Project[] = [];
-    for (const id of ids) {
-      const project = await readJson<Project>(p.projectFile(this.home, id));
-      if (project) projects.push(project);
-    }
-    projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return projects;
-  }
+  createProjectDir(id: string): Promise<void>;
 
-  async createProjectDir(id: string): Promise<void> {
-    await fs.mkdir(p.blobsDir(this.home, id), { recursive: true });
-  }
+  projectExists(id: string): Promise<boolean>;
 
-  async projectExists(id: string): Promise<boolean> {
-    return (await readJson<Project>(p.projectFile(this.home, id))) !== null;
-  }
+  load(id: string): Promise<LoadedProject | null>;
 
-  async load(id: string): Promise<LoadedProject | null> {
-    const project = await readJson<Project>(p.projectFile(this.home, id));
-    if (!project) return null;
-    const snapshot = await readJson<CanvasSnapshotFile>(p.canvasFile(this.home, id));
-    const trash = (await readJson<ProjectState["canvas"]["trash"]>(p.trashFile(this.home, id))) ?? [];
-    const entries = await readJsonLines<LogEntry>(p.oplogFile(this.home, id));
+  saveProject(project: Project): Promise<void>;
 
-    let state: ProjectState = {
-      project,
-      canvas: snapshot
-        ? { items: snapshot.items, threads: snapshot.threads, trash }
-        : { ...emptyCanvas(), trash },
-    };
-    let lastSeq = snapshot?.lastSeq ?? 0;
+  saveSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void>;
 
-    // Crash recovery: replay any oplog tail the snapshot doesn't cover.
-    const recoveredSeqs: number[] = [];
-    for (const entry of entries) {
-      if (entry.seq <= lastSeq) continue;
-      if (entry.envelope.op.type === "project.create") continue; // project.json already exists
-      const next = applyOperation(state, entry.envelope);
-      if (next === null) return null; // replayed a project.delete — treat as gone
-      state = next;
-      lastSeq = entry.seq;
-      recoveredSeqs.push(entry.seq);
-    }
-    if (recoveredSeqs.length > 0) {
-      await this.saveSnapshot(id, state, lastSeq);
-    }
-    return { state, lastSeq, entries, recoveredSeqs };
-  }
+  appendLog(id: string, entry: LogEntry): Promise<void>;
 
-  async saveProject(project: Project): Promise<void> {
-    await writeFileAtomic(p.projectFile(this.home, project.id), pretty(project));
-  }
+  /** project.delete is soft: the state is moved aside, recoverable by hand. */
+  softDeleteProject(id: string): Promise<void>;
 
-  async saveSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void> {
-    const snapshot: CanvasSnapshotFile = {
-      lastSeq,
-      items: state.canvas.items,
-      threads: state.canvas.threads,
-    };
-    await writeFileAtomic(p.canvasFile(this.home, id), pretty(snapshot));
-    await writeFileAtomic(p.trashFile(this.home, id), pretty(state.canvas.trash));
-    await this.saveProject(state.project);
-  }
+  // ---- slash commands ----
 
-  async appendLog(id: string, entry: LogEntry): Promise<void> {
-    await appendLineDurable(p.oplogFile(this.home, id), JSON.stringify(entry));
-  }
+  loadCommands(): Promise<SlashCommand[]>;
 
-  /** project.delete is soft: the directory is moved aside, recoverable by hand. */
-  async softDeleteProject(id: string): Promise<void> {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    await fs.rename(
-      p.projectDir(this.home, id),
-      path.join(p.deletedProjectsDir(this.home), `${id}-${stamp}`),
-    );
-  }
+  saveCommand(name: string, text: string): Promise<void>;
+
+  /** Removing a shadow gives the built-in back, which is why this says
+   * whether one was actually there. */
+  deleteCommand(name: string): Promise<boolean>;
 
   // ---- the actor registry (home-scoped; see core/claims.ts) ----
 
-  /**
-   * Load the registry: snapshot plus any oplog tail the snapshot doesn't
-   * cover. Replay is trivial — the envelope carries the RESOLVED actor, so a
-   * logged claim re-applies without re-validation — which is what makes the
-   * jsonl the source of truth and actors.json derived, same as a project.
-   */
-  /**
-   * The slash commands this home has written. Read from disk every time
-   * rather than cached: these are files a person edits in a text editor, and
-   * an editor save should show up in the next menu they open, not the next
-   * time they restart the daemon.
-   *
-   * A file that does not parse is skipped, not fatal. One malformed command
-   * must not take the menu down with it.
-   */
-  async loadCommands(): Promise<SlashCommand[]> {
-    let names: string[];
-    try {
-      names = await fs.readdir(p.commandsDir(this.home));
-    } catch {
-      return []; // no commands directory yet: the built-ins are the whole set
-    }
-    const commands: SlashCommand[] = [];
-    for (const file of names.sort()) {
-      if (!file.endsWith(".md")) continue;
-      const name = file.slice(0, -3);
-      if (!COMMAND_NAME.test(name)) continue;
-      try {
-        const parsed = parseCommandFile(name, await fs.readFile(p.commandFile(this.home, name), "utf8"));
-        if (parsed) commands.push(parsed);
-      } catch {
-        // Unreadable mid-write, or not a file at all. Skip it.
-      }
-    }
-    return commands;
-  }
+  loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }>;
 
-  /** Write one, atomically — the menu reads this directory unsynchronised. */
-  async saveCommand(name: string, text: string): Promise<void> {
-    if (!COMMAND_NAME.test(name)) throw new Error(`not a command name: ${name}`);
-    await fs.mkdir(p.commandsDir(this.home), { recursive: true });
-    await writeFileAtomic(p.commandFile(this.home, name), text);
-  }
+  saveActors(registry: ActorRegistry, lastSeq: number): Promise<void>;
 
-  /** Remove one. Removing a shadow gives the built-in back, which is why this
-   * says whether a file was actually there. */
-  async deleteCommand(name: string): Promise<boolean> {
-    if (!COMMAND_NAME.test(name)) throw new Error(`not a command name: ${name}`);
-    try {
-      await fs.unlink(p.commandFile(this.home, name));
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  appendActorsLog(entry: LogEntry): Promise<void>;
 
-  async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
-    const snapshot = await readJson<{
-      lastSeq: number;
-      claims: ActorRegistry["claims"];
-      colors?: ActorRegistry["colors"];
-    }>(p.actorsFile(this.home));
-    // `colors` is absent in files written before identity colors existed —
-    // an old home simply has nobody who has chosen one yet.
-    let registry: ActorRegistry = { claims: snapshot?.claims ?? {}, colors: snapshot?.colors ?? {} };
-    let lastSeq = snapshot?.lastSeq ?? 0;
-    const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
-    let recovered = false;
-    for (const entry of entries) {
-      if (entry.seq <= lastSeq) continue;
-      const op = entry.envelope.op;
-      if (op.type === "actor.claim") {
-        registry = bindClaim(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, op });
-      } else if (op.type === "actor.setColor") {
-        registry = applyActorColor(registry, op);
-      } else {
-        continue;
-      }
-      lastSeq = entry.seq;
-      recovered = true;
-    }
-    if (recovered) await this.saveActors(registry, lastSeq);
-    return { registry, lastSeq };
-  }
-
-  async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
-    await writeFileAtomic(
-      p.actorsFile(this.home),
-      pretty({ lastSeq, claims: registry.claims, colors: registry.colors }),
-    );
-  }
-
-  async appendActorsLog(entry: LogEntry): Promise<void> {
-    await appendLineDurable(p.actorsLogFile(this.home), JSON.stringify(entry));
-  }
-
-  /**
-   * Fold the CLI-era session registry (`agents.json`, pre-#57) into the
-   * actor registry, then move the file aside so this runs once (#59). Actor
-   * ids must survive — they are what the canvases remember — so each binding
-   * becomes a logged reincarnation claim (`as` + name), stamped with its
-   * original boundAt: recency semantics carry over, and a lost snapshot
-   * recovers the imported rows from the jsonl like any other claim. Runs at
-   * daemon startup, before the engine reads the registry.
-   */
-  async migrateLegacyAgents(): Promise<void> {
-    interface LegacyBinding {
-      id?: string;
-      name?: string;
-      boundAt?: string;
-    }
-    const file = p.agentsFile(this.home);
-    let legacy: { sessions?: Record<string, LegacyBinding> };
-    try {
-      legacy = JSON.parse(await fs.readFile(file, "utf8")) as typeof legacy;
-    } catch {
-      return; // no file, or unreadable — nothing to fold in
-    }
-    const { registry, lastSeq } = await this.loadActors();
-    let current = registry;
-    let seq = lastSeq;
-    // Oldest first, so when several keys held one actor (nested sessions),
-    // the newest binding is the one that survives bindClaim's eviction.
-    const sessions = Object.entries(legacy?.sessions ?? {}).sort(([, a], [, b]) =>
-      (a?.boundAt ?? "").localeCompare(b?.boundAt ?? ""),
-    );
-    for (const [key, binding] of sessions) {
-      if (!binding?.id || !binding.name) continue;
-      // The new registry wins: a key or actor already claimed post-#57 is
-      // living its own life, and the legacy row is history.
-      if (current.claims[key]) continue;
-      if (Object.values(current.claims).some((claim) => claim.id === binding.id)) continue;
-      const ts = binding.boundAt ?? new Date().toISOString();
-      const op = {
-        type: "actor.claim",
-        sessionKey: key,
-        name: binding.name,
-        as: binding.id,
-      } as const;
-      const envelope: OpEnvelope = {
-        id: newOpId(),
-        projectId: null,
-        actor: { id: binding.id, name: binding.name },
-        ts,
-        op,
-      };
-      seq += 1;
-      await this.appendActorsLog({ seq, envelope, inverse: null });
-      current = bindClaim(current, { actor: envelope.actor, ts, op });
-    }
-    if (seq !== lastSeq) await this.saveActors(current, seq);
-    await fs.rename(file, `${file}.migrated`).catch(() => {});
-  }
+  /** One-time fold-in of the CLI-era `agents.json` (#59). File-shaped: only a
+   * disk backing has ever had such a file. */
+  migrateLegacyAgents(): Promise<void>;
 
   // ---- blobs ----
 
-  /**
-   * Store bytes and name them in the index. Read-modify-write over the whole
-   * of `blobs.json`, so like every other writer here it must be called from
-   * the engine's single-writer chain — `Engine.putBlob`, never directly.
-   */
-  async putBlob(
+  putBlob(
     id: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
-  ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    const blobHash = createHash("sha256").update(data).digest("hex");
-    const index = await this.blobIndex(id);
-    const existing = index[blobHash];
-    if (existing) {
-      return { blobHash, size: existing.size, mimeType: existing.mimeType };
-    }
-    const ext = extensionFor(meta.filename, meta.mimeType);
-    const file = ext ? `${blobHash}.${ext}` : blobHash;
-    await writeFileAtomic(path.join(p.blobsDir(this.home, id), file), data);
-    index[blobHash] = { file, mimeType: meta.mimeType, filename: meta.filename, size: data.length };
-    await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
-    return { blobHash, size: data.length, mimeType: meta.mimeType };
-  }
+  ): Promise<{ blobHash: string; size: number; mimeType: string }>;
 
-  async getBlob(id: string, blobHash: string): Promise<{ path: string; meta: BlobMeta } | null> {
-    const meta = (await this.blobIndex(id))[blobHash];
-    if (!meta) return null;
-    return { path: path.join(p.blobsDir(this.home, id), meta.file), meta };
-  }
+  /** File-shaped: the caller streams from `path`. A backing without a
+   * filesystem path will need this reshaped. */
+  getBlob(id: string, blobHash: string): Promise<{ path: string; meta: BlobMeta } | null>;
 
-  async blobIndex(id: string): Promise<Record<string, BlobMeta>> {
-    return (await readJson<Record<string, BlobMeta>>(p.blobsIndexFile(this.home, id))) ?? {};
-  }
+  blobIndex(id: string): Promise<Record<string, BlobMeta>>;
 
   // ---- garbage collection primitives (composed by Engine.gc) ----
 
-  /** Age of a blob file in ms, or null if it is already gone. */
-  async blobAgeMs(id: string, meta: BlobMeta): Promise<number | null> {
-    try {
-      const stat = await fs.stat(path.join(p.blobsDir(this.home, id), meta.file));
-      return Date.now() - stat.mtimeMs;
-    } catch {
-      return null;
-    }
-  }
+  /** Age of a blob in ms, or null if it is already gone. */
+  blobAgeMs(id: string, meta: BlobMeta): Promise<number | null>;
 
-  async deleteBlobFile(id: string, meta: BlobMeta): Promise<void> {
-    await fs.rm(path.join(p.blobsDir(this.home, id), meta.file), { force: true });
-  }
+  deleteBlobFile(id: string, meta: BlobMeta): Promise<void>;
 
-  async writeBlobIndex(id: string, index: Record<string, BlobMeta>): Promise<void> {
-    await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
-  }
+  writeBlobIndex(id: string, index: Record<string, BlobMeta>): Promise<void>;
 
   /** Preserve compacted-away entries for audit before the live log shrinks. */
-  async archiveOplogEntries(id: string, dropped: LogEntry[]): Promise<void> {
-    if (dropped.length === 0) return;
-    const lines = dropped.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
-    await fs.appendFile(p.oplogArchiveFile(this.home, id), lines);
-  }
+  archiveOplogEntries(id: string, dropped: LogEntry[]): Promise<void>;
 
   /** Atomically replace the live oplog with the retained entries. */
-  async rewriteOplog(id: string, retained: LogEntry[]): Promise<void> {
-    const body = retained.map((entry) => JSON.stringify(entry)).join("\n");
-    await writeFileAtomic(p.oplogFile(this.home, id), body.length > 0 ? body + "\n" : "");
-  }
-}
-
-function pretty(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
-/** Prefer the real file extension; fall back to a small mime map. */
-function extensionFor(filename: string, mimeType: string): string {
-  const fromName = path.extname(filename).slice(1).toLowerCase();
-  if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
-  const map: Record<string, string> = {
-    "text/markdown": "md",
-    "text/uri-list": "uri",
-    "text/html": "html",
-    "text/plain": "txt",
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/gif": "gif",
-    "image/svg+xml": "svg",
-    "image/webp": "webp",
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-  };
-  return map[mimeType] ?? "bin";
+  rewriteOplog(id: string, retained: LogEntry[]): Promise<void>;
 }

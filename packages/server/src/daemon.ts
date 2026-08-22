@@ -5,7 +5,8 @@ import { DEFAULT_PORT } from "@isocan/core";
 import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { attachWebSockets } from "./ws.ts";
-import { Store } from "./store.ts";
+import { FileStore } from "./file-store.ts";
+import type { Store } from "./store.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 
@@ -34,7 +35,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
 
-  const store = new Store(home);
+  const store = new FileStore(home);
   await store.init();
   await store.migrateLegacyAgents(); // pre-#57 session bindings, folded in once
   const presence = new PresenceHub();

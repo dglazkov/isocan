@@ -81,10 +81,11 @@ a feature rather than a risk.
 ## Storage: the Store grows a second backing
 
 `Store` is already the seam — the engine mutates nothing except
-through its methods. It becomes an interface with two backings:
-**FileStore** (today's code, unchanged, and still the default — any
-innkeeper with a disk runs a complete home) and **CloudStore** (what
-the hosted home configures). The mapping, file by file:
+through its methods. As of phase 1 it *is* an interface, with room for
+two backings: **FileStore** (today's code, unchanged, and still the
+default — any innkeeper with a disk runs a complete home) and
+**CloudStore** (what the hosted home configures). The mapping, file by
+file:
 
 | FileStore | CloudStore |
 | --- | --- |
@@ -92,7 +93,7 @@ the hosted home configures). The mapping, file by file:
 | `canvas.json`, `trash.json` snapshots | GCS objects (snapshots can outgrow Firestore's document limit; the oplog is truth, snapshots are a fast boot) |
 | `project.json` | Firestore document |
 | `blobs/<sha256>.<ext>` | GCS objects, same content addressing |
-| `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index |
+| `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index. Costlier than it looks: `Engine.gc` drives that read-modify-write from *above* the seam (read the whole index, age each blob, delete, write back), so this row is not a schema swap behind an unchanged method — GC's per-blob loop moves behind the seam first (phase 1 finding) |
 | `actors.jsonl` + `actors.json` | same op-docs-plus-snapshot pattern, for the registry's public face (ids, names, colors); the claims half re-keys onto `badges/` — the two-ledger split, drawn in code |
 
 The durability contract is unchanged: an op is durable **before** it is

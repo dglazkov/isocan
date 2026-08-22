@@ -34,8 +34,8 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: nothing started — Phase 1 is next.** This line moves
-as phases close; a clean session starts by believing it.
+**Where we are: Phase 1 is closed — Phase 2, the badge, is next.** This
+line moves as phases close; a clean session starts by believing it.
 
 ---
 
@@ -50,7 +50,43 @@ untouched, which is the entire point of the phase.
 
 **Proof:** The full vitest suite, green, with no test edited.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-22 — "no test edited" met a rename, and the proof bent by
+  three lines.** `store.test.ts` constructs the concrete class, so a
+  rename cannot leave it alone. The conductor authorized exactly the
+  identifier substitution and the module path that the file split
+  forces — one import, one type annotation, one `new` — and checked
+  the whole `test/` diff to confirm nothing else moved. Not an
+  assertion, not a fixture. Recorded so no later phase reads "566
+  passing, untouched" as literally true. The lesson for the phases
+  that follow: a proof written as "no test edited" is really "no test
+  *rewritten*", and should be stated that way when it is meant.
+- **2026-08-22 — The seam is two files, and that is the point.**
+  `store.ts` holds the interface and nothing else — its only import is
+  a single `import type` from core, so it has no runtime dependency at
+  all. `file-store.ts` holds the class. That split turns "the engine
+  compiles against the interface and nothing else" from a claim into a
+  grep: `store.ts` structurally *cannot* reach the concrete class, so
+  no future edit can quietly re-couple them. `FileStore` is named in
+  exactly three places — `daemon.ts` (the composition root that picks
+  the backing), `index.ts` (the export), and that one test.
+- **2026-08-22 — Three file-shaped methods survived onto the
+  interface, on purpose.** An honest leaky seam beats a speculative
+  clean one, so today's code crossed unchanged and the debts are named
+  instead of paid: `getBlob` returns `{ path }` and `http.ts` streams
+  from it; `migrateLegacyAgents()` is a one-time `agents.json` fold-in
+  (#59) no cloud backing will ever have; and the blob index crosses
+  whole — `blobIndex(id)` hands back the entire record and
+  `writeBlobIndex` takes it back.
+- **2026-08-22 — The third debt is bigger than a signature, and it
+  redrew the map.** `Engine.gc` drives the blob cycle from *above* the
+  seam: read the whole index, age each blob, delete files, write the
+  index back. So CloudStore's per-blob `blobmeta/{hash}` docs are not
+  a schema swap behind an unchanged method — the read-modify-write
+  lives in the engine, and Phase 4 must move that loop behind the seam
+  before the schema means anything. [architecture.md](architecture.md)
+  now says so where the blob row is.
 
 ## Phase 2 — The badge
 

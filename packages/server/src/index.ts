@@ -1,7 +1,8 @@
 export { startDaemon, runDaemon, stopDaemons } from "./daemon.ts";
 export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.ts";
 export { Engine, ProjectNotFoundError, NothingToUndoError } from "./engine.ts";
-export { Store } from "./store.ts";
+export type { Store } from "./store.ts";
+export { FileStore } from "./file-store.ts";
 export { buildStamp, stalenessOf } from "./build.ts";
 export type { BuildStamp } from "./build.ts";
 export * as paths from "./paths.ts";
