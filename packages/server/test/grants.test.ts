@@ -3,8 +3,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
-import type { GrantResponse, GrantsResponse, LogEntry, Project } from "@isocan/core";
-import { grantRoute, grantsRoute, WS_NOT_ADMITTED } from "@isocan/core";
+import type { FreeNameResponse, GrantResponse, GrantsResponse, LogEntry, Project } from "@isocan/core";
+import { FREE_NAME_ROUTE, grantRoute, grantsRoute, ISOCAN_NAMES, WS_NOT_ADMITTED } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -413,6 +413,82 @@ describe("actor.claim's projectId", () => {
     expect(taken.status).toBe(200);
     const { envelope } = (await taken.json()) as { envelope: { actor: { name: string } } };
     expect(envelope.actor.name).toBe("Priya");
+  });
+});
+
+describe("a free name, for a badge that has been nowhere", () => {
+  /**
+   * **The bug phase 7.5 shipped, reproduced without a clock.**
+   *
+   * `GET /api/actors/free-name` is asked by a replica on behalf of a nameless
+   * claimant, and the badge asking is the replica's own — brand new, admitted
+   * to nothing. Scoped strictly to admissions, that badge's scope is EMPTY,
+   * so the home answers with the first roster name: the one answer guaranteed
+   * to collide the instant the claim is announced.
+   *
+   * It passed against a local home because a replica's sweep admits its badge
+   * over loopback within milliseconds, so by claim time the scope was full.
+   * Against a real home the claim won that race — and the refusal that came
+   * back NAMED the canvas, because by then the badge HAD been admitted. That
+   * asymmetry is what made it look like anything but a scope bug.
+   *
+   * So this asks the route directly, from a badge that has been nowhere. No
+   * replica, no sweep, no timing: the condition, not the clock.
+   */
+  const freeName = async (badge: TestBadge): Promise<string> =>
+    ((await (await get(badge, FREE_NAME_ROUTE)).json()) as FreeNameResponse).name;
+
+  /** The first roster name, on a canvas — `heldNames` reads rosters, so a
+   * claim alone would not put it in anybody's way. */
+  async function canvasHeldByIsaac(): Promise<void> {
+    const isaac = { id: "usr_isaac", name: ISOCAN_NAMES[0] };
+    await owner.speakAs(isaac, "test:isaac");
+    const made = await op(owner, {
+      projectId: null,
+      actor: isaac,
+      op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    });
+    if (!made.ok) throw new Error(`could not create the canvas: ${await made.text()}`);
+  }
+
+  it("skips a name taken in a canvas the asker has not entered but could", async () => {
+    await canvasHeldByIsaac();
+    const fresh = await stranger();
+    expect(await freeName(fresh)).not.toBe(ISOCAN_NAMES[0]);
+    expect(await freeName(fresh)).toBe(ISOCAN_NAMES[1]);
+  });
+
+  it("does not admit the asker to anything by answering", async () => {
+    await canvasHeldByIsaac();
+    const fresh = await stranger();
+    await freeName(fresh);
+    // Same line the projects listing holds: what a badge COULD get into is a
+    // different question from where it has been, and answering the first by
+    // writing the second would hand every asking badge an admission to
+    // everything — the scope mechanism 10 exists to narrow.
+    expect((await daemon.desk.badge(fresh.badgeId))!.admissions).toEqual([]);
+  });
+
+  it("does not reach into a canvas the asker could not enter", async () => {
+    await canvasHeldByIsaac();
+    await revokeLink(owner);
+    const fresh = await stranger();
+    // With the link off the room is out of reach, so its roster is none of
+    // this badge's business and the first roster name is free again. The
+    // widening is the door's test, not "the whole home".
+    expect(await freeName(fresh)).toBe(ISOCAN_NAMES[0]);
+  });
+
+  it("still answers an ADMITTED badge from what it is admitted to", async () => {
+    await canvasHeldByIsaac();
+    const inside = await stranger();
+    expect((await get(inside, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    await revokeLink(owner);
+    // The link is off, so no grant would admit anybody now — but this badge
+    // has already been in, and its admission is what answers. The widening
+    // adds to the admissions; it never replaces them.
+    expect(await freeName(inside)).toBe(ISOCAN_NAMES[1]);
+    expect(await freeName(await stranger())).toBe(ISOCAN_NAMES[0]);
   });
 });
 
