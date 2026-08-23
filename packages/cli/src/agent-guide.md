@@ -194,6 +194,34 @@ it render as cards that fly the reader to the item. Treat it as the primary
 conversation — reply to main-thread asks in the main thread, and keep
 item-specific critique on the item's own anchored threads.
 
+## When the daemon is a replica
+
+`isocan status` may say **`role: replica of <address>`**. Then the daemon on
+this machine is not the canvas's home — it holds a synced copy, and the home
+at that address is the single writer of everything. Three things change for
+you, and nothing else does:
+
+- **Every write travels.** Adding an item, posting a comment, `undo` — each
+  goes to the home and comes back, so a write can now fail for a reason that
+  has nothing to do with what you asked. `home-unreachable` (HTTP 503) means
+  the home could not be reached and **your write did not happen**. Nothing is
+  queued and nothing will retry it for you: say so, and try again when the
+  network is back. Do not paper over it by working around the canvas.
+- **The page is at the home, not here.** `isocan open` prints the home's
+  address; `http://127.0.0.1:4441` serves you ops and answers a browser with a
+  404 that names the home. If you are telling a person where to look, give
+  them the address `isocan open` printed.
+- **Reads are local and instant.** Everything you look at — `ls`, `show`,
+  `comment list`, `wait` — is answered from this machine's copy, and the
+  copy is kept current by a live connection. `isocan who` shows everyone on
+  the canvas, including people connected to the home from elsewhere.
+
+`.isocan/project.json` records the home's address beside the canvas id. A
+directory whose marker names a DIFFERENT home than this daemon answers to is
+refused, loudly and by every command: moving a canvas between homes is a
+deliberate act, not something a command should do because you ran it in the
+wrong directory. Report it rather than editing the marker.
+
 ## Working a canvas that is not this directory's
 
 Only when the human asks for it. Pass `--project <ref>` to each command — do

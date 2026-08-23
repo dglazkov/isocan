@@ -39,6 +39,7 @@ import {
 } from "@isocan/core";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
+import type { HomeConnection } from "./home-link.ts";
 import { UndoStacks } from "./undo.ts";
 import {
   DEFAULT_GRACE_MS,
@@ -109,6 +110,27 @@ export interface ClaimRequest {
 type EventListener = (projectId: string, message: ServerMessage) => void;
 
 /**
+ * An entry as it arrives from a home — a `LogEntry` whose `inverse` may not be
+ * known yet.
+ *
+ * Two shapes reach a replica for the SAME entry: the WS broadcast carries the
+ * whole `LogEntry` the home built (inverse and cause included), while
+ * `POST /api/ops` answers with `{ seq, envelope }` only. The second is
+ * complete enough: the inverse is `invertOperation` of the op against the
+ * pre-state, the reducer is the same reducer on both machines, and the entry
+ * is only ever applied when the local state IS the pre-state (see
+ * `applyRemoteEntry`'s contiguity guard) — so recomputing it produces the
+ * bytes the home produced. That is the isomorphism contract doing work rather
+ * than being admired.
+ */
+type IncomingEntry = Omit<LogEntry, "inverse"> & { inverse?: Operation | null };
+
+/** What `applyRemoteEntry` did, so the caller knows whether to resync.
+ * "skipped" is the ordinary case, not an error: the POST answer and the
+ * broadcast are the same entry arriving twice. */
+export type RemoteApply = "applied" | "skipped" | "gap";
+
+/**
  * The single op engine. ALL mutations — from the CLI, the web app, and
  * undo/redo — funnel through one promise chain, giving single-writer
  * discipline over both the in-memory state and the files.
@@ -123,6 +145,21 @@ export class Engine {
   private listeners = new Set<EventListener>();
   private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
 
+  /**
+   * The home this engine is a REPLICA of, or null when it is a home itself.
+   *
+   * This one field is the demotion. With it set, the engine stops being a
+   * writer: every mutation is forwarded, the home assigns the seq, and what
+   * comes back is applied here VERBATIM through `applyRemoteEntry`. The
+   * single-writer promise chain below is untouched and still does exactly what
+   * it always did — it just serializes forwarded writes and arriving entries
+   * against each other instead of serializing writes against writes. There is
+   * still exactly one thing mutating this daemon's state at a time; what
+   * changed is who decides the order, and that is the whole point of a
+   * replica.
+   */
+  private home: HomeConnection | null = null;
+
   constructor(
     private readonly store: Store,
     /** The desk. The engine writes the claims half through it and never
@@ -130,6 +167,21 @@ export class Engine {
     private readonly desk: Desk,
     private readonly options: EngineOptions = {},
   ) {}
+
+  /**
+   * Point this engine at a home — the composition root's last wire, set in
+   * `startDaemon` before the port is bound, so no request can ever see the
+   * engine half-demoted.
+   *
+   * A setter rather than a constructor argument because the two objects need
+   * each other: the home connection applies what it receives THROUGH the
+   * engine, and the engine forwards what it is asked THROUGH the connection.
+   * Constructing one with the other would be a cycle; one setter at the
+   * composition root is the honest cut.
+   */
+  forwardTo(home: HomeConnection | null): void {
+    this.home = home;
+  }
 
   /** Subscribe to project events; returns an unsubscribe function. */
   onEvent(listener: EventListener): () => void {
@@ -139,6 +191,24 @@ export class Engine {
 
   private emit(projectId: string, message: ServerMessage): void {
     for (const listener of this.listeners) listener(projectId, message);
+  }
+
+  /**
+   * Resolves when everything currently on the single-writer chain has run.
+   *
+   * The replica needed it and the reason is worth keeping: a forwarded write
+   * holds the chain across its HTTP round trip, so between "the home has
+   * created this canvas" and "this daemon has written it down" there is a real
+   * window — and the home connection's dial, which asks the store how far it
+   * has got, was reading that store MID-WRITE. It presented `since=0` for a
+   * canvas it was in the middle of creating, was correctly answered with a
+   * snapshot, and adopted it over the entry that was one line from landing.
+   * Waiting for the chain to drain makes the cursor a fact rather than a
+   * guess, and it is the same discipline every other reader here already has
+   * — it just had no name.
+   */
+  settled(): Promise<void> {
+    return this.enqueue(async () => {});
   }
 
   /** Serialize all mutations through one chain. */
@@ -218,6 +288,20 @@ export class Engine {
       await this.requireActor(request.badgeId, request.actor.id);
       if (request.op.actorId !== request.actor.id) {
         await this.requireActor(request.badgeId, request.op.actorId);
+      }
+      // A color is the actor's own, home-scoped, and every screen that paints
+      // that face is at the home — so on a replica it goes up first and is
+      // applied here after. It does not come back down: the actors log is
+      // home-scoped and `/ws` is per canvas, so nothing replicates it. What
+      // brings it to the other replicas is `mergeRemoteIdentity`, off the
+      // `colors` map every snapshot, resume and roster already carries.
+      if (this.home) {
+        await this.home.submitOp({
+          projectId: null,
+          actor: request.actor,
+          op: request.op,
+          ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+        });
       }
       const runtime = await this.actors();
       const ts = new Date().toISOString();
@@ -308,7 +392,13 @@ export class Engine {
 
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      // Mechanism 5's local half, and it runs on a replica exactly as it runs
+      // on a home: THIS daemon is the only one that can tell one process on
+      // this machine from another, so it checks session-level before anything
+      // leaves the machine. The home then checks badge-level, which is all it
+      // can honestly see.
       await this.requireActor(request.badgeId, request.actor.id);
+      if (this.home) return this.forwardSubmit(this.home, request);
       return this.applyAndPersist(request, undefined);
     });
   }
@@ -320,7 +410,31 @@ export class Engine {
    * client-side pre-check both of them can pass at once.
    */
   claim(request: ClaimRequest): Promise<LogEntry> {
-    return this.enqueue(() => this.applyClaimAndPersist(request));
+    return this.enqueue(async () => {
+      const entry = await this.applyClaimAndPersist(request);
+      /**
+       * A claim does NOT forward, and that is mechanism 5's split rather than
+       * an omission. The two hops verify different things and therefore keep
+       * different tables: this daemon's claims table is what lets it say "the
+       * process holding sessionKey `claude-code:s-1` is Isaac", which the home
+       * can never know; the home's is what lets it say "this daemon's badge
+       * speaks for Isaac". Forwarding the claim would put the local
+       * `sessionKey` — explicitly "never something the home trusts" — into the
+       * home's ledger, and leave THIS daemon unable to answer the question
+       * only it can.
+       *
+       * What does travel is the actor, announced onto this daemon's one badge
+       * at the home. Fire-and-forget on purpose: the local claim has already
+       * succeeded, a replica must stay usable while the home is unreachable,
+       * and every forwarded write claims again before it goes (see
+       * `HomeLink.ensureClaim`) — so this is a latency saving, never the only
+       * chance. A refusal is said out loud because a name collision AT THE
+       * HOME is exactly the thing an agent would otherwise meet as a baffling
+       * error on its first write.
+       */
+      if (this.home) void this.home.announceActor(entry.envelope.actor);
+      return entry;
+    });
   }
 
   /**
@@ -406,7 +520,17 @@ export class Engine {
     data: Buffer,
     meta: { mimeType: string; filename: string },
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    return this.enqueue(() => this.store.putBlob(projectId, data, meta));
+    return this.enqueue(async () => {
+      // On a replica the bytes go where the ops that name them go — the home
+      // first, because its refusal is the one that matters, and then here.
+      // Both copies, not one: the home is where every browser tab and every
+      // other replica will read this blob from, and the local copy is Scene
+      // 4's "and in Priya's `~/.isocan` by hash", which is how an agent's
+      // hands reach it. Content addressing makes "both" cheap to be right
+      // about — the same bytes hash the same on either side.
+      if (this.home) await this.home.putBlob(projectId, data, meta);
+      return this.store.putBlob(projectId, data, meta);
+    });
   }
 
   /**
@@ -445,6 +569,20 @@ export class Engine {
       // undo is actor-scoped, so naming somebody else is not a slip, it is
       // undoing their work.
       await this.requireActor(badgeId, actor.id);
+      // On a replica the undo STACK is the home's too, and it has to be: it is
+      // rebuilt from the log, and a replica whose live log was re-snapshotted
+      // (the home could not serve a tail) holds no entries to walk. Choosing
+      // what to undo here and forwarding the resulting op would be a second
+      // opinion about a stack that has one owner.
+      if (this.home) {
+        return this.landRemote(
+          projectId,
+          await this.home.undo(projectId, {
+            actor,
+            ...(clientId !== undefined ? { clientId } : {}),
+          }),
+        );
+      }
       const runtime = await this.runtime(projectId);
       for (;;) {
         const targetSeq = runtime.undo.nextUndoTarget(actor.id);
@@ -471,6 +609,15 @@ export class Engine {
   redo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       await this.requireActor(badgeId, actor.id);
+      if (this.home) {
+        return this.landRemote(
+          projectId,
+          await this.home.redo(projectId, {
+            actor,
+            ...(clientId !== undefined ? { clientId } : {}),
+          }),
+        );
+      }
       const runtime = await this.runtime(projectId);
       for (;;) {
         const next = runtime.undo.nextRedoTarget(actor.id);
@@ -556,6 +703,250 @@ export class Engine {
       if (sweep.length > 0) await this.store.deleteBlobs(projectId, sweep);
       return report;
     });
+  }
+
+  // ---------- the replica side: what arrives from the home ----------
+  //
+  // Everything below runs on a daemon that has been demoted. Three entry
+  // points, all of them queued on the same single-writer chain as a local
+  // write, because a forwarded write and an arriving entry are two mutations
+  // of one state and letting them interleave is exactly the corruption the
+  // chain has always existed to prevent.
+
+  /**
+   * One entry from the home, landed here with **the home's seq, verbatim**.
+   *
+   * The seq is not re-assigned and the entry does not go near
+   * `applyAndPersist`'s numbering. That is not an implementation detail, it is
+   * the demotion: two machines numbering one log is the disaster the whole
+   * design forbids, and a replica that renumbered would make its own oplog
+   * un-comparable with the home's — which is the one thing that has to stay
+   * true for a seq cursor to mean anything on reconnect.
+   *
+   * ## The double-application guard
+   *
+   * A forwarded write's answer and the broadcast of that same write are the
+   * SAME entry arriving twice, by two routes, in either order. **Seq is the
+   * idempotence key**, and it is the natural one: the home assigns seqs
+   * strictly increasing per canvas from one writer, so `seq <= lastSeq` means
+   * "already have it" with no bookkeeping to keep, no dedup table to bound,
+   * and nothing to get wrong after a restart — the store itself remembers.
+   * Whichever route arrives first applies; the other is a no-op. (In practice
+   * the broadcast usually wins, because the home broadcasts inside its own
+   * write before it writes the HTTP response.)
+   *
+   * `gap` is the other answer: an entry past `lastSeq + 1` cannot be applied
+   * on top of a state that is not its pre-state, so it is refused here and the
+   * caller re-dials with the cursor it does hold. Guessing would be the only
+   * way to be wrong silently.
+   */
+  applyRemote(projectId: string, entry: IncomingEntry): Promise<RemoteApply> {
+    return this.enqueue(() => this.applyRemoteEntry(projectId, entry));
+  }
+
+  /**
+   * The home could not serve a tail, so it sent state instead — take it.
+   *
+   * The live log is emptied in the same breath, and that is the load-bearing
+   * half. The entries this replica holds are a PREFIX the home has told us it
+   * cannot join up to; keeping them beside a snapshot from far past their end
+   * would leave `load()` replaying a tail that is not a tail, and `getLog`
+   * answering a cursor question with entries from before the gap. Emptying it
+   * through `compactOplog` rather than by deletion is deliberate: that method
+   * archives before it forgets, so the history is preserved for audit, and a
+   * backing where a seq must stay claimed forever (the cloud one) is not asked
+   * to free anything.
+   */
+  adoptRemoteSnapshot(projectId: string, snapshot: CanvasSnapshotResponse): Promise<void> {
+    return this.enqueue(async () => {
+      const state: ProjectState = { project: snapshot.project, canvas: snapshot.canvas };
+      let held: LogEntry[] = [];
+      if (await this.store.projectExists(projectId)) {
+        const runtime = await this.runtime(projectId).catch(() => null);
+        // Already exactly here. Adopting anyway would EMPTY a live log for
+        // nothing — the entries would be archived and `getLog` would answer
+        // every cursor with silence — and a snapshot that arrives while the
+        // replica is already current is ordinary: a socket that dialled with
+        // a cursor of 0 for a canvas the chain was mid-way through creating
+        // gets one, correctly, and it must not undo the creation.
+        if (runtime && runtime.lastSeq === snapshot.lastSeq) return;
+        held = runtime?.entries ?? [];
+      } else {
+        await this.store.createProjectDir(projectId);
+      }
+      if (held.length > 0) await this.store.compactOplog(projectId, [], held);
+      await this.store.saveSnapshot(projectId, state, snapshot.lastSeq);
+      this.projects.set(projectId, {
+        state,
+        lastSeq: snapshot.lastSeq,
+        entries: [],
+        undo: UndoStacks.rebuild([]),
+      });
+    });
+  }
+
+  /** The home says this canvas is gone. Soft, like every delete here: the
+   * directory is moved aside rather than removed, so a replica that was told
+   * to forget a canvas can still be asked what it used to hold. */
+  applyRemoteDelete(projectId: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (!(await this.store.projectExists(projectId))) return;
+      await this.store.softDeleteProject(projectId);
+      this.projects.delete(projectId);
+      this.emit(projectId, { type: "project-deleted" });
+    });
+  }
+
+  /**
+   * Identity's public face, as the home has it — names and chosen colors.
+   *
+   * These ride on every `snapshot`, every `resumed` and every
+   * `presence-roster` already, for the reason `protocol.ts` gives: nothing in
+   * an op tail carries them, and a rename has to reach the words somebody
+   * wrote before it. On a replica they are also the ONLY route by which a
+   * stranger's name arrives — the actors oplog is home-scoped and `/ws` is per
+   * canvas, so `isocan who` and `isocan ls` on this machine would otherwise
+   * letter everyone by whatever was stamped on their oldest comment.
+   *
+   * A merge, never a replacement: an actor the home has not heard of yet (one
+   * claimed here a second ago, whose announcement is still in flight) keeps
+   * its local row instead of being erased by an answer that simply does not
+   * mention it.
+   */
+  mergeRemoteIdentity(colors: ActorColors, names: ActorNames): Promise<void> {
+    return this.enqueue(async () => {
+      const runtime = await this.actors();
+      const nextNames = { ...runtime.registry.names };
+      const nextColors = { ...runtime.registry.colors };
+      let changed = false;
+      const now = new Date().toISOString();
+      for (const [actorId, name] of Object.entries(names)) {
+        if (nextNames[actorId]?.name === name) continue;
+        nextNames[actorId] = { name, at: now };
+        changed = true;
+      }
+      for (const [actorId, color] of Object.entries(colors)) {
+        if (nextColors[actorId] === color) continue;
+        nextColors[actorId] = color;
+        changed = true;
+      }
+      // Guarded because this runs off every roster message, which is every
+      // mouse move on every canvas: a disk write per cursor beat for data that
+      // did not change would put the actors file on the latency path.
+      if (!changed) return;
+      runtime.registry = { names: nextNames, colors: nextColors };
+      await this.store.saveActors(runtime.registry, runtime.lastSeq);
+    });
+  }
+
+  /** Forward a write and land the home's answer here. Runs INSIDE the queue —
+   * hence the private, unqueued `applyRemoteEntry` rather than the public
+   * `applyRemote`, which would deadlock waiting on the chain it is already
+   * on. */
+  private async forwardSubmit(home: HomeConnection, request: SubmitRequest): Promise<LogEntry> {
+    const answer = await home.submitOp({
+      projectId: request.projectId,
+      actor: request.actor,
+      op: request.op,
+      ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+    });
+    const projectId =
+      request.op.type === "project.create" ? request.op.projectId : request.projectId;
+    return this.landRemote(projectId, answer);
+  }
+
+  /**
+   * Apply what the home answered, and hand the caller the home's own entry.
+   *
+   * Applying here rather than only waiting for the socket is what makes
+   * read-after-write work on a replica: `bindFresh` creates a canvas and reads
+   * it straight back, `isocan add` prints the item it just made. A round trip
+   * through the socket would be a race the CLI would lose often enough to be a
+   * bug report. Applying twice is free — see `applyRemoteEntry`'s seq guard.
+   */
+  private async landRemote(
+    projectId: string | null,
+    answer: { seq: number; envelope: OpEnvelope; inverse?: Operation | null },
+  ): Promise<LogEntry> {
+    const entry: IncomingEntry = {
+      seq: answer.seq,
+      envelope: answer.envelope,
+      ...(answer.inverse !== undefined ? { inverse: answer.inverse } : {}),
+    };
+    if (projectId !== null) await this.applyRemoteEntry(projectId, entry);
+    return { inverse: null, ...entry } as LogEntry;
+  }
+
+  /** The unqueued core. Every caller is already on the chain. */
+  private async applyRemoteEntry(
+    projectId: string,
+    incoming: IncomingEntry,
+  ): Promise<RemoteApply> {
+    const { envelope, seq } = incoming;
+    const op = envelope.op;
+
+    if (op.type === "project.create") {
+      if (await this.store.projectExists(op.projectId)) return "skipped";
+      const state = applyOperation(null, envelope)!;
+      const entry: LogEntry = {
+        seq,
+        envelope,
+        inverse: incoming.inverse !== undefined ? incoming.inverse : invertOperation(null, op),
+        ...(incoming.cause !== undefined ? { cause: incoming.cause } : {}),
+      };
+      await this.store.createProjectDir(op.projectId);
+      await this.appendOrFence(op.projectId, entry);
+      await this.store.saveSnapshot(op.projectId, state, seq);
+      this.projects.set(op.projectId, {
+        state,
+        lastSeq: seq,
+        entries: [entry],
+        undo: UndoStacks.rebuild([entry]),
+      });
+      this.emit(op.projectId, { type: "op-applied", entry });
+      return "applied";
+    }
+
+    const runtime = await this.runtime(projectId).catch(() => null);
+    // A canvas this replica has never seen, arriving mid-history: only a
+    // snapshot can start it, so say `gap` and let the dial ask for one.
+    if (!runtime) return "gap";
+    if (seq <= runtime.lastSeq) return "skipped";
+    if (seq !== runtime.lastSeq + 1) return "gap";
+
+    let nextState: ProjectState | null;
+    let inverse: Operation | null;
+    try {
+      inverse = incoming.inverse !== undefined
+        ? incoming.inverse
+        : invertOperation(runtime.state, op);
+      nextState = applyOperation(runtime.state, envelope);
+    } catch {
+      // The reducer refused an op the home accepted, so our state is not the
+      // pre-state it was applied against — divergence, not a bad op. A
+      // snapshot is the correction, and `gap` is how one is asked for.
+      return "gap";
+    }
+    const entry: LogEntry = {
+      seq,
+      envelope,
+      inverse,
+      ...(incoming.cause !== undefined ? { cause: incoming.cause } : {}),
+    };
+    await this.appendOrFence(projectId, entry);
+    if (nextState === null) {
+      await this.store.softDeleteProject(projectId);
+      this.projects.delete(projectId);
+      this.emit(projectId, { type: "project-deleted" });
+      return "applied";
+    }
+    runtime.state = nextState;
+    runtime.lastSeq = seq;
+    runtime.entries.push(entry);
+    runtime.undo.record(entry);
+    await this.store.saveSnapshot(projectId, nextState, seq);
+    this.emit(projectId, { type: "op-applied", entry });
+    return "applied";
   }
 
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {

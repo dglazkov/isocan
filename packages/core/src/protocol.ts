@@ -19,6 +19,33 @@ export type ServerMessage =
        * somebody wrote before it. Absent entries keep the stamped name. */
       names: ActorNames;
     }
+  /**
+   * The other half of the connect handshake: "you already have through
+   * `from`, here is what happened since." What follows is one `op-applied`
+   * per entry in `from+1 … lastSeq`, in order, replayed through the same
+   * reducer a crash recovery replays — because it IS that code path.
+   *
+   * A client asks for this with `?since=N` and must be ready for either
+   * answer: the home sends `snapshot` instead whenever it cannot serve the
+   * tail (the client is ahead of it, or the entries have been compacted out
+   * of the live log). That is not an error path, it is the fallback half of
+   * one contract, and a client that treats a `snapshot` where it expected a
+   * `resumed` as a failure has misread it.
+   *
+   * `colors` and `names` ride along for the same reason `snapshot` carries
+   * them: a rename or a recolour that happened while the lid was shut has to
+   * reach the words that were written before it, and nothing in the op tail
+   * carries identity's public face.
+   */
+  | {
+      type: "resumed";
+      /** The cursor the client presented — the last seq it already holds. */
+      from: number;
+      /** The last seq it will hold once the tail below has been applied. */
+      lastSeq: number;
+      colors: ActorColors;
+      names: ActorNames;
+    }
   | { type: "op-applied"; entry: LogEntry }
   | { type: "project-deleted" }
   /** The roster carries the chosen identity colors with it: they change about
@@ -34,14 +61,38 @@ export type ServerMessage =
 
 /** Client → server. Presence is the ephemeral plane: daemon memory + WS
  * fan-out only — never the oplog, never storage, never undo. */
-export type ClientMessage = {
-  type: "presence";
-  /** The tab's client id — doubles as its presence session id. */
-  sessionId: string;
-  actor: Actor;
-  cursor: { x: number; y: number } | null;
-  selection: string[];
-};
+export type ClientMessage =
+  | {
+      type: "presence";
+      /** The tab's client id — doubles as its presence session id. */
+      sessionId: string;
+      actor: Actor;
+      cursor: { x: number; y: number } | null;
+      selection: string[];
+    }
+  /**
+   * A whole roster, from a connection that speaks for several people at once.
+   *
+   * This is the daemon's beat, not a tab's: "one connection carries several
+   * actors" is the case mechanism 1 drew the badge for — Priya's daemon
+   * relaying its CLI self AND Isaac — and a per-session `presence` message
+   * cannot express it, because one socket is one presence session by
+   * construction there.
+   *
+   * A full set replaces what that connection last relayed, rather than a diff:
+   * the sender already has the whole roster in hand (it is what its own hub
+   * holds), and a diff protocol would be a second thing to get wrong for no
+   * saving worth measuring on a plane that is already coalesced.
+   *
+   * Sessions keep their ids, their `kind`, their labels and their statuses, so
+   * a parked agent on somebody's laptop shows on the home's canvas as a parked
+   * agent — Scene 4's dimmed face with a dashed ring — rather than as an
+   * anonymous cursor. The receiving daemon still checks EVERY actor in it
+   * against the relaying badge's claims and drops the ones it cannot vouch
+   * for; the sender's word for who is here is not the sender's word for who it
+   * may speak as.
+   */
+  | { type: "presence-relay"; sessions: PresenceSession[] };
 
 // ---- presence sessions ----
 
@@ -253,6 +304,69 @@ export interface HealthResponse {
   pid: number;
   version: string;
   startedAt: string;
+  /**
+   * The home this daemon is a REPLICA of, when it is one; absent when the
+   * daemon IS a home (every daemon before phase 6, and every daemon nobody has
+   * configured).
+   *
+   * On the health route because that is the one call every client already
+   * makes before it does anything else, and because the answer changes what a
+   * client may say to a person: a replica serves no pages, so `isocan open`
+   * and `isocan setup` must send them to this address instead of to
+   * `127.0.0.1`, and the marker a new canvas gets must carry it.
+   */
+  home?: string;
+}
+
+/** Loopback, by the two literals a URL can produce plus the whole 127/8
+ * block RFC 1122 reserves. `new URL()` hands IPv6 hosts back in brackets,
+ * so `::1` arrives as `[::1]` and has to be recognized in that shape. */
+const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
+
+/**
+ * WHICH health path to ask a daemon at this address for.
+ *
+ * The daemon answers `/healthz` and `/api/healthz` from one handler with one
+ * body, so this is never a second thing to keep in sync — it is a choice of
+ * which door to knock on, and the choice belongs to the ADDRESS rather than
+ * to the caller.
+ *
+ * Why it has to: a hosted home does not get to answer `/healthz`. Measured on
+ * the dev home (phase 5), Google's frontend claims that exact path and returns
+ * its own branded 404 — `/` 200, an unknown path 200 through our SPA fallback,
+ * `/healthz/` with a trailing slash 200, `/HEALTHZ` 200, and `/healthz` a 404
+ * that never appears in the container's request log at all. So a probe that
+ * has only ever spoken to 127.0.0.1 — `daemonPidOn`, `ensureDaemon`'s startup
+ * poll, `warnIfStale`, `stopDaemons`, `isocan status` — reads a perfectly live
+ * hosted home as DEAD the first time it is pointed at one, and phase 6 points
+ * all of them at one.
+ *
+ * Loopback keeps `/healthz` deliberately: no frontend stands between a CLI and
+ * its own daemon, every one of those callers works exactly as it does today,
+ * and this stays an addition rather than a rename. `/api/healthz` is the other
+ * answer because `/api/` is the one prefix the SPA fallback does not answer
+ * with a cheerful 200 — a check that cannot fail is the defect the pair of
+ * routes exists to avoid.
+ *
+ * Anything unparseable is treated as remote. That is the safe way to be wrong:
+ * `/api/healthz` is answered on loopback too, so a mistake here costs nothing,
+ * while guessing "loopback" about an address we could not read would resurrect
+ * the exact failure this function exists to prevent.
+ */
+export function healthPath(base: string): string {
+  let host: string;
+  try {
+    host = new URL(base).hostname;
+  } catch {
+    try {
+      // A bare `127.0.0.1:4441` or `dev.isocan.io` — no scheme, still an
+      // address somebody meant. Parsing it is cheaper than refusing it.
+      host = new URL(`http://${base}`).hostname;
+    } catch {
+      return "/api/healthz";
+    }
+  }
+  return LOOPBACK.test(host) ? "/healthz" : "/api/healthz";
 }
 
 export interface ApiError {

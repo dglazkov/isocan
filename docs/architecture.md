@@ -119,6 +119,18 @@ snapshot, replay the oplog tail through the reducer. An instance
 restart, a deploy, a crash — all the same path, now reading from GCS
 and Firestore, and already tested every day by the file backing.
 
+**What a replica's store actually holds, as of phase 6.** "Canvas state
+replicates through the store" is true of the state and not of the
+history. A joining replica can only present cursor 0, and the connect
+handshake answers a cursor it cannot serve with a snapshot — so a
+replica's oplog begins at the moment it joined, and a replica that ever
+falls behind the home's compaction horizon is re-snapshotted and starts
+again from there. State converges exactly; the log is a cache, never a
+claim to the whole history. Nothing downstream depends otherwise — undo
+and redo are the home's, and `wait` and `tail` are cursor-based — but
+"sovereignty by replica is also disaster recovery" is a claim about the
+canvas, not about its oplog, and this is the line that says so.
+
 **Deploy overlap is the one moment two instances exist.** During a
 rollout the old instance drains while the new one starts. Two writers
 against one oplog is the disaster the whole design forbids, so the
@@ -316,19 +328,17 @@ comes from the object store rather than from the client.
 What the code does not have yet — an inventory, not a sequence (the
 sequence is [phases.md](phases.md)):
 
-- The daemon's **home connection** — the sync-client role that makes a
-  local daemon a replica: dial the home, present the badge, carry the
-  two planes, reconnect by seq cursor. The web client already speaks
-  this protocol, which is the isomorphism thesis paying again.
 - The service worker: cached shell, durable browser replica, offline
   queue.
-- The marker gaining the home address; setup creating the canvas at
-  the home.
-- The page server becoming home-only: `registerStaticWebApp` is
-  exactly the code the home needs and exactly what the local daemon
-  must stop doing for persons — same code, one configuration flag.
 - The Share dialog and grant routes; registrations and the dispatch
   path.
+- **Which canvases a replica replicates.** The home connection discovers
+  them by polling `GET /api/projects`, which is home-wide rather than
+  scoped to the asking badge's admissions — so a replica of a
+  MULTI-TENANT home would mirror strangers' canvases onto its own disk.
+  Correct today, because a solo home has one member and that is what
+  phase 6 proves; wrong the moment a home has two. The narrowing is
+  mechanism 10's and belongs on the route, in phase 7.
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
   uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is

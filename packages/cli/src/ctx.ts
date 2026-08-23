@@ -3,8 +3,8 @@ import path from "node:path";
 import type { Command } from "commander";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT, newProjectId } from "@isocan/core";
-import { paths, stalenessOf } from "@isocan/server";
-import { DaemonClient } from "./client.ts";
+import { paths, readConfigFile, stalenessOf } from "@isocan/server";
+import { DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
 import {
@@ -25,6 +25,17 @@ export interface Ctx {
   /** The directory's canvas, when the cwd sits under a `.isocan/project.json`
    * marker (#60). Resolved once per command; null outside any bound tree. */
   binding: DirBinding | null;
+  /**
+   * The address the local daemon is a REPLICA of, or null when it is a home
+   * itself (every daemon before phase 6, and every unconfigured one).
+   *
+   * Read once per command off the health route rather than from this
+   * machine's own config, deliberately: what matters is what the daemon
+   * ACTUALLY is — a CLI whose config was edited five minutes ago and a daemon
+   * that has been running since Tuesday must not disagree about where the
+   * pages are.
+   */
+  homeUrl: string | null;
 }
 
 export async function makeCtx(cmd: Command): Promise<Ctx> {
@@ -45,7 +56,12 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const known = await resolveIdentity(client, home);
   const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
   await client.ensureDaemon();
-  await warnIfStale(client, home);
+  // One health call, two answers. It was already being made for the staleness
+  // warning; asking it again for the home address would be a second round trip
+  // on every command for a field that travels in the same body.
+  const health = await client.healthz().catch(() => null);
+  await warnIfStale(health, home);
+  const homeUrl = health?.home ?? null;
   // Nothing is claimed here. Mechanism 5 asks the badge to vouch for whoever
   // this command speaks as — but a read stamps nothing and names nobody, and
   // an eager claim on every command would put an actors-log entry behind
@@ -65,8 +81,34 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     json: opts.json ?? false,
     home,
     binding,
+    homeUrl,
     ...(opts.project !== undefined ? { projectRef: opts.project } : {}),
   };
+}
+
+/**
+ * The marker says this canvas lives somewhere else. Refuse, naming both.
+ *
+ * Moving a canvas between homes is **re-homing** — a thick replica offering
+ * its store to a new home and rewriting the marker (innkeeper.md) — and it is
+ * phase 13's. What it moves is the WORK and not the desk: badges, grants,
+ * attestations and the claims binding actors to badges all stay behind. That
+ * is not a migration a command can perform as a side effect of somebody
+ * running `isocan ls` in the wrong directory, so nothing here migrates
+ * anything. The two addresses are both printed because the interesting
+ * question is always which of them is the surprise.
+ */
+function refuseForeignHome(binding: DirBinding, homeUrl: string | null): void {
+  if (binding.home === undefined) return; // an older marker; it names no home
+  const mine = homeUrl ?? "this machine (no home configured)";
+  if (binding.home === homeUrl) return;
+  throw new Error(
+    `this directory's canvas lives at ${binding.home} (${markerFile(binding.root)}), ` +
+      `but this daemon answers to ${mine}. Moving a canvas between homes is re-homing, ` +
+      "and it is not something a command does by accident — point this daemon at " +
+      `${binding.home} (ISOCAN_HOME_URL, or "home" in ~/.isocan/config.json), or work ` +
+      "in a directory bound to a canvas that lives here.",
+  );
 }
 
 /**
@@ -76,9 +118,8 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
  * and a line on every one of them is noise, but never saying it at all is how
  * you spend an afternoon debugging yesterday's build.
  */
-async function warnIfStale(client: DaemonClient, home: string): Promise<void> {
+async function warnIfStale(health: Health | null, home: string): Promise<void> {
   try {
-    const health = await client.healthz();
     if (!health) return;
     const { stale, why } = stalenessOf(health);
     if (!stale) return;
@@ -96,12 +137,11 @@ interface ConfigFile extends HarnessVarConfig {
   defaultProjectId?: string;
 }
 
+/** One reader for `config.json`, in `@isocan/server` — the daemon reads the
+ * same file for `home` now, and three hand-rolled `try { JSON.parse }` blocks
+ * is three chances to disagree about what a malformed file means. */
 export async function readConfig(home: string): Promise<ConfigFile> {
-  try {
-    return JSON.parse(await fs.readFile(paths.configFile(home), "utf8")) as ConfigFile;
-  } catch {
-    return {};
-  }
+  return readConfigFile<ConfigFile>(home);
 }
 
 export async function writeConfig(home: string, config: ConfigFile): Promise<void> {
@@ -130,6 +170,7 @@ export async function resolveProject(ctx: Ctx, opts: ResolveOptions = {}): Promi
   const projects = await ctx.client.listProjects();
   if (ctx.projectRef !== undefined) return matchRef(projects, ctx.projectRef);
   if (ctx.binding) {
+    refuseForeignHome(ctx.binding, ctx.homeUrl);
     const bound = projects.find((p) => p.id === ctx.binding!.projectId);
     if (bound) {
       await recordDir(ctx.home, ctx.binding.root, bound.id);
@@ -206,11 +247,17 @@ async function bindFresh(ctx: Ctx): Promise<Project | null> {
   if (!root) return null;
   const projectId = newProjectId();
   const title = path.basename(root);
+  // The write is the birth, and on a replica the write FORWARDS — so this one
+  // call is what makes the canvas exist at the home rather than here, and the
+  // marker records the address it was born at. Nothing extra is done to make
+  // that true; it falls out of the demotion, which is the argument for having
+  // done the demotion in the engine rather than in each caller.
   await ctx.client.sendOp(null, ctx.actor, { type: "project.create", projectId, title });
-  const file = await writeMarker(root, { projectId, title });
+  const marker = { projectId, title, ...(ctx.homeUrl ? { home: ctx.homeUrl } : {}) };
+  const file = await writeMarker(root, marker);
   await recordDir(ctx.home, root, projectId);
   console.error(`note: created "${title}" (${projectId}) for this directory — bound via ${file}`);
-  ctx.binding = { root, projectId, title };
+  ctx.binding = { root, ...marker };
   return projectById(ctx.client, projectId);
 }
 
@@ -226,9 +273,11 @@ export async function ensureDirBinding(
   client: DaemonClient,
   home: string,
   actor: Actor,
+  homeUrl: string | null = null,
 ): Promise<{ project: Project; root: string; created: boolean } | null> {
   const binding = await findBinding(process.cwd(), home);
   if (binding) {
+    refuseForeignHome(binding, homeUrl);
     const existing = (await client.listProjects()).find((p) => p.id === binding.projectId);
     if (existing) {
       await recordDir(home, binding.root, existing.id);
@@ -252,7 +301,7 @@ export async function ensureDirBinding(
   const projectId = newProjectId();
   const title = path.basename(root);
   await client.sendOp(null, actor, { type: "project.create", projectId, title });
-  await writeMarker(root, { projectId, title });
+  await writeMarker(root, { projectId, title, ...(homeUrl ? { home: homeUrl } : {}) });
   await recordDir(home, root, projectId);
   return { project: await projectById(client, projectId), root, created: true };
 }
