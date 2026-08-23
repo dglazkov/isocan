@@ -28,6 +28,7 @@ import {
   COMMAND_NAME,
   IDENTITY_COLORS,
   actorNameIn,
+  actorsAnswerTo,
   cancelledSince,
   commandFileText,
   findCommand,
@@ -2288,7 +2289,13 @@ async function newComment(
   snapshot: CanvasSnapshotResponse,
   body: string,
 ): Promise<NewComment> {
-  const candidates: MentionCandidate[] = collectCanvasActors(snapshot.canvas);
+  // What the canvas remembers, plus what everyone goes by NOW — otherwise
+  // "@Di" resolves to nobody the moment Dion 2 renames, and the summons that
+  // was meant for her is a comment nobody wakes for.
+  const candidates: MentionCandidate[] = actorsAnswerTo(
+    collectCanvasActors(snapshot.canvas),
+    snapshot.names,
+  );
   const sessions = await ctx.client.listSessions(projectId).catch(() => []);
   for (const s of sessions) {
     candidates.push(s.actor);

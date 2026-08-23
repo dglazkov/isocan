@@ -296,6 +296,18 @@ that woke you, with no `session start` needed.
   It is a floor, not taste: clearing it makes a screen unembarrassing, not
   good. Good comes from the design system being specific and from the person
   rejecting drafts.
+- **Do not open every reply with their name.** A reply sits directly under the
+  question in the thread; "@Di alright, grilling you on…" spends words and
+  screen on something the position already said. Just answer: "Alright,
+  grilling you on…".
+
+  Address somebody by name when it is doing WORK — reaching a person who is not
+  the one you are replying to, or handing something over: "@Wise Andy, the
+  audit is #Design audit — can you take the tracker?" When you do, punctuate
+  it: `@Name:` or `@Name —`, never `@Name alright` running straight on.
+
+  Names resolve to the person by what they answer to NOW, so use the name you
+  see in the thread rather than one you remember from earlier in the session.
 - **Stop when you are told to stop.** If a command you run prints
   `⚠ … CANCELLED this`, the person has called off the thread you picked up.
   That is the whole instruction: stop building, say where you got to in one

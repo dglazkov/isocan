@@ -32,7 +32,8 @@ import { OnIt } from "./OnIt.tsx";
  * from the store, so the rosters are never stale. */
 export function makeComment(body: string): NewComment {
   const { canvas, sessions } = useCanvasStore.getState();
-  const mentions = extractMentions(body, mentionRoster(canvas, sessions).candidates);
+  const { actorNames } = useCanvasStore.getState();
+  const mentions = extractMentions(body, mentionRoster(canvas, sessions, undefined, actorNames).candidates);
   const items = canvas ? extractItemRefs(body, collectItemRefCandidates(canvas)) : [];
   return {
     id: newCommentId(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
+import { actorsAnswerTo,
   collectCanvasActors,
   collectCanvasNames,
   extractMentions,
@@ -96,5 +96,29 @@ describe("collectCanvasNames", () => {
       "usr_alice",
       "usr_bob",
     ]);
+  });
+});
+
+describe("a name somebody answers to now", () => {
+  const stamped = [{ id: "usr_di", name: "Dion 2" }, { id: "usr_f", name: "Fable" }];
+  const now = { usr_di: "Di", usr_f: "Fable" };
+
+  it("resolves a mention by the CURRENT name", () => {
+    // The bug this covers is not a missing chip. Before this, "@Di" put no id
+    // on the comment, so the summons meant for her woke nobody.
+    expect(extractMentions("@Di alright, grilling you", actorsAnswerTo(stamped, now))).toEqual(["usr_di"]);
+  });
+
+  it("still resolves the name that was stamped at the time", () => {
+    // Text written months ago says "@Dion 2" and points at the same person.
+    expect(extractMentions("@Dion 2 have a look", actorsAnswerTo(stamped, now))).toEqual(["usr_di"]);
+  });
+
+  it("adds nothing when the name has not changed", () => {
+    expect(actorsAnswerTo(stamped, now).filter((a) => a.id === "usr_f")).toHaveLength(1);
+  });
+
+  it("is unchanged with no registry to consult", () => {
+    expect(actorsAnswerTo(stamped, undefined)).toEqual(stamped);
   });
 });

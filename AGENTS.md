@@ -34,6 +34,14 @@ mechanisms), [`docs/architecture.md`](docs/architecture.md) (the
 physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
 "where we are" line says which phase is next; start there).
 
+## Research
+
+`docs/research/` holds findings that took longer to reach than they take to
+read — format evaluations, ecosystem surveys, readiness assessments. Its index
+says what each one found. Read the relevant one before re-deciding something it
+already measured, and add to it when you learn something a month from now would
+want.
+
 ## House rules
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done.
