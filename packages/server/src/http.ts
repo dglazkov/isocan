@@ -39,17 +39,37 @@ const STARTED_AT = new Date().toISOString();
 
 /** Routes that answer without a badge, and why each one cannot close.
  *
- * `/healthz` is the load balancer's probe and, internally, what `daemonPidOn`,
- * `ensureDaemon`'s startup poll, `warnIfStale` and `stopDaemons` all call —
- * before any badge could exist. The door obviously cannot ask for what it
- * hands out. The static web app is the page that SETS the cookie; closing it
- * is a bootstrap paradox. And the blob GET is the one named hole — see
- * `blobRoute` below.
+ * The health routes are the load balancer's probe and, internally, what
+ * `daemonPidOn`, `ensureDaemon`'s startup poll, `warnIfStale` and
+ * `stopDaemons` all call — before any badge could exist. The door obviously
+ * cannot ask for what it hands out. The static web app is the page that SETS
+ * the cookie; closing it is a bootstrap paradox. And the blob GET is the one
+ * named hole — see `blobRoute` below.
  *
  * Everything else under `/api/*` and the `/ws` upgrade is refused, by one
  * hook with one allowlist, so a route added later is refused by DEFAULT
  * rather than by somebody remembering. */
 const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
+
+/** TWO paths, one answer.
+ *
+ * `/healthz` is what every local caller uses and it is not going anywhere.
+ * But a hosted home does not get to answer it: Google's frontend swallows
+ * that exact path and returns its own branded 404 — measured on the dev home,
+ * where `/`, `/healthz/` and `/HEALTHZ` all reach the container and `/healthz`
+ * never appears in the request log at all. So the hosted probe needs a path
+ * Google will forward.
+ *
+ * `/api/healthz` is that path, and it is under `/api/` on purpose: that is the
+ * one prefix the SPA fallback does not answer with a cheerful 200 page to an
+ * unbadged caller. If this handler ever disappears, a monitoring check on
+ * `/api/healthz` gets a 401 and goes red; a check on some bare `/health` would
+ * get `index.html`, 200, forever — a check that cannot fail is exactly the
+ * defect this route exists to avoid.
+ *
+ * Both answer the same body from the same handler, `buildStamp()` and all, so
+ * there is no second thing to keep in sync. */
+const HEALTH_ROUTES = ["/healthz", "/api/healthz"] as const;
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
  * so `projectId ∈ admissions` is re-asked on all of them, including the ones
@@ -58,7 +78,7 @@ const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
 const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
 
 function isOpen(method: string, pathname: string): boolean {
-  if (pathname === "/healthz") return true;
+  if ((HEALTH_ROUTES as readonly string[]).includes(pathname)) return true;
   if (!pathname.startsWith("/api/")) return true; // the web app and its assets
   if (method === "POST" && pathname === DOOR_ROUTE) return true;
   /**
@@ -117,12 +137,14 @@ export function registerRoutes(
   });
 
   // The stamp is what lets a CLI notice it is talking to yesterday's daemon.
-  app.get("/healthz", async () => ({
+  // One handler, registered at both health paths — see HEALTH_ROUTES.
+  const health = async () => ({
     ok: true,
     pid: process.pid,
     startedAt: STARTED_AT,
     ...buildStamp(),
-  }));
+  });
+  for (const route of HEALTH_ROUTES) app.get(route, health);
 
   // ---- the door (identity desk, mechanism 1) ----
 

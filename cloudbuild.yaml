@@ -1,0 +1,147 @@
+# How a commit becomes a running home.
+#
+# Two callers, one file:
+#
+#   infra/60-build-image.sh   uploads THIS working tree, builds, pushes,
+#                             and stops (_DEPLOY=no). No GitHub connection
+#                             needed — that is the whole point of it.
+#   infra/95-build-trigger.sh installs a trigger on push to `main` that runs
+#                             the same file with _DEPLOY=yes.
+#
+# The architecture's deploy row, made literal: "build -> Artifact Registry ->
+# gcloud run deploy, all inside GCP on a build service account, so no
+# cross-cloud credentials exist at all." Nothing here holds a key; the build
+# service account is the identity, and it never leaves Google.
+#
+# NOT the `release` branch. CI regenerates that from every main commit as the
+# CLI distribution branch (scripts/release.mjs, AGENTS.md). It is not a gate
+# and must never become one.
+
+substitutions:
+  _IMAGE: ""      # e.g. us-west1-docker.pkg.dev/isocan-io-dev/isocan/isocan
+  _TAG: ""        # the git sha, short
+  _SERVICE: isocan
+  _REGION: us-west1
+  _DEPLOY: "no"   # the trigger sets "yes"
+
+options:
+  # A build running as a user-specified service account must say where its logs
+  # go, or it fails before the first step with a message about logging buckets.
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1800s
+
+images:
+  - "${_IMAGE}:${_TAG}"
+  - "${_IMAGE}:latest"
+
+steps:
+  # ---- build ----
+  #
+  # --cache-from on :latest turns a no-source-change rebuild into a pull, and
+  # more usefully turns a source-only change into "reuse the npm ci layer".
+  # `|| true` because the very first build has no :latest to pull and a failed
+  # pull must not be a failed build.
+  - id: pull-cache
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - docker pull "${_IMAGE}:latest" || true
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --cache-from=${_IMAGE}:latest
+      - --build-arg=ISOCAN_BUILD_SHA=${_TAG}
+      - -t
+      - ${_IMAGE}:${_TAG}
+      - -t
+      - ${_IMAGE}:latest
+      - .
+
+  # ---- the container's own smoke test, before anything is deployed ----
+  #
+  # Boot the image with no cloud configuration at all (FileStore, the default
+  # backing) and ask it for /healthz. That catches the entire class of failure
+  # that otherwise shows up as a Cloud Run revision stuck in "the user-provided
+  # container failed to start and listen on the port": a missing node_modules
+  # symlink, a tsx that cannot resolve @isocan/core, a web bundle that was
+  # never built, an entrypoint that binds the wrong interface.
+  #
+  # It does NOT prove the cloud backing works — that needs Firestore and a
+  # bucket, and is what infra/local-e2e.sh and infra/signed-url-smoke.sh are
+  # for. It proves the box opens.
+  # Cloud Build reads every dollar-brace reference in a step's args as a
+  # substitution and fails the whole build if it does not recognize one — so
+  # these scripts deliberately use no shell variables at all. If one is ever
+  # needed it must be escaped with a doubled dollar sign, and so must a command
+  # substitution.
+  #
+  # `--network cloudbuild` on both the server and the prober: build steps run
+  # on that network, so a published port would go to the host where nothing can
+  # reach it, while a container NAME resolves. The prober is the isocan image
+  # itself with node as its entrypoint — no curl, no extra image, nothing to
+  # pull.
+  - id: boots
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        cleanup() { docker rm -f isocan-smoke >/dev/null 2>&1 || true; }
+        trap cleanup EXIT
+        # ISOCAN_STORE is baked into the image as `cloud`, and a cloud home
+        # refuses to start without a bucket — correctly, which is how this
+        # step failed the first time it ever ran. Override it: what is under
+        # test here is that the IMAGE boots and serves, not that it can reach
+        # Firestore. A build step has no business talking to the real home,
+        # and the cloud backing has its own suite against the emulator.
+        docker run -d --name isocan-smoke --network cloudbuild \
+          -e PORT=8080 -e ISOCAN_STORE=file "${_IMAGE}:${_TAG}"
+        if docker run --rm --network cloudbuild --entrypoint node "${_IMAGE}:${_TAG}" -e '
+          const deadline = Date.now() + 90_000;
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          (async () => {
+            for (;;) {
+              try {
+                const res = await fetch("http://isocan-smoke:8080/healthz", { signal: AbortSignal.timeout(2000) });
+                if (res.ok) { console.log("healthz:", await res.text()); process.exit(0); }
+              } catch {}
+              if (Date.now() > deadline) { console.error("no /healthz within 90s"); process.exit(1); }
+              await sleep(1000);
+            }
+          })();
+        '; then
+          echo "the container boots and serves."
+        else
+          echo "--- container logs ---" >&2
+          docker logs isocan-smoke >&2 || true
+          exit 1
+        fi
+
+  # ---- deploy ----
+  #
+  # Only the trigger passes _DEPLOY=yes. Every flag that shapes the service
+  # lives in infra/70-cloud-run.sh; this step deliberately changes ONLY the
+  # image, so a deploy can never quietly re-shape the service. `gcloud run
+  # deploy --image` on an existing service preserves everything else.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "${_DEPLOY}" != "yes" ]; then
+          echo "_DEPLOY=${_DEPLOY} — built and pushed, not deploying."
+          exit 0
+        fi
+        gcloud run deploy "${_SERVICE}" \
+          --project="$PROJECT_ID" \
+          --region="${_REGION}" \
+          --image="${_IMAGE}:${_TAG}" \
+          --quiet

@@ -41,8 +41,22 @@ in the same change.
 | secrets | Secret Manager (GitHub app credentials and kin) |
 | deploy | **Cloud Build triggers** on the GitHub repo — push to `main` builds and deploys dev; prod promotes only by an explicit gesture (a `prod` tag, moved deliberately) — NOT the `release` branch, which CI regenerates from every main commit: it is the CLI distribution branch, not a gate; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
 | environments | two GCP projects: `isocan-dev` at dev.isocan.io, `isocan-prod` at isocan.io |
-| observability | Cloud Logging + Error Reporting, uptime check on `/healthz` |
+| observability | Cloud Logging + Error Reporting, uptime check on `/api/healthz` — see the note below |
 | infra as code | `infra/` — small idempotent gcloud scripts; Terraform waits for a second operator |
+
+**Why the health check is `/api/healthz` and not `/healthz`.** A hosted
+home does not get to answer `/healthz`: Google's frontend claims that
+exact path and returns a branded 404 of its own, and the container's
+request log never shows the request at all. Measured on the dev home —
+`/` 200, an unknown path 200 through our SPA fallback, `/healthz/` with
+a trailing slash 200, `/HEALTHZ` 200, `/healthz` 404. So a check on
+`/healthz` would be watching Google's frontend rather than the daemon:
+green whether or not the home is up, and unable to fail for the right
+reason. The daemon answers `/api/healthz` from the same handler with
+the same body, on a prefix Google forwards. `/healthz` is unchanged and
+stays the localhost path — the CLI's whole daemon lifecycle probes it
+against 127.0.0.1, where no frontend is in the way. This is a
+constraint of the platform written down, not a taste in URLs.
 
 Two roads not taken, each in one line. **A VM with a persistent disk**
 would run today's daemon unchanged, but buys OS care, a deploy story,
