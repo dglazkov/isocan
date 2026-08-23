@@ -68,7 +68,7 @@ home already exists and is already current, sharing is **pure permission**:
 grant + URL. No store to push, no home to create. The dialog hands back the
 one thing Priya actually needs:
 
-the canvas's address — `isocan.io/c/7f3a…` — with a copy button. That is
+the canvas's address — `isocan.io/p/7f3a…` — with a copy button. That is
 the whole invitation: *"here's the canvas."* It carries no installation
 instructions, because the canvas teaches its own escalation (Scene 5) to
 whoever wants it, whenever they reach for it — nothing needs to survive in
@@ -188,7 +188,7 @@ own copy; your own agent can join* — and shows a single command with a copy
 button:
 
 ```
-npx github:dglazkov/isocan#release setup isocan.io/c/7f3a…#<pass>
+npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
 ```
 
 She pastes it into a terminal in an empty directory. One command — Priya's
@@ -251,7 +251,7 @@ session). The dialog says the sentence of concept — *an agent that outlives
 your lid needs to run somewhere that doesn't close* — and hands her a
 copy-able instruction line, pass included:
 
-> use isocan — the canvas is at isocan.io/c/7f3a…#\<pass\>. Park and handle
+> use isocan — the canvas is at isocan.io/p/7f3a…#\<pass\>. Park and handle
 > summonses.
 
 isocan never runs compute; the harness does. So she goes to her harness's

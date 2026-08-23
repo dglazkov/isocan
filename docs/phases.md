@@ -60,6 +60,30 @@ otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
 
+- **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
+  **canvas** in every doc — 160 mentions against 15 of "project" — and a
+  **project** in every line of code: 712 `projectId`, plus
+  `project.create`, `listProjects`, `ProjectListPage`. The map splits the
+  difference and specifies the Firestore schema as `canvases/{id}`. The
+  seam became visible where it matters most, in the address a stranger
+  pastes: the journey and the desk design both wrote
+  `isocan.io/c/7f3a…`, and **nothing ever served `/c/`** — the app has
+  had exactly two routes, `/` and `/p/:projectId`, all along. Measured
+  in a browser, `/c/<id>` returns 200, serves the app shell, and renders
+  a **blank page**: no catch-all route, so React Router matches nothing
+  and draws nothing. **Settled by Dimitri, 2026-08-23: keep `/p/`, fix
+  the docs** — it works, it is tested, and a second URL shape for one
+  canvas is a cost that lasts forever. The docs now say `/p/`.
+  What stays open is the **rename itself**, deliberately: it touches
+  every file, buys no behaviour, and would bury whatever phase it landed
+  in. It is recorded here rather than in a phase because the thing that
+  will eventually force it is not a feature but an audience — the first
+  time somebody outside this repo reads `projectId` in the agent guide
+  and asks what a project is. Until then the split is a known cost, not
+  a bug, and the one place it must never leak again is a URL. The
+  blank-page half is **not** open: a catch-all route that says the
+  canvas is not here is phase 7's, because a share link is the one
+  address strangers hand each other and its failure has to be legible.
 - **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
   garbage collection at the hosted home, on purpose;
   [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
