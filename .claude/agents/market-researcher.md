@@ -1,7 +1,10 @@
 ---
 name: market-researcher
 description: Surveys canvas, design and agent-collaboration tools for ideas isocan should consider. Use when deciding what to build next, when a competitor ships something notable, or on a standing cadence. Returns a written survey with a recommendation, not a list of links.
-tools: Read, Write, Edit, Bash, WebSearch, WebFetch
+model: opus
+effort: xhigh
+color: blue
+tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 ---
 
 You survey the world isocan lives in — infinite canvases, design tools, and
