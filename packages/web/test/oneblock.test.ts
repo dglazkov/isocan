@@ -57,6 +57,43 @@ describe("the stylesheet", () => {
   });
 });
 
+/**
+ * The other half of the same accident, and the half the count above cannot
+ * see. `.declares each class once` only fires when the class ALREADY has a
+ * canonical bare block, so the leftover is a second one. Drop the scope from
+ * a class that has only ever appeared scoped — 57 of them in this file — and
+ * the leftover is the FIRST bare block for that class, count 1, green.
+ *
+ * A modifier is the case where that is never acceptable: `.away`, `.active`,
+ * `.selected` are claims about a state OF something, meaningless alone, and a
+ * stranded bare one would decorate anything in the app that happens to carry
+ * the word. Which classes are modifiers is read off the stylesheet itself —
+ * anything chained onto another class, `.face.away` — so this is an invariant
+ * and not a list somebody has to remember to update.
+ */
+function modifierClasses(text: string): Set<string> {
+  const modifiers = new Set<string>();
+  for (const rule of text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?:^|\})\s*([^{}@]+?)\{/g)) {
+    for (const selector of rule[1]!.split(",")) {
+      for (const compound of selector.trim().split(/[\s>+~]+/)) {
+        const classes = compound.match(/\.[A-Za-z0-9_-]+/g) ?? [];
+        for (const cls of classes.slice(1)) modifiers.add(cls);
+      }
+    }
+  }
+  return modifiers;
+}
+
+describe("state classes", () => {
+  it("never get a rule of their own", () => {
+    const modifiers = modifierClasses(css);
+    expect(modifiers.size, "no chained modifiers found — the parser is wrong").toBeGreaterThan(10);
+    const bare = new Set(bareClassSelectors(css));
+    const stranded = [...modifiers].filter((cls) => bare.has(cls));
+    expect(stranded, "a state class with an unscoped rule — a scope that fell off").toEqual([]);
+  });
+});
+
 describe("the named cursor", () => {
   /**
    * `OwnCursor` shows itself exactly where the computed cursor is `none`,

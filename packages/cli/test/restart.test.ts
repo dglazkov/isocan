@@ -3,9 +3,9 @@ import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { stopDaemons } from "@isocan/server";
+import { reservePort } from "../../../test/ports.ts";
 
 /**
  * Upgrading the CLI leaves the daemon behind: `ensureDaemon` only starts one
@@ -19,22 +19,10 @@ let home: string;
 let work: string;
 let port: number;
 
-/** A port nobody is on — these tests let the CLI spawn the daemon itself,
- * which is the path an upgrade actually walks. */
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(address.port));
-    });
-  });
-}
-
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-restart-home-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-restart-work-"));
-  port = await freePort();
+  port = await reservePort();
 });
 
 afterEach(async () => {
