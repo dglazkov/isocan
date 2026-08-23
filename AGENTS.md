@@ -66,6 +66,15 @@ in August measured, and writes its findings back there as a dated page.
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
 
+## Evals
+
+`docs/evals.md` is the staged plan for finding out whether isocan is any good
+at what it exists for. The short version, if you only read one thing: the
+oplog already records more evaluation signal than most products collect on
+purpose — undo is a labelled failure, and a version stack is a preference pair
+a person produced for free. Measure what is measurable before asking a model's
+opinion about anything.
+
 ## House rules
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done.
