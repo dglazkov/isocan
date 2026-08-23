@@ -827,6 +827,38 @@ the lid-close/reopen beat played with Chrome and the CLI.
   expired one first, rather than deleting the dead one — a map that
   quietly drops a reason teaches the next reader that the surviving one
   was always the whole story.
+- **2026-08-23 — A replica is not a backup, and the map said it was the
+  best one.** Found by walking Scene 0's multi-device beat by hand: two
+  replicas of one home, a file added on the first, and the second
+  machine listing the item perfectly while holding **zero bytes of it**.
+  Blobs a replica did not itself upload are streamed from the home on
+  demand and are **not cached** — the second machine's blob directory
+  was still empty after reading the file through twice. Put beside the
+  earlier finding that a replica's oplog begins where it joined, the
+  shape is clear: a replica holds the canvas's **state**, not its
+  **history** and not its **bytes**.
+  [architecture.md](architecture.md)'s backups bullet said "the best
+  backup remains a thick replica — sovereignty by replica is also
+  disaster recovery"; it was written before replicas existed and is now
+  corrected, because it fails in the one direction that matters — a
+  replica looks complete right up until the home is gone.
+  **This is phase 13's problem before it is anyone else's.** Re-homing
+  is drawn in [offline-birth.md](design/offline-birth.md) as "a thick
+  replica offers its store to a *new* home … hello, badge, offer,
+  replay", and the store it would offer today is missing precisely the
+  two things a replay consumes. Whether re-homing is restricted to the
+  originating replica, or a replica learns to backfill history and
+  blobs, is a phase 13 decision — named here so it is chosen rather than
+  discovered.
+- **2026-08-23 — Scene 0's multi-device beat works, including the race
+  nobody had run.** A marker carried to a second machine by git — the
+  clone case — resolves against a replica that has never heard of the
+  canvas, and it does so without a `duplicate-id`: the command was run
+  deliberately in the window before the home connection's first sweep,
+  and the binding still landed on the existing canvas rather than trying
+  to create it again. What the second machine then sees is the first
+  machine's work, which is the beat Scene 0 promises and the one that
+  makes solo multi-device fall out of the multiuser topology.
 - **2026-08-23 — What the conductor did NOT verify, stated plainly.**
   The `writer-fenced` (409) pass-through is proven by construction — one
   branch, one error shape — and not by execution: a real fence needs two

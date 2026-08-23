@@ -337,9 +337,28 @@ comes from the object store rather than from the client.
   per run**, never a fixed one, so the bucket holds many restore points
   and a bad export cannot land on top of a good one; a lifecycle rule
   sweeps whole exports by age. The bucket also keeps a soft-delete
-  window under GC. And the best backup remains a thick replica —
-  sovereignty by replica is also disaster recovery, which is worth
-  saying out loud.
+  window under GC.
+
+  **And a thick replica is NOT a backup, which this doc used to say the
+  opposite of.** "The best backup remains a thick replica — sovereignty
+  by replica is also disaster recovery" was written before replicas
+  existed; phase 6 built them and measured what one actually holds. A
+  replica holds the canvas **state**, live and exact. It does not hold
+  the **history** — its oplog begins where it joined, because a joining
+  replica can only present cursor 0. And it does not hold the **bytes**:
+  blobs it did not itself upload are streamed from the home on demand
+  and are not cached, so a second device shows every item and stores
+  none of their files. Measured, not reasoned — a two-machine setup
+  where the second machine's blob directory stayed empty across repeated
+  reads of a file it displayed perfectly.
+
+  So disaster recovery is Firestore PITR and the scheduled export, full
+  stop. A replica is a live mirror, and calling it a backup would fail
+  in the one direction that matters: it looks complete until the home is
+  gone. **This lands on [phases.md](phases.md)'s phase 13 too** —
+  re-homing is drawn as "a thick replica offers its store to a new home
+  … hello, badge, offer, replay", and the store it would offer is
+  missing exactly the two things a replay needs.
 
 ## Distance to the map
 
