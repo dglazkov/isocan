@@ -28,7 +28,10 @@ freely, but never a cloud resource without permission.
 
 **How this doc lives.** The surprise log lives here now, folded into
 the phases: each phase carries a **Findings** section that accumulates
-dated entries as the work teaches us things. A finding that redraws
+dated entries as the work teaches us things. Beside the "where we are"
+line sits **Deliberately open** — the short list of decisions postponed
+on purpose, so a later session chooses them awake instead of meeting
+them mid-task and improvising. A finding that redraws
 the map edits [architecture.md](architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
@@ -43,6 +46,34 @@ seeing each other's cursors, and ops written DURING a rollout all
 landing in order. Both want phase 6's home connection to be worth
 playing, so they may close as part of it.** This line moves as phases
 close; a clean session starts by believing it.
+
+**Deliberately open.** Things decided *not* to decide yet, kept here
+rather than in a phase because they belong to no phase's Proof and would
+otherwise be discovered instead of chosen. A clean session should read
+this list, not act on it: each entry is open because acting tired on it
+is how it goes wrong.
+
+- **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
+  garbage collection at the hosted home, on purpose;
+  [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
+  nothing and explains why at length. Two independent blockers: the door
+  admits **badges** and Cloud Scheduler cannot hold one (a Google OIDC
+  token runs through `parseBadgeToken` and parses as nothing, so the
+  request is badge-less and correctly refused), and there is **no
+  home-wide GC route** — only `POST /api/projects/:id/gc`, one canvas at
+  a time, with nothing enumerating them. Three ways out are drawn in
+  that script; a fourth, and the current lean, is to **sweep in-process
+  on a timer** — no scheduler, no credential, no new kind of caller at
+  the door, and the fit is good because garbage only accrues while a
+  home is in use, which is exactly when an instance is alive. Whatever
+  is chosen, `POST /api/gc` is wanted either way, including by a person
+  who just wants to collect the whole home. **Not urgent and not
+  load-bearing:** GC reclaims blobs no live entry references, the bill
+  for not reclaiming them is cents at journey scale, and correctness
+  does not depend on it. A home can run un-swept for a long time. It
+  should not run un-swept forever, and whichever answer wins **redraws
+  the [map](architecture.md)'s GC line**, which today promises a
+  mechanism the code cannot perform.
 
 ---
 
