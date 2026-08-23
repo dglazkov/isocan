@@ -5,7 +5,8 @@ usefully — *why*, because the reasoning is the part that is expensive to
 recover and the diff is the part that is not.
 
 Written from the commit history, which in this repo carries the argument as
-well as the change. Where a day's work was later reverted, the entry says so
+well as the change — by hand at the end of a session, or by the nightly
+workflow for the days that ended without one. Where a day's work was later reverted, the entry says so
 rather than quietly dropping it: a road not taken is worth as much as the one
 taken, and costs less to read.
 
