@@ -34,12 +34,14 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 5 is PART-DONE. Stage A is provisioned and live —
-`isocan-io-dev` serves a real canvas off Firestore at its `*.run.app`
-URL, and the signed-URL smoke test passes all three assertions. Stages
-B (the domain and the load balancer, ~$18/month), C and D are not
-run.** This line moves as phases close; a clean session starts by
-believing it.
+**Where we are: Phase 5 is PART-DONE. Stages A, B and C are provisioned
+and live — https://dev.isocan.io serves a real canvas off Firestore, TLS
+on a Google-managed cert, nightly export, uptime check. Stage D
+(continuous deploy) needs a browser GitHub OAuth step and is not run;
+GC is deliberately not scheduled, and `infra/91-scheduler-gc.sh` says
+why. The phase's remaining Proof — two people, live correspondence, and
+ops landing in order across a rollout — is not yet played.** This line
+moves as phases close; a clean session starts by believing it.
 
 ---
 
@@ -536,6 +538,29 @@ observed in production conditions).
   *build service account*. Nothing bridges them, so the first build died
   on a 403 that talks about a storage object and reads like a corrupt
   upload. Folded into `infra/40-service-account.sh`.
+- **2026-08-22 — The managed certificate, and a mistake of mine worth
+  keeping.** `dev.isocan.io` is live on a Google-managed cert, and the
+  ordering the README describes is real: the load balancer and its
+  static IP must exist first, then DNS points at it, and only then can
+  the cert validate. What the README did not say is that the cert was
+  created **before** the A record existed, so Google probed, failed, and
+  parked the domain in `FAILED_NOT_VISIBLE` — a *sticky* verdict, not a
+  live one. With DNS then correct, a verified chain (one IP, both
+  forwarding rules, cert on the proxy that serves 443), and no CAA
+  record in the way, it still read FAILED for ten minutes. I concluded
+  the state machine was stuck and recreated the certificate. The
+  background watcher then logged the original going **ACTIVE at
+  19:45:25** — within seconds of my deleting it. The diagnosis was
+  right and the patience was wrong: Google's retry had already
+  succeeded, and recreating cost seven more minutes for nothing.
+  The lesson, which is the reason this is written down: **a sticky
+  failure status is not a stuck state machine.** When the chain is
+  verifiable and DNS is clean, the correct action is to wait, because
+  the only evidence that a retry is not coming is a retry that has
+  already not come — and ten minutes is not that evidence. Create the
+  cert *after* the DNS record next time and the whole episode does not
+  occur. A cert also lags its own `ACTIVE` by a few minutes at the
+  edge: 19:52 active, 19:53 serving.
 - **2026-08-22 — The image's own boot test could not boot the image,
   and was right not to.** `cloudbuild.yaml`'s smoke step starts the
   container to check it serves; the image bakes `ISOCAN_STORE=cloud`,
