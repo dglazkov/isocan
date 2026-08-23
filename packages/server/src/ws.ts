@@ -1,9 +1,10 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
-import { newId, WS_BAD_ORIGIN, WS_NO_BADGE } from "@isocan/core";
+import { newId, WS_BAD_ORIGIN, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
 import { Engine, ProjectNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
+import { admittingGrant } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
 
@@ -120,8 +121,20 @@ export function attachWebSockets(
   /**
    * The upgrade's own door check, plus mechanism 5's `projectId ∈
    * admissions`: a socket is a project-scoped route that happens to stay
-   * open, so it re-asks the door's test exactly like the HTTP routes do.
-   * Today the address admits, so being here writes the admission down.
+   * open, so it asks the door's test exactly like the HTTP routes do — the
+   * same test, from `grants.ts`, because two copies of a policy is two
+   * policies.
+   *
+   * The refusal is a close code rather than a status: this file's
+   * 4400/4401/4404/4500 convention, and `WS_NOT_ADMITTED` is 4402 because
+   * `WS_BAD_ORIGIN` already holds 4403. A reconnect loop that cannot tell
+   * "your origin is wrong" from "you are not admitted here" is a reconnect
+   * loop that retries the one it cannot fix.
+   *
+   * A canvas this daemon does not hold falls THROUGH the door rather than
+   * being refused by it, exactly as in `http.ts`: `handleConnection` closes
+   * 4404 a moment later, which is the true answer and the one `HomeLink`
+   * already knows how to stop dialling on.
    */
   async function admitted(
     request: IncomingMessage,
@@ -149,8 +162,17 @@ export function attachWebSockets(
     if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
     await desk.touch(badge.badgeId, new Date().toISOString());
     if (projectId && !badge.admissions.some((a) => a.canvasId === projectId)) {
-      // ---- the policy point, as in http.ts. Phase 7: refuse instead. ----
-      await desk.admit(badge.badgeId, projectId, { root: "link" });
+      const grant = await admittingGrant(desk, projectId, badge);
+      if (grant) {
+        // Provenance is revocation's grip: the grant that actually admitted
+        // this socket, so phase 9's sweep can find it.
+        await desk.admit(badge.badgeId, projectId, { root: "grant", grantId: grant.id });
+      } else if (await engine.getSnapshot(projectId).then(() => true, () => false)) {
+        return { code: WS_NOT_ADMITTED, reason: "not admitted" };
+      }
+      // No grant and no such canvas here: fall through to `handleConnection`,
+      // which closes 4404. A replica dialling a canvas its home has deleted
+      // takes this path, and 4404 is what makes it stop dialling.
     }
     return { badgeId: badge.badgeId, bearer: presented?.carrier === "bearer" };
   }
@@ -249,7 +271,7 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      ws.close(err instanceof ProjectNotFoundError ? 4404 : 4500, String(err));
+      ws.close(err instanceof ProjectNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
     let room = rooms.get(projectId);

@@ -1,6 +1,7 @@
 import type {
   Actor,
   ActorBindingRecord,
+  ActorClaim,
   ActorClaimOp,
   ActorColors,
   ActorNames,
@@ -25,6 +26,7 @@ import {
   OpValidationError,
   DEFAULT_COMMANDS,
   actorNames,
+  allocateName,
   applyActorColor,
   mergeCommands,
   applyClaim,
@@ -39,6 +41,7 @@ import {
 } from "@isocan/core";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
+import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
 import type { HomeConnection } from "./home-link.ts";
 import { UndoStacks } from "./undo.ts";
 import {
@@ -49,6 +52,29 @@ import {
   type GcOptions,
   type GcReport,
 } from "./gc.ts";
+
+/**
+ * The session key `freeName` asks with. A claim context is gathered for a
+ * specific key, and this question is asked for nobody in particular — so it is
+ * asked under a key no client can send. Clients namespace theirs by harness
+ * (`claude-code:s-1`, `codex:s-2`); the leading space here is not a
+ * namespace anything can produce, and matching no row is the whole point.
+ */
+const FREE_NAME_PROBE = " free-name probe";
+
+/**
+ * How far a name question may see, gathered in `claimContext`.
+ *
+ * - `"admitted"` — the rooms this badge has actually been let into (plus, for
+ *   a claim, the one room it names, if a grant would admit it). What a CLAIM
+ *   is judged in: a claim is judged where it is made.
+ * - `"admissible"` — those, plus every canvas a grant would admit this badge
+ *   to. What ALLOCATION asks in, because the badge doing the asking has
+ *   typically been nowhere yet. The door's own test, asked without opening
+ *   the door; `claimContext` says why, and where the same trick is already
+ *   played.
+ */
+type NameReach = "admitted" | "admissible";
 
 interface ProjectRuntime {
   state: ProjectState;
@@ -431,10 +457,66 @@ export class Engine {
        * chance. A refusal is said out loud because a name collision AT THE
        * HOME is exactly the thing an agent would otherwise meet as a baffling
        * error on its first write.
+       *
+       * **Phase 7.5 carved out exactly one exception, and it is not a claim.**
+       * WHICH name a nameless claimant is handed is not a fact about a local
+       * process at all — it is a question about a namespace shared with
+       * everybody at the home — so on a replica that one question is asked
+       * upward before the claim is applied. See `preferredName`. Everything
+       * this comment says about the claim itself is untouched: the session key
+       * still never leaves, and the two tables still hold different things.
        */
       if (this.home) void this.home.announceActor(entry.envelope.actor);
       return entry;
     });
+  }
+
+  /**
+   * A name free in the ASKING badge's scope — what a home answers when a
+   * replica asks on behalf of a claimant who supplied none. The other end of
+   * `preferredName`, and the one thing above that a replica cannot work out
+   * for itself.
+   *
+   * Built from `claimContext`, not from a second gathering that looks like it.
+   * The whole point is that the answer comes out of the scope this home would
+   * judge the resulting claim in; a lookalike scope here would be the same
+   * mismatch again, one layer down.
+   *
+   * It asks with `"admissible"` reach rather than the claim's `"admitted"`,
+   * and that is not a departure from the sentence above — it is what makes it
+   * true. The badge asking has been NOWHERE yet; the rooms it is about to be
+   * in are the rooms a grant would admit it to, which is where the claim it
+   * is allocating for will land. Same reach `GET /api/projects` uses, for the
+   * same reason. `claimContext` carries the argument and the disclosure
+   * check.
+   *
+   * One name out, never the taken set. The scope's names are already visible
+   * to this badge — a refusal says who holds a name — but a route that handed
+   * back a roster on request is the listing `orphanedClaims` refuses to be,
+   * and this one has no reason to be it.
+   *
+   * A read, off the writer chain, like the other reads here: an allocation is
+   * advice until a claim acts on it, and the claim that acts on it is
+   * serialized like everything else.
+   */
+  async freeName(badgeId: string): Promise<string> {
+    const runtime = await this.actors();
+    return allocateName(
+      await this.claimContext(
+        // A claim that will never be applied. The session key is a probe: it
+        // matches no row, so the context is gathered as it would be for a
+        // claimant this badge has not seen before — which is exactly who is
+        // being allocated for.
+        { badgeId, op: { type: "actor.claim", sessionKey: FREE_NAME_PROBE } },
+        runtime.registry,
+        new Date().toISOString(),
+        // The scope this question is actually about. A replica's badge is
+        // brand new and admitted to nothing when it asks, so "admitted" is
+        // the empty scope that makes every roster name look free — the
+        // original bug, one layer down. See `claimContext`.
+        "admissible",
+      ),
+    );
   }
 
   /**
@@ -782,6 +864,12 @@ export class Engine {
         entries: [],
         undo: UndoStacks.rebuild([]),
       });
+      // The OTHER way a canvas arrives on a replica — and the more common
+      // one, because a replica that has never held a canvas can only present
+      // cursor 0 and can only be answered with state. Same local row, same
+      // reason: no row, and this machine's own CLIs are refused a canvas
+      // sitting in their store.
+      await ensureHomeLinkGrant(this.desk, projectId);
     });
   }
 
@@ -903,6 +991,11 @@ export class Engine {
         entries: [entry],
         undo: UndoStacks.rebuild([entry]),
       });
+      // A canvas now exists on this machine, so this machine's door needs a
+      // row for it (phase 7). The home wrote its own; this one governs who
+      // HERE may reach the local copy, and without it every CLI on this
+      // laptop would be refused a canvas it is replicating.
+      await ensureHomeLinkGrant(this.desk, op.projectId);
       this.emit(op.projectId, { type: "op-applied", entry });
       return "applied";
     }
@@ -994,14 +1087,84 @@ export class Engine {
     request: ClaimRequest,
     registry: ActorRegistry,
     now: string,
+    reach: NameReach = "admitted",
   ): Promise<ClaimContext> {
     const badge = await this.desk.badge(request.badgeId);
     const canvasIds = (badge?.admissions ?? []).map((a) => a.canvasId);
-    // The room this name is being taken in counts even before the badge has
-    // been let into it — a browser names itself at the identity dialog,
-    // before it has fetched anything. See `ActorClaimOp.projectId`.
+    /**
+     * `freeName` only (see `NameReach`), and it is the SAME trick `GET
+     * /api/projects` plays, for the same reason — not a coincidence, a
+     * pattern.
+     *
+     * Phase 7 hit this exact shape once already: scoping the projects listing
+     * strictly to admissions broke replicas, because a fresh replica's badge
+     * has no admissions and would discover nothing at all. The answer there
+     * was to scope to what the badge is admitted to PLUS what a grant would
+     * admit it to — the door's own test, asked without opening the door.
+     *
+     * Allocation is the same question wearing different clothes. A replica
+     * asks "what name is free where this is going to land?" with a badge that
+     * has, by construction, just been minted and been nowhere; scoped to
+     * admissions that badge's scope is empty, and an empty scope makes every
+     * roster name look free — so the home confidently answers with the one
+     * name most likely to already be taken. That is the original bug
+     * reproduced INSIDE its own fix, one layer down. (It hid locally because
+     * a replica's sweep admits its badge over loopback in milliseconds, so by
+     * claim time the scope was full; against a real home the claim wins that
+     * race. The refusal still names the canvas, because by the time the CLAIM
+     * is judged the badge HAS been admitted — which is what made it look like
+     * anything but a scope bug.)
+     *
+     * Not applied to a claim, which keeps phase 7's narrower widening below:
+     * a claim is judged where it is made, and the room it names is the room
+     * it named. This is one question — "hand me a name" — asked on behalf of
+     * somebody who has not arrived yet.
+     *
+     * **What it discloses, checked rather than assumed.** One NAME goes back,
+     * never the taken set, never a holder, never a title. What that leaks is
+     * a count: how many of the roster's first names are in use across the
+     * canvases this badge could enter by presenting the address. Those are
+     * exactly the canvases `GET /api/projects` already lists to the same
+     * badge, ids and titles included, and any of them would hand over its
+     * whole roster to a badge that simply opened it. So the answer is a
+     * function of what the asker can already have, and a canvas whose link is
+     * off drops out of it — same as the listing.
+     *
+     * Nothing is written: satisfying a grant to judge a name is not entering
+     * the room. The cost is one grant query per canvas the badge has not been
+     * in, on a route asked once per nameless claim.
+     */
+    if (reach === "admissible" && badge) {
+      for (const project of await this.listProjects()) {
+        if (canvasIds.includes(project.id)) continue;
+        if (await admittingGrant(this.desk, project.id, badge)) canvasIds.push(project.id);
+      }
+    }
+    /**
+     * The room this name is being taken in counts even before the badge has
+     * been let into it — a browser names itself at the identity dialog,
+     * before it has fetched anything. See `ActorClaimOp.projectId`.
+     *
+     * **Phase 3 left this as a hole and phase 7 closes it.** A claim widens
+     * its own name-check scope by naming the canvas it was made from, which
+     * under the old policy could only ever reach a canvas the address would
+     * have admitted the asker to anyway. Under a grant it must be
+     * admission-CHECKED, or "is this name taken here" becomes a probe into a
+     * room you were never let into: the refusal names the holder, so an
+     * unchecked widening would leak a stranger's roster one name at a time.
+     *
+     * The test is the door's own — would a grant admit this badge? — and NOT
+     * "is it already admitted", because the browser case above is precisely a
+     * badge that is not admitted yet and is about to be. Nothing is written
+     * here: satisfying a grant for the purpose of judging a name is not
+     * entering the room, and an admission written from a claim would be an
+     * admission with no request behind it (and, in phase 9, a badge the sweep
+     * would have to expel from a canvas it never opened).
+     */
     const from = request.op.projectId;
-    if (from !== undefined && !canvasIds.includes(from)) canvasIds.push(from);
+    if (from !== undefined && !canvasIds.includes(from) && badge) {
+      if (await admittingGrant(this.desk, from, badge)) canvasIds.push(from);
+    }
     const own = await this.desk.claimsOf(request.badgeId);
     // Own rows first, then the neighbours: a badge with no admissions yet is
     // still in its own scope, which is what keeps two agents on one machine
@@ -1014,12 +1177,66 @@ export class Engine {
       registry,
       own,
       ...(shelved !== undefined ? { shelved } : {}),
+      ...(await this.preferredName(request, own, shelved)),
       scoped,
       // Only `as` asks a global question, so only `as` pays for one.
       claimants: request.op.as ? await this.desk.claimants(request.op.as) : [],
       held: await this.heldNames(canvasIds),
       now,
     };
+  }
+
+  /**
+   * Ask the home for a name, when this daemon is a replica and the claimant
+   * asked for none — the ONE part of a claim that crosses the wire.
+   *
+   * The split is deliberate and narrow. A claim still does not forward (see
+   * `claim()`), because "the process holding sessionKey `claude-code:s-1` is
+   * Isaac" is a fact only this daemon can hold. But WHICH name a nameless
+   * claimant is handed is not that kind of fact at all: it is a question about
+   * a namespace shared with everybody else at the home, and on a replica the
+   * home owns that namespace. Answering it locally is how a fresh replica
+   * confidently hands out "Isaac" and is then refused by the home a
+   * millisecond later — the local answer correct by its own scope, and wrong
+   * where it lands.
+   *
+   * Three ways this stays small:
+   *
+   * - **Only allocation.** A supplied name is judged, not allocated, and a
+   *   collision on one is still refused locally with the message it always
+   *   had. A key this badge (or the shelf) already holds is a RESUMPTION,
+   *   handed back the name it already has — nothing to allocate, nothing to
+   *   ask.
+   * - **Only a preference.** The answer arrives as `ClaimContext.preferred`
+   *   and is re-checked against the local scope, so a stale answer costs a
+   *   roster position rather than a wrong name.
+   * - **Never load-bearing.** Any failure — an unreachable home, a home too
+   *   old to know the route — falls back to local allocation, which is what a
+   *   replica did before and what keeps it usable with no home in sight.
+   *
+   * The seam left, named rather than smoothed: two replicas asking in the same
+   * instant can be handed the same name, and the second one's `announceActor`
+   * meets the home's refusal exactly as it does today. Closing that would mean
+   * RESERVING a name at the home, and a reservation is a claim — which is the
+   * thing that must not forward.
+   */
+  private async preferredName(
+    request: ClaimRequest,
+    own: readonly ActorClaim[],
+    shelved: ActorClaim | undefined,
+  ): Promise<{ preferred?: string }> {
+    const op = request.op;
+    if (!this.home) return {};
+    if (op.name !== undefined || op.as !== undefined) return {};
+    // `fresh` allocates even for a key that is already somebody — that is what
+    // being a second Kenny on purpose means — so it asks even when resuming
+    // would not.
+    if (!op.fresh && (own.some((row) => row.sessionKey === op.sessionKey) || shelved)) return {};
+    try {
+      return { preferred: await this.home.freeName() };
+    } catch {
+      return {};
+    }
   }
 
   /**
@@ -1134,6 +1351,28 @@ export class Engine {
     return entry;
   }
 
+  /**
+   * A canvas is born, and with it the standing **link grant** (phase 7).
+   *
+   * "The status quo demoted to data": every canvas born today carries a link
+   * grant, so "the address is the secret" stops being a regime and becomes one
+   * revocable row. Written here rather than in the route because this is the
+   * one place a canvas comes into existence under this daemon's own writership
+   * — the CLI's `bindFresh`, the web app's new-canvas button and a
+   * materialized marker all arrive through `project.create`, and a grant
+   * written per caller would be a grant somebody forgot.
+   *
+   * **On a replica this method is not reached at all**, and that is correct:
+   * the create FORWARDS (see `forwardSubmit`), so the canvas is born at the
+   * home and the home writes the grant that governs it. What lands back here
+   * is the home's entry, through `applyRemoteEntry`, which writes this
+   * machine's own local row — a different sentence in a different ledger. See
+   * `ensureHomeLinkGrant`.
+   *
+   * The grant is written AFTER the canvas exists, deliberately: a grant for a
+   * canvas whose creation then failed would be a row admitting people to
+   * nothing, and the desk has no transaction that spans both ledgers.
+   */
   private async createProject(
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
@@ -1153,6 +1392,7 @@ export class Engine {
       entries: [entry],
       undo: UndoStacks.rebuild([entry]),
     });
+    await ensureLinkGrant(this.desk, op.projectId, request.badgeId);
     return entry;
   }
 

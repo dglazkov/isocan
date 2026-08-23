@@ -222,6 +222,70 @@ refused, loudly and by every command: moving a canvas between homes is a
 deliberate act, not something a command should do because you ran it in the
 wrong directory. Report it rather than editing the marker.
 
+**`isocan home`** is which home this daemon answers to:
+
+```sh
+isocan home                    # a home, or a replica of what — and whether
+                               # that home is answering right now
+isocan home https://isocan.io  # answer to that home from now on: writes the
+                               # setting, restarts the daemon so it takes
+isocan home --clear            # answer to nobody — be a home again
+```
+
+It is **configuration, not a per-command flag**: there is no way to point one
+command at one home and the next at another, and there should not be. Setting
+a home checks the address answers before committing to it, because a replica
+that cannot reach its home refuses every write — `--force` sets it anyway if
+that is genuinely what was meant.
+
+**Do not run it on your own initiative.** Which home a machine answers to is
+the person's decision about their machine, and setting it moves where every
+canvas here is written. Run it when they ask you to point their daemon
+somewhere, and say on the thread that you did. Reading it — plain
+`isocan home` — is free and often the answer to "why was my write refused".
+
+## Sharing a canvas
+
+`isocan share` is who may enter, and it is the same endpoint the Share button
+in the web app drives:
+
+- `isocan share` — prints the canvas's **address** and whether the link is on.
+  The address is the whole invitation: hand it to a person and they land on
+  the canvas in a browser with nothing installed. Do not attach setup
+  instructions to it; the canvas offers those itself to whoever wants them.
+- `isocan share --link off` — new arrivals are turned away. People and agents
+  **already on the canvas keep their access**; this is not an expulsion, and
+  do not tell anyone it was one.
+- `isocan share --link on` — grant it again. (That writes a NEW grant row; the
+  old one stays as a record of when it was switched off.)
+- `isocan share <email>` — not yet. The home will refuse and tell you why.
+
+Two things to know before you use it:
+
+- **Sharing is not a canvas op.** It changes who may knock, not what is on the
+  canvas, so it never appears in the oplog and `undo` will not take it back.
+  Turning the link off is undone by turning it on, and by nothing else.
+- **There is no owner.** Anyone admitted to a canvas may share or un-share it,
+  you included. That is a reason to be careful, not a licence: change who may
+  enter a canvas when the person asked you to, and say on the thread that you
+  did.
+
+## When a canvas refuses you
+
+A **403 with `not-admitted`** is not a broken credential — it means your badge
+is fine and *this canvas will not have you*. Usually its link was switched off
+after you were told about it, or you were handed an address on a home you have
+never been admitted to.
+
+What to do: **stop, and ask the person who shared the canvas to let you in.**
+Do not retry it, do not go back to the door for a fresh badge (a new badge is
+refused identically — that is why the refusal is a 403 and not a 401), and do
+not work around it by finding another canvas. Say plainly which canvas refused
+you and what you were trying to do.
+
+`404` is the different answer, and worth telling apart: there is no canvas at
+that id here at all — a typo, or a canvas that lives at another home.
+
 ## Working a canvas that is not this directory's
 
 Only when the human asks for it. Pass `--project <ref>` to each command — do
@@ -584,7 +648,8 @@ make),
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
-`open`, `setup`.
+`share`, `open`, `setup`, `home` (which home this daemon answers to — read it
+freely, set it only when asked).
 
 Every one of these is the same operation the web app sends. If you find
 something a person can do on the canvas that you cannot do from here, that is

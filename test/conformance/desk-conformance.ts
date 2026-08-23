@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim } from "@isocan/core";
-import { SHELF } from "@isocan/core";
+import type { ActorClaim, Grant } from "@isocan/core";
+import { LINK, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
 
@@ -166,6 +166,53 @@ export function deskConformance(
     );
 
     test(
+      "grants: written per canvas, read back by canvas, and nothing else's",
+      withDesk(async ({ desk }) => {
+        // A canvas nobody has granted anything admits NOBODY. This is the
+        // rule `desk.ts` states and the reason the birth path and the
+        // migration both write rows: an empty answer here must stay empty,
+        // because a backing that helpfully implied a link grant would make a
+        // forgotten write invisible until it was an outage.
+        expect(await desk.grantsFor("prj_a")).toEqual([]);
+
+        await desk.putGrant(grant("gnt_1", "prj_a", "bdg_1"));
+        await desk.putGrant(grant("gnt_2", "prj_b", "bdg_1"));
+        const onA = await desk.grantsFor("prj_a");
+        expect(onA.map((row) => row.id)).toEqual(["gnt_1"]);
+        expect(onA[0]).toMatchObject({
+          canvasId: "prj_a",
+          subject: "link",
+          grantedBy: "bdg_1",
+        });
+        expect((await desk.grantsFor("prj_b")).map((row) => row.id)).toEqual(["gnt_2"]);
+      }),
+    );
+
+    test(
+      "revoking a grant is a tombstone, and it is idempotent",
+      withDesk(async ({ desk }) => {
+        await desk.putGrant(grant("gnt_1", "prj_a", "bdg_1"));
+        const at = "2026-08-23T12:00:00.000Z";
+        const revoked = await desk.revokeGrant("gnt_1", at, "bdg_2");
+        expect(revoked).toMatchObject({ id: "gnt_1", revokedAt: at, revokedBy: "bdg_2" });
+
+        // A TOMBSTONE, not a delete: a badge admitted under this grant carries
+        // `{root: "grant", grantId}` as its provenance, and phase 9's sweep
+        // has to be able to read the row it is expelling people from.
+        const rows = await desk.grantsFor("prj_a");
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.revokedAt).toBe(at);
+
+        // Idempotent, and the FIRST stamp stands — two people turning one link
+        // off at once must not argue about when it went off.
+        const again = await desk.revokeGrant("gnt_1", "2026-08-23T13:00:00.000Z", "bdg_3");
+        expect(again).toMatchObject({ revokedAt: at, revokedBy: "bdg_2" });
+        // A grant this desk does not know is null, not a throw.
+        expect(await desk.revokeGrant("gnt_nope", at, "bdg_1")).toBeNull();
+      }),
+    );
+
+    test(
       "the migration shelf: shelved rows answer every question, and adoption is first-come",
       withDesk(async ({ desk }) => {
         await desk.put(mint("bdg_1"));
@@ -212,4 +259,15 @@ export function mint(badgeId: string): BadgeRecord {
 
 export function claim(actorId: string, sessionKey: string): ActorClaim {
   return { actorId, boundAt: new Date(Date.UTC(2026, 0, 1)).toISOString(), sessionKey };
+}
+
+/** A standing link grant, the only subject a v1 door can check. */
+export function grant(id: string, canvasId: string, grantedBy: string): Grant {
+  return {
+    id,
+    canvasId,
+    subject: LINK,
+    grantedBy,
+    at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  };
 }

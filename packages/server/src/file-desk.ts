@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import type { ActorClaim } from "@isocan/core";
+import type { ActorClaim, Grant } from "@isocan/core";
 import { SHELF } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
@@ -16,11 +16,22 @@ import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
  * own name back until phase 9 ships kill-a-badge". The log is fsynced before
  * a write is acknowledged.
  *
- * WHAT IS LOGGED: mints, claim-list replacements, shelving, and adoption —
- * everything that would otherwise be unrecoverable. WHAT IS NOT: `lastSeen`
- * and `admissions`, which re-derive themselves. The address admits, so a
- * badge that lost its admissions re-admits itself on its next request; paying
- * one fsync per (badge, canvas) pair for that would be ceremony.
+ * WHAT IS LOGGED: mints, claim-list replacements, shelving, adoption, and —
+ * from phase 7 — grants and their revocations. Everything that would
+ * otherwise be unrecoverable. A grant is policy: losing the row that says
+ * "the link is off" would quietly turn a closed canvas back on, which is the
+ * one direction a lost file must never fail in.
+ *
+ * WHAT IS NOT: `lastSeen` and `admissions`, which re-derive themselves — a
+ * badge that lost its admissions re-admits itself on its next request, and
+ * paying one fsync per (badge, canvas) pair for that would be ceremony. Phase
+ * 7 raises the stakes on that choice without changing it: re-admission now
+ * goes through the door, so a badge that lost its admissions gets back in
+ * only if a grant still admits it. That is the correct behaviour (it is the
+ * door's answer, freshly asked) — but it means a lost SNAPSHOT can expel a
+ * badge from a canvas whose link has since been turned off, and phase 9,
+ * which owns kill-a-badge and the sweep, is where "admissions are durable"
+ * gets re-decided if anything ever needs them to be.
  *
  * The desk serializes its own writes on its OWN promise chain, independent of
  * the engine's. Admissions are written by the transport layer and claims by
@@ -33,7 +44,9 @@ type DeskLogEntry =
   | { seq: number; type: "badge"; badgeId: string; secretHash: string; kind: BadgeRecord["kind"]; at: string }
   | { seq: number; type: "claims"; badgeId: string; claims: ActorClaim[]; at: string }
   | { seq: number; type: "shelve"; rows: Record<string, ActorClaim>; at: string }
-  | { seq: number; type: "adopt"; sessionKey: string; badgeId: string; at: string };
+  | { seq: number; type: "adopt"; sessionKey: string; badgeId: string; at: string }
+  | { seq: number; type: "grant"; grant: Grant; at: string }
+  | { seq: number; type: "revoke"; grantId: string; by: string; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -43,6 +56,10 @@ interface DeskSnapshot {
   badges: Record<string, BadgeRecord>;
   /** Pre-badge claims waiting for the sessionKey that will collect them. */
   shelf: Record<string, ActorClaim>;
+  /** `grants/{id}`, on a disk: keyed by grant id, exactly as the cloud
+   * backing keys its documents, so `grantsFor` is the same walk-or-query
+   * split every other read here already has. */
+  grants: Record<string, Grant>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -51,7 +68,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -63,6 +80,11 @@ export class FileDesk implements Desk {
       lastSeq: snapshot?.lastSeq ?? 0,
       badges: snapshot?.badges ?? {},
       shelf: snapshot?.shelf ?? {},
+      // Absent in every desk written before phase 7 — and correctly EMPTY
+      // rather than "everything is granted": the one-time migration in
+      // `migrations.ts` writes the rows, so that a canvas whose grant was
+      // never written answers nothing here instead of answering helpfully.
+      grants: snapshot?.grants ?? {},
     };
     // Crash recovery: replay any log tail the snapshot doesn't cover.
     let recovered = false;
@@ -167,6 +189,38 @@ export class FileDesk implements Desk {
     await this.enqueue(() => this.writeSnapshot());
   }
 
+  // ---- grants ----
+
+  async grantsFor(canvasId: string): Promise<Grant[]> {
+    // A walk is the honest implementation of a query on a file backing; what
+    // matters is that the SEAM is a query, so `CloudDesk` serves it with
+    // `where("canvasId", "==", …)` and an index rather than a scan.
+    return Object.values(this.state.grants)
+      .filter((grant) => grant.canvasId === canvasId)
+      .map((grant) => ({ ...grant }));
+  }
+
+  async putGrant(grant: Grant): Promise<void> {
+    await this.enqueue(async () => {
+      this.state.grants[grant.id] = { ...grant };
+      await this.append({ type: "grant", grant, at: grant.at });
+    });
+  }
+
+  async revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null> {
+    return this.enqueue(async () => {
+      const grant = this.state.grants[grantId];
+      if (!grant) return null;
+      // Idempotent: the first revocation's stamp stands, so two people
+      // turning the link off at once do not argue about when it went off.
+      if (grant.revokedAt !== undefined) return { ...grant };
+      grant.revokedAt = at;
+      grant.revokedBy = by;
+      await this.append({ type: "revoke", grantId, by, at });
+      return { ...grant };
+    });
+  }
+
   // ---- the migration shelf ----
 
   async adopt(sessionKey: string, badgeId: string): Promise<ActorClaim | null> {
@@ -242,6 +296,17 @@ export class FileDesk implements Desk {
         if (!row) return;
         delete this.state.shelf[entry.sessionKey];
         if (badge) badge.claims = [...badge.claims.filter((c) => c.actorId !== row.actorId), row];
+        return;
+      }
+      case "grant": {
+        this.state.grants[entry.grant.id] ??= { ...entry.grant };
+        return;
+      }
+      case "revoke": {
+        const grant = this.state.grants[entry.grantId];
+        if (!grant || grant.revokedAt !== undefined) return;
+        grant.revokedAt = entry.at;
+        grant.revokedBy = entry.by;
         return;
       }
     }

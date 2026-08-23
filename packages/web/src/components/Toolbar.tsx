@@ -8,6 +8,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { ProjectEditor } from "./ProjectEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
+import { ShareDialog } from "./ShareDialog.tsx";
 import { CreateActions, PanelSwitch } from "./CreateActions.tsx";
 
 /**
@@ -27,11 +28,15 @@ export function Toolbar({
   const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
+  const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
     useUiStore.getState().setIdentityOpen(false),
+  );
+  const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
+    useUiStore.getState().setShareOpen(false),
   );
 
   return (
@@ -93,6 +98,27 @@ export function Toolbar({
       >
         ?
       </button>
+      {/* Who may be here, next to who is here — the facepile and Share are the
+          same subject, which is why the journey puts them shoulder to
+          shoulder. */}
+      <div className="identity-anchor" ref={shareRef}>
+        <button
+          className={`btn${shareOpen ? " active" : ""}`}
+          title="Who may enter this canvas"
+          disabled={!project}
+          onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
+        >
+          Share
+        </button>
+        {shareOpen && project && (
+          <div className="identity-popover share-popover">
+            <ShareDialog
+              actor={actor}
+              onClose={() => useUiStore.getState().setShareOpen(false)}
+            />
+          </div>
+        )}
+      </div>
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>

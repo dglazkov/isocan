@@ -7,6 +7,7 @@ import { Command } from "commander";
 import type {
   Actor,
   CanvasSnapshotResponse,
+  GrantSubject,
   Comment,
   CommentThread,
   Item,
@@ -27,7 +28,9 @@ import {
   DRAWING_TITLE,
   COMMAND_NAME,
   IDENTITY_COLORS,
+  LINK,
   actorNameIn,
+  canvasUrl,
   actorsAnswerTo,
   cancelledSince,
   commandFileText,
@@ -92,7 +95,7 @@ import {
   writeConfig,
 } from "./ctx.ts";
 import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
-import { ApiError, DaemonClient } from "./client.ts";
+import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
   readIdentity,
   claimSessionIdentity,
@@ -748,9 +751,7 @@ program
         // Which of the two things it is. A replica that stopped serving pages
         // without saying so reads as a broken daemon, and `status` is the
         // first place anybody looks.
-        ...(health.home
-          ? { role: `replica of ${health.home} — ops to CLIs, pages at the home` }
-          : {}),
+        ...(health.home ? { role: roleLine(health.home, daemonBase) } : {}),
         pid: String(health.pid),
         since: health.startedAt,
         version: health.version,
@@ -763,6 +764,47 @@ program
     }),
   );
 
+/**
+ * Which of the two things a daemon is, in ONE phrasing.
+ *
+ * `isocan status` has said it since phase 6 and `isocan home` says it now;
+ * two commands answering the same question in two vocabularies is how a
+ * person ends up believing they are different questions.
+ */
+function roleLine(homeUrl: string | null | undefined, base: string): string {
+  return homeUrl
+    ? `replica of ${homeUrl} — ops to CLIs, pages at the home`
+    : `home — this daemon holds the canvases and serves the app at ${base}`;
+}
+
+/**
+ * Stop whoever holds the port, bring this build up in its place.
+ *
+ * The one stop-and-start dance in the CLI. `isocan restart` was it; phase
+ * 7.5's `isocan home` needs exactly the same sequence (a daemon reads its
+ * home once, at boot, so writing `config.json` only takes effect on the next
+ * one), and a second copy of it would be a second place for the `.stale-warned`
+ * reset and the come-up wait to drift.
+ *
+ * Note what it does NOT do: talk to the daemon first. Nothing here holds a
+ * socket, a badge or a watch on the process it is about to kill — which is
+ * why `home` is plumbing like `restart` and `status` are, and does not build
+ * a `Ctx`. A command that had opened a session on the old daemon would be
+ * killing its own correspondent mid-sentence.
+ */
+async function restartDaemon(
+  home: string,
+  port: number,
+): Promise<{ stopped: number[]; health: Health | null; client: DaemonClient }> {
+  const { stopDaemons } = await import("@isocan/server");
+  const stopped = await stopDaemons(port, home);
+  const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+  await client.ensureDaemon();
+  const health = await client.healthz(2000);
+  await fs.rm(path.join(home, ".stale-warned"), { force: true });
+  return { stopped, health, client };
+}
+
 program
   .command("restart")
   .description("Stop the daemon and start this build in its place — what an upgrade needs")
@@ -770,12 +812,7 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
-      const { stopDaemons } = await import("@isocan/server");
-      const stopped = await stopDaemons(port, home);
-      const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
-      await client.ensureDaemon();
-      const health = await client.healthz(2000);
-      await fs.rm(path.join(home, ".stale-warned"), { force: true });
+      const { stopped, health, client } = await restartDaemon(home, port);
       const globals = cmd.optsWithGlobals() as { json?: boolean };
       if (globals.json) return printJson({ stopped, ...(health ?? {}) });
       printKeyValues({
@@ -786,6 +823,241 @@ program
       });
     }),
   );
+
+/**
+ * **The home this daemon answers to** — phase 7.5's whole verb.
+ *
+ * `config.json` has had a `home` key since phase 6 and `resolveHomeUrl` has
+ * always read it; nothing could ever WRITE it, so the only ways to become a
+ * replica were an environment variable and a text editor. That is a missing
+ * verb, not a missing feature, and it is not only a developer's problem:
+ * commitment 2 says `isocan serve` on a rented VM is a complete home, so
+ * anybody pointing their daemon at their own innkeeper's home walks straight
+ * into it.
+ *
+ * **This is not phase 6 being undone.** Phase 6 refused a `--home` FLAG on
+ * `isocan serve`, on the same grounds as `ISOCAN_BIND` and `ISOCAN_STORE`:
+ * which home a daemon answers to is innkeeper configuration, not a
+ * per-invocation choice an agent should be able to reach for. That reasoning
+ * survives intact — and this verb obeys it. It writes the configuration file
+ * and restarts the daemon so the file is read the way it always was; it does
+ * not add a per-command override, and there is still no way to point one
+ * command at one home and the next at another. `daemon.ts`'s `homeUrl`
+ * comment is still true.
+ *
+ * **No compiled-in default, still.** `isocan home` with no address SHOWS;
+ * there is no address baked in for it to fall back to, because a CLI
+ * shipping with `isocan.io` as its default would turn `isocan serve` in this
+ * checkout into a replica of production. The flip belongs with phase 14's
+ * promotion gesture, where it is one line.
+ */
+program
+  .command("home [url]")
+  .description("What this daemon answers to: show it, point it at a home, or be a home again")
+  .option("--clear", "answer to no home — be a home again")
+  .option("--force", "set the address even though nothing answered there")
+  .action(
+    run(async (
+      url: string | undefined,
+      opts: { clear?: boolean; force?: boolean },
+      cmd: Command,
+    ) => {
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const isocanHome = paths.isocanHome();
+      const port = daemonPort(cmd);
+      const base = `http://127.0.0.1:${port}`;
+      const client = new DaemonClient(base, isocanHome);
+      if (url !== undefined && opts.clear) {
+        throw new Error(
+          "`isocan home <url>` sets a home and `isocan home --clear` removes one — not both",
+        );
+      }
+
+      // What the daemon ACTUALLY is, off the health route — the same source
+      // `Ctx.homeUrl` reads and for the same reason: a config file edited five
+      // minutes ago and a daemon running since Tuesday must not be allowed to
+      // disagree about where the pages are. The config file is read too, but
+      // only to NOTICE that disagreement.
+      const health = await client.healthz(500);
+      const config = await readConfig(isocanHome);
+      const written = typeof config.home === "string" ? config.home.trim() : "";
+      const configured = written || null;
+      const live = health?.home ?? null;
+
+      // `resolveHomeUrl` reads the environment FIRST, and `ensureDaemon` hands
+      // the daemon this process's environment — so with `ISOCAN_HOME_URL` set,
+      // writing the file would change nothing and the restart would bring the
+      // daemon back on the variable's address. Silently. Refusing is the only
+      // honest answer; the variable is the thing to remove.
+      const override = process.env.ISOCAN_HOME_URL?.trim();
+
+      if (url === undefined && !opts.clear) {
+        const target = live ?? configured;
+        const reachable = target ? await homeAnswers(target) : null;
+        if (globals.json) {
+          return printJson({
+            role: live ? "replica" : "home",
+            home: live,
+            daemon: base,
+            running: health !== null,
+            ...(configured !== live ? { configured } : {}),
+            ...(reachable
+              ? { reachable: reachable.ok, ...(reachable.ok ? {} : { why: reachable.why }) }
+              : {}),
+            ...(override ? { override } : {}),
+          });
+        }
+        printKeyValues({
+          role: health ? roleLine(live, base) : `unknown — no daemon is running on ${base}`,
+          ...(health
+            ? {}
+            : {
+                configured: configured
+                  ? `${configured} (config.json) — start a daemon to make it so`
+                  : "nothing — this machine is a home",
+              }),
+          ...(reachable
+            ? {
+                answering: reachable.ok
+                  ? `yes — ${target} is up`
+                  : `NO (${reachable.why}) — writes are refused while it cannot be reached`,
+              }
+            : {}),
+          // The one disagreement worth naming: somebody wrote the file and
+          // never restarted, so the running daemon is still the old thing.
+          ...(health && configured !== live
+            ? {
+                pending: `config.json says ${configured ?? "no home"} — \`isocan restart\` to take it`,
+              }
+            : {}),
+          ...(override ? { note: `ISOCAN_HOME_URL=${override} is set and overrides all of this` } : {}),
+        });
+        return;
+      }
+
+      if (override) {
+        throw new Error(
+          `ISOCAN_HOME_URL=${override} is set in this shell and wins over the config file — ` +
+            "unset it first (`unset ISOCAN_HOME_URL`), then run this again",
+        );
+      }
+
+      const target = opts.clear ? null : normalizeHomeUrl(url!);
+      const reachable = target ? await homeAnswers(target) : null;
+      if (reachable && !reachable.ok && !opts.force) {
+        // Phase 6 made this loud for a reason: a replica that cannot reach its
+        // home REFUSES every write, with nothing queued. Walking somebody into
+        // that quietly is exactly what this verb must not do — so say it, and
+        // offer the honest escape rather than deciding for them.
+        throw new Error(
+          `nothing answered at ${target} (${reachable.why}) — a daemon whose home is ` +
+            "unreachable refuses every write, and nothing is queued. " +
+            `\`isocan home ${target} --force\` sets it anyway.`,
+        );
+      }
+
+      // A no-op is a no-op: pointing a daemon at the home it already answers
+      // to should not bounce it. Restarting is cheap but not free — anything
+      // parked on `isocan wait` loses its socket — so it happens only when
+      // something actually changed.
+      if (configured === target && live === target) {
+        if (globals.json) {
+          return printJson({
+            role: target ? "replica" : "home",
+            home: target,
+            restarted: false,
+            daemon: base,
+          });
+        }
+        printKeyValues({
+          role: roleLine(target, base),
+          unchanged: target ? "this daemon already answers to that home" : "this daemon is already a home",
+        });
+        return;
+      }
+
+      if (target) config.home = target;
+      else delete config.home;
+      await writeConfig(isocanHome, config);
+
+      // The daemon reads its home once, at boot. Writing the file is half the
+      // gesture; the restart is what makes it true.
+      const { stopped, health: after } = await restartDaemon(isocanHome, port);
+      const became = after?.home ?? null;
+      if (became !== target) {
+        throw new Error(
+          `wrote ${paths.configFile(isocanHome)} but the daemon came back as ` +
+            `${became ? `a replica of ${became}` : "a home"} — check that file`,
+        );
+      }
+      if (globals.json) {
+        return printJson({
+          role: target ? "replica" : "home",
+          home: target,
+          restarted: true,
+          stopped,
+          daemon: base,
+          ...(reachable ? { reachable: reachable.ok } : {}),
+        });
+      }
+      printKeyValues({
+        role: roleLine(target, base),
+        wrote: paths.configFile(isocanHome),
+        daemon:
+          stopped.length > 0
+            ? `restarted on ${base} (was ${stopped.join(", ")})`
+            : `started on ${base}`,
+        ...(reachable && !reachable.ok
+          ? { warning: `${target} did not answer (${reachable.why}) — writes will be refused until it does` }
+          : {}),
+      });
+    }),
+  );
+
+/**
+ * A home address, as somebody would type it — and the refusals that show the
+ * shape rather than describing it.
+ *
+ * Deliberately permissive about WHERE: a home is as often
+ * `http://192.168.1.9:4441` on a LAN as it is `https://isocan.io`. Strict
+ * about WHAT, because the two mistakes are predictable — a bare hostname, and
+ * a canvas link pasted out of a browser bar.
+ */
+function normalizeHomeUrl(input: string): string {
+  const raw = input.trim();
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      `not an address: "${raw}" — a home looks like https://isocan.io or http://127.0.0.1:4441`,
+    );
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`a home is reached over http or https, not ${url.protocol} — got "${raw}"`);
+  }
+  if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    // Almost always a canvas link, copied from the address bar. Naming the
+    // origin it contains is more useful than naming the rule it broke.
+    throw new Error(`that is a page at ${url.origin}, not a home — try \`isocan home ${url.origin}\``);
+  }
+  return url.origin;
+}
+
+/** Does the address answer as a home? The health route, which is what the
+ * daemon itself will dial — `healthPath` picks `/api/healthz` for anything
+ * that is not loopback, because Google's frontend swallows the bare path. */
+async function homeAnswers(url: string): Promise<{ ok: boolean; why: string }> {
+  try {
+    const res = await fetch(`${url}${healthPath(url)}`, { signal: AbortSignal.timeout(5000) });
+    return res.ok
+      ? { ok: true, why: "" }
+      : { ok: false, why: `it answered ${res.status} — is that address a home?` };
+  } catch (err) {
+    const why = (err as Error).name === "TimeoutError" ? "no answer in 5s" : (err as Error).message;
+    return { ok: false, why };
+  }
+}
 
 program
   .command("upgrade")
@@ -897,7 +1169,7 @@ program
       // the home's when there is one — opening `127.0.0.1` on a replica lands
       // them on `registerHomeElsewhere`'s 404, which is a correct answer to
       // the wrong question.
-      const url = `${ctx.homeUrl ?? ctx.client.base}/p/${project.id}`;
+      const url = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
       spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
         stdio: "ignore",
         detached: true,
@@ -905,6 +1177,107 @@ program
       console.log(url);
     }),
   );
+
+/**
+ * **Share** — the verb half of the Share dialog, and the first gesture in this
+ * CLI that is not a canvas op.
+ *
+ * That is worth stating rather than discovering. Every other verb here turns
+ * into an `Operation` applied by the one reducer; this one acts on the OUTSIDE
+ * world — grants, addresses, who may knock — so its parity with the button
+ * lives at the daemon API instead (the journey's rule 5: "pretending it is an
+ * op would make the oplog lie"). Button and verb drive exactly the same three
+ * routes, and neither of them spells a URL: `@isocan/core` does.
+ *
+ * Three shapes, one endpoint:
+ *
+ * - `isocan share` — the address to send, and whether the link is on.
+ * - `isocan share --link off` / `--link on` — revoke, or grant again.
+ * - `isocan share <email>` — phase 9's slot. It is not stubbed out here and it
+ *   is not silently refused either: the request goes to the home, and the
+ *   home's own 400 explains that a badge cannot prove an email until the
+ *   attesters land. A client-side "not yet" would be a second copy of a policy
+ *   that is about to change.
+ *
+ * **There is no owner**, deliberately, and this verb does not imply one: any
+ * admitted badge may share or un-share, which is what the door actually does.
+ *
+ * On a replica every one of these forwards to the home, because the row that
+ * decides who may enter lives there. Nothing here has to know that — but it is
+ * why `isocan share --link off` run on a laptop really does turn the link off
+ * for the world, rather than editing a local copy and reporting success.
+ */
+program
+  .command("share")
+  .description("Who may enter this canvas: the address to send, and the \"anyone with the link\" grant")
+  .argument("[who]", "an email or repo to grant access to — the home answers why it cannot yet")
+  .option("--link <on|off>", "turn the link grant on (anyone with the address) or off")
+  .action(
+    run(async (who: string | undefined, opts: { link?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const project = await resolveProject(ctx);
+      // The one origin: people always enter through the home, so a replica
+      // hands out the home's address and never its own 127.0.0.1 — the same
+      // rule `isocan open` follows, from the same function.
+      const address = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+
+      if (opts.link !== undefined) {
+        const want = opts.link.toLowerCase();
+        if (want !== "on" && want !== "off") {
+          throw new Error(`--link wants on or off, got: ${opts.link}`);
+        }
+        const live = (await ctx.client.grants(project.id)).grants.find((g) => g.subject === LINK);
+        if (want === "on" && !live) await ctx.client.createGrant(project.id, LINK);
+        // Off with no live row is not an error: the gesture is "the link is
+        // off", and it already is. Two people flipping the same toggle at once
+        // must not turn one of them into a failure.
+        if (want === "off" && live) await ctx.client.revokeGrant(project.id, live.id);
+      }
+
+      if (who !== undefined) {
+        // Straight to the home. It refuses, in its own words, naming phase 9 —
+        // and if some later build can satisfy the subject, this line grants it
+        // without being touched.
+        const { grant } = await ctx.client.createGrant(project.id, grantSubjectOf(who));
+        console.log(`granted ${grant.subject} on ${project.title} (${grant.id})`);
+      }
+
+      const { grants } = await ctx.client.grants(project.id);
+      const link = grants.find((g) => g.subject === LINK) ?? null;
+      if (ctx.json) return printJson({ address, grants });
+      printKeyValues({
+        address,
+        link: link
+          ? `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
+          : "off — new arrivals are turned away; people already on this canvas keep their access",
+      });
+      const others = grants.filter((g) => g.subject !== LINK);
+      if (others.length > 0) {
+        printTable(
+          others.map((g) => ({ subject: g.subject, granted: g.at.slice(0, 10), by: g.grantedBy })),
+        );
+      }
+    }),
+  );
+
+/**
+ * What a person typed, as a grant subject.
+ *
+ * It lives here rather than in core because only one surface computes it: the
+ * Share dialog has no "who" field to type into (phase 9 owns that control),
+ * so there is nothing for a shared helper to keep in step yet. When the field
+ * lands, this moves — it is the same question asked twice at that point.
+ *
+ * Anything unrecognised is passed through untouched so that the home's refusal
+ * is about what the person actually wrote, rather than about something this
+ * function guessed.
+ */
+function grantSubjectOf(who: string): GrantSubject {
+  if (who.startsWith("email:") || who.startsWith("repo:")) return who as GrantSubject;
+  if (who.includes("@")) return `email:${who}`;
+  if (who.split("/").length === 3) return `repo:${who}`;
+  return who as GrantSubject;
+}
 
 // ---------- setup: one command, from any directory ----------
 
@@ -1100,10 +1473,27 @@ program
          */
         const daemonUp = report.app === client.base;
         const homeUrl = daemonUp ? ((await client.healthz(2000))?.home ?? null) : null;
-        const where = homeUrl ?? client.base;
+        const origin = homeUrl ?? client.base;
         if (homeUrl) {
           report.app = `${client.base} — replica of ${homeUrl} (ops to CLIs, no pages here)`;
-          report.canvas = homeUrl;
+        }
+
+        /**
+         * Phase 7.5: finish the walk.
+         *
+         * Setup still creates NO canvas — the paragraph above stands, and it is
+         * the reason there is a branch here at all. What changed is only what
+         * setup REPORTS. A directory that already has a marker gets its
+         * canvas's address AT THE HOME, which is the thing that used to be read
+         * out of `.isocan/project.json` by hand; a directory that has none is
+         * told what makes one, rather than being handed a bare origin and left
+         * to guess.
+         */
+        const bound = daemonUp ? await findBinding(target, home) : null;
+        const where = bound ? canvasUrl(origin, bound.projectId) : origin;
+        if (bound) report.canvas = where;
+        else if (homeUrl) {
+          report.canvas = `${homeUrl} — none in this directory yet: make one there, or \`isocan identity --session\` here`;
         }
 
         // A person at a terminal gets the app opened for them; a script or an
@@ -1118,10 +1508,13 @@ program
 
         if (globals.json) return printJson(report);
         printKeyValues(report);
+        const agentLine =
+          "\nTell your agent to use the isocan-collab skill (or to run `isocan --agent-help`," +
+          "\nwhich is the same instructions, shipped with this build).";
         console.log(
-          `\nOpen ${where} — pick your name, make a canvas — then tell your agent` +
-            "\nto use the isocan-collab skill (or to run `isocan --agent-help`, which is" +
-            "\nthe same instructions, shipped with this build).",
+          bound
+            ? `\nThis directory's canvas: ${where}${agentLine}`
+            : `\nOpen ${where} — pick your name, make a canvas.${agentLine}`,
         );
       },
     ),
@@ -1299,7 +1692,18 @@ program
             "`isocan use <ref> --home` sets the home-wide default instead",
         );
       }
-      const file = await writeMarker(root, { projectId: p.id, title: p.title });
+      // The address, beside the id — the same promise `bindFresh` and the
+      // session handshake write (offline-birth.md). Found while walking phase
+      // 7.5's own outcome: with a home configured, binding by hand was the one
+      // path that produced a marker naming no home, so a teammate cloning the
+      // repo got "wherever the daemon reading this lives" for a canvas that
+      // demonstrably lives somewhere. Absent still means that, and still has
+      // to — every marker written before phase 6 lacks the key.
+      const file = await writeMarker(root, {
+        projectId: p.id,
+        title: p.title,
+        ...(ctx.homeUrl ? { home: ctx.homeUrl } : {}),
+      });
       await recordDir(ctx.home, root, p.id);
       console.log(`this directory now means "${p.title}" (${p.id}) — bound via ${file}`);
     }),

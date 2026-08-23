@@ -262,11 +262,31 @@ two-ledger rule:
   authorization, so one lost file must not cost somebody their own name),
   while `lastSeen` and `admissions` are not, because the address admits and
   a returning badge re-admits itself.
-- `grants/{id}` — `{canvasId, subject, grantedBy, at}`.
+- `grants/{id}` — `{canvasId, subject, grantedBy, at}`, **plus `revokedAt`
+  and `revokedBy`, added in phase 7**: revocation is a *tombstone*, not a
+  delete. Provenance points at a grant id, so phase 9's sweep must be able
+  to read the row it is expelling people from; a deleted row would leave
+  admissions rooted in nothing. Re-granting the same subject writes a NEW
+  row rather than clearing the tombstone, so "turn the link off and on
+  again" is two rows and an honest history. `link` is the only subject the
+  door can satisfy today — `email:` and `repo:` are refused at the API
+  until phase 9 gives a badge attestations, because a row that admits
+  nobody while a dialog claims an invitation is worse than a refusal.
 - `registrations/{id}` — frozen delegation's record; the scoped launch
   token is KMS-wrapped at write and unwrapped only at fire time.
 - `audit/` — append-only firing and admission ledger. The audit ledger
   is Firestore, not Cloud Logging: logs rotate, the ledger answers.
+
+**The canvas's public address is `/p/<id>`, and it has exactly one
+definition.** This is the one URL in the product that strangers hand each
+other, so it is on the map rather than left to a router: `packages/core/
+src/address.ts` holds the prefix and the builders, both clients use them,
+and a test greps every source file for a hand-built canvas URL and fails
+the build on one. The journey and the desk design used to write `/c/…`
+and nothing ever served it — an unmatched path returned the app shell with
+a 200 and rendered a blank page, so a mistyped or doc-shaped link failed
+invisibly. Settled 2026-08-23: keep `/p/`, correct the docs, and give the
+app a catch-all that says the canvas is not here.
 
 Carriers are as the desk designed them — HTTP-only cookie at the one
 origin, bearer token in the daemon's `auth` block — with the

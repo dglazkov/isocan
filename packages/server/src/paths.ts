@@ -45,6 +45,13 @@ export const badgesFile = (home: string) => path.join(deskDir(home), "badges.jso
  * admits, so a returning badge re-admits itself on its next request, and one
  * fsync per (badge, canvas) pair for data that rebuilds itself is ceremony. */
 export const badgesLogFile = (home: string) => path.join(deskDir(home), "badges.jsonl");
+/** Says the phase 7 link-grant migration has run here. A marker file rather
+ * than a renamed-aside input, because that migration has no input file to
+ * rename: what it reads is the project list. See
+ * `grantTheLinkOnOldCanvases` for what a container with no durable
+ * filesystem does with it. */
+export const linkGrantsMigratedFile = (home: string) =>
+  path.join(deskDir(home), "link-grants.migrated");
 /** The CLI-era session registry (pre-#57); read only to migrate (#59). */
 export const agentsFile = (home: string) => path.join(home, "agents.json");
 /** Pre-facepile-fix single pointer; read by nobody, removed on sight. */

@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @isocan/server\" \"npm run dev -w @isocan/web\"",
+    "dev:replica": "node scripts/dev-replica.mjs",
     "build": "npm run build -w @isocan/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",

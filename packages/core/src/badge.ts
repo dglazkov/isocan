@@ -109,6 +109,17 @@ export const BADGE_RESTART_HINT =
 /** WebSocket close codes, continuing ws.ts's 4400/4404/4500 convention. */
 export const WS_NO_BADGE = 4401;
 export const WS_BAD_ORIGIN = 4403;
+/**
+ * There is no canvas at that address — the socket half of a 404, and the one
+ * close code a client must NOT retry its way out of.
+ *
+ * It was a bare `4404` in `ws.ts` and a bare `4404` in `home-link.ts`'s
+ * stop-dialling branch; naming it is phase 7's tidy-up for the same reason
+ * `address.ts` exists. A mistyped canvas id in a pasted share link arrives
+ * here, and a tab that reconnects forever against it is exactly the silent
+ * blank page the `/c/` finding was about.
+ */
+export const WS_NO_CANVAS = 4404;
 
 // ---- the claims half of the registry (desk-private; see server/desk.ts) ----
 

@@ -13,12 +13,32 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { applyOperation, WS_NO_BADGE } from "@isocan/core";
+import { applyOperation, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
 import { CLIENT_ID, knockOnDoor } from "../lib/api.ts";
 import { useUiStore } from "./uiStore.ts";
 import { markRead, noticeComment, syncProject } from "./unreadStore.ts";
 
-export type Connection = "connecting" | "live" | "reconnecting" | "gone";
+/**
+ * What the socket is doing — and, from phase 7, two answers that are FINAL.
+ *
+ * `refused` and `absent` are the door's two "no"s, and they are separate from
+ * `reconnecting` because they are not a network condition: retrying cannot fix
+ * either one. Before this, a 4402 (not admitted) and a 4404 (no such canvas)
+ * both fell into the ordinary 800ms backoff, so a pasted link to a canvas that
+ * had been shut off — or a mistyped id — showed "reconnecting" over an empty
+ * canvas forever. That is the same silence the missing catch-all route made,
+ * one layer down, and a share link's failure has to be legible.
+ */
+export type Connection =
+  | "connecting"
+  | "live"
+  | "reconnecting"
+  /** The canvas was deleted while this tab was on it. */
+  | "gone"
+  /** The door said no: a good badge, a canvas that will not have it. */
+  | "refused"
+  /** There is no canvas at this address here. */
+  | "absent";
 
 interface CanvasStore {
   projectId: string | null;
@@ -317,6 +337,16 @@ function open(projectId: string): void {
     // set headers on a WS handshake, so the cookie is the only carrier here:
     // go to the door and come straight back rather than waiting out the
     // ordinary backoff.
+    // The door's two final answers. Neither is retried: a badge that is not
+    // admitted would be refused identically forever, and a canvas that is not
+    // here does not appear because somebody asked twice.
+    if (event.code === WS_NOT_ADMITTED || event.code === WS_NO_CANVAS) {
+      useCanvasStore.setState({
+        connection: event.code === WS_NOT_ADMITTED ? "refused" : "absent",
+      });
+      disconnect();
+      return;
+    }
     if (event.code === WS_NO_BADGE) {
       void knockOnDoor().then(() => {
         if (currentProjectId === projectId && socket === null) open(projectId);
