@@ -314,6 +314,7 @@ isocan --agent-help                # the collaboration protocol, for agents
 isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
+isocan home [<url>|--clear]        # which home this daemon answers to
 isocan share [--link on|off]     # the canvas's address, and who may enter it
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
@@ -373,6 +374,32 @@ pair-complete so redo never dangles; dropped entries go to
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
 
+## Answering to a home
+
+A daemon is one of two things. On its own it is a **home**: it holds the
+canvases, serves the app, and is the single writer of everything on them.
+Given an address it becomes a **replica** of the home at that address — it
+still answers your CLI instantly from a local copy, but every write it makes
+travels to the home and comes back, and the pages are served there, not here.
+That is the one-origin rule: people always enter through the home.
+
+```sh
+isocan home                       # which of the two this daemon is, and
+                                  # whether its home is answering
+isocan home https://isocan.io     # answer to that home from now on
+isocan home --clear               # answer to nobody — be a home again
+```
+
+Setting a home writes `~/.isocan/config.json` and restarts the daemon, because
+a daemon reads its home once, at boot. It checks the address answers first: a
+replica that cannot reach its home refuses every write and queues nothing, so
+being pointed at nothing is a state worth being warned about (`--force` sets
+it anyway). There is **no default address** — `isocan serve` with nothing
+configured is a home, which is what every daemon in this repo is.
+
+`isocan serve` on a rented VM is a complete home: the same daemon, the same
+code, reachable by anyone you point at it.
+
 ## Updating
 
 ```sh
@@ -398,6 +425,8 @@ earlier run left behind; `isocan restart` does. From a checkout,
 
 ```sh
 npm run dev         # daemon + Vite with hot reload
+npm run dev:replica # a replica of dev, on :4442, with its OWN isocan home —
+                    # `-- <command>` runs any CLI command against it
 npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages

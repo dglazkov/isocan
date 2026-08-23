@@ -7,6 +7,7 @@ import type {
   CreateGrantRequest,
   DoorRequest,
   DoorResponse,
+  FreeNameResponse,
   Grant,
   GrantResponse,
   GrantsResponse,
@@ -21,6 +22,7 @@ import {
   decodeFilename,
   DOOR_ROUTE,
   FILENAME_HEADER,
+  FREE_NAME_ROUTE,
   grantSubjectRefusal,
   isLive,
   newId,
@@ -447,6 +449,25 @@ export function registerRoutes(
       req.badge!.badgeId,
       keys ? keys.split(",").filter(Boolean) : [],
     );
+  });
+
+  /**
+   * "Hand me a name that is free HERE" — asked by a REPLICA, on behalf of a
+   * claimant who supplied none.
+   *
+   * A replica cannot answer this one for itself: names are judged in the
+   * presenting badge's scope, and a fresh replica's badge has no admissions,
+   * so every roster name looks free to it right up until the home refuses the
+   * announcement. Allocation is the only part of a claim that crosses the wire
+   * — `Engine.preferredName` says why, and why a claim itself still does not.
+   *
+   * Badge-scoped like everything on this desk, and it hands back ONE name
+   * rather than the names in use. A route that answered "who is taken here"
+   * would be the home listing its rosters to anyone who knocked, which is
+   * exactly what `/api/actors/orphaned` is shaped to avoid.
+   */
+  app.get(FREE_NAME_ROUTE, async (req) => {
+    return { name: await engine.freeName(req.badge!.badgeId) } satisfies FreeNameResponse;
   });
 
   /** Chosen identity colors, for clients painting faces before a canvas is

@@ -62,11 +62,52 @@ async function startSquatter(): Promise<number> {
   });
   const answered = await until(health, (h) => h !== null, "the squatting daemon");
   expect(answered!.pid).toBe(squatter.pid);
+  // And not merely answering: the pidfile WRITTEN. `startDaemon` binds the port
+  // before it writes `daemon.json`, so a test that took the pidfile away the
+  // moment health answered was sometimes deleting a file that had not been
+  // written yet — and then the daemon wrote it, and the test that says
+  // "pidfile or no pidfile" quietly ran the pidfile case instead. It still
+  // passed, which is the worst kind of race: it costs coverage, not runs.
+  await until(
+    () => fs.readFile(pidfile(), "utf8").then(() => true, () => false),
+    (there) => there,
+    "the squatting daemon's pidfile",
+  );
   return squatter.pid!;
 }
 
-const exited = (child: ChildProcess) =>
-  new Promise<void>((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", () => resolve())));
+/**
+ * Resolve once this child is gone — asking whether it is gone, not whether it
+ * is gone THE ONE WAY.
+ *
+ * `exitCode !== null` is only half the question: a process killed by a signal
+ * has `exitCode === null` and `signalCode === "SIGKILL"`. Every caller here
+ * runs after `stopDaemons`, which does not come back until the pid has left the
+ * process table — so by the time this is called the `exit` event has ALREADY
+ * been delivered, and testing `exitCode` alone read a SIGKILLed daemon as still
+ * running and then waited for an event that was never coming again. Forever, in
+ * a test whose only ceiling was vitest's 30s: `Test timed out in 30000ms`.
+ *
+ * Which is intermittent for a reason that is not mysterious once named: the
+ * SIGKILL branch is only reached when the daemon takes longer than
+ * `stopDaemons`' three-second grace to honour SIGTERM, and on an idle machine
+ * it never does. Under a full parallel suite it sometimes does.
+ *
+ * The ceiling below is generous and exists only so that a daemon which really
+ * will not die says so, instead of arriving as a bare timeout on the test.
+ */
+const exited = (child: ChildProcess, ceilingMs = 15_000) =>
+  new Promise<void>((resolve, reject) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    const ceiling = setTimeout(
+      () => reject(new Error(`daemon ${child.pid} was still running after ${ceilingMs}ms`)),
+      ceilingMs,
+    );
+    child.once("exit", () => {
+      clearTimeout(ceiling);
+      resolve();
+    });
+  });
 
 function isocan(...args: string[]): Promise<{ code: number; stdout: string }> {
   const child = spawn(process.execPath, [cliBin, ...args], {
@@ -95,7 +136,12 @@ beforeEach(async () => {
 afterEach(async () => {
   if (mine) await mine.close();
   await stopDaemons(port, home).catch(() => {});
-  if (squatter && squatter.exitCode === null) squatter.kill("SIGKILL");
+  // Both halves of "has it exited", for the reason `exited` above spells out:
+  // a squatter that stopDaemons had to SIGKILL has a null exitCode and would
+  // otherwise be signalled again here, on a pid that is no longer its own.
+  if (squatter && squatter.exitCode === null && squatter.signalCode === null) {
+    squatter.kill("SIGKILL");
+  }
   await fs.rm(home, { recursive: true, force: true });
 });
 

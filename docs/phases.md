@@ -55,11 +55,13 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 7 is closed — Phase 7.5, the home you answer to, is
-next, and it exists because walking Scene 0 by hand cost three environment
-variables and a scratch directory.** Phase 8 then inherits the question
-phase 7 could not settle: a replica still discovers canvases by
-enumerating the home, and the pass is the mechanism that fixes it. This line moves as phases close; a clean
+**Where we are: Phase 7.5 is PART-DONE — `isocan home` is built and
+verified, and its last Proof leg is waiting on a deploy: dev.isocan.io
+runs pre-phase-7 code, so the walk's canvas step cannot complete there
+yet. Deploy phases 7 and 7.5 to dev, replay the walk, close it.** Phase 8
+then inherits the question phase 7 could not settle: a replica still
+discovers canvases by enumerating the home, and the pass is the mechanism
+that fixes it. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1026,7 +1028,15 @@ name.
 
 ## Phase 7.5 — The home you answer to
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** `isocan home` is built and verified — including
+against the real dev home, which it reaches and answers to in one
+command. **What is missing is the Proof's last leg:** the walk's canvas
+step cannot complete against dev.isocan.io until phase 7 and 7.5 are
+deployed there. Dev runs pre-phase-7 code, so it has no
+`GET /api/actors/free-name`, and a replica asking an older home falls
+back to local allocation — correctly, and into the exact collision the
+fix exists to avoid. Verified end to end against a local home running
+this build. Deploy, then replay, then close.
 
 **Why this exists, since it was not in the original walk.** Phase 6
 shipped replicas, and then Dimitri tried to walk Scene 0 with them. It
@@ -1083,7 +1093,79 @@ against dev.isocan.io. The baseline is known and painful: phase 7's own
 proof was played with the full dance, so this phase's proof is that same
 walk with the exports deleted.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — A name allocated on a replica was a name the home would
+  refuse, and the obvious diagnosis was wrong.** The walk's first
+  `isocan identity --session` against dev failed with *"Isaac" is taken
+  here*. The conductor assumed a race — the home's actor registry not yet
+  replicated — **and tested it, and it was not.** With eleven names
+  confirmed replicated locally and a twelve-second wait, allocation still
+  picked Isaac. The real cause is a **scope mismatch**: `allocateName`
+  builds its taken-set from *admission-scoped* queries, and a fresh
+  replica's badge has no admissions — `desk.ts` says so on purpose
+  ("a badge that has never been in a canvas shares a roster with
+  nobody"). So the local answer is right by its own rules and wrong at
+  the home, which judges the same name against its own scope. It looked
+  like it self-healed on retry; that was **accidental** — the failed
+  attempt left Isaac claimed locally, so allocation moved to the next
+  roster entry, burning names until one was free at both ends.
+  The fix asks the home for a free name and treats the answer as a
+  **preference**, not a reservation: forwarding the claim itself would
+  put a local session key into the home's ledger — the precise thing
+  `Engine.claim` forbids — and would make a nameless claim *fail* when
+  the home is unreachable, which a replica must survive. Two replicas
+  asking in the same instant can still be handed the same name; closing
+  that needs a reservation, and a reservation is a claim, so it is named
+  in the code rather than half-built.
+- **2026-08-23 — The flake was two flakes, both timing, and one of them
+  was a product bug.** Dimitri's read — *"flakes come from when I forget
+  to design the tests to not depend on timing"* — was right on both
+  counts. Caught by running the suite twenty times and writing **full
+  output to a file per run**, which is the whole lesson: two earlier
+  sightings were lost because the reporter grepped a stream that had
+  already scrolled, and an unnamed flake is one nobody can fix.
+  **The first was not a test bug at all.** `Daemon.close()` never drained
+  the engine's single-writer chain. `app.close()` destroys sockets, which
+  does not cancel a handler already running behind one, so a request that
+  had reached `engine.claim` had work still queued — and that work wrote
+  to the desk *after* `desk.close()` had drained and returned. Caught in
+  the act with a post-close write detector: a `.tmp-*` file appearing in
+  a `desk/` directory belonging to a daemon that had said it was shut.
+  Under test that is `ENOTEMPTY … rmdir …/desk`; in a container it is a
+  write racing process exit. `await engine.settled()` in `close()` is the
+  fix, and it is safe there rather than earlier only because the home
+  connection is closed above it.
+  The second was a test asking the wrong question: `exitCode !== null` is
+  **null for a process killed by a signal**, so on the SIGKILL path the
+  helper read a dead daemon as alive and waited on an `exit` event that
+  had already fired. Intermittent because `stopDaemons` only escalates to
+  SIGKILL when a daemon misses its SIGTERM grace, which happens under a
+  loaded suite and never on an idle machine. Neither was fixed by
+  lengthening a timeout or sleeping in teardown — both of which hide a
+  signal rather than remove it.
+- **2026-08-23 — And the shutdown could not always shut down.**
+  `runDaemon`'s handler was `close().then(() => process.exit(0))` with no
+  catch, so a rejection from `desk.close()` or `store.close()` left a
+  process alive with its handlers detached: stopped serving, will not
+  die. That is *exactly* the condition that makes `stopDaemons` escalate
+  to SIGKILL — so chasing a flake caused by the escalation is how the
+  line got read at all. It now logs and exits 1, because a close that
+  could not flush is not a clean shutdown and a process reporting success
+  is one nobody investigates. Named and not fixed: a `close()` that never
+  *settles* hangs the same way, and a watchdog that killed a daemon
+  mid-flush would be its own bug.
+- **2026-08-23 — The cheerful wrong address, a fourth time, now between
+  versions.** `GET /api/actors/free-name` against dev returns **HTTP 200
+  and the web app**, because an unmatched `/api/` path on a badged
+  request falls through to the SPA handler. After `/healthz/`, `/c/<id>`
+  and the refused socket, this is the same shape in a new place — and
+  this one has teeth beyond legibility: **a replica's version
+  negotiation with an older home works only because parsing HTML as JSON
+  throws.** The fallback is correct by accident rather than by design.
+  A route that does not exist under `/api/` should say so; that is the
+  general fix, and it wants doing before something asks a question whose
+  wrong answer is not conveniently unparseable.
 
 ## Phase 8 — Escalation (Scene 5)
 

@@ -222,6 +222,28 @@ refused, loudly and by every command: moving a canvas between homes is a
 deliberate act, not something a command should do because you ran it in the
 wrong directory. Report it rather than editing the marker.
 
+**`isocan home`** is which home this daemon answers to:
+
+```sh
+isocan home                    # a home, or a replica of what — and whether
+                               # that home is answering right now
+isocan home https://isocan.io  # answer to that home from now on: writes the
+                               # setting, restarts the daemon so it takes
+isocan home --clear            # answer to nobody — be a home again
+```
+
+It is **configuration, not a per-command flag**: there is no way to point one
+command at one home and the next at another, and there should not be. Setting
+a home checks the address answers before committing to it, because a replica
+that cannot reach its home refuses every write — `--force` sets it anyway if
+that is genuinely what was meant.
+
+**Do not run it on your own initiative.** Which home a machine answers to is
+the person's decision about their machine, and setting it moves where every
+canvas here is written. Run it when they ask you to point their daemon
+somewhere, and say on the thread that you did. Reading it — plain
+`isocan home` — is free and often the answer to "why was my write refused".
+
 ## Sharing a canvas
 
 `isocan share` is who may enter, and it is the same endpoint the Share button
@@ -626,7 +648,8 @@ make),
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
-`share`, `open`, `setup`.
+`share`, `open`, `setup`, `home` (which home this daemon answers to — read it
+freely, set it only when asked).
 
 Every one of these is the same operation the web app sends. If you find
 something a person can do on the canvas that you cannot do from here, that is

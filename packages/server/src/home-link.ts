@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import type {
   Actor,
   BlobUploadResponse,
+  FreeNameResponse,
   GrantResponse,
   GrantsResponse,
   GrantSubject,
@@ -17,6 +18,7 @@ import type {
 import {
   encodeFilename,
   FILENAME_HEADER,
+  FREE_NAME_ROUTE,
   grantRoute,
   grantsRoute,
   healthPath,
@@ -124,6 +126,14 @@ export interface HomeConnection {
   /** Make this daemon's badge at the home vouch for an actor (and, when the
    * name has changed, tell the home the new one). */
   announceActor(actor: Actor): Promise<void>;
+  /**
+   * A name that is free AT THE HOME, in this daemon's badge's scope there.
+   *
+   * The one question a claim asks that a replica cannot answer for itself, and
+   * therefore the one part of a claim that travels. `Engine.preferredName`
+   * holds the reasoning; this end is a plain read.
+   */
+  freeName(): Promise<string>;
   /**
    * The grant routes, forwarded.
    *
@@ -659,6 +669,21 @@ export class HomeLink implements HomeConnection {
           (err as Error).message,
       );
     });
+  }
+
+  /**
+   * "What name is free where this is going to land?"
+   *
+   * No claim goes up first, and there is nothing to cache: the answer is about
+   * a namespace other machines are also writing to, and a remembered one would
+   * be a reservation this link is in no position to hold. The engine treats
+   * what comes back as a preference and re-checks it locally, so a stale answer
+   * is cheap and an unreachable home costs nothing at all.
+   */
+  async freeName(): Promise<string> {
+    const { name } = await this.api<FreeNameResponse>("GET", FREE_NAME_ROUTE);
+    if (!name) throw new HomeRefusedError(200, "the home named no free name");
+    return name;
   }
 
   private ensureClaim(actor: Actor): Promise<void> {

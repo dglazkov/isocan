@@ -1,6 +1,7 @@
 import type {
   Actor,
   ActorBindingRecord,
+  ActorClaim,
   ActorClaimOp,
   ActorColors,
   ActorNames,
@@ -25,6 +26,7 @@ import {
   OpValidationError,
   DEFAULT_COMMANDS,
   actorNames,
+  allocateName,
   applyActorColor,
   mergeCommands,
   applyClaim,
@@ -50,6 +52,15 @@ import {
   type GcOptions,
   type GcReport,
 } from "./gc.ts";
+
+/**
+ * The session key `freeName` asks with. A claim context is gathered for a
+ * specific key, and this question is asked for nobody in particular — so it is
+ * asked under a key no client can send. Clients namespace theirs by harness
+ * (`claude-code:s-1`, `codex:s-2`); the leading space here is not a
+ * namespace anything can produce, and matching no row is the whole point.
+ */
+const FREE_NAME_PROBE = " free-name probe";
 
 interface ProjectRuntime {
   state: ProjectState;
@@ -432,10 +443,53 @@ export class Engine {
        * chance. A refusal is said out loud because a name collision AT THE
        * HOME is exactly the thing an agent would otherwise meet as a baffling
        * error on its first write.
+       *
+       * **Phase 7.5 carved out exactly one exception, and it is not a claim.**
+       * WHICH name a nameless claimant is handed is not a fact about a local
+       * process at all — it is a question about a namespace shared with
+       * everybody at the home — so on a replica that one question is asked
+       * upward before the claim is applied. See `preferredName`. Everything
+       * this comment says about the claim itself is untouched: the session key
+       * still never leaves, and the two tables still hold different things.
        */
       if (this.home) void this.home.announceActor(entry.envelope.actor);
       return entry;
     });
+  }
+
+  /**
+   * A name free in the ASKING badge's scope — what a home answers when a
+   * replica asks on behalf of a claimant who supplied none. The other end of
+   * `preferredName`, and the one thing above that a replica cannot work out
+   * for itself.
+   *
+   * Built from `claimContext`, not from a second gathering that looks like it.
+   * The whole point is that the answer comes out of the scope this home would
+   * judge the resulting claim in; a lookalike scope here would be the same
+   * mismatch again, one layer down.
+   *
+   * One name out, never the taken set. The scope's names are already visible
+   * to this badge — a refusal says who holds a name — but a route that handed
+   * back a roster on request is the listing `orphanedClaims` refuses to be,
+   * and this one has no reason to be it.
+   *
+   * A read, off the writer chain, like the other reads here: an allocation is
+   * advice until a claim acts on it, and the claim that acts on it is
+   * serialized like everything else.
+   */
+  async freeName(badgeId: string): Promise<string> {
+    const runtime = await this.actors();
+    return allocateName(
+      await this.claimContext(
+        // A claim that will never be applied. The session key is a probe: it
+        // matches no row, so the context is gathered as it would be for a
+        // claimant this badge has not seen before — which is exactly who is
+        // being allocated for.
+        { badgeId, op: { type: "actor.claim", sessionKey: FREE_NAME_PROBE } },
+        runtime.registry,
+        new Date().toISOString(),
+      ),
+    );
   }
 
   /**
@@ -1046,12 +1100,66 @@ export class Engine {
       registry,
       own,
       ...(shelved !== undefined ? { shelved } : {}),
+      ...(await this.preferredName(request, own, shelved)),
       scoped,
       // Only `as` asks a global question, so only `as` pays for one.
       claimants: request.op.as ? await this.desk.claimants(request.op.as) : [],
       held: await this.heldNames(canvasIds),
       now,
     };
+  }
+
+  /**
+   * Ask the home for a name, when this daemon is a replica and the claimant
+   * asked for none — the ONE part of a claim that crosses the wire.
+   *
+   * The split is deliberate and narrow. A claim still does not forward (see
+   * `claim()`), because "the process holding sessionKey `claude-code:s-1` is
+   * Isaac" is a fact only this daemon can hold. But WHICH name a nameless
+   * claimant is handed is not that kind of fact at all: it is a question about
+   * a namespace shared with everybody else at the home, and on a replica the
+   * home owns that namespace. Answering it locally is how a fresh replica
+   * confidently hands out "Isaac" and is then refused by the home a
+   * millisecond later — the local answer correct by its own scope, and wrong
+   * where it lands.
+   *
+   * Three ways this stays small:
+   *
+   * - **Only allocation.** A supplied name is judged, not allocated, and a
+   *   collision on one is still refused locally with the message it always
+   *   had. A key this badge (or the shelf) already holds is a RESUMPTION,
+   *   handed back the name it already has — nothing to allocate, nothing to
+   *   ask.
+   * - **Only a preference.** The answer arrives as `ClaimContext.preferred`
+   *   and is re-checked against the local scope, so a stale answer costs a
+   *   roster position rather than a wrong name.
+   * - **Never load-bearing.** Any failure — an unreachable home, a home too
+   *   old to know the route — falls back to local allocation, which is what a
+   *   replica did before and what keeps it usable with no home in sight.
+   *
+   * The seam left, named rather than smoothed: two replicas asking in the same
+   * instant can be handed the same name, and the second one's `announceActor`
+   * meets the home's refusal exactly as it does today. Closing that would mean
+   * RESERVING a name at the home, and a reservation is a claim — which is the
+   * thing that must not forward.
+   */
+  private async preferredName(
+    request: ClaimRequest,
+    own: readonly ActorClaim[],
+    shelved: ActorClaim | undefined,
+  ): Promise<{ preferred?: string }> {
+    const op = request.op;
+    if (!this.home) return {};
+    if (op.name !== undefined || op.as !== undefined) return {};
+    // `fresh` allocates even for a key that is already somebody — that is what
+    // being a second Kenny on purpose means — so it asks even when resuming
+    // would not.
+    if (!op.fresh && (own.some((row) => row.sessionKey === op.sessionKey) || shelved)) return {};
+    try {
+      return { preferred: await this.home.freeName() };
+    } catch {
+      return {};
+    }
   }
 
   /**

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Command } from "commander";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT, newProjectId } from "@isocan/core";
-import { paths, readConfigFile, stalenessOf } from "@isocan/server";
+import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
 import { DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
@@ -106,8 +106,8 @@ function refuseForeignHome(binding: DirBinding, homeUrl: string | null): void {
     `this directory's canvas lives at ${binding.home} (${markerFile(binding.root)}), ` +
       `but this daemon answers to ${mine}. Moving a canvas between homes is re-homing, ` +
       "and it is not something a command does by accident — point this daemon at " +
-      `${binding.home} (ISOCAN_HOME_URL, or "home" in ~/.isocan/config.json), or work ` +
-      "in a directory bound to a canvas that lives here.",
+      `${binding.home} (\`isocan home ${binding.home}\`), or work in a directory bound ` +
+      "to a canvas that lives here.",
   );
 }
 
@@ -133,7 +133,7 @@ async function warnIfStale(health: Health | null, home: string): Promise<void> {
   }
 }
 
-interface ConfigFile extends HarnessVarConfig {
+interface ConfigFile extends HarnessVarConfig, HomeConfig {
   defaultProjectId?: string;
 }
 

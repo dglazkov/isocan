@@ -115,6 +115,22 @@ export const ISOCAN_NAMES = [
 ] as const;
 
 /**
+ * Where a replica asks its home for a name that is free THERE — the one
+ * question about a shared namespace that a replica cannot answer for itself.
+ *
+ * A route constant rather than a literal in two files, for the same reason
+ * `DOOR_ROUTE` is one: the caller and the answerer live in different modules,
+ * and two spellings of one path is a divergence waiting to happen.
+ */
+export const FREE_NAME_ROUTE = "/api/actors/free-name";
+
+/** The answer: one name, free in the asking badge's scope. Deliberately one
+ * name and not the taken set — see the route in `http.ts`. */
+export interface FreeNameResponse {
+  name: string;
+}
+
+/**
  * How long a claim stands as proof its owner is alive, when no face on any
  * canvas says so. Presence is the real answer, but there is a window between
  * claiming a name and starting a session where an agent is working invisibly
@@ -161,6 +177,26 @@ export interface ClaimContext {
    * remembered from history, the same set an @-mention resolves against.
    * Scoped to the claiming badge's admissions, for mechanism 10's reason. */
   held: readonly NameHolder[];
+  /**
+   * A name the AUTHORITY over this namespace has already picked out as free —
+   * the home's answer, when this daemon is a replica and the claimant supplied
+   * no name of their own. Absent on a home, which IS the authority, and absent
+   * whenever a name was supplied: an explicit name is judged, never allocated.
+   *
+   * It exists because a replica and its home ask "is this name taken" in
+   * DIFFERENT SCOPES, and both are right. Scope is the presenting badge's
+   * admissions (mechanism 10), and a fresh replica's local badge has none —
+   * so every roster name looks free to it, while the home judges the very same
+   * name against the rosters that badge can see THERE and refuses. Two scopes,
+   * one name. Allocation is the only place that mismatch is worth closing: an
+   * allocated name is a question about a shared namespace, and on a replica
+   * the home owns the namespace. See `Engine.claim` for why a CLAIM still does
+   * not forward.
+   *
+   * A preference and not an instruction: it is checked against the local scope
+   * below like any other candidate, and skipped if it is taken here.
+   */
+  preferred?: string;
   /** The envelope timestamp — claims are pure; the caller owns the clock. */
   now: string;
   /** Injectable for tests. */
@@ -427,12 +463,23 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
   );
 }
 
-/** The next free isocan name: the roster in order, then numbered rounds
- * ("Isaac 2", …) — allocation can always answer. */
-function allocateName(ctx: ClaimContext): string {
+/**
+ * The next free isocan name: the roster in order, then numbered rounds
+ * ("Isaac 2", …) — allocation can always answer.
+ *
+ * Exported so a home can answer `FREE_NAME_ROUTE` with the SAME function that
+ * would allocate here. Building a second, similar allocator for that route is
+ * exactly the shape of the bug it exists to fix.
+ */
+export function allocateName(ctx: ClaimContext): string {
   const taken = new Set<string>();
   for (const holder of ctx.held) taken.add(holder.actor.name.trim().toLowerCase());
   for (const row of ctx.scoped) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
+  // The authority's pick goes first, and is still checked here — so allocation
+  // keeps its one promise even when the home's answer has gone stale between
+  // the asking and the claiming, or when there was no home to ask.
+  const preferred = ctx.preferred?.trim();
+  if (preferred && !taken.has(preferred.toLowerCase())) return preferred;
   for (let round = 1; ; round++) {
     for (const base of ISOCAN_NAMES) {
       const name = round === 1 ? base : `${base} ${round}`;
