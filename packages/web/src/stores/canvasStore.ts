@@ -13,8 +13,8 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { applyOperation } from "@isocan/core";
-import { CLIENT_ID } from "../lib/api.ts";
+import { applyOperation, WS_NO_BADGE } from "@isocan/core";
+import { CLIENT_ID, knockOnDoor } from "../lib/api.ts";
 import { useUiStore } from "./uiStore.ts";
 import { markRead, noticeComment, syncProject } from "./unreadStore.ts";
 
@@ -189,8 +189,15 @@ function wsUrl(projectId: string): string {
   // straight to the daemon. Proxying WebSockets through Vite added a flaky
   // hop that spammed "ws proxy error: write EPIPE" whenever either end tore
   // down mid-write (tsx watch restarts, tab closes, socket replacement).
+  //
+  // `location.hostname`, not a literal `127.0.0.1`: cookies are scoped by
+  // HOST and ignore port, so a badge cookie stored for `localhost` (where
+  // Vite serves the page) is happily sent to `localhost:4441` — and not at
+  // all to `127.0.0.1`, which is a different host. Hardcoding the literal
+  // meant the dev handshake arrived badge-less the moment the upgrade
+  // started asking for one.
   const devPort = import.meta.env.DEV ? (import.meta.env.VITE_ISOCAN_PORT ?? "4441") : null;
-  const host = devPort ? `127.0.0.1:${devPort}` : location.host;
+  const host = devPort ? `${location.hostname}:${devPort}` : location.host;
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${host}/ws?projectId=${projectId}`;
 }
@@ -257,10 +264,20 @@ function open(projectId: string): void {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     if (stale()) return; // superseded or deliberately disconnected
     socket = null;
     useCanvasStore.setState({ connection: "reconnecting" });
+    // The home refused the handshake for want of a badge. A browser cannot
+    // set headers on a WS handshake, so the cookie is the only carrier here:
+    // go to the door and come straight back rather than waiting out the
+    // ordinary backoff.
+    if (event.code === WS_NO_BADGE) {
+      void knockOnDoor().then(() => {
+        if (currentProjectId === projectId && socket === null) open(projectId);
+      });
+      return;
+    }
     reconnectTimer = setTimeout(() => {
       if (currentProjectId === projectId && socket === null) open(projectId);
     }, 800);

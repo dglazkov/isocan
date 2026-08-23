@@ -7,6 +7,7 @@ import type {
   ActorRegistry,
   ActorSetColorOp,
   CanvasSnapshotResponse,
+  ClaimContext,
   LogEntry,
   NameHolder,
   OpEnvelope,
@@ -16,9 +17,11 @@ import type {
   ProjectState,
   ServerMessage,
   SlashCommand,
+  UploadTicket,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
+  OplogFencedError,
   OpValidationError,
   DEFAULT_COMMANDS,
   actorNames,
@@ -26,12 +29,16 @@ import {
   mergeCommands,
   applyClaim,
   applyOperation,
+  claimsActor,
   collectCanvasNames,
   invertOperation,
   newOpId,
+  notYourActor,
   resolvePlacement,
+  SHELF,
 } from "@isocan/core";
-import type { Store } from "./store.ts";
+import type { BlobUploadRequest, Store } from "./store.ts";
+import type { Desk } from "./desk.ts";
 import { UndoStacks } from "./undo.ts";
 import {
   DEFAULT_GRACE_MS,
@@ -79,11 +86,24 @@ export interface SubmitRequest {
   actor: Actor;
   clientId?: string;
   op: Operation;
+  /**
+   * The badge that presented this request — resolved by the transport and
+   * handed to the engine BESIDE the request, never inside it (mechanism 5).
+   *
+   * It stops here. `envelope()` builds the log entry field by field and this
+   * is not one of them: the oplog is shared state every replica sees, and
+   * which badge issued which op is the home's private audit, not the canvas's
+   * history. Same instinct as "the oplog never records grants".
+   */
+  badgeId: string;
 }
 
 export interface ClaimRequest {
   op: ActorClaimOp;
   clientId?: string;
+  /** The badge presenting the claim. `actor.claim` is "add an actor to THIS
+   * badge's claims", so the transport has to say which badge. */
+  badgeId: string;
 }
 
 type EventListener = (projectId: string, message: ServerMessage) => void;
@@ -101,10 +121,13 @@ export class Engine {
   private actorsRuntime: ActorsRuntime | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
-  private colorListeners = new Set<(colors: ActorColors) => void>();
+  private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
 
   constructor(
     private readonly store: Store,
+    /** The desk. The engine writes the claims half through it and never
+     * touches the transport's half (badges, secrets, admissions). */
+    private readonly desk: Desk,
     private readonly options: EngineOptions = {},
   ) {}
 
@@ -177,16 +200,25 @@ export class Engine {
 
   /**
    * Choosing the color you wear. Home-scoped like a claim: it lands in the
-   * actors log, updates the registry, and is not undoable. Any actor can be
-   * addressed — there is no authentication here, and a daemon that only
-   * listens to one machine's people and agents does not pretend otherwise.
+   * actors log, updates the registry, and is not undoable.
+   *
+   * BOTH actors are checked, and they are two different assertions: `actor`
+   * is who is speaking and `op.actorId` is whose face changes. A badge may
+   * repaint only actors it claims — a color is the actor's own choice, and
+   * choosing it for somebody else is exactly the impersonation mechanism 5
+   * exists to stop.
    */
   setActorColor(request: {
     op: ActorSetColorOp;
     actor: Actor;
     clientId?: string;
+    badgeId: string;
   }): Promise<LogEntry> {
     return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      if (request.op.actorId !== request.actor.id) {
+        await this.requireActor(request.badgeId, request.op.actorId);
+      }
       const runtime = await this.actors();
       const ts = new Date().toISOString();
       const registry = applyActorColor(runtime.registry, request.op);
@@ -200,20 +232,73 @@ export class Engine {
       };
       const seq = runtime.lastSeq + 1;
       const entry: LogEntry = { seq, envelope, inverse: null };
-      await this.store.appendActorsLog(entry);
+      await this.appendActorsOrFence(entry);
       runtime.registry = registry;
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
-      for (const listener of this.colorListeners) listener(registry.colors);
+      this.identityChanged(registry.colors, request.op.actorId);
       return entry;
     });
   }
 
-  /** Told when identity changes — a color chosen, or a name taken — so live
-   * canvases can repaint their faces and re-letter what people said. */
-  onColors(listener: (colors: ActorColors) => void): () => void {
+  /**
+   * Told when identity changes — a color chosen, or a name taken — so live
+   * canvases can repaint their faces and re-letter what people said.
+   *
+   * The listener is told WHICH ACTOR changed, and that is mechanism 10's one
+   * behavioral narrowing: a color travels with its actor (global, per actor),
+   * but the BROADCAST does not. This used to flood every room on the home;
+   * the transport now asks `appearances()` which of its open rooms that actor
+   * is actually in, and repaints those. On a solo home that is every room it
+   * was before; on a multi-tenant one it is the difference between a repaint
+   * and a roster leak.
+   */
+  onColors(listener: (colors: ActorColors, actorId: string) => void): () => void {
     this.colorListeners.add(listener);
     return () => this.colorListeners.delete(listener);
+  }
+
+  private identityChanged(colors: ActorColors, actorId: string): void {
+    for (const listener of this.colorListeners) listener(colors, actorId);
+  }
+
+  /**
+   * Which of these canvases that actor APPEARS on — the rooms a color change
+   * or a rename has any business repainting (mechanism 10).
+   *
+   * Appearance is deliberately wider than presence. A rename has to reach the
+   * comments the renamed actor wrote before it, in rooms where nobody by that
+   * name is currently connected — so history counts: the canvas's authors,
+   * every name the canvas remembers, and the live roster.
+   */
+  async appearances(actorId: string, projectIds: Iterable<string>): Promise<string[]> {
+    const found: string[] = [];
+    for (const projectId of projectIds) {
+      let state: ProjectState;
+      try {
+        state = (await this.runtime(projectId)).state;
+      } catch {
+        continue; // a canvas mid-delete has nobody on it
+      }
+      const here =
+        state.project.createdBy.id === actorId ||
+        state.project.updatedBy.id === actorId ||
+        collectCanvasNames(state.canvas).some((known) => known.id === actorId) ||
+        (this.options.liveness?.(projectId) ?? []).some((s) => s.actor.id === actorId);
+      if (here) found.push(projectId);
+    }
+    return found;
+  }
+
+  /**
+   * Mechanism 5's membership check, at the one place the claims registry
+   * lives. Public because presence beats are checked too and presence does
+   * not live on this chain; the op paths call it INSIDE their queued work, so
+   * a claim and an op racing serialize like everything else.
+   */
+  async requireActor(badgeId: string, actorId: string): Promise<void> {
+    if (claimsActor(await this.desk.claimsOf(badgeId), actorId)) return;
+    throw notYourActor(actorId);
   }
 
   async getLog(projectId: string, sinceSeq = 0): Promise<LogEntry[]> {
@@ -222,7 +307,10 @@ export class Engine {
   }
 
   submit(request: SubmitRequest): Promise<LogEntry> {
-    return this.enqueue(() => this.applyAndPersist(request, undefined));
+    return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      return this.applyAndPersist(request, undefined);
+    });
   }
 
   /**
@@ -235,18 +323,74 @@ export class Engine {
     return this.enqueue(() => this.applyClaimAndPersist(request));
   }
 
-  /** Who the given session keys (or everyone, when omitted) speak as. */
-  async actorBindings(keys?: string[] | null): Promise<ActorBindingRecord[]> {
+  /**
+   * Who the given session keys (or all of them, when omitted) speak as —
+   * SCOPED TO ONE BADGE. A badge sees its own claims and nobody else's, which
+   * is the re-key showing up on the wire: `sessionKey` is a client's index
+   * into its own list, so an answer that crossed badges would be answering a
+   * question nobody asked.
+   *
+   * Naming a key is also how a legacy claim is COLLECTED. A resuming client
+   * asks "who is claude-code:s-1?" before it claims anything — `whoami` never
+   * writes — so if adoption only happened inside `applyClaim`, every upgraded
+   * agent's first command would resolve to the human instead of itself. A
+   * named key is a presentation of that key, which is exactly what the shelf
+   * waits for; adoption is still one-time and first-come.
+   */
+  async actorBindings(badgeId: string, keys?: string[] | null): Promise<ActorBindingRecord[]> {
     const { registry } = await this.actors();
+    if (keys) {
+      const held = new Set((await this.desk.claimsOf(badgeId)).map((row) => row.sessionKey));
+      for (const key of keys) {
+        if (!held.has(key)) await this.desk.adopt(key, badgeId);
+      }
+    }
     const wanted = keys ? new Set(keys) : null;
-    return Object.entries(registry.claims)
-      .filter(([key]) => !wanted || wanted.has(key))
-      .map(([key, { boundAt, projectId, ...actor }]) => ({
-        key,
-        actor,
-        boundAt,
-        ...(projectId !== undefined ? { projectId } : {}),
-      }));
+    const claims = await this.desk.claimsOf(badgeId);
+    const records: ActorBindingRecord[] = [];
+    for (const row of claims) {
+      if (row.sessionKey === undefined) continue;
+      if (wanted && !wanted.has(row.sessionKey)) continue;
+      records.push({
+        key: row.sessionKey,
+        actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
+        boundAt: row.boundAt,
+        ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+      });
+    }
+    return records;
+  }
+
+  /**
+   * Claims on this home that match the given session keys but are held by a
+   * DIFFERENT badge — the answer to "I have no identity here; is there an
+   * actor I should be resuming?".
+   *
+   * Deliberately key-scoped rather than a listing of the home. A client asking
+   * about `claude-code:s-1` is asking about a conversation it is already
+   * inside; a client that could ask "who is on this home?" would be handed a
+   * roster of actors to impersonate, and the answer would encourage exactly
+   * the mistake `--as` exists to prevent. Nothing here is adopted: the claim
+   * stays where it is, and coming back is a deliberate act.
+   */
+  async orphanedClaims(badgeId: string, keys: string[]): Promise<ActorBindingRecord[]> {
+    if (keys.length === 0) return [];
+    const { registry } = await this.actors();
+    const records: ActorBindingRecord[] = [];
+    // Key by key, which is what makes the narrowing structural: there is no
+    // shape of this call that could ever list the home.
+    for (const key of new Set(keys)) {
+      for (const { badgeId: holder, claim: row } of await this.desk.holdersOf(key)) {
+        if (holder === badgeId || row.sessionKey === undefined) continue;
+        records.push({
+          key: row.sessionKey,
+          actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
+          boundAt: row.boundAt,
+          ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+        });
+      }
+    }
+    return records.sort((a, b) => b.boundAt.localeCompare(a.boundAt));
   }
 
   /**
@@ -266,13 +410,41 @@ export class Engine {
   }
 
   /**
+   * Somewhere to put bytes this daemon must not receive, or null when the
+   * backing has no such thing (every file home). Deliberately NOT on the
+   * single-writer chain: it reads one blob record and mints a URL, writing
+   * nothing, and minting can involve a round trip to a signing API — putting
+   * it on the chain would stall every op behind somebody's video.
+   */
+  beginUpload(projectId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
+    return this.store.beginUpload(projectId, request);
+  }
+
+  /**
+   * Name bytes that arrived without us. ON the chain, because GC is on the
+   * chain: a register that lands mid-sweep would otherwise re-name a blob the
+   * sweep has just decided is garbage, and the item pointing at it would 404
+   * forever.
+   */
+  registerBlob(
+    projectId: string,
+    request: BlobUploadRequest,
+  ): Promise<{ blobHash: string; size: number; mimeType: string }> {
+    return this.enqueue(() => this.store.registerBlob(projectId, request));
+  }
+
+  /**
    * Actor-scoped undo: walk THIS actor's stack. Stored inverses are applied
    * as-is when possible (stale values are accepted — undo restores what you
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
+  undo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
+      // Checked here as well as on `submit`, and for a reason of its own:
+      // undo is actor-scoped, so naming somebody else is not a slip, it is
+      // undoing their work.
+      await this.requireActor(badgeId, actor.id);
       const runtime = await this.runtime(projectId);
       for (;;) {
         const targetSeq = runtime.undo.nextUndoTarget(actor.id);
@@ -282,7 +454,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "undo", targetSeq },
             );
           } catch (err) {
@@ -296,8 +468,9 @@ export class Engine {
     });
   }
 
-  redo(projectId: string, actor: Actor, clientId?: string): Promise<LogEntry> {
+  redo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
+      await this.requireActor(badgeId, actor.id);
       const runtime = await this.runtime(projectId);
       for (;;) {
         const next = runtime.undo.nextRedoTarget(actor.id);
@@ -308,7 +481,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, ...(clientId !== undefined ? { clientId } : {}) },
+              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "redo", targetSeq: next.targetSeq },
             );
           } catch (err) {
@@ -339,7 +512,7 @@ export class Engine {
       const dropped = runtime.entries.filter((entry) => !retainedSeqs.has(entry.seq));
 
       const marked = reachableHashes(runtime.state, retained);
-      const index = await this.store.blobIndex(projectId);
+      const listing = await this.store.listBlobs(projectId);
 
       const report: GcReport = {
         dryRun,
@@ -353,14 +526,13 @@ export class Engine {
       };
 
       const sweep: string[] = [];
-      for (const [hash, meta] of Object.entries(index)) {
+      for (const { hash, meta, ageMs } of listing) {
         if (marked.has(hash)) {
           report.reachableBlobs += 1;
           report.reachableBytes += meta.size;
           continue;
         }
-        const age = await this.store.blobAgeMs(projectId, meta);
-        if (age !== null && age < graceMs) {
+        if (ageMs !== null && ageMs < graceMs) {
           report.skippedRecentBlobs += 1;
           continue;
         }
@@ -371,22 +543,17 @@ export class Engine {
 
       if (dryRun) return report;
 
-      // Order matters for crash safety: archive first, then the atomic log
-      // rewrite, and only then delete blob bytes. A crash at any point leaves
-      // either extra history or extra garbage — both harmless and re-collectable.
+      // Order matters for crash safety: compact the log first (which archives
+      // before it forgets), and only then delete blob bytes. A crash at any
+      // point leaves either extra history or extra garbage — both harmless and
+      // re-collectable. What compaction MEANS is the backing's: a rewrite on a
+      // disk, an advanced horizon in the cloud, and never a deleted seq.
       if (dropped.length > 0) {
-        await this.store.archiveOplogEntries(projectId, dropped);
-        await this.store.rewriteOplog(projectId, retained);
+        await this.store.compactOplog(projectId, retained, dropped);
         runtime.entries = retained;
         runtime.undo = UndoStacks.rebuild(retained);
       }
-      if (sweep.length > 0) {
-        for (const hash of sweep) {
-          await this.store.deleteBlobFile(projectId, index[hash]!);
-          delete index[hash];
-        }
-        await this.store.writeBlobIndex(projectId, index);
-      }
+      if (sweep.length > 0) await this.store.deleteBlobs(projectId, sweep);
       return report;
     });
   }
@@ -394,8 +561,8 @@ export class Engine {
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
     const runtime = await this.actors();
     const ts = new Date().toISOString();
-    const { registry, actor } = applyClaim(
-      { registry: runtime.registry, held: await this.heldNames(), now: ts },
+    const { registry, actor, claims, adopted } = applyClaim(
+      await this.claimContext(request, runtime.registry, ts),
       request.op,
     );
     const envelope: OpEnvelope = {
@@ -408,25 +575,80 @@ export class Engine {
     };
     const seq = runtime.lastSeq + 1;
     const entry: LogEntry = { seq, envelope, inverse: null };
-    await this.store.appendActorsLog(entry);
+    await this.appendActorsOrFence(entry);
     runtime.registry = registry;
     runtime.lastSeq = seq;
     await this.store.saveActors(registry, seq);
+    // Two ledgers, two writes. The public half is a logged, replayable op;
+    // the private half is written straight to the desk, because the oplog
+    // must not learn that badges exist (mechanism 5).
+    if (adopted !== undefined) await this.desk.adopt(adopted, request.badgeId);
+    await this.desk.setClaims(request.badgeId, claims);
     // A claim can be a RENAME, and a rename has to reach the comments the
     // renamed actor wrote before it. Same channel a color change takes.
-    for (const listener of this.colorListeners) listener(registry.colors);
+    this.identityChanged(registry.colors, actor.id);
     return entry;
   }
 
   /**
-   * Everyone every canvas answers to — live faces (and their labels) plus
-   * every name remembered in history, the same set an @-mention resolves
+   * Everything `applyClaim` is allowed to see, gathered at the single writer.
+   *
+   * The GATHERING is where mechanism 10 lives, and it lives here rather than
+   * in the reducer on purpose: `claims.ts` has never heard of a badge record
+   * or an admission, and judging a name against "everyone in scope" is the
+   * same code whatever the scope turns out to be. What changed in phase 3 is
+   * only what gets put in front of it.
+   */
+  private async claimContext(
+    request: ClaimRequest,
+    registry: ActorRegistry,
+    now: string,
+  ): Promise<ClaimContext> {
+    const badge = await this.desk.badge(request.badgeId);
+    const canvasIds = (badge?.admissions ?? []).map((a) => a.canvasId);
+    // The room this name is being taken in counts even before the badge has
+    // been let into it — a browser names itself at the identity dialog,
+    // before it has fetched anything. See `ActorClaimOp.projectId`.
+    const from = request.op.projectId;
+    if (from !== undefined && !canvasIds.includes(from)) canvasIds.push(from);
+    const own = await this.desk.claimsOf(request.badgeId);
+    // Own rows first, then the neighbours: a badge with no admissions yet is
+    // still in its own scope, which is what keeps two agents on one machine
+    // from taking one name while their badge is still fresh.
+    const scoped = [...own, ...(await this.desk.claimsIn(canvasIds))];
+    const shelved = (await this.desk.holdersOf(request.op.sessionKey)).find(
+      (row) => row.badgeId === SHELF,
+    )?.claim;
+    return {
+      registry,
+      own,
+      ...(shelved !== undefined ? { shelved } : {}),
+      scoped,
+      // Only `as` asks a global question, so only `as` pays for one.
+      claimants: request.op.as ? await this.desk.claimants(request.op.as) : [],
+      held: await this.heldNames(canvasIds),
+      now,
+    };
+  }
+
+  /**
+   * Everyone the canvases IN SCOPE answer to — live faces (and their labels)
+   * plus every name remembered in history, the same set an @-mention resolves
    * against. This is what `heldNames()` in the CLI used to reconstruct by
    * polling; here it is a read the single writer takes mid-claim.
+   *
+   * It used to walk the whole home. Mechanism 10 stops it at the claiming
+   * badge's admissions: name uniqueness is a ROSTER property, so it is asked
+   * of exactly the rosters that badge can see. A solo home degenerates to the
+   * old walk, because a local daemon's badge is admitted to the canvases it
+   * works on — the same code, with the scope emerging from the badge instead
+   * of being hard-coded.
    */
-  private async heldNames(): Promise<NameHolder[]> {
+  private async heldNames(canvasIds: readonly string[]): Promise<NameHolder[]> {
+    const inScope = new Set(canvasIds);
     const holders: NameHolder[] = [];
     for (const project of await this.listProjects()) {
+      if (!inScope.has(project.id)) continue;
       let state: ProjectState;
       try {
         state = (await this.runtime(project.id)).state;
@@ -501,7 +723,7 @@ export class Engine {
       ...(cause !== undefined ? { cause } : {}),
     };
 
-    await this.store.appendLog(projectId, entry);
+    await this.appendOrFence(projectId, entry);
 
     if (nextState === null) {
       // project.delete: the entry lands in the oplog inside the dir, then the
@@ -532,7 +754,7 @@ export class Engine {
     const state = applyOperation(null, envelope)!;
     const entry: LogEntry = { seq: 1, envelope, inverse: invertOperation(null, op) };
     await this.store.createProjectDir(op.projectId);
-    await this.store.appendLog(op.projectId, entry);
+    await this.appendOrFence(op.projectId, entry);
     await this.store.saveSnapshot(op.projectId, state, 1);
     this.projects.set(op.projectId, {
       state,
@@ -552,6 +774,54 @@ export class Engine {
       ts: new Date().toISOString(),
       op,
     };
+  }
+
+  /**
+   * Append, and if this writer has been fenced, forget what it thought it
+   * knew about that canvas.
+   *
+   * The refusal means exactly one thing: another instance already claimed
+   * this seq, so our `lastSeq` — and everything we derived from it — is
+   * stale. Dropping the runtime is the "re-syncs" half of the map's sentence
+   * at CANVAS granularity: the next request re-loads from the store, sees the
+   * winner's ops, and numbers its own from there. Nothing was applied (the
+   * append happens BEFORE `runtime.state` is touched), so there is nothing to
+   * roll back — the state we are dropping is merely behind.
+   *
+   * Process-level fencing — a draining instance that stops serving, or
+   * exits — is deliberately NOT here. It is a rollout question, it can only
+   * be observed against a real rollout, and phase 5 is where a rollout
+   * exists. The lever is named so nobody has to rediscover it.
+   */
+  private async appendOrFence(projectId: string, entry: LogEntry): Promise<void> {
+    try {
+      await this.store.appendLog(projectId, entry);
+    } catch (err) {
+      if (err instanceof OplogFencedError) {
+        console.error(
+          `[isocan] FENCED on ${projectId}: another writer already holds seq ${entry.seq}. ` +
+            `Dropping this canvas's runtime and re-syncing from the store.`,
+        );
+        this.projects.delete(projectId);
+      }
+      throw err;
+    }
+  }
+
+  /** The registry's fence. Home-scoped, so it drops the registry runtime
+   * rather than a canvas's — same remedy, different cache. */
+  private async appendActorsOrFence(entry: LogEntry): Promise<void> {
+    try {
+      await this.store.appendActorsLog(entry);
+    } catch (err) {
+      if (err instanceof OplogFencedError) {
+        console.error(
+          `[isocan] FENCED on the actor registry: another writer already holds seq ${entry.seq}.`,
+        );
+        this.actorsRuntime = null;
+      }
+      throw err;
+    }
   }
 
   private async runtime(projectId: string): Promise<ProjectRuntime> {

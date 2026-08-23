@@ -6,10 +6,12 @@ import { WebSocket } from "ws";
 import type { PresenceSession, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { PresenceHub, opLocus } from "../src/presence.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 import { emptyCanvas } from "@isocan/core";
 
 const alice = { id: "usr_alice", name: "Alice" };
 const kenny = { id: "usr_kenny", name: "Kenny" };
+const nico = { id: "usr_nico", name: "Nico" };
 
 describe("PresenceHub", () => {
   it("creates, touches, ends, and expires sessions", () => {
@@ -164,12 +166,18 @@ describe("presence over the daemon", () => {
   let home: string;
   let daemon: Daemon;
   let base: string;
+  let badge: TestBadge;
 
   beforeEach(async () => {
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-presence-"));
     daemon = await startDaemon({ port: 0, home });
     const address = daemon.app.server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+    badge = await mintTestBadge(base);
+    // One badge, three faces — a browser wearing a roster of personas plus
+    // the CLI session beside it. Relayed presence is checked PER ACTOR, so
+    // each of them has to be a claim on this badge.
+    for (const who of [alice, kenny, nico]) await badge.speakAs(who);
     await post("/api/ops", {
       projectId: null,
       actor: alice,
@@ -197,7 +205,7 @@ describe("presence over the daemon", () => {
   async function post(url: string, body: unknown) {
     const res = await fetch(`${base}${url}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify(body),
     });
     return { status: res.status, json: (await res.json().catch(() => null)) as any };
@@ -224,23 +232,26 @@ describe("presence over the daemon", () => {
       op: { type: "item.move", itemId: "itm_1", x: 1000, y: 2000 },
     });
     await new Promise((r) => setTimeout(r, 80)); // allow the async piggyback hook
-    const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`)).json()) as PresenceSession[];
+    const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers })).json()) as PresenceSession[];
     expect(roster).toHaveLength(1);
     expect(roster[0]!.cursor).toEqual({ x: 1050, y: 2030 });
 
     // Status + explicit cursor via PUT.
     const put = await fetch(`${base}/api/projects/prj_1/sessions/${sid}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({ status: "thinking…", cursor: { x: 1, y: 2 } }),
     });
     expect(put.status).toBe(200);
 
     // DELETE removes it; PUT afterwards 404s.
-    await fetch(`${base}/api/projects/prj_1/sessions/${sid}`, { method: "DELETE" });
+    await fetch(`${base}/api/projects/prj_1/sessions/${sid}`, {
+      method: "DELETE",
+      headers: badge.headers,
+    });
     const gone = await fetch(`${base}/api/projects/prj_1/sessions/${sid}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({}),
     });
     expect(gone.status).toBe(404);
@@ -255,7 +266,7 @@ describe("presence over the daemon", () => {
       op: { type: "item.move", itemId: "itm_1", x: 40, y: 60 },
     });
     await new Promise((r) => setTimeout(r, 80));
-    const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`)).json()) as PresenceSession[];
+    const roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers })).json()) as PresenceSession[];
     expect(roster).toHaveLength(1);
     expect(roster[0]!.sessionId).toBe("ses_ghost1234");
     expect(roster[0]!.actor).toEqual(kenny);
@@ -269,7 +280,9 @@ describe("presence over the daemon", () => {
 
   it("web presence flows to the roster and other clients", async () => {
     const messages: ServerMessage[] = [];
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_1`);
+    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_1`, {
+      headers: badge.headers,
+    });
     ws.on("message", (data) => messages.push(JSON.parse(String(data))));
     await new Promise((resolve, reject) => (ws.on("open", resolve), ws.on("error", reject)));
     await until(() => messages.some((m) => m.type === "snapshot"));
@@ -301,7 +314,7 @@ describe("presence over the daemon", () => {
       JSON.stringify({
         type: "presence",
         sessionId: "cli_tab1",
-        actor: { id: "usr_nico", name: "Nico" },
+        actor: nico,
         cursor: { x: 7, y: 8 },
         selection: [],
       }),
@@ -321,7 +334,7 @@ describe("presence over the daemon", () => {
     const deadline = Date.now() + 2000;
     let roster: PresenceSession[] = [];
     for (;;) {
-      roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`)).json()) as PresenceSession[];
+      roster = (await (await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers })).json()) as PresenceSession[];
       if (roster.length === 1 || Date.now() > deadline) break;
       await new Promise((r) => setTimeout(r, 25));
     }

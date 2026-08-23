@@ -3,7 +3,7 @@ import {
   IDENTITY_COLORS,
   actorColor,
   applyActorColor,
-  bindClaim,
+  bindName,
   emptyActorRegistry,
   isIdentityColor,
   type ActorSetColorOp,
@@ -49,24 +49,22 @@ describe("applyActorColor", () => {
     );
   });
 
-  it("leaves the claims alone", () => {
-    const claimed = bindClaim(emptyActorRegistry(), {
+  it("leaves the names alone", () => {
+    const claimed = bindName(emptyActorRegistry(), {
       actor: { id: "usr_alice", name: "Alice" },
       ts: "2026-01-01T00:00:00.000Z",
-      op: { type: "actor.claim", sessionKey: "cc:1", name: "Alice" },
     });
     const colored = applyActorColor(claimed, setColor("usr_alice", "#c93a55"));
-    expect(colored.claims).toEqual(claimed.claims);
+    expect(colored.names).toEqual(claimed.names);
   });
 
-  it("keeps a color whose claim is gone — the color belongs to the actor", () => {
+  it("keeps a color whose actor nobody speaks as — the color belongs to the actor", () => {
     // A comment written a year ago still has to be painted in its author's
-    // color, long after the session that wrote it was pruned.
+    // color, long after the session that wrote it stopped existing.
     const registry = applyActorColor(emptyActorRegistry(), setColor("usr_ghost", "#b26a00"));
-    const rebound = bindClaim(registry, {
+    const rebound = bindName(registry, {
       actor: { id: "usr_alice", name: "Alice" },
       ts: "2026-01-01T00:00:00.000Z",
-      op: { type: "actor.claim", sessionKey: "cc:2", name: "Alice" },
     });
     expect(rebound.colors).toEqual({ usr_ghost: "#b26a00" });
   });

@@ -5,6 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import type { LogEntry, Operation, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 const alice = { id: "usr_alice", name: "Alice" };
 const bob = { id: "usr_bob", name: "Bob" };
@@ -12,6 +13,9 @@ const bob = { id: "usr_bob", name: "Bob" };
 let home: string;
 let daemon: Daemon;
 let base: string;
+/** Every surface carries a badge now; this file is about what the daemon
+ * DOES, not about anonymity, so it gets one in the helper. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-daemon-"));
@@ -19,6 +23,12 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   const port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
+  // One machine's badge, vouching for the two people on it. A badge speaks
+  // only for actors it claims (mechanism 5), so a file that posts as Alice
+  // and Bob says who they are first.
+  await badge.speakAs(alice);
+  await badge.speakAs(bob);
 });
 
 afterEach(async () => {
@@ -29,7 +39,7 @@ afterEach(async () => {
 async function post(url: string, body: unknown): Promise<{ status: number; json: any }> {
   const res = await fetch(`${base}${url}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -40,7 +50,7 @@ async function op(operation: Operation, projectId: string | null = "prj_1", acto
 }
 
 async function get(url: string): Promise<any> {
-  const res = await fetch(`${base}${url}`);
+  const res = await fetch(`${base}${url}`, { headers: badge.headers });
   return res.json();
 }
 
@@ -129,7 +139,7 @@ describe("daemon HTTP", () => {
   });
 
   it("404s unknown projects", async () => {
-    const res = await fetch(`${base}/api/projects/prj_nope/canvas`);
+    const res = await fetch(`${base}/api/projects/prj_nope/canvas`, { headers: badge.headers });
     expect(res.status).toBe(404);
   });
 
@@ -296,7 +306,7 @@ describe("daemon HTTP", () => {
 
     // Wake path: an op lands mid-poll → resolves early with the entry.
     started = Date.now();
-    const pending = fetch(`${base}/api/projects/prj_1/oplog?since=2&waitMs=5000`).then((r) =>
+    const pending = fetch(`${base}/api/projects/prj_1/oplog?since=2&waitMs=5000`, { headers: badge.headers }).then((r) =>
       r.json(),
     );
     await new Promise((r) => setTimeout(r, 120));
@@ -389,7 +399,7 @@ describe("daemon HTTP", () => {
     const body = "<h1>hi</h1>";
     const upload = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",
-      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "page.html" },
+      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "page.html", ...badge.headers },
       body,
     });
     const { blobHash, size } = (await upload.json()) as { blobHash: string; size: number };
@@ -409,7 +419,7 @@ describe("daemon HTTP", () => {
   it("project.delete parks the directory and 404s afterwards", async () => {
     await createProjectWithItem();
     await op({ type: "project.delete" });
-    const res = await fetch(`${base}/api/projects/prj_1/canvas`);
+    const res = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
     expect(res.status).toBe(404);
     expect(await get("/api/projects")).toEqual([]);
   });
@@ -418,7 +428,9 @@ describe("daemon HTTP", () => {
 describe("daemon WS", () => {
   function connect(projectId: string): Promise<{ ws: WebSocket; messages: ServerMessage[] }> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=${projectId}`);
+      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=${projectId}`, {
+        headers: badge.headers,
+      });
       const messages: ServerMessage[] = [];
       ws.on("message", (data) => messages.push(JSON.parse(String(data))));
       ws.on("open", () => resolve({ ws, messages }));

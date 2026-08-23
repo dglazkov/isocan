@@ -11,8 +11,16 @@ export type OpErrorCode =
   | "main-exists"
   | "name-taken"
   | "unknown-actor"
+  /** The speaker named an actor its badge does not claim (the identity desk's
+   * mechanism 5). The remedy is always the same and always available: claim
+   * the actor first. */
+  | "not-your-actor"
   | "internal-op"
   | "unknown-op"
+  /** This daemon is no longer the writer for that canvas — another instance
+   * already used the sequence number it tried to claim. Never retried by the
+   * client: see `OplogFencedError`. */
+  | "writer-fenced"
   | "bad-op";
 
 export class OpValidationError extends Error {
@@ -22,6 +30,37 @@ export class OpValidationError extends Error {
   ) {
     super(message);
     this.name = "OpValidationError";
+  }
+}
+
+/**
+ * Two writers reached for one sequence number and this one lost.
+ *
+ * A DISTINCT error, not an `OpValidationError`, because the one thing that
+ * must never happen to it is a retry: a `bad-op` is something the caller can
+ * fix and try again, and this is the opposite — the op was refused because
+ * this process is writing behind another one, and trying again with the same
+ * belief about `lastSeq` refuses again. The remedy is on the daemon's side
+ * (drop the canvas's runtime, re-load from the store, re-submit), which is
+ * why the wire code is its own word.
+ *
+ * On a `FileStore` home this cannot happen — one process owns the directory.
+ * It exists because the cloud backing's oplog is create-only per seq, so the
+ * SCHEMA refuses the second writer rather than a lock doing it, and a deploy
+ * that overlaps two instances is a normal Tuesday rather than a disaster.
+ */
+export class OplogFencedError extends Error {
+  readonly code = "writer-fenced" as const;
+
+  constructor(
+    /** Which canvas — a fence is per-canvas, not per-process. */
+    public readonly projectId: string,
+    /** The seq this writer believed was next, and which was already taken. */
+    public readonly seq: number,
+    message?: string,
+  ) {
+    super(message ?? `another writer already holds seq ${seq} on ${projectId}`);
+    this.name = "OplogFencedError";
   }
 }
 

@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Project } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { mintTestBadge } from "./badge.ts";
 
 /**
  * `isocan setup` is the whole "cd anywhere, run one thing" promise (#42): the
@@ -60,7 +61,11 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
 }
 
 const projects = (): Promise<Project[]> =>
-  fetch(`http://127.0.0.1:${port}/api/projects`).then((r) => r.json() as Promise<Project[]>);
+  mintTestBadge(`http://127.0.0.1:${port}`).then((badge) =>
+    fetch(`http://127.0.0.1:${port}/api/projects`, { headers: badge.headers }).then(
+      (r) => r.json() as Promise<Project[]>,
+    ),
+  );
 
 describe("isocan setup", () => {
   it("leaves the skill, its doorway, and a running app — and no canvas", async () => {
@@ -119,9 +124,11 @@ describe("isocan setup", () => {
     // The point of not creating one: this canvas is the person's, named by
     // them, not a directory-shaped guess owned by a passing agent.
     await isocan("setup", "--no-install", "--no-open");
+    const badge = await mintTestBadge(`http://127.0.0.1:${port}`);
+    await badge.speakAs(nico); // a badge speaks only for actors it claims
     await fetch(`http://127.0.0.1:${port}/api/ops`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
         projectId: null,
         actor: nico,

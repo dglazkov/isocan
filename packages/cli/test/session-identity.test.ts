@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Project } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
+import { mintTestBadge } from "./badge.ts";
 
 /**
  * Two agents, one directory.
@@ -73,31 +74,58 @@ function asAgent(session: Record<string, string>, ...args: string[]) {
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
 
-/** The daemon's registry, read from its snapshot on disk. */
-const registry = () =>
-  fs
-    .readFile(path.join(home, "actors.json"), "utf8")
-    .then(
-      (raw) =>
-        JSON.parse(raw) as { claims: Record<string, { id: string; name: string; boundAt: string }> },
-    );
+const deskFile = () => path.join(home, "desk", "badges.json");
+
+interface DeskSnapshot {
+  badges: Record<string, { claims: { actorId: string; boundAt: string; sessionKey?: string }[] }>;
+}
 
 /**
- * Put a claim in the past. The registry lives in the daemon's memory, so
- * aging a binding means editing the snapshot UNDER a stopped daemon and
- * starting a fresh one — which doubles as a persistence test.
+ * Who this home's claims belong to, keyed by session key — read off the
+ * DESK's snapshot rather than `actors.json`, because the claims half of the
+ * registry moved behind the desk when it re-keyed onto badges. The machine
+ * has exactly one badge (one per `~/.isocan`), and its claims are the agents
+ * on it, so flattening reads exactly as the old table did.
+ */
+const registry = async (): Promise<{
+  claims: Record<string, { id: string; boundAt: string }>;
+}> => {
+  const desk = JSON.parse(await fs.readFile(deskFile(), "utf8")) as DeskSnapshot;
+  const claims: Record<string, { id: string; boundAt: string }> = {};
+  for (const badge of Object.values(desk.badges)) {
+    for (const row of badge.claims) {
+      if (row.sessionKey) claims[row.sessionKey] = { id: row.actorId, boundAt: row.boundAt };
+    }
+  }
+  return { claims };
+};
+
+/**
+ * Put a claim in the past. The claims table lives in the daemon's memory, so
+ * aging a binding means editing the desk's snapshot UNDER a stopped daemon
+ * and starting a fresh one — which doubles as a persistence test.
  */
 async function age(key: string, hours: number): Promise<void> {
   await daemon.close();
-  const file = path.join(home, "actors.json");
-  const reg = await registry();
-  reg.claims[key]!.boundAt = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  await fs.writeFile(file, JSON.stringify(reg, null, 2));
+  const desk = JSON.parse(await fs.readFile(deskFile(), "utf8")) as DeskSnapshot & {
+    lastSeq: number;
+  };
+  const at = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  for (const badge of Object.values(desk.badges)) {
+    for (const row of badge.claims) if (row.sessionKey === key) row.boundAt = at;
+  }
+  await fs.writeFile(deskFile(), JSON.stringify(desk, null, 2));
   daemon = await startDaemon({ port, home });
 }
 
-const projects = (): Promise<Project[]> =>
-  fetch(`${base}/api/projects`).then((r) => r.json() as Promise<Project[]>);
+/** Reading the daemon directly needs a badge like anything else does. */
+const badgeHeaders = async (): Promise<Record<string, string>> =>
+  (await mintTestBadge(base)).headers;
+
+const projects = async (): Promise<Project[]> =>
+  fetch(`${base}/api/projects`, { headers: await badgeHeaders() }).then(
+    (r) => r.json() as Promise<Project[]>,
+  );
 const idOf = (out: string) => /\((usr_[^)]+)\)/.exec(out)?.[1];
 
 describe("two agents in one directory", () => {
@@ -235,7 +263,7 @@ describe("two agents, two faces", () => {
     await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
 
     const project = (await projects()).find((p) => p.title === "Surfaces")!;
-    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
       r.json(),
     )) as { sessionId: string; label: string | null; actor: { id: string; name: string } }[];
 
@@ -261,7 +289,7 @@ describe("leaving is leaving", () => {
     expect(ended.stdout).toContain("session ended");
 
     const project = (await projects()).find((p) => p.title === "Surfaces")!;
-    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`).then((r) =>
+    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
       r.json(),
     )) as unknown[];
     expect(roster).toEqual([]); // nobody left blinking

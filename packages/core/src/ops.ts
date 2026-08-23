@@ -54,8 +54,23 @@ export type Operation =
        * actor, which is how the caller learns who it is.
        */
       type: "actor.claim";
-      /** `<harness>:<session id>` — the one key one agent holds, durable
-       * across resume because harnesses name conversations, not processes. */
+      /**
+       * `<harness>:<session id>` — which of the PRESENTING BADGE's claims
+       * this is. Durable across resume because harnesses name conversations,
+       * not processes, so an agent that comes back presents the same key and
+       * is handed the same actor.
+       *
+       * DEMOTED, and the demotion is the vocabulary change the badge makes:
+       * this used to be the key of the whole claims table, and the home
+       * believed it from anyone. Claims key on badge ids now, and this is a
+       * discriminator INSIDE one badge's list — never trusted, only indexed.
+       * A browser wears several personas under one cookie and a machine's
+       * badge vouches for its human and each of its agents; both need to say
+       * which claim they mean, and neither is asserting a credential by
+       * doing so. The op itself is unchanged: naming yourself is the same
+       * user-visible act, so it is the same one op and the same (absent)
+       * undo.
+       */
       sessionKey: string;
       /** The name asked for. Omitted: the daemon allocates the next free
        * isocan name — ask, receive. */
@@ -66,11 +81,24 @@ export type Operation =
       /** Mint a NEW actor even if the name is worn: a second Kenny on
        * purpose, not a collision. */
       fresh?: boolean;
-      /** The canvas of the directory this claim was made from, when that
-       * directory was already bound (#60). Informational scope — recorded on
-       * the binding so the registry can say which project an agent is of; it
-       * gates nothing. Absent on the very first handshake in a fresh
-       * directory, whose project is only created after the claim answers. */
+      /**
+       * The canvas this claim is made FROM — the bound directory for a CLI
+       * (#60), the canvas in the address bar for a browser. Recorded on the
+       * binding so the registry can say which project an agent is of.
+       *
+       * It is also the ROOM this name is being taken in, and mechanism 10
+       * makes that count: name uniqueness is judged against the rosters the
+       * claiming badge can see, and a surface that has not been anywhere yet
+       * — a browser naming itself at the identity dialog, before it has
+       * fetched a thing — would otherwise be judged against nobody and walk
+       * in wearing a name somebody on that very canvas already answers to.
+       *
+       * It widens the QUESTION, never the answer: it grants no admission and
+       * carries no authority, and today it can only reach a canvas the
+       * address would have admitted the asker to anyway. Absent on the very
+       * first handshake in a fresh directory, whose project is only created
+       * after the claim answers.
+       */
       projectId?: string;
     }
   | {

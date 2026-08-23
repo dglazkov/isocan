@@ -54,6 +54,23 @@ export async function enterAs(name: string): Promise<Actor> {
   return claimInto(key, { type: "actor.claim", sessionKey: key, name: trimmed });
 }
 
+/**
+ * The canvas in the address bar — the room a browser is naming itself in.
+ *
+ * The identity dialog is shown BEFORE the router mounts and before anything
+ * is fetched, so a fresh browser landing on a canvas link has a badge that
+ * has not been anywhere. Sending the canvas is what lets the home judge the
+ * name against the roster that is actually about to see it (mechanism 10);
+ * without it, a second Kenny walks straight in beside the first.
+ */
+function canvasInUrl(): string | undefined {
+  try {
+    return /^\/p\/([^/?#]+)/.exec(location.pathname)?.[1];
+  } catch {
+    return undefined; // no document (tests, a worker) — no room to name
+  }
+}
+
 /** Same person, new label: keeps the id, so everything you have done stays
  * yours. Matches `isocan identity --name --session`, which renames the same
  * way — one rule, one writer. */
@@ -71,6 +88,25 @@ export async function renameIdentity(name: string): Promise<Actor> {
 export async function adoptIdentity(actor: Actor): Promise<Actor> {
   const known = personas().find((p) => p.id === actor.id);
   return resume(known ?? { ...actor });
+}
+
+/**
+ * Claim again what this browser is already wearing.
+ *
+ * The recovery path: the badge behind the cookie was replaced (cleared site
+ * data, a wiped home, phase 9's kill-a-badge), so the home no longer knows
+ * this tab speaks for its persona — while the tab goes on asserting it. A
+ * resume is exactly the right shape, and it is the same one the roster uses:
+ * same key, same actor, and `as` pins the id so recovery cannot quietly mint
+ * a stranger.
+ *
+ * Nothing to do for a browser that has not entered under a name: it has no
+ * persona to lose, and the identity dialog is the next thing it sees.
+ */
+export async function reclaimIdentity(): Promise<void> {
+  const current = parsePersona(read(KEY));
+  if (!current) return;
+  await resume(current);
 }
 
 /**
@@ -98,7 +134,8 @@ function resume(persona: Persona): Promise<Actor> {
 }
 
 async function claimInto(key: string, op: ActorClaimOp): Promise<Actor> {
-  const { envelope } = await claimActor(op);
+  const from = canvasInUrl();
+  const { envelope } = await claimActor(from ? { ...op, projectId: from } : op);
   return become({ id: envelope.actor.id, name: envelope.actor.name, key });
 }
 

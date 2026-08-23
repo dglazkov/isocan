@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { GcReport, Operation } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 import * as p from "../src/paths.ts";
 
 const alice = { id: "usr_alice", name: "Alice" };
@@ -11,11 +12,14 @@ const alice = { id: "usr_alice", name: "Alice" };
 let home: string;
 let daemon: Daemon;
 let base: string;
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-gc-"));
   daemon = await startDaemon({ port: 0, home });
   base = baseOf(daemon);
+  badge = await mintTestBadge(base);
+  await badge.speakAs(alice); // a badge speaks only for actors it claims
 });
 
 afterEach(async () => {
@@ -31,7 +35,7 @@ function baseOf(d: Daemon): string {
 async function post(url: string, body: unknown): Promise<{ status: number; json: any }> {
   const res = await fetch(`${base}${url}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -44,7 +48,7 @@ async function op(operation: Operation, projectId: string | null = "prj_1", acto
 async function uploadBlob(content: string, filename: string): Promise<string> {
   const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
     method: "POST",
-    headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": filename },
+    headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": filename, ...badge.headers },
     body: content,
   });
   const { blobHash } = (await res.json()) as { blobHash: string };
@@ -145,7 +149,7 @@ describe("blob GC", () => {
 
     // History is gone: nothing to undo, but state is fully intact.
     expect((await post("/api/projects/prj_1/undo", { actor: alice })).status).toBe(409);
-    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`)).json();
+    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json();
     expect((snapshot as any).canvas.items["itm_live"].x).toBe(9);
   });
 
@@ -160,7 +164,7 @@ describe("blob GC", () => {
 
     const redo = await post("/api/projects/prj_1/redo", { actor: alice });
     expect(redo.status).toBe(200);
-    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`)).json();
+    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json();
     expect((snapshot as any).canvas.items["itm_live"].x).toBe(100);
   });
 
@@ -190,7 +194,7 @@ describe("blob GC", () => {
     daemon = await startDaemon({ port: 0, home });
     base = baseOf(daemon);
 
-    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`)).json();
+    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json();
     expect((snapshot as any).canvas.items["itm_live"].x).toBe(42);
     // Sequence numbering continues past the compacted log.
     const next = await op({ type: "item.move", itemId: "itm_live", x: 1, y: 1 });

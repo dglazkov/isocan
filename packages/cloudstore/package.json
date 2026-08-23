@@ -1,0 +1,22 @@
+{
+  "name": "@isocan/cloudstore",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "//": "The vendor lives here and NOWHERE else. These two libraries are 156 packages and ~43 MiB, and `npm i -g github:dglazkov/isocan#release` resolves the ROOT manifest only — so declaring them here rather than there is what keeps the CLI install at 81 packages for a daemon that runs FileStore. test/packaging.test.ts asserts both halves of that: @google-cloud/* here, and nowhere in the root package.",
+  "dependencies": {
+    "@google-cloud/firestore": "^9.0.0",
+    "@google-cloud/storage": "^8.0.1",
+    "@isocan/core": "*",
+    "@isocan/server": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1"
+  }
+}
