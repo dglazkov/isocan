@@ -89,11 +89,13 @@ file:
 
 | FileStore | CloudStore |
 | --- | --- |
-| `oplog.jsonl` append + fsync | `canvases/{id}/ops/{seq}` — one create-only document write; the ack is the fsync |
-| `canvas.json`, `trash.json` snapshots | GCS objects (snapshots can outgrow Firestore's document limit; the oplog is truth, snapshots are a fast boot) |
-| `project.json` | Firestore document |
+| `oplog.jsonl` append + fsync | `canvases/{id}/ops/{seq}` — one create-only document write; the ack is the fsync. The seq is zero-padded (`ops/000000000041`), because document ids sort lexicographically and `ops/9` would otherwise sort after `ops/10`; the entry itself rides as an opaque JSON string, so a new `Operation` shape can never break persistence, with `seq`/`ts`/`actorId`/`opType` denormalized beside it for the console. An entry over ~900 KiB spills its bytes to `canvases/{id}/ops/{seq}.json` in the bucket — object first, document second, so the ack still means durable |
+| `oplog` compaction — atomic rewrite of the live file | **advance a horizon; delete nothing.** The cloud has no equivalent of the file rewrite, and it must not grow one: deleting an op document frees its id, and a create-only precondition on a free id passes, so a stale writer could re-claim a compacted-away seq and succeed. Compaction appends the dropped entries to `oplog-archive.jsonl`, marks their documents compacted, and advances `compactedThrough` on the canvas document; boot reads `where("seq", ">", compactedThrough)`, which is what compaction is FOR in the cloud, where there is no file to keep small. Every seq ever used stays claimed forever, and the precondition is absolute rather than horizon-limited. The lever if a rollout ever proves nastier: assert `seq === lastSeq + 1` inside a transaction with the create — strictly stronger, at two round trips per op on the durability path |
+| `canvas.json`, `trash.json` snapshots | GCS objects (snapshots can outgrow Firestore's document limit; the oplog is truth, snapshots are a fast boot) — and **debounced**, because a full-canvas object write on every op would put a bucket round trip on the latency path for data that is derived. The engine still calls `saveSnapshot` after every op and cannot tell; the backing flushes on a count, a timer, idle, and shutdown. The visible consequence: a cloud boot routinely replays a tail where a file boot does not, so recovery stops being the exceptional path and becomes the everyday one — which is what min-instances 0 on dev already wanted |
+| `project.json` | the `canvases/{id}` document, written when the metadata changes rather than once per op — a single document has roughly a one-write-per-second ceiling, and the oplog is what carries the per-op rate |
+| `project.delete` — soft, the directory moved aside (which frees the id) | soft too — `deleted: true` on the canvas document, ops untouched. The id therefore stays **taken forever**: its seqs are still claimed, so re-creating it is refused with `duplicate-id` rather than being fenced. The one place the two backings differ in what they *allow*; canvas ids are minted, never chosen, so nothing reaches it |
 | `blobs/<sha256>.<ext>` | GCS objects, same content addressing |
-| `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index. Costlier than it looks: `Engine.gc` drives that read-modify-write from *above* the seam (read the whole index, age each blob, delete, write back), so this row is not a schema swap behind an unchanged method — GC's per-blob loop moves behind the seam first (phase 1 finding) |
+| `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index. Costlier than it looks: `Engine.gc` drove that read-modify-write from *above* the seam (read the whole index, age each blob, delete, write back), so this row was not a schema swap behind an unchanged method. Phase 4 moved it: the seam now says `listBlobs` and `deleteBlobs`, the policy stays in the engine where `gc.test.ts` already tests it, and no shared-index concept crosses in either direction |
 | `actors.jsonl` + `actors.json` | same op-docs-plus-snapshot pattern, for the registry's public face (ids, names, colors); the claims half re-keys onto `badges/` — the two-ledger split, drawn in code |
 
 The durability contract is unchanged: an op is durable **before** it is
@@ -111,6 +113,18 @@ the write carries a create-only precondition. A second writer does not
 interleave — it errors loudly and re-syncs. Ordering authority stays
 in-process where it always was; Firestore is durability, not a judge.
 
+What "errors loudly and re-syncs" means, concretely, as of phase 4:
+`ALREADY_EXISTS` becomes an `OplogFencedError` — its own error with its
+own wire code (`writer-fenced`, a 409), distinct from every validation
+failure precisely because the one thing a client must never do with it
+is retry. The daemon drops that canvas's runtime, so the next request
+re-loads from the store and numbers itself from the winner's log.
+Nothing was applied: the append happens *before* in-memory state is
+touched, so a fenced writer is merely stale, never inconsistent. The
+re-sync is per canvas; process-level fencing — a draining instance that
+stops serving, or exits — is a rollout question and belongs to the
+phase where a rollout exists.
+
 ## Single-writer on a platform that wants to scale
 
 Why one instance is correct and not a compromise: the engine chain,
@@ -126,14 +140,30 @@ is roughly a thousand simultaneous connections, minus long-polls —
 hundreds of concurrently active collaborators before anything has to
 change, with a vertical lever (4 vCPU) before an architectural one.
 
+**The second ceiling, which is Firestore's.** A collection whose
+document ids increase monotonically concentrates on one tablet —
+Google's "500/50/5" rule — and tops out around **500 writes per second**
+without ramping. Ours increase monotonically by construction and must:
+the seq *is* the precondition, so sharding the key would trade the
+guarantee for headroom we do not need. At one writer per canvas and
+human-driven ops we are three orders of magnitude below it. Named
+because it is the number that binds second, not because it binds.
+
 **The growth path, chosen now so the schema can't warp later:** when
 the ceiling is real, canvases **shard across instances** — a
 home-assignment lease in Firestore, a thin router by canvas id — and
 each canvas still has exactly one writer. Never multi-writer per
-canvas; scaling multiplies homes, not writers. Everything in the
-CloudStore schema is already keyed per-canvas, so sharding is a router,
-not a data migration. Presence would then need a cross-instance relay
-(Pub/Sub) — deferred until that day, and only that part.
+canvas; scaling multiplies homes, not writers. Every **canvas** in the
+CloudStore schema is keyed per-canvas, so sharding canvases is a
+router, not a data migration — but two things in it are deliberately
+**home-scoped** and would not shard with them: the actor registry
+(`meta/actors` plus the `actors/` oplog; `loadActors()` takes no canvas
+id) and the whole desk. Both are one database behind whatever router
+appears, which is why the conclusion survives — but the day somebody
+shards on the strength of "everything is per-canvas" they will find a
+shared registry, so it is written down here instead. Presence would
+then need a cross-instance relay (Pub/Sub) — deferred until that day,
+and only that part.
 
 **WebSockets through the LB.** The backend timeout is set to an hour;
 a socket that hits it drops and reconnects. That is not a mitigation —
@@ -168,7 +198,21 @@ two-ledger rule:
   recycle), `claimKeys` answers "who holds this session key?" (the
   lost-badge recovery route), and `admittedTo` answers "whose rosters does
   this badge share?" — the admission scope mechanism 10 judges names
-  against. On a FileStore home the desk is
+  against. Two rules the cloud desk lives or dies by, made structural in
+  phase 4: **exactly one function writes a badge document**, and it
+  derives all three arrays from the record on every call, so "did you
+  remember to update `claimIds`?" is not a question anybody has to ask;
+  and the reads that use them are **queries with no fallback** — never
+  "if the query came back empty, scan the collection", because a
+  fallback would make a badge whose arrays were never written answer
+  correctly anyway, which is precisely the phase 3 failure wearing a
+  helpful face. `touch()`'s debounce is likewise not an optimization
+  here but a correctness requirement: `lastSeen` on every request is one
+  write per request against a single document, straight into Firestore's
+  ~1/second limit. The migration **shelf** belongs to no badge and so has
+  no home in `badges/{badgeId}`; it is `meta/shelf`, one document keyed
+  by sessionKey, read alongside the queries exactly as `FileDesk` reads
+  it alongside its walk. On a FileStore home the desk is
   `~/.isocan/desk/` — `badges.json` snapshot over an append-only
   `badges.jsonl`; the claims half is logged and fsynced (a claim carries
   authorization, so one lost file must not cost somebody their own name),
@@ -206,10 +250,30 @@ upload path by size: small blobs go through the daemon exactly as
 today; large ones ask the daemon first — which checks badge and
 admission, then mints a short-lived **signed PUT URL** — upload
 straight to GCS, and register the blob meta after. The big bytes never
-transit the instance. Downloads stream through the daemon (Range
-honored) for now; signed GETs and CDN fronting are tuning levers when
-egress asks for them. FileStore keeps the single simple path — the
-split is CloudStore's, and the CLI and web uploader grow one branch.
+transit the instance. `MAX_DIRECT_UPLOAD_BYTES` in `@isocan/core` is
+the one number both clients branch on, set at 24 MiB for headroom under
+the cap. Downloads stream through the daemon and **Range is honored**
+— `Accept-Ranges` unconditionally, `206` with a `Content-Range`,
+`416` for a range that starts past the end, and an unparseable header
+treated as absent per RFC 9110; the backing takes the range, so a seek
+in a video does not re-read the whole object from the bucket. Signed
+GETs and CDN fronting are tuning levers when egress asks for them.
+FileStore keeps the single simple path at any size — `beginUpload`
+returns null there, which is how a client learns to just post the bytes
+— so the split is CloudStore's, and the CLI and web uploader grow one
+branch.
+
+Two properties of that branch, stated rather than assumed. The ticket
+is minted only when `blobmeta/{hash}` does not already exist, and it
+signs `x-goog-if-generation-match: 0` into the request: **blob writes
+are create-only for the same reason op writes are**, so a leaked ticket
+cannot replace bytes an item already points at. And the daemon never
+sees the bytes, so it takes the client's word for the hash — an
+**accepted limit**, bounded to one canvas that the same admitted client
+could have emptied anyway, and a read-back to re-hash would defeat the
+entire point of the direct upload. What is *not* taken on faith is that
+the object arrived: a register naming nothing is refused, and the size
+comes from the object store rather than from the client.
 
 ## Presence, hooks, GC, backups
 
@@ -234,10 +298,6 @@ split is CloudStore's, and the CLI and web uploader grow one branch.
 What the code does not have yet — an inventory, not a sequence (the
 sequence is [phases.md](phases.md)):
 
-- The door: badge minting and cookie/bearer resolution on every route
-  and the WS upgrade; today the daemon listens on 127.0.0.1 and
-  believes what it's handed.
-- The `Store` interface split and the CloudStore backing.
 - The daemon's **home connection** — the sync-client role that makes a
   local daemon a replica: dial the home, present the badge, carry the
   two planes, reconnect by seq cursor. The web client already speaks
@@ -249,17 +309,42 @@ sequence is [phases.md](phases.md)):
 - The page server becoming home-only: `registerStaticWebApp` is
   exactly the code the home needs and exactly what the local daemon
   must stop doing for persons — same code, one configuration flag.
-- The Share dialog and grant routes; the signed-URL upload branch;
-  registrations and the dispatch path.
+- The Share dialog and grant routes; registrations and the dispatch
+  path.
+- The **clients'** half of the large-blob upload: the daemon serves the
+  ticket and the register route, and neither the CLI nor the web
+  uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is
+  still "add this file", so it is a transport branch and not a verb —
+  and when it lands, `agent-guide.md`'s advice to `POST …/blobs`
+  directly needs the size caveat beside it.
+- One assertion in the signed-URL branch, named rather than assumed:
+  that GCS accepts a signature the service mints, that it honors
+  `x-goog-if-generation-match: 0` inside a signed request, and that a
+  Cloud Run service account — which has no private key — can sign at
+  all. See Phase 5's Work.
 
 ## Any innkeeper, still true
 
 The image builds from the public repo; FileStore is the default
-backing; CloudStore is switched on by configuration. Google Cloud
-imports live in the CloudStore adapter and the KMS wrap and **nowhere
-else** — core and the protocol never learn the vendor exists. The
-litmus test, to be kept passing: `isocan serve` on a rented VM with a
-disk is a complete home. A feature that only works on the GCP home has
+backing; CloudStore is switched on by configuration — `ISOCAN_STORE=cloud`
+and friends, read from the environment, because that is how Cloud Run
+passes it and because a `--store` flag would be a surface an agent could
+reach for and misuse. Google Cloud imports live in the CloudStore
+adapter and the KMS wrap and **nowhere else** — core and the protocol
+never learn the vendor exists.
+
+As of phase 4 that is a **package boundary rather than a convention**:
+`@google-cloud/*` are dependencies of `packages/cloudstore` and of
+nothing else, `daemon.ts` reaches that package by dynamic import inside
+the one branch that picks a backing, and `test/packaging.test.ts`
+asserts both halves. The measurement that decided it: those two
+libraries are 156 packages and ~43 MiB, and
+`npm i -g github:dglazkov/isocan#release` resolves the ROOT manifest
+only — so an installed CLI stays at 81 packages and 18.6 MiB, and could
+not resolve the specifier even if something asked for it.
+
+The litmus test, to be kept passing: `isocan serve` on a rented VM with
+a disk is a complete home. A feature that only works on the GCP home has
 broken commitment 2, whatever else it does.
 
 ## Cost, order of magnitude

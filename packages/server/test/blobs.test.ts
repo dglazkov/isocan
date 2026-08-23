@@ -88,6 +88,142 @@ describe("concurrent blob uploads", () => {
   });
 });
 
+describe("the blob route honors Range", () => {
+  /**
+   * The map has said "Downloads stream through the daemon (Range honored)"
+   * since it was drawn, and until phase 4 the route did no such thing: it sent
+   * a whole `createReadStream` with no `Accept-Ranges` and no `Range` parsing,
+   * and Fastify adds neither. The doc was the better half of that
+   * disagreement, so the code moved. It matters more in the cloud than on a
+   * disk — a video blob seeking through the instance without ranges re-reads
+   * the whole object from the bucket every single time.
+   */
+  const CONTENT = "0123456789abcdefghij";
+
+  async function range(hash: string, header: string) {
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, {
+      headers: { Range: header },
+    });
+    return {
+      status: res.status,
+      contentRange: res.headers.get("content-range"),
+      body: await res.text(),
+    };
+  }
+
+  it("advertises byte ranges on every blob, before anybody asks", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`);
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    expect(res.headers.get("content-length")).toBe(String(CONTENT.length));
+    expect(await res.text()).toBe(CONTENT);
+  });
+
+  it("serves a closed range as 206 with the range it actually sent", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    expect(await range(hash, "bytes=5-9")).toEqual({
+      status: 206,
+      contentRange: `bytes 5-9/${CONTENT.length}`,
+      body: "56789",
+    });
+  });
+
+  it("serves an open range and a suffix range", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    // `bytes=15-` — from here to the end, which is how a resumed download asks.
+    expect(await range(hash, "bytes=15-")).toEqual({
+      status: 206,
+      contentRange: `bytes 15-19/${CONTENT.length}`,
+      body: "fghij",
+    });
+    // `bytes=-4` — the LAST four bytes, which is how a player reads a trailer.
+    expect(await range(hash, "bytes=-4")).toEqual({
+      status: 206,
+      contentRange: `bytes 16-19/${CONTENT.length}`,
+      body: "ghij",
+    });
+  });
+
+  it("clamps a range that runs off the end, and refuses one that starts past it", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    expect(await range(hash, "bytes=18-999")).toEqual({
+      status: 206,
+      contentRange: `bytes 18-19/${CONTENT.length}`,
+      body: "ij",
+    });
+    const beyond = await range(hash, "bytes=99-200");
+    expect(beyond.status).toBe(416);
+    expect(beyond.contentRange).toBe(`bytes */${CONTENT.length}`);
+  });
+
+  it("ignores a header it cannot parse, rather than 416-ing a whole download", async () => {
+    // RFC 9110 is explicit: a Range that cannot be understood must be treated
+    // as absent. Answering 416 to a garbled header would break a client that
+    // was perfectly happy to take the whole file.
+    const hash = await upload(CONTENT, "digits.txt");
+    expect(await range(hash, "furlongs=1-2")).toEqual({
+      status: 200,
+      contentRange: null,
+      body: CONTENT,
+    });
+  });
+});
+
+describe("the direct-upload routes on a file home", () => {
+  async function post(route: string, body: unknown) {
+    const res = await fetch(`${base}/api/projects/prj_1/${route}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, json: (await res.json().catch(() => null)) as any };
+  }
+
+  const request = {
+    blobHash: "a".repeat(64),
+    mimeType: "video/mp4",
+    filename: "clip.mp4",
+    size: 40 * 1024 * 1024,
+  };
+
+  it("say plainly that this home takes the bytes itself", async () => {
+    const asked = await post("blobs/upload-url", request);
+    expect(asked.status).toBe(409);
+    expect(asked.json.code).toBe("bad-op");
+    expect(asked.json.error).toMatch(/POST them/);
+  });
+
+  it("refuse a malformed request before anything is signed for", async () => {
+    expect((await post("blobs/upload-url", { blobHash: "nope" })).status).toBe(400);
+    expect((await post("blobs/upload-url", { ...request, size: 0 })).status).toBe(400);
+    expect((await post("blobs/register", { ...request, mimeType: "" })).status).toBe(400);
+  });
+
+  it("answer for a blob that is already here instead of minting anything", async () => {
+    const hash = await upload("# already here\n", "here.md");
+    const asked = await post("blobs/upload-url", {
+      blobHash: hash,
+      mimeType: "text/markdown",
+      filename: "here.md",
+      size: 16,
+    });
+    expect(asked.status).toBe(200);
+    expect(asked.json.blob.blobHash).toBe(hash);
+    expect(asked.json.upload).toBeUndefined();
+  });
+
+  it("are behind the door, like every route about one canvas", async () => {
+    // No badge headers at all: the POST-only shape means `isOpen`'s GET-only
+    // blob hole does not cover these, and the hook refuses by default.
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/upload-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("filenames that are not ByteStrings", () => {
   /**
    * Every macOS screenshot is named "Screenshot … at 8.05.12 PM.png" with

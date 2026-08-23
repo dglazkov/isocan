@@ -1,6 +1,7 @@
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Project, ProjectState, SlashCommand } from "@isocan/core";
 import {
   applyActorColor,
@@ -8,11 +9,19 @@ import {
   bindName,
   COMMAND_NAME,
   emptyCanvas,
+  extensionFor,
+  OpValidationError,
   parseCommandFile,
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
-import type { BlobMeta, LoadedProject, Store } from "./store.ts";
+import type {
+  BlobListing,
+  BlobMeta,
+  BlobUploadRequest,
+  LoadedProject,
+  Store,
+} from "./store.ts";
 
 /**
  * Persistence for one isocan home. Layout per project:
@@ -41,6 +50,10 @@ export class FileStore implements Store {
     await fs.mkdir(p.projectsDir(this.home), { recursive: true });
     await fs.mkdir(p.deletedProjectsDir(this.home), { recursive: true });
   }
+
+  /** Nothing is held open: every write here closes its own handle. The method
+   * exists for the backing that does hold something open. */
+  async close(): Promise<void> {}
 
   async listProjects(): Promise<Project[]> {
     let ids: string[];
@@ -245,7 +258,7 @@ export class FileStore implements Store {
     meta: { mimeType: string; filename: string },
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
     const blobHash = createHash("sha256").update(data).digest("hex");
-    const index = await this.blobIndex(id);
+    const index = await this.readIndex(id);
     const existing = index[blobHash];
     if (existing) {
       return { blobHash, size: existing.size, mimeType: existing.mimeType };
@@ -258,20 +271,93 @@ export class FileStore implements Store {
     return { blobHash, size: data.length, mimeType: meta.mimeType };
   }
 
-  async getBlob(id: string, blobHash: string): Promise<{ path: string; meta: BlobMeta } | null> {
-    const meta = (await this.blobIndex(id))[blobHash];
-    if (!meta) return null;
-    return { path: path.join(p.blobsDir(this.home, id), meta.file), meta };
+  async blobMeta(id: string, blobHash: string): Promise<BlobMeta | null> {
+    return (await this.readIndex(id))[blobHash] ?? null;
   }
 
-  async blobIndex(id: string): Promise<Record<string, BlobMeta>> {
+  async openBlob(
+    id: string,
+    blobHash: string,
+    range?: { start: number; end: number },
+  ): Promise<Readable | null> {
+    const meta = await this.blobMeta(id, blobHash);
+    if (!meta) return null;
+    const file = path.join(p.blobsDir(this.home, id), meta.file);
+    // `createReadStream` does not stat first, so a missing file surfaces as an
+    // "error" event on the stream rather than a throw here. That is the same
+    // shape the route already handled, and it is the honest one: the index
+    // said the blob is there.
+    return range ? createReadStream(file, { start: range.start, end: range.end }) : createReadStream(file);
+  }
+
+  /**
+   * No ticket: on a disk the daemon IS the place the bytes go, at any size.
+   * Null rather than a throw because the answer is "there is nothing to hand
+   * you", not "you asked wrongly" — the client branches on it and posts.
+   */
+  async beginUpload(_id: string, _request: BlobUploadRequest): Promise<null> {
+    return null;
+  }
+
+  /** Unreachable in practice — a client only registers after `beginUpload`
+   * gave it somewhere to upload to, and this backing never does. It refuses
+   * in the vocabulary the route already speaks rather than throwing something
+   * that would reach a person as a 500. */
+  async registerBlob(_id: string, _request: BlobUploadRequest): Promise<never> {
+    throw new OpValidationError("bad-op", "this home takes blob bytes directly; there is nothing to register");
+  }
+
+  // ---- garbage collection (the policy lives in Engine.gc) ----
+
+  /** The index, plus an mtime per row. Two calls per blob, exactly as before
+   * — what moved is which side of the seam they happen on. */
+  async listBlobs(id: string): Promise<BlobListing[]> {
+    const index = await this.readIndex(id);
+    const listing: BlobListing[] = [];
+    for (const [hash, meta] of Object.entries(index)) {
+      listing.push({ hash, meta, ageMs: await this.ageMs(id, meta) });
+    }
+    return listing;
+  }
+
+  /** Unlink the bytes, then rewrite the index ONCE — the same file semantics
+   * as before, including one index rewrite per GC pass. */
+  async deleteBlobs(id: string, hashes: string[]): Promise<void> {
+    if (hashes.length === 0) return;
+    const index = await this.readIndex(id);
+    for (const hash of hashes) {
+      const meta = index[hash];
+      if (!meta) continue;
+      await fs.rm(path.join(p.blobsDir(this.home, id), meta.file), { force: true });
+      delete index[hash];
+    }
+    await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
+  }
+
+  /**
+   * Archive first, then replace the live log atomically. Crash-safe in that
+   * order: a crash between the two leaves extra history, which is harmless
+   * and re-collectable. On a disk a compacted entry really does leave the
+   * live log — one process owns this directory, so no reader can be surprised
+   * by a seq becoming free again.
+   */
+  async compactOplog(id: string, retained: LogEntry[], dropped: LogEntry[]): Promise<void> {
+    if (dropped.length > 0) {
+      const lines = dropped.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+      await fs.appendFile(p.oplogArchiveFile(this.home, id), lines);
+    }
+    const body = retained.map((entry) => JSON.stringify(entry)).join("\n");
+    await writeFileAtomic(p.oplogFile(this.home, id), body.length > 0 ? body + "\n" : "");
+  }
+
+  // ---- internals ----
+
+  private async readIndex(id: string): Promise<Record<string, BlobMeta>> {
     return (await readJson<Record<string, BlobMeta>>(p.blobsIndexFile(this.home, id))) ?? {};
   }
 
-  // ---- garbage collection primitives (composed by Engine.gc) ----
-
   /** Age of a blob file in ms, or null if it is already gone. */
-  async blobAgeMs(id: string, meta: BlobMeta): Promise<number | null> {
+  private async ageMs(id: string, meta: BlobMeta): Promise<number | null> {
     try {
       const stat = await fs.stat(path.join(p.blobsDir(this.home, id), meta.file));
       return Date.now() - stat.mtimeMs;
@@ -279,50 +365,8 @@ export class FileStore implements Store {
       return null;
     }
   }
-
-  async deleteBlobFile(id: string, meta: BlobMeta): Promise<void> {
-    await fs.rm(path.join(p.blobsDir(this.home, id), meta.file), { force: true });
-  }
-
-  async writeBlobIndex(id: string, index: Record<string, BlobMeta>): Promise<void> {
-    await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
-  }
-
-  /** Preserve compacted-away entries for audit before the live log shrinks. */
-  async archiveOplogEntries(id: string, dropped: LogEntry[]): Promise<void> {
-    if (dropped.length === 0) return;
-    const lines = dropped.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
-    await fs.appendFile(p.oplogArchiveFile(this.home, id), lines);
-  }
-
-  /** Atomically replace the live oplog with the retained entries. */
-  async rewriteOplog(id: string, retained: LogEntry[]): Promise<void> {
-    const body = retained.map((entry) => JSON.stringify(entry)).join("\n");
-    await writeFileAtomic(p.oplogFile(this.home, id), body.length > 0 ? body + "\n" : "");
-  }
 }
 
 function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
-}
-
-/** Prefer the real file extension; fall back to a small mime map. */
-function extensionFor(filename: string, mimeType: string): string {
-  const fromName = path.extname(filename).slice(1).toLowerCase();
-  if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
-  const map: Record<string, string> = {
-    "text/markdown": "md",
-    "text/uri-list": "uri",
-    "text/html": "html",
-    "text/plain": "txt",
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/gif": "gif",
-    "image/svg+xml": "svg",
-    "image/webp": "webp",
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-  };
-  return map[mimeType] ?? "bin";
 }

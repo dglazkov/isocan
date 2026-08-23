@@ -20,6 +20,37 @@ export function extensionOf(filename: string): string {
 }
 
 /**
+ * The extension a stored blob is filed under, dot NOT included — "md", "png",
+ * "bin". Prefer the real filename's extension; fall back to a small mime map.
+ *
+ * Lives here rather than in a backing because TWO backings now compute a
+ * storage filename from a mime type: `<sha256>.<ext>` on a disk and
+ * `canvases/{id}/blobs/<sha256>.<ext>` in a bucket, deliberately the same
+ * addressing so a home can be copied from one to the other by hand. Two
+ * copies of this map would drift, and the drift would be silent — the same
+ * bytes filed under two names, and a `.bin` where a `.png` should have been.
+ */
+export function extensionFor(filename: string, mimeType: string): string {
+  const fromName = extensionOf(filename).slice(1).toLowerCase();
+  if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
+  const map: Record<string, string> = {
+    "text/markdown": "md",
+    "text/uri-list": "uri",
+    "text/html": "html",
+    "text/plain": "txt",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+  };
+  return map[mimeType] ?? "bin";
+}
+
+/**
  * A title as a filename: "Bass tab v2" → "bass-tab-v2.svg". Keeps the old
  * extension, because renaming a drawing does not make it a different kind of
  * file. A title with nothing usable in it (an emoji, say) keeps the old stem

@@ -10,11 +10,12 @@ import {
   decodeFilename,
   DOOR_ROUTE,
   FILENAME_HEADER,
+  OplogFencedError,
   OpValidationError,
   parseCommandFile,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
-import type { Store } from "./store.ts";
+import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
@@ -98,6 +99,15 @@ export function registerRoutes(
     }
     if (err instanceof ProjectNotFoundError) {
       return reply.status(404).send({ error: err.message, code: "unknown-project" });
+    }
+    // 409, and its own code, because a client must NOT retry this: the op was
+    // refused by another writer's claim on the seq, and the daemon has
+    // already dropped that canvas's runtime. The next request re-loads and
+    // numbers itself correctly; a blind retry with the same belief just
+    // refuses again.
+    if (err instanceof OplogFencedError) {
+      app.log.error(err);
+      return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof NothingToUndoError) {
       return reply.status(409).send({ error: err.message, code: "nothing-to-undo" });
@@ -534,23 +544,131 @@ export function registerRoutes(
     return engine.putBlob(id, data, { mimeType, filename });
   });
 
+  /**
+   * Ask for somewhere to put bytes too big to post (see
+   * `MAX_DIRECT_UPLOAD_BYTES`). POST, so `isOpen`'s GET-only blob hole does
+   * not cover it, and under `/api/projects/:id/…`, so the door re-asks
+   * `projectId ∈ admissions` before a single byte is signed for.
+   */
+  app.post("/api/projects/:id/blobs/upload-url", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id); // 404 for unknown projects
+    const request = req.body as Partial<BlobUploadRequest> | undefined;
+    const problem = badUploadRequest(request);
+    if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
+    const asked = request as BlobUploadRequest;
+
+    // Already here? Then there is nothing to upload, and saying so is cheaper
+    // for everyone than a round trip to a bucket that would dedup it anyway.
+    const known = await store.blobMeta(id, asked.blobHash);
+    if (known) {
+      return { blob: { blobHash: asked.blobHash, mimeType: known.mimeType, size: known.size } };
+    }
+    const upload = await engine.beginUpload(id, asked);
+    if (!upload) {
+      return reply
+        .status(409)
+        .send({ error: "this home takes blob bytes directly — POST them", code: "bad-op" });
+    }
+    return { upload };
+  });
+
+  /** Name bytes that went straight to the object store. */
+  app.post("/api/projects/:id/blobs/register", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    const request = req.body as Partial<BlobUploadRequest> | undefined;
+    const problem = badUploadRequest(request);
+    if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
+    return engine.registerBlob(id, request as BlobUploadRequest);
+  });
+
   app.get("/api/projects/:id/blobs/:hash", async (req, reply) => {
     const { id, hash } = req.params as { id: string; hash: string };
     await engine.getSnapshot(id);
-    const blob = await store.getBlob(id, hash);
-    if (!blob) return reply.status(404).send({ error: "blob not found" });
-    return reply
-      .header("Content-Type", blob.meta.mimeType)
-      // Defense in depth for HTML blobs: even outside the app's sandboxed
-      // iframe, a directly-opened blob document is sandboxed and can't reach
-      // the daemon API with an origin.
+    const meta = await store.blobMeta(id, hash);
+    if (!meta) return reply.status(404).send({ error: "blob not found" });
+
+    // Defense in depth for HTML blobs: even outside the app's sandboxed
+    // iframe, a directly-opened blob document is sandboxed and can't reach
+    // the daemon API with an origin.
+    reply
+      .header("Content-Type", meta.mimeType)
       .header("Content-Security-Policy", "sandbox allow-scripts")
       .header("X-Content-Type-Options", "nosniff")
       .header("Cache-Control", "immutable, max-age=31536000")
-      .send(createReadStream(blob.path));
+      // Said unconditionally, so a player knows it may seek BEFORE it asks.
+      .header("Accept-Ranges", "bytes");
+
+    const range = parseRange(req.headers.range, meta.size);
+    if (range === "unsatisfiable") {
+      return reply.status(416).header("Content-Range", `bytes */${meta.size}`).send();
+    }
+    if (range) {
+      const stream = await store.openBlob(id, hash, range);
+      if (!stream) return reply.status(404).send({ error: "blob not found" });
+      return reply
+        .status(206)
+        .header("Content-Range", `bytes ${range.start}-${range.end}/${meta.size}`)
+        .header("Content-Length", String(range.end - range.start + 1))
+        .send(stream);
+    }
+    const stream = await store.openBlob(id, hash);
+    if (!stream) return reply.status(404).send({ error: "blob not found" });
+    return reply.header("Content-Length", String(meta.size)).send(stream);
   });
 
   registerStaticWebApp(app, desk);
+}
+
+/** What a direct-upload request must carry, or the reason it does not. All
+ * four fields are load-bearing: the hash is the object's name, the mime type
+ * and filename are signed into the URL, and the size is what the register
+ * will be checked against. */
+function badUploadRequest(request: Partial<BlobUploadRequest> | undefined): string | null {
+  if (!request || typeof request !== "object") return "expected an upload request body";
+  if (typeof request.blobHash !== "string" || !/^[0-9a-f]{64}$/.test(request.blobHash)) {
+    return "blobHash must be a sha256 hex digest";
+  }
+  if (typeof request.mimeType !== "string" || request.mimeType === "") return "mimeType is required";
+  if (typeof request.filename !== "string" || request.filename === "") return "filename is required";
+  if (typeof request.size !== "number" || !Number.isInteger(request.size) || request.size <= 0) {
+    return "size must be a positive integer";
+  }
+  return null;
+}
+
+/**
+ * One HTTP byte range, or null for "the whole thing", or "unsatisfiable".
+ *
+ * Deliberately narrow: a single range, which is every range a browser's media
+ * element or a `curl -C -` ever sends. A multipart range response is a
+ * different content type and a different body format, and nothing that talks
+ * to a canvas asks for one — so an `Accept-Ranges: bytes` promise this route
+ * cannot keep is not made. Anything unparseable is IGNORED (RFC 9110 says a
+ * bad Range must be treated as absent), which is why a garbled header gets
+ * the whole blob rather than a 416.
+ */
+function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | "unsatisfiable" | null {
+  if (typeof header !== "string") return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === "" && rawEnd === "") return null;
+  if (rawStart === "") {
+    // A suffix range: the LAST n bytes. `bytes=-0` asks for nothing.
+    const wanted = Number(rawEnd);
+    if (wanted === 0) return "unsatisfiable";
+    return { start: Math.max(0, size - wanted), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  if (start >= size) return "unsatisfiable";
+  const end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  if (end < start) return "unsatisfiable";
+  return { start, end };
 }
 
 /** The canvas id out of a path segment. A malformed percent escape is not

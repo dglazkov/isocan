@@ -37,13 +37,55 @@ export interface Daemon {
   close: () => Promise<void>;
 }
 
+/**
+ * Which disk this home runs on. Environment, not a flag, and deliberately:
+ * Cloud Run passes env, an innkeeper on a VM sets env, and a `--store` flag
+ * on `isocan serve` would be a surface an agent could reach for and misuse.
+ * A home's backing is innkeeper configuration, not a thing anyone chooses per
+ * invocation.
+ *
+ * The cloud backing arrives by DYNAMIC import, which is the whole reason the
+ * CLI install stays at 81 packages: `@isocan/cloudstore` carries 156 packages
+ * and ~43 MiB of Google client libraries, a git install resolves the root
+ * manifest only, and `bin/workspace-loader.mjs` maps `@isocan/core` and
+ * `@isocan/server` by path and nothing else. So an installed CLI could not
+ * resolve this specifier even if something asked — which is exactly right,
+ * because the only thing that asks is a hosted home built from the repo.
+ *
+ * And the specifier is deliberately NOT declared in this package's manifest.
+ * `@isocan/cloudstore` depends on `@isocan/server`, never the reverse — that
+ * is what lets the cloud backing compile against `store.ts` and `desk.ts` —
+ * so declaring it here would make the dependency graph a cycle and would say,
+ * in the one place people read to find out, that the server needs Google's
+ * libraries. It does not. The workspace root resolves the name; nothing an
+ * installed CLI can reach ever does. `test/packaging.test.ts` asserts both
+ * halves of that arrangement rather than leaving it as folklore.
+ *
+ * The price, stated: a typo here is a runtime error at daemon start rather
+ * than a compile error. `packages/cloudstore/test/daemon-composition.test.ts`
+ * is the two-line test that buys it back.
+ */
+async function openBacking(home: string): Promise<{ store: Store; desk: Desk }> {
+  if (process.env.ISOCAN_STORE !== "cloud") {
+    return { store: new FileStore(home), desk: new FileDesk(home) };
+  }
+  const bucket = process.env.ISOCAN_BUCKET;
+  if (!bucket) throw new Error("ISOCAN_STORE=cloud needs ISOCAN_BUCKET");
+  const { openCloudBacking } = await import("@isocan/cloudstore");
+  return openCloudBacking({
+    bucket,
+    ...(process.env.ISOCAN_GCP_PROJECT !== undefined
+      ? { projectId: process.env.ISOCAN_GCP_PROJECT }
+      : {}),
+  });
+}
+
 export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> {
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
 
-  // The composition root, and the ONE place either backing is named.
-  const store = new FileStore(home);
-  const desk = new FileDesk(home);
+  // The composition root, and the ONE place any backing is named.
+  const { store, desk } = await openBacking(home);
   await store.init();
   await desk.init();
   // Both one-time migrations, composed across the two ledgers: the pre-badge
@@ -95,6 +137,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     } catch {
       // already gone or unreadable — nothing to clean
     }
+    // Last, and after the sockets are shut: the backing flushes whatever it
+    // was debouncing and closes whatever it holds open. A cloud home that
+    // skipped this would lose the newest snapshot (harmless — the log is
+    // truth, boot replays the tail) and keep a gRPC channel alive forever
+    // (not harmless — the process never exits).
+    await desk.close();
+    await store.close();
   };
 
   return { app, engine, store, desk, port, close };

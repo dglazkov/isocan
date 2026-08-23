@@ -75,6 +75,12 @@ export class FileDesk implements Desk {
     if (recovered) await this.writeSnapshot();
   }
 
+  /** Drain the write chain so a shutdown cannot land between a log append and
+   * its snapshot; nothing is held open beyond that. */
+  async close(): Promise<void> {
+    await this.chain;
+  }
+
   async put(badge: BadgeRecord): Promise<void> {
     await this.enqueue(async () => {
       this.state.badges[badge.badgeId] = { ...badge };

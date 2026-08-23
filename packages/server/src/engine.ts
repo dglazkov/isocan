@@ -17,9 +17,11 @@ import type {
   ProjectState,
   ServerMessage,
   SlashCommand,
+  UploadTicket,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
+  OplogFencedError,
   OpValidationError,
   DEFAULT_COMMANDS,
   actorNames,
@@ -35,7 +37,7 @@ import {
   resolvePlacement,
   SHELF,
 } from "@isocan/core";
-import type { Store } from "./store.ts";
+import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { UndoStacks } from "./undo.ts";
 import {
@@ -230,7 +232,7 @@ export class Engine {
       };
       const seq = runtime.lastSeq + 1;
       const entry: LogEntry = { seq, envelope, inverse: null };
-      await this.store.appendActorsLog(entry);
+      await this.appendActorsOrFence(entry);
       runtime.registry = registry;
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
@@ -408,6 +410,30 @@ export class Engine {
   }
 
   /**
+   * Somewhere to put bytes this daemon must not receive, or null when the
+   * backing has no such thing (every file home). Deliberately NOT on the
+   * single-writer chain: it reads one blob record and mints a URL, writing
+   * nothing, and minting can involve a round trip to a signing API — putting
+   * it on the chain would stall every op behind somebody's video.
+   */
+  beginUpload(projectId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
+    return this.store.beginUpload(projectId, request);
+  }
+
+  /**
+   * Name bytes that arrived without us. ON the chain, because GC is on the
+   * chain: a register that lands mid-sweep would otherwise re-name a blob the
+   * sweep has just decided is garbage, and the item pointing at it would 404
+   * forever.
+   */
+  registerBlob(
+    projectId: string,
+    request: BlobUploadRequest,
+  ): Promise<{ blobHash: string; size: number; mimeType: string }> {
+    return this.enqueue(() => this.store.registerBlob(projectId, request));
+  }
+
+  /**
    * Actor-scoped undo: walk THIS actor's stack. Stored inverses are applied
    * as-is when possible (stale values are accepted — undo restores what you
    * changed); inverses invalidated by other actors' ops are repaired (batch
@@ -486,7 +512,7 @@ export class Engine {
       const dropped = runtime.entries.filter((entry) => !retainedSeqs.has(entry.seq));
 
       const marked = reachableHashes(runtime.state, retained);
-      const index = await this.store.blobIndex(projectId);
+      const listing = await this.store.listBlobs(projectId);
 
       const report: GcReport = {
         dryRun,
@@ -500,14 +526,13 @@ export class Engine {
       };
 
       const sweep: string[] = [];
-      for (const [hash, meta] of Object.entries(index)) {
+      for (const { hash, meta, ageMs } of listing) {
         if (marked.has(hash)) {
           report.reachableBlobs += 1;
           report.reachableBytes += meta.size;
           continue;
         }
-        const age = await this.store.blobAgeMs(projectId, meta);
-        if (age !== null && age < graceMs) {
+        if (ageMs !== null && ageMs < graceMs) {
           report.skippedRecentBlobs += 1;
           continue;
         }
@@ -518,22 +543,17 @@ export class Engine {
 
       if (dryRun) return report;
 
-      // Order matters for crash safety: archive first, then the atomic log
-      // rewrite, and only then delete blob bytes. A crash at any point leaves
-      // either extra history or extra garbage — both harmless and re-collectable.
+      // Order matters for crash safety: compact the log first (which archives
+      // before it forgets), and only then delete blob bytes. A crash at any
+      // point leaves either extra history or extra garbage — both harmless and
+      // re-collectable. What compaction MEANS is the backing's: a rewrite on a
+      // disk, an advanced horizon in the cloud, and never a deleted seq.
       if (dropped.length > 0) {
-        await this.store.archiveOplogEntries(projectId, dropped);
-        await this.store.rewriteOplog(projectId, retained);
+        await this.store.compactOplog(projectId, retained, dropped);
         runtime.entries = retained;
         runtime.undo = UndoStacks.rebuild(retained);
       }
-      if (sweep.length > 0) {
-        for (const hash of sweep) {
-          await this.store.deleteBlobFile(projectId, index[hash]!);
-          delete index[hash];
-        }
-        await this.store.writeBlobIndex(projectId, index);
-      }
+      if (sweep.length > 0) await this.store.deleteBlobs(projectId, sweep);
       return report;
     });
   }
@@ -555,7 +575,7 @@ export class Engine {
     };
     const seq = runtime.lastSeq + 1;
     const entry: LogEntry = { seq, envelope, inverse: null };
-    await this.store.appendActorsLog(entry);
+    await this.appendActorsOrFence(entry);
     runtime.registry = registry;
     runtime.lastSeq = seq;
     await this.store.saveActors(registry, seq);
@@ -703,7 +723,7 @@ export class Engine {
       ...(cause !== undefined ? { cause } : {}),
     };
 
-    await this.store.appendLog(projectId, entry);
+    await this.appendOrFence(projectId, entry);
 
     if (nextState === null) {
       // project.delete: the entry lands in the oplog inside the dir, then the
@@ -734,7 +754,7 @@ export class Engine {
     const state = applyOperation(null, envelope)!;
     const entry: LogEntry = { seq: 1, envelope, inverse: invertOperation(null, op) };
     await this.store.createProjectDir(op.projectId);
-    await this.store.appendLog(op.projectId, entry);
+    await this.appendOrFence(op.projectId, entry);
     await this.store.saveSnapshot(op.projectId, state, 1);
     this.projects.set(op.projectId, {
       state,
@@ -754,6 +774,54 @@ export class Engine {
       ts: new Date().toISOString(),
       op,
     };
+  }
+
+  /**
+   * Append, and if this writer has been fenced, forget what it thought it
+   * knew about that canvas.
+   *
+   * The refusal means exactly one thing: another instance already claimed
+   * this seq, so our `lastSeq` — and everything we derived from it — is
+   * stale. Dropping the runtime is the "re-syncs" half of the map's sentence
+   * at CANVAS granularity: the next request re-loads from the store, sees the
+   * winner's ops, and numbers its own from there. Nothing was applied (the
+   * append happens BEFORE `runtime.state` is touched), so there is nothing to
+   * roll back — the state we are dropping is merely behind.
+   *
+   * Process-level fencing — a draining instance that stops serving, or
+   * exits — is deliberately NOT here. It is a rollout question, it can only
+   * be observed against a real rollout, and phase 5 is where a rollout
+   * exists. The lever is named so nobody has to rediscover it.
+   */
+  private async appendOrFence(projectId: string, entry: LogEntry): Promise<void> {
+    try {
+      await this.store.appendLog(projectId, entry);
+    } catch (err) {
+      if (err instanceof OplogFencedError) {
+        console.error(
+          `[isocan] FENCED on ${projectId}: another writer already holds seq ${entry.seq}. ` +
+            `Dropping this canvas's runtime and re-syncing from the store.`,
+        );
+        this.projects.delete(projectId);
+      }
+      throw err;
+    }
+  }
+
+  /** The registry's fence. Home-scoped, so it drops the registry runtime
+   * rather than a canvas's — same remedy, different cache. */
+  private async appendActorsOrFence(entry: LogEntry): Promise<void> {
+    try {
+      await this.store.appendActorsLog(entry);
+    } catch (err) {
+      if (err instanceof OplogFencedError) {
+        console.error(
+          `[isocan] FENCED on the actor registry: another writer already holds seq ${entry.seq}.`,
+        );
+        this.actorsRuntime = null;
+      }
+      throw err;
+    }
   }
 
   private async runtime(projectId: string): Promise<ProjectRuntime> {

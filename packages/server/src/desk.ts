@@ -23,6 +23,17 @@ import type { ActorClaim } from "@isocan/core";
  * a document read, a document write, or one indexed query — phase 3 retired
  * the whole-table `claims()` read that phase 2 left standing, because
  * narrowing name checks to a badge's admissions is the same motion.
+ *
+ * ## The rule a query-backed desk lives or dies by
+ *
+ * `claimants`, `holdersOf` and `claimsIn` are served by INDEXED QUERIES over
+ * the denormalized `claimIds` / `claimKeys` / `admittedTo` arrays, and a
+ * backing that serves them that way MUST NOT KEEP A FALLBACK. No "if the
+ * query came back empty, scan the collection". A fallback would make a badge
+ * whose arrays were never written answer correctly anyway — which is phase
+ * 3's named failure mode wearing a helpful face, and it would hide the one
+ * bug that matters here until it was somebody else's outage. Let a forgotten
+ * array answer nothing, loudly, on the first test that asks.
  */
 
 /** Why a badge is in a canvas. Phase 2 writes it and enforces nothing: the
@@ -86,6 +97,11 @@ export interface BadgeRecord {
 
 export interface Desk {
   init(): Promise<void>;
+
+  /** Release whatever the backing holds open — the twin of `Store.close`, and
+   * for the same reason: a gRPC channel nobody closes is a process that never
+   * exits and a vitest worker that hangs. */
+  close(): Promise<void>;
 
   /** Store a freshly minted record. */
   put(badge: BadgeRecord): Promise<void>;

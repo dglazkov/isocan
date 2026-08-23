@@ -183,6 +183,40 @@ export interface BlobUploadResponse {
 export const FILENAME_HEADER = "X-Isocan-Filename";
 
 /**
+ * Above this, a blob does not go through the daemon.
+ *
+ * ONE number, here, because both clients branch on it and "the same
+ * computation in two clients" is exactly what the house rules forbid. It is
+ * below Cloud Run's 32 MiB HTTP/1 request-body cap with room to spare: a
+ * hosted home physically cannot receive a larger body, so a client that
+ * posted one would get a platform error with no isocan words in it. Under it
+ * the bytes are posted to `POST /api/projects/:id/blobs` as they always have
+ * been; over it the client asks for an upload ticket, PUTs straight to object
+ * storage, and registers the hash.
+ *
+ * A `FileStore` home has no ticket to give and says so (`beginUpload` returns
+ * null), so a local daemon keeps the single simple path at any size — the
+ * split is the cloud backing's, not the protocol's.
+ */
+export const MAX_DIRECT_UPLOAD_BYTES = 24 * 1024 * 1024;
+
+/** What the daemon hands back for a blob too big to post: where to PUT the
+ * bytes, and the headers that were SIGNED into that URL — send them exactly,
+ * or the upload is refused by the object store rather than by us. */
+export interface UploadTicket {
+  url: string;
+  headers: Record<string, string>;
+  /** ISO 8601. Short — minutes, not days. */
+  expiresAt: string;
+}
+
+/** The daemon's answer to "I have a big blob": either a ticket, or the news
+ * that these bytes are already here and no upload is needed. */
+export type BeginUploadResponse =
+  | { upload: UploadTicket; blob?: undefined }
+  | { upload?: undefined; blob: BlobUploadResponse };
+
+/**
  * Filenames travel percent-encoded, because a header value is a ByteString
  * and real filenames are not. Every macOS screenshot is named with U+202F
  * (narrow no-break space) before AM/PM, and handing that to `fetch` throws

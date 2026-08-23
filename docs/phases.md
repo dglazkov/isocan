@@ -34,8 +34,9 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 3 is closed — Phase 4, CloudStore, is next.** This
-line moves as phases close; a clean session starts by believing it.
+**Where we are: Phase 4 is closed — Phase 5, a home in the sky, is next,
+and it is the first ⚑ provision phase.** This line moves as phases close;
+a clean session starts by believing it.
 
 ---
 
@@ -310,14 +311,115 @@ second errors loudly.
 clean; a double-writer test proves the create-only precondition; a
 large-blob round trip exercises the signed-URL branch.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-22 — The no-delete rule was necessary and not sufficient,
+  and the gap would have eaten a blob.** Compaction must not delete op
+  documents, because a deleted `ops/{seq}` frees that id for creation
+  again and holes the create-only precondition. But a horizon alone is
+  also wrong: `chooseRetained` extends its cut to a pair-complete set,
+  so it can pull an entry back above the line that sits *below* the
+  newest dropped seq. A horizon of `max(dropped)` hides that entry; a
+  horizon of `min(retained) − 1` bounds almost nothing. So compaction
+  does both — it advances `compactedThrough` **and** marks each dropped
+  document, and the tail read filters on the mark. The horizon bounds
+  the read; the mark makes it exact. Without both, GC sweeps a blob
+  that a resurrected entry still references and the undo stack comes
+  back holding a dangling hash.
+- **2026-08-22 — Debouncing the snapshot would have made a brand-new
+  canvas invisible.** `createProject` calls `saveSnapshot` and nothing
+  else, so a fully debounced backing answers `projectExists` false and
+  `listProjects` empty until a timer fires. The split that fixes it is
+  the useful distinction: the *GCS snapshot object* is debounced (it is
+  a fast boot, and the oplog is truth), while the `canvases/{id}`
+  **document** is written when project metadata actually changes —
+  which is not per-op either, so the one-write-per-second-per-document
+  ceiling still holds.
+- **2026-08-22 — "Identical behavior" is a claim about the engine, not
+  about every field of every record.** A cloud boot routinely finds a
+  snapshot lagging the log, so `recoveredSeqs` is normally non-empty
+  where the file backing's is normally `[]`. The conformance suite
+  therefore asserts *convergence* — the state equals what the ops
+  produce, `lastSeq` is right — and the empty-recovery assertion stays
+  as a FileStore-only case. Worth stating plainly, because it is the
+  one place the Outcome sentence needs reading precisely.
+- **2026-08-22 — A soft-deleted canvas id is claimed forever in the
+  cloud, and this is the one thing the two backings genuinely do not
+  agree on.** No-delete means the ops stay at seqs 1..N, so re-creating
+  that id would be *fenced* — a lie, since no second writer exists. So
+  `CloudStore.projectExists` reports a deleted canvas as existing and
+  the engine refuses with `duplicate-id`, where a file home frees the
+  id by moving the directory aside. Canvas ids are minted and never
+  chosen, so nothing reaches it; pinned on both sides so a later phase
+  cannot reach it by accident either.
+- **2026-08-22 — The port bought less purity than the design promised,
+  and said so.** `ObjectStore` was drawn as five methods of pure
+  delegation, on the argument that "read it" would be a complete review
+  of the untested surface. In fact `list` was never needed, `stat` and
+  `readAll` were, and `append` had to exist because **object stores
+  have no append** — the oplog archive wants one, and in GCS that is a
+  compose-then-delete, plus a 404 branch. So `GcsObjects` is 143 lines
+  with real branching, not 80 without. The bargain still holds — the
+  untested surface is one dull file — but "trivial to review" was
+  overclaimed and is now "cheap to review".
+- **2026-08-22 — Option B needed zero changes to `gc.test.ts`, which
+  is the argument for it.** The design predicted two tests would have
+  to be pinned as file-only. Keeping the GC policy in the engine and
+  moving only the storage down meant the pure logic stayed exactly
+  where its tests already were, and none of the seven moved. Phase 1's
+  debt is paid without disturbing anything that was already proven.
+- **2026-08-22 — The emulator needs Java 21, and the tooling survey
+  said 17.** Discovered by running it. The consequence is a design
+  input rather than a note: the test setup cannot spawn the emulator
+  and inherit `PATH`, because the *wrong* `java` first fails exactly
+  like no `java` at all. Discovery is explicit and ordered, a missing
+  21+ JRE is its own named skip, and CI pins 21. A second correction
+  from the same source: `gcloud emulators firestore start` is a bash
+  wrapper that forks a JVM, so killing the wrapper leaves a JVM holding
+  a port — teardown kills the process **group**, escalating to SIGKILL,
+  after a real 22-second straggler was caught doing exactly that.
+- **2026-08-22 — What is still unproven, named rather than implied.**
+  Blob bytes, snapshots and range reads run against an in-process
+  double, not GCS; everything deciding *what* to store and *where*
+  runs against a real Firestore. `GcsObjects` itself is executed by
+  nothing but the signing path. And three assertions about signing
+  cannot be made without a bucket — they are Phase 5's first act, and
+  that phase's Work now says so.
 
 ## Phase 5 — A home in the sky (dev) ⚑ provision
 
 **Work:** Stand up `isocan-dev`: Cloud Run service on CloudStore, load
 balancer + CDN + managed cert at dev.isocan.io, Cloud Build triggers
 from the repo, Firestore PITR and scheduled export, Cloud Scheduler on
-the GC endpoint, uptime check.
+the GC endpoint, uptime check. The service reads its backing from the
+environment: `ISOCAN_STORE=cloud`, `ISOCAN_GCP_PROJECT`,
+`ISOCAN_BUCKET`.
+
+**Two debts phase 4 hands over, both about signing, and the first one
+is the kind that gets discovered at 11pm during a deploy.**
+
+1. **The runtime service account needs
+   `roles/iam.serviceAccountTokenCreator` on itself.** A Cloud Run
+   service account has **no private key**, so `getSignedUrl` cannot
+   sign locally; `google-auth-library` falls back to the IAM
+   `signBlob` API, which is a network call that role gates. Without
+   it the large-blob upload branch fails at the first attempt, in
+   production, with an error about credentials rather than about
+   permissions. Grant it when the service account is created, not
+   when a video fails to upload.
+2. **A 30-second signed-URL smoke test is this phase's first act.**
+   Phase 4 verified the branch to the edge of the machine — the V4
+   signature is cryptographically checked against a canonical request
+   re-derived from the URL, and the upload-and-register round trip
+   runs against an in-process object store — but three assertions
+   cannot be made without a real bucket, and this is where they get
+   made: that GCS accepts a signature the service minted; that it
+   honors `x-goog-if-generation-match: 0` **inside a signed request**
+   (the mechanism that makes blob writes create-only, and the one
+   phase 4 is least certain of); and that the service account can sign
+   at all under (1). Mint a ticket against the dev bucket, PUT to it,
+   PUT again and expect the precondition to refuse the second. Until
+   that runs, the branch is unproven in production.
 
 **Outcome:** A real hosted home. Two people at dev.isocan.io see each
 other's cursors live; a deploy in the middle of traffic loses nothing.
