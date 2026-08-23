@@ -470,7 +470,9 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}`}
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${
+        activeTool === "select" && !commentMode ? " own-cursor-on" : ""
+      }`}
       style={{
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,

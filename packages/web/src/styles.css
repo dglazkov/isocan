@@ -1433,6 +1433,19 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- remote cursors (presence) ---------- */
 .remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
+/* Your own, drawn like everyone else's. Fixed rather than absolute because it
+   follows the POINTER, not the world; inert, because it is a picture of your
+   hand and must never eat the click your hand is making. */
+.own-cursor {
+  position: fixed; left: 0; top: 0; z-index: var(--z-popover);
+  display: flex; flex-direction: column; align-items: flex-start;
+  pointer-events: none; will-change: transform;
+  transition: opacity 0.12s ease;
+}
+.own-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
+/* The OS arrow would be a second cursor saying the same thing in a different
+   colour. Only under Select, where this component renders at all. */
+.canvas-viewport.own-cursor-on { cursor: none; }
 .remote-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
 .cursor-chip {
   margin: 2px 0 0 10px; padding: 3px 8px; border-radius: 999px 999px 999px 3px;

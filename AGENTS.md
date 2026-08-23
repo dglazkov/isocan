@@ -40,6 +40,13 @@ physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
 commit history. Add the day's entry when you finish a session's work — the
 reasoning is the expensive part to recover later, and the diff is not.
 
+A nightly workflow (`.github/workflows/changelog.yml`) covers the days nobody
+remembers to. `scripts/changelog-day.mjs` gathers the day's commits with their
+full messages into a draft; the model step turns that into an entry and adds
+the index row; the result arrives as a pull request. It never touches a page
+somebody already wrote. Writing the day yourself is still better — you were
+there — and the workflow finds nothing to do when you have.
+
 ## Research
 
 `docs/research/` holds findings that took longer to reach than they take to
