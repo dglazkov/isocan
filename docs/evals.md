@@ -34,8 +34,20 @@ the actor on both sides. Nobody has to be surveyed for it.
 **Version stacks are revealed preference.** `/variation` produces N
 alternatives; `item.setCurrentVersion` records which one won. That is
 human-labelled comparison data — the expensive kind — generated as a byproduct
-of ordinary use. It is the single most valuable asset here and it is currently
-being thrown away.
+of ordinary use.
+
+**Measured, 23 Aug 2026, and this document overstated it.** Across every
+project in one home: 20 threads, 63 replies, **16 ops reversed by an undo**, 39
+versions across 14 items — and **2** deliberate version choices and **1** parent
+with more than one child. The plumbing is real and the mine is empty. The
+preference-pair harvest is not a standing asset we are ignoring; it is an asset
+that begins to exist the first time anybody reaches for `/variation`, which so
+far nobody has. Stage 4's calibration problem is **not** already solved.
+
+That has a product consequence worth naming: nothing generates preference pairs
+until divergence is something people actually use, and divergence is not worth
+using while [convergence](design/convergence.md) is missing. The op is on the
+critical path for the eval programme, not only for the canvas.
 
 **Comments are the request corpus.** What people ask agents for, in their own
 words, timestamped, with `@mentions` naming who was asked and `onThread`
@@ -129,6 +141,33 @@ measurement.
 them as tests. Do not adopt an eval framework at this stage — a framework
 bought before there are twenty tasks is a dependency that arrives before its
 job does.
+
+### Built, 23 Aug 2026 — `scripts/grade.mjs`
+
+Eight checks over a real screen, measured in a browser at 390/768/1440 and in
+the source: renders, contrast against the actual painted background, stretched
+images, sideways scroll, unnamed controls, target size, missing alt text, and
+the handful of `slop.ts` rules that are a string match rather than a judgement.
+It grades **files**, and reaches a canvas through `isocan get` — so it needs no
+badge and measures the artifact somebody would actually receive.
+
+It reports counts and pass/fail, deliberately **not** a weighted score. A
+single number invites tuning the number, and each of these is independently
+actionable.
+
+**Run it against `--selftest` before believing it.** The first version of this
+grader was theatre: the in-page probe carried a syntax error, and
+`Runtime.evaluate` answers a malformed expression with `exceptionDetails`
+rather than rejecting — so every reading came back `undefined`, every `?? []`
+fell to empty, and a page with a stretched image scored 8/8. It was caught by
+mutation-testing the grader against a bug we had actually shipped, not by
+reading it.
+
+The guard is now permanent: `test/fixtures/deliberately-bad.html` is a page
+built to break all seven failable checks, and `--selftest` fails the run if any
+check stays silent on it. **A grader that reports zeros when it breaks is worse
+than no grader, because it is believed** — which is the same sentence as lesson
+#2, arriving from a different direction on the same day.
 
 ---
 
@@ -313,7 +352,9 @@ Three things, in order, none of which needs a decision from anybody else:
 2. **Harvest the version stacks.** Every `item.setCurrentVersion` over a
    multi-child parent is a preference pair. Count them. If the number is large,
    Stage 4's calibration problem is already solved and we did not know it.
-3. **Score one real canvas with the graders we own.** Contrast, tokens, slop,
-   design-system conformance, run over an actual project. It will produce a
-   number, that number will be worse than expected, and having it will make
-   every argument after it concrete.
+3. ~~**Score one real canvas with the graders we own.**~~ **Done** —
+   `scripts/grade.mjs`, above. The number was not worse than expected, which is
+   its own finding: three hand-written screens and the marketing page all pass
+   8/8. That is weak evidence, because everything graded so far was written by
+   somebody being careful. The suite earns its keep on the first artifact an
+   agent produced unsupervised, and that is the next thing to point it at.
