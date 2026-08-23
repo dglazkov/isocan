@@ -23,16 +23,21 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import type { DoorResponse } from "@isocan/core";
-import { BADGE_SCHEME, DOOR_ROUTE, encodeFilename, FILENAME_HEADER, formatBadgeToken } from "@isocan/core";
-import type { BuildStamp } from "@isocan/server";
-import { paths } from "@isocan/server";
+import { encodeFilename, FILENAME_HEADER, healthPath } from "@isocan/core";
+import type { BuildStamp, StoredBadge } from "@isocan/server";
+import { bearerHeader, knockOnDoor, paths, readBadge, writeBadge } from "@isocan/server";
 
-/** `/healthz`: who is holding the port, and which build they are. */
+/** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
   ok: true;
   pid: number;
   startedAt: string;
+  /** The home this daemon is a REPLICA of, when it is one. Absent means the
+   * daemon IS a home — every daemon before phase 6, and every daemon nobody
+   * has configured. The CLI reads it to know where the pages are: a replica
+   * serves none, so `isocan open` and `setup` must point at this address
+   * instead of at `127.0.0.1`. */
+  home?: string;
 }
 
 export class ApiError extends Error {
@@ -44,15 +49,6 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
-}
-
-/** One badge, as `identity.json`'s `auth` block holds it. Keyed by home
- * address, so phase 6's second badge — a local daemon's badge TO the home —
- * has a slot waiting instead of needing a second file. */
-interface StoredBadge {
-  badgeId: string;
-  secret: string;
-  at: string;
 }
 
 export class DaemonClient {
@@ -121,8 +117,7 @@ export class DaemonClient {
   /** `Authorization: Bearer <badgeId>.<secret>`, when we hold one. */
   private async authHeader(): Promise<Record<string, string>> {
     const badge = await this.storedBadge();
-    if (!badge) return {};
-    return { Authorization: `${BADGE_SCHEME} ${formatBadgeToken(badge.badgeId, badge.secret)}` };
+    return badge ? bearerHeader(badge) : {};
   }
 
   private async storedBadge(): Promise<StoredBadge | null> {
@@ -133,31 +128,16 @@ export class DaemonClient {
   /** Go to the door and keep what it hands over. Returns false if the door
    * itself refused, so a caller does not loop. */
   private async reBadge(): Promise<boolean> {
-    try {
-      const res = await fetch(`${this.base}${DOOR_ROUTE}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ carrier: "bearer" }),
-      });
-      if (!res.ok) return false;
-      const door = (await res.json()) as DoorResponse;
-      if (!door.secret) return false;
-      const badge: StoredBadge = {
-        badgeId: door.badgeId,
-        secret: door.secret,
-        at: new Date().toISOString(),
-      };
-      this.badge = badge;
-      await writeBadge(this.home, this.base, badge);
-      // Re-claim, THEN replay. Without this the recovery path is a 401
-      // followed by a `not-your-actor`: the door mints a badge whose claims
-      // are empty while the client goes on asserting the actor it has held
-      // all along.
-      await this.reclaimIdentity();
-      return true;
-    } catch {
-      return false;
-    }
+    const badge = await knockOnDoor(this.base);
+    if (!badge) return false;
+    this.badge = badge;
+    await writeBadge(this.home, this.base, badge);
+    // Re-claim, THEN replay. Without this the recovery path is a 401
+    // followed by a `not-your-actor`: the door mints a badge whose claims
+    // are empty while the client goes on asserting the actor it has held
+    // all along.
+    await this.reclaimIdentity();
+    return true;
   }
 
   /** How to prove who this command speaks as, if the home asks. Registered by
@@ -196,10 +176,19 @@ export class DaemonClient {
   }
 
   /** The daemon's own account of itself — pid, when it started, and which
-   * copy of isocan it is running. Null when nothing answers. */
+   * copy of isocan it is running. Null when nothing answers.
+   *
+   * The path is a property of `this.base`, not a constant: against 127.0.0.1
+   * it is `/healthz` as it has always been, and against a hosted home it is
+   * `/api/healthz`, because Google's frontend swallows the bare path and this
+   * one call sits under `health()`, `ensureDaemon`'s startup poll and
+   * `warnIfStale` — all three of which would otherwise report a live home as
+   * dead. See `healthPath`. */
   async healthz(timeoutMs = 300): Promise<Health | null> {
     try {
-      const res = await fetch(`${this.base}/healthz`, { signal: AbortSignal.timeout(timeoutMs) });
+      const res = await fetch(`${this.base}${healthPath(this.base)}`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       return res.ok ? ((await res.json()) as Health) : null;
     } catch {
       return null;
@@ -382,40 +371,4 @@ export class DaemonClient {
     if (!res.ok) throw new ApiError(res.status, `blob not found: ${blobHash}`);
     return Buffer.from(await res.arrayBuffer());
   }
-}
-
-/**
- * The `auth` block `identity.json` has stubbed since the beginning, filled
- * in. It sits beside the human's name because a machine's credential belongs
- * beside the machine's person — one badge per client home directory, holding
- * the human's claim and each of its agents'.
- */
-async function readBadge(home: string, base: string): Promise<StoredBadge | null> {
-  try {
-    const raw = JSON.parse(await fs.readFile(paths.identityFile(home), "utf8")) as {
-      auth?: Record<string, StoredBadge>;
-    };
-    const badge = raw.auth?.[base];
-    return badge?.badgeId && badge.secret ? badge : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Read-merge, never clobber: `identity.json` also holds the human's name,
- * and a badge write that rewrote the file from scratch would delete it (and
- * the mirror bug — `isocan identity --name` deleting the badge — is why
- * `writeIdentity` merges too). */
-async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
-  await fs.mkdir(home, { recursive: true });
-  let current: Record<string, unknown> = {};
-  try {
-    current = JSON.parse(await fs.readFile(paths.identityFile(home), "utf8")) as Record<string, unknown>;
-  } catch {
-    // No identity yet: an agent-only machine gets a file holding just its
-    // badge. `readIdentity` returns null without id/name, so nothing
-    // mis-resolves.
-  }
-  const auth = { ...((current.auth as Record<string, StoredBadge>) ?? {}), [base]: badge };
-  await fs.writeFile(paths.identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
 }

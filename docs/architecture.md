@@ -44,19 +44,37 @@ in the same change.
 | observability | Cloud Logging + Error Reporting, uptime check on `/api/healthz` — see the note below |
 | infra as code | `infra/` — small idempotent gcloud scripts; Terraform waits for a second operator |
 
-**Why the health check is `/api/healthz` and not `/healthz`.** A hosted
-home does not get to answer `/healthz`: Google's frontend claims that
-exact path and returns a branded 404 of its own, and the container's
-request log never shows the request at all. Measured on the dev home —
-`/` 200, an unknown path 200 through our SPA fallback, `/healthz/` with
-a trailing slash 200, `/HEALTHZ` 200, `/healthz` 404. So a check on
-`/healthz` would be watching Google's frontend rather than the daemon:
-green whether or not the home is up, and unable to fail for the right
-reason. The daemon answers `/api/healthz` from the same handler with
-the same body, on a prefix Google forwards. `/healthz` is unchanged and
-stays the localhost path — the CLI's whole daemon lifecycle probes it
-against 127.0.0.1, where no frontend is in the way. This is a
-constraint of the platform written down, not a taste in URLs.
+**Why the health check is `/api/healthz` and not `/healthz`.** Two
+reasons were given for this, one of them has since stopped being true,
+and the surviving one is the better of the pair — so both are kept, in
+order, rather than the dead one being quietly deleted.
+
+The reason that has expired: **Google's frontend used to claim the exact
+path `/healthz`.** Measured on the dev home 2026-08-22 — `/` 200, an
+unknown path 200 through our SPA fallback, `/healthz/` 200, `/HEALTHZ`
+200, and `/healthz` a branded 404 that never appeared in the container's
+request log. Re-measured 2026-08-23 against the same home, and it is
+gone: `/healthz` now returns **the daemon's own body**, `pid` and
+`root: /app` and all, byte-identical to `/api/healthz`. What changed —
+Google's frontend, or something in the load balancer between the two
+measurements — is not established, and that is the point: it is not
+ours to control and it moved under us inside a day.
+
+The reason that stands, and always did the real work: **`/api/` is the
+one prefix the SPA fallback does not answer with a cheerful 200.** The
+same re-measurement makes this sharper than before — `/healthz/` and
+`/HEALTHZ` return 1001 bytes of `index.html`, not health JSON, so a
+check pointed at a near-miss path is green forever and cannot fail for
+the right reason. If the handler ever vanishes, `/api/healthz` goes red;
+a check on some bare `/health` gets the app shell and never does. That
+argument never depended on the frontend at all.
+
+`/healthz` is unchanged and stays the localhost path — the CLI's whole
+daemon lifecycle probes it against 127.0.0.1, where no frontend is in
+the way. `healthPath()` picking `/api/healthz` for a remote address is
+therefore **defensive rather than necessary today**, and worth keeping
+on those terms: the behaviour it guards against existed, went away
+without notice, and can come back the same way.
 
 Two roads not taken, each in one line. **A VM with a persistent disk**
 would run today's daemon unchanged, but buys OS care, a deploy story,
@@ -118,6 +136,18 @@ And boot is the crash-recovery path that already exists: load the
 snapshot, replay the oplog tail through the reducer. An instance
 restart, a deploy, a crash — all the same path, now reading from GCS
 and Firestore, and already tested every day by the file backing.
+
+**What a replica's store actually holds, as of phase 6.** "Canvas state
+replicates through the store" is true of the state and not of the
+history. A joining replica can only present cursor 0, and the connect
+handshake answers a cursor it cannot serve with a snapshot — so a
+replica's oplog begins at the moment it joined, and a replica that ever
+falls behind the home's compaction horizon is re-snapshotted and starts
+again from there. State converges exactly; the log is a cache, never a
+claim to the whole history. Nothing downstream depends otherwise — undo
+and redo are the home's, and `wait` and `tail` are cursor-based — but
+"sovereignty by replica is also disaster recovery" is a claim about the
+canvas, not about its oplog, and this is the line that says so.
 
 **Deploy overlap is the one moment two instances exist.** During a
 rollout the old instance drains while the new one starts. Two writers
@@ -307,28 +337,45 @@ comes from the object store rather than from the client.
   per run**, never a fixed one, so the bucket holds many restore points
   and a bad export cannot land on top of a good one; a lifecycle rule
   sweeps whole exports by age. The bucket also keeps a soft-delete
-  window under GC. And the best backup remains a thick replica —
-  sovereignty by replica is also disaster recovery, which is worth
-  saying out loud.
+  window under GC.
+
+  **And a thick replica is NOT a backup, which this doc used to say the
+  opposite of.** "The best backup remains a thick replica — sovereignty
+  by replica is also disaster recovery" was written before replicas
+  existed; phase 6 built them and measured what one actually holds. A
+  replica holds the canvas **state**, live and exact. It does not hold
+  the **history** — its oplog begins where it joined, because a joining
+  replica can only present cursor 0. And it does not hold the **bytes**:
+  blobs it did not itself upload are streamed from the home on demand
+  and are not cached, so a second device shows every item and stores
+  none of their files. Measured, not reasoned — a two-machine setup
+  where the second machine's blob directory stayed empty across repeated
+  reads of a file it displayed perfectly.
+
+  So disaster recovery is Firestore PITR and the scheduled export, full
+  stop. A replica is a live mirror, and calling it a backup would fail
+  in the one direction that matters: it looks complete until the home is
+  gone. **This lands on [phases.md](phases.md)'s phase 13 too** —
+  re-homing is drawn as "a thick replica offers its store to a new home
+  … hello, badge, offer, replay", and the store it would offer is
+  missing exactly the two things a replay needs.
 
 ## Distance to the map
 
 What the code does not have yet — an inventory, not a sequence (the
 sequence is [phases.md](phases.md)):
 
-- The daemon's **home connection** — the sync-client role that makes a
-  local daemon a replica: dial the home, present the badge, carry the
-  two planes, reconnect by seq cursor. The web client already speaks
-  this protocol, which is the isomorphism thesis paying again.
 - The service worker: cached shell, durable browser replica, offline
   queue.
-- The marker gaining the home address; setup creating the canvas at
-  the home.
-- The page server becoming home-only: `registerStaticWebApp` is
-  exactly the code the home needs and exactly what the local daemon
-  must stop doing for persons — same code, one configuration flag.
 - The Share dialog and grant routes; registrations and the dispatch
   path.
+- **Which canvases a replica replicates.** The home connection discovers
+  them by polling `GET /api/projects`, which is home-wide rather than
+  scoped to the asking badge's admissions — so a replica of a
+  MULTI-TENANT home would mirror strangers' canvases onto its own disk.
+  Correct today, because a solo home has one member and that is what
+  phase 6 proves; wrong the moment a home has two. The narrowing is
+  mechanism 10's and belongs on the route, in phase 7.
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
   uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is

@@ -27,6 +27,22 @@ export interface DirMarker {
    * (a fresh clone): the id is the identity, the title is a good first
    * guess. */
   title?: string;
+  /**
+   * The canvas's home — the address it lives at.
+   *
+   * **Birth writes a promise, not a fact** (offline-birth.md): the marker
+   * carries id AND address from the first minute, committed with the marker,
+   * whether or not the home has heard of the canvas yet. Nothing about the
+   * marker's shape reveals the difference, which is the point — a clone, a
+   * script, an agent reading it behaves identically either way, and a canvas
+   * born on a plane adopts its home later without the file changing.
+   *
+   * Optional forever, and that is not laxity: every marker in the wild today
+   * lacks it, and a daemon with no home configured writes markers that go on
+   * lacking it, because a canvas that lives on one laptop has no address to
+   * name. Absent means "wherever the daemon reading this lives".
+   */
+  home?: string;
 }
 
 export interface DirBinding extends DirMarker {
@@ -40,9 +56,19 @@ async function readMarker(dir: string): Promise<DirMarker | null> {
   try {
     const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as DirMarker;
     if (typeof raw.projectId !== "string" || raw.projectId.length === 0) return null;
+    // A `home` that is present but not a usable address is a MALFORMED marker,
+    // judged exactly as a malformed `projectId` is: the whole file is
+    // rejected. Not ignored — ignoring it would silently turn "this canvas
+    // lives at the address I cannot read" into "this canvas lives wherever you
+    // are", which is the one wrong answer, and it would be given quietly. An
+    // ABSENT `home` is a different thing entirely and is fine (see DirMarker).
+    if (raw.home !== undefined && (typeof raw.home !== "string" || raw.home.trim() === "")) {
+      return null;
+    }
     return {
       projectId: raw.projectId,
       ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+      ...(typeof raw.home === "string" ? { home: raw.home.trim() } : {}),
     };
   } catch {
     return null;

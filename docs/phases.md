@@ -47,9 +47,12 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 5 is closed — Phase 6, birth at home and replica
-at home, is next, and it has a real address to dial.** This line moves
-as phases close; a clean session starts by believing it.
+**Where we are: Phase 6 is closed and verified against dev.isocan.io —
+Phase 7, the share (Scenes 1–4), is next, and it inherits one debt named
+in phase 6's findings: the admission scope on `GET /api/projects`, which
+today would have a replica of a multi-tenant home mirror strangers'
+canvases onto a laptop.** This line moves as phases close; a clean
+session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -666,7 +669,12 @@ observed in production conditions).
 
 ## Phase 6 — Birth at home, replica at home
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-23 (`2f3e0aa`). Both halves of the Proof
+played: the integration tests stand up a home and two replicas on
+separate `ISOCAN_HOME`s, and the lid-close beat was played by hand with
+Chrome and the CLI against real daemons. Then played again against
+**dev.isocan.io** over `wss:` — fourteen checks, all green — which is
+also how phase 5's health-path finding was discovered to have expired.
 
 **Work:** Setup creates the canvas at the home; the marker carries id
 and address; the local daemon grows its **home connection** — dial,
@@ -694,7 +702,173 @@ tab and daemon each say "I have through N" and stream the tail.
 **Proof:** Integration tests with two `ISOCAN_HOME`s against a home;
 the lid-close/reopen beat played with Chrome and the CLI.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — "Is my cursor past the horizon" is the wrong question,
+  and the empty answer to it is the dangerous one.** Compaction retains
+  a **set, not a suffix**: `chooseRetained` walks undo/redo causes back
+  into the past, so the live log after a GC has holes. A resume check
+  written as "is `since` past `compactedThrough`" would therefore be
+  wrong on any canvas with undo history, and the worker got that right
+  on its own — contiguity from `since + 1` is the honest test. What
+  contiguity cannot see is the empty tail: `[].every()` is vacuously
+  true, and `chooseRetained` returns `[]` outright for `keepOps <= 0`,
+  which `POST /api/projects/:id/gc` passes straight through from a
+  request body. Measured on the working tree: a canvas at seq 6, gc with
+  `keepOps: 0`, a socket at `?since=2` — and the answer was
+  `{"type":"resumed","from":2,"lastSeq":2}`, telling the client it was
+  current while four ops were missing. A tab self-heals on the next op,
+  because the gap check fires; **a quiet canvas leaves nothing to fire**,
+  and from this phase on that client can be a replica daemon that
+  believes it is in sync. The check needs completeness beside
+  contiguity — `since + tail.length >= lastSeq`. Recorded because the
+  shape recurs: a guard written as a predicate over a list is a guard
+  that says yes to the empty list.
+- **2026-08-23 — A replica's oplog is a cache, not a copy of the
+  history, and the map said otherwise.** A joining replica can only
+  present cursor 0, and a cursor that cannot be served is answered with
+  a snapshot — so a replica's log starts where it joined. Verified as a
+  *mutation of the conductor's own proof* rather than reasoned: with the
+  home made unable to serve a tail, the reopened replica's local oplog
+  came back `[]` while its state converged exactly, against `[1,2,3,4,5]`
+  when it genuinely resumed. That is also what makes "it resumed rather
+  than re-snapshotted" assertable at all — contiguity of the local log
+  is the observable difference, and it is what both the test and the
+  hand-played beat check. [architecture.md](architecture.md) now says
+  the log is a cache where it used to imply a replica ends up holding
+  the history.
+- **2026-08-23 — A replica discovers canvases by a home-wide route, so
+  a multi-tenant home would replicate strangers onto a laptop.** The
+  home connection polls `GET /api/projects`, which is not scoped to the
+  asking badge's admissions. Solo is correct — one member, which is
+  Scene 0 and everything this phase proves — but the moment a home has
+  two members a replica pulls down canvases it was never admitted to.
+  The narrowing is mechanism 10's and belongs on the route, in phase 7;
+  it is on the [map](architecture.md) now rather than in a worker's
+  head, because "everything is per-canvas" is exactly the belief phase
+  4's finding warned would be acted on later by somebody who did not
+  check.
+- **2026-08-23 — A person cannot be one actor in the tab and the
+  terminal while both are live — and the reported reason was the wrong
+  one.** The worker reported this as `reincarnate`'s 30-minute window
+  refusing with `name-taken`, called it "the one place phase 6 leans on
+  phase 8", and it is neither. Measured: the refusal is
+  `claims.ts`'s **liveness** clause — *"usr_… is somebody right now
+  (live on a canvas) — becoming them would be one actor wearing two
+  faces"* — and with no live face the same `--as` claim **succeeds**,
+  which is the recovery the registry itself prints as the remedy. The
+  guard consults `presence.roster`, which was per-daemon before this
+  phase too, so tab-and-CLI-as-one-live-actor was refused exactly this
+  way when both sat on one local daemon: the constraint is pre-existing
+  and phase 6 does not lean on passes for it. Recorded at length
+  because the correction matters more than the fact — a finding that
+  names the wrong mechanism sends the next phase to fix the wrong code,
+  and this one would have sent phase 8 after a problem it does not own.
+- **2026-08-23 — Two badges, and the one that had a slot waiting.**
+  `client.ts`'s `StoredBadge` comment predicted this phase in writing —
+  "keyed by home address, so phase 6's second badge … has a slot waiting
+  instead of needing a second file" — and it was right, but the slot was
+  in the wrong package: the door knock and the badge store lived in the
+  CLI, and the daemon needed both. They moved to
+  `packages/server/src/badge-store.ts` and both surfaces import one
+  mechanism. The prediction paid off; the location did not, which is
+  the ordinary fate of a seam designed one caller early.
+- **2026-08-23 — A forwarded write holds the single-writer chain across
+  an HTTP round trip, and that opened a window the design did not have
+  before.** With the write in flight the local store still said "I have
+  nothing" about a canvas one line from being written, so the home
+  connection dialled with `since=0`, was correctly answered with a
+  snapshot, and adopted it *over* the entry about to land — losing seq 1
+  from the replica's own log. Fixed twice over (`Engine.settled()`
+  before reading a cursor; `adoptRemoteSnapshot` refusing when the local
+  `lastSeq` already equals the snapshot's). The general shape is worth
+  keeping: the chain used to serialize writes against writes, and now it
+  serializes writes against *arrivals*, which are not under this
+  process's control.
+- **2026-08-23 — Blobs are not ops, but items are named by them.** The
+  write-forwarding list was written as "ops", and a replica that
+  forwarded only ops replicated a canvas of items whose bytes nobody
+  else could resolve. Uploads go to the home first and are kept locally
+  too; a local blob miss reads through to the home, Range passed up.
+- **2026-08-23 — A test pointed at the real dev home, and only stage 2
+  made it fire.** `replica.test.ts` used `https://dev.isocan.io` as a
+  configured address. Harmless while a replica merely declined to serve
+  pages; the moment a replica *dials*, the suite started knocking on the
+  live dev home's door. Now `https://home.invalid` (RFC 2606, which can
+  never resolve). A placeholder that names a real host is a placeholder
+  only until the code grows the ability to use it.
+- **2026-08-23 — The address was dialled, and everything held over the
+  real wire.** Recorded on Dimitri's run rather than this session's, and
+  the attribution matters: a replica pointed at **dev.isocan.io**, badge
+  minted at the real door, one socket over **wss:** through the load
+  balancer. All fourteen checks passed — the canvas born through the
+  replica exists at dev; a write forwards and the item is at the home by
+  name; the lid closes, the evening is written at dev by another actor,
+  the lid reopens and the local oplog comes back contiguous `[1,2,3]`.
+  That last is the phase's whole claim: it **resumed** rather than
+  re-snapshotting, across the internet, through a load balancer, against
+  a Cloud Run instance that had cold-started from zero.
+- **2026-08-23 — And the run overturned phase 5's health-path finding
+  inside a day.** Phase 5 measured `/healthz` on the dev home as a
+  branded 404 from Google's frontend that never reached the container.
+  Re-measured on the same home one day later, it returns **the daemon's
+  own body** — `pid`, `root: /app`, byte-identical to `/api/healthz`.
+  Whether Google's frontend changed or something in the load balancer
+  did is not established, and that is exactly the finding: the fact the
+  map rested on was never ours, and it moved without notice.
+  What survives is the *other* argument, which never depended on the
+  frontend and which the same measurement sharpens: `/healthz/` and
+  `/HEALTHZ` come back as **1001 bytes of `index.html`** at 200, so a
+  check on a near-miss path is green forever and cannot fail for the
+  right reason — `/api/` is the one prefix the SPA fallback does not
+  answer cheerfully. `healthPath()` is therefore **defensive rather than
+  necessary** now, and is kept on those terms.
+  [architecture.md](architecture.md) keeps both reasons in order, the
+  expired one first, rather than deleting the dead one — a map that
+  quietly drops a reason teaches the next reader that the surviving one
+  was always the whole story.
+- **2026-08-23 — A replica is not a backup, and the map said it was the
+  best one.** Found by walking Scene 0's multi-device beat by hand: two
+  replicas of one home, a file added on the first, and the second
+  machine listing the item perfectly while holding **zero bytes of it**.
+  Blobs a replica did not itself upload are streamed from the home on
+  demand and are **not cached** — the second machine's blob directory
+  was still empty after reading the file through twice. Put beside the
+  earlier finding that a replica's oplog begins where it joined, the
+  shape is clear: a replica holds the canvas's **state**, not its
+  **history** and not its **bytes**.
+  [architecture.md](architecture.md)'s backups bullet said "the best
+  backup remains a thick replica — sovereignty by replica is also
+  disaster recovery"; it was written before replicas existed and is now
+  corrected, because it fails in the one direction that matters — a
+  replica looks complete right up until the home is gone.
+  **This is phase 13's problem before it is anyone else's.** Re-homing
+  is drawn in [offline-birth.md](design/offline-birth.md) as "a thick
+  replica offers its store to a *new* home … hello, badge, offer,
+  replay", and the store it would offer today is missing precisely the
+  two things a replay consumes. Whether re-homing is restricted to the
+  originating replica, or a replica learns to backfill history and
+  blobs, is a phase 13 decision — named here so it is chosen rather than
+  discovered.
+- **2026-08-23 — Scene 0's multi-device beat works, including the race
+  nobody had run.** A marker carried to a second machine by git — the
+  clone case — resolves against a replica that has never heard of the
+  canvas, and it does so without a `duplicate-id`: the command was run
+  deliberately in the window before the home connection's first sweep,
+  and the binding still landed on the existing canvas rather than trying
+  to create it again. What the second machine then sees is the first
+  machine's work, which is the beat Scene 0 promises and the one that
+  makes solo multi-device fall out of the multiuser topology.
+- **2026-08-23 — What the conductor did NOT verify, stated plainly.**
+  The `writer-fenced` (409) pass-through is proven by construction — one
+  branch, one error shape — and not by execution: a real fence needs two
+  writers against one oplog, which a `FileStore` home does not produce,
+  and the dev run did not force a rollout underneath itself. Phase 5
+  measured the real thing against the hosted home under a rollout; this
+  phase did not re-measure it through the replica path. Nor was a
+  **browser at dev.isocan.io** driven against a replica: the hand-played
+  Chrome half ran entirely against local daemons, and the dev half was
+  CLI-only.
 
 ## Phase 7 — The share (Scenes 1–4)
 
