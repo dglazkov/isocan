@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { ClientMessage, ServerMessage } from "@isocan/core";
-import { WS_BAD_ORIGIN, WS_NO_BADGE } from "@isocan/core";
+import type { ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
+import { newId, WS_BAD_ORIGIN, WS_NO_BADGE } from "@isocan/core";
 import { Engine, ProjectNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
@@ -103,6 +103,7 @@ export function attachWebSockets(
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") return; // let other handlers (e.g. Vite HMR proxy) pass
     const projectId = url.searchParams.get("projectId");
+    const since = parseCursor(url.searchParams.get("since"));
     void (async () => {
       const badge = await admitted(request, projectId);
       wss.handleUpgrade(request, socket, head, (ws) => {
@@ -111,7 +112,7 @@ export function attachWebSockets(
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, projectId, badge.badgeId);
+        void handleConnection(ws, projectId, badge.badgeId, since, badge.bearer);
       });
     })();
   });
@@ -125,7 +126,7 @@ export function attachWebSockets(
   async function admitted(
     request: IncomingMessage,
     projectId: string | null,
-  ): Promise<{ badgeId: string } | { code: number; reason: string }> {
+  ): Promise<{ badgeId: string; bearer: boolean } | { code: number; reason: string }> {
     const presented = presentedBadge(request.headers);
     if (presented?.carrier !== "bearer") {
       const secure = isSecureRequest(
@@ -151,13 +152,15 @@ export function attachWebSockets(
       // ---- the policy point, as in http.ts. Phase 7: refuse instead. ----
       await desk.admit(badge.badgeId, projectId, { root: "link" });
     }
-    return { badgeId: badge.badgeId };
+    return { badgeId: badge.badgeId, bearer: presented?.carrier === "bearer" };
   }
 
   async function handleConnection(
     ws: WebSocket,
     projectId: string | null,
     badgeId: string,
+    since: number,
+    bearer: boolean,
   ): Promise<void> {
     // Without a listener, an abrupt client death (ECONNRESET) raises an
     // unhandled 'error' event on the EventEmitter and would crash the daemon.
@@ -169,8 +172,75 @@ export function attachWebSockets(
     }
     try {
       const snapshot = await engine.getSnapshot(projectId);
-      const hello: ServerMessage = { type: "snapshot", ...snapshot };
+      /**
+       * "I have through N" — the lid-close beat, and the reason this is worth
+       * a branch at all: a tab (and, from phase 6, a local daemon's home
+       * connection) that has been away for an evening does not need the whole
+       * canvas back, it needs the evening. The tail is replayed through the
+       * same reducer crash recovery replays, which is what makes this cheap to
+       * be right about: there is no second application path to keep honest.
+       *
+       * The tail is read AFTER the snapshot on purpose. An op landing between
+       * the two is not yet broadcast to this socket (it joins the room below),
+       * so reading the log second means that op arrives in the tail rather
+       * than falling into the gap between "what the snapshot knew" and "what
+       * the room has broadcast since".
+       */
+      const tail = since > 0 ? await engine.getLog(projectId, since) : [];
+      /**
+       * Four ways this is not servable, all of them ordinary rather than
+       * exceptional:
+       *
+       * - `since > lastSeq` — the client is AHEAD of us. A home restored from
+       *   a backup behind its own replicas produces exactly this, and it must
+       *   answer with a snapshot rather than throw: the client is the one that
+       *   has to be corrected, and a snapshot is the correction.
+       * - the tail is not contiguous from `since + 1` — `Engine.gc` compacts
+       *   the live log to an undo horizon, and `chooseRetained` keeps whatever
+       *   undo/redo chains reach back to, so what survives compaction is a SET
+       *   and not a suffix. A client whose cursor fell behind that horizon
+       *   cannot be caught up from the live log at all.
+       * - the tail does not REACH `lastSeq`, even when every entry in it is
+       *   contiguous. Contiguity alone is not enough, and `every()` is the
+       *   reason it looks like it is: it is vacuously true on an empty array,
+       *   so a tail compacted away to nothing (`chooseRetained` returns `[]`
+       *   for `keepOps <= 0`, straight off `POST /api/projects/:id/gc`) would
+       *   pass the check and be answered `resumed` with a `lastSeq` of
+       *   `since` — the client told it is current while missing every seq in
+       *   `since + 1 … lastSeq`, with no event left to correct it once the
+       *   canvas goes quiet. Completeness is the other half of the condition:
+       *   the tail must carry at least `lastSeq - since` entries. `>=` and not
+       *   `===` on purpose — an op landing between the two reads makes the
+       *   tail legitimately run one past the snapshot (see above).
+       * - `since === 0` or absent — no cursor, today's behaviour, untouched.
+       *
+       * The fallback is the other half of the contract, not a failure: every
+       * client must handle either answer, which is also what lets a home
+       * decline to resume for any reason a later backing invents.
+       */
+      const resumable =
+        since > 0 &&
+        since <= snapshot.lastSeq &&
+        since + tail.length >= snapshot.lastSeq &&
+        tail.every((entry, index) => entry.seq === since + index + 1);
+      const hello: ServerMessage = resumable
+        ? {
+            type: "resumed",
+            from: since,
+            // Not `snapshot.lastSeq`: if an op landed while we were reading
+            // the log, it is in the tail and the client will hold it.
+            lastSeq: tail.length > 0 ? tail[tail.length - 1]!.seq : since,
+            colors: snapshot.colors,
+            names: snapshot.names,
+          }
+        : { type: "snapshot", ...snapshot };
       ws.send(JSON.stringify(hello));
+      if (resumable) {
+        for (const entry of tail) {
+          const applied: ServerMessage = { type: "op-applied", entry };
+          ws.send(JSON.stringify(applied));
+        }
+      }
       const roster: ServerMessage = {
         type: "presence-roster",
         sessions: presence.roster(projectId),
@@ -204,11 +274,60 @@ export function attachWebSockets(
      */
     const vouched = new Set<string>();
 
+    /**
+     * The key this socket's RELAYED roster is held under, if it relays one.
+     *
+     * A replica's whole local roster arrives on one connection, so the faces
+     * belong to the connection rather than to a session of it — which is what
+     * makes them go away together when it drops. `newId` rather than the badge
+     * id: one badge may hold two connections (a daemon reconnecting before its
+     * old socket has finished closing), and keying on the badge would let the
+     * dying one wipe the live one's faces on its way out.
+     */
+    const relayOrigin = `relay:${newId("rel")}`;
+
     ws.on("message", (data) => {
       let message: ClientMessage;
       try {
         message = JSON.parse(String(data)) as ClientMessage;
       } catch {
+        return;
+      }
+      /**
+       * A whole roster, from a daemon speaking for several people.
+       *
+       * **Bearer only.** A browser cannot set headers on a WS handshake, so a
+       * cookie-carried socket is by definition a page — and a page must not be
+       * able to publish a roster of faces it merely asserts. The carrier is
+       * the honest discriminator here for the same reason the Origin check
+       * exempts it above: an attacker's page cannot read a bearer token, so
+       * nothing it can reach speaks with one.
+       *
+       * Every actor is checked against this badge's claims and the ones it
+       * cannot vouch for are DROPPED rather than closing the socket —
+       * mechanism 5's "a daemon's relayed presence, where one connection
+       * carries several actors and each must be in the badge's claims", with
+       * the same forgiveness the single-session path already has: a face that
+       * cannot be vouched for simply does not go up.
+       */
+      if (message.type === "presence-relay") {
+        if (!bearer || !Array.isArray(message.sessions)) return;
+        void (async () => {
+          const allowed: PresenceSession[] = [];
+          for (const session of message.sessions) {
+            if (!session?.sessionId || !session.actor?.id) continue;
+            if (!vouched.has(session.actor.id)) {
+              const ok = await engine.requireActor(badgeId, session.actor.id).then(
+                () => true,
+                () => false,
+              );
+              if (!ok) continue;
+              vouched.add(session.actor.id);
+            }
+            allowed.push(session);
+          }
+          presence.mirror(projectId!, relayOrigin, allowed);
+        })();
         return;
       }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
@@ -243,6 +362,12 @@ export function attachWebSockets(
       room.delete(ws);
       if (room.size === 0) rooms.delete(projectId);
       if (sessionId !== null) presence.endSession(projectId, sessionId);
+      // A dropped connection takes the faces it was relaying with it. Scene
+      // 4's beat 7 is exactly this: Priya shuts the lid, her daemon's
+      // connection dies, and "one presence-TTL later her face — AND ISAAC'S
+      // RING — fade from Jordan's pile". A sleeping laptop's agent cannot
+      // wake, so a ring that said "summonable" would lie.
+      presence.dropMirror(relayOrigin);
     });
   }
 
@@ -251,4 +376,19 @@ export function attachWebSockets(
     pendingRoster.clear();
     for (const socket of wss.clients) socket.terminate();
   };
+}
+
+/**
+ * `?since=N`, the seq a connecting client says it already holds.
+ *
+ * Anything that is not a whole number ≥ 0 means "no cursor" and gets today's
+ * full snapshot — including `0` itself, which is what a client that has never
+ * seen this canvas sends. Garbage in a query string must not be able to
+ * produce a WRONG answer here: a snapshot is always correct, so every
+ * unreadable cursor lands on it.
+ */
+function parseCursor(raw: string | null): number {
+  if (raw === null) return 0;
+  const since = Number(raw);
+  return Number.isInteger(since) && since > 0 ? since : 0;
 }

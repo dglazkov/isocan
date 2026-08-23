@@ -184,7 +184,7 @@ export function disconnect(): void {
   doomed?.close();
 }
 
-function wsUrl(projectId: string): string {
+function wsUrl(projectId: string, since: number): string {
   // In dev the page is served by Vite but the daemon owns /ws — connect
   // straight to the daemon. Proxying WebSockets through Vite added a flaky
   // hop that spammed "ws proxy error: write EPIPE" whenever either end tore
@@ -199,12 +199,44 @@ function wsUrl(projectId: string): string {
   const devPort = import.meta.env.DEV ? (import.meta.env.VITE_ISOCAN_PORT ?? "4441") : null;
   const host = devPort ? `${location.hostname}:${devPort}` : location.host;
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${host}/ws?projectId=${projectId}`;
+  // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
+  // a fresh connect says the same thing whether it says it or stays silent.
+  return `${protocol}//${host}/ws?projectId=${projectId}&since=${since}`;
+}
+
+/**
+ * The cursor to reconnect with: the last seq this tab actually holds, or 0
+ * when it holds nothing for this canvas.
+ *
+ * Both halves of the guard matter. `projectId` must match, because a store
+ * still carrying the last canvas's `lastSeq` would ask a DIFFERENT canvas for
+ * a tail from a seq that means nothing there — the home would happily serve
+ * one, and the tab would apply another canvas's ops to this one's state.
+ * `project`/`canvas` must both be present, because a cursor is a claim to hold
+ * the state that seq describes; without the state the seq is a number about
+ * nothing, and only a snapshot is an answer.
+ */
+function resumeCursor(projectId: string): number {
+  const { projectId: held, project, canvas, lastSeq } = useCanvasStore.getState();
+  return held === projectId && project && canvas ? lastSeq : 0;
 }
 
 function open(projectId: string): void {
-  const ws = new WebSocket(wsUrl(projectId));
+  const ws = new WebSocket(wsUrl(projectId, resumeCursor(projectId)));
   socket = ws;
+  /**
+   * While a resumed tail is streaming, this is the seq it ends at.
+   *
+   * The tail is delivery, not arrival — Scene 4's lid-close beat is explicit
+   * that reopening at 9pm shows unread badges and a dimmed face-with-a-count,
+   * and that "no toast queue replays". Unread badges are computed from the
+   * canvas state against local watermarks, so they survive this suppression
+   * untouched; toasts are for arrival-while-here, and every comment in this
+   * tail arrived while this tab was away. Without the flag, switching the
+   * reconnect from a snapshot to a resume would have turned a two-minute
+   * network blip into a burst of toasts for comments the tab had never shown.
+   */
+  let replayThrough = 0;
   // Events from any socket that is no longer THE socket are ignored. Without
   // this, StrictMode's double-mount let a superseded socket's late onclose
   // schedule a reconnect and leave TWO live sockets — every broadcast then
@@ -226,6 +258,19 @@ function open(projectId: string): void {
       syncProject(projectId, message.canvas, presenceActor?.id);
       // Announce this tab's presence immediately so it shows up in rosters
       // (and `isocan who`) even before the mouse moves.
+      schedulePresenceFlush();
+    } else if (message.type === "resumed") {
+      // The other answer to the same question, and deliberately NOT a place
+      // that touches `project`/`canvas`: the whole point of resuming is that
+      // this tab keeps the state it already has and the tail is applied ON
+      // TOP of it. Clearing them here — the way a fresh connect does — would
+      // unmount the canvas for as long as the tail took to arrive.
+      replayThrough = message.lastSeq;
+      useCanvasStore.setState({
+        connection: "live",
+        actorColors: message.colors,
+        actorNames: message.names,
+      });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {
       useCanvasStore.setState({
@@ -257,7 +302,7 @@ function open(projectId: string): void {
         canvas: next.canvas,
         lastSeq: message.entry.seq,
       });
-      announceComment(message.entry.envelope);
+      if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
     } else if (message.type === "project-deleted") {
       useCanvasStore.setState({ connection: "gone" });
       disconnect();

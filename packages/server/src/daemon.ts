@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import net from "node:net";
 import Fastify, { type FastifyInstance } from "fastify";
-import { DEFAULT_PORT } from "@isocan/core";
+import { DEFAULT_PORT, healthPath } from "@isocan/core";
 import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { attachWebSockets } from "./ws.ts";
@@ -12,6 +12,8 @@ import type { Desk } from "./desk.ts";
 import { runMigrations } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
+import { resolveHomeUrl } from "./config.ts";
+import { HomeLink } from "./home-link.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -35,6 +37,27 @@ export interface DaemonOptions {
    * trust off by itself.
    */
   host?: string;
+  /**
+   * The home this daemon is a REPLICA of — `https://isocan.io`. Absent (the
+   * default, and every daemon in this repo today) means this daemon IS a home.
+   *
+   * Read from `ISOCAN_HOME_URL`, then `~/.isocan/config.json`'s `home`, by
+   * `resolveHomeUrl` — environment and configuration rather than a flag, for
+   * the same reason `ISOCAN_BIND` and `ISOCAN_STORE` are. Setting it does one
+   * thing in stage 1: the page server stops. The one-origin rule is that a
+   * local daemon serves **ops to CLIs, never pages to persons**, and
+   * `registerStaticWebApp` is precisely the code a home needs and precisely
+   * what a replica must not run — same code, one configuration answer.
+   *
+   * Stage 2 hangs the home CONNECTION off the same answer: with an address
+   * here, `HomeLink` dials it per canvas, forwards every write to it, and
+   * carries presence both ways.
+   */
+  homeUrl?: string | null;
+  /** How often the home connection re-reads which canvases to replicate.
+   * A knob rather than a constant only because tests want it small and a
+   * gentle innkeeper might want it large; see `HomeLink.sync`. */
+  homePollMs?: number;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -53,6 +76,16 @@ export interface Daemon {
    * replicates through the store, the desk's ledgers never leave. */
   desk: Desk;
   port: number;
+  /** The home this daemon replicates, or null when it is a home itself.
+   * Recorded rather than merely acted on: stage 2's home connection dials
+   * exactly this, and a daemon that cannot say which it is would be a daemon
+   * nothing could ask. */
+  homeUrl: string | null;
+  /** The live connection to that home, or null when this daemon is a home.
+   * Exposed so a test — and, later, a status route — can ask what the last
+   * handshake actually was: "resumed from 241" and "re-snapshotted" are the
+   * two answers this phase exists to tell apart. */
+  home: HomeLink | null;
   close: () => Promise<void>;
 }
 
@@ -103,6 +136,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
   const host = options.host ?? process.env.ISOCAN_BIND ?? "127.0.0.1";
+  // Undefined means "nobody has said" — go and look. An explicit `null` is a
+  // caller saying "this one is a home", which a test needs to be able to say
+  // on a machine whose config.json names one.
+  const homeUrl = options.homeUrl !== undefined ? options.homeUrl : await resolveHomeUrl(home);
 
   // The composition root, and the ONE place any backing is named.
   const { store, desk } = await openBacking(home);
@@ -133,11 +170,35 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
       .catch(() => {});
   });
 
+  /**
+   * The demotion, wired.
+   *
+   * Built BEFORE the port is bound and before anything is dialled, so there is
+   * no window in which this daemon accepts a write it would have applied
+   * locally and a moment later would have forwarded. `forwardTo` is the whole
+   * switch: with it set, the engine stops assigning seqs and the home does.
+   */
+  const homeLink =
+    homeUrl === null
+      ? null
+      : new HomeLink({
+          homeUrl,
+          home,
+          engine,
+          presence,
+          ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
+        });
+  engine.forwardTo(homeLink);
+
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
-  registerRoutes(app, engine, store, desk, presence);
+  registerRoutes(app, engine, store, desk, presence, { homeUrl, home: homeLink });
   await app.listen({ port, host });
+  // Dialling starts only once we are serving: the first thing that arrives
+  // down a canvas socket is written through the engine, and an engine whose
+  // daemon is still coming up is a race for no benefit.
+  if (homeLink) await homeLink.start();
   const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
 
   await fs.writeFile(
@@ -147,6 +208,11 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const close = async () => {
     presence.close();
+    // The home connection first, and before the store: it is the one thing
+    // here that is still WRITING (an entry may be mid-apply), and a socket
+    // left open is a process that never exits — which phase 4's finding
+    // already paid for once.
+    if (homeLink) await homeLink.close();
     closeWebSockets();
     await app.close();
     // Only remove the pidfile if it is still OURS — a stop-then-serve race
@@ -166,7 +232,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     await store.close();
   };
 
-  return { app, engine, store, desk, port, close };
+  return { app, engine, store, desk, port, homeUrl, home: homeLink, close };
 }
 
 // ---------- stale daemons ----------
@@ -176,10 +242,14 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 // last week's server. So getting rid of one must never depend on a pidfile
 // being right — we ask the port who it is, and believe that first.
 
-/** The pid answering /healthz on this port, or null if no daemon is there. */
+/** The pid answering the health route on this port, or null if no daemon is
+ * there. The path comes from `healthPath` rather than a literal — this one is
+ * always loopback and so always gets `/healthz`, but a constant here is how
+ * the next caller copies the wrong one. */
 async function daemonPidOn(port: number): Promise<number | null> {
+  const base = `http://127.0.0.1:${port}`;
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
+    const res = await fetch(`${base}${healthPath(base)}`, {
       signal: AbortSignal.timeout(500),
     });
     if (!res.ok) return null;
@@ -350,6 +420,27 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
   const bound = daemon.app.server.address();
   const where = bound && typeof bound !== "string" ? bound.address : "127.0.0.1";
   console.log(`isocan daemon listening on http://${where}:${daemon.port}`);
+  // Which of the two things this daemon is, said out loud at boot. A replica
+  // that stopped serving pages without saying so is a canvas that "just
+  // stopped opening in the browser" — the one-origin rule is a design
+  // decision, and a design decision nobody is told about reads as a bug.
+  if (daemon.homeUrl !== null) {
+    console.log(`isocan replica of ${daemon.homeUrl} — serving ops to CLIs, not pages to people`);
+    // And whether that address is actually answering, said once, in the
+    // background so a home that is down never delays a boot. A replica pointed
+    // at a typo'd address otherwise behaves exactly like one pointed at a home
+    // that happens to be busy — every write refused, nothing on screen
+    // explaining why. The probe goes through `healthPath`, so it asks a hosted
+    // home the path Google's frontend will forward rather than the one it
+    // swallows (phase 5's finding).
+    void daemon.home?.reachable().then((up) => {
+      console.log(
+        up
+          ? `home ${daemon.homeUrl} is answering`
+          : `WARNING: home ${daemon.homeUrl} is NOT answering — reads work from the local copy, writes will be refused until it does`,
+      );
+    });
+  }
   const shutdown = () => {
     void daemon.close().then(() => process.exit(0));
   };

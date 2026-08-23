@@ -27,6 +27,7 @@ import {
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
+import { HomeRefusedError, HomeUnreachableError, type HomeConnection } from "./home-link.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -103,12 +104,25 @@ function isOpen(method: string, pathname: string): boolean {
   return false;
 }
 
+export interface RouteOptions {
+  /** The home this daemon replicates, or null when it is a home itself. The
+   * only thing it decides here is whether pages are served at all — see
+   * `registerStaticWebApp` and `registerHomeElsewhere` — plus saying so on the
+   * health route, which is how a CLI learns there are no pages here. */
+  homeUrl?: string | null;
+  /** The live connection to that home. Routes need it for exactly one thing:
+   * bytes this replica has never held (see the blob GET). Writes reach it
+   * through the engine, never from here. */
+  home?: HomeConnection | null;
+}
+
 export function registerRoutes(
   app: FastifyInstance,
   engine: Engine,
   store: Store,
   desk: Desk,
   presence: PresenceHub,
+  options: RouteOptions = {},
 ): void {
   // Raw bodies for blob uploads; JSON stays JSON.
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
@@ -132,6 +146,23 @@ export function registerRoutes(
     if (err instanceof NothingToUndoError) {
       return reply.status(409).send({ error: err.message, code: "nothing-to-undo" });
     }
+    // A replica is a PASS-THROUGH for a refusal, not a re-interpreter: the
+    // home's status and the home's code, verbatim, so a `writer-fenced` 409
+    // still says "do not retry" by the time it reaches the CLI. Flattening it
+    // to a 500 would turn the one refusal a client must never retry into one
+    // that looks worth retrying.
+    if (err instanceof HomeRefusedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+    }
+    // The home is not there, and the write did NOT happen. 503 because it is
+    // the truth and it is retryable BY A PERSON — nothing here retries it,
+    // because a queue with no durability and no ordering story is the half-
+    // built machinery phases 10 and 13 exist to do properly.
+    if (err instanceof HomeUnreachableError) {
+      return reply.status(503).send({ error: err.message, code: err.code });
+    }
     app.log.error(err);
     return reply.status(500).send({ error: "internal error" });
   });
@@ -142,6 +173,12 @@ export function registerRoutes(
     ok: true,
     pid: process.pid,
     startedAt: STARTED_AT,
+    // Which of the two things this daemon is, on the one call every client
+    // already makes. A replica serves no pages, so `isocan open` and `isocan
+    // setup` have to send a person somewhere else — and the marker a new
+    // canvas gets has to carry the address (offline-birth's "birth writes a
+    // promise"). Both need to find it out without a second route.
+    ...(options.homeUrl ? { home: options.homeUrl } : {}),
     ...buildStamp(),
   });
   for (const route of HEALTH_ROUTES) app.get(route, health);
@@ -609,6 +646,36 @@ export function registerRoutes(
     const { id, hash } = req.params as { id: string; hash: string };
     await engine.getSnapshot(id);
     const meta = await store.blobMeta(id, hash);
+    /**
+     * Bytes this replica has never held, read straight from the home.
+     *
+     * The ops replicate; the blobs they name do not follow on their own. So a
+     * replica that applied somebody else's `item.add` knows the hash and has
+     * nothing under it — and an item that renders as a broken version on the
+     * one machine an agent's hands can reach is not a replica, it is a list of
+     * hashes. The bytes are streamed through rather than mirrored to disk: a
+     * read is not the moment to decide what this machine should keep, and
+     * content addressing means the copy that arrives with the next upload is
+     * the same copy either way.
+     *
+     * Range requests go up with the request, so seeking a video does not drag
+     * the whole object across twice.
+     */
+    if (!meta && options.home) {
+      const range = parseRange(req.headers.range, Number.MAX_SAFE_INTEGER);
+      const remote = await options.home.openBlob(
+        id,
+        hash,
+        range && range !== "unsatisfiable" ? range : undefined,
+      );
+      if (!remote) return reply.status(404).send({ error: "blob not found" });
+      return reply
+        .header("Content-Type", remote.mimeType)
+        .header("Content-Security-Policy", "sandbox allow-scripts")
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Cache-Control", "immutable, max-age=31536000")
+        .send(remote.stream);
+    }
     if (!meta) return reply.status(404).send({ error: "blob not found" });
 
     // Defense in depth for HTML blobs: even outside the app's sandboxed
@@ -640,7 +707,13 @@ export function registerRoutes(
     return reply.header("Content-Length", String(meta.size)).send(stream);
   });
 
-  registerStaticWebApp(app, desk);
+  // The one-origin rule, in one branch. A daemon that knows a home is a
+  // REPLICA: it serves ops to CLIs and never pages to persons, so the page
+  // server — and, with it, the cookie badge the page server mints — does not
+  // exist here at all. A daemon that knows no home is a home, which is every
+  // daemon in this repo today and stays exactly as it was.
+  if (options.homeUrl) registerHomeElsewhere(app, options.homeUrl);
+  else registerStaticWebApp(app, desk);
 }
 
 /** What a direct-upload request must carry, or the reason it does not. All
@@ -753,4 +826,68 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback
   });
+}
+
+/** The header a replica names its home in — a machine-readable copy of what
+ * the body says, for a `curl` or a script that would rather not scrape prose.
+ * Deliberately NOT `Location`, and deliberately not a 3xx: see below. */
+export const HOME_HEADER = "X-Isocan-Home";
+
+/**
+ * What a replica answers a person with instead of the web app.
+ *
+ * This takes the place of `registerStaticWebApp` exactly — same `GET /*`
+ * shape, same position as the last thing registered — so what a replica does
+ * with an unmatched GET is *this* rather than whatever Fastify's default 404
+ * happens to be. It replaces the page server's OTHER half too: the SPA
+ * fallback is where a browser gets badged (`if (!req.badge) mintBadge`), and a
+ * daemon that no longer serves pages must not go on minting cookie badges for
+ * people it is not serving. That half is simply not here.
+ *
+ * **404, and no redirect.** The canvas genuinely is not at this address, so
+ * 404 is the true status; and a `Location` would send a browser to the home
+ * carrying a path this daemon invented, which is how a person ends up on a
+ * home's 404 wondering what they did. The address is stated — in the body, and
+ * in `X-Isocan-Home` — and the move is left to the person. Silence was the
+ * other option and is the wrong one: an unexplained 404 from your own machine
+ * reads as a broken daemon, and this codebase's instinct is that a failure may
+ * not be silent.
+ */
+function registerHomeElsewhere(app: FastifyInstance, homeUrl: string): void {
+  app.get("/*", async (req, reply) => {
+    const accepts = String(req.headers.accept ?? "");
+    reply.status(404).header(HOME_HEADER, homeUrl).header("Cache-Control", "no-store");
+    // A person gets a page; a script gets a line. Not content negotiation for
+    // its own sake — `curl` and an agent's `fetch` are the callers most likely
+    // to reach a local daemon by accident, and a wall of markup is a worse
+    // answer to them than one sentence.
+    if (!accepts.includes("text/html")) {
+      return reply
+        .type("text/plain; charset=utf-8")
+        .send(`this canvas lives at ${homeUrl} — open it there\n`);
+    }
+    const safe = escapeHtml(homeUrl);
+    return reply.type("text/html; charset=utf-8").send(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+        `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+        `<title>This canvas lives elsewhere</title></head><body>` +
+        `<h1>This canvas lives at <a href="${safe}">${safe}</a></h1>` +
+        `<p>Open it there. This is a local isocan daemon: it serves ops to the ` +
+        `<code>isocan</code> CLI and to agents on this machine, and never pages ` +
+        `to people — everyone sits at the one origin.</p>` +
+        `</body></html>\n`,
+    );
+  });
+}
+
+/** Enough escaping for a configured address dropped into markup. The value
+ * comes from this machine's own environment or config file rather than from a
+ * request, so this is belt to that braces — but a home address is the one
+ * string here that a person types by hand. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

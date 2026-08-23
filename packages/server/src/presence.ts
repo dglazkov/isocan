@@ -13,6 +13,24 @@ import { newId } from "@isocan/core";
  */
 
 interface SessionState extends PresenceSession {
+  /**
+   * Where this face came from: `null` when the session belongs to a client of
+   * THIS daemon, or the key of the connection that mirrored it in.
+   *
+   * The ephemeral plane is the one thing phase 6 has to carry in BOTH
+   * directions — a local daemon relays its own faces up to the home, and the
+   * home's roster comes back down so `isocan who` and a parked `isocan wait`
+   * see the whole canvas. One field makes both halves safe:
+   *
+   * - **No relay loop.** A daemon relays only its LOCAL sessions up. Without
+   *   this, the roster it just mirrored down would be relayed back up on the
+   *   next change and the two hubs would beat each other forever.
+   * - **No lying TTL.** Mirrored faces are exempt from the sweep below. Their
+   *   origin is authoritative about them and re-mirrors the whole set whenever
+   *   it changes — including when its own sweep expires somebody — so a
+   *   second, local expiry could only ever remove a face that is still there.
+   */
+  origin: string | null;
   lastSeenMs: number;
   /** The status was said out loud (`session say`), not derived — inferred
    * narration must not displace it. Cleared when working resolves into a
@@ -123,10 +141,89 @@ export class PresenceHub {
     return ended;
   }
 
-  /** Who this canvas sees: everyone actually on it. */
+  /** Who this canvas sees: everyone actually on it — this daemon's own
+   * clients and every face mirrored in from a connection. */
   roster(projectId: string): PresenceSession[] {
     const here = [...(this.rooms.get(projectId)?.values() ?? [])];
-    return here.map(({ lastSeenMs, statusSticky, onThreadAt, ...session }) => session);
+    return here.map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
+  }
+
+  /**
+   * This daemon's OWN faces on a canvas — what a home connection relays up.
+   *
+   * The narrowing is the loop guard: relaying `roster()` would send the home
+   * back the faces it just sent us, and every roster either end published
+   * would provoke another.
+   */
+  localRoster(projectId: string): PresenceSession[] {
+    const here = [...(this.rooms.get(projectId)?.values() ?? [])];
+    return here
+      .filter((session) => session.origin === null)
+      .map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
+  }
+
+  /**
+   * Take a roster somebody else is authoritative about and hold it here.
+   *
+   * Used in BOTH directions, which is why it is one method: the home stores a
+   * replica's relayed faces under that socket, and the replica stores the
+   * home's roster under its home connection. `sessions` REPLACES everything
+   * previously mirrored under `origin` on this canvas — a full set rather than
+   * a diff, because the sender already computes the full set and a diff
+   * protocol is a second thing to get wrong.
+   *
+   * Sessions keep their ids verbatim. That is what lets the sender recognize
+   * (and drop) its own faces when the merged roster comes back, and what makes
+   * a face the same face on every screen it reaches.
+   *
+   * Presence is still never written down: this is daemon memory and WS fan-out
+   * exactly as before, and nothing here reaches a store or an oplog.
+   */
+  mirror(projectId: string, origin: string, sessions: readonly PresenceSession[]): void {
+    const room = this.room(projectId);
+    const wanted = new Map(sessions.map((session) => [session.sessionId, session]));
+    let changed = false;
+    for (const [sessionId, session] of room) {
+      if (session.origin !== origin) continue;
+      if (wanted.has(sessionId)) continue;
+      room.delete(sessionId);
+      changed = true;
+    }
+    for (const [sessionId, session] of wanted) {
+      const existing = room.get(sessionId);
+      // A local session of ours must never be overwritten by a mirrored copy
+      // of itself. The sender should have filtered it out; if it did not, the
+      // local one is the truer of the two — it is where the beats arrive.
+      if (existing && existing.origin === null) continue;
+      const before = existing ? JSON.stringify(stripped(existing)) : null;
+      const next: SessionState = {
+        ...session,
+        origin,
+        lastSeenMs: Date.now(),
+        statusSticky: false,
+        onThreadAt: existing?.onThreadAt ?? null,
+      };
+      room.set(sessionId, next);
+      if (before !== JSON.stringify(stripped(next))) changed = true;
+    }
+    if (room.size === 0) this.rooms.delete(projectId);
+    if (changed) this.emit(projectId);
+  }
+
+  /** Every face mirrored in from this origin, gone — on every canvas. What a
+   * dropped home connection (or a closed relaying socket) means: nobody on the
+   * other side of it is visibly here any more. */
+  dropMirror(origin: string): void {
+    for (const [projectId, room] of this.rooms) {
+      let changed = false;
+      for (const [sessionId, session] of room) {
+        if (session.origin !== origin) continue;
+        room.delete(sessionId);
+        changed = true;
+      }
+      if (room.size === 0) this.rooms.delete(projectId);
+      if (changed) this.emit(projectId);
+    }
   }
 
   /** What this session says it is answering, and since when. */
@@ -177,6 +274,8 @@ export class PresenceHub {
     for (const [projectId, room] of this.rooms) {
       let changed = false;
       for (const [sessionId, session] of room) {
+        // Mirrored faces are somebody else's to expire — see `origin`.
+        if (session.origin !== null) continue;
         if (session.lastSeenMs < cutoff) {
           room.delete(sessionId);
           changed = true;
@@ -188,12 +287,21 @@ export class PresenceHub {
   }
 }
 
+/** A session as it goes over the wire — the private bookkeeping dropped, so
+ * two of them can be compared for "did anything a client would see change". */
+function stripped(session: SessionState): PresenceSession {
+  const { lastSeenMs, statusSticky, onThreadAt, origin, ...rest } = session;
+  // `lastSeen` moves on every beat and would make every mirror a change.
+  return { ...rest, lastSeen: "" };
+}
+
 function blankSession(
   actor: Actor,
   kind: "web" | "cli",
   options: { label?: string; sessionId?: string },
 ): SessionState {
   return {
+    origin: null,
     sessionId: options.sessionId ?? newId("ses"),
     actor,
     kind,

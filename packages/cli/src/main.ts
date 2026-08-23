@@ -32,6 +32,7 @@ import {
   cancelledSince,
   commandFileText,
   findCommand,
+  healthPath,
   parseCommandFile,
   collectCanvasActors,
   bySeverity,
@@ -459,6 +460,7 @@ async function nameCollision(
       json: false,
       home,
       binding: await findBinding(process.cwd(), home),
+      homeUrl: (await client.healthz())?.home ?? null,
       ...(globals.project !== undefined ? { projectRef: globals.project } : {}),
     };
     const project = await resolveProject(ctx);
@@ -594,7 +596,14 @@ program
             // Best-effort — the name was saved either way, and saying why the
             // binding failed beats failing a command that did its job.
             try {
-              const landed = await ensureDirBinding(client, home, actor);
+              // A canvas born through the handshake is born at the home when
+              // this daemon is a replica, and the marker it writes says so.
+              const landed = await ensureDirBinding(
+                client,
+                home,
+                actor,
+                (await client.healthz().catch(() => null))?.home ?? null,
+              );
               if (landed) {
                 console.log(
                   `this directory's canvas: "${landed.project.title}" (${landed.project.id})` +
@@ -712,7 +721,12 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const globals = cmd.optsWithGlobals() as { json?: boolean };
       const port = daemonPort(cmd);
-      const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
+      // The one raw health fetch left in the CLI — `status` wants the body
+      // shape, not `healthz()`'s null-or-Health. The path still comes from the
+      // address (see `healthPath`), so this cannot drift from every other
+      // probe the way a literal would.
+      const daemonBase = `http://127.0.0.1:${port}`;
+      const res = await fetch(`${daemonBase}${healthPath(daemonBase)}`, {
         signal: AbortSignal.timeout(500),
       }).catch(() => null);
       if (!res?.ok) {
@@ -725,11 +739,18 @@ program
         version: string;
         root?: string;
         codeAt?: string;
+        home?: string;
       };
       if (globals.json) return printJson(health);
       const { stale, why } = stalenessOf(health);
       printKeyValues({
         daemon: `running on http://127.0.0.1:${port}`,
+        // Which of the two things it is. A replica that stopped serving pages
+        // without saying so reads as a broken daemon, and `status` is the
+        // first place anybody looks.
+        ...(health.home
+          ? { role: `replica of ${health.home} — ops to CLIs, pages at the home` }
+          : {}),
         pid: String(health.pid),
         since: health.startedAt,
         version: health.version,
@@ -871,7 +892,12 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const project = await resolveProject(ctx);
-      const url = `${ctx.client.base}/p/${project.id}`;
+      // A replica has no page to open. The one-origin rule is that people
+      // always enter through the home, so the address a person is handed is
+      // the home's when there is one — opening `127.0.0.1` on a replica lands
+      // them on `registerHomeElsewhere`'s 404, which is a correct answer to
+      // the wrong question.
+      const url = `${ctx.homeUrl ?? ctx.client.base}/p/${project.id}`;
       spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
         stdio: "ignore",
         detached: true,
@@ -1063,11 +1089,28 @@ program
           report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
         }
 
+        /**
+         * Where the person is sent.
+         *
+         * A replica serves no pages — that IS the one-origin rule — so every
+         * line below that names an address has to name the home's when there
+         * is one. `report.app` keeps saying where the daemon is, because "is
+         * my daemon up" is still the question it answers; `report.canvas` is
+         * the new line, and it is the one a person reads.
+         */
+        const daemonUp = report.app === client.base;
+        const homeUrl = daemonUp ? ((await client.healthz(2000))?.home ?? null) : null;
+        const where = homeUrl ?? client.base;
+        if (homeUrl) {
+          report.app = `${client.base} — replica of ${homeUrl} (ops to CLIs, no pages here)`;
+          report.canvas = homeUrl;
+        }
+
         // A person at a terminal gets the app opened for them; a script or an
         // agent gets the URL to hand over.
         const open = opts.open ?? Boolean(process.stdout.isTTY);
-        if (open && report.app === client.base) {
-          spawn(process.platform === "darwin" ? "open" : "xdg-open", [client.base], {
+        if (open && daemonUp) {
+          spawn(process.platform === "darwin" ? "open" : "xdg-open", [where], {
             stdio: "ignore",
             detached: true,
           }).unref();
@@ -1076,7 +1119,7 @@ program
         if (globals.json) return printJson(report);
         printKeyValues(report);
         console.log(
-          `\nOpen ${client.base} — pick your name, make a canvas — then tell your agent` +
+          `\nOpen ${where} — pick your name, make a canvas — then tell your agent` +
             "\nto use the isocan-collab skill (or to run `isocan --agent-help`, which is" +
             "\nthe same instructions, shipped with this build).",
         );

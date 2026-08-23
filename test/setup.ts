@@ -21,6 +21,16 @@
 process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
 
 /**
+ * A daemon that knows a home is a REPLICA — it serves ops to CLIs and stops
+ * serving pages to people (`resolveHomeUrl`, phase 6). That is read from the
+ * environment, so a developer who has pointed their own machine at a home
+ * would otherwise run the whole suite against replicas and watch the page
+ * tests fail for a reason nothing on screen mentions. Every test daemon is a
+ * home unless its own test says otherwise.
+ */
+delete process.env.ISOCAN_HOME_URL;
+
+/**
  * And this worker dies when vitest does. Test files run in forked children, and
  * a fork whose parent was killed is simply reparented to init — no signal, no
  * closed channel to notice, nothing to say the run it belongs to is over. A

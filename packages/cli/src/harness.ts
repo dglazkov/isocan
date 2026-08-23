@@ -1,5 +1,4 @@
-import { promises as fs } from "node:fs";
-import { paths } from "@isocan/server";
+import { readConfigFile } from "@isocan/server";
 
 /**
  * Which agent is running this command.
@@ -63,17 +62,11 @@ const VALID_VAR = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * thrown: this file is hand-edited, and a typo in it must not cost an agent
  * the ability to say who it is. */
 async function declaredVars(home: string): Promise<[string, string][]> {
-  try {
-    const raw = JSON.parse(
-      await fs.readFile(paths.configFile(home), "utf8"),
-    ) as HarnessVarConfig;
-    return Object.entries(raw?.harnessVars ?? {}).filter(
-      ([harness, envVar]) =>
-        typeof envVar === "string" && VALID_VAR.test(envVar) && harness.length > 0,
-    );
-  } catch {
-    return [];
-  }
+  const raw = await readConfigFile<HarnessVarConfig>(home);
+  return Object.entries(raw.harnessVars ?? {}).filter(
+    ([harness, envVar]) =>
+      typeof envVar === "string" && VALID_VAR.test(envVar) && harness.length > 0,
+  );
 }
 
 /** In probe order: the escape hatch, then this machine's own declarations,
