@@ -83,3 +83,32 @@ describe("stacked cursors fan out", () => {
     expect(spread.get("ses_b")).toEqual({ x: 900, y: 900 });
   });
 });
+
+/**
+ * A session's `label` is a display OVERRIDE and it is usually absent — one
+ * exists only when somebody passed `--label`. The item's "working here" chip
+ * built its key with a template string, so an absent label became the literal
+ * "null" and the canvas said **null is working** over the item. That is every
+ * agent that ever ran `isocan session start` without a label, which is nearly
+ * all of them, and it was found in a screenshot rather than by a test.
+ */
+describe("who is working here", () => {
+  const nameOf = (label: string | null, actor: { id: string; name: string }, names: Record<string, string>) =>
+    label ?? (names[actor.id] ?? actor.name);
+
+  it("falls back to the actor's name when there is no label", () => {
+    expect(nameOf(null, { id: "usr_1", name: "Fable" }, {})).toBe("Fable");
+  });
+
+  it("never renders the word null", () => {
+    expect(nameOf(null, { id: "usr_1", name: "Fable" }, {})).not.toBe("null");
+  });
+
+  it("prefers a rename over the name stamped on the session", () => {
+    expect(nameOf(null, { id: "usr_1", name: "Dion 2" }, { usr_1: "Di" })).toBe("Di");
+  });
+
+  it("still lets an explicit label win", () => {
+    expect(nameOf("deploy bot", { id: "usr_1", name: "Fable" }, { usr_1: "Di" })).toBe("deploy bot");
+  });
+});
