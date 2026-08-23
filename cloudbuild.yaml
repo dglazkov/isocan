@@ -123,6 +123,32 @@ steps:
           exit 1
         fi
 
+  # ---- push, BEFORE deploy and not by `images:` ----
+  #
+  # The top-level `images:` list is pushed by Cloud Build only AFTER every step
+  # has finished. That is fine for a build-only run — 60-build-image.sh relies
+  # on it, and 70-cloud-run.sh deploys afterwards, by which time the push has
+  # happened. It is NOT fine for a step that deploys, because that step runs
+  # while the image still exists nowhere but this worker's local docker.
+  #
+  # Measured, on the first trigger build: `gcloud run deploy` failed with
+  # "Image 'us-west1-docker.pkg.dev/.../isocan:da3e43a' not found" while the
+  # registry still held only the previous tag. `_TAG` had expanded correctly;
+  # the bytes simply were not there yet.
+  #
+  # So the push is its own step, before deploy. `images:` stays, because it is
+  # what records the built images on the build record — by then the layers are
+  # already up, so it costs a digest lookup and nothing more.
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        docker push "${_IMAGE}:${_TAG}"
+        docker push "${_IMAGE}:latest"
+
   # ---- deploy ----
   #
   # Only the trigger passes _DEPLOY=yes. Every flag that shapes the service
