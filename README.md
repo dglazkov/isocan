@@ -244,6 +244,28 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `undo` will not take it back. A canvas that will not have you says so:
   `403 not-admitted`, which means ask whoever shared it — not "get a new
   credential".
+- **Escalation**: a thin guest goes thick in one command, and the canvas hands
+  it to you — click your own face and pick **"Work from your terminal…"**: one
+  sentence of concept, one command, a copy button, and a clock, because the
+  thing it hands you is single-use and dies in fifteen minutes. The terminal
+  half is the same gesture: from a canvas you are
+  already on, `isocan pass` mints a short-lived, single-use **pass** and prints
+  the whole line to paste on the other machine —
+  `npx github:dglazkov/isocan#release setup <address>#<pass>` — and that one
+  line points the daemon at the home, redeems the pass so the machine is
+  admitted and knows whose it is, writes the marker, and replicates the canvas.
+  Your own second machine arrives **as you**: an identity is handed over by a
+  session that already is you, never claimed at a door. `--admit-only` mints
+  the other honest shape, for an agent that will name itself. A pass is a
+  credential, not an invitation — it admits even when the link grant is off, so
+  it is worth exactly one machine, once, for fifteen minutes, and the address
+  from `isocan share` stays the thing you hand a person. `isocan open` uses the
+  same mechanism the other way: the browser it spawns arrives already being
+  you, while the address it prints carries no pass. The credential rides in a
+  `#fragment`, which never leaves the browser — not into the home's access log,
+  not into a `Referer` — and a tab that arrives on one comes up already being
+  that person, or says in words which of "expired", "already used" and "no such
+  pass" it met.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -311,11 +333,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 
 ```
 isocan --agent-help                # the collaboration protocol, for agents
-isocan setup [dir]                 # skill + CLI + daemon for a directory
+isocan setup [dir | <address>#<pass>]  # ready a directory — or join that canvas
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan home [<url>|--clear]        # which home this daemon answers to
 isocan share [--link on|off]     # the canvas's address, and who may enter it
+isocan pass [--admit-only]         # a one-use pass: the command another
+                                   # machine of yours pastes to join
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

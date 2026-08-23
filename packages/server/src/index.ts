@@ -9,7 +9,7 @@ export type {
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";
-export type { Desk, BadgeRecord, Admission, Provenance, BadgeKind } from "./desk.ts";
+export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
 export { readConfigFile, resolveHomeUrl } from "./config.ts";
 export type { HomeConfig } from "./config.ts";

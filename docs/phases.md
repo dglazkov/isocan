@@ -1212,7 +1212,47 @@ roof.
 **Proof:** The scene, played end to end against dev; vitest for pass
 lifecycle (single-use, short TTL, named claim, admission-only form).
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — A pass that lands in the bar of a tab that is already
+  open never arrives at all.** Measured in Chrome while driving the web
+  half: pointing an open canvas tab at *its own address* with `#<pass>`
+  appended is a **same-document navigation**. Nothing reloads, the entry
+  point never runs again, and the credential simply sits in the address
+  bar doing nothing — no redemption, no refusal, no page to read. It is
+  the cheerful wrong address in its quietest form yet, and this codebase
+  has now met that shape five times. `isocan open` usually escapes it by
+  spawning a new tab, but "usually" is not a property: a person pasting
+  the line into the bar of the tab they already have open lands here
+  every time. The fix is four lines — a `hashchange` listener that
+  reloads when the new fragment is a pass, after which the page comes
+  back through the ordinary arrival path. It cannot loop, because the
+  fragment is stripped with `replaceState`, which fires no `hashchange`.
+  **The general lesson is about fragments, not passes:** a credential
+  carried in a `#fragment` is invisible to the one event a SPA usually
+  relies on (a page load), so anything that arrives that way has to be
+  read at load *and* on change.
+- **2026-08-23 — The same handed identity is adopted differently on the
+  two surfaces, on purpose.** `setup` refuses to let a pasted command
+  overwrite a DIFFERENT person already in `identity.json` — that file is
+  a machine's one durable answer to "who owns this laptop", and nothing
+  stands behind it. The browser does the opposite and overwrites: the
+  persona it displaces is still one click away in the identity menu's
+  "Switch to" roster, and the tab was opened by a link that names who it
+  is for, so refusing would burn a single-use pass and leave the person
+  looking at somebody else's face. Two surfaces, one mechanism, two
+  answers — because what is behind the slot differs, not because either
+  side got it wrong. Recorded so a later phase does not "fix" the
+  asymmetry into consistency.
+- **2026-08-23 — A copy button cannot be proven in an automated tab.**
+  The dialog's Copy was driven both by a real click and from the page,
+  and `navigator.clipboard.writeText` neither resolved nor rejected:
+  Chrome blocks the clipboard while `document.visibilityState` is
+  `hidden`, which is what an automated tab is. The command itself was
+  read off the screen and out of the DOM, and the fallback path (a
+  refusal message, plus `user-select: all` on the command so it can be
+  selected by hand) is what a real browser would show. Worth knowing
+  before the next phase writes a Chrome proof around a clipboard.
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
 

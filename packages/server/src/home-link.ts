@@ -8,10 +8,12 @@ import type {
   GrantsResponse,
   GrantSubject,
   LogEntry,
+  MintPassResponse,
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
   Project,
+  RedeemPassResponse,
   ServerMessage,
   UndoRedoRequest,
 } from "@isocan/core";
@@ -22,6 +24,8 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  PASS_REDEEM_ROUTE,
+  passesRoute,
   WS_NO_CANVAS,
 } from "@isocan/core";
 import type { Engine } from "./engine.ts";
@@ -147,6 +151,23 @@ export interface HomeConnection {
   grants(projectId: string): Promise<GrantsResponse>;
   createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
+  /**
+   * The pass routes, forwarded — for the grant routes' reason, one turn
+   * sharper.
+   *
+   * A pass is desk state and desk state does not replicate, so the row lives
+   * at the home. But a pass is also SINGLE-USE, and single-use is only a
+   * property of the desk that holds the row: a replica that minted its own
+   * passes would be handing out admissions to a canvas whose door it does not
+   * answer, and one minted here and redeemed there would be spent twice.
+   *
+   * `actor` rather than an id, because the home may never have heard of this
+   * actor: `mintPass` claims it onto this daemon's badge first (the home
+   * verifies badge-level, which is all it can see), and bringing an actor in
+   * from elsewhere needs its name.
+   */
+  mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse>;
+  redeemPass(token: string): Promise<RedeemPassResponse>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
     projectId: string,
@@ -651,8 +672,18 @@ export class HomeLink implements HomeConnection {
    * most plausibly the same person's browser tab, which claimed them at the
    * one origin — the home refuses with `name-taken`, correctly, because two
    * badges holding one actor is what a PASS is for (mechanism 1's "Jordan's
-   * tab and her daemon"), and passes are phase 8. The refusal is surfaced with
-   * the home's own words rather than swallowed.
+   * tab and her daemon"). The refusal is surfaced with the home's own words
+   * rather than swallowed.
+   *
+   * **Phase 8 built the pass, and the seam narrowed rather than closed** —
+   * which is the design's answer, not a shortfall. A machine whose person is
+   * already somebody at the home enrols by REDEEMING a pass minted from the
+   * surface that is her (`redeemPass`, below); after that the home's badge
+   * holds the claim outright and this call has nothing left to ask. What is
+   * still refused is the thing that should be: announcing your way into an
+   * identity somebody else is currently wearing, with nobody vouching. "First
+   * surface versus every later surface of the same person" is exactly how
+   * mechanism 1 puts it.
    */
   announceActor(actor: Actor): Promise<void> {
     return this.ensureClaim(actor).catch((err: unknown) => {
@@ -734,6 +765,59 @@ export class HomeLink implements HomeConnection {
 
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
     return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
+  }
+
+  /**
+   * Mint a pass at the home, on this daemon's badge.
+   *
+   * The claim goes up first, exactly as it does before a forwarded write: the
+   * home refuses to endow a pass with an actor the presenting badge does not
+   * hold, and the badge that presents here is this daemon's one badge at the
+   * home rather than the local CLI's. That is mechanism 5's split doing its
+   * job — the local daemon already checked that the asking process may speak
+   * as this actor, which the home could never know, and the home checks that
+   * this machine may, which is all it can honestly see.
+   */
+  async mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<MintPassResponse>(
+      "POST",
+      passesRoute(projectId),
+      actor ? { actorId: actor.id } : {},
+    );
+  }
+
+  /**
+   * Redeem one at the home, on this daemon's badge — the enrolling half of
+   * Scene 5, from the new machine's end.
+   *
+   * Two things happen here that are easy to miss, and both are the point:
+   *
+   * - **This badge comes back admitted at the home**, so the canvas now
+   *   appears in `GET /api/projects` for it and the next sweep dials it. That
+   *   is how a replica stops discovering canvases by enumerating a home and
+   *   starts replicating the ones it was actually let into — phase 7's open
+   *   question, answered by the mechanism phase 7 said would answer it.
+   * - **The vouch cache is primed rather than left to be discovered.** The
+   *   home has just written this actor onto this badge's claims, so
+   *   `ensureClaim` has nothing to do; without priming it, the first forwarded
+   *   write would spend a round trip re-claiming an actor the badge already
+   *   holds. (It would also *succeed* — `reincarnate` lets a badge re-key an
+   *   actor it already claims, which phase 8 had to make true anyway, because
+   *   after a pass there are legitimately two badges holding one actor and the
+   *   other one is a live tab.) A re-badge clears this cache along with
+   *   everything else, which is correct: a badge that had to go back to the
+   *   door is a different holder, and it holds nothing.
+   *
+   * A sweep is kicked immediately rather than waiting out the poll interval:
+   * the person at the terminal has just typed the enrolling command, and the
+   * next thing they expect is their canvas.
+   */
+  async redeemPass(token: string): Promise<RedeemPassResponse> {
+    const answer = await this.api<RedeemPassResponse>("POST", PASS_REDEEM_ROUTE, { token });
+    if (answer.actor) this.claimed.add(`${answer.actor.id}\u0000${answer.actor.name}`);
+    void this.sync().catch(() => {});
+    return answer;
   }
 
   async undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {

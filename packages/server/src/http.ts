@@ -11,8 +11,13 @@ import type {
   Grant,
   GrantResponse,
   GrantsResponse,
+  MintPassRequest,
+  MintPassResponse,
+  Pass,
   PostOpRequest,
   Project,
+  RedeemPassRequest,
+  RedeemPassResponse,
   UndoRedoRequest,
 } from "@isocan/core";
 import {
@@ -29,9 +34,12 @@ import {
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
+  PASS_REDEEM_ROUTE,
+  UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
 import { admittingGrant, NotAdmittedError } from "./grants.ts";
+import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
@@ -170,6 +178,15 @@ export function registerRoutes(
     if (err instanceof NotAdmittedError) {
       return reply.status(403).send({ error: err.message, code: err.code });
     }
+    // The pass said no, and each reason is its own status and its own code —
+    // 404 unknown, 409 spent, 410 expired (see `PassRefusedError`). A single
+    // collapsed refusal would send "you mistyped it", "you already used it"
+    // and "it timed out" to the same unhelpful place, which is phase 7's
+    // cheerful-wrong-address finding wearing its most personal face: the
+    // caller here is a human who just pasted a command into a terminal.
+    if (err instanceof PassRefusedError) {
+      return reply.status(err.status).send({ error: err.message, code: err.code });
+    }
     // A replica is a PASS-THROUGH for a refusal, not a re-interpreter: the
     // home's status and the home's code, verbatim, so a `writer-fenced` 409
     // still says "do not retry" by the time it reaches the CLI. Flattening it
@@ -218,6 +235,28 @@ export function registerRoutes(
     }
     app.log.error(err);
     return reply.status(500).send({ error: "internal error" });
+  });
+
+  /**
+   * Nothing matched. **Under `/api/`, say so in JSON with a code** — phase
+   * 7.5's open finding, closed (see `apiNotFound`).
+   *
+   * This handler is where an unmatched non-GET lands, and — on a daemon with
+   * no built web app — an unmatched GET too, because `registerStaticWebApp`
+   * registers nothing when `packages/web/dist` is absent. The two `GET /*`
+   * handlers below shadow it for GETs when they ARE registered, so each of
+   * them takes the same `/api/` branch: three call sites, one answer, because
+   * a 404 that differs by which fallback caught it is a 404 nobody can reason
+   * about.
+   *
+   * Non-`/api/` paths keep the plain 404 they always had, in this codebase's
+   * `{error}` shape rather than Fastify's own — the SPA fallback for a person
+   * loading a page is untouched, and this is what a `POST /nope` gets.
+   */
+  app.setNotFoundHandler((req, reply) => {
+    const pathname = (req.url ?? "/").split("?")[0]!;
+    if (pathname.startsWith("/api/")) return apiNotFound(reply, req.method, pathname);
+    return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
   });
 
   // The stamp is what lets a CLI notice it is talking to yesterday's daemon.
@@ -316,8 +355,12 @@ export function registerRoutes(
    * re-asked on every project-scoped route (mechanism 5) — and, when the
    * answer is no, the design's flowchart run in order:
    *
-   *   already admitted → creating the canvas (bootstrap) → a valid pass
-   *   (phase 8) → a grant is satisfied → **refused**
+   *   already admitted → creating the canvas (bootstrap) → a grant is
+   *   satisfied → **refused**
+   *
+   * (The design's flowchart has a fourth branch, "it bears a valid pass".
+   * Phase 8 built it as its own route rather than a branch here — see the
+   * comment inside `admit` where a reader would look for it.)
    *
    * Phase 2 left this line saying "the address admits" and merely writing the
    * admission down; phase 3 marked it as the place the grant lookup goes. The
@@ -348,12 +391,25 @@ export function registerRoutes(
     // are no grants on a canvas one line old.
     let provenance: Provenance | null = bootstrap ? { root: "created" } : null;
 
-    // Phase 8's branch, named rather than pretended: a pass minted by an
-    // admitted badge admits its holder, with the MINTER's root inherited so
-    // the sweep still reaches it. There is no pass in existence yet, so there
-    // is nothing here to run — but a reader looking for where it goes should
-    // find this comment rather than an unexplained gap between bootstrap and
-    // grant.
+    /**
+     * **Phase 8's branch is real now, and it deliberately does not live here.**
+     *
+     * The design's flowchart puts "it bears a valid pass" between the
+     * bootstrap and the grants, as a third thing the door tests on an ordinary
+     * request. It is not one, because a pass is not a credential a caller
+     * carries around: it is redeemed ONCE, at `POST /api/passes/redeem`, which
+     * spends the row and writes the admission itself — with `{root: "pass",
+     * badgeId}` naming the minter, so phase 9's sweep can walk the chain. By
+     * the time a pass-enrolled badge reaches this function it is already
+     * admitted and answered by the first line above, exactly like every other
+     * admitted badge.
+     *
+     * Testing a pass here instead would mean carrying the token on every
+     * request (a single-use credential presented repeatedly is not single-use)
+     * or looking one up per unadmitted arrival (a desk query for a row that is
+     * almost never there). Redemption is a gesture with its own moment, and it
+     * has its own route.
+     */
 
     if (!provenance) {
       const grant = await admittingGrant(desk, canvasId, req.badge);
@@ -645,6 +701,140 @@ export function registerRoutes(
     }
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
     return { grant: revoked ?? mine } satisfies GrantResponse;
+  });
+
+  // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
+  //
+  // Two routes with deliberately different shapes, and the asymmetry is the
+  // design rather than an accident of naming.
+  //
+  // **Minting is project-scoped** (`/api/projects/:id/passes`), the same
+  // argument the three grant routes are written on: the `onRequest` hook has
+  // already asked the door about this caller for anything under
+  // `/api/projects/:id/`, so "only an admitted badge may mint a pass for this
+  // canvas" costs nothing per-route and cannot be forgotten by a later edit.
+  // The canvas comes from the address, so a pass is about the room the asker
+  // was standing in rather than one it named in a body.
+  //
+  // **Redeeming is not** (`/api/passes/redeem`), and it cannot be: the whole
+  // point of the redeemer is that it is NOT admitted to that canvas yet, so a
+  // project-scoped path would be refused by the door hook before the handler
+  // could look at the pass — the door answering `not-admitted` to the one
+  // request whose purpose is to become admitted.
+  //
+  // On a REPLICA both forward. A pass is desk state and desk state does not
+  // replicate: the row lives at the home that minted it, single use is only
+  // single across the desk that holds it, and a laptop that minted its own
+  // passes would be handing out admissions to a canvas it does not own.
+
+  /**
+   * Mint one. The token comes back exactly once — there is no route that
+   * reads a pass back out, and the desk keeps only its hash.
+   *
+   * `actorId` is optional and both shapes are real (see `Pass.actorId`): with
+   * it the redeemer arrives being somebody, without it the redeemer arrives
+   * admitted and claims its own actor. The claim a pass may name must be one
+   * this badge HOLDS, checked by mechanism 5's own `requireActor` rather than
+   * by a second spelling of the same rule — a pass hands over an identity its
+   * minter already is, and endowing somebody else's is impersonation with a
+   * wrapper on it.
+   *
+   * The design widens the mintable set by exactly one hop — a badge may also
+   * endow an *agent's* actor that it SPONSORED into existence, which is how
+   * Inna resumes Sonia after the sandbox that held Sonia's badge is gone. That
+   * hop is deliberately NOT built here: sponsorship is a fact the desk would
+   * have to record (the provenance parent of a badge), it exists to serve
+   * standing registrations minting with nobody at the keyboard, and both of
+   * those are the innkeeper's half of launch custody — mechanism 11, phase 9.
+   * Half-building it here would mean inferring sponsorship from provenance at
+   * exactly the moment nobody is watching.
+   *
+   * On a replica the check runs TWICE, which is mechanism 5's split working as
+   * designed: this daemon verifies session-level (the local badge holds that
+   * claim) because only it can, and the home verifies badge-level (its own
+   * badge at the home holds it) because that is all it can honestly see.
+   */
+  app.post("/api/projects/:id/passes", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Partial<MintPassRequest>;
+    const actorId = typeof body.actorId === "string" && body.actorId ? body.actorId : undefined;
+    if (actorId) await engine.requireActor(req.badge!.badgeId, actorId);
+    if (options.home) {
+      // The name rides up with the actor so the home can vouch for an actor it
+      // has never heard of — `HomeLink.mintPass` claims before it asks, and
+      // `reincarnate` refuses an unknown `as` with no name to go on.
+      const names = actorId ? await engine.actorNames() : {};
+      return options.home.mintPass(
+        id,
+        actorId ? { id: actorId, name: names[actorId] ?? "" } : undefined,
+      );
+    }
+    await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
+    const { record, token } = mintPass({
+      canvasId: id,
+      mintedBy: req.badge!.badgeId,
+      ...(actorId !== undefined ? { actorId } : {}),
+    });
+    await desk.putPass(record);
+    return { pass: withoutSecret(record), token } satisfies MintPassResponse;
+  });
+
+  /**
+   * Redeem one — **the presenting badge is the one that gets endowed.**
+   *
+   * This diverges from the desk design's diagram, which has the home minting a
+   * third badge (`H-->>D: badge B₃`), and the divergence is argued at length
+   * in `passes.ts` rather than taken quietly. The short of it: a browser
+   * already holds a cookie badge before it can ask for anything, the door
+   * deliberately never returns a cookie's secret in a body, and every client
+   * here already knocks on the door when it is 401'd — so "mint a second
+   * badge" would mean re-setting the one cookie and dropping its admissions.
+   * The design's substance is preserved exactly: a badge that arrived knowing
+   * nothing leaves knowing its person, and leaves admitted. Only who did the
+   * minting moved.
+   *
+   * **On a replica, redemption forwards AND writes locally, and both halves
+   * are necessary.** The forwarding is what spends the pass and endows this
+   * daemon's badge AT THE HOME — which is what makes the canvas appear in that
+   * badge's admissions, and therefore in `GET /api/projects`, and therefore in
+   * the sweep that dials it: the pass is how a replica stops discovering
+   * canvases by enumerating a home (phase 7's finding, and the question phase
+   * 8 inherited). The local write is the claim row for the badge in front of
+   * us, because the CLI on this machine speaks to THIS daemon and mechanism
+   * 5's local half checks the local claims table — without it, Jordan's agent
+   * would be admitted to a canvas at the home and be told `not-your-actor` by
+   * her own laptop.
+   *
+   * What is deliberately NOT written locally is an admission. A replicated
+   * canvas already gets a local link grant when it lands (`ensureHomeLinkGrant`
+   * — "who on THIS machine may reach the local copy"), so the local door
+   * admits this badge the first time it asks; writing a second, pass-rooted
+   * local admission would put provenance in a ledger whose grants are a
+   * different sentence, pointing at a badge id that means nothing on this
+   * machine.
+   */
+  app.post(PASS_REDEEM_ROUTE, async (req) => {
+    const body = (req.body ?? {}) as Partial<RedeemPassRequest>;
+    // No special case for a missing token: `redeemPass` parses it, and an
+    // empty string is not a pass in exactly the way a mangled one is not.
+    const token = typeof body.token === "string" ? body.token : "";
+    const badge = req.badge!;
+    if (options.home) {
+      const answer = await options.home.redeemPass(token);
+      if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);
+      return answer;
+    }
+    const pass = await redeemPass(desk, token, badge);
+    if (pass.actorId === undefined) {
+      return { canvasId: pass.canvasId } satisfies RedeemPassResponse;
+    }
+    // The name as of NOW, not as of minting: a person who renamed herself
+    // between copying the command and pasting it is handed the name she goes
+    // by, which is also the name the canvas already shows on her work.
+    const names = await engine.actorNames();
+    const actor: Actor = { id: pass.actorId, name: names[pass.actorId] ?? "" };
+    await engine.endowClaim(badge.badgeId, actor, pass.canvasId);
+    return { canvasId: pass.canvasId, actor } satisfies RedeemPassResponse;
   });
 
   app.get("/api/projects/:id/canvas", async (req) => {
@@ -974,6 +1164,38 @@ export function registerRoutes(
   else registerStaticWebApp(app, desk);
 }
 
+/**
+ * A pass as the wire may see it. The hash stays behind the desk seam — the
+ * same split the badge has, and the reason is the same: what leaves this
+ * process must never be enough to redeem anything.
+ */
+function withoutSecret(record: Pass & { secretHash: string }): Pass {
+  const { secretHash: _hash, ...pass } = record;
+  return pass;
+}
+
+/**
+ * **There is no such route here** — a JSON 404 with a code, for anything
+ * unmatched under `/api/`.
+ *
+ * Phase 7.5's open finding, closed. An unmatched `/api/` path fell through to
+ * the SPA handler and answered 200 with the web app, which made a replica's
+ * version negotiation with an older home correct BY ACCIDENT — it worked
+ * because `res.json()` threw on HTML. Phase 8 is when that stops being
+ * theoretical: a replica now asks its home to redeem a pass, and a home
+ * deployed before this phase has no such route.
+ *
+ * Deliberately narrow. Only `/api/` answers this way; an unmatched path
+ * anywhere else is still the SPA's, because the web app owns its own routing
+ * and a client-side route is not a missing one.
+ */
+function apiNotFound(reply: FastifyReply, method: string, pathname: string): FastifyReply {
+  return reply.status(404).send({
+    error: `no route ${method} ${pathname} on this daemon — if you are a newer client, this home is older than the route you asked for`,
+    code: UNKNOWN_ROUTE,
+  });
+}
+
 /** The rows still admitting, oldest first — what a person means by "who can
  * get in". Tombstones stay on the desk for provenance and audit (see
  * `Grant.revokedAt`) and are nobody's answer to that question. */
@@ -1072,6 +1294,11 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
 
   app.get("/*", async (req, reply) => {
     const url = (req.params as { "*": string })["*"] ?? "";
+    // An unmatched `/api/` path is a MISSING ROUTE, not a page. This one line
+    // is phase 7.5's finding: without it the SPA fallback answers 200 and the
+    // web app to `GET /api/actors/free-name`, and a replica negotiating with an
+    // older home is correct only because parsing HTML as JSON throws.
+    if (`/${url}`.startsWith("/api/")) return apiNotFound(reply, req.method, `/${url}`);
     const resolved = path.resolve(dist, url);
     if (resolved.startsWith(dist) && url && existsSync(resolved)) {
       return send(reply, resolved);
@@ -1120,6 +1347,13 @@ export const HOME_HEADER = "X-Isocan-Home";
  */
 function registerHomeElsewhere(app: FastifyInstance, homeUrl: string): void {
   app.get("/*", async (req, reply) => {
+    // The same `/api/` branch the page server takes. A replica answers API
+    // calls for real — it is a daemon, not a signpost — so an unmatched one
+    // here is a missing route, and telling a CLI "this canvas lives at
+    // https://…" when it asked for a route that does not exist would be the
+    // cheerful wrong address again, in HTML this time.
+    const pathname = (req.url ?? "/").split("?")[0]!;
+    if (pathname.startsWith("/api/")) return apiNotFound(reply, req.method, pathname);
     const accepts = String(req.headers.accept ?? "");
     reply.status(404).header(HOME_HEADER, homeUrl).header("Cache-Control", "no-store");
     // A person gets a page; a script gets a line. Not content negotiation for

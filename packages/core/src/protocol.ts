@@ -382,6 +382,31 @@ export interface ApiError {
   code?: string;
 }
 
+/**
+ * **There is no such route under `/api/` on this daemon** — and saying so is
+ * phase 8 closing phase 7.5's open finding.
+ *
+ * An unmatched `/api/` path used to fall through to the SPA handler and answer
+ * **200 with the web app**: the fourth instance of "this system's default
+ * answer to a wrong address is a cheerful one", after `/healthz/`, the blank
+ * page a mistyped canvas address rendered, and a socket refusal
+ * indistinguishable from a network blip. This one had
+ * teeth beyond legibility, because it is how one VERSION of this code talks to
+ * another: a replica asking an older home for a route that home does not have
+ * got HTML, and the fallback worked *only because parsing HTML as JSON
+ * throws*. Correct by accident is not correct — and phase 8 is the moment it
+ * stops being theoretical, because a replica now asks its home to redeem a
+ * pass, and a home that predates this phase has no such route.
+ *
+ * The code is exported here, rather than spelled in the server, because it is
+ * the answer a CLIENT reads to tell "this home is too old for that" from "this
+ * home refused me". Nothing branches on it today: the callers that meet it
+ * fall back for any refusal, which is the right shape. It is here so that the
+ * first caller that WANTS to branch has a name to branch on rather than a
+ * status code shared with four other meanings.
+ */
+export const UNKNOWN_ROUTE = "unknown-route";
+
 // ---- blob garbage collection (maintenance; not an Operation) ----
 
 export interface GcRequest {

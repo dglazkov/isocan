@@ -16,17 +16,27 @@ import type {
   GrantsResponse,
   GrantSubject,
   LogEntry,
+  MintPassResponse,
   Operation,
   PostOpResponse,
   PresenceSession,
   Project,
+  RedeemPassResponse,
   UpdateSessionRequest,
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER, grantRoute, grantsRoute, healthPath } from "@isocan/core";
+import {
+  encodeFilename,
+  FILENAME_HEADER,
+  grantRoute,
+  grantsRoute,
+  healthPath,
+  PASS_REDEEM_ROUTE,
+  passesRoute,
+} from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
 import { bearerHeader, knockOnDoor, paths, readBadge, writeBadge } from "@isocan/server";
 
@@ -309,6 +319,41 @@ export class DaemonClient {
    * should not announce a content type. */
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
     return this.request("DELETE", grantRoute(projectId, grantId));
+  }
+
+  // ---- passes: the escalation credential (Scene 5) ----
+  //
+  // Two routes, deliberately different shapes, and the CLI does not get to
+  // decide which: `passesRoute` is project-scoped so the door has already
+  // asked whether this badge may mint for this canvas, and `PASS_REDEEM_ROUTE`
+  // is flat because the redeemer is BY DEFINITION not admitted yet. Both
+  // spellings come from `@isocan/core`, like the grant routes above and for
+  // the same reason — stage 3's dialog drives the identical pair.
+  //
+  // On a replica both forward to the home. That is not an optimization: a pass
+  // is desk state, single-use is only single across the desk that holds the
+  // row, and the badge a redeemed pass endows has to be the one the HOME will
+  // see presented. Nothing here has to know that, which is the point.
+
+  /** Mint one for this canvas. `actorId` endows the claim; omitting it mints
+   * the admission-only shape. The token comes back exactly once. */
+  mintPass(projectId: string, actorId?: string): Promise<MintPassResponse> {
+    return this.request("POST", passesRoute(projectId), actorId ? { actorId } : {});
+  }
+
+  /**
+   * Redeem one: this daemon's badge comes away admitted at the home and, when
+   * the pass named a claim, holding it.
+   *
+   * **The answer is the only announcement there will ever be.** The handoff
+   * row carries no session key by design, and `GET /api/actors` is keyed by
+   * session key — so a caller that throws this response away cannot ask for
+   * it again, and the identity the pass endowed becomes unreachable from this
+   * machine even though the badge still holds it. `isocan setup` writes it
+   * into `identity.json` for exactly that reason.
+   */
+  redeemPass(token: string): Promise<RedeemPassResponse> {
+    return this.request("POST", PASS_REDEEM_ROUTE, { token });
   }
 
   snapshot(projectId: string): Promise<CanvasSnapshotResponse> {
