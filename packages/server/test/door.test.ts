@@ -441,10 +441,22 @@ describe("what a badge holds", () => {
     expect(asYou).toEqual([]);
   });
 
-  it("writes down where it has been, without enforcing it", async () => {
-    // Unenforced in phase 2 — "the address still admits" recorded as data
-    // instead of assumed, so phase 3's `projectId ∈ admissions` is a check
-    // rather than a backfill.
+  it("writes down where it has been, and which grant let it in", async () => {
+    /**
+     * Phase 2 wrote this down unenforced — "the address still admits",
+     * recorded as data instead of assumed, so phase 3's `projectId ∈
+     * admissions` was a check rather than a backfill. **Phase 7 makes it the
+     * door**: the visitor is still admitted, but now BY A ROW — the canvas's
+     * standing link grant — and the admission names it.
+     *
+     * The two assertions below moved with the policy they describe, which is
+     * the one kind of assertion change this phase is entitled to make: the
+     * visitor's provenance was `{root: "link"}`, phase 2's word for "the
+     * address let it in" when there was nothing to point at, and is now
+     * `{root: "grant", grantId}`. That is not cosmetic — phase 9's sweep
+     * walks exactly these roots, and an admission still saying `link` would
+     * be one no revocation could ever find.
+     */
     const creator = await mintTestBadge(base);
     await creator.speakAs(usrA);
     await fetch(`${base}/api/ops`, {
@@ -458,14 +470,17 @@ describe("what a badge holds", () => {
     });
     const visitor = await mintTestBadge(base);
     const seen = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: visitor.headers });
-    expect(seen.status).toBe(200); // policy unchanged: the address admits
+    expect(seen.status).toBe(200); // the link grant admits — the status quo, as data
 
     const desk = await deskFile();
     expect(desk.badges[creator.badgeId]!.admissions).toEqual([
       expect.objectContaining({ canvasId: "prj_1", provenance: { root: "created" } }),
     ]);
     expect(desk.badges[visitor.badgeId]!.admissions).toEqual([
-      expect.objectContaining({ canvasId: "prj_1", provenance: { root: "link" } }),
+      expect.objectContaining({
+        canvasId: "prj_1",
+        provenance: { root: "grant", grantId: expect.stringMatching(/^gnt_/) },
+      }),
     ]);
   });
 });

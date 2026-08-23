@@ -1,0 +1,189 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { promises as fs } from "node:fs";
+import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Grant } from "@isocan/core";
+import { canvasUrl, grantsRoute } from "@isocan/core";
+import { startDaemon, type Daemon } from "@isocan/server";
+import { markerFile } from "../src/binding.ts";
+import { harnessVars } from "../src/harness.ts";
+import { mintTestBadge } from "./badge.ts";
+
+/**
+ * **`isocan share` — the verb half of Scenes 1–2.**
+ *
+ * House rule 2 says an agent needs a verb for every intent a person has a
+ * button for, and Phase 7 says it outright: "button and verb, one endpoint".
+ * What is asserted here is that the endpoint really is the same one — and, in
+ * particular, that the verb run on a REPLICA changes who may enter the canvas
+ * **at the home**, because a grant is desk state and the row that guards the
+ * door lives where the door is. A `share --link off` that quietly edited the
+ * laptop's own ledger would print exactly the same success and leave the link
+ * on for the world, which is the failure worth a real two-daemon test.
+ *
+ * The door is the witness throughout: a brand-new badge at the home is turned
+ * away after the revoke and walks in after the re-grant, so nothing here is
+ * asserting that a command printed a word.
+ *
+ * Fixtures are synthetic: Priya, an Acme board, and a stranger.
+ */
+
+const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
+const priya = { id: "usr_priya", name: "Priya" };
+
+let upstreamDir: string;
+let laptopDir: string;
+let work: string;
+let homeDaemon: Daemon;
+let laptop: Daemon;
+let homeBase: string;
+
+function baseOf(daemon: Daemon): string {
+  const address = daemon.app.server.address();
+  return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+}
+
+const portOf = (daemon: Daemon) => Number(new URL(baseOf(daemon)).port);
+
+beforeEach(async () => {
+  upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-home-"));
+  laptopDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-laptop-"));
+  work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-work-"));
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  homeBase = baseOf(homeDaemon);
+  await fs.writeFile(
+    path.join(laptopDir, "identity.json"),
+    JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
+  );
+  laptop = await startDaemon({ port: 0, home: laptopDir, homeUrl: homeBase, homePollMs: 50 });
+});
+
+afterEach(async () => {
+  await laptop.close();
+  await homeDaemon.close();
+  await Promise.allSettled(
+    [upstreamDir, laptopDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+  );
+});
+
+interface Run {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** The real CLI, on the laptop, in a directory bound by a marker. */
+function cli(...args: string[]): Promise<Run> {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ISOCAN_HOME: laptopDir,
+    ISOCAN_PORT: String(portOf(laptop)),
+  };
+  for (const v of harnessVars) delete env[v];
+  env.CLAUDE_CODE_SESSION_ID = "s-priya";
+  const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (c) => (stdout += c));
+  child.stderr.on("data", (c) => (stderr += c));
+  return new Promise((resolve) =>
+    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
+  );
+}
+
+/** Born through the replica, so born at the home — Scene 0's topology. */
+async function bornCanvas(): Promise<string> {
+  const born = await cli("identity", "--session");
+  expect(born.code, born.stderr).toBe(0);
+  const marker = JSON.parse(await fs.readFile(markerFile(work), "utf8")) as { projectId: string };
+  return marker.projectId;
+}
+
+/** The home's own rows, read past the CLI entirely. */
+async function grantsAtHome(projectId: string): Promise<Grant[]> {
+  const badge = await mintTestBadge(homeBase);
+  const res = await fetch(`${homeBase}${grantsRoute(projectId)}`, { headers: badge.headers });
+  return ((await res.json()) as { grants: Grant[] }).grants;
+}
+
+/** A badge that has never been anywhere: does the door let it at the canvas? */
+async function strangerCanRead(projectId: string): Promise<number> {
+  const badge = await mintTestBadge(homeBase);
+  const res = await fetch(`${homeBase}/api/projects/${projectId}/canvas`, {
+    headers: badge.headers,
+  });
+  return res.status;
+}
+
+describe("isocan share", () => {
+  it("prints the address a person is sent, and says the link is on", async () => {
+    const projectId = await bornCanvas();
+
+    const shown = await cli("share");
+    expect(shown.code, shown.stderr).toBe(0);
+    // The home's address, never the laptop's 127.0.0.1: people always enter
+    // through the one origin, and a replica serves no pages at all.
+    expect(shown.stdout).toContain(canvasUrl(homeBase, projectId));
+    expect(shown.stdout).toMatch(/link\s+on —/);
+  }, 60_000);
+
+  it("--link off closes the door AT THE HOME, and --link on opens it again", async () => {
+    const projectId = await bornCanvas();
+    expect(await strangerCanRead(projectId)).toBe(200);
+
+    const off = await cli("share", "--link", "off");
+    expect(off.code, off.stderr).toBe(0);
+    expect(off.stdout).toMatch(/link\s+off —/);
+    // The witness is the door, at the home, for a badge this test just minted.
+    expect(await strangerCanRead(projectId)).toBe(403);
+
+    const on = await cli("share", "--link", "on");
+    expect(on.code, on.stderr).toBe(0);
+    expect(await strangerCanRead(projectId)).toBe(200);
+
+    // Two rows, not one resurrected: revocation is a tombstone, so the desk
+    // remembers that the link was off and who turned it back on.
+    const rows = await grantsAtHome(projectId);
+    expect(rows).toHaveLength(1); // the listing hides tombstones…
+    expect(rows[0]!.id).not.toBe("");
+  }, 60_000);
+
+  it("turning the link off twice is not an error — the gesture is idempotent", async () => {
+    await bornCanvas();
+    expect((await cli("share", "--link", "off")).code).toBe(0);
+    const again = await cli("share", "--link", "off");
+    expect(again.code, again.stderr).toBe(0);
+    expect(again.stdout).toMatch(/link\s+off —/);
+  }, 60_000);
+
+  it("refuses --link with anything that is not on or off", async () => {
+    await bornCanvas();
+    const bad = await cli("share", "--link", "maybe");
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toMatch(/on or off/);
+  }, 60_000);
+
+  it("hands back the HOME's refusal for an email, naming the phase that will serve it", async () => {
+    await bornCanvas();
+    const refused = await cli("share", "jordan@example.com");
+    expect(refused.code).toBe(1);
+    // Not a client-side "not yet": the request went up, and the message is the
+    // one the API gives, so a later build that can satisfy the subject needs
+    // no change here.
+    expect(refused.stderr).toMatch(/attester/);
+    expect(refused.stderr).toMatch(/phase 9/);
+    expect(refused.stderr).toContain("jordan@example.com");
+  }, 60_000);
+
+  it("--json carries the address and the live rows", async () => {
+    const projectId = await bornCanvas();
+    const json = await cli("share", "--json");
+    expect(json.code, json.stderr).toBe(0);
+    const payload = JSON.parse(json.stdout) as { address: string; grants: Grant[] };
+    expect(payload.address).toBe(canvasUrl(homeBase, projectId));
+    expect(payload.grants.map((g) => g.subject)).toEqual(["link"]);
+    expect(payload.grants[0]!.canvasId).toBe(projectId);
+  }, 60_000);
+});

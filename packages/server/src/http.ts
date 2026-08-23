@@ -2,7 +2,18 @@ import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { Actor, DoorRequest, DoorResponse, PostOpRequest, UndoRedoRequest } from "@isocan/core";
+import type {
+  Actor,
+  CreateGrantRequest,
+  DoorRequest,
+  DoorResponse,
+  Grant,
+  GrantResponse,
+  GrantsResponse,
+  PostOpRequest,
+  Project,
+  UndoRedoRequest,
+} from "@isocan/core";
 import {
   BADGE_RESTART_HINT,
   cancelledSince,
@@ -10,11 +21,15 @@ import {
   decodeFilename,
   DOOR_ROUTE,
   FILENAME_HEADER,
+  grantSubjectRefusal,
+  isLive,
+  newId,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
+import { admittingGrant, NotAdmittedError } from "./grants.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
@@ -146,6 +161,13 @@ export function registerRoutes(
     if (err instanceof NothingToUndoError) {
       return reply.status(409).send({ error: err.message, code: "nothing-to-undo" });
     }
+    // 403, and its own code, because this caller's badge is FINE. A 401 would
+    // send it back to the door for a fresh badge, which would be refused here
+    // in exactly the same way — a refresh loop minting credentials that cannot
+    // help. `not-admitted` is a different recovery: ask for the link.
+    if (err instanceof NotAdmittedError) {
+      return reply.status(403).send({ error: err.message, code: err.code });
+    }
     // A replica is a PASS-THROUGH for a refusal, not a re-interpreter: the
     // home's status and the home's code, verbatim, so a `writer-fenced` 409
     // still says "do not retry" by the time it reaches the CLI. Flattening it
@@ -162,6 +184,35 @@ export function registerRoutes(
     // built machinery phases 10 and 13 exist to do properly.
     if (err instanceof HomeUnreachableError) {
       return reply.status(503).send({ error: err.message, code: err.code });
+    }
+    // Fastify's OWN refusals, restored to the 4xx they already are.
+    //
+    // Fastify tags a caller's mistake with a `statusCode` and an `FST_ERR_*`
+    // code and hands it to this handler; every branch above matches on our
+    // error classes, so those tagged errors fell through to the 500 below and
+    // were reported as our failure. The loudest instance: a `DELETE` that
+    // declares `Content-Type: application/json` and sends no body. Fastify
+    // will not parse an empty JSON body — `FST_ERR_CTP_EMPTY_JSON_BODY`, 400 —
+    // and the caller was told `internal error`, which is a lie that gets
+    // debugged from the wrong end.
+    //
+    // This is PRE-EXISTING, not a phase 7 regression: `DELETE /api/commands/:id`
+    // and `DELETE /api/presence/actors/:id` have both done it since they were
+    // written. It surfaces now because stage 1 adds the grant revoke, which
+    // stage 2 calls from two surfaces — the Share dialog and the CLI verb —
+    // and plenty of HTTP clients set a JSON content-type unconditionally on
+    // every request, body or no body.
+    //
+    // The gate is the status code, not the message: 4xx means the error is
+    // ABOUT the request, so its own message is safe to repeat and useful to
+    // read. 5xx keeps falling through, because a server-side failure's message
+    // is ours and stays ours.
+    const tagged = err as { statusCode?: unknown; code?: unknown; message?: unknown };
+    if (typeof tagged.statusCode === "number" && tagged.statusCode >= 400 && tagged.statusCode < 500) {
+      return reply.status(tagged.statusCode).send({
+        error: typeof tagged.message === "string" ? tagged.message : "bad request",
+        ...(typeof tagged.code === "string" ? { code: tagged.code } : {}),
+      });
     }
     app.log.error(err);
     return reply.status(500).send({ error: "internal error" });
@@ -259,26 +310,61 @@ export function registerRoutes(
   });
 
   /**
-   * `projectId ∈ badge.admissions`, re-asked on every project-scoped route —
-   * the door's test, taken cheaply on each request rather than only at entry
-   * (mechanism 5).
+   * **The door, and the point of phase 7.** `projectId ∈ badge.admissions`,
+   * re-asked on every project-scoped route (mechanism 5) — and, when the
+   * answer is no, the design's flowchart run in order:
    *
-   * Today it always passes, and saying so plainly is more useful than hiding
-   * it: the door's POLICY is that the address admits, so a badge that is not
-   * yet admitted here is admitted NOW and the admission is written down.
-   * Phase 7 replaces the one marked line with the canvas's link grant, and
-   * this becomes a refusal without another route having to be found and
-   * edited.
+   *   already admitted → creating the canvas (bootstrap) → a valid pass
+   *   (phase 8) → a grant is satisfied → **refused**
    *
-   * The payoff is already real, though, and it is mechanism 10's: because
-   * every project-scoped route passes through here, a badge's admissions are
-   * an accurate record of where it has been — which is exactly the scope the
-   * narrowed name check and the narrowed color broadcast are judged against.
+   * Phase 2 left this line saying "the address admits" and merely writing the
+   * admission down; phase 3 marked it as the place the grant lookup goes. The
+   * lookup is `admittingGrant`, and because every project-scoped route passes
+   * through the one `onRequest` hook, replacing it here turns the check into
+   * a refusal without a single route having to be found and edited.
+   *
+   * **Provenance is written correctly or phase 9 is broken.** `{root:
+   * "grant", grantId}` for an ordinary admission, `{root: "created"}` for the
+   * bootstrap. The sweep that expels a revoked grant's badges walks exactly
+   * these roots, so an admission mis-rooted here is one no revocation can
+   * ever find.
+   *
+   * **A canvas that is not here is a 404, not a 403.** The refusal is for
+   * canvases that exist and will not have you; anything else would turn every
+   * mistyped id in the suite — and in the wild — into a "you are not admitted"
+   * about a canvas that was never there. It does mean an unadmitted caller
+   * can tell "exists" from "does not exist", which is a real disclosure and a
+   * small one: ids are 10 characters of nanoid, and the whole premise of the
+   * link grant is that knowing the id is what gets you in.
    */
-  const admit = async (req: FastifyRequest, canvasId: string, provenance: Provenance = { root: "link" }) => {
+  const admit = async (req: FastifyRequest, canvasId: string, bootstrap = false) => {
     if (!req.badge) return; // an open route (the blob GET); nothing to admit
     if (req.badge.admissions.some((a) => a.canvasId === canvasId)) return;
-    // ---- the policy point. Phase 7: consult the grant, and refuse. ----
+
+    // The bootstrap: this badge is creating the canvas, and it is the only
+    // provenance that is not "somebody let me in". Nothing to consult — there
+    // are no grants on a canvas one line old.
+    let provenance: Provenance | null = bootstrap ? { root: "created" } : null;
+
+    // Phase 8's branch, named rather than pretended: a pass minted by an
+    // admitted badge admits its holder, with the MINTER's root inherited so
+    // the sweep still reaches it. There is no pass in existence yet, so there
+    // is nothing here to run — but a reader looking for where it goes should
+    // find this comment rather than an unexplained gap between bootstrap and
+    // grant.
+
+    if (!provenance) {
+      const grant = await admittingGrant(desk, canvasId, req.badge);
+      if (grant) provenance = { root: "grant", grantId: grant.id };
+    }
+
+    if (!provenance) {
+      // No canvas here at all — let the route answer 404 for itself. On a
+      // replica this is also the ordinary shape of "not replicated yet".
+      if (!(await store.projectExists(canvasId))) return;
+      throw new NotAdmittedError(canvasId);
+    }
+
     await desk.admit(req.badge.badgeId, canvasId, provenance);
     req.badge.admissions = [
       ...req.badge.admissions,
@@ -313,17 +399,28 @@ export function registerRoutes(
       });
       return { seq: entry.seq, envelope: entry.envelope };
     }
+    /**
+     * The door, BEFORE the write, and the order is the whole point.
+     *
+     * `/api/ops` is the one route that is about a canvas without saying so in
+     * its path (`PROJECT_ROUTE` deliberately does not match it — "its canvas
+     * is in the body, and it says so itself"), so the hook cannot cover it and
+     * this call is the door for every op ever written. Under phase 2's policy
+     * the admission was recorded AFTER the submit, which was harmless when it
+     * could not refuse; a refusal that arrives after the op has landed is not
+     * a refusal at all.
+     */
+    if (body.projectId) await admit(req, body.projectId);
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
       badgeId: req.badge!.badgeId,
     });
     if (body.op?.type === "project.create") {
-      // The bootstrap badge's first admission: it earned this one by making
-      // the canvas, which is the only provenance that is not "somebody let
-      // me in".
-      await admit(req, body.op.projectId, { root: "created" });
-    } else if (body.projectId) {
-      await admit(req, body.projectId);
+      // The bootstrap badge's first admission, and it can only be taken after
+      // the fact: the canvas did not exist to be admitted to a moment ago. It
+      // earned this one by making the canvas, which is the only provenance
+      // that is not "somebody let me in".
+      await admit(req, body.op.projectId, true);
     }
     return { seq: entry.seq, envelope: entry.envelope };
   });
@@ -391,12 +488,142 @@ export function registerRoutes(
     return reply.code(204).send();
   });
 
-  app.get("/api/projects", async () => engine.listProjects());
+  /**
+   * The canvases this badge may see — phase 6's inherited debt, paid as far
+   * as this phase can honestly pay it.
+   *
+   * Phase 6 found this route home-wide and named the consequence: "the moment
+   * a home has two members a replica pulls down canvases it was never
+   * admitted to", because `HomeLink.sweep` polls exactly this list and dials
+   * everything in it. The narrowing is the DOOR'S OWN TEST, asked per canvas:
+   * a badge sees what it is admitted to, plus what a grant would admit it to.
+   *
+   * **What that closes, and what it does not.** A canvas whose link grant has
+   * been revoked drops out of every unadmitted badge's list immediately — a
+   * stranger's replica stops mirroring it, which is the gesture "turn off the
+   * link" is supposed to perform. A canvas whose link is ON is still listed
+   * to anyone, and that is not a bug in this route: a link grant says "anyone
+   * presenting the address may enter", and with every canvas born carrying
+   * one, "the ones you may enter" IS the home. Closing that last gap needs a
+   * grant that is about a person rather than a link (`email:`, phase 9), or a
+   * pass-enrolled second machine that inherits its household's admissions
+   * (phase 8) — and it must not be closed by narrowing to admissions alone
+   * TODAY, because a fresh replica's badge has no admissions and would
+   * discover nothing at all: Scene 0's multi-device beat, and phase 6's whole
+   * proof, run through this list. Measured, not assumed — see the phase's
+   * findings.
+   *
+   * The cost is one grant query per canvas the badge has not been in. It
+   * disappears after the first sweep, because dialling a canvas admits the
+   * badge to it, and an admitted canvas is answered from the badge record
+   * that the request already resolved.
+   */
+  app.get("/api/projects", async (req) => {
+    const badge = req.badge!;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const visible: Project[] = [];
+    for (const project of await engine.listProjects()) {
+      if (admitted.has(project.id) || (await admittingGrant(desk, project.id, badge))) {
+        visible.push(project);
+      }
+    }
+    return visible;
+  });
 
   app.get("/api/projects/:id", async (req) => {
     const { id } = req.params as { id: string };
     const snapshot = await engine.getSnapshot(id);
     return snapshot.project;
+  });
+
+  // ---- grants: who may enter this canvas (identity desk, mechanisms 3 + 2) ----
+  //
+  // Three routes, project-scoped, so the `onRequest` hook has already asked
+  // the door about the caller before any of them runs: **only an admitted
+  // badge can read or change a canvas's grants**, with nothing per-route to
+  // remember. One endpoint for both surfaces — stage 2's Share dialog and the
+  // CLI verb drive exactly these.
+  //
+  // What is deliberately NOT here is a notion of OWNERSHIP: any admitted badge
+  // may share or un-share. The design leaves roles open ("whether grants may
+  // carry roles waits for a scene that forces it"), and inventing an owner
+  // here would invent it in the one place hardest to change later — the door.
+  // On a solo home this is exactly today's posture; on a shared one it is the
+  // familiar "anyone in the doc can share the doc", stated rather than
+  // stumbled into.
+  //
+  // On a REPLICA all three forward to the home. A grant is desk state and does
+  // not replicate, so the row that decides who may enter the canvas lives at
+  // the home — and a verb that quietly edited the laptop's own copy would
+  // report success while the link stayed on for everyone else.
+
+  app.get("/api/projects/:id/grants", async (req) => {
+    const { id } = req.params as { id: string };
+    if (options.home) return options.home.grants(id);
+    await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
+    return { grants: liveGrants(await desk.grantsFor(id)) } satisfies GrantsResponse;
+  });
+
+  /**
+   * Share it. Today that means one subject — `link` — and the refusal for the
+   * others is the honest half: `email:` and `repo:` are satisfied by
+   * attestations, phase 9 owns attesters, and a row written now would admit
+   * nobody while the dialog claimed somebody had been invited.
+   *
+   * Re-granting a subject that is already live hands back the row that is
+   * already there rather than writing a second one. The gesture is a TOGGLE,
+   * two people can flip it at once, and two live link grants on one canvas
+   * would mean revoking the link left the link on.
+   */
+  app.post("/api/projects/:id/grants", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
+    const refusal = grantSubjectRefusal(body.subject);
+    if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
+    const subject = body.subject!;
+    if (options.home) return options.home.createGrant(id, subject);
+    await engine.getSnapshot(id);
+    const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
+    if (live) return { grant: live } satisfies GrantResponse;
+    const grant: Grant = {
+      id: newId("gnt"),
+      canvasId: id,
+      subject,
+      grantedBy: req.badge!.badgeId,
+      at: new Date().toISOString(),
+    };
+    await desk.putGrant(grant);
+    return { grant } satisfies GrantResponse;
+  });
+
+  /**
+   * Un-share it — "turn off the link", and the same gesture for every other
+   * subject.
+   *
+   * **What this does and does not do, stated where somebody would otherwise
+   * expect the sweep.** The row stops admitting NEW arrivals: a badge that
+   * has not been here is now refused, and the canvas drops out of its
+   * listing. Badges ALREADY admitted under this grant keep their admissions
+   * until phase 9's provenance sweep, which is not a shortcut — the sweep has
+   * to RE-RUN the door test per badge and re-root the ones another grant
+   * still covers, or turning off the link would expel the very people who
+   * were invited by name. That re-rooting needs attestations to be worth
+   * anything, and attestations are phase 9's. So: this revocation is the
+   * "stop strangers" half, in full, and the "expel" half is deliberately not
+   * half-built here.
+   */
+  app.delete("/api/projects/:id/grants/:grantId", async (req, reply) => {
+    const { id, grantId } = req.params as { id: string; grantId: string };
+    if (options.home) return options.home.revokeGrant(id, grantId);
+    await engine.getSnapshot(id);
+    // Read through this canvas's own rows, so a grant id belonging to another
+    // canvas cannot be revoked through a canvas the caller happens to be in.
+    const mine = (await desk.grantsFor(id)).find((g) => g.id === grantId);
+    if (!mine) {
+      return reply.status(404).send({ error: `no grant ${grantId} on ${id}`, code: "unknown-grant" });
+    }
+    const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
+    return { grant: revoked ?? mine } satisfies GrantResponse;
   });
 
   app.get("/api/projects/:id/canvas", async (req) => {
@@ -440,6 +667,16 @@ export function registerRoutes(
    * listens on. An on-call agent hears canvases it has never opened, so the
    * long poll must be woken by ANY project's op, and a project born while it
    * waits is streamed from its first entry.
+   *
+   * **Still home-wide, and it is the sibling of the leak `GET /api/projects`
+   * just closed.** "Canvases it has never opened" is the feature — a parked
+   * agent must hear a canvas it was summoned to — and at a multi-tenant home
+   * that same sentence reads as "hears everybody's". Narrowing it is the same
+   * per-canvas door test as the listing above; what stops it happening here
+   * is that a parked `isocan wait` is exactly the caller whose badge has no
+   * admissions yet, so the narrowing has to be designed WITH the wake-up
+   * (phase 11's thin agent and phase 12's dispatch), not bolted on the poll.
+   * Recorded here so the next person meets a decision rather than a surprise.
    */
   app.post("/api/oplog/watch", async (req) => {
     const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
@@ -716,6 +953,13 @@ export function registerRoutes(
   else registerStaticWebApp(app, desk);
 }
 
+/** The rows still admitting, oldest first — what a person means by "who can
+ * get in". Tombstones stay on the desk for provenance and audit (see
+ * `Grant.revokedAt`) and are nobody's answer to that question. */
+function liveGrants(grants: Grant[]): Grant[] {
+  return grants.filter(isLive).sort((a, b) => a.at.localeCompare(b.at));
+}
+
 /** What a direct-upload request must carry, or the reason it does not. All
  * four fields are load-bearing: the hash is the object's name, the mime type
  * and filename are signed into the URL, and the size is what the register
@@ -812,7 +1056,7 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
       return send(reply, resolved);
     }
     // The browser is badged on the PAGE LOAD, not on a round trip — the
-    // desk's Scene 3 diagram is literal about it: `GET /c/7f3a… → web app +
+    // desk's Scene 3 diagram is literal about it: `GET /p/7f3a… → web app +
     // Set-Cookie`. So the app is badged before its first fetch, and the
     // 401-and-recover path in `api.ts` is belt-and-braces rather than the
     // way in. The guard matters: this handler is the SPA fallback for any

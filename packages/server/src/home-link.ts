@@ -3,6 +3,9 @@ import { WebSocket } from "ws";
 import type {
   Actor,
   BlobUploadResponse,
+  GrantResponse,
+  GrantsResponse,
+  GrantSubject,
   LogEntry,
   PostOpRequest,
   PostOpResponse,
@@ -11,7 +14,14 @@ import type {
   ServerMessage,
   UndoRedoRequest,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER, healthPath } from "@isocan/core";
+import {
+  encodeFilename,
+  FILENAME_HEADER,
+  grantRoute,
+  grantsRoute,
+  healthPath,
+  WS_NO_CANVAS,
+} from "@isocan/core";
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } from "./badge-store.ts";
@@ -114,6 +124,19 @@ export interface HomeConnection {
   /** Make this daemon's badge at the home vouch for an actor (and, when the
    * name has changed, tell the home the new one). */
   announceActor(actor: Actor): Promise<void>;
+  /**
+   * The grant routes, forwarded.
+   *
+   * A grant is desk state and desk state does not replicate — so unlike a
+   * canvas, whose local copy is a real copy, the local rows on this machine
+   * say only who on THIS machine may reach it. The row that decides who may
+   * enter the canvas at all lives at the home, and a `isocan share` that
+   * edited the laptop's ledger would report success while the link stayed on
+   * for the world. These three go up for the same reason writes do.
+   */
+  grants(projectId: string): Promise<GrantsResponse>;
+  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
+  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
     projectId: string,
@@ -416,7 +439,7 @@ export class HomeLink implements HomeConnection {
       // replica holding a canvas the home has never heard of is offline birth
       // (phase 13), and retrying forever would be a socket storm about a
       // canvas nobody can serve.
-      if (code === 4404) {
+      if (code === WS_NO_CANVAS) {
         link.closed = true;
         this.links.delete(link.projectId);
         return;
@@ -672,6 +695,20 @@ export class HomeLink implements HomeConnection {
   async submitOp(body: PostOpRequest): Promise<PostOpResponse> {
     if (body.actor) await this.ensureClaim(body.actor);
     return this.api<PostOpResponse>("POST", "/api/ops", body);
+  }
+
+  /** Who may enter this canvas, as the HOME has it. No claim goes up first:
+   * a grant is about badges, never about actors. */
+  grants(projectId: string): Promise<GrantsResponse> {
+    return this.api<GrantsResponse>("GET", grantsRoute(projectId));
+  }
+
+  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
+    return this.api<GrantResponse>("POST", grantsRoute(projectId), { subject });
+  }
+
+  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
+    return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
   }
 
   async undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {

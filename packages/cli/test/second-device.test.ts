@@ -1,0 +1,179 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { promises as fs } from "node:fs";
+import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Project } from "@isocan/core";
+import { startDaemon, type Daemon } from "@isocan/server";
+import { markerFile } from "../src/binding.ts";
+import { harnessVars } from "../src/harness.ts";
+
+/**
+ * **Scene 0's multi-device beat, played against the door.**
+ *
+ * Phase 6 shipped replicas and proved this by hand: a marker carried to a
+ * second machine by git resolves against a replica that has never heard of
+ * the canvas, and the second machine then shows the first machine's work.
+ * Phase 7 puts a door in front of every one of those steps, and **the second
+ * machine's badges are all brand new** — its daemon's badge at the home has
+ * no admissions, and the CLI's badge on that machine has none either. What
+ * lets both of them in is the standing **link grant**, at the home and in the
+ * replica's own ledger, and nothing else does.
+ *
+ * So this is the regression that had to be verified rather than assumed. It
+ * is a second `ISOCAN_HOME` whose only knowledge of the canvas is a copied
+ * `.isocan/project.json` — the clone case, with two real daemons and the real
+ * CLI, because what is under test is what three badges say to each other and
+ * no in-process assertion would show it.
+ */
+
+const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
+const priya = { id: "usr_priya", name: "Priya" };
+
+let upstreamDir: string;
+let firstDir: string;
+let secondDir: string;
+let firstWork: string;
+let secondWork: string;
+let homeDaemon: Daemon;
+let first: Daemon;
+let second: Daemon | null;
+let homeBase: string;
+
+function baseOf(daemon: Daemon): string {
+  const address = daemon.app.server.address();
+  return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+}
+
+const portOf = (daemon: Daemon) => Number(new URL(baseOf(daemon)).port);
+
+async function machine(dir: string): Promise<Daemon> {
+  await fs.writeFile(
+    path.join(dir, "identity.json"),
+    JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
+  );
+  return startDaemon({ port: 0, home: dir, homeUrl: homeBase, homePollMs: 50 });
+}
+
+beforeEach(async () => {
+  upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-home-"));
+  firstDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-a-"));
+  secondDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-b-"));
+  firstWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-a-"));
+  secondWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-b-"));
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  homeBase = baseOf(homeDaemon);
+  first = await machine(firstDir);
+  second = null;
+});
+
+afterEach(async () => {
+  await Promise.allSettled([second?.close(), first?.close()]);
+  await homeDaemon.close();
+  await Promise.allSettled(
+    [upstreamDir, firstDir, secondDir, firstWork, secondWork].map((dir) =>
+      fs.rm(dir, { recursive: true, force: true }),
+    ),
+  );
+});
+
+interface Run {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+function cli(cwd: string, home: string, port: number, session: Record<string, string>, ...args: string[]): Promise<Run> {
+  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
+  for (const v of harnessVars) delete env[v];
+  Object.assign(env, session);
+  const child = spawn(process.execPath, [cliBin, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (c) => (stdout += c));
+  child.stderr.on("data", (c) => (stderr += c));
+  return new Promise((resolve) =>
+    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
+  );
+}
+
+const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
+
+async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: string): Promise<T> {
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const value = await fn().catch(() => null as T | null);
+    if (value !== null && ok(value)) return value;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
+describe("a second machine, holding nothing but the marker", () => {
+  it("resolves the binding, replicates the canvas, and writes to it", async () => {
+    // The first machine: a canvas born through a replica, so it is born AT
+    // THE HOME, and a marker beside the directory naming id and address.
+    const born = await cli(firstWork, firstDir, portOf(first), claude("s-1"), "identity", "--session");
+    expect(born.code, born.stderr).toBe(0);
+    const marker = JSON.parse(await fs.readFile(markerFile(firstWork), "utf8")) as {
+      projectId: string;
+      home: string;
+    };
+    expect(marker.home).toBe(homeBase);
+
+    // Committed to git, cloned on the other machine — which here is a copy of
+    // one file into a directory that knows nothing else.
+    await fs.mkdir(path.join(secondWork, ".isocan"), { recursive: true });
+    await fs.copyFile(markerFile(firstWork), markerFile(secondWork));
+
+    // The second machine boots. Its daemon knocks on the home's door for a
+    // badge that has never been admitted anywhere.
+    second = await machine(secondDir);
+
+    // Discovery: the home lists the canvas to a badge with NO admissions,
+    // because the canvas's link grant would admit it. This is the exact step
+    // that narrowing the listing to admissions alone would have broken — a
+    // fresh replica would then discover nothing, forever, and Scene 0's
+    // multi-device beat would be over before the CLI ran.
+    const listed = await until(
+      () => second!.engine.listProjects(),
+      (projects) => projects.some((project) => project.id === marker.projectId),
+      "the second machine to replicate the canvas",
+    );
+    expect(listed.find((project: Project) => project.id === marker.projectId)!.title).toBe(
+      path.basename(firstWork),
+    );
+
+    // And the CLI on that machine — a THIRD brand-new badge, minted at the
+    // replica's own door — resolves the marker and reads the canvas through
+    // the local daemon's door, which admits it under the link grant the
+    // replica wrote when the canvas arrived.
+    const read = await cli(secondWork, secondDir, portOf(second), claude("s-2"), "ls", "--json");
+    expect(read.code, read.stderr).toBe(0);
+    expect(read.stderr).not.toContain("not admitted");
+    // Materializing would have meant a second `project.create` for an id the
+    // home already holds; the binding landed on the existing canvas instead.
+    expect(read.stderr).not.toContain("materialized");
+
+    // A write from the second machine forwards to the home like any other,
+    // and the door lets it: the daemon's badge was admitted when it dialled.
+    const wrote = await cli(
+      secondWork,
+      secondDir,
+      portOf(second),
+      claude("s-2"),
+      "project",
+      "edit",
+      "--title",
+      "Acme Sprint Board",
+    );
+    expect(wrote.code, wrote.stderr).toBe(0);
+    const atHome = await until(
+      () => homeDaemon.engine.listProjects(),
+      (projects) => projects.some((project) => project.title === "Acme Sprint Board"),
+      "the rename to reach the home",
+    );
+    expect(atHome.map((project) => project.id)).toEqual([marker.projectId]);
+  }, 60_000);
+});

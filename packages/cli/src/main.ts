@@ -7,6 +7,7 @@ import { Command } from "commander";
 import type {
   Actor,
   CanvasSnapshotResponse,
+  GrantSubject,
   Comment,
   CommentThread,
   Item,
@@ -27,7 +28,9 @@ import {
   DRAWING_TITLE,
   COMMAND_NAME,
   IDENTITY_COLORS,
+  LINK,
   actorNameIn,
+  canvasUrl,
   actorsAnswerTo,
   cancelledSince,
   commandFileText,
@@ -897,7 +900,7 @@ program
       // the home's when there is one — opening `127.0.0.1` on a replica lands
       // them on `registerHomeElsewhere`'s 404, which is a correct answer to
       // the wrong question.
-      const url = `${ctx.homeUrl ?? ctx.client.base}/p/${project.id}`;
+      const url = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
       spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
         stdio: "ignore",
         detached: true,
@@ -905,6 +908,107 @@ program
       console.log(url);
     }),
   );
+
+/**
+ * **Share** — the verb half of the Share dialog, and the first gesture in this
+ * CLI that is not a canvas op.
+ *
+ * That is worth stating rather than discovering. Every other verb here turns
+ * into an `Operation` applied by the one reducer; this one acts on the OUTSIDE
+ * world — grants, addresses, who may knock — so its parity with the button
+ * lives at the daemon API instead (the journey's rule 5: "pretending it is an
+ * op would make the oplog lie"). Button and verb drive exactly the same three
+ * routes, and neither of them spells a URL: `@isocan/core` does.
+ *
+ * Three shapes, one endpoint:
+ *
+ * - `isocan share` — the address to send, and whether the link is on.
+ * - `isocan share --link off` / `--link on` — revoke, or grant again.
+ * - `isocan share <email>` — phase 9's slot. It is not stubbed out here and it
+ *   is not silently refused either: the request goes to the home, and the
+ *   home's own 400 explains that a badge cannot prove an email until the
+ *   attesters land. A client-side "not yet" would be a second copy of a policy
+ *   that is about to change.
+ *
+ * **There is no owner**, deliberately, and this verb does not imply one: any
+ * admitted badge may share or un-share, which is what the door actually does.
+ *
+ * On a replica every one of these forwards to the home, because the row that
+ * decides who may enter lives there. Nothing here has to know that — but it is
+ * why `isocan share --link off` run on a laptop really does turn the link off
+ * for the world, rather than editing a local copy and reporting success.
+ */
+program
+  .command("share")
+  .description("Who may enter this canvas: the address to send, and the \"anyone with the link\" grant")
+  .argument("[who]", "an email or repo to grant access to — the home answers why it cannot yet")
+  .option("--link <on|off>", "turn the link grant on (anyone with the address) or off")
+  .action(
+    run(async (who: string | undefined, opts: { link?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const project = await resolveProject(ctx);
+      // The one origin: people always enter through the home, so a replica
+      // hands out the home's address and never its own 127.0.0.1 — the same
+      // rule `isocan open` follows, from the same function.
+      const address = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+
+      if (opts.link !== undefined) {
+        const want = opts.link.toLowerCase();
+        if (want !== "on" && want !== "off") {
+          throw new Error(`--link wants on or off, got: ${opts.link}`);
+        }
+        const live = (await ctx.client.grants(project.id)).grants.find((g) => g.subject === LINK);
+        if (want === "on" && !live) await ctx.client.createGrant(project.id, LINK);
+        // Off with no live row is not an error: the gesture is "the link is
+        // off", and it already is. Two people flipping the same toggle at once
+        // must not turn one of them into a failure.
+        if (want === "off" && live) await ctx.client.revokeGrant(project.id, live.id);
+      }
+
+      if (who !== undefined) {
+        // Straight to the home. It refuses, in its own words, naming phase 9 —
+        // and if some later build can satisfy the subject, this line grants it
+        // without being touched.
+        const { grant } = await ctx.client.createGrant(project.id, grantSubjectOf(who));
+        console.log(`granted ${grant.subject} on ${project.title} (${grant.id})`);
+      }
+
+      const { grants } = await ctx.client.grants(project.id);
+      const link = grants.find((g) => g.subject === LINK) ?? null;
+      if (ctx.json) return printJson({ address, grants });
+      printKeyValues({
+        address,
+        link: link
+          ? `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
+          : "off — new arrivals are turned away; people already on this canvas keep their access",
+      });
+      const others = grants.filter((g) => g.subject !== LINK);
+      if (others.length > 0) {
+        printTable(
+          others.map((g) => ({ subject: g.subject, granted: g.at.slice(0, 10), by: g.grantedBy })),
+        );
+      }
+    }),
+  );
+
+/**
+ * What a person typed, as a grant subject.
+ *
+ * It lives here rather than in core because only one surface computes it: the
+ * Share dialog has no "who" field to type into (phase 9 owns that control),
+ * so there is nothing for a shared helper to keep in step yet. When the field
+ * lands, this moves — it is the same question asked twice at that point.
+ *
+ * Anything unrecognised is passed through untouched so that the home's refusal
+ * is about what the person actually wrote, rather than about something this
+ * function guessed.
+ */
+function grantSubjectOf(who: string): GrantSubject {
+  if (who.startsWith("email:") || who.startsWith("repo:")) return who as GrantSubject;
+  if (who.includes("@")) return `email:${who}`;
+  if (who.split("/").length === 3) return `repo:${who}`;
+  return who as GrantSubject;
+}
 
 // ---------- setup: one command, from any directory ----------
 

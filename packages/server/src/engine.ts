@@ -39,6 +39,7 @@ import {
 } from "@isocan/core";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
+import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
 import type { HomeConnection } from "./home-link.ts";
 import { UndoStacks } from "./undo.ts";
 import {
@@ -782,6 +783,12 @@ export class Engine {
         entries: [],
         undo: UndoStacks.rebuild([]),
       });
+      // The OTHER way a canvas arrives on a replica — and the more common
+      // one, because a replica that has never held a canvas can only present
+      // cursor 0 and can only be answered with state. Same local row, same
+      // reason: no row, and this machine's own CLIs are refused a canvas
+      // sitting in their store.
+      await ensureHomeLinkGrant(this.desk, projectId);
     });
   }
 
@@ -903,6 +910,11 @@ export class Engine {
         entries: [entry],
         undo: UndoStacks.rebuild([entry]),
       });
+      // A canvas now exists on this machine, so this machine's door needs a
+      // row for it (phase 7). The home wrote its own; this one governs who
+      // HERE may reach the local copy, and without it every CLI on this
+      // laptop would be refused a canvas it is replicating.
+      await ensureHomeLinkGrant(this.desk, op.projectId);
       this.emit(op.projectId, { type: "op-applied", entry });
       return "applied";
     }
@@ -997,11 +1009,31 @@ export class Engine {
   ): Promise<ClaimContext> {
     const badge = await this.desk.badge(request.badgeId);
     const canvasIds = (badge?.admissions ?? []).map((a) => a.canvasId);
-    // The room this name is being taken in counts even before the badge has
-    // been let into it — a browser names itself at the identity dialog,
-    // before it has fetched anything. See `ActorClaimOp.projectId`.
+    /**
+     * The room this name is being taken in counts even before the badge has
+     * been let into it — a browser names itself at the identity dialog,
+     * before it has fetched anything. See `ActorClaimOp.projectId`.
+     *
+     * **Phase 3 left this as a hole and phase 7 closes it.** A claim widens
+     * its own name-check scope by naming the canvas it was made from, which
+     * under the old policy could only ever reach a canvas the address would
+     * have admitted the asker to anyway. Under a grant it must be
+     * admission-CHECKED, or "is this name taken here" becomes a probe into a
+     * room you were never let into: the refusal names the holder, so an
+     * unchecked widening would leak a stranger's roster one name at a time.
+     *
+     * The test is the door's own — would a grant admit this badge? — and NOT
+     * "is it already admitted", because the browser case above is precisely a
+     * badge that is not admitted yet and is about to be. Nothing is written
+     * here: satisfying a grant for the purpose of judging a name is not
+     * entering the room, and an admission written from a claim would be an
+     * admission with no request behind it (and, in phase 9, a badge the sweep
+     * would have to expel from a canvas it never opened).
+     */
     const from = request.op.projectId;
-    if (from !== undefined && !canvasIds.includes(from)) canvasIds.push(from);
+    if (from !== undefined && !canvasIds.includes(from) && badge) {
+      if (await admittingGrant(this.desk, from, badge)) canvasIds.push(from);
+    }
     const own = await this.desk.claimsOf(request.badgeId);
     // Own rows first, then the neighbours: a badge with no admissions yet is
     // still in its own scope, which is what keeps two agents on one machine
@@ -1134,6 +1166,28 @@ export class Engine {
     return entry;
   }
 
+  /**
+   * A canvas is born, and with it the standing **link grant** (phase 7).
+   *
+   * "The status quo demoted to data": every canvas born today carries a link
+   * grant, so "the address is the secret" stops being a regime and becomes one
+   * revocable row. Written here rather than in the route because this is the
+   * one place a canvas comes into existence under this daemon's own writership
+   * — the CLI's `bindFresh`, the web app's new-canvas button and a
+   * materialized marker all arrive through `project.create`, and a grant
+   * written per caller would be a grant somebody forgot.
+   *
+   * **On a replica this method is not reached at all**, and that is correct:
+   * the create FORWARDS (see `forwardSubmit`), so the canvas is born at the
+   * home and the home writes the grant that governs it. What lands back here
+   * is the home's entry, through `applyRemoteEntry`, which writes this
+   * machine's own local row — a different sentence in a different ledger. See
+   * `ensureHomeLinkGrant`.
+   *
+   * The grant is written AFTER the canvas exists, deliberately: a grant for a
+   * canvas whose creation then failed would be a row admitting people to
+   * nothing, and the desk has no transaction that spans both ledgers.
+   */
   private async createProject(
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
@@ -1153,6 +1207,7 @@ export class Engine {
       entries: [entry],
       undo: UndoStacks.rebuild([entry]),
     });
+    await ensureLinkGrant(this.desk, op.projectId, request.badgeId);
     return entry;
   }
 
