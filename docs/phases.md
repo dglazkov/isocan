@@ -47,15 +47,9 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 5 is PART-DONE. All four stages are provisioned
-and live — https://dev.isocan.io serves a real canvas off Firestore, and
-a push to `main` now builds, boot-checks and deploys it with no hands.
-GC is deliberately not scheduled, and `infra/91-scheduler-gc.sh` says
-why. What remains is the phase's own Proof: two people at dev.isocan.io
-seeing each other's cursors, and ops written DURING a rollout all
-landing in order. Both want phase 6's home connection to be worth
-playing, so they may close as part of it.** This line moves as phases
-close; a clean session starts by believing it.
+**Where we are: Phase 5 is closed — Phase 6, birth at home and replica
+at home, is next, and it has a real address to dial.** This line moves
+as phases close; a clean session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -443,10 +437,10 @@ large-blob round trip exercises the signed-URL branch.
 
 ## Phase 5 — A home in the sky (dev) ⚑ provision
 
-**Status: PART-DONE** 2026-08-22 (`a624cd5` … `1e21c03`). All four
-provisioning stages are live and `https://dev.isocan.io` auto-deploys on
-push. The **Proof is not played**: two people, live correspondence, and
-ops landing in order across a rollout. Do not read this phase as closed.
+**Status: CLOSED** 2026-08-22 (`a624cd5` … `756f6f8`). All four
+provisioning stages live at `https://dev.isocan.io`, auto-deploying on
+push, and both halves of the Proof played. GC remains unscheduled on
+purpose — see **Deliberately open**.
 
 **Work:** Stand up `isocan-dev`: Cloud Run service on CloudStore, load
 balancer + CDN + managed cert at dev.isocan.io, Cloud Build triggers
@@ -588,6 +582,23 @@ observed in production conditions).
   localhost; this is an addition, not a rename. The interception itself
   is unverifiable outside a deployed home, so no local test pretends
   otherwise — what is pinned is that both paths are one handler.
+- **2026-08-22 — The Proof is played, and the deploy overlap behaved
+  exactly as designed.** The correspondence half — two people at
+  dev.isocan.io, cursors live — was exercised by Dimitri, not by this
+  session, and is recorded on his word rather than measured here; that
+  attribution matters, because a proof is only worth what its witness
+  saw. The rollout half was measured: 150 ops written continuously
+  against the live home while the service took **two** revision
+  rollovers (`isocan-00010-vmn` → `isocan-00012-krt`). Every one
+  succeeded — **zero refused** — and the oplog reads back 150 entries,
+  seqs ascending, contiguous from 31 to 180 with no gaps and no
+  duplicates, and the order they landed is the order they were written.
+  This is phase 4's create-only precondition observed under the
+  condition it was built for and could previously only be shown against
+  an emulator: during a rollout two instances briefly exist, and the
+  schema — not an agreement — is what keeps one oplog honest. Left
+  behind on purpose: 150 `thr_roll*` threads on the dev canvas, which
+  are the evidence.
 - **2026-08-22 — Stage D, and two gcloud shapes that only fail when you
   run them.** Continuous deploy works: a push to `main` builds, runs the
   container's own boot check, pushes, and deploys — revision
