@@ -1,4 +1,4 @@
-import type { ActorClaim } from "@isocan/core";
+import type { ActorClaim, Grant } from "@isocan/core";
 
 /**
  * The desk: the home's PRIVATE ledgers — who holds a badge, what it has been
@@ -24,6 +24,14 @@ import type { ActorClaim } from "@isocan/core";
  * the whole-table `claims()` read that phase 2 left standing, because
  * narrowing name checks to a badge's admissions is the same motion.
  *
+ * Phase 7 adds the desk's SECOND ledger of its own: grants, at `grants/{id}`,
+ * the architecture's other row. They are here rather than on the `Store`
+ * because a grant is innkeeper-private and must never travel — the design is
+ * explicit that a grant is "written through the daemon API — never an op, per
+ * the journey's rule 5" — so putting them behind this seam is what makes "no
+ * grant ever appears in an oplog envelope" a fact about the code rather than
+ * a convention somebody could break by adding an op.
+ *
  * ## The rule a query-backed desk lives or dies by
  *
  * `claimants`, `holdersOf` and `claimsIn` are served by INDEXED QUERIES over
@@ -34,19 +42,44 @@ import type { ActorClaim } from "@isocan/core";
  * 3's named failure mode wearing a helpful face, and it would hide the one
  * bug that matters here until it was somebody else's outage. Let a forgotten
  * array answer nothing, loudly, on the first test that asks.
+ *
+ * `grantsFor` obeys the same rule, and phase 7 leans on it harder than the
+ * claim queries do, because the answer is now the DOOR. "No grants for this
+ * canvas means the link is implied" is the same fallback wearing the same
+ * helpful face: it would make a canvas whose grant row was never written
+ * admit everybody anyway, and the one bug that matters — a birth path that
+ * forgot to write the row — would surface as an outage rather than as a test.
+ * So the rows are written, everywhere a canvas can come into existence, and a
+ * canvas with no rows admits nobody.
  */
 
-/** Why a badge is in a canvas. Phase 2 writes it and enforces nothing: the
- * address still admits, and this only writes down that it did. */
+/**
+ * Why a badge is in a canvas — and, from phase 7, **revocation's grip**.
+ *
+ * Phase 9's sweep works by walking admissions whose root names a revoked
+ * grant and re-running the door test on each, so a phase that writes this
+ * wrong makes that sweep silently incomplete: an admission mis-rooted as
+ * `link` is one no revocation can ever find. Every admission the door writes
+ * now carries the grant that actually admitted it.
+ */
 export type Provenance =
-  /** This badge created the canvas — the bootstrap badge's first admission. */
+  /** This badge created the canvas — the bootstrap badge's first admission.
+   * The only root that is not "somebody let me in", and the only one a sweep
+   * never touches. */
   | { root: "created" }
-  /** The address admitted it. Phase 7 rewrites this to the canvas's standing
-   * link grant, which is the status quo demoted to data. */
+  /**
+   * HISTORICAL, and kept because desks in the world are full of it: phase 2
+   * through phase 6 wrote this for "the address admitted it", before the
+   * link grant existed to point at. Nothing writes it any more. A sweep
+   * cannot re-root one of these to a grant it never named, which is the
+   * concrete cost of having written provenance before there was any, and the
+   * reason phase 7 is careful to write `grant` from the first admission.
+   */
   | { root: "link" }
-  /** Redeemed a pass (phase 8). */
+  /** Redeemed a pass (phase 8). A pass-derived admission inherits the ROOT of
+   * the badge that minted the pass, so a sweep reaches it too. */
   | { root: "pass"; badgeId: string }
-  /** Admitted by a grant (phase 7). */
+  /** Admitted by a grant — the ordinary case from phase 7 on. */
   | { root: "grant"; grantId: string };
 
 export interface Admission {
@@ -169,9 +202,40 @@ export interface Desk {
    */
   claimsIn(canvasIds: readonly string[]): Promise<ActorClaim[]>;
 
-  /** Record that this badge has been in this canvas. Policy-free in phase 2
-   * — everyone is admitted; this only writes down that they were. */
+  /** Record that this badge has been in this canvas. No longer policy-free:
+   * from phase 7 the door decides whether this is called at all, and the
+   * provenance it passes is what phase 9's sweep will grip. */
   admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void>;
+
+  // ---- grants: who may enter one canvas (mechanisms 3 + 2) ----
+
+  /**
+   * Every grant on one canvas, revoked rows included.
+   *
+   * `where("canvasId", "==", canvasId)` over `grants/{id}` — the architecture's
+   * shape, and the query the door takes on every arrival that is not already
+   * admitted. Revoked rows come back because the caller's questions differ: the
+   * door filters them out (`isLive`), the listing route hides them, and phase
+   * 9's sweep needs to READ one to know what it is expelling.
+   *
+   * No fallback, per the rule above: a canvas with no rows admits nobody.
+   */
+  grantsFor(canvasId: string): Promise<Grant[]>;
+
+  /** Write one. Used at birth (the standing link grant), by the migration, and
+   * by the grant API. A grant id is minted by the caller, so this is a plain
+   * document write. */
+  putGrant(grant: Grant): Promise<void>;
+
+  /**
+   * Stop a grant admitting new arrivals — a tombstone, not a delete (see
+   * `Grant.revokedAt`). Returns the revoked row, or null when there is no such
+   * grant. Revoking an already-revoked row is a no-op that returns it: the
+   * gesture is idempotent because a Share dialog and a CLI verb can both be
+   * pointed at the same row by two people at once, and "the link is off" is
+   * the same answer either way.
+   */
+  revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
 
   // ---- the migration shelf; it dies when it empties ----
 

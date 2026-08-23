@@ -3,11 +3,11 @@ import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BADGE_COOKIE, DOOR_ROUTE } from "@isocan/core";
+import { BADGE_COOKIE, DOOR_ROUTE, ISOCAN_NAMES } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { resolveHomeUrl } from "../src/config.ts";
 import * as p from "../src/paths.ts";
-import { mintTestBadge } from "./badge.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * The one-origin rule, in the code that enforces it: **a local daemon serves
@@ -203,5 +203,138 @@ describe("a home is unchanged", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(res.headers.get("set-cookie")).toContain(BADGE_COOKIE);
     expect(res.headers.get("x-isocan-home")).toBeNull();
+  });
+});
+
+/**
+ * Phase 7.5's defect, in the shape it was met in: the very first
+ * `isocan identity --session` against a real home allocated "Isaac" locally
+ * and was then refused by the home, because Isaac was already somebody there.
+ *
+ * Not a race — that was tested and ruled out. A SCOPE MISMATCH. A name is
+ * judged in the presenting badge's admissions (mechanism 10), a fresh
+ * replica's local badge has none, so the whole roster looks free to it, while
+ * the home judges the same name against the rosters that badge can see there.
+ * Both answers are correct in their own scope; only one of them is the one
+ * that matters, and it is the home's, because the home owns the namespace the
+ * name has to be unique in.
+ *
+ * Nothing here points at dev.isocan.io. Two daemons in one process reproduce
+ * it exactly, and a test that reached the real dev home would be asserting
+ * against somebody else's roster.
+ */
+describe("a name allocated on a replica is a name the home will accept", () => {
+  /** The canvas at the home, with the first roster name already on it. */
+  async function homeWithIsaac(): Promise<{ base: string; badge: TestBadge }> {
+    const base = await realHome();
+    const badge = await mintTestBadge(base);
+    const isaac = { id: "usr_isaac", name: "Isaac" };
+    await badge.speakAs(isaac);
+    // On a CANVAS, not merely claimed: `heldNames` is what a name is judged
+    // against, and it reads the rosters of the canvases in scope.
+    const created = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        projectId: null,
+        actor: isaac,
+        op: { type: "project.create", projectId: "prj_acme", title: "Acme Sprint Board" },
+      }),
+    });
+    expect(created.status).toBe(200);
+    return { base, badge };
+  }
+
+  /** A nameless claim — "hand me a name" — from a badge that has never
+   * claimed anything. The path the defect lived on. */
+  async function claimNameless(
+    base: string,
+    badge: TestBadge,
+    sessionKey: string,
+  ): Promise<{ status: number; actor?: { id: string; name: string }; error?: string }> {
+    const res = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        projectId: null,
+        op: { type: "actor.claim", sessionKey },
+      }),
+    });
+    const json = (await res.json().catch(() => null)) as any;
+    return res.ok
+      ? { status: res.status, actor: json.envelope.actor }
+      : { status: res.status, error: json?.error };
+  }
+
+  async function until<T>(fn: () => Promise<T>, ok: (v: T) => boolean, what: string): Promise<T> {
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const value = await fn().catch(() => null as T | null);
+      if (value !== null && ok(value)) return value;
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+
+  const namesAt = async (base: string, badge: TestBadge): Promise<Record<string, string>> =>
+    (await (await fetch(`${base}/api/names`, { headers: badge.headers })).json()) as Record<
+      string,
+      string
+    >;
+
+  it("skips a roster name that is taken at the home, and the home vouches for the one it hands out", async () => {
+    const upstream = await homeWithIsaac();
+    const base = await boot(upstream.base);
+    const mine = await mintTestBadge(base);
+
+    const claimed = await claimNameless(base, mine, "claude-code:s-1");
+    expect(claimed.status).toBe(200);
+    // The defect, stated as an assertion: "Isaac" is free by this replica's
+    // own lights and it must not hand it out anyway.
+    expect(claimed.actor!.name).not.toBe("Isaac");
+    expect(claimed.actor!.name).toBe(ISOCAN_NAMES[1]);
+
+    // And the proof that it is the RIGHT name and not merely a different one:
+    // the announcement lands at the home instead of being refused there, so
+    // the actor born on this replica exists at the home under that name.
+    const names = await until(
+      () => namesAt(upstream.base, upstream.badge),
+      (all) => all[claimed.actor!.id] !== undefined,
+      "the home to vouch for the actor born on the replica",
+    );
+    expect(names[claimed.actor!.id]).toBe(claimed.actor!.name);
+  });
+
+  it("never swaps a name somebody asked for, even one the home would refuse", async () => {
+    // The narrowness of the fix, asserted. Only ALLOCATION consults the home;
+    // a supplied name is judged where it is supplied, and is never quietly
+    // replaced by the home's suggestion. `--name Isaac` here is free locally,
+    // so it binds locally and the home refuses the announcement with the
+    // message it has always had — which is the behaviour the phase keeps.
+    const upstream = await homeWithIsaac();
+    const base = await boot(upstream.base);
+    const mine = await mintTestBadge(base);
+    const res = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...mine.headers },
+      body: JSON.stringify({
+        projectId: null,
+        op: { type: "actor.claim", sessionKey: "claude-code:s-1", name: "Isaac" },
+      }),
+    });
+    const json = (await res.json()) as any;
+    expect(res.status).toBe(200);
+    expect(json.envelope.actor.name).toBe("Isaac");
+  });
+
+  it("allocates from its own scope when the home cannot be reached", async () => {
+    // A replica must stay usable with no home in sight: the home's answer is a
+    // preference, never a precondition. `.invalid` can never resolve, so this
+    // is the offline case with no waiting for a timeout to be arranged.
+    const base = await boot(HOME);
+    const mine = await mintTestBadge(base);
+    const claimed = await claimNameless(base, mine, "claude-code:s-1");
+    expect(claimed.status).toBe(200);
+    expect(claimed.actor!.name).toBe(ISOCAN_NAMES[0]);
   });
 });

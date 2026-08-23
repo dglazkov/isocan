@@ -164,7 +164,7 @@ terminal; see the bootstrap bullet below):
 sequenceDiagram
     participant J as Jordan's browser
     participant H as home daemon
-    J->>H: GET /c/7f3a… (no badge yet)
+    J->>H: GET /p/7f3a… (no badge yet)
     Note over H: door policy unchanged:<br/>knowing the address admits (the link grant, mech 2)
     H-->>J: web app + Set-Cookie: badge B₂
     Note over H: record: B₂ {admissions: [7f3a…], claims: []}
@@ -227,7 +227,7 @@ sequenceDiagram
       S->>H: project.create (carries B₀)
       H-->>S: canvas 7f3a… born
       Note over H: B₀ {admissions: [7f3a…]} — the first admission.<br/>The id + home address land in the committed marker
-      P->>H: GET /c/7f3a… (isocan open)
+      P->>H: GET /p/7f3a… (isocan open)
       H-->>P: web app + Set-Cookie: badge B₁
       P->>H: actor.claim "Priya" (carries B₁)
       Note over H: the name's first claim — no badge holds "Priya" yet,<br/>so no vouch is owed (a later machine resumes her via<br/>isocan open's pass — mech 2). B₀ relays the machine's<br/>agents; B₁ is her tab. Two badges before anyone shared.

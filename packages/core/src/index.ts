@@ -3,6 +3,8 @@ export * from "./errors.ts";
 export * from "./ops.ts";
 export * from "./reducer.ts";
 export * from "./badge.ts";
+export * from "./grants.ts";
+export * from "./address.ts";
 export * from "./claims.ts";
 export * from "./invert.ts";
 export * from "./placement.ts";

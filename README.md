@@ -230,6 +230,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a
   count takes you to that comment; a live face takes you to their cursor.
+- **Sharing**: **Share** sits beside the facepile, because the pile is *who's
+  here* and Share is *who may be here*. It hands you the canvas's address with
+  a copy button — that is the whole invitation, and it carries no installation
+  instructions on purpose: whoever receives it lands on the populated canvas in
+  a browser with nothing installed, and the canvas offers a terminal to anyone
+  who reaches for one. Underneath is one revocable row: **"anyone with the
+  link"** is a grant the canvas is born with, and turning it off turns the next
+  stranger away while everybody already here keeps working. `isocan share`,
+  `isocan share --link off|on` is the same endpoint from a terminal — sharing
+  is the one gesture that is not a canvas op, because it acts on who may knock
+  rather than on what is on the canvas, so it never appears in the oplog and
+  `undo` will not take it back. A canvas that will not have you says so:
+  `403 not-admitted`, which means ask whoever shared it — not "get a new
+  credential".
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -300,6 +314,8 @@ isocan --agent-help                # the collaboration protocol, for agents
 isocan setup [dir]                 # skill + CLI + daemon for a directory
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
+isocan home [<url>|--clear]        # which home this daemon answers to
+isocan share [--link on|off]     # the canvas's address, and who may enter it
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
@@ -358,6 +374,32 @@ pair-complete so redo never dangles; dropped entries go to
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
 
+## Answering to a home
+
+A daemon is one of two things. On its own it is a **home**: it holds the
+canvases, serves the app, and is the single writer of everything on them.
+Given an address it becomes a **replica** of the home at that address — it
+still answers your CLI instantly from a local copy, but every write it makes
+travels to the home and comes back, and the pages are served there, not here.
+That is the one-origin rule: people always enter through the home.
+
+```sh
+isocan home                       # which of the two this daemon is, and
+                                  # whether its home is answering
+isocan home https://isocan.io     # answer to that home from now on
+isocan home --clear               # answer to nobody — be a home again
+```
+
+Setting a home writes `~/.isocan/config.json` and restarts the daemon, because
+a daemon reads its home once, at boot. It checks the address answers first: a
+replica that cannot reach its home refuses every write and queues nothing, so
+being pointed at nothing is a state worth being warned about (`--force` sets
+it anyway). There is **no default address** — `isocan serve` with nothing
+configured is a home, which is what every daemon in this repo is.
+
+`isocan serve` on a rented VM is a complete home: the same daemon, the same
+code, reachable by anyone you point at it.
+
 ## Updating
 
 ```sh
@@ -383,6 +425,8 @@ earlier run left behind; `isocan restart` does. From a checkout,
 
 ```sh
 npm run dev         # daemon + Vite with hot reload
+npm run dev:replica # a replica of dev, on :4442, with its OWN isocan home —
+                    # `-- <command>` runs any CLI command against it
 npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages

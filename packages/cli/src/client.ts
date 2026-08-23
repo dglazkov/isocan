@@ -12,6 +12,9 @@ import type {
   CreateSessionResponse,
   GcReport,
   GcRequest,
+  GrantResponse,
+  GrantsResponse,
+  GrantSubject,
   LogEntry,
   Operation,
   PostOpResponse,
@@ -23,7 +26,7 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER, healthPath } from "@isocan/core";
+import { encodeFilename, FILENAME_HEADER, grantRoute, grantsRoute, healthPath } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
 import { bearerHeader, knockOnDoor, paths, readBadge, writeBadge } from "@isocan/server";
 
@@ -283,6 +286,29 @@ export class DaemonClient {
 
   listProjects(): Promise<Project[]> {
     return this.request("GET", "/api/projects");
+  }
+
+  // ---- who may enter a canvas: `isocan share`'s three calls ----
+  //
+  // The same three routes the Share dialog drives, built from the same core
+  // helpers — house rule 2's "button and verb, one endpoint", taken literally
+  // enough that neither surface spells a URL. On a replica the daemon forwards
+  // all three to the home, because the row that decides who may enter lives
+  // there; nothing here has to know that.
+
+  grants(projectId: string): Promise<GrantsResponse> {
+    return this.request("GET", grantsRoute(projectId));
+  }
+
+  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
+    return this.request("POST", grantsRoute(projectId), { subject });
+  }
+
+  /** No body, deliberately: a DELETE that declares `application/json` and
+   * sends nothing is a Fastify parse error, and a request with nothing to say
+   * should not announce a content type. */
+  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
+    return this.request("DELETE", grantRoute(projectId, grantId));
   }
 
   snapshot(projectId: string): Promise<CanvasSnapshotResponse> {

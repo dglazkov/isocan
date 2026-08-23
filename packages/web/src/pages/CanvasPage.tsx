@@ -399,11 +399,30 @@ export function CanvasPage({
 
   if (!projectId) return null;
 
-  if (connection === "gone") {
+  // The three ends of a connection that will not come back, each said in its
+  // own words. `refused` is phase 7's: the door works now, so "this canvas
+  // will not have you" is a thing a person can actually be told — and the one
+  // recovery is a social one, which is why the note says who to ask instead of
+  // offering a retry that would be refused identically.
+  const dead: Record<string, { note: string; hint?: string }> = {
+    gone: { note: "This project was deleted." },
+    refused: {
+      note: "This canvas will not have you.",
+      hint: "Its link has been switched off. Ask whoever shared it to turn it back on, or to let you in.",
+    },
+    absent: {
+      note: "There is no canvas at this address.",
+      hint: "Check the link you were sent — the Share dialog's copy button always produces a working one.",
+    },
+  };
+  const end = dead[connection];
+  if (end) {
     return (
       <div className="canvas-page">
-        <div className="page-note">
-          This project was deleted.&nbsp;<Link to="/">Back to projects</Link>
+        <div className="page-note page-note-stack">
+          <div>{end.note}</div>
+          {end.hint && <div className="page-note-hint">{end.hint}</div>}
+          <Link to="/">All canvases</Link>
         </div>
       </div>
     );

@@ -1,9 +1,15 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim } from "@isocan/core";
+import type { ActorClaim, Grant } from "@isocan/core";
 import { SHELF } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
+/** `grants/{id}` — the architecture's other desk row, one document per grant,
+ * queried by `canvasId`. A collection rather than an array on the canvas
+ * because the canvas lives in the OTHER ledger entirely: canvas state
+ * replicates, the desk's ledgers never leave the home, and a grant that rode
+ * on a project document would be a grant that travelled. */
+export const GRANTS = "grants";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -26,8 +32,9 @@ const TOUCH_DEBOUNCE_MS = 60_000;
 const DISJUNCTION_LIMIT = 30;
 
 /**
- * The desk on Firestore: one document per badge at `badges/{badgeId}`,
- * exactly the shape the architecture draws.
+ * The desk on Firestore: one document per badge at `badges/{badgeId}`, and
+ * from phase 7 one per grant at `grants/{id}` — exactly the shapes the
+ * architecture draws.
  *
  * ## The three arrays, and why there is exactly one writer
  *
@@ -178,6 +185,45 @@ export class CloudDesk implements Desk {
     });
   }
 
+  // ---- grants ----
+
+  /**
+   * One indexed query, `where("canvasId", "==", canvasId)`, and NO FALLBACK —
+   * the rule `desk.ts` states, applied to the row the door now reads. A canvas
+   * whose grant was never written comes back empty and admits nobody, loudly,
+   * on the first request that asks; anything cleverer here would hide a
+   * missing birth-time write until it was somebody's outage.
+   *
+   * Firestore serves a single-field equality from its automatic index, so this
+   * needs no composite index in `firestore.indexes.json`.
+   */
+  async grantsFor(canvasId: string): Promise<Grant[]> {
+    const found = await this.db.collection(GRANTS).where("canvasId", "==", canvasId).get();
+    return found.docs.map((doc) => toGrant(doc.data()));
+  }
+
+  async putGrant(grant: Grant): Promise<void> {
+    await this.db.collection(GRANTS).doc(grant.id).set(jsonSafe(grant));
+  }
+
+  /**
+   * A transaction, because two people can turn one link off at once and the
+   * first stamp must stand — the same read-modify-write discipline `mutate`
+   * gives a badge, on a document that answers the door.
+   */
+  async revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null> {
+    const ref = this.db.collection(GRANTS).doc(grantId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return null;
+      const grant = toGrant(doc.data()!);
+      if (grant.revokedAt !== undefined) return grant;
+      const revoked: Grant = { ...grant, revokedAt: at, revokedBy: by };
+      tx.set(ref, jsonSafe(revoked));
+      return revoked;
+    });
+  }
+
   // ---- the migration shelf ----
 
   /**
@@ -276,6 +322,21 @@ function toRecord(data: DocumentData): BadgeRecord {
     lastSeen: data["lastSeen"] as string,
     admissions: (data["admissions"] as Admission[] | undefined) ?? [],
     claims: (data["claims"] as ActorClaim[] | undefined) ?? [],
+  };
+}
+
+/** A grant document, back as a row. Nothing is derived here — a grant has no
+ * denormalized arrays, because the one question asked of it (`canvasId`) is a
+ * plain field. */
+function toGrant(data: DocumentData): Grant {
+  return {
+    id: data["id"] as string,
+    canvasId: data["canvasId"] as string,
+    subject: data["subject"] as Grant["subject"],
+    grantedBy: data["grantedBy"] as string,
+    at: data["at"] as string,
+    ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
+    ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
   };
 }
 

@@ -46,12 +46,22 @@ the map edits [architecture.md](architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
+**One correction to that, learned 2026-08-23:** the numbers stopped
+being positions some time ago. Roughly fifty comments in the code name a
+phase by number — "phase 9's sweep", "phase 13's offline birth" — as
+forward references to work not yet done, and renumbering would silently
+falsify every one of them. So a phase inserted into the middle gets a
+**fractional number** rather than a renumbering, and this list is read
+in the order it is written rather than by counting. Names are the
+identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 6 is closed and verified against dev.isocan.io —
-Phase 7, the share (Scenes 1–4), is next, and it inherits one debt named
-in phase 6's findings: the admission scope on `GET /api/projects`, which
-today would have a replica of a multi-tenant home mirror strangers'
-canvases onto a laptop.** This line moves as phases close; a clean
+**Where we are: Phase 7.5 is PART-DONE — `isocan home` is built and
+verified, and its last Proof leg is waiting on a deploy: dev.isocan.io
+runs pre-phase-7 code, so the walk's canvas step cannot complete there
+yet. Deploy phases 7 and 7.5 to dev, replay the walk, close it.** Phase 8
+then inherits the question phase 7 could not settle: a replica still
+discovers canvases by enumerating the home, and the pass is the mechanism
+that fixes it. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -60,6 +70,30 @@ otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
 
+- **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
+  **canvas** in every doc — 160 mentions against 15 of "project" — and a
+  **project** in every line of code: 712 `projectId`, plus
+  `project.create`, `listProjects`, `ProjectListPage`. The map splits the
+  difference and specifies the Firestore schema as `canvases/{id}`. The
+  seam became visible where it matters most, in the address a stranger
+  pastes: the journey and the desk design both wrote
+  `isocan.io/c/7f3a…`, and **nothing ever served `/c/`** — the app has
+  had exactly two routes, `/` and `/p/:projectId`, all along. Measured
+  in a browser, `/c/<id>` returns 200, serves the app shell, and renders
+  a **blank page**: no catch-all route, so React Router matches nothing
+  and draws nothing. **Settled by Dimitri, 2026-08-23: keep `/p/`, fix
+  the docs** — it works, it is tested, and a second URL shape for one
+  canvas is a cost that lasts forever. The docs now say `/p/`.
+  What stays open is the **rename itself**, deliberately: it touches
+  every file, buys no behaviour, and would bury whatever phase it landed
+  in. It is recorded here rather than in a phase because the thing that
+  will eventually force it is not a feature but an audience — the first
+  time somebody outside this repo reads `projectId` in the agent guide
+  and asks what a project is. Until then the split is a known cost, not
+  a bug, and the one place it must never leak again is a URL. The
+  blank-page half is **not** open: a catch-all route that says the
+  canvas is not here is phase 7's, because a share link is the one
+  address strangers hand each other and its failure has to be legible.
 - **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
   garbage collection at the hosted home, on purpose;
   [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
@@ -872,7 +906,11 @@ the lid-close/reopen beat played with Chrome and the CLI.
 
 ## Phase 7 — The share (Scenes 1–4)
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-23 (`995fbe5`). Scenes 1–4 played by the
+conductor against real daemons: the Share dialog beside the facepile, the
+CLI verb reporting the same address, Jordan arriving on nothing but a
+link, and a parked `isocan wait` on a replica woken by a mention typed in
+a browser at the home.
 
 **Work:** The link grant born at birth as a revocable row; the Share
 dialog and roster driving the grant API (button and verb, one
@@ -898,7 +936,236 @@ name.
 **Proof:** The scenes, played — two Chrome profiles and a parked
 `isocan wait` — plus vitest for grant rows and door admission.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — The same silent failure, a third time, one layer down.**
+  Stage 1 taught the socket to refuse (4402) and 4404 already existed, and
+  the browser handled *neither*: both fell into the ordinary 800 ms
+  reconnect backoff, so a canvas whose link had been switched off, or a
+  mistyped id, sat forever on "reconnecting" over an empty canvas. That is
+  the third instance of one pattern in two days — phase 6's `/healthz/`
+  answering 200 with the app shell, `/c/<id>` rendering a blank page, and
+  now a refusal indistinguishable from a network blip. **The shape: this
+  system's default answer to a wrong address is a cheerful one.** Both are
+  terminal states with their own copy now, and the door was not loosened
+  to do it — only its legibility changed.
+- **2026-08-23 — Discovery by enumeration is the wrong primitive, and
+  phase 6's debt is only partly paid.** Narrowing `GET /api/projects` to
+  admissions alone **breaks replicas**, measured rather than reasoned: a
+  fresh replica's badge has no admissions, `HomeLink.sweep` unions the
+  local list with that route, both come back empty, so it never dials and
+  nothing ever admits it. A link grant admits whoever *presents* the
+  address; it does not make a canvas enumerable, and enumeration is what
+  discovery currently needs. The shipped compromise is the door's own test
+  on the listing — a badge sees what it is admitted to plus what a grant
+  *would* admit it to — which closes the leak for a revoked link and
+  leaves it open while the link is on. The honest wording for phase 6's
+  finding is therefore **"narrowed to the door's test; full closure needs
+  phase 8's pass"**, not "paid". And the deeper question, named here so
+  phase 8 chooses it rather than meets it: a replica arguably should
+  replicate **the canvases its markers name**, not everything a home will
+  show it. Enumerate-and-mirror was never the design; it was the easiest
+  thing that worked when there was one member.
+- **2026-08-23 — A replica needs its own grant rows, which no design doc
+  had considered.** The desk's mechanisms only ever discuss the *home's*
+  door. Without a local row a second machine's CLI does not get a clean
+  403 — it gets "this directory is bound to project prj_… which does not
+  exist in this home yet", because the local listing hides the replicated
+  canvas from a fresh local badge. The local row is a different sentence
+  in a different ledger: *who on this machine may reach the local copy*. It
+  deliberately does **not** inherit the home's revocation — what stops a
+  laptop is that its badge is expelled at the home and replication goes
+  stale, which is phase 9's to state.
+- **2026-08-23 — `/api/ops` was admitting AFTER the write.** Harmless for
+  five phases, because the check could not refuse; the moment it could, a
+  refusal that arrives after the op has landed is not a refusal. Now the
+  door runs before `engine.submit` for every op naming a canvas, and the
+  conductor confirmed by hand that a refused write leaves `lastSeq`
+  untouched. The general lesson is about *order surviving a change in
+  meaning*: code that runs in the wrong order is invisible while it is a
+  no-op, and correct-looking right up until the day it matters.
+- **2026-08-23 — A caller's mistake was being reported as our failure.**
+  `DELETE` with `Content-Type: application/json` and no body returned
+  **500 "internal error"**. Pre-existing — `/api/commands` and
+  `/api/presence/actors` had always done it — because Fastify refuses an
+  empty JSON body and `setErrorHandler` collapsed the unknown error to
+  500. It became this phase's because stage 1 adds a revoke that both
+  surfaces call, and plenty of clients set that header unconditionally.
+  The fix is better than the report asked for: gate on **`statusCode`**
+  rather than a list of `FST_ERR_CTP_*` codes, because Fastify already
+  tags a caller's mistake 4xx and its own failures 5xx. The rule that fell
+  out is worth keeping — **4xx is about the request, so its message is
+  safe to repeat; 5xx is ours and stays opaque.**
+- **2026-08-23 — The address got a forcing function, not just a
+  decision.** Keeping `/p/` would have been a comment somebody violated in
+  a month, so the prefix now has exactly one definition in
+  `core/address.ts` and a test greps every source file for a hand-built
+  canvas URL in either spelling. It found three on its first run — the
+  CLI's `open` and two in the project list. Same instinct as
+  `surface.test.ts` catching a verb missing from the agent guide: a rule
+  the build can check is a rule, and anything else is a hope.
+- **2026-08-23 — How the Proof was actually played, stated so nobody
+  over-reads it.** The Proof says "two Chrome profiles"; the conductor
+  used **two cookie hosts** — `127.0.0.1` and `localhost`, which are
+  different hosts for cookies and therefore different badges, on one
+  profile. That is a real second person as far as the desk is concerned
+  and it is how Jordan arrived on nothing but a link. What it does not
+  exercise is a genuinely separate browser profile's storage, and the
+  badge cookie is `HttpOnly` by design, so a third arrival needs a third
+  host or a real profile. Everything else played: the parked agent on a
+  **replica** woke from a mention typed in a browser at the **home**, the
+  `@` picker showed him LIVE across the relay, and his "reading your
+  comment…" came back the other way.
+- **2026-08-23 — One unreproduced flake, recorded rather than closed.**
+  Stage 1 reported a single failing test in one run out of seven and could
+  not name it — the grep that would have captured it swallowed the name.
+  It did not recur in roughly twenty subsequent runs (six full suites and
+  eight of the concentrated integration files by the conductor, plus the
+  worker's own). Left open on purpose: a flake nobody can name is not a
+  flake anybody has fixed. The operational lesson is the cheap one — **a
+  stress loop that does not capture failures by name is a stress loop that
+  buys nothing.**
+
+## Phase 7.5 — The home you answer to
+
+**Status: PART-DONE.** `isocan home` is built and verified — including
+against the real dev home, which it reaches and answers to in one
+command. **What is missing is the Proof's last leg:** the walk's canvas
+step cannot complete against dev.isocan.io until phase 7 and 7.5 are
+deployed there. Dev runs pre-phase-7 code, so it has no
+`GET /api/actors/free-name`, and a replica asking an older home falls
+back to local allocation — correctly, and into the exact collision the
+fix exists to avoid. Verified end to end against a local home running
+this build. Deploy, then replay, then close.
+
+**Why this exists, since it was not in the original walk.** Phase 6
+shipped replicas, and then Dimitri tried to walk Scene 0 with them. It
+took three exported environment variables, a scratch `ISOCAN_HOME`, a
+hand-started daemon in its own terminal, and a URL read out of a marker
+file. None of that is a missing feature in the journey — it is a missing
+**verb**. `config.json` has had a `home` key since phase 6 and
+`resolveHomeUrl` has always read it; nothing was ever able to write it,
+so the only ways to become a replica are an environment variable and a
+text editor. The scratch home was not incidental either: setting the
+variable globally would have demoted the working daemon and stopped it
+serving pages, so the temp directory was self-defence against the
+configuration model.
+
+This is **not only dev ergonomics.** Commitment 2 says `isocan serve` on
+a rented VM is a complete home; anyone pointing their daemon at their
+own innkeeper's home needs this verb, and today they would have to be
+told about an environment variable. House rule 2 says an agent should
+not need a pointer for an intent, and "answer to this home" is an
+intent.
+
+**Work:** `isocan home` — show the current role, set a home, clear it —
+writing `config.json` and restarting the daemon so the change takes.
+`npm run dev:replica` for the repo's own use: a replica against dev on a
+fixed port with its own `ISOCAN_HOME`, because working on the web UI
+needs a local home and working on the home needs a replica, and that is
+inherent rather than a bug (the one-origin rule means a replica cannot
+serve pages — [offline-birth.md](design/offline-birth.md) already
+accepts it). `isocan setup` finishing the walk when a home is
+configured, printing the canvas's address at the home rather than
+leaving it to be read out of a marker file. The agent guide and the
+README told about all of it.
+
+**Not a reversal, and the comment must say so.** Phase 6 deliberately
+refused a `--home` *flag*, on the same grounds as `ISOCAN_BIND` and
+`ISOCAN_STORE`: "innkeeper configuration, not a per-invocation choice an
+agent should be able to reach for." A verb that writes persistent
+configuration is a different thing from a per-command override, and the
+original reasoning survives intact. Say that where somebody would
+otherwise read this as phase 6 being undone.
+
+**The default address stays deferred to phase 14, and this phase
+sharpens why.** A CLI that shipped with `isocan.io` as its default would
+turn `isocan serve` in this checkout into a replica of production.
+Opt-in is right for us; opt-out is right for a shipped product; the flip
+belongs with the promotion gesture, where it is one line.
+
+**Outcome:** Pointing a daemon at a home is one command. The Scene 0
+walk against dev needs no environment variables and no scratch
+directories.
+
+**Proof:** The walk played with a clean shell — no `ISOCAN_*` exported —
+against dev.isocan.io. The baseline is known and painful: phase 7's own
+proof was played with the full dance, so this phase's proof is that same
+walk with the exports deleted.
+
+**Findings:**
+
+- **2026-08-23 — A name allocated on a replica was a name the home would
+  refuse, and the obvious diagnosis was wrong.** The walk's first
+  `isocan identity --session` against dev failed with *"Isaac" is taken
+  here*. The conductor assumed a race — the home's actor registry not yet
+  replicated — **and tested it, and it was not.** With eleven names
+  confirmed replicated locally and a twelve-second wait, allocation still
+  picked Isaac. The real cause is a **scope mismatch**: `allocateName`
+  builds its taken-set from *admission-scoped* queries, and a fresh
+  replica's badge has no admissions — `desk.ts` says so on purpose
+  ("a badge that has never been in a canvas shares a roster with
+  nobody"). So the local answer is right by its own rules and wrong at
+  the home, which judges the same name against its own scope. It looked
+  like it self-healed on retry; that was **accidental** — the failed
+  attempt left Isaac claimed locally, so allocation moved to the next
+  roster entry, burning names until one was free at both ends.
+  The fix asks the home for a free name and treats the answer as a
+  **preference**, not a reservation: forwarding the claim itself would
+  put a local session key into the home's ledger — the precise thing
+  `Engine.claim` forbids — and would make a nameless claim *fail* when
+  the home is unreachable, which a replica must survive. Two replicas
+  asking in the same instant can still be handed the same name; closing
+  that needs a reservation, and a reservation is a claim, so it is named
+  in the code rather than half-built.
+- **2026-08-23 — The flake was two flakes, both timing, and one of them
+  was a product bug.** Dimitri's read — *"flakes come from when I forget
+  to design the tests to not depend on timing"* — was right on both
+  counts. Caught by running the suite twenty times and writing **full
+  output to a file per run**, which is the whole lesson: two earlier
+  sightings were lost because the reporter grepped a stream that had
+  already scrolled, and an unnamed flake is one nobody can fix.
+  **The first was not a test bug at all.** `Daemon.close()` never drained
+  the engine's single-writer chain. `app.close()` destroys sockets, which
+  does not cancel a handler already running behind one, so a request that
+  had reached `engine.claim` had work still queued — and that work wrote
+  to the desk *after* `desk.close()` had drained and returned. Caught in
+  the act with a post-close write detector: a `.tmp-*` file appearing in
+  a `desk/` directory belonging to a daemon that had said it was shut.
+  Under test that is `ENOTEMPTY … rmdir …/desk`; in a container it is a
+  write racing process exit. `await engine.settled()` in `close()` is the
+  fix, and it is safe there rather than earlier only because the home
+  connection is closed above it.
+  The second was a test asking the wrong question: `exitCode !== null` is
+  **null for a process killed by a signal**, so on the SIGKILL path the
+  helper read a dead daemon as alive and waited on an `exit` event that
+  had already fired. Intermittent because `stopDaemons` only escalates to
+  SIGKILL when a daemon misses its SIGTERM grace, which happens under a
+  loaded suite and never on an idle machine. Neither was fixed by
+  lengthening a timeout or sleeping in teardown — both of which hide a
+  signal rather than remove it.
+- **2026-08-23 — And the shutdown could not always shut down.**
+  `runDaemon`'s handler was `close().then(() => process.exit(0))` with no
+  catch, so a rejection from `desk.close()` or `store.close()` left a
+  process alive with its handlers detached: stopped serving, will not
+  die. That is *exactly* the condition that makes `stopDaemons` escalate
+  to SIGKILL — so chasing a flake caused by the escalation is how the
+  line got read at all. It now logs and exits 1, because a close that
+  could not flush is not a clean shutdown and a process reporting success
+  is one nobody investigates. Named and not fixed: a `close()` that never
+  *settles* hangs the same way, and a watchdog that killed a daemon
+  mid-flush would be its own bug.
+- **2026-08-23 — The cheerful wrong address, a fourth time, now between
+  versions.** `GET /api/actors/free-name` against dev returns **HTTP 200
+  and the web app**, because an unmatched `/api/` path on a badged
+  request falls through to the SPA handler. After `/healthz/`, `/c/<id>`
+  and the refused socket, this is the same shape in a new place — and
+  this one has teeth beyond legibility: **a replica's version
+  negotiation with an older home works only because parsing HTML as JSON
+  throws.** The fallback is correct by accident rather than by design.
+  A route that does not exist under `/api/` should say so; that is the
+  general fix, and it wants doing before something asks a question whose
+  wrong answer is not conveniently unparseable.
 
 ## Phase 8 — Escalation (Scene 5)
 
@@ -1019,7 +1286,20 @@ while the roster re-forms.
 
 **Work:** Stand up `isocan-prod`; the domain; the `release`-branch
 promotion; the front page — the home origin wearing Scene 0's three
-steps.
+steps; and flipping the default home address from unset to isocan.io
+(phase 7.5 says why it is unset until here).
+
+**This phase bundles two things, noticed 2026-08-23, and may split.**
+Provisioning prod is genuinely last. The **front door** — the front page
+and the default address, the two things that make the product enterable
+by somebody who has read nothing — has no dependency on prod and could
+run against dev. Until it exists, every Proof from phase 6 onward is
+played by somebody who already knows the environment variables, which is
+how the phase 7.5 gap stayed invisible until a person tried the walk.
+**Scene 0 is not a phase; it is a thread through phases 6, 10 and 14** —
+which is why phase 6 could only claim its *shape* was true while this
+phase claims it "plays for real". Left as one phase for now because
+there are no strangers yet; split it the moment there are.
 
 **Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
 steps, a canvas born at its hosted home.

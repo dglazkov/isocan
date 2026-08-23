@@ -43,7 +43,17 @@ export interface DaemonOptions {
    *
    * Read from `ISOCAN_HOME_URL`, then `~/.isocan/config.json`'s `home`, by
    * `resolveHomeUrl` — environment and configuration rather than a flag, for
-   * the same reason `ISOCAN_BIND` and `ISOCAN_STORE` are. Setting it does one
+   * the same reason `ISOCAN_BIND` and `ISOCAN_STORE` are.
+   *
+   * **`isocan home <url>` (phase 7.5) is not a reversal of that.** It writes
+   * the configuration file and restarts the daemon so the file is read exactly
+   * as it always was; it adds no per-invocation override, and there is still
+   * no way to point one command at one home and the next at another. The
+   * refusal above is of a `--home` FLAG, and it stands. What phase 7.5 removed
+   * was the absurdity that the only ways to WRITE the key were an environment
+   * variable and a text editor.
+   *
+   * Setting it does one
    * thing in stage 1: the page server stops. The one-origin rule is that a
    * local daemon serves **ops to CLIs, never pages to persons**, and
    * `registerStaticWebApp` is precisely the code a home needs and precisely
@@ -215,6 +225,28 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     if (homeLink) await homeLink.close();
     closeWebSockets();
     await app.close();
+    /**
+     * The writer, drained — and this is a shutdown GUARANTEE, not tidiness.
+     *
+     * `app.close()` stops the listener and (with `forceCloseConnections`)
+     * destroys the sockets, but destroying a socket does not cancel the
+     * handler that was already running behind it: a request that reached
+     * `engine.claim` has its work sitting on the single-writer chain, and that
+     * work writes to the desk and the store. Without this line `close()`
+     * resolved while those writes were still to come, and they landed AFTER
+     * `desk.close()` had drained — `FileDesk.setClaims` → `writeFileAtomic`
+     * dropping a fresh `.tmp-*` into `desk/` on a daemon that had said it was
+     * shut. Under test that surfaced as `ENOTEMPTY … rmdir …/desk`; in a
+     * container it is a write racing process exit.
+     *
+     * `settled()` already exists for exactly this shape of question (the home
+     * connection asks it before reading a seq cursor), and it is safe HERE
+     * rather than earlier because the home connection is closed above: a
+     * forwarded write holds the chain across an HTTP round trip, and
+     * `HomeLink.close()`'s abort is what makes that round trip end now instead
+     * of in thirty seconds.
+     */
+    await engine.settled();
     // Only remove the pidfile if it is still OURS — a stop-then-serve race
     // otherwise lets the dying daemon delete its replacement's pidfile.
     try {
@@ -441,8 +473,34 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
       );
     });
   }
+  /**
+   * Exit, whatever `close()` does — and say so honestly if it went wrong.
+   *
+   * This used to be `close().then(() => process.exit(0))` with no catch, so a
+   * rejection from `desk.close()` or `store.close()` left the process alive
+   * with its handlers detached: a daemon that has stopped serving and will not
+   * die. That is not a hypothetical shape. It is exactly the condition that
+   * makes `stopDaemons` escalate to SIGKILL, and chasing a flake caused BY
+   * that escalation is how this line got read at all.
+   *
+   * Exit 1 rather than 0 when the shutdown failed, because a close that could
+   * not flush is not a clean shutdown and a process that reports success is a
+   * process nobody investigates. The error goes to the log first: on a hosted
+   * home that log line is the only witness.
+   *
+   * What this still does not cover, named rather than fixed: a `close()` that
+   * never SETTLES hangs the same way. A watchdog that exits regardless after a
+   * grace period is the answer if that is ever observed — it is not, today,
+   * and a timer that kills a daemon mid-flush would be its own bug.
+   */
   const shutdown = () => {
-    void daemon.close().then(() => process.exit(0));
+    void daemon
+      .close()
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error("isocan: shutdown failed to complete cleanly:", err);
+        process.exit(1);
+      });
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);

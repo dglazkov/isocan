@@ -1,12 +1,15 @@
 import { promises as fs } from "node:fs";
 import type { ActorClaim, ActorRegistry, LogEntry, OpEnvelope } from "@isocan/core";
-import { bindName, newOpId } from "@isocan/core";
+import { bindName, GRANTED_BY_MIGRATION, newOpId } from "@isocan/core";
 import * as p from "./paths.ts";
 import type { Desk } from "./desk.ts";
+import { ensureLinkGrant } from "./grants.ts";
 import type { Store } from "./store.ts";
 
 /**
- * The one-time migrations, both of them, composed across the two ledgers.
+ * The one-time migrations — two across the two ledgers, and phase 7's third,
+ * which writes the door's rows for a world full of canvases born before there
+ * was a door to have rows.
  *
  * They live here rather than on the `Store` because they are FILE-SHAPED —
  * an `agents.json`, an old-shaped `actors.json`, files only a disk backing
@@ -35,6 +38,45 @@ import type { Store } from "./store.ts";
 export async function runMigrations(home: string, store: Store, desk: Desk): Promise<void> {
   await migrateLegacyClaims(home, store, desk);
   await migrateLegacyAgents(home, store, desk);
+  await grantTheLinkOnOldCanvases(home, store, desk);
+}
+
+/**
+ * Every canvas that predates grants gets the standing link grant it would
+ * have been born with (phase 7).
+ *
+ * **Why this is not optional.** The door now refuses a badge no grant admits.
+ * Every canvas already in the world — on every laptop, and at dev.isocan.io —
+ * has no grant row, so without this every one of them becomes unreachable the
+ * moment its daemon is upgraded: not degraded, not read-only, gone.
+ *
+ * **Why not "no grants means link is implied".** That is the same fallback
+ * `desk.ts` forbids for the claim queries, for exactly the same reason: it
+ * would make a canvas whose grant was never written admit everybody anyway,
+ * so a birth path that forgot to write the row would look perfect until the
+ * day somebody turned a link off and it did not go off. The rows are written.
+ *
+ * **The marker, and its honest limit.** A file beside the desk says this ran,
+ * so the ordinary case is one `stat` at boot. It is a FILE, so a container
+ * that starts from a fresh filesystem re-runs it — the hosted home does
+ * exactly that on every cold start — and what that costs is one `grantsFor`
+ * query per canvas, writing nothing once the rows exist. That is acceptable
+ * at journey scale and would not be at ten thousand canvases; the fix when it
+ * matters is to move the marker onto the desk itself, where it survives the
+ * container. Named here rather than discovered there.
+ *
+ * `grantedBy` is the migration rather than a badge id, so "who opened this
+ * canvas up?" answers "nobody — it predates the question" instead of
+ * fingering whichever badge happened to be around.
+ */
+async function grantTheLinkOnOldCanvases(home: string, store: Store, desk: Desk): Promise<void> {
+  const marker = p.linkGrantsMigratedFile(home);
+  if (await fs.stat(marker).then(() => true, () => false)) return;
+  for (const project of await store.listProjects()) {
+    await ensureLinkGrant(desk, project.id, GRANTED_BY_MIGRATION);
+  }
+  await fs.mkdir(p.deskDir(home), { recursive: true }).catch(() => {});
+  await fs.writeFile(marker, new Date().toISOString()).catch(() => {});
 }
 
 /** The registry as it looked before the badge. */

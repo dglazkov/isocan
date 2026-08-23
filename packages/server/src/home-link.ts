@@ -3,6 +3,10 @@ import { WebSocket } from "ws";
 import type {
   Actor,
   BlobUploadResponse,
+  FreeNameResponse,
+  GrantResponse,
+  GrantsResponse,
+  GrantSubject,
   LogEntry,
   PostOpRequest,
   PostOpResponse,
@@ -11,7 +15,15 @@ import type {
   ServerMessage,
   UndoRedoRequest,
 } from "@isocan/core";
-import { encodeFilename, FILENAME_HEADER, healthPath } from "@isocan/core";
+import {
+  encodeFilename,
+  FILENAME_HEADER,
+  FREE_NAME_ROUTE,
+  grantRoute,
+  grantsRoute,
+  healthPath,
+  WS_NO_CANVAS,
+} from "@isocan/core";
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } from "./badge-store.ts";
@@ -114,6 +126,27 @@ export interface HomeConnection {
   /** Make this daemon's badge at the home vouch for an actor (and, when the
    * name has changed, tell the home the new one). */
   announceActor(actor: Actor): Promise<void>;
+  /**
+   * A name that is free AT THE HOME, in this daemon's badge's scope there.
+   *
+   * The one question a claim asks that a replica cannot answer for itself, and
+   * therefore the one part of a claim that travels. `Engine.preferredName`
+   * holds the reasoning; this end is a plain read.
+   */
+  freeName(): Promise<string>;
+  /**
+   * The grant routes, forwarded.
+   *
+   * A grant is desk state and desk state does not replicate — so unlike a
+   * canvas, whose local copy is a real copy, the local rows on this machine
+   * say only who on THIS machine may reach it. The row that decides who may
+   * enter the canvas at all lives at the home, and a `isocan share` that
+   * edited the laptop's ledger would report success while the link stayed on
+   * for the world. These three go up for the same reason writes do.
+   */
+  grants(projectId: string): Promise<GrantsResponse>;
+  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
+  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
     projectId: string,
@@ -416,7 +449,7 @@ export class HomeLink implements HomeConnection {
       // replica holding a canvas the home has never heard of is offline birth
       // (phase 13), and retrying forever would be a socket storm about a
       // canvas nobody can serve.
-      if (code === 4404) {
+      if (code === WS_NO_CANVAS) {
         link.closed = true;
         this.links.delete(link.projectId);
         return;
@@ -638,6 +671,21 @@ export class HomeLink implements HomeConnection {
     });
   }
 
+  /**
+   * "What name is free where this is going to land?"
+   *
+   * No claim goes up first, and there is nothing to cache: the answer is about
+   * a namespace other machines are also writing to, and a remembered one would
+   * be a reservation this link is in no position to hold. The engine treats
+   * what comes back as a preference and re-checks it locally, so a stale answer
+   * is cheap and an unreachable home costs nothing at all.
+   */
+  async freeName(): Promise<string> {
+    const { name } = await this.api<FreeNameResponse>("GET", FREE_NAME_ROUTE);
+    if (!name) throw new HomeRefusedError(200, "the home named no free name");
+    return name;
+  }
+
   private ensureClaim(actor: Actor): Promise<void> {
     // Keyed by id AND name, because a claim is also how somebody RENAMES
     // themselves. Keying on the id alone would let the first claim-up cache
@@ -672,6 +720,20 @@ export class HomeLink implements HomeConnection {
   async submitOp(body: PostOpRequest): Promise<PostOpResponse> {
     if (body.actor) await this.ensureClaim(body.actor);
     return this.api<PostOpResponse>("POST", "/api/ops", body);
+  }
+
+  /** Who may enter this canvas, as the HOME has it. No claim goes up first:
+   * a grant is about badges, never about actors. */
+  grants(projectId: string): Promise<GrantsResponse> {
+    return this.api<GrantsResponse>("GET", grantsRoute(projectId));
+  }
+
+  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
+    return this.api<GrantResponse>("POST", grantsRoute(projectId), { subject });
+  }
+
+  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
+    return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
   }
 
   async undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {

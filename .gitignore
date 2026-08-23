@@ -145,3 +145,7 @@ vite.config.ts.timestamp-*
 # An agent working in this repo names itself here (isocan identity --name … --here).
 # That name is the agent's, not the project's: local, never committed.
 .isocan/
+
+# `npm run dev:replica`'s own ISOCAN_HOME — a scratch daemon's badges, log and
+# replicated store. Kept out of ~/.isocan on purpose (scripts/dev-replica.mjs).
+.dev-replica/

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
-import { newProjectId } from "@isocan/core";
+import { canvasPath, newProjectId } from "@isocan/core";
 import { listProjects, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
@@ -90,7 +90,7 @@ export function ProjectListPage({
             ) : (
               <>
                 <h3>
-                  <Link to={`/p/${project.id}`} style={{ color: "inherit", textDecoration: "none" }}>
+                  <Link to={canvasPath(project.id)} style={{ color: "inherit", textDecoration: "none" }}>
                     {project.title}
                   </Link>
                 </h3>
@@ -99,7 +99,7 @@ export function ProjectListPage({
                   updated {new Date(project.updatedAt).toLocaleString()} by {actorNameIn(names, project.updatedBy)}
                 </div>
                 <div className="row">
-                  <Link className="btn" to={`/p/${project.id}`}>
+                  <Link className="btn" to={canvasPath(project.id)}>
                     Open
                   </Link>
                   <button

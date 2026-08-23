@@ -6,6 +6,9 @@ import type {
   CanvasSnapshotResponse,
   GcReport,
   GcRequest,
+  GrantResponse,
+  GrantsResponse,
+  GrantSubject,
   LogEntry,
   Operation,
   PostOpResponse,
@@ -13,7 +16,14 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { DOOR_ROUTE, encodeFilename, FILENAME_HEADER, newClientId } from "@isocan/core";
+import {
+  DOOR_ROUTE,
+  encodeFilename,
+  FILENAME_HEADER,
+  grantRoute,
+  grantsRoute,
+  newClientId,
+} from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
 export const CLIENT_ID = newClientId();
@@ -178,6 +188,38 @@ export async function uploadBlob(
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as BlobUploadResponse;
+}
+
+// ---- who may enter this canvas (the Share dialog's three calls) ----
+//
+// The routes are built by `@isocan/core`'s `grantsRoute`/`grantRoute` rather
+// than spelled here, and the subject is core's `GrantSubject` rather than the
+// string `"link"`: the dialog, the CLI verb and the daemon all have to agree
+// about the shape of a URL and the spelling of a subject, and a disagreement
+// shows up at runtime as a refusal with nothing to read.
+
+/** The rows still admitting, oldest first. Tombstones stay on the desk; the
+ * route does not hand them over, because "who can get in" is a question about
+ * the present. */
+export function listGrants(projectId: string): Promise<GrantsResponse> {
+  return request("GET", grantsRoute(projectId));
+}
+
+/** Share it. Today `link` is the only subject a home can check, and the API
+ * refuses the others by naming phase 9 — the dialog shows that refusal rather
+ * than hiding it behind a disabled control. */
+export function createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
+  return request("POST", grantsRoute(projectId), { subject });
+}
+
+/**
+ * Un-share it. Deliberately sends NO body and no content-type: a `DELETE`
+ * declaring `application/json` with nothing in it is a Fastify parse error,
+ * and while `http.ts` now answers that with the 400 it always was, the
+ * request that never needed a body should not send headers about one.
+ */
+export function revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
+  return request("DELETE", grantRoute(projectId, grantId));
 }
 
 export function runGc(projectId: string, options: GcRequest = {}): Promise<GcReport> {
