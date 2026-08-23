@@ -47,10 +47,11 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 6 is closed — Phase 7, the share (Scenes 1–4),
-is next, and it inherits two debts named in phase 6's findings: the
-admission scope on `GET /api/projects`, and a replica that has still
-never dialled dev.isocan.io.** This line moves as phases close; a clean
+**Where we are: Phase 6 is closed and verified against dev.isocan.io —
+Phase 7, the share (Scenes 1–4), is next, and it inherits one debt named
+in phase 6's findings: the admission scope on `GET /api/projects`, which
+today would have a replica of a multi-tenant home mirror strangers'
+canvases onto a laptop.** This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -671,7 +672,9 @@ observed in production conditions).
 **Status: CLOSED** 2026-08-23 (`2f3e0aa`). Both halves of the Proof
 played: the integration tests stand up a home and two replicas on
 separate `ISOCAN_HOME`s, and the lid-close beat was played by hand with
-Chrome and the CLI against real daemons.
+Chrome and the CLI against real daemons. Then played again against
+**dev.isocan.io** over `wss:` — fourteen checks, all green — which is
+also how phase 5's health-path finding was discovered to have expired.
 
 **Work:** Setup creates the canvas at the home; the marker carries id
 and address; the local daemon grows its **home connection** — dial,
@@ -794,17 +797,78 @@ the lid-close/reopen beat played with Chrome and the CLI.
   live dev home's door. Now `https://home.invalid` (RFC 2606, which can
   never resolve). A placeholder that names a real host is a placeholder
   only until the code grows the ability to use it.
+- **2026-08-23 — The address was dialled, and everything held over the
+  real wire.** Recorded on Dimitri's run rather than this session's, and
+  the attribution matters: a replica pointed at **dev.isocan.io**, badge
+  minted at the real door, one socket over **wss:** through the load
+  balancer. All fourteen checks passed — the canvas born through the
+  replica exists at dev; a write forwards and the item is at the home by
+  name; the lid closes, the evening is written at dev by another actor,
+  the lid reopens and the local oplog comes back contiguous `[1,2,3]`.
+  That last is the phase's whole claim: it **resumed** rather than
+  re-snapshotting, across the internet, through a load balancer, against
+  a Cloud Run instance that had cold-started from zero.
+- **2026-08-23 — And the run overturned phase 5's health-path finding
+  inside a day.** Phase 5 measured `/healthz` on the dev home as a
+  branded 404 from Google's frontend that never reached the container.
+  Re-measured on the same home one day later, it returns **the daemon's
+  own body** — `pid`, `root: /app`, byte-identical to `/api/healthz`.
+  Whether Google's frontend changed or something in the load balancer
+  did is not established, and that is exactly the finding: the fact the
+  map rested on was never ours, and it moved without notice.
+  What survives is the *other* argument, which never depended on the
+  frontend and which the same measurement sharpens: `/healthz/` and
+  `/HEALTHZ` come back as **1001 bytes of `index.html`** at 200, so a
+  check on a near-miss path is green forever and cannot fail for the
+  right reason — `/api/` is the one prefix the SPA fallback does not
+  answer cheerfully. `healthPath()` is therefore **defensive rather than
+  necessary** now, and is kept on those terms.
+  [architecture.md](architecture.md) keeps both reasons in order, the
+  expired one first, rather than deleting the dead one — a map that
+  quietly drops a reason teaches the next reader that the surviving one
+  was always the whole story.
+- **2026-08-23 — A replica is not a backup, and the map said it was the
+  best one.** Found by walking Scene 0's multi-device beat by hand: two
+  replicas of one home, a file added on the first, and the second
+  machine listing the item perfectly while holding **zero bytes of it**.
+  Blobs a replica did not itself upload are streamed from the home on
+  demand and are **not cached** — the second machine's blob directory
+  was still empty after reading the file through twice. Put beside the
+  earlier finding that a replica's oplog begins where it joined, the
+  shape is clear: a replica holds the canvas's **state**, not its
+  **history** and not its **bytes**.
+  [architecture.md](architecture.md)'s backups bullet said "the best
+  backup remains a thick replica — sovereignty by replica is also
+  disaster recovery"; it was written before replicas existed and is now
+  corrected, because it fails in the one direction that matters — a
+  replica looks complete right up until the home is gone.
+  **This is phase 13's problem before it is anyone else's.** Re-homing
+  is drawn in [offline-birth.md](design/offline-birth.md) as "a thick
+  replica offers its store to a *new* home … hello, badge, offer,
+  replay", and the store it would offer today is missing precisely the
+  two things a replay consumes. Whether re-homing is restricted to the
+  originating replica, or a replica learns to backfill history and
+  blobs, is a phase 13 decision — named here so it is chosen rather than
+  discovered.
+- **2026-08-23 — Scene 0's multi-device beat works, including the race
+  nobody had run.** A marker carried to a second machine by git — the
+  clone case — resolves against a replica that has never heard of the
+  canvas, and it does so without a `duplicate-id`: the command was run
+  deliberately in the window before the home connection's first sweep,
+  and the binding still landed on the existing canvas rather than trying
+  to create it again. What the second machine then sees is the first
+  machine's work, which is the beat Scene 0 promises and the one that
+  makes solo multi-device fall out of the multiuser topology.
 - **2026-08-23 — What the conductor did NOT verify, stated plainly.**
   The `writer-fenced` (409) pass-through is proven by construction — one
   branch, one error shape — and not by execution: a real fence needs two
-  writers against one oplog, which a `FileStore` home does not produce.
-  Phase 5 measured the real thing against the hosted home under a
-  rollout; this phase did not re-measure it through the replica path.
-  And nothing here ran against **dev.isocan.io** at all: every daemon in
-  both halves of the Proof was local. Phase 6's Work says the phase "has
-  a real address to dial" and it was not dialled — the address is
-  configuration with no compiled-in default, so pointing a replica at
-  dev is a one-variable change, but it is a change nobody has made yet.
+  writers against one oplog, which a `FileStore` home does not produce,
+  and the dev run did not force a rollout underneath itself. Phase 5
+  measured the real thing against the hosted home under a rollout; this
+  phase did not re-measure it through the replica path. Nor was a
+  **browser at dev.isocan.io** driven against a replica: the hand-played
+  Chrome half ran entirely against local daemons, and the dev half was
+  CLI-only.
 
 ## Phase 7 — The share (Scenes 1–4)
 

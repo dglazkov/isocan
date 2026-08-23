@@ -331,15 +331,23 @@ const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
  * which door to knock on, and the choice belongs to the ADDRESS rather than
  * to the caller.
  *
- * Why it has to: a hosted home does not get to answer `/healthz`. Measured on
- * the dev home (phase 5), Google's frontend claims that exact path and returns
- * its own branded 404 — `/` 200, an unknown path 200 through our SPA fallback,
- * `/healthz/` with a trailing slash 200, `/HEALTHZ` 200, and `/healthz` a 404
- * that never appears in the container's request log at all. So a probe that
- * has only ever spoken to 127.0.0.1 — `daemonPidOn`, `ensureDaemon`'s startup
- * poll, `warnIfStale`, `stopDaemons`, `isocan status` — reads a perfectly live
- * hosted home as DEAD the first time it is pointed at one, and phase 6 points
- * all of them at one.
+ * Why it existed, and why it stays after that reason expired. Phase 5 measured
+ * Google's frontend claiming the exact path `/healthz` on the dev home and
+ * answering its own branded 404, never reaching the container — so a probe
+ * that had only ever spoken to 127.0.0.1 (`daemonPidOn`, `ensureDaemon`'s
+ * startup poll, `warnIfStale`, `stopDaemons`, `isocan status`) would read a
+ * live hosted home as DEAD the first time it was pointed at one. Phase 6
+ * pointed all of them at one, and then re-measured: `/healthz` on that same
+ * home now returns the daemon's own body. Something between the two days
+ * changed, and which end of the wire it was is not established.
+ *
+ * The function stays, for the reason that never depended on the frontend:
+ * `/api/` is the one prefix the SPA fallback does not answer with a cheerful
+ * 200. `/healthz/` and `/HEALTHZ` come back as `index.html` at 200 — a check
+ * on a near-miss path is green forever and cannot fail for the right reason.
+ * So this is now DEFENSIVE rather than necessary, which is the honest way to
+ * hold a guard against behaviour that went away without notice and can return
+ * the same way.
  *
  * Loopback keeps `/healthz` deliberately: no frontend stands between a CLI and
  * its own daemon, every one of those callers works exactly as it does today,
