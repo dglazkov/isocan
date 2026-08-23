@@ -30,7 +30,7 @@ const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.
 function bareClassSelectors(text: string): string[] {
   const found: string[] = [];
   for (const rule of text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?:^|\})\s*([^{}@]+?)\{/g)) {
-    for (const selector of (rule[1] ?? "").split(",")) {
+    for (const selector of rule[1]!.split(",")) {
       const trimmed = selector.trim();
       if (/^\.[A-Za-z0-9_-]+$/.test(trimmed)) found.push(trimmed);
     }
@@ -52,7 +52,7 @@ describe("the stylesheet", () => {
     // The rule that broke, named directly: absence is a claim about one person
     // and it must never be made about the room.
     for (const rule of css.matchAll(/([^{}]*\.face-mark[^{}]*)\{([^}]*)\}/g)) {
-      if (/opacity|grayscale/.test(rule[2] ?? "")) expect(rule[1]).toContain(".away");
+      if (/opacity|grayscale/.test(rule[2]!)) expect(rule[1]!).toContain(".away");
     }
   });
 });
@@ -66,7 +66,7 @@ describe("the named cursor", () => {
    */
   it("is switched off in exactly one place", () => {
     const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
-    const off = [...bare.matchAll(/([^{}]*)\{[^}]*cursor:\s*none/g)].map((m) => m[1]?.trim());
+    const off = [...bare.matchAll(/([^{}]*)\{[^}]*cursor:\s*none/g)].map((m) => m[1]!.trim());
     expect(off).toEqual([".canvas-viewport.own-cursor-on"]);
   });
 });
