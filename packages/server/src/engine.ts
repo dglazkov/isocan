@@ -62,6 +62,20 @@ import {
  */
 const FREE_NAME_PROBE = " free-name probe";
 
+/**
+ * How far a name question may see, gathered in `claimContext`.
+ *
+ * - `"admitted"` — the rooms this badge has actually been let into (plus, for
+ *   a claim, the one room it names, if a grant would admit it). What a CLAIM
+ *   is judged in: a claim is judged where it is made.
+ * - `"admissible"` — those, plus every canvas a grant would admit this badge
+ *   to. What ALLOCATION asks in, because the badge doing the asking has
+ *   typically been nowhere yet. The door's own test, asked without opening
+ *   the door; `claimContext` says why, and where the same trick is already
+ *   played.
+ */
+type NameReach = "admitted" | "admissible";
+
 interface ProjectRuntime {
   state: ProjectState;
   lastSeq: number;
@@ -468,6 +482,14 @@ export class Engine {
    * judge the resulting claim in; a lookalike scope here would be the same
    * mismatch again, one layer down.
    *
+   * It asks with `"admissible"` reach rather than the claim's `"admitted"`,
+   * and that is not a departure from the sentence above — it is what makes it
+   * true. The badge asking has been NOWHERE yet; the rooms it is about to be
+   * in are the rooms a grant would admit it to, which is where the claim it
+   * is allocating for will land. Same reach `GET /api/projects` uses, for the
+   * same reason. `claimContext` carries the argument and the disclosure
+   * check.
+   *
    * One name out, never the taken set. The scope's names are already visible
    * to this badge — a refusal says who holds a name — but a route that handed
    * back a roster on request is the listing `orphanedClaims` refuses to be,
@@ -488,6 +510,11 @@ export class Engine {
         { badgeId, op: { type: "actor.claim", sessionKey: FREE_NAME_PROBE } },
         runtime.registry,
         new Date().toISOString(),
+        // The scope this question is actually about. A replica's badge is
+        // brand new and admitted to nothing when it asks, so "admitted" is
+        // the empty scope that makes every roster name look free — the
+        // original bug, one layer down. See `claimContext`.
+        "admissible",
       ),
     );
   }
@@ -1060,9 +1087,59 @@ export class Engine {
     request: ClaimRequest,
     registry: ActorRegistry,
     now: string,
+    reach: NameReach = "admitted",
   ): Promise<ClaimContext> {
     const badge = await this.desk.badge(request.badgeId);
     const canvasIds = (badge?.admissions ?? []).map((a) => a.canvasId);
+    /**
+     * `freeName` only (see `NameReach`), and it is the SAME trick `GET
+     * /api/projects` plays, for the same reason — not a coincidence, a
+     * pattern.
+     *
+     * Phase 7 hit this exact shape once already: scoping the projects listing
+     * strictly to admissions broke replicas, because a fresh replica's badge
+     * has no admissions and would discover nothing at all. The answer there
+     * was to scope to what the badge is admitted to PLUS what a grant would
+     * admit it to — the door's own test, asked without opening the door.
+     *
+     * Allocation is the same question wearing different clothes. A replica
+     * asks "what name is free where this is going to land?" with a badge that
+     * has, by construction, just been minted and been nowhere; scoped to
+     * admissions that badge's scope is empty, and an empty scope makes every
+     * roster name look free — so the home confidently answers with the one
+     * name most likely to already be taken. That is the original bug
+     * reproduced INSIDE its own fix, one layer down. (It hid locally because
+     * a replica's sweep admits its badge over loopback in milliseconds, so by
+     * claim time the scope was full; against a real home the claim wins that
+     * race. The refusal still names the canvas, because by the time the CLAIM
+     * is judged the badge HAS been admitted — which is what made it look like
+     * anything but a scope bug.)
+     *
+     * Not applied to a claim, which keeps phase 7's narrower widening below:
+     * a claim is judged where it is made, and the room it names is the room
+     * it named. This is one question — "hand me a name" — asked on behalf of
+     * somebody who has not arrived yet.
+     *
+     * **What it discloses, checked rather than assumed.** One NAME goes back,
+     * never the taken set, never a holder, never a title. What that leaks is
+     * a count: how many of the roster's first names are in use across the
+     * canvases this badge could enter by presenting the address. Those are
+     * exactly the canvases `GET /api/projects` already lists to the same
+     * badge, ids and titles included, and any of them would hand over its
+     * whole roster to a badge that simply opened it. So the answer is a
+     * function of what the asker can already have, and a canvas whose link is
+     * off drops out of it — same as the listing.
+     *
+     * Nothing is written: satisfying a grant to judge a name is not entering
+     * the room. The cost is one grant query per canvas the badge has not been
+     * in, on a route asked once per nameless claim.
+     */
+    if (reach === "admissible" && badge) {
+      for (const project of await this.listProjects()) {
+        if (canvasIds.includes(project.id)) continue;
+        if (await admittingGrant(this.desk, project.id, badge)) canvasIds.push(project.id);
+      }
+    }
     /**
      * The room this name is being taken in counts even before the badge has
      * been let into it — a browser names itself at the identity dialog,
