@@ -156,3 +156,55 @@ describe("the CLI-era session registry", () => {
     expect((await isocan(claude("s-1"), "whoami")).stdout).toContain(`Sonia (${sonia})`);
   });
 });
+
+describe("a home from before the badge", () => {
+  /**
+   * The fourth of the phase's named proofs, from the CLI's side. An upgraded
+   * home has claims keyed by `sessionKey` and clients holding no secret; the
+   * daemon cannot retroactively hand one out. So the migration puts the
+   * private half of each claim on the desk's SHELF, and the first badge to
+   * present the matching key adopts it — today's posture preserved for one
+   * hop and then extinguished.
+   *
+   * From the outside, this is indistinguishable from today: the agent runs
+   * `whoami` and is told who it is.
+   */
+  const kenny = { id: "usr_kenny", name: "Kenny" };
+
+  it("hands a returning agent its actor back, with nobody told anything", async () => {
+    const boundAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await fs.writeFile(
+      path.join(home, "actors.json"),
+      JSON.stringify({
+        lastSeq: 0,
+        claims: { "isocan:legacy": { ...kenny, boundAt } },
+        colors: {},
+      }),
+    );
+    await boot();
+
+    const back = await isocan({ ISOCAN_SESSION_ID: "legacy" }, "whoami");
+    expect(back.code).toBe(0);
+    expect(back.stdout).toContain(`Kenny (${kenny.id})`);
+    // And it is holding a badge of its own now, printed but never its secret.
+    expect(back.stdout).toMatch(/badge bdg_/);
+
+    // The public half is the registry's, with the original timestamp; the
+    // old file survives as the record of who held what when the desk opened.
+    const actors = JSON.parse(await fs.readFile(path.join(home, "actors.json"), "utf8")) as {
+      names: Record<string, { name: string; at: string }>;
+    };
+    expect(actors.names[kenny.id]).toEqual({ name: "Kenny", at: boundAt });
+    await fs.access(path.join(home, "actors.json.pre-badge"));
+
+    // The shelf that made it possible has emptied itself onto the badge.
+    const desk = JSON.parse(await fs.readFile(path.join(home, "desk", "badges.json"), "utf8")) as {
+      shelf: Record<string, unknown>;
+      badges: Record<string, { claims: { actorId: string; sessionKey?: string }[] }>;
+    };
+    expect(desk.shelf).toEqual({});
+    expect(Object.values(desk.badges).flatMap((b) => b.claims)).toEqual([
+      expect.objectContaining({ actorId: kenny.id, sessionKey: "isocan:legacy" }),
+    ]);
+  });
+});

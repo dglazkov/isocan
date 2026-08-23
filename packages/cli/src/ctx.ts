@@ -46,6 +46,11 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
   await client.ensureDaemon();
   await warnIfStale(client, home);
+  // Nothing is claimed here. Mechanism 5 asks the badge to vouch for whoever
+  // this command speaks as — but a read stamps nothing and names nobody, and
+  // an eager claim on every command would put an actors-log entry behind
+  // `ls`. `resolveIdentity` has already told the client HOW to claim; the
+  // home asking is what makes it happen, exactly once per badge.
   const binding = await findBinding(process.cwd(), home);
   return {
     client,

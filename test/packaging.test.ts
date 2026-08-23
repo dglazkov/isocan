@@ -28,6 +28,42 @@ describe("installable straight from git", () => {
     }
   });
 
+  it("keeps the cloud backing's 43 MiB out of the CLI install, in both directions", async () => {
+    // The two-way guard, and the direction that matters is the SECOND one.
+    // The test above says "what a workspace needs at runtime must be in the
+    // root manifest too", and @google-cloud/firestore and @google-cloud/storage
+    // are the first dependencies that must NOT be — 156 packages and ~43 MiB
+    // onto every `npm i -g github:dglazkov/isocan#release`, for a daemon that
+    // runs FileStore and never loads a line of it. So they live in a fourth
+    // workspace nobody installs, `daemon.ts` reaches it by dynamic import, and
+    // both halves of that arrangement are asserted here rather than tolerated
+    // as an exception.
+    const pkg = await readJson("package.json");
+    const cloudstore = await readJson("packages/cloudstore/package.json");
+    const cloudDeps = Object.keys(cloudstore.dependencies ?? {}).filter((dep) =>
+      dep.startsWith("@google-cloud/"),
+    );
+    expect(cloudDeps.sort()).toEqual(["@google-cloud/firestore", "@google-cloud/storage"]);
+
+    for (const manifest of ["package.json", "packages/cli/package.json", "packages/server/package.json"]) {
+      const declared = Object.keys({
+        ...(await readJson(manifest)).dependencies,
+        ...(await readJson(manifest)).devDependencies,
+      });
+      for (const dep of declared) {
+        expect(dep.startsWith("@google-cloud/"), `${manifest} hoists ${dep}`).toBe(false);
+      }
+    }
+    // And nothing an installed CLI can resolve names the cloud workspace: the
+    // loader maps two packages by path, and this is not one of them.
+    expect(Object.keys(pkg.dependencies)).not.toContain("@isocan/cloudstore");
+    const loader = await fs.readFile(
+      path.join(repo, "packages/cli/bin/workspace-loader.mjs"),
+      "utf8",
+    );
+    expect(loader).not.toContain("@isocan/cloudstore");
+  });
+
   it("never depends on its own workspaces — link deps break every reinstall", async () => {
     // `"@isocan/core": "file:packages/core"` reads as harmless and installs
     // fine ONCE. Reinstalling over it leaves npm rebuilding a link whose

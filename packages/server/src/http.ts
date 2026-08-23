@@ -1,27 +1,93 @@
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { FastifyInstance } from "fastify";
-import type { Actor, PostOpRequest, UndoRedoRequest } from "@isocan/core";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Actor, DoorRequest, DoorResponse, PostOpRequest, UndoRedoRequest } from "@isocan/core";
 import {
+  BADGE_RESTART_HINT,
   cancelledSince,
   COMMAND_NAME,
   decodeFilename,
+  DOOR_ROUTE,
   FILENAME_HEADER,
+  OplogFencedError,
   OpValidationError,
   parseCommandFile,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
-import type { Store } from "./store.ts";
+import type { BlobUploadRequest, Store } from "./store.ts";
+import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
+import {
+  badgeCookie,
+  isSecureRequest,
+  mintBadge,
+  originAllowed,
+  presentedBadge,
+  resolveBadge,
+} from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    /** The badge this request presented, resolved once by the door hook. */
+    badge: BadgeRecord | null;
+  }
+}
+
 const STARTED_AT = new Date().toISOString();
+
+/** Routes that answer without a badge, and why each one cannot close.
+ *
+ * `/healthz` is the load balancer's probe and, internally, what `daemonPidOn`,
+ * `ensureDaemon`'s startup poll, `warnIfStale` and `stopDaemons` all call —
+ * before any badge could exist. The door obviously cannot ask for what it
+ * hands out. The static web app is the page that SETS the cookie; closing it
+ * is a bootstrap paradox. And the blob GET is the one named hole — see
+ * `blobRoute` below.
+ *
+ * Everything else under `/api/*` and the `/ws` upgrade is refused, by one
+ * hook with one allowlist, so a route added later is refused by DEFAULT
+ * rather than by somebody remembering. */
+const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
+
+/** Every route that is ABOUT one canvas, by its shape rather than by a list —
+ * so `projectId ∈ admissions` is re-asked on all of them, including the ones
+ * a later phase adds. `/api/ops` is deliberately not here: its canvas is in
+ * the body, and it says so itself. */
+const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
+
+function isOpen(method: string, pathname: string): boolean {
+  if (pathname === "/healthz") return true;
+  if (!pathname.startsWith("/api/")) return true; // the web app and its assets
+  if (method === "POST" && pathname === DOOR_ROUTE) return true;
+  /**
+   * The sandboxed HTML blob, deliberately. `ItemView` renders a blob in an
+   * iframe with `sandbox="allow-scripts"` and no `allow-same-origin`, which
+   * gives that document an OPAQUE ORIGIN — and a document with an opaque
+   * origin has a null site-for-cookies, so nothing it then requests (a
+   * relative `<img>`, a stylesheet, a `fetch`) carries a `SameSite` cookie at
+   * all. The security comment in `ItemView.tsx` says this out loud as a
+   * feature, and it is right; it just means an HTML blob with relative asset
+   * references breaks the moment this route wants a badge.
+   *
+   * So it stays open, in writing. It is open today, so this changes nothing,
+   * and the phase's outcome is recognition rather than policy. The honest
+   * long-term answer is that a blob hash IS a capability — 256 bits of
+   * content address, unguessable, already how the route is reasoned about —
+   * and PHASE 3, which re-asks `projectId ∈ admissions` per route, is the
+   * phase that decides whether that is capability enough or whether HTML
+   * blobs get a per-blob token in the URL.
+   */
+  if (method === "GET" && BLOB_ROUTE.test(pathname)) return true;
+  return false;
+}
 
 export function registerRoutes(
   app: FastifyInstance,
   engine: Engine,
   store: Store,
+  desk: Desk,
   presence: PresenceHub,
 ): void {
   // Raw bodies for blob uploads; JSON stays JSON.
@@ -33,6 +99,15 @@ export function registerRoutes(
     }
     if (err instanceof ProjectNotFoundError) {
       return reply.status(404).send({ error: err.message, code: "unknown-project" });
+    }
+    // 409, and its own code, because a client must NOT retry this: the op was
+    // refused by another writer's claim on the seq, and the daemon has
+    // already dropped that canvas's runtime. The next request re-loads and
+    // numbers itself correctly; a blind retry with the same belief just
+    // refuses again.
+    if (err instanceof OplogFencedError) {
+      app.log.error(err);
+      return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof NothingToUndoError) {
       return reply.status(409).send({ error: err.message, code: "nothing-to-undo" });
@@ -49,13 +124,119 @@ export function registerRoutes(
     ...buildStamp(),
   }));
 
+  // ---- the door (identity desk, mechanism 1) ----
+
+  app.decorateRequest("badge", null);
+
+  /**
+   * One hook, run before every route: resolve the carrier, judge the Origin,
+   * refuse the badge-less. Policy is untouched — the address still admits,
+   * and getting a badge is free — so what this changes is RECOGNITION: from
+   * here on trust attaches to the badge and never to the address again.
+   */
+  app.addHook("onRequest", async (req, reply) => {
+    const pathname = (req.url ?? "/").split("?")[0]!;
+    const presented = presentedBadge(req.headers);
+    req.badge = await resolveBadge(desk, presented);
+
+    // The Origin check, as the belt to SameSite's braces. Cookie-carried and
+    // badge-less requests are judged; a bearer is exempt, because an
+    // attacker's page cannot read a bearer token and so has nothing to ride.
+    if (pathname.startsWith("/api/") && presented?.carrier !== "bearer") {
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      const allowed = originAllowed(
+        Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin,
+        { host: req.headers.host, secure },
+        { loopback: loopbackBound(app) },
+      );
+      if (!allowed) {
+        return reply.status(403).send({ error: "origin not allowed here", code: "bad-origin" });
+      }
+    }
+
+    if (req.badge) {
+      await desk.touch(req.badge.badgeId, new Date().toISOString());
+      // The door's test, re-asked. One hook rather than a call in each
+      // handler, for the same reason the badge check is one hook: a
+      // project-scoped route added later is covered by DEFAULT instead of by
+      // somebody remembering.
+      const scoped = PROJECT_ROUTE.exec(pathname)?.[1];
+      if (scoped) await admit(req, decodeSegment(scoped));
+      return;
+    }
+    if (isOpen(req.method, pathname)) return;
+    return presented
+      ? reply
+          .status(401)
+          .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" })
+      : reply
+          .status(401)
+          .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+  });
+
+  /**
+   * Mint a badge. `carrier` is STATED, never sniffed: `Origin` presence and
+   * `Sec-Fetch-Mode` are guessable and wrong at the edges, and one field in a
+   * body is honest and costs nothing.
+   *
+   * The door mints only for the badge-less. A caller that already holds a
+   * valid badge is told its own id and handed no new secret, so a refresh
+   * storm or a retry loop cannot mint a badge per request.
+   */
+  app.post(DOOR_ROUTE, async (req, reply) => {
+    if (req.badge) return { badgeId: req.badge.badgeId } satisfies DoorResponse;
+    const carrier = ((req.body ?? {}) as DoorRequest).carrier ?? "bearer";
+    const { record, token } = mintBadge(carrier === "cookie" ? "cookie" : "bearer");
+    await desk.put(record);
+    if (carrier === "cookie") {
+      // The secret is NEVER in the body for the cookie carrier: the whole
+      // value of HttpOnly is that page JavaScript cannot read the credential,
+      // and returning it in JSON hands it straight back.
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      reply.header("Set-Cookie", badgeCookie(token, secure));
+      return { badgeId: record.badgeId } satisfies DoorResponse;
+    }
+    return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
+  });
+
+  /**
+   * `projectId ∈ badge.admissions`, re-asked on every project-scoped route —
+   * the door's test, taken cheaply on each request rather than only at entry
+   * (mechanism 5).
+   *
+   * Today it always passes, and saying so plainly is more useful than hiding
+   * it: the door's POLICY is that the address admits, so a badge that is not
+   * yet admitted here is admitted NOW and the admission is written down.
+   * Phase 7 replaces the one marked line with the canvas's link grant, and
+   * this becomes a refusal without another route having to be found and
+   * edited.
+   *
+   * The payoff is already real, though, and it is mechanism 10's: because
+   * every project-scoped route passes through here, a badge's admissions are
+   * an accurate record of where it has been — which is exactly the scope the
+   * narrowed name check and the narrowed color broadcast are judged against.
+   */
+  const admit = async (req: FastifyRequest, canvasId: string, provenance: Provenance = { root: "link" }) => {
+    if (!req.badge) return; // an open route (the blob GET); nothing to admit
+    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) return;
+    // ---- the policy point. Phase 7: consult the grant, and refuse. ----
+    await desk.admit(req.badge.badgeId, canvasId, provenance);
+    req.badge.admissions = [
+      ...req.badge.admissions,
+      { canvasId, provenance, at: new Date().toISOString() },
+    ];
+  };
+
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
     if (body.op?.type === "actor.claim") {
       // A claim resolves who is speaking, so it is the one op that arrives
-      // without an actor; the response envelope carries the answer.
+      // without an actor; the response envelope carries the answer. It is
+      // also "add an actor to THIS badge's claims", which is why the badge
+      // travels with it.
       const entry = await engine.claim({
         op: body.op,
+        badgeId: req.badge!.badgeId,
         ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
       });
       return { seq: entry.seq, envelope: entry.envelope };
@@ -68,19 +249,48 @@ export function registerRoutes(
       const entry = await engine.setActorColor({
         op: body.op,
         actor: body.actor,
+        badgeId: req.badge!.badgeId,
         ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
       });
       return { seq: entry.seq, envelope: entry.envelope };
     }
-    const entry = await engine.submit(body as PostOpRequest & { actor: Actor });
+    const entry = await engine.submit({
+      ...(body as PostOpRequest & { actor: Actor }),
+      badgeId: req.badge!.badgeId,
+    });
+    if (body.op?.type === "project.create") {
+      // The bootstrap badge's first admission: it earned this one by making
+      // the canvas, which is the only provenance that is not "somebody let
+      // me in".
+      await admit(req, body.op.projectId, { root: "created" });
+    } else if (body.projectId) {
+      await admit(req, body.projectId);
+    }
     return { seq: entry.seq, envelope: entry.envelope };
   });
 
   // ---- the actor registry: who a session key speaks as (#57) ----
 
+  /** Badge-scoped: a holder sees its own claims and nobody else's. */
   app.get("/api/actors", async (req) => {
     const { keys } = req.query as { keys?: string };
-    return engine.actorBindings(keys ? keys.split(",").filter(Boolean) : null);
+    return engine.actorBindings(req.badge!.badgeId, keys ? keys.split(",").filter(Boolean) : null);
+  });
+
+  /**
+   * The recovery question, asked only about session keys the caller already
+   * holds: is this key claimed on a badge that is not mine? A client whose
+   * badge was lost or wiped is otherwise told it has no identity, while its
+   * actor sits on an orphaned badge — true, useless, and pointing at `--name`,
+   * which would mint a stranger. Answering does not adopt anything; coming
+   * back is `--as`, and it stays deliberate.
+   */
+  app.get("/api/actors/orphaned", async (req) => {
+    const { keys } = req.query as { keys?: string };
+    return engine.orphanedClaims(
+      req.badge!.badgeId,
+      keys ? keys.split(",").filter(Boolean) : [],
+    );
   });
 
   /** Chosen identity colors, for clients painting faces before a canvas is
@@ -132,6 +342,8 @@ export function registerRoutes(
 
   app.get("/api/projects/:id/canvas", async (req) => {
     const { id } = req.params as { id: string };
+    // No `admit` here any more: the hook took the door's test on the way in,
+    // for this route and every other one shaped like it.
     return engine.getSnapshot(id);
   });
 
@@ -232,13 +444,13 @@ export function registerRoutes(
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.undo(id, body.actor, body.clientId);
+    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId);
   });
 
   app.post("/api/projects/:id/redo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.redo(id, body.actor, body.clientId);
+    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId);
   });
 
   // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
@@ -247,6 +459,8 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id); // 404 unknown projects
     const body = req.body as import("@isocan/core").CreateSessionRequest;
+    // A face is an assertion about who is here, so it is checked like an op.
+    await engine.requireActor(req.badge!.badgeId, body.actor.id);
     const session = presence.createSession(id, body.actor, "cli", {
       ...(body.label !== undefined ? { label: body.label } : {}),
     });
@@ -256,6 +470,9 @@ export function registerRoutes(
   app.put("/api/projects/:id/sessions/:sid", async (req, reply) => {
     const { id, sid } = req.params as { id: string; sid: string };
     const body = (req.body ?? {}) as import("@isocan/core").UpdateSessionRequest;
+    // Every beat re-asserts who is holding the face (that is what makes a
+    // rename re-label it live), so every beat is checked.
+    if (body.actor) await engine.requireActor(req.badge!.badgeId, body.actor.id);
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }
@@ -285,6 +502,10 @@ export function registerRoutes(
 
   app.delete("/api/projects/:id/sessions/:sid", async (req) => {
     const { id, sid } = req.params as { id: string; sid: string };
+    // Taking a face DOWN names an actor too. A session that is already gone
+    // names nobody, and ending it stays the no-op it has always been.
+    const standing = presence.roster(id).find((session) => session.sessionId === sid);
+    if (standing) await engine.requireActor(req.badge!.badgeId, standing.actor.id);
     presence.endSession(id, sid);
     return { ok: true };
   });
@@ -298,6 +519,10 @@ export function registerRoutes(
   app.delete("/api/presence/actors/:actorId", async (req) => {
     const { actorId } = req.params as { actorId: string };
     const { kind } = req.query as { kind?: "web" | "cli" };
+    // Ending an actor's sessions everywhere is as much an assertion about who
+    // you are as putting a face up: without the check, one request would
+    // silently blank anybody's face on any canvas.
+    await engine.requireActor(req.badge!.badgeId, actorId);
     return { ended: presence.endActorSessions(actorId, kind) };
   });
 
@@ -319,27 +544,155 @@ export function registerRoutes(
     return engine.putBlob(id, data, { mimeType, filename });
   });
 
+  /**
+   * Ask for somewhere to put bytes too big to post (see
+   * `MAX_DIRECT_UPLOAD_BYTES`). POST, so `isOpen`'s GET-only blob hole does
+   * not cover it, and under `/api/projects/:id/…`, so the door re-asks
+   * `projectId ∈ admissions` before a single byte is signed for.
+   */
+  app.post("/api/projects/:id/blobs/upload-url", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id); // 404 for unknown projects
+    const request = req.body as Partial<BlobUploadRequest> | undefined;
+    const problem = badUploadRequest(request);
+    if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
+    const asked = request as BlobUploadRequest;
+
+    // Already here? Then there is nothing to upload, and saying so is cheaper
+    // for everyone than a round trip to a bucket that would dedup it anyway.
+    const known = await store.blobMeta(id, asked.blobHash);
+    if (known) {
+      return { blob: { blobHash: asked.blobHash, mimeType: known.mimeType, size: known.size } };
+    }
+    const upload = await engine.beginUpload(id, asked);
+    if (!upload) {
+      return reply
+        .status(409)
+        .send({ error: "this home takes blob bytes directly — POST them", code: "bad-op" });
+    }
+    return { upload };
+  });
+
+  /** Name bytes that went straight to the object store. */
+  app.post("/api/projects/:id/blobs/register", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    const request = req.body as Partial<BlobUploadRequest> | undefined;
+    const problem = badUploadRequest(request);
+    if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
+    return engine.registerBlob(id, request as BlobUploadRequest);
+  });
+
   app.get("/api/projects/:id/blobs/:hash", async (req, reply) => {
     const { id, hash } = req.params as { id: string; hash: string };
     await engine.getSnapshot(id);
-    const blob = await store.getBlob(id, hash);
-    if (!blob) return reply.status(404).send({ error: "blob not found" });
-    return reply
-      .header("Content-Type", blob.meta.mimeType)
-      // Defense in depth for HTML blobs: even outside the app's sandboxed
-      // iframe, a directly-opened blob document is sandboxed and can't reach
-      // the daemon API with an origin.
+    const meta = await store.blobMeta(id, hash);
+    if (!meta) return reply.status(404).send({ error: "blob not found" });
+
+    // Defense in depth for HTML blobs: even outside the app's sandboxed
+    // iframe, a directly-opened blob document is sandboxed and can't reach
+    // the daemon API with an origin.
+    reply
+      .header("Content-Type", meta.mimeType)
       .header("Content-Security-Policy", "sandbox allow-scripts")
       .header("X-Content-Type-Options", "nosniff")
       .header("Cache-Control", "immutable, max-age=31536000")
-      .send(createReadStream(blob.path));
+      // Said unconditionally, so a player knows it may seek BEFORE it asks.
+      .header("Accept-Ranges", "bytes");
+
+    const range = parseRange(req.headers.range, meta.size);
+    if (range === "unsatisfiable") {
+      return reply.status(416).header("Content-Range", `bytes */${meta.size}`).send();
+    }
+    if (range) {
+      const stream = await store.openBlob(id, hash, range);
+      if (!stream) return reply.status(404).send({ error: "blob not found" });
+      return reply
+        .status(206)
+        .header("Content-Range", `bytes ${range.start}-${range.end}/${meta.size}`)
+        .header("Content-Length", String(range.end - range.start + 1))
+        .send(stream);
+    }
+    const stream = await store.openBlob(id, hash);
+    if (!stream) return reply.status(404).send({ error: "blob not found" });
+    return reply.header("Content-Length", String(meta.size)).send(stream);
   });
 
-  registerStaticWebApp(app);
+  registerStaticWebApp(app, desk);
+}
+
+/** What a direct-upload request must carry, or the reason it does not. All
+ * four fields are load-bearing: the hash is the object's name, the mime type
+ * and filename are signed into the URL, and the size is what the register
+ * will be checked against. */
+function badUploadRequest(request: Partial<BlobUploadRequest> | undefined): string | null {
+  if (!request || typeof request !== "object") return "expected an upload request body";
+  if (typeof request.blobHash !== "string" || !/^[0-9a-f]{64}$/.test(request.blobHash)) {
+    return "blobHash must be a sha256 hex digest";
+  }
+  if (typeof request.mimeType !== "string" || request.mimeType === "") return "mimeType is required";
+  if (typeof request.filename !== "string" || request.filename === "") return "filename is required";
+  if (typeof request.size !== "number" || !Number.isInteger(request.size) || request.size <= 0) {
+    return "size must be a positive integer";
+  }
+  return null;
+}
+
+/**
+ * One HTTP byte range, or null for "the whole thing", or "unsatisfiable".
+ *
+ * Deliberately narrow: a single range, which is every range a browser's media
+ * element or a `curl -C -` ever sends. A multipart range response is a
+ * different content type and a different body format, and nothing that talks
+ * to a canvas asks for one — so an `Accept-Ranges: bytes` promise this route
+ * cannot keep is not made. Anything unparseable is IGNORED (RFC 9110 says a
+ * bad Range must be treated as absent), which is why a garbled header gets
+ * the whole blob rather than a 416.
+ */
+function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | "unsatisfiable" | null {
+  if (typeof header !== "string") return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === "" && rawEnd === "") return null;
+  if (rawStart === "") {
+    // A suffix range: the LAST n bytes. `bytes=-0` asks for nothing.
+    const wanted = Number(rawEnd);
+    if (wanted === 0) return "unsatisfiable";
+    return { start: Math.max(0, size - wanted), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  if (start >= size) return "unsatisfiable";
+  const end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  if (end < start) return "unsatisfiable";
+  return { start, end };
+}
+
+/** The canvas id out of a path segment. A malformed percent escape is not
+ * worth a 500 from a hook: it is not a canvas id either way, and the route
+ * behind it will say so. */
+function decodeSegment(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Is this daemon listening only to its own machine? Mechanism 5's "within a
+ * machine, localhost trust stands" needs to know, and the hosted home (bound
+ * to 0.0.0.0) must not take the clause. */
+function loopbackBound(app: FastifyInstance): boolean {
+  const address = app.server.address();
+  if (!address || typeof address === "string") return false;
+  return address.address === "127.0.0.1" || address.address === "::1";
 }
 
 /** Serve packages/web/dist (if built) so `isocan open` works without Vite. */
-function registerStaticWebApp(app: FastifyInstance): void {
+function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(here, "../../web/dist");
   if (!existsSync(path.join(dist, "index.html"))) return;
@@ -362,6 +715,19 @@ function registerStaticWebApp(app: FastifyInstance): void {
     const resolved = path.resolve(dist, url);
     if (resolved.startsWith(dist) && url && existsSync(resolved)) {
       return send(reply, resolved);
+    }
+    // The browser is badged on the PAGE LOAD, not on a round trip — the
+    // desk's Scene 3 diagram is literal about it: `GET /c/7f3a… → web app +
+    // Set-Cookie`. So the app is badged before its first fetch, and the
+    // 401-and-recover path in `api.ts` is belt-and-braces rather than the
+    // way in. The guard matters: this handler is the SPA fallback for any
+    // unmatched GET, so minting unconditionally would mint a badge per
+    // stray asset request.
+    if (!req.badge) {
+      const { record, token } = mintBadge("cookie");
+      await desk.put(record);
+      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+      reply.header("Set-Cookie", badgeCookie(token, secure));
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback
   });

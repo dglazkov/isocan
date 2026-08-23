@@ -24,6 +24,27 @@ export const identityFile = (home: string) => path.join(home, "identity.json");
 export const actorsFile = (home: string) => path.join(home, "actors.json");
 /** The home's identity oplog — every actor.claim, append-only. */
 export const actorsLogFile = (home: string) => path.join(home, "actors.jsonl");
+/** The registry as it was before the badge — claims keyed by session key.
+ * Renamed aside by the one-time migration, and kept: it is the record of who
+ * held what when the desk opened. */
+export const preBadgeActorsFile = (home: string) => path.join(home, "actors.json.pre-badge");
+/** The desk's ledgers: innkeeper-private, never replicated (the two-ledger
+ * rule). A DIRECTORY rather than a loose file, because the desk grows
+ * `grants`, `registrations`, and an audit ledger in phases 7, 9, and 12, and
+ * because encryption at rest and key custody for these is a debt innkeeper.md
+ * already owes — a directory makes that a directory-level operation later
+ * instead of a scavenger hunt. */
+export const deskDir = (home: string) => path.join(home, "desk");
+/** The badge snapshot: every badge this home has minted. Derived. */
+export const badgesFile = (home: string) => path.join(deskDir(home), "badges.json");
+/** The desk's durable log — mints, claims, and the migration shelf,
+ * append-only, fsynced before a write is acknowledged. A claim carries
+ * AUTHORIZATION now, so the claims half is snapshot-plus-tail like everything
+ * else in this house: losing one file must not lock somebody out of their own
+ * name. Admissions and `lastSeen` are deliberately NOT logged — the address
+ * admits, so a returning badge re-admits itself on its next request, and one
+ * fsync per (badge, canvas) pair for data that rebuilds itself is ceremony. */
+export const badgesLogFile = (home: string) => path.join(deskDir(home), "badges.jsonl");
 /** The CLI-era session registry (pre-#57); read only to migrate (#59). */
 export const agentsFile = (home: string) => path.join(home, "agents.json");
 /** Pre-facepile-fix single pointer; read by nobody, removed on sight. */

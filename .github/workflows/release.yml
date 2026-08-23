@@ -41,11 +41,34 @@ jobs:
           git fetch --no-tags origin +refs/heads/release:refs/remotes/origin/release \
             || echo "no release branch yet — this run creates it"
 
+      # The Firestore emulator is a JAR and it refuses anything below 21 —
+      # "The java executable on your PATH is not a Java 21+ JRE". The runner
+      # image ships a JDK, and which one is not ours to assume; pin it.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # `ubuntu-latest` MAY ship the Google Cloud CLI, and "may" is exactly the
+      # wrong foundation here: the failure mode is a silent skip of the cloud
+      # suites on the branch everybody installs from.
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: cloud-firestore-emulator
+
       - run: npm ci
 
       # A release nobody tested is a release that installs a broken canvas. If
       # these fail, main keeps its last good release until the next green commit.
+      #
+      # ISOCAN_REQUIRE_EMULATOR is the anti-skip switch. Locally the cloud
+      # suites skip loudly and say what they did not check; here a skip is a
+      # FAILURE, because a green run that did not test Firestore launders an
+      # unknown into a checkmark — and this is the run that decides what gets
+      # released.
       - run: npm test
+        env:
+          ISOCAN_REQUIRE_EMULATOR: "1"
       - run: npm run typecheck
 
       - name: Build and publish the release branch

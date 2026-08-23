@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import { BROWSER_MIME } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * `isocan browse` projects a live site as an ordinary item whose blob is a
@@ -17,11 +18,15 @@ import { startDaemon, type Daemon } from "@isocan/server";
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
+/** Whoever set the fixture canvas up — not anybody the CLI speaks as. */
+const seeder = { id: "usr_seed", name: "Seed" };
 
 let home: string;
 let daemon: Daemon;
 let base: string;
 let port: number;
+/** The CLI badges itself; a test poking the daemon directly needs its own. */
+let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-browse-"));
@@ -33,13 +38,19 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;
+  badge = await mintTestBadge(base);
+  // A badge speaks only for actors it claims (mechanism 5). The seeded
+  // canvas is deliberately NOT the human's: `usr_nico` is the identity the
+  // CLI under test claims for itself, and one actor may be claimed by one
+  // session at a time, so a fixture holding it would be a second claimant.
+  await badge.speakAs(seeder);
 
   await fetch(`${base}/api/ops`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
       projectId: null,
-      actor: nico,
+      actor: seeder,
       op: { type: "project.create", projectId: "prj_1", title: "P" },
     }),
   });
@@ -68,7 +79,7 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
 }
 
 function snapshot(): Promise<CanvasSnapshotResponse> {
-  return fetch(`${base}/api/projects/prj_1/canvas`).then(
+  return fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<CanvasSnapshotResponse>,
   );
 }

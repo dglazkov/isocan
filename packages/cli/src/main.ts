@@ -95,6 +95,9 @@ import { ApiError, DaemonClient } from "./client.ts";
 import {
   readIdentity,
   claimSessionIdentity,
+  HOME_CLAIM_KEY,
+  noIdentityHere,
+  reclaimIdentity,
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity,
@@ -557,7 +560,7 @@ program
         // color everyone sees, not a local preference each keeps to itself.
         if (opts.color !== undefined) {
           const resolved = await resolveIdentity(client, home);
-          if (!resolved) throw new Error("no identity configured — use --name first");
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
           const color = parseIdentityColor(opts.color);
           await client.sendOp(null, resolved.actor, {
             type: "actor.setColor",
@@ -608,6 +611,20 @@ program
           if (!opts.name) throw new Error('a name is required — `isocan identity --name "You" --home`');
           const actor = await writeIdentity(home, opts.name, opts.new ?? false);
           console.log(`identity saved: ${actor.name} (${actor.id}) → ${paths.identityFile(home)}`);
+          // The file is one half; the claim on the machine's badge is the
+          // other, and a RENAME has to reach it or the registry goes on
+          // answering with the old name — which would put the old name back
+          // on every comment the new one writes, the exact failure the
+          // registry exists to prevent.
+          //
+          // Best-effort, and deliberately so: the name IS saved, and a daemon
+          // that is not running is not a reason to fail a write to a local
+          // file. Whatever this machine does next claims it.
+          if (await client.health()) {
+            await reclaimIdentity(client, { actor, key: HOME_CLAIM_KEY }).catch((err: Error) => {
+              console.error(`warning: this home still knows you as somebody else — ${err.message}`);
+            });
+          }
           await relabelLiveSession(cmd, actor);
           const taken = await nameCollision(cmd, actor);
           if (taken) {
@@ -618,7 +635,7 @@ program
           }
         } else {
           const resolved = await resolveIdentity(client, home);
-          if (!resolved) throw new Error("no identity configured — use --name");
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
           printKeyValues({
             id: resolved.actor.id,
             name: resolved.actor.name,
@@ -642,9 +659,15 @@ program
       const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
       await retireStrandedIdentities(process.cwd(), home);
       const resolved = await resolveIdentity(client, home);
-      if (!resolved) throw new Error('no identity configured — run `isocan identity --name "You"`');
+      if (!resolved) throw new Error(await noIdentityHere(client, home));
       const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
+      // The badge, never its secret. Nothing is DONE to a badge in this phase
+      // — getting one is automatic and invisible, which is the point of it —
+      // but when a 401 shows up, "am I recognized here, and as which holder?"
+      // is the one question a person or an agent genuinely needs answered.
+      const badgeId = await client.badgeId();
+      if (badgeId) console.log(`badge ${badgeId} at ${client.base}`);
     }),
   );
 

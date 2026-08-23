@@ -67,7 +67,9 @@ Pick like this, once, before you appear:
 
 1. `isocan whoami` — a name followed by "this agent session" is YOURS, from
    earlier in this same session: keep it, a stable name beats a fresh one.
-   A bare name is the HUMAN's — never yours to keep. On a machine where
+   A bare name is the HUMAN's — never yours to keep. (A `badge bdg_…` line
+   under it is this machine's credential with the daemon, handed out
+   automatically; there is nothing for you to do with it.) On a machine where
    nobody has been named yet it errors with "no identity configured" — that
    is the answer "nobody, yet", not a broken install; same for a `project
    list` that is empty before you have named yourself (the handshake is what
