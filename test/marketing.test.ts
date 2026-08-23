@@ -22,6 +22,19 @@ import { fileURLToPath } from "node:url";
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string) => fs.readFile(path.join(repo, rel), "utf8");
 
+/** Every rule in the stylesheet whose selector list mentions <img>. */
+async function imageRules(): Promise<{ selectors: string[]; body: string }[]> {
+  const css = (await read("marketing/style.css")).replace(/\/\*[\s\S]*?\*\//g, "");
+  const out: { selectors: string[]; body: string }[] = [];
+  for (const rule of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectors = (rule[1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    // `img` as its own element token — not `.image-frame`, not `imgx`.
+    if (!selectors.some((s) => /(^|[\s>+~])img\b/.test(s))) continue;
+    out.push({ selectors, body: rule[2] ?? "" });
+  }
+  return out;
+}
+
 /** Width and height out of a PNG's IHDR, which is always the first chunk. */
 async function pngSize(rel: string): Promise<{ width: number; height: number }> {
   const head = await fs.readFile(path.join(repo, rel));
@@ -45,16 +58,35 @@ describe("the marketing page", () => {
     }
   });
 
-  it("lets the intrinsic ratio win", async () => {
-    const css = await read("marketing/style.css");
-    // Every rule that gives an image a width must leave its height alone.
-    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
-    for (const rule of bare.matchAll(/([^{}]*img[^{}]*)\{([^}]*)\}/g)) {
-      const [, selector, body] = rule;
-      if (!/(^|[;\s])width\s*:/.test(body ?? "")) continue;
-      expect(body, `${selector?.trim()} sizes an image without height: auto`).toMatch(
-        /height\s*:\s*auto/,
-      );
+  /**
+   * Stated as an invariant rather than as "don't repeat my mistake".
+   *
+   * The first version of this checked that any rule setting an image's WIDTH
+   * also set `height: auto`, which is the exact keystroke that caused the bug
+   * and almost nothing else. Mutation testing found the hole in a minute:
+   * size the image with `max-width` instead and the picture squashes to the
+   * same 1158x1346, with the test green. A presentational hint loses to ANY
+   * author height declaration, so the real invariant is not about width at
+   * all — every image gets `height: auto`, and nothing takes it away.
+   */
+  it("gives every image height: auto, so the attribute stays a hint", async () => {
+    const rules = await imageRules();
+    const blanket = rules.filter((r) => r.selectors.includes("img"));
+    expect(blanket.length, "no bare `img` rule to carry height: auto").toBeGreaterThan(0);
+    expect(
+      blanket.some((r) => /(^|[;{\s])height\s*:\s*auto/.test(r.body)),
+      "no rule applies `height: auto` to all images — an <img> added tomorrow " +
+        "would be drawn to whatever its height attribute says",
+    ).toBe(true);
+  });
+
+  it("never pins an image's height", async () => {
+    for (const rule of await imageRules()) {
+      // max-height, min-height and line-height are different properties and
+      // none of them overrides the intrinsic ratio.
+      const height = /(?:^|[;{\s])height\s*:\s*([^;}]+)/.exec(rule.body)?.[1]?.trim();
+      if (height === undefined) continue;
+      expect(height, `${rule.selectors.join(", ")} pins an image's height`).toBe("auto");
     }
   });
 
