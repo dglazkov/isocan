@@ -55,16 +55,19 @@ REPO_NAME="${ISOCAN_REPO_NAME:-isocan}"
 BRANCH="${ISOCAN_TRIGGER_BRANCH:-^main$}"
 
 step "is the repository connected?"
-CONNECTED="$(gcloud builds repositories list --project="${PROJECT_ID}" --region="${REGION}" \
-  --format='value(name)' 2>/dev/null || true)"
-if [ -z "${CONNECTED}" ]; then
-  human "no repository is connected to Cloud Build in ${REGION}."
-  note "open this, connect ${REPO_OWNER}/${REPO_NAME}, then re-run:"
-  note "  https://console.cloud.google.com/cloud-build/triggers/connect?project=${PROJECT_ID}"
-  die "a browser has to do this part"
-fi
-note "connected repositories in ${REGION}:"
-printf '%s\n' "${CONNECTED}" | sed 's/^/      /'
+# There are TWO connection generations and they do not see each other. The
+# console's "GitHub (Cloud Build GitHub App)" flow — the one this file tells
+# you to use, and the one `triggers create github --repo-owner/--repo-name`
+# below consumes — is 1st gen, and 1st-gen links appear in NEITHER
+# `gcloud builds connections list` NOR `gcloud builds repositories list`;
+# those are 2nd gen (Developer Connect) only.
+#
+# This check used to call `builds repositories list` and die when it came back
+# empty, which it always does for a correctly connected 1st-gen repo. The
+# script would have refused forever no matter what you connected. There is no
+# 1st-gen "list what is linked" command, so the honest check is to ATTEMPT the
+# create and read the failure — a missing connection fails fast and says so.
+note "1st-gen (GitHub App) links are not listable; the create below is the check."
 
 step "trigger ${TRIGGER}"
 if exists gcloud builds triggers describe "${TRIGGER}" --project="${PROJECT_ID}" --region="${REGION}"; then
@@ -75,7 +78,11 @@ fi
 
 confirm "create a trigger that deploys ${PROJECT_ID} on every push to main?"
 
-gcloud builds triggers create github "${TRIGGER}" \
+# --name=, not a positional: `triggers create github` names the trigger with a
+# flag, unlike most `create` verbs in gcloud. Measured, after it rejected the
+# positional with "unrecognized arguments".
+gcloud builds triggers create github \
+  --name="${TRIGGER}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
   --repo-owner="${REPO_OWNER}" \
