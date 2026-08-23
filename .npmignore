@@ -11,3 +11,9 @@ coverage
 .DS_Store
 .env
 .env.*
+
+# The marketing site is a static page for isocan.io, not part of the CLI. It
+# carries a ~500KB screenshot, and nobody running `npx isocan setup` needs it.
+# When a daemon serves that page (phase 14), shipping it becomes a decision to
+# make on purpose rather than a default nobody chose.
+marketing

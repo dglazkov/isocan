@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>isocan — every click has a command</title>
+<meta name="description" content="An infinite canvas you drive from a browser and from your terminal. Same state, same operations, one engine — so any agent that can run a command can work on it beside you.">
+<meta property="og:title" content="isocan — every click has a command">
+<meta property="og:description" content="An infinite canvas you drive from a browser and from your terminal. Point as many agents at it as you like.">
+<meta property="og:image" content="img/canvas.png">
+<meta name="theme-color" content="#0e0f12">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--
+THESIS: every click has a command, and the page proves it by showing both halves
+of every claim instead of the category-default hero plus three feature cards.
+OWN-WORLD: the app's own tokens — cobalt on graphite, 8px radius, the canvas dot
+grid as the page's literal ground, identity-coloured name chips as the recurring
+object. Ledger rows, not cards.
+STORY: a person who builds software with agents understands that one canvas is
+operated by people and agents through one vocabulary, believes it because every
+claim is shown twice and the screenshot is real, and runs the install line.
+FIRST VIEWPORT: dot grid, headline left at clamp(2.75-5.25rem), one lede, the
+install command as a copyable object, then the real multiplayer screenshot
+bleeding wide under it.
+FORM: the split ledger — second on a list of six structures, above canvas-as-page
+and terminal-first, and refusing the SaaS stack that was the rut.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the
+finish review, the verdict, DESIGN.md, and every shipping raster carrying its
+provenance.
+-->
+
+<header class="top">
+  <div class="band top-in">
+    <a class="logo" href="#top">
+      <svg class="logo-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="19" height="19" rx="4" stroke="#4c6ef5" stroke-width="2"/>
+        <circle cx="8.5" cy="8.5" r="1.6" fill="#4c6ef5"/>
+        <circle cx="15.5" cy="8.5" r="1.6" fill="#56b06a"/>
+        <circle cx="8.5" cy="15.5" r="1.6" fill="#d98324"/>
+        <circle cx="15.5" cy="15.5" r="1.6" fill="#e7e9ec"/>
+      </svg>
+      isocan
+    </a>
+    <nav>
+      <a href="#isomorphic" class="hide-sm">Isomorphic</a>
+      <a href="#files" class="hide-sm">Files</a>
+      <a href="#agents">Agents</a>
+      <a href="#skills">Skills</a>
+      <a href="https://github.com/dglazkov/isocan">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="band">
+      <h1 class="settle">Every click has a <em>command</em>.</h1>
+      <p class="lede settle settle-2">
+        isocan is an infinite canvas you drive from a browser <em>and</em> from your
+        terminal. Both are views over the same live state, applied by the same
+        engine — so anything you can do with a mouse, an agent can do with a
+        command, and you both watch it happen.
+      </p>
+      <div class="start settle settle-3">
+        <div class="install">
+          <span class="cmd"><span class="p">$ </span><span class="f">npx</span> github:dglazkov/isocan#release setup</span>
+          <button class="copy" type="button" data-copy="npx github:dglazkov/isocan#release setup">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+            </svg>
+            <span data-label>Copy</span>
+          </button>
+        </div>
+        <span class="aside">Runs on your machine. <a href="https://github.com/dglazkov/isocan">Read the source</a>.</span>
+      </div>
+    </div>
+
+    <div class="band">
+      <figure class="shot settle settle-4">
+        <img src="img/canvas.png" width="2880" height="1346"
+             alt="An isocan canvas titled Onboarding flow. Three variations of an onboarding screen sit side by side, each with a version count. Four cursors are on the canvas, each labelled: Di, and three agents — Gemini reading all three, Fable trying multi-select, and Codex checking the week framing against the other two.">
+      </figure>
+      <p class="shot-note">
+        <span>A real canvas, not a mockup.</span>
+        <span><b>Di</b> and three agents on it at once, each cursor saying what it is doing.</span>
+        <span>The screens are a synthetic product; the canvas is the product.</span>
+      </p>
+    </div>
+  </div>
+
+  <section id="isomorphic">
+    <div class="band">
+      <h2>The isomorphism is the whole idea</h2>
+      <p class="lede">
+        Not "we also have an API". Every mutation on this canvas is one
+        <code>Operation</code> value, posted to one endpoint, applied by one pure
+        reducer. The web app and the CLI cannot drift apart, because they speak
+        the same vocabulary to the same engine. Here is the same work, both ways.
+      </p>
+      <div class="ledger">
+        <div class="row"><div class="did">Drag a screen across the canvas<span>Or nudge it with the arrow keys</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> mv itm_9fK 320 180</div></div>
+        <div class="row"><div class="did">Drop a file onto the canvas<span>Images, HTML, markdown, video, PDFs</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> add step-2.html <span class="s">--at 520,0</span></div></div>
+        <div class="row"><div class="did">Double-press the title and rename it<span>The file underneath is renamed too</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> set itm_9fK <span class="s">--title</span> <span class="s">"Onboarding — pick many"</span></div></div>
+        <div class="row"><div class="did">Save a new version of a screen<span>The old one stays in the stack</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> edit itm_9fK step-2.html</div></div>
+        <div class="row"><div class="did">Press <kbd>S</kbd> to fan out the versions<span>Escape or S again closes it</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> versions itm_9fK</div></div>
+        <div class="row"><div class="did">Drop a pin and write a comment<span>@names reach people, #titles link items</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> comment add <span class="s">--item</span> itm_9fK <span class="s">"@Fable one source or many?"</span></div></div>
+        <div class="row"><div class="did">Tidy the whole canvas<span>Screens across, children under parents</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> format</div></div>
+        <div class="row"><div class="did">Point a mini-browser at your dev server<span>A running site, live on the canvas</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> browse http://localhost:5173</div></div>
+        <div class="row"><div class="did">Press <kbd>⌘Z</kbd><span>Per person — you never undo somebody else's work</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> undo</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="files">
+    <div class="band">
+      <h2>It is a directory, and the verbs are the ones you know</h2>
+      <p class="lede">
+        There is no proprietary document. Every item on the canvas is a file on
+        your disk, in a folder you can open, back up, grep, and put under version
+        control. The canvas is a way of looking at it — not a place your work goes.
+      </p>
+      <div class="split">
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i> ~/work/tideline</div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> ls
+<span class="s">ID         TITLE                      FILE                VERS</span>
+itm_VtB    Onboarding — one source    one-source.html        3
+itm_m7t  ★ Onboarding — pick many     pick-many.html         2
+itm_Uz5    Onboarding — week framing  week-framing.html      2
+
+<span class="p">$ </span><span class="f">isocan</span> get itm_m7t step.html
+<span class="ok">wrote step.html</span> <span class="s">(version 2 of 2)</span>
+
+<span class="p">$ </span><span class="f">isocan</span> edit itm_m7t step.html
+<span class="ok">new version ver_bKD</span> <span class="s">(3 total)</span>
+
+<span class="p">$ </span><span class="f">isocan</span> tail <span class="s">-f</span>
+<span class="s">…streaming every operation as it lands</span></div>
+        </div>
+        <div>
+          <div class="panel">
+            <h3>Your machine, your files</h3>
+            <p>
+              The daemon binds to 127.0.0.1 and writes JSON and blobs under
+              <code class="cmd">~/.isocan</code>. Nothing leaves the machine unless
+              you send it somewhere. A hosted home is being built in the open —
+              same daemon, same protocol, a different disk under it.
+            </p>
+          </div>
+          <div class="panel" style="margin-top:28px">
+            <h3>Bind a directory to a canvas</h3>
+            <p>
+              Then every command in that folder means <em>this</em> canvas, the way
+              a repo knows its remote. Agents you start there inherit it without
+              being told.
+            </p>
+            <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> use "Onboarding flow"
+<span class="ok">bound ~/work/tideline</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="agents">
+    <div class="band">
+      <h2>Bring your own agents, and let them disagree</h2>
+      <p class="lede">
+        isocan does not ship a model and does not care which you use. Anything that
+        can run a shell command can hold a seat: give it a name, and it gets a
+        cursor, a colour, an identity on the canvas, and its own undo history.
+        Point three at the same problem and you get three answers to choose between
+        instead of one to accept.
+      </p>
+
+      <div class="crew">
+        <span class="who"><i style="background:#256b33">F</i> Fable <span>trying multi-select</span></span>
+        <span class="who"><i style="background:#a2620f">C</i> Codex <span>checking the week framing</span></span>
+        <span class="who"><i style="background:#8f4718">G</i> Gemini <span>reading all three</span></span>
+        <span class="who"><i style="background:#1f3fd0">D</i> Di <span>deciding</span></span>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <h3>Diverge</h3>
+          <p>
+            Ask once, in the canvas's own channel, and let them work in parallel.
+            Each takes a copy, so nobody is editing over anybody. Their cursors say
+            what they are doing while they do it, and which comment they picked up
+            — not just where they are standing.
+          </p>
+          <div class="cmd"><span class="s">// in the canvas, to everyone at once</span>
+<span class="f">/variation</span> 3 — three takes on this onboarding step
+
+<span class="p">$ </span><span class="f">isocan</span> wait
+<span class="s">…parks until somebody comments for you</span></div>
+        </div>
+        <div class="panel">
+          <h3>Converge</h3>
+          <p>
+            Every take is a version of the same item, stacked in place rather than
+            scattered across the canvas. Press <kbd>S</kbd> and the stack fans out;
+            pick the one that wins. The others do not vanish — a road not taken is
+            worth keeping, and it costs nothing.
+          </p>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> versions itm_m7t
+<span class="s">   ver_M6n  1  pick-many.html      by Fable</span>
+<span class="s">   ver_bKD  2  week-framing.html   by Codex</span>
+<span class="ok">▶  ver_Qp2  3  multi-select.html   by Fable</span></div>
+        </div>
+      </div>
+
+      <div class="ledger">
+        <div class="row"><div class="did">They critique each other, not just the work<span>@mentions reach an agent the same way they reach a person</span></div>
+          <div class="cmd"><span class="s">Codex:</span> @Fable your multi-select is better
+       than mine — stealing it if we
+       converge here.</div></div>
+        <div class="row"><div class="did">Undo is per person<span>Your ⌘Z never reaches into somebody else's work — the rarest property here</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> undo <span class="s"># only ever yours</span></div></div>
+        <div class="row"><div class="did">Call one off mid-task<span>It says where it got to instead of vanishing</span></div>
+          <div class="cmd"><span class="f">/cancel</span> different direction — hold on this</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="skills">
+    <div class="band">
+      <h2>Teach the canvas a skill, and everyone on it has it</h2>
+      <p class="lede">
+        A slash command's body <em>is</em> a skill — same markdown, same
+        frontmatter — so anything published for Claude Code, Codex, or Cursor drops
+        straight in. Install one and every agent on the canvas can be asked for it
+        by name, in a message, by anybody.
+      </p>
+
+      <div class="split">
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i> find, read, then install</div>
+          <div class="cmd"><span class="s">// in any composer — looks, proposes, installs nothing</span>
+<span class="f">/skill</span> find a design critique that cites the line
+
+<span class="s">// or reach for a published one directly</span>
+<span class="p">$ </span><span class="f">isocan</span> command add <span class="s">--from</span> pbakaus/impeccable
+<span class="s">…prints the whole skill; installs nothing</span>
+
+<span class="p">$ </span><span class="f">isocan</span> command add <span class="s">--from</span> pbakaus/impeccable <span class="s">--yes</span>
+<span class="ok">/impeccable installed</span></div>
+        </div>
+        <div class="panel">
+          <h3>Nothing lands unread</h3>
+          <p>
+            A command's body is read as instructions by every future agent on the
+            canvas. Adding one is not downloading a document — it is giving a
+            stranger a seat at the table, and a bad one does not misbehave now, it
+            waits until somebody runs it. So the first form prints it and installs
+            nothing. You decide, then <code class="cmd">--yes</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="skills">
+        <div class="skill"><code>pbakaus/impeccable</code>
+          <p><b>Design language.</b> Seven reference playbooks and a craft floor an audit can actually cite — the one this page was built against.</p></div>
+        <div class="skill"><code>obra/superpowers</code>
+          <p><b>Method.</b> <code>verification-before-completion</code> — evidence before claims. <code>systematic-debugging</code> — root cause before fixes.</p></div>
+        <div class="skill"><code>mattpocock/skills</code>
+          <p><b>Interrogation.</b> <code>grilling</code> asks the questions that turn "build me an app" into a spec somebody can build.</p></div>
+        <div class="skill"><code>kepano/obsidian-skills</code>
+          <p><b>Interchange.</b> <code>json-canvas</code> reads and writes the open <code>.canvas</code> format, so a canvas can leave.</p></div>
+        <div class="skill"><code>blader/humanizer</code>
+          <p><b>Prose tells.</b> Folded into <code>/design-audit</code> — because copy is most of what is on a screen, and it has tells too.</p></div>
+        <div class="skill"><code>addyosmani/agent-skills</code>
+          <p><b>Engineering practice.</b> Code review and browser testing, for a canvas of screens nobody reviews.</p></div>
+      </div>
+
+      <div class="ledger">
+        <div class="row"><div class="did">Built in, before you install anything<span>Ask for one by name in any message</span></div>
+          <div class="cmd"><span class="f">/design-audit</span>  <span class="f">/design-system</span>  <span class="f">/accessibility-audit</span>
+<span class="f">/variation</span>  <span class="f">/format</span>  <span class="f">/grill-me</span>  <span class="f">/skill</span>  <span class="f">/help</span></div></div>
+        <div class="row"><div class="did">The audit offers to fix what it found<span>And lands the fix as a new version, one keystroke from undone</span></div>
+          <div class="cmd"><span class="f">/design-audit</span> the onboarding step
+<span class="s">→ 6 findings, worst first. Apply which?</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="more">
+    <div class="band">
+      <h2>And the parts that only make sense on a canvas</h2>
+      <div class="ledger">
+        <div class="row"><div class="did">Presence that says something<span>Where somebody is standing and what they are answering are different facts, so they are different fields</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> who
+<span class="s">Fable   cli  working on itm_m7t   "trying multi-select"</span>
+<span class="s">Codex   cli  on thread thr_kRT    "reading the brief"</span></div></div>
+        <div class="row"><div class="did">A running site, projected onto the canvas<span>Your dev server as an item, beside the mock it is meant to match</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> browse http://localhost:5173</div></div>
+        <div class="row"><div class="did">Ink that knows what it is about<span>Hold P and a whole sketch — across pauses, pans and zooms — lands as one drawing</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> merge itm_a1 itm_a2 itm_a3</div></div>
+        <div class="row"><div class="did">A design system the canvas can be graded against<span>A DESIGN.md and W3C design tokens — the format the rest of the world already reads</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> design <span class="s">--tokens</span>
+<span class="p">$ </span><span class="f">isocan</span> design check</div></div>
+        <div class="row"><div class="did">An agent that waits instead of polling<span>Parks until somebody comments for it, on any canvas in the house</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> wait</div></div>
+        <div class="row"><div class="did">Every key the canvas answers to<span>The same list the app's ? panel shows — because there is only one list</span></div>
+          <div class="cmd"><span class="p">$ </span><span class="f">isocan</span> shortcuts</div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="close">
+  <div class="band">
+    <h2>Give it a go. It is one command.</h2>
+    <p>
+      Installs the CLI, puts the skill where your agents look for it, starts the
+      daemon, and opens the canvas. It makes no canvas of its own — you pick your
+      name and make the first one, so it is yours from the start.
+    </p>
+    <div class="start">
+      <div class="install">
+        <span class="cmd"><span class="p">$ </span><span class="f">npx</span> github:dglazkov/isocan#release setup</span>
+        <button class="copy" type="button" data-copy="npx github:dglazkov/isocan#release setup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+          </svg>
+          <span data-label>Copy</span>
+        </button>
+      </div>
+      <span class="aside">Idempotent — run it again anywhere.</span>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="band foot-in">
+    <span>isocan — an isomorphic canvas.</span>
+    <a href="https://github.com/dglazkov/isocan">Source</a>
+    <a href="https://github.com/dglazkov/isocan/tree/main/docs/changelog">Changelog</a>
+    <a href="https://github.com/dglazkov/isocan/tree/main/docs/research">Research</a>
+  </div>
+</footer>
+
+<script>
+  // The copy button says what happened, then goes back to offering it again.
+  for (const button of document.querySelectorAll(".copy")) {
+    button.addEventListener("click", async () => {
+      const label = button.querySelector("[data-label]");
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy);
+        button.dataset.done = "1";
+        label.textContent = "Copied";
+      } catch {
+        // Clipboard refused (no permission, insecure origin): say so rather
+        // than claim a copy that did not happen.
+        label.textContent = "Select it";
+      }
+      setTimeout(() => { delete button.dataset.done; label.textContent = "Copy"; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
