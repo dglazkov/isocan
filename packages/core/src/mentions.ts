@@ -1,3 +1,4 @@
+import type { ActorNames } from "./identity.ts";
 import type { Actor, CanvasState } from "./model.ts";
 
 /**
@@ -64,6 +65,35 @@ export function extractMentions(body: string, candidates: MentionCandidate[]): s
     if (mentioned.has(candidate.id) && !ids.includes(candidate.id)) ids.push(candidate.id);
   }
   return ids;
+}
+
+/**
+ * The names an actor answers to: what the canvas remembers PLUS what they go
+ * by now.
+ *
+ * A rename reaches everything a person reads (lib/names.ts, actorNames) — and
+ * for a while it did not reach the thing that matters most, because mentions
+ * were matched against the name stamped on old ops. Rename "Dion 2" to "Di"
+ * and `@Di` resolved to nobody: no chip in the web app, and worse, no id on
+ * the comment, so the summons never woke her. A name you answer to has to
+ * work in the one place names are for.
+ *
+ * The old names stay: text written months ago still says "@Dion 2", and that
+ * should keep pointing at the same person.
+ */
+export function actorsAnswerTo(
+  actors: MentionCandidate[],
+  names: ActorNames | undefined,
+): MentionCandidate[] {
+  const out = [...actors];
+  const seen = new Set(actors.map((actor) => `${actor.id}\u0000${actor.name}`));
+  for (const actor of actors) {
+    const now = names?.[actor.id];
+    if (!now || seen.has(`${actor.id}\u0000${now}`)) continue;
+    seen.add(`${actor.id}\u0000${now}`);
+    out.push({ id: actor.id, name: now });
+  }
+  return out;
 }
 
 /** Candidate names plus their first tokens, longest first (ties: input order). */
