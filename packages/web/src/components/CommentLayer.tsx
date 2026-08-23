@@ -25,6 +25,7 @@ import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts"
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.tsx";
 import { OnIt } from "./OnIt.tsx";
+import { liveActorIds } from "../lib/presence.ts";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -165,6 +166,16 @@ function ThreadPin({
 }) {
   const colors = useActorColors();
   const names = useActorNames();
+  // A ring says somebody is here now. Without it a face on a pin looks the
+  // same whether they are reading this or asleep, and "who can I ask" is the
+  // question a pin is usually being looked at to answer.
+  //
+  // Subscribe to the sessions and build the Set OUTSIDE the selector: a
+  // selector that constructs a value returns a new reference every call, so
+  // the store looks changed on every render. That is an infinite loop, and it
+  // does not fail loudly — it blanks the whole app.
+  const sessions = useCanvasStore((s) => s.sessions);
+  const live = liveActorIds(sessions);
   const first = thread.comments[0]!;
   // Distinct authors in comment order; up to three initials, then a +N chip.
   const authors: Actor[] = [];
@@ -190,7 +201,11 @@ function ThreadPin({
       onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
     >
       {shown.map((author) => (
-        <span className="pin-avatar" key={author.id} style={{ background: actorColorIn(colors, author.id) }}>
+        <span
+          className={`pin-avatar${live.has(author.id) ? " live" : ""}`}
+          key={author.id}
+          style={{ background: actorColorIn(colors, author.id) }}
+        >
           {actorNameIn(names, author).charAt(0).toUpperCase()}
         </span>
       ))}

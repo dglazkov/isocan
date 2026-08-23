@@ -9,6 +9,17 @@
 
 :root,
 :root[data-theme="light"] {
+  /* Connection and liveness. Both themes get their own value: a green that
+     reads on vellum is not the green that reads on graphite. */
+  --good: #2e8540;
+  --live-wash: rgba(46, 133, 64, 0.16);
+  /* Tints and shadows derived from the two colours that change with theme,
+     so nothing has to restate 31, 63, 208 and go stale when the accent moves. */
+  --accent-wash: rgba(31, 63, 208, 0.08);
+  --accent-glow: rgba(31, 63, 208, 0.16);
+  --accent-shadow: rgba(31, 63, 208, 0.45);
+  --shade: rgba(30, 34, 40, 0.35);
+
   --ground: #fbfbf9;
   --dot: #c9ccc4;
   /* The grid dots under the cursor spotlight — a denser cobalt-tinted dot. */
@@ -17,14 +28,17 @@
   --line: #e2e3dd;
   --line-soft: #eff0ea;
   --ink: #23262b;
-  --ink-muted: #8a8e95;
-  --ink-soft: #b4b7bd;
+  --ink-muted: #646d76;
+  --ink-soft: #686e75;
   --chip: #f0f1ec;
   --chip-hover: #e9eae4;
   --chip-line: #e0e1da;
   --accent: #1f3fd0;
   --accent-hover: #1a36b4;
   --accent-ink: #ffffff;
+  /* The accent as TEXT (links, #refs). On a light ground the fill colour is
+     also the readable one; on graphite it is not. */
+  --accent-text: #1f3fd0;
   --danger: #b3261e;
   --warn: #a06000;
   /* Frosted surfaces that float over the canvas: toolbar, minimap, popovers. */
@@ -43,6 +57,13 @@
    cobalt so selection still reads against the dark. Shadows go to near-black
    since a soft gray one is invisible on a dark surface. */
 :root[data-theme="dark"] {
+  --good: #56b06a;
+  --live-wash: rgba(86, 176, 106, 0.22);
+  --accent-wash: rgba(76, 110, 245, 0.14);
+  --accent-glow: rgba(76, 110, 245, 0.26);
+  --accent-shadow: rgba(76, 110, 245, 0.55);
+  --shade: rgba(0, 0, 0, 0.55);
+
   --ground: #0e0f12;
   --dot: #2b2f36;
   --dot-glow: #c3c9d6;
@@ -51,13 +72,14 @@
   --line-soft: #23272e;
   --ink: #e7e9ec;
   --ink-muted: #8b929d;
-  --ink-soft: #596170;
+  --ink-soft: #868f9e;
   --chip: #262a31;
   --chip-hover: #2f343d;
   --chip-line: #343a44;
-  --accent: #4c6ef5;
-  --accent-hover: #5c7cff;
+  --accent: #4059d8;
+  --accent-hover: #5670ea;
   --accent-ink: #ffffff;
+  --accent-text: #8fa8ff;
   --danger: #f26a60;
   --warn: #d99a3a;
   --guide-spacing: #a672f0;
@@ -132,6 +154,12 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
+/* A button does not inherit colour: left alone it paints the UA's buttontext,
+   which is black, which is fine on vellum and invisible on graphite. Every
+   button here is chrome we styled, so it takes the text colour around it
+   unless it says otherwise. This is the whole of the dark-mode card bug. */
+button, select { color: inherit; }
+
 .text-input {
   padding: 7px 10px; border-radius: 6px;
   border: 1px solid var(--chip-line); background: var(--card);
@@ -198,7 +226,8 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   background: none; border: 1px solid transparent; color: var(--ink);
 }
 .identity-known-row:hover { background: var(--chip); border-color: var(--chip-line); }
-.identity-known-row .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.identity-known-row .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
+.face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 .identity-warning { font-size: 11px; color: var(--warn); line-height: 1.35; }
 .identity-leave { justify-content: center; font-size: 12.5px; }
 
@@ -227,7 +256,8 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .projects-head .who-btn:hover, .projects-head .who-btn.active {
   background: var(--chip); border-color: var(--chip-line);
 }
-.projects-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.projects-head .who-btn .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
+.face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 
 /* ---------- editing a project's name ---------- */
 .project-editor { display: flex; flex-direction: column; gap: 8px; }
@@ -292,6 +322,7 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
   background-image: radial-gradient(circle, var(--dot-glow) 1px, transparent 1px);
   --gx: -200px; --gy: -200px;
+  /* #000 here is an ALPHA MASK, not a colour: black means "keep this". */
   -webkit-mask-image: radial-gradient(circle 132px at var(--gx) var(--gy), #000 0%, #000 16%, transparent 70%);
   mask-image: radial-gradient(circle 132px at var(--gx) var(--gy), #000 0%, #000 16%, transparent 70%);
 }
@@ -325,8 +356,8 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .toolbar .home:hover { background: var(--chip); }
 .toolbar .spacer { flex: 1; }
 .toolbar .conn { font-size: 11px; color: var(--ink-muted); }
-.toolbar .conn.live::before { content: "●"; color: #2e8540; margin-right: 4px; }
-.toolbar .conn.reconnecting::before { content: "●"; color: #c77700; margin-right: 4px; }
+.toolbar .conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
+.toolbar .conn.reconnecting::before { content: "●"; color: var(--warn); margin-right: 4px; }
 
 /* ---------- items ---------- */
 .item {
@@ -477,6 +508,10 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .md-view hr { border: none; border-top: 1px solid var(--line-soft); margin: 1em 0; }
 .md-view blockquote { border-left: 3px solid var(--line); margin: 0.5em 0; padding-left: 10px; color: var(--ink-muted); }
 .img-view, .video-view { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--chip); }
+/* Literal white, and one of only two in this file: an iframe is showing a real
+   page, and a page assumes a white canvas. Painting it graphite would show
+   through the transparent parts of somebody else's design and misrepresent it.
+   The rest of the app takes its colours from the tokens. */
 .html-view { width: 100%; height: 100%; border: 0; background: #fff; }
 /* The mini-browser: a live site projected onto the canvas. */
 .browser-view { width: 100%; height: 100%; border: 0; background: #fff; }
@@ -570,7 +605,7 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   display: flex; align-items: center; padding: 2px;
   border-radius: 999px 999px 999px 4px;
   background: var(--card); border: 1px solid var(--line);
-  box-shadow: 0 4px 10px -3px rgba(31, 63, 208, 0.45);
+  box-shadow: 0 4px 10px -3px var(--accent-shadow);
   transform: translate(-4px, -22px);
   cursor: pointer;
 }
@@ -583,13 +618,18 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   border: 1.5px solid var(--card);
 }
 .pin-avatar + .pin-avatar { margin-left: -7px; }
+/* Here NOW. One signal for liveness wherever a face appears: a ring in the
+   colour this app already uses for live, with a gap so it reads as a ring
+   rather than as a thicker disc. The plain disc is somebody who is not here —
+   the common case, and therefore the quiet one. */
+.pin-avatar.live { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
 .pin-more { background: var(--chip); color: var(--ink-muted); border-color: var(--chip-line); }
 
 /* Unread: the pin wears the accent and counts what you have not read. The
    attention pulse runs a few times on arrival, then leaves the badge to it. */
 .pin.unread {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 63, 208, 0.16), 0 4px 10px -3px rgba(31, 63, 208, 0.5);
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 10px -3px var(--accent-shadow);
   animation: pin-pulse 1.1s ease-out 3;
 }
 .pin-unread {
@@ -598,10 +638,27 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
 }
 @keyframes pin-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(31, 63, 208, 0.5), 0 4px 10px -3px rgba(31, 63, 208, 0.5); }
-  70% { box-shadow: 0 0 0 10px rgba(31, 63, 208, 0), 0 4px 10px -3px rgba(31, 63, 208, 0.5); }
-  100% { box-shadow: 0 0 0 3px rgba(31, 63, 208, 0.16), 0 4px 10px -3px rgba(31, 63, 208, 0.5); }
+  0% { box-shadow: 0 0 0 0 var(--accent-glow), 0 4px 10px -3px var(--accent-shadow); }
+  70% { box-shadow: 0 0 0 10px transparent, 0 4px 10px -3px var(--accent-shadow); }
+  100% { box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 10px -3px var(--accent-shadow); }
 }
+/* An identity colour written as TEXT. The palette was chosen so every colour
+   reads on both grounds as a DISC; as small text on graphite, Violet is 2.75:1
+   and Forest is 3.3:1, which is unreadable and excludes people. Mixing 40% of
+   the ink into it keeps the hue and takes the whole palette past 5:1. Light
+   mode leaves it exactly as chosen. */
+.who { color: var(--who, currentColor); }
+:root[data-theme="dark"] .who,
+:root[data-theme="dark"] .mention {
+  color: color-mix(in srgb, var(--who, var(--mention-color, var(--accent-text))) 55%, var(--ink));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .who,
+  :root:not([data-theme="light"]) .mention {
+    color: color-mix(in srgb, var(--who, var(--mention-color, var(--accent-text))) 55%, var(--ink));
+  }
+}
+
 /* ---------- facepile (who's on canvas) ---------- */
 .facepile {
   display: flex; align-items: center; gap: 6px; margin-left: 6px; padding-left: 10px;
@@ -671,17 +728,21 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 /* Faces overlap, so a badge would slide under the next face — lift it. */
 .face.badged { z-index: 2; }
 .face:hover { z-index: 3; transform: translateY(-1px); }
+.face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
 .face-mark {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 999px;
   border: 2px solid var(--card);
-  color: #fff; font-size: 11px; font-weight: 700; line-height: 1;
+  color: var(--accent-ink); font-size: 11px; font-weight: 700; line-height: 1;
 }
 /* Not here, but they left something behind. */
-.face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
-.face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
+.face.away .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
+.face-mark { opacity: 0.45; filter: grayscale(0.5); }
+.face.self .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
+.face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
-.face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }
+.face.followed .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
+.face-mark { box-shadow: 0 0 0 2px var(--accent); }
 .face-more { background: var(--chip); color: var(--ink-muted); font-size: 10px; }
 .face-badge {
   position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px;
@@ -744,7 +805,7 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .main-panel {
   position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
   background: var(--card); border-right: 1px solid var(--line);
-  box-shadow: 12px 0 24px -18px rgba(30, 34, 40, 0.3);
+  box-shadow: 12px 0 24px -18px var(--shade);
   display: flex; flex-direction: column; font-size: 12px;
 }
 .main-panel header {
@@ -788,8 +849,8 @@ button.mt-card:hover { border-color: var(--accent); }
 .mt-glyph {
   width: 28px; height: 28px; border-radius: 6px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--accent) 10%, white);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, white);
+  background: var(--accent-wash);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--card));
   color: var(--accent); font-size: 13px;
 }
 .mt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -822,7 +883,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .toast-body:hover { background: var(--line-soft); }
 .toast-avatar {
   width: 20px; height: 20px; border-radius: 999px; flex: none;
-  color: #fff; font-size: 10px; font-weight: 700;
+  color: var(--accent-ink); font-size: 10px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
 .toast-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -858,7 +919,7 @@ button.mt-card:hover { border-color: var(--accent); }
    acts like a link: clicking it flies you to the item. Same box-shadow trick
    as .mention so it can sit under live composer text. */
 .item-ref {
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 3px; font-weight: 600;
@@ -1111,7 +1172,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .files-panel {
   position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
   background: var(--card); border-right: 1px solid var(--line);
-  box-shadow: 12px 0 24px -18px rgba(30, 34, 40, 0.3);
+  box-shadow: 12px 0 24px -18px var(--shade);
   display: flex; flex-direction: column; font-size: 12px;
 }
 .files-panel header {
@@ -1174,7 +1235,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .site-popover .text-input { width: 220px; }
 .site-error {
   position: absolute; top: calc(100% + 4px); left: 10px;
-  font-size: 10.5px; color: #c93a55; white-space: nowrap;
+  font-size: 10.5px; color: var(--danger); white-space: nowrap;
 }
 .shelf-glyph { color: var(--accent); }
 .btn.active .shelf-glyph { color: var(--accent-ink); }
@@ -1267,7 +1328,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .trash-panel {
   position: absolute; top: 48px; right: 0; bottom: 0; width: 300px; z-index: var(--z-dock);
   background: var(--card); border-left: 1px solid var(--line);
-  box-shadow: -12px 0 24px -18px rgba(30, 34, 40, 0.3);
+  box-shadow: -12px 0 24px -18px var(--shade);
   display: flex; flex-direction: column;
 }
 .trash-panel header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-weight: 600; }
@@ -1372,12 +1433,12 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- remote cursors (presence) ---------- */
 .remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
-.remote-cursor svg { display: block; filter: drop-shadow(0 1px 2px rgba(30,34,40,0.35)); }
+.remote-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
 .cursor-chip {
   margin: 2px 0 0 10px; padding: 3px 8px; border-radius: 999px 999px 999px 3px;
-  color: #fff; font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  color: var(--accent-ink); font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap;
   display: flex; flex-direction: column; align-items: flex-start;
-  box-shadow: 0 4px 10px -4px rgba(30,34,40,0.4);
+  box-shadow: 0 4px 10px -4px var(--shade);
 }
 .cursor-chip em { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.85; }
 /* Quiet-but-alive: the agent hasn't touched the daemon in a while but its
@@ -1416,7 +1477,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .marquee {
   position: absolute; z-index: var(--z-canvas); pointer-events: none;
   border: 1px solid var(--accent);
-  background: rgba(31, 63, 208, 0.08);
+  background: var(--accent-wash);
   border-radius: 2px;
 }
 
@@ -1424,7 +1485,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .drop-overlay {
   position: absolute; inset: 8px; z-index: var(--z-overlay); pointer-events: none;
   border: 2px dashed var(--accent); border-radius: 12px;
-  background: rgba(31, 63, 208, 0.05);
+  background: var(--accent-wash);
   display: flex; align-items: center; justify-content: center;
   color: var(--accent); font-weight: 600;
 }
@@ -1453,7 +1514,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .cmdbar-listening.live { color: var(--ink); }
 .cmdbar-dot {
   width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: #2e8540; box-shadow: 0 0 0 3px rgba(46, 133, 64, 0.16);
+  background: var(--good); box-shadow: 0 0 0 3px var(--live-wash);
 }
 .cmdbar-thread {
   max-height: 184px; overflow-y: auto; overscroll-behavior: contain;

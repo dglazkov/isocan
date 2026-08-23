@@ -95,3 +95,15 @@ export function spreadOverlaps(
   }
   return spread;
 }
+
+
+/**
+ * Whose sessions are live right now, by actor id.
+ *
+ * "Is this person here" is asked in three places — the facepile, a comment
+ * pin's avatars, and the thread that pin opens — and answering it three ways
+ * is how a face ends up looking present on one surface and absent on another.
+ */
+export function liveActorIds(sessions: PresenceSession[]): Set<string> {
+  return new Set(sessions.map((session) => session.actor.id));
+}

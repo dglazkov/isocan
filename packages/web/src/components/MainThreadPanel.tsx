@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
@@ -264,7 +264,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           )}
           {thread?.comments.map((comment) => (
             <div className="comment" key={comment.id}>
-              <span className="who" style={{ color: actorColorIn(colors, comment.author.id) }}>
+              <span className="who" style={{ "--who": actorColorIn(colors, comment.author.id) } as CSSProperties}>
                 {actorNameIn(names, comment.author)}
               </span>
               <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
