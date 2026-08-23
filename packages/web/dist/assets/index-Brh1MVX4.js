@@ -297,8 +297,26 @@ first argument says which job:
 
 **\`/skill find <what you want>\`** — look, propose, install NOTHING.
 
-Search for skills that do the thing they described. Then, for the two or three
-worth their time, reply with:
+START AT AN INDEX, NOT A SEARCH BOX. A web search for a skill returns ten
+reprints of the same repo and the original is rarely the first hit. These are
+the directories worth reading first — they are indexes, not skills, so nothing
+here is a candidate to install:
+
+- \`VoltAgent/awesome-agent-skills\` — the broadest, 1000+ entries
+- \`ComposioHQ/awesome-claude-skills\` — smaller, better curated
+- \`github/awesome-copilot\` — the same format from the other direction
+
+And these are the collections most things worth having actually live in, so
+check them before concluding something does not exist: \`obra/superpowers\`
+(methodology), \`mattpocock/skills\` and \`addyosmani/agent-skills\`
+(engineering practice), \`anthropics/skills\` (documents, design, testing),
+\`pbakaus/impeccable\` (design language), \`kepano/obsidian-skills\`.
+
+ONE WARNING TO PASS ON: \`anthropics/skills\` ships no LICENSE file and no
+licence note. It is worth reading and worth learning from; recommend it only
+while saying that, and never suggest vendoring it.
+
+Then, for the two or three worth their time, reply with:
 - what it does, in your words, and whether it actually fits this canvas
 - the CANONICAL source — the repo it lives in, not the tenth aggregator site
   that reprinted it. Most search results for skills are SEO copies; find the
@@ -331,6 +349,11 @@ it, so \`isocan command add <name> <file>\` needs no ceremony.
 AFTERWARDS: say the name, that \`/name\` now works in any composer, and that
 \`isocan command rm <name>\` takes it back. If it shadows a built-in, say which
 one and that removing yours gives ours back.
+
+ONE SKILL PER JOB. Before proposing anything, check what this canvas already
+has (\`isocan command list\`). A second skill that does a job we already do is
+not more capability, it is a menu where two entries mean the same thing and
+nobody knows which to pick — say so and name the one that already covers it.
 
 WHAT NOT TO DO: do not add several at once "to be helpful", and do not add
 anything they did not ask for. A canvas whose menu is forty commands nobody

@@ -45,6 +45,9 @@ beside it. That is what isocan adds and nobody else in the list has.
 
 ## Import today
 
+*Done 2026-08-23 — all three are installed on this home; `isocan command list`
+shows them as `home` alongside the built-ins.*
+
 ```sh
 isocan command add --from obra/superpowers/skills/verification-before-completion/SKILL.md
 isocan command add --from obra/superpowers/skills/systematic-debugging/SKILL.md
@@ -86,7 +89,9 @@ The awesome-* lists themselves — indexes, not skills, and VoltAgent's is mostl
 vendor SDK skills. Useful as a **search target**: point `/skill find` at them so
 it proposes from a real index rather than a web search that returns ten reprints
 of the same repo. One line in the command body, and the cheapest improvement in
-this survey.
+this survey. *Done 2026-08-23 — all three directories are named in the command,
+along with the six collections worth checking and the licence warning on
+`anthropics/skills`.*
 
 Also skip second copies of jobs we already do (`interview-me`, `idea-refine` vs
 `/grill-me`). **One skill per job.** Nine built-ins that each mean something
