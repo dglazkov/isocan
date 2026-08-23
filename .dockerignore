@@ -1,0 +1,66 @@
+# What never reaches the build context.
+#
+# Two jobs. The obvious one is speed: node_modules and .git are most of this
+# repo's bytes and the image needs neither (the builder runs `npm ci` from the
+# lockfile, which is the only reproducible way to get a tree anyway).
+#
+# The one that matters more: KEEPING A DEVELOPER'S LAPTOP OUT OF THE IMAGE.
+# `packages/web/dist` is a build artifact that is gitignored precisely because
+# it is whatever the last local `npm run dev` left behind; if it rode into the
+# build context it would be COPY'd over the freshly built bundle and the image
+# would serve a stale canvas that matched no commit. Same for `.isocan/`, which
+# holds this machine's agent identity, and `.env*`, which holds whatever
+# somebody once pasted there.
+
+.git
+.github
+node_modules
+**/node_modules
+
+# Build artifacts — rebuilt inside the image, never imported into it.
+packages/web/dist
+dist
+**/*.tsbuildinfo
+coverage
+
+# Local state and scratch.
+.isocan
+scratch
+.claude
+.agents
+*.log
+.DS_Store
+
+# Secrets, in the two shapes they usually arrive in.
+.env
+.env.*
+*.pem
+*-key.json
+*credentials*.json
+
+# Things that describe the repo rather than run it. Excluded so a docs-only
+# commit reuses every layer — the `COPY . .` above `npm run build` is what
+# would otherwise be invalidated by a typo fix in a markdown file.
+#
+# NOT excluded, deliberately: package.json (the version /healthz reports),
+# the tsconfigs, and packages/cli/src/agent-guide.md — the CLI's own test
+# reads that file, and a shipped daemon that could not produce it would be a
+# daemon whose --agent-help is a lie.
+LICENSE
+README.md
+AGENTS.md
+docs
+test
+**/test
+vitest.config.ts
+
+# Per-package `scripts/` directories are DEV TOOLS, and one of them is a tool
+# that talks to a real bucket: packages/cloudstore/scripts/signed-url-smoke.ts.
+# Nothing imports it, so shipping it would be inert rather than dangerous — but
+# an operator smoke-testing signatures is not a thing the home does, and a file
+# in an image is a file somebody eventually runs. Out.
+#
+# The ROOT `scripts/` stays: package.json's `prepare` names scripts/prepare.mjs,
+# and a manifest pointing at a file that is not there is a trap for any npm
+# command in the image that decides to run a lifecycle hook.
+packages/*/scripts

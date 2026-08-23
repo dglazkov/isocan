@@ -77,6 +77,22 @@ describe("daemon HTTP", () => {
     expect(health.pid).toBe(process.pid);
   });
 
+  /**
+   * The hosted home cannot answer `/healthz`: Google's frontend swallows that
+   * exact path and returns its own 404, and the container's request log never
+   * sees it. `/api/healthz` is the path a hosted probe uses instead.
+   *
+   * That interception is Google's and is NOT testable here — nothing local can
+   * reproduce a frontend we do not run. What IS testable, and what a future
+   * edit could quietly break, is the half we own: the two paths are one
+   * handler, so they answer the same thing, stamp and all. If someone adds a
+   * second handler and lets them drift, the hosted probe starts monitoring a
+   * different daemon fact than the local one and this test says so.
+   */
+  it("api/healthz is the same answer, because it is the same handler", async () => {
+    expect(await get("/api/healthz")).toEqual(await get("/healthz"));
+  });
+
   it("applies ops and serves snapshots", async () => {
     await createProjectWithItem();
     const projects = await get("/api/projects");
