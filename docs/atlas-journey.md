@@ -166,7 +166,8 @@ current one.
 Two atlases, side by side, at the same zoom, both explorable. The argument
 happens on the thread between them. When it settles, one of them wins.
 
-**And this is where the journey stops working.** isocan can diverge — that is
+**And this is where the journey stops working** — see
+[convergence](design/convergence.md), which takes this up. isocan can diverge — that is
 `/variation`, and it is good — but it has no operation for *this one won*. The
 version stack converges inside one item (`item.setCurrentVersion`); nothing
 converges siblings back into the thing they came from. The
@@ -200,10 +201,12 @@ Four things are genuinely forced, smallest first.
 
 ## Open debts
 
-- **Pinned state does not survive a reload.** HTML items are sandboxed without
-  `allow-same-origin`, so an atlas cannot use `localStorage`. Fine for reading,
-  annoying for a long session. Whether to widen the sandbox for a file the user
-  put there themselves is a real decision and not an obvious one.
+- **Pinned state does not survive a reload.** ~~HTML items are sandboxed
+  without `allow-same-origin`.~~ **Taken up**, and the answer is not to widen
+  the sandbox: item content is served from the app's own origin and the badge
+  is a cookie, so `allow-same-origin` would let any item call the API as you.
+  See [the content origin](design/content-origin.md) — move the content, not
+  the flag.
 - **A thread can be pinned to the atlas, not to a box inside it.** The atlas is
   one item; isocan cannot anchor a comment at `ingest.parser`. Closing this
   needs the atlas to emit a structure manifest with coordinates, and isocan to
