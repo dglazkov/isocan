@@ -55,13 +55,11 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 6 is closed and verified against dev.isocan.io —
-Phase 7, the share (Scenes 1–4), is next, and it inherits one debt named
-in phase 6's findings: the admission scope on `GET /api/projects`, which
-today would have a replica of a multi-tenant home mirror strangers'
-canvases onto a laptop. Then phase 7.5, the home you answer to, which
-exists because walking Scene 0 by hand cost three environment variables
-and a scratch directory.** This line moves as phases close; a clean
+**Where we are: Phase 7 is closed — Phase 7.5, the home you answer to, is
+next, and it exists because walking Scene 0 by hand cost three environment
+variables and a scratch directory.** Phase 8 then inherits the question
+phase 7 could not settle: a replica still discovers canvases by
+enumerating the home, and the pass is the mechanism that fixes it. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -906,7 +904,11 @@ the lid-close/reopen beat played with Chrome and the CLI.
 
 ## Phase 7 — The share (Scenes 1–4)
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-23 (`995fbe5`). Scenes 1–4 played by the
+conductor against real daemons: the Share dialog beside the facepile, the
+CLI verb reporting the same address, Jordan arriving on nothing but a
+link, and a parked `isocan wait` on a replica woken by a mention typed in
+a browser at the home.
 
 **Work:** The link grant born at birth as a revocable row; the Share
 dialog and roster driving the grant API (button and verb, one
@@ -932,7 +934,95 @@ name.
 **Proof:** The scenes, played — two Chrome profiles and a parked
 `isocan wait` — plus vitest for grant rows and door admission.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — The same silent failure, a third time, one layer down.**
+  Stage 1 taught the socket to refuse (4402) and 4404 already existed, and
+  the browser handled *neither*: both fell into the ordinary 800 ms
+  reconnect backoff, so a canvas whose link had been switched off, or a
+  mistyped id, sat forever on "reconnecting" over an empty canvas. That is
+  the third instance of one pattern in two days — phase 6's `/healthz/`
+  answering 200 with the app shell, `/c/<id>` rendering a blank page, and
+  now a refusal indistinguishable from a network blip. **The shape: this
+  system's default answer to a wrong address is a cheerful one.** Both are
+  terminal states with their own copy now, and the door was not loosened
+  to do it — only its legibility changed.
+- **2026-08-23 — Discovery by enumeration is the wrong primitive, and
+  phase 6's debt is only partly paid.** Narrowing `GET /api/projects` to
+  admissions alone **breaks replicas**, measured rather than reasoned: a
+  fresh replica's badge has no admissions, `HomeLink.sweep` unions the
+  local list with that route, both come back empty, so it never dials and
+  nothing ever admits it. A link grant admits whoever *presents* the
+  address; it does not make a canvas enumerable, and enumeration is what
+  discovery currently needs. The shipped compromise is the door's own test
+  on the listing — a badge sees what it is admitted to plus what a grant
+  *would* admit it to — which closes the leak for a revoked link and
+  leaves it open while the link is on. The honest wording for phase 6's
+  finding is therefore **"narrowed to the door's test; full closure needs
+  phase 8's pass"**, not "paid". And the deeper question, named here so
+  phase 8 chooses it rather than meets it: a replica arguably should
+  replicate **the canvases its markers name**, not everything a home will
+  show it. Enumerate-and-mirror was never the design; it was the easiest
+  thing that worked when there was one member.
+- **2026-08-23 — A replica needs its own grant rows, which no design doc
+  had considered.** The desk's mechanisms only ever discuss the *home's*
+  door. Without a local row a second machine's CLI does not get a clean
+  403 — it gets "this directory is bound to project prj_… which does not
+  exist in this home yet", because the local listing hides the replicated
+  canvas from a fresh local badge. The local row is a different sentence
+  in a different ledger: *who on this machine may reach the local copy*. It
+  deliberately does **not** inherit the home's revocation — what stops a
+  laptop is that its badge is expelled at the home and replication goes
+  stale, which is phase 9's to state.
+- **2026-08-23 — `/api/ops` was admitting AFTER the write.** Harmless for
+  five phases, because the check could not refuse; the moment it could, a
+  refusal that arrives after the op has landed is not a refusal. Now the
+  door runs before `engine.submit` for every op naming a canvas, and the
+  conductor confirmed by hand that a refused write leaves `lastSeq`
+  untouched. The general lesson is about *order surviving a change in
+  meaning*: code that runs in the wrong order is invisible while it is a
+  no-op, and correct-looking right up until the day it matters.
+- **2026-08-23 — A caller's mistake was being reported as our failure.**
+  `DELETE` with `Content-Type: application/json` and no body returned
+  **500 "internal error"**. Pre-existing — `/api/commands` and
+  `/api/presence/actors` had always done it — because Fastify refuses an
+  empty JSON body and `setErrorHandler` collapsed the unknown error to
+  500. It became this phase's because stage 1 adds a revoke that both
+  surfaces call, and plenty of clients set that header unconditionally.
+  The fix is better than the report asked for: gate on **`statusCode`**
+  rather than a list of `FST_ERR_CTP_*` codes, because Fastify already
+  tags a caller's mistake 4xx and its own failures 5xx. The rule that fell
+  out is worth keeping — **4xx is about the request, so its message is
+  safe to repeat; 5xx is ours and stays opaque.**
+- **2026-08-23 — The address got a forcing function, not just a
+  decision.** Keeping `/p/` would have been a comment somebody violated in
+  a month, so the prefix now has exactly one definition in
+  `core/address.ts` and a test greps every source file for a hand-built
+  canvas URL in either spelling. It found three on its first run — the
+  CLI's `open` and two in the project list. Same instinct as
+  `surface.test.ts` catching a verb missing from the agent guide: a rule
+  the build can check is a rule, and anything else is a hope.
+- **2026-08-23 — How the Proof was actually played, stated so nobody
+  over-reads it.** The Proof says "two Chrome profiles"; the conductor
+  used **two cookie hosts** — `127.0.0.1` and `localhost`, which are
+  different hosts for cookies and therefore different badges, on one
+  profile. That is a real second person as far as the desk is concerned
+  and it is how Jordan arrived on nothing but a link. What it does not
+  exercise is a genuinely separate browser profile's storage, and the
+  badge cookie is `HttpOnly` by design, so a third arrival needs a third
+  host or a real profile. Everything else played: the parked agent on a
+  **replica** woke from a mention typed in a browser at the **home**, the
+  `@` picker showed him LIVE across the relay, and his "reading your
+  comment…" came back the other way.
+- **2026-08-23 — One unreproduced flake, recorded rather than closed.**
+  Stage 1 reported a single failing test in one run out of seven and could
+  not name it — the grep that would have captured it swallowed the name.
+  It did not recur in roughly twenty subsequent runs (six full suites and
+  eight of the concentrated integration files by the conductor, plus the
+  worker's own). Left open on purpose: a flake nobody can name is not a
+  flake anybody has fixed. The operational lesson is the cheap one — **a
+  stress loop that does not capture failures by name is a stress loop that
+  buys nothing.**
 
 ## Phase 7.5 — The home you answer to
 
