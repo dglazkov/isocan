@@ -372,7 +372,7 @@ with if you only got one.`,
   },
   {
     name: "design-audit",
-    description: "Review a screen's craft against the design system and the usual tells",
+    description: "Review a screen's craft and copy against the design system, then offer to fix it",
     usage: "[what to look at]",
     source: "built-in",
     body: `Audit the design of the selected screens, from the source.
@@ -397,8 +397,10 @@ WHAT TO LOOK FOR, in this order:
 **Conformance.** Where the screen departs from the design system. Cite the
 declared value and the one it should have been.
 
-**The usual tells.** These are the moves a generated interface reaches for.
-Each one says how to spot it, so report it only when you can point at the
+**The usual tells.** These are the moves a generated interface reaches for —
+in the pixels AND in the words, because copy is most of what is on a screen and
+an audit that grades the type scale and skips the sentences has graded half of
+it. Each one says how to spot it, so report it only when you can point at the
 line:
 
 ${slopRulesAsText()}
@@ -425,7 +427,27 @@ This list is a FLOOR, not taste. Removing every item on it makes a screen
 unembarrassing, not good; say plainly which findings are hygiene and which are
 the one or two that would actually make it better.
 
-Then reply on the thread with the verdict, the top fix, and #the-report.`,
+THEN ASK BEFORE YOU CHANGE ANYTHING. An audit nobody acts on is a document,
+and most of these fixes are ten seconds of work for whoever wrote the screen.
+So reply on the thread with the verdict, the top fix, #the-report, and the
+offer — findings numbered, and how to answer:
+
+> Want me to apply these? Reply with the numbers, or \`all\`, or \`hygiene\` for
+> the mechanical ones (1, 4, 7) and none of the judgement calls.
+
+Do NOT apply anything until that reply comes back. The person who asked for an
+audit asked for an audit; a screen that changed under them while they were
+reading about it is a worse outcome than a finding they never got to.
+
+WHEN THEY SAY YES, the fix lands as a NEW VERSION of the screen — write the
+corrected file and \`isocan edit <the screen's item> <file>\`. Never a new item
+beside it: a variant is a different thing to choose between, and this is the
+same screen with a fault removed. The version stack is what makes saying yes
+cheap — every fix is one keystroke from being undone, and the before is still
+there to compare against.
+
+Apply only what they named. Then reply saying which findings are now fixed,
+which you left and why, and that the previous version is still in the stack.`,
   },
   {
     name: "design-system",

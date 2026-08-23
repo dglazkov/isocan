@@ -72,4 +72,26 @@ describe("the tells of a machine-made interface", () => {
   it("is worth having at all", () => {
     expect(SLOP_RULES.length).toBeGreaterThanOrEqual(12);
   });
+
+  // Copy is most of what is on a screen. An audit that grades the type scale
+  // and skips the sentences has graded half of it, so both halves have to be
+  // here — and `/design-audit` has to render both, which is what the
+  // unfiltered call gives it.
+  it("covers both halves of a screen: what it looks like and what it says", () => {
+    const kinds = new Set(SLOP_RULES.map((r) => r.kind));
+    expect(kinds).toEqual(new Set(["visual", "copy"]));
+    expect(SLOP_RULES.filter((r) => r.kind === "copy").length).toBeGreaterThanOrEqual(6);
+    expect(SLOP_RULES.filter((r) => r.kind === "visual").length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("narrows to one half on request, and to neither by default", () => {
+    const copy = slopRulesAsText("copy").split("\n");
+    const visual = slopRulesAsText("visual").split("\n");
+    expect(copy).toHaveLength(SLOP_RULES.filter((r) => r.kind === "copy").length);
+    expect(visual).toHaveLength(SLOP_RULES.filter((r) => r.kind === "visual").length);
+    expect(copy.length + visual.length).toBe(slopRulesAsText().split("\n").length);
+    // Numbered from 1 within the half, so an agent told "fix 3" and a person
+    // reading "3." are looking at the same rule.
+    expect(copy[0]).toMatch(/^1\. /);
+  });
 });
