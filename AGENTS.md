@@ -66,6 +66,20 @@ in August measured, and writes its findings back there as a dated page.
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
 
+## Where a document goes
+
+Two kinds, and the split is worth keeping. **Top level** (`architecture.md`,
+`phases.md`, the journeys, `evals.md`) is whole-product and spans time: the
+map, the walk, the ideal, the plan. **`docs/design/`** is one bounded
+mechanism, taken up because something above forced it — every doc there opens
+by naming the debt it discharges.
+
+So a plan stays at the top and the mechanisms it forces land in `design/` as
+they are chosen. That is already the shape: `multiuser-journey.md` spawned
+`identity-desk.md`, `innkeeper.md` and `offline-birth.md`; `atlas-journey.md`
+spawned `convergence.md` and `content-origin.md`; `evals.md` will spawn the
+corpus report, the telemetry payload and the grader harness the same way.
+
 ## Journeys
 
 `docs/multiuser-journey.md` and `docs/atlas-journey.md` are written as scenes
