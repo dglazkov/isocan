@@ -48,7 +48,6 @@ beside it. That is what isocan adds and nobody else in the list has.
 ```sh
 isocan command add --from obra/superpowers/skills/verification-before-completion/SKILL.md
 isocan command add --from obra/superpowers/skills/systematic-debugging/SKILL.md
-isocan command add --from blader/humanizer/SKILL.md
 isocan command add --from kepano/obsidian-skills/skills/json-canvas/SKILL.md
 ```
 
@@ -56,9 +55,12 @@ isocan command add --from kepano/obsidian-skills/skills/json-canvas/SKILL.md
   what came back. Matters more here than in a terminal: a claim on a canvas is a
   comment somebody else acts on.
 - **systematic-debugging** — instrument before concluding.
-- **humanizer** — the prose half of our slop list, from Wikipedia's *Signs of AI
-  writing*. `/design-audit` checks seventeen visual tells and nothing checks the
-  copy, which is most of every screen. Fold it in as a section.
+- **humanizer** — *done, and not as an import.* Its tells are the same kind of
+  object as ours — a phrase you can point at, a construction you can search for
+  — so six of them went into `slop.ts` as `kind: "copy"` rules rather than into
+  a second skill. `/design-audit` renders both halves and grades the sentences
+  along with the type scale. The shape is owed to `blader/humanizer` and,
+  behind it, Wikipedia's *Signs of AI writing*.
 - **json-canvas** — so "give me this as a canvas file" produces a spec-correct one.
 
 Also worth taking, from `addyosmani/agent-skills` (MIT):
