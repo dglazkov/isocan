@@ -56,3 +56,17 @@ describe("the stylesheet", () => {
     }
   });
 });
+
+describe("the named cursor", () => {
+  /**
+   * `OwnCursor` shows itself exactly where the computed cursor is `none`,
+   * which only works because one rule in the app turns the cursor off. A
+   * second one somewhere else would be a place the chip claims as its own
+   * without anybody deciding that.
+   */
+  it("is switched off in exactly one place", () => {
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const off = [...bare.matchAll(/([^{}]*)\{[^}]*cursor:\s*none/g)].map((m) => m[1]!.trim());
+    expect(off).toEqual([".canvas-viewport.own-cursor-on"]);
+  });
+});
