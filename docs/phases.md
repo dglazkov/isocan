@@ -55,13 +55,10 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 7.5 is PART-DONE — `isocan home` is built and
-verified, and its last Proof leg is waiting on a deploy: dev.isocan.io
-runs pre-phase-7 code, so the walk's canvas step cannot complete there
-yet. Deploy phases 7 and 7.5 to dev, replay the walk, close it.** Phase 8
-then inherits the question phase 7 could not settle: a replica still
-discovers canvases by enumerating the home, and the pass is the mechanism
-that fixes it. This line moves as phases close; a clean
+**Where we are: Phase 7.5 is closed and dev.isocan.io is running phases 7
+and 7.5 — Phase 8, escalation (Scene 5), is next, and it inherits the
+question phase 7 could not settle: a replica still discovers canvases by
+enumerating the home, and the pass is the mechanism that fixes it.** This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1028,15 +1025,13 @@ name.
 
 ## Phase 7.5 — The home you answer to
 
-**Status: PART-DONE.** `isocan home` is built and verified — including
-against the real dev home, which it reaches and answers to in one
-command. **What is missing is the Proof's last leg:** the walk's canvas
-step cannot complete against dev.isocan.io until phase 7 and 7.5 are
-deployed there. Dev runs pre-phase-7 code, so it has no
-`GET /api/actors/free-name`, and a replica asking an older home falls
-back to local allocation — correctly, and into the exact collision the
-fix exists to avoid. Verified end to end against a local home running
-this build. Deploy, then replay, then close.
+**Status: CLOSED** 2026-08-23 (`af7b2ab` … `5f3aaf9`). The walk played
+against **dev.isocan.io** on deployed code: `isocan home` in one command,
+a nameless claim that allocated `Nico` rather than colliding, a canvas
+born at the home, a marker carrying its address, and an item written from
+the terminal and read back at dev. It was PART-DONE for an hour while the
+last leg was chased — see the findings, where two of the conductor's own
+diagnoses were wrong before the third one measured it.
 
 **Why this exists, since it was not in the original walk.** Phase 6
 shipped replicas, and then Dimitri tried to walk Scene 0 with them. It
@@ -1118,6 +1113,41 @@ walk with the exports deleted.
   asking in the same instant can still be handed the same name; closing
   that needs a reservation, and a reservation is a claim, so it is named
   in the code rather than half-built.
+- **2026-08-23 — The fix reproduced the bug inside itself, and it took a
+  real remote home to show that.** Asking the home for a free name was
+  the right shape, and `freeName` was built from `claimContext` — which
+  gathers scope with the CLAIM's reach, admissions only. A replica's
+  badge is minted fresh and admitted to nothing at the moment it asks, so
+  every roster name looked free and the home returned the one name
+  guaranteed to collide. Measured against dev with **one badge and two
+  calls a single GET apart**:
+
+      no admissions           -> {"name":"Isaac"}   (taken on a canvas)
+      after one admitting GET -> {"name":"Nico"}
+
+  It passed every local test because a replica's sweep admits its badge
+  in milliseconds over loopback, so by claim time the scope was
+  populated; across the internet the claim wins that race. The refusal
+  then names a canvas the badge had **not** been in when it asked, which
+  is what made it so hard to read.
+  The conductor got there third. The first diagnosis was a registry race
+  (tested, wrong). The second was "dev runs old code" — plausible, since
+  dev genuinely lacked the route, and **still wrong**: dev was redeployed
+  and the walk failed identically. Only then did the one-badge-two-calls
+  measurement isolate it. Both wrong diagnoses were *reasonable* and both
+  would have shipped a fix for a bug that was not there. What finally
+  worked was reducing to a single call whose answer could only mean one
+  thing.
+  The fix gives `claimContext` a **reach**: `freeName` alone asks for
+  "admissible" — admissions plus whatever a grant would admit this badge
+  to, through the same `admittingGrant` the projects listing walks. That
+  is the same trick phase 7 used when scoping `GET /api/projects` to
+  admissions broke replicas, for the same reason, and the code says so
+  rather than leaving two coincidences. Disclosure is a strict function
+  of what the asker can already obtain: one name, never the taken set,
+  across canvases `GET /api/projects` already lists to that badge. A
+  revoked link drops the canvas out, and judging a name admits nobody —
+  both asserted.
 - **2026-08-23 — The flake was two flakes, both timing, and one of them
   was a product bug.** Dimitri's read — *"flakes come from when I forget
   to design the tests to not depend on timing"* — was right on both
