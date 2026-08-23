@@ -34,14 +34,15 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 5 is PART-DONE. Stages A, B and C are provisioned
-and live — https://dev.isocan.io serves a real canvas off Firestore, TLS
-on a Google-managed cert, nightly export, uptime check. Stage D
-(continuous deploy) needs a browser GitHub OAuth step and is not run;
+**Where we are: Phase 5 is PART-DONE. All four stages are provisioned
+and live — https://dev.isocan.io serves a real canvas off Firestore, and
+a push to `main` now builds, boot-checks and deploys it with no hands.
 GC is deliberately not scheduled, and `infra/91-scheduler-gc.sh` says
-why. The phase's remaining Proof — two people, live correspondence, and
-ops landing in order across a rollout — is not yet played.** This line
-moves as phases close; a clean session starts by believing it.
+why. What remains is the phase's own Proof: two people at dev.isocan.io
+seeing each other's cursors, and ops written DURING a rollout all
+landing in order. Both want phase 6's home connection to be worth
+playing, so they may close as part of it.** This line moves as phases
+close; a clean session starts by believing it.
 
 ---
 
@@ -533,6 +534,35 @@ observed in production conditions).
   localhost; this is an addition, not a rename. The interception itself
   is unverifiable outside a deployed home, so no local test pretends
   otherwise — what is pinned is that both paths are one handler.
+- **2026-08-22 — Stage D, and two gcloud shapes that only fail when you
+  run them.** Continuous deploy works: a push to `main` builds, runs the
+  container's own boot check, pushes, and deploys — revision
+  `isocan-00004-q8v` from image `:b4642d5`, the commit sha, with the
+  canvas intact across the rollout. Getting there corrected three
+  things. **The connection check could never have passed:**
+  `95-build-trigger.sh` verified the repository with `gcloud builds
+  repositories list`, which is 2nd-gen Developer Connect only, while the
+  console flow it instructs you to use — and the `triggers create github
+  --repo-owner/--repo-name` form it then calls — are 1st gen. The two
+  generations cannot see each other, so a correctly connected repository
+  always listed empty and the script refused forever. There is no
+  1st-gen "list what is linked" command, so the create is the check.
+  **And `triggers create github` names its trigger with `--name`**, not
+  a positional, unlike most `create` verbs.
+- **2026-08-22 — `images:` is pushed after every step, which makes it
+  useless to a step that deploys.** The first trigger build failed with
+  `Image …:da3e43a not found` while the registry still held only the
+  previous tag — `_TAG` had expanded correctly, the bytes simply were
+  not there. Cloud Build pushes the top-level `images:` list only once
+  all steps finish. That is fine for a build-only run, which is why
+  `60-build-image.sh` never hit it and why `70-cloud-run.sh` deploying
+  afterwards always worked; it is exactly wrong for an in-build deploy,
+  which runs while the image exists nowhere but the worker's local
+  docker. The push is its own step now, before deploy. Worth noting the
+  shape of this bug: **the manual path and the automatic path disagreed
+  about when a push happens, and only the automatic one was wrong** —
+  so every hand-run of Stage A had been quietly confirming an ordering
+  that continuous deploy did not share.
 - **2026-08-22 — Two principals, one tarball.** `gcloud builds submit`
   uploads the source as the *human*, and Cloud Build reads it as the
   *build service account*. Nothing bridges them, so the first build died
