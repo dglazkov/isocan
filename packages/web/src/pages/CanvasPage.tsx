@@ -32,6 +32,7 @@ import { CommentToasts } from "../components/CommentToasts.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
 import { isTyping } from "../lib/keys.ts";
+import { OwnCursor } from "../components/OwnCursor.tsx";
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -432,6 +433,7 @@ export function CanvasPage({
       <FavouritesBar projectId={projectId} />
       <CommentToasts />
       <HelpPanel />
+      <OwnCursor actor={actor} />
     </div>
   );
 }
