@@ -34,6 +34,12 @@ mechanisms), [`docs/architecture.md`](docs/architecture.md) (the
 physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
 "where we are" line says which phase is next; start there).
 
+## Changelog
+
+`docs/changelog/` is a page per day: what changed and why, written from the
+commit history. Add the day's entry when you finish a session's work — the
+reasoning is the expensive part to recover later, and the diff is not.
+
 ## Research
 
 `docs/research/` holds findings that took longer to reach than they take to

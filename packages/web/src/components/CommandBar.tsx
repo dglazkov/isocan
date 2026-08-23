@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Actor } from "@isocan/core";
 import { mainThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -122,7 +122,7 @@ export function CommandBar({ projectId, actor }: { projectId: string; actor: Act
           <div className="cmdbar-thread">
             {recent.map((c) => (
               <div key={c.id} className="cmdbar-msg">
-                <span className="cmdbar-author" style={{ color: actorColorIn(colors, c.author.id) }}>
+                <span className="cmdbar-author who" style={{ "--who": actorColorIn(colors, c.author.id) } as CSSProperties}>
                   {actorNameIn(names, c.author)}
                 </span>
                 <span className="cmdbar-body">{c.body}</span>

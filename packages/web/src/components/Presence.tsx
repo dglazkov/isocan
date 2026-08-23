@@ -168,7 +168,7 @@ export function Presence({ actor }: { actor: Actor }) {
         <button
           key={face.actor.id}
           data-face-id={face.actor.id}
-          className={`face${face.live ? "" : " away"}${
+          className={`face${face.live ? " live" : " away"}${
             face.self ? " self" : ""
           }${face.unread > 0 ? " badged" : ""}${
             face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
