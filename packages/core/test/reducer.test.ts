@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OpValidationError, applyOperation } from "../src/index.ts";
 import type { Operation } from "../src/index.ts";
-import { apply, envelope, nv, seedState } from "./helpers.ts";
+import { apply, bob, envelope, nv, seedState } from "./helpers.ts";
 
 function expectRejects(op: Operation, code: string) {
   const s = seedState();
@@ -298,6 +298,95 @@ describe("semantics", () => {
     expect(withMention.mentions).toEqual(["usr_alice"]);
     // Seed comments were created without mentions — the field stays absent.
     expect("mentions" in s.canvas.threads["thr_1"]!.comments[0]!).toBe(false);
+  });
+
+  /**
+   * The reducer's own contract: "Every mutation stamps updatedAt/updatedBy
+   * from the envelope." It was believed rather than checked. Only ONE op's
+   * stamp was under test (addVersion, incidentally, through the seed), and
+   * the round-trip and random-walk properties are blind here on purpose —
+   * `normalize()` strips the audit keys so undo comparisons can ignore them.
+   *
+   * So this asserts the rule over the whole vocabulary rather than over the
+   * op that happened to break: delete the stamp from item.move and this goes
+   * red, which it did not before.
+   */
+  it("every mutation stamps updatedAt/updatedBy from the envelope", () => {
+    const mutations: Array<{ op: Operation; touches: string[] }> = [
+      { op: { type: "item.move", itemId: "itm_1", x: 9, y: 9 }, touches: ["itm_1"] },
+      { op: { type: "item.resize", itemId: "itm_1", width: 11, height: 12 }, touches: ["itm_1"] },
+      { op: { type: "item.update", itemId: "itm_1", patch: { title: "renamed" } }, touches: ["itm_1"] },
+      {
+        op: { type: "item.update", itemId: "itm_1", patch: {}, filename: "new.md" },
+        touches: ["itm_1"],
+      },
+      { op: { type: "item.addVersion", itemId: "itm_1", version: nv("ver_stamp") }, touches: ["itm_1"] },
+      {
+        op: { type: "item.setCurrentVersion", itemId: "itm_1", versionId: "ver_1" },
+        touches: ["itm_1"],
+      },
+      {
+        op: {
+          type: "item.removeVersion",
+          itemId: "itm_1",
+          versionId: "ver_1b",
+          prevCurrentVersionId: "ver_1",
+        },
+        touches: ["itm_1"],
+      },
+      {
+        op: {
+          type: "items.move",
+          moves: [
+            { itemId: "itm_1", x: 1, y: 1 },
+            { itemId: "itm_2", x: 2, y: 2 },
+          ],
+        },
+        touches: ["itm_1", "itm_2"],
+      },
+      {
+        op: {
+          type: "item.add",
+          itemId: "itm_stamped",
+          version: nv("ver_stamped"),
+          width: 10,
+          height: 10,
+          placement: { x: 0, y: 0 },
+        },
+        touches: ["itm_stamped"],
+      },
+    ];
+
+    for (const { op, touches } of mutations) {
+      const env = envelope(op, bob);
+      const after = applyOperation(seedState(), env)!;
+      for (const itemId of touches) {
+        const item = after.canvas.items[itemId]!;
+        expect(item.updatedBy, `${op.type} did not stamp ${itemId} with the acting identity`).toEqual(bob);
+        expect(item.updatedAt, `${op.type} did not stamp ${itemId} with the envelope ts`).toBe(env.ts);
+      }
+    }
+  });
+
+  it("project.update stamps the project, and deletes stamp the trash entry", () => {
+    const meta = envelope({ type: "project.update", patch: { title: "T" } }, bob);
+    const updated = applyOperation(seedState(), meta)!;
+    expect(updated.project.updatedBy).toEqual(bob);
+    expect(updated.project.updatedAt).toBe(meta.ts);
+
+    const one = envelope({ type: "item.delete", itemId: "itm_1" }, bob);
+    const afterOne = applyOperation(seedState(), one)!;
+    const entry = afterOne.canvas.trash.find((t) => t.item.id === "itm_1")!;
+    expect(entry.deletedBy).toEqual(bob);
+    expect(entry.deletedAt).toBe(one.ts);
+
+    const many = envelope({ type: "items.delete", itemIds: ["itm_1", "itm_2"] }, bob);
+    const afterMany = applyOperation(seedState(), many)!;
+    for (const itemId of ["itm_1", "itm_2"]) {
+      const trashed = afterMany.canvas.trash.find((t) => t.item.id === itemId)!;
+      expect(trashed.deletedBy, `items.delete did not stamp ${itemId}`).toEqual(bob);
+      expect(trashed.deletedAt).toBe(many.ts);
+    }
   });
 
   it("applyOperation is pure — inputs are never mutated", () => {

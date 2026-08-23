@@ -55,6 +55,26 @@ says what each one found. Read the relevant one before re-deciding something it
 already measured, and add to it when you learn something a month from now would
 want.
 
+## The standing reviews
+
+Four personas in `.claude/agents/` watch what shipping tends to erode — a
+market researcher, a design auditor, an architect, and a QA tester. Each reads
+`docs/reviews/README.md` before it looks, so a run in October knows what a run
+in August measured, and writes its findings back there as a dated page.
+
+`docs/reviews/lessons.md` is the one to read even if you never run them: the
+failure modes this codebase has actually produced, each with the guard that
+now catches it. Add to it when a bug turns out to have a shape.
+
+## Evals
+
+`docs/evals.md` is the staged plan for finding out whether isocan is any good
+at what it exists for. The short version, if you only read one thing: the
+oplog already records more evaluation signal than most products collect on
+purpose — undo is a labelled failure, and a version stack is a preference pair
+a person produced for free. Measure what is measurable before asking a model's
+opinion about anything.
+
 ## House rules
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done.

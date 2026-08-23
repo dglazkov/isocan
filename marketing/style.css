@@ -1,0 +1,285 @@
+/* ==========================================================================
+   isocan.io — the logged-out surface.
+
+   The visual world is the app's own, taken from packages/web/src/styles.css:
+   the same cobalt, the same graphite ground, the same 8px radius, the same
+   dotted canvas. Nothing here invents a second identity for the product —
+   what changes is the register. The app is a room you work in and gets out of
+   the way; this page has to argue, so the accent is allowed to own whole
+   bands and the type is allowed a voice.
+
+   Dark, and committed. The scene is a person at their desk with a terminal in
+   one window and the canvas in another, agents working while they read; the
+   product's own chrome is dark in that scene, and a light page would put the
+   screenshot in a frame it does not belong in.
+   ========================================================================== */
+
+:root {
+  /* --- the app's tokens, unchanged --- */
+  --ground: #0e0f12;
+  --card: #1b1e23;
+  --line: #2c313a;
+  --line-soft: #23272e;
+  --ink: #e7e9ec;
+  --ink-muted: #a6adb8;
+  --ink-soft: #858d99;
+  --chip: #23272e;
+  --accent: #4c6ef5;
+  --accent-hover: #6480f7;
+  /* The accent as a FILL UNDER WHITE TEXT, which is a different job and needs
+     a different value: white on #4c6ef5 measures 4.32:1, under the 4.5 that
+     body-sized text needs. This is the app's own light-theme accent — the same
+     hue, the darker end of it — and white on it clears 8:1. Borders, glows and
+     links keep --accent; anything carrying white words sits on this. */
+  --accent-solid: #1f3fd0;
+  --accent-ink: #ffffff;
+  --accent-text: #93a7fb;
+  --accent-wash: rgba(76, 110, 245, 0.14);
+  --accent-glow: rgba(76, 110, 245, 0.26);
+  --good: #56b06a;
+  --amber: #d98324;
+  --dot: #2b2f36;
+  --radius: 8px;
+
+  /* --- this surface's own --- */
+  --measure: 62ch;
+  --band: 1160px;
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 32px 64px -28px rgba(0, 0, 0, 0.85);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --display: "Bricolage Grotesque", system-ui, sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  color-scheme: dark;
+  /* The parts nobody draws still carry the design. */
+  accent-color: var(--accent);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.6 var(--body);
+  /* The canvas's own ground, at the canvas's own spacing. The dots earn their
+     place here: this is what the product's background actually is. */
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+::selection { background: var(--accent); color: var(--accent-ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--ground); }
+::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid var(--ground); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4150; }
+
+img, svg { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--ink); }
+
+h1, h2, h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.band { width: min(100% - 48px, var(--band)); margin-inline: auto; }
+.lede { color: var(--ink-muted); font-size: 1.0625rem; max-width: var(--measure); }
+
+/* ---------- the command line, this page's recurring object ---------- */
+/* Mono here is not a costume for "technical": every one of these strings is a
+   command you can paste into a shell, which is the whole argument of the page. */
+.cmd {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.cmd .p { color: var(--ink-soft); user-select: none; }
+.cmd .f { color: var(--accent-text); }
+.cmd .s { color: var(--ink-soft); }
+.cmd .ok { color: var(--good); }
+
+/* ---------- header ---------- */
+.top {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.top-in { display: flex; align-items: center; gap: 20px; height: 58px; }
+.logo { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.02em; font-family: var(--display); font-size: 1.0625rem; color: var(--ink); text-decoration: none; }
+.logo-mark { width: 20px; height: 20px; flex: none; }
+.top nav { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+.top nav a { color: var(--ink-muted); text-decoration: none; font-size: 0.875rem; padding: 6px 0; }
+.top nav a:hover { color: var(--ink); }
+@media (max-width: 720px) { .top nav a.hide-sm { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { padding: 84px 0 0; position: relative; }
+.hero h1 {
+  font-size: clamp(2.75rem, 8vw, 5.25rem);
+  max-width: 15ch;
+}
+.hero h1 em { font-style: normal; color: var(--accent-text); }
+.hero .lede { margin-top: 22px; font-size: clamp(1.0625rem, 2vw, 1.25rem); max-width: 54ch; }
+
+.start { margin-top: 34px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.install {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 12px 12px 16px;
+}
+.install .cmd { overflow: visible; white-space: nowrap; }
+.copy {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-solid); color: var(--accent-ink);
+  border: none; border-radius: 6px; padding: 7px 11px;
+  font: 600 0.8125rem var(--body); cursor: pointer;
+  transition: background 0.15s var(--ease-out);
+}
+.copy:hover { background: #2c50e2; }
+.copy svg { width: 13px; height: 13px; }
+.copy[data-done="1"] { background: var(--good); }
+.start .aside { color: var(--ink-muted); font-size: 0.875rem; }
+.start .aside a { padding: 5px 0; display: inline-block; }
+@media (max-width: 560px) {
+  .install { width: 100%; }
+  .install .cmd { overflow-x: auto; }
+}
+
+/* The shot sits on the page like an item sits on the canvas. */
+.shot {
+  margin-top: 64px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lift);
+  background: var(--card);
+}
+.shot img { width: 100%; height: auto; }
+.shot-note {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; max-width: 90ch;
+  margin: 14px 2px 0; color: var(--ink-soft); font-size: 0.8125rem;
+}
+.shot-note b { color: var(--ink-muted); font-weight: 600; }
+
+/* ---------- sections ---------- */
+section { padding: 104px 0 0; }
+section > .band > h2 { font-size: clamp(1.875rem, 4vw, 2.75rem); max-width: 20ch; }
+section > .band > .lede { margin-top: 16px; }
+
+/* The ledger: a gesture on the left, the command that does the same thing on
+   the right. The page's thesis IS this layout, which is why the sections are
+   built from it rather than from cards. */
+.ledger { margin-top: 40px; border-top: 1px solid var(--line-soft); }
+.row {
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 9fr);
+  gap: 12px 40px; align-items: baseline;
+  padding: 17px 2px; border-bottom: 1px solid var(--line-soft);
+}
+.row:hover { background: color-mix(in srgb, var(--card) 55%, transparent); }
+.row .did { font-weight: 600; font-size: 0.9375rem; }
+.row .did span { display: block; font-weight: 400; color: var(--ink-soft); font-size: 0.8125rem; margin-top: 3px; }
+@media (max-width: 760px) { .row { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
+
+/* ---------- panels: a figure that is not a card grid ---------- */
+.split { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; }
+.panel h3 { font-size: 1.125rem; letter-spacing: -0.02em; }
+.panel p { color: var(--ink-muted); font-size: 0.9375rem; margin-top: 9px; }
+.panel .cmd { margin-top: 16px; }
+
+/* A terminal, drawn as one: the product's second surface, shown honestly. */
+.term { background: #08090b; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.term-bar { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font: 500 0.75rem var(--body); }
+.term-bar i { width: 9px; height: 9px; border-radius: 99px; background: var(--line); display: block; }
+.term .cmd { padding: 16px 18px; }
+
+/* ---------- who is on it ---------- */
+.crew { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 10px; }
+.who {
+  display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 999px; padding: 6px 14px 6px 7px;
+  font-size: 0.875rem; font-weight: 600; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line);
+}
+.who i { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; font-size: 0.6875rem; font-weight: 700; color: #fff; font-style: normal; }
+.who span { font-weight: 400; color: var(--ink-soft); font-size: 0.8125rem; }
+
+/* ---------- skills ---------- */
+.skills { margin-top: 40px; border-top: 1px solid var(--line-soft); }
+.skill {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 11fr);
+  gap: 6px 40px; padding: 15px 2px; border-bottom: 1px solid var(--line-soft);
+  align-items: baseline;
+}
+.skill code { font-family: var(--mono); font-size: 0.8125rem; color: var(--accent-text); }
+.skill p { color: var(--ink-muted); font-size: 0.9375rem; max-width: 68ch; }
+.skill p b { color: var(--ink); font-weight: 600; }
+@media (max-width: 760px) { .skill { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* ---------- the closing band: colour that owns a region ---------- */
+.close {
+  margin-top: 112px;
+  background: var(--accent-solid);
+  color: var(--accent-ink);
+  padding: 84px 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.close h2 { font-size: clamp(2rem, 5vw, 3.25rem); max-width: 18ch; color: #fff; }
+.close p { margin-top: 16px; color: rgba(255, 255, 255, 0.86); max-width: 52ch; font-size: 1.0625rem; }
+.close .install { margin-top: 30px; background: rgba(0, 0, 0, 0.28); border-color: rgba(255, 255, 255, 0.28); display: inline-flex; }
+.close .install .cmd, .close .install .cmd .f { color: #fff; }
+.close .install .cmd .p { color: rgba(255, 255, 255, 0.62); }
+.close .copy { background: #fff; color: var(--accent-solid); }
+.close .copy:hover { background: rgba(255, 255, 255, 0.86); }
+.close .copy[data-done="1"] { background: #0d2a12; color: #fff; }
+.close .aside { color: rgba(255, 255, 255, 0.78); }
+.close a { color: #fff; }
+
+footer { padding: 44px 0 64px; color: var(--ink-soft); font-size: 0.875rem; }
+.foot-in { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+footer a { color: var(--ink-muted); padding: 5px 0; display: inline-block; }
+
+/* ---------- the one authored moment ---------- */
+/* The hero settles once on load: the words first, then the canvas under them,
+   exponential ease-out from an already-visible default. Nothing else on the
+   page animates on scroll — a fade on every section is a tic, not a moment. */
+@media (prefers-reduced-motion: no-preference) {
+  .settle { animation: settle 0.9s var(--ease-out) both; }
+  .settle-2 { animation-delay: 0.07s; }
+  .settle-3 { animation-delay: 0.14s; }
+  .settle-4 { animation-delay: 0.22s; }
+  @keyframes settle {
+    from { opacity: 0.4; transform: translateY(14px); filter: blur(6px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+}
+
+/* ---------- small inline objects ---------- */
+kbd {
+  font: 600 0.75rem/1 var(--mono);
+  background: var(--chip); border: 1px solid var(--line);
+  border-radius: 5px; padding: 3px 5px; color: var(--ink);
+  vertical-align: baseline;
+}
+code.cmd { display: inline; white-space: normal; color: var(--accent-text); }
+.panel .cmd { white-space: pre; }
+.lede em, .panel p em { font-style: italic; color: var(--ink); }
+/* Digits that sit in columns line up. */
+.term .cmd, .row .cmd { font-variant-numeric: tabular-nums; }

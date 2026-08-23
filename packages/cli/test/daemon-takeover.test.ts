@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { reservePort } from "../../../test/ports.ts";
 
 /**
  * The stale daemon: a process that outlives the code it was started from,
@@ -22,46 +22,92 @@ let port: number;
 let squatter: ChildProcess | null;
 let mine: Daemon | null;
 
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(address.port));
-    });
-  });
-}
+/** What the last probe saw, so a timeout can say which of the three it was:
+ * nothing listening, something listening that is not ours, or ours but slow. */
+let lastProbe = "not probed yet";
 
 async function health(): Promise<{ pid: number } | null> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
-      signal: AbortSignal.timeout(500),
+      signal: AbortSignal.timeout(2_000),
     });
-    return res.ok ? ((await res.json()) as { pid: number }) : null;
-  } catch {
+    if (!res.ok) {
+      lastProbe = `something on ${port} answered /healthz with ${res.status}`;
+      return null;
+    }
+    const body = (await res.json()) as { pid: number };
+    lastProbe = `pid ${body.pid} answering on ${port}`;
+    return body;
+  } catch (err) {
+    lastProbe = `nothing answered on ${port} (${(err as Error).name}: ${(err as Error).message})`;
     return null;
   }
 }
 
+/**
+ * Poll, and FAIL WITH THE EVIDENCE.
+ *
+ * The old version said "timed out waiting for the squatting daemon" and
+ * nothing else, which is the same sentence for a machine under load, a port
+ * somebody else took, and a daemon that crashed on startup — so the only
+ * available response was to run it again and see. A flake nobody can explain
+ * is a flake everybody learns to re-run past, and that habit costs more than
+ * the flake. Every wait here now reports how long it waited, what the last
+ * probe saw, and whether the process it was waiting for is even alive.
+ */
 async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: string): Promise<T> {
-  const deadline = Date.now() + 10_000;
+  const started = Date.now();
+  const deadline = started + 10_000;
   for (;;) {
     const value = await fn();
     if (ok(value)) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    // A process that has already exited is never going to answer; waiting the
+    // full ten seconds for it only delays the same news.
+    const dead = squatter !== null && (squatter.exitCode !== null || squatter.signalCode !== null);
+    if (dead || Date.now() > deadline) {
+      throw new Error(
+        `${dead ? "gave up" : "timed out"} after ${Date.now() - started}ms waiting for ${what}\n` +
+          `  last probe: ${lastProbe}\n` +
+          `  squatter:   ${describeSquatter()}`,
+      );
+    }
     await new Promise((r) => setTimeout(r, 50));
   }
 }
 
+function describeSquatter(): string {
+  if (!squatter) return "none spawned";
+  if (squatter.exitCode !== null || squatter.signalCode !== null) {
+    return `pid ${squatter.pid} already exited (code ${squatter.exitCode}, signal ${squatter.signalCode})${
+      squatterErr ? ` — stderr: ${squatterErr.trim().slice(-500)}` : " — no stderr"
+    }`;
+  }
+  return `pid ${squatter.pid} still running`;
+}
+
+/** Whatever the spawned daemon complained about. `stdio: "ignore"` threw this
+ * away, which is why a startup failure looked exactly like a slow machine. */
+let squatterErr = "";
+
 /** Start a daemon in its own process and wait for it to answer. */
-async function startSquatter(): Promise<number> {
-  squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+function spawnSquatter(extraEnv: Record<string, string> = {}): ChildProcess {
+  squatterErr = "";
+  const child = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
+    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...extraEnv },
     cwd: home,
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
   });
+  child.stderr?.on("data", (chunk) => (squatterErr += chunk));
+  return child;
+}
+
+async function startSquatter(): Promise<number> {
+  squatter = spawnSquatter();
   const answered = await until(health, (h) => h !== null, "the squatting daemon");
-  expect(answered!.pid).toBe(squatter.pid);
+  // Not just "somebody answered": the daemon on the port must be the process
+  // we started. Anything else means the port was taken from under us, and
+  // saying so here is cheaper than the afterEach killing a stranger's daemon.
+  expect(answered!.pid, `${lastProbe} — but the squatter is pid ${squatter.pid}`).toBe(squatter.pid);
   // And not merely answering: the pidfile WRITTEN. `startDaemon` binds the port
   // before it writes `daemon.json`, so a test that took the pidfile away the
   // moment health answered was sometimes deleting a file that had not been
@@ -128,7 +174,7 @@ const pidfile = () => path.join(home, "daemon.json");
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-takeover-"));
-  port = await freePort();
+  port = await reservePort();
   squatter = null;
   mine = null;
 });
@@ -226,16 +272,7 @@ describe("a daemon that was told whose fate it shares", () => {
 
   it("stops when the process named by ISOCAN_DAEMON_GUARD_PID is gone", async () => {
     const guard = bystander();
-    squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
-      env: {
-        ...process.env,
-        ISOCAN_HOME: home,
-        ISOCAN_PORT: String(port),
-        ISOCAN_DAEMON_GUARD_PID: String(guard.pid),
-      },
-      cwd: home,
-      stdio: "ignore",
-    });
+    squatter = spawnSquatter({ ISOCAN_DAEMON_GUARD_PID: String(guard.pid) });
     await until(health, (h) => h !== null, "the guarded daemon");
 
     // Nobody stops the daemon: the process it was told to die with just dies,
@@ -249,16 +286,7 @@ describe("a daemon that was told whose fate it shares", () => {
   it("keeps serving while that process is alive", async () => {
     const guard = bystander();
     try {
-      squatter = spawn(process.execPath, [cliBin, "serve", "--foreground"], {
-        env: {
-          ...process.env,
-          ISOCAN_HOME: home,
-          ISOCAN_PORT: String(port),
-          ISOCAN_DAEMON_GUARD_PID: String(guard.pid),
-        },
-        cwd: home,
-        stdio: "ignore",
-      });
+      squatter = spawnSquatter({ ISOCAN_DAEMON_GUARD_PID: String(guard.pid) });
       const up = await until(health, (h) => h !== null, "the guarded daemon");
 
       await new Promise((r) => setTimeout(r, 2500)); // several checks' worth

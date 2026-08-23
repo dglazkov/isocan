@@ -18,7 +18,7 @@ import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
-import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
 const DRAG_SLOP = 4;
@@ -441,10 +441,10 @@ export function ItemView({
         {worker && (
           <span
             className="work-chip"
-            title={`${worker.label} is working${worker.status ? ` — ${worker.status}` : ""}`}
+            title={`${worker.name} is working${worker.status ? ` — ${worker.status}` : ""}`}
           >
             <span className="work-dot" />
-            <span className="work-name">{worker.label}</span>
+            <span className="work-name">{worker.name}</span>
             <i>.</i>
             <i>.</i>
             <i>.</i>
@@ -540,7 +540,7 @@ const WORK_LINGER_MS = 2500;
 // task would otherwise strobe work → op → work between edits.
 function useWorkingSession(
   itemId: string,
-): { actorId: string; label: string; status: string | null } | null {
+): { actorId: string; name: string; status: string | null } | null {
   // Serialized to a scalar so remote cursor moves don't re-render every item.
   const live = useCanvasStore((s) => {
     const session = s.sessions.find(
@@ -549,7 +549,15 @@ function useWorkingSession(
         "itemId" in candidate.activity &&
         candidate.activity.itemId === itemId,
     );
-    return session ? `${session.actor.id}\u0000${session.label}\u0000${session.status ?? ""}` : null;
+    if (!session) return null;
+    // `label` is a display OVERRIDE and it is usually absent — a session only
+    // has one when somebody passed `--label`. Interpolating it straight into
+    // this key wrote the string "null", and the chip then said "null is
+    // working" over the item, which is every agent that ever started a session
+    // without one. The fallback the type documents is the actor's name, and
+    // the name that reaches a rename is the registry's.
+    const name = sessionName(s.actorNames, session);
+    return `${session.actor.id}\u0000${name}\u0000${session.status ?? ""}`;
   });
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => {
@@ -563,8 +571,8 @@ function useWorkingSession(
 
   const key = live ?? held;
   if (!key) return null;
-  const [actorId, label, status] = key.split("\u0000");
-  return { actorId: actorId!, label: label!, status: status || null };
+  const [actorId, name, status] = key.split("\u0000");
+  return { actorId: actorId!, name: name!, status: status || null };
 }
 
 /**

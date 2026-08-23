@@ -28,6 +28,27 @@ export function actorNameIn(names: ActorNames, actor: { id: string; name: string
   return lookup(names, actor);
 }
 
+/**
+ * What to call a SESSION — the same question one layer out.
+ *
+ * `PresenceSession.label` is a display override and it is usually absent: a
+ * session only has one when somebody passed `--label`. Interpolating it
+ * straight into a string wrote the literal word "null" over an item ("null is
+ * working"), for every agent that ever started a session without one. So the
+ * rule lives here, in one function that can be tested, rather than being
+ * retyped at each place that needs a name — and it falls THROUGH the label to
+ * the registry, so a rename reaches the chip too.
+ *
+ * A blank label is treated as no label, for the same reason `actorNameIn`
+ * treats a blank registry name as no name: an empty chip names nobody.
+ */
+export function sessionName(
+  names: ActorNames,
+  session: { label: string | null; actor: { id: string; name: string } },
+): string {
+  return session.label && session.label.trim() ? session.label : lookup(names, session.actor);
+}
+
 /** The same answer as a subscription, for a component naming one actor. */
 export function useActorName(actor: { id: string; name: string }): string {
   return useCanvasStore((s) => lookup(s.actorNames, actor));
