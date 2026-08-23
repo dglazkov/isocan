@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Deliberately bad</title>
+<!--
+  THE GRADER'S OWN FIXTURE. Every check in scripts/grade.mjs must fail on this
+  page. If any of them passes, that check has stopped measuring and is
+  reporting a zero — which is how this grader shipped its first version:
+  a probe with a syntax error returned undefined, every reading fell back to
+  empty, and a broken page scored 8/8.
+
+  Do not fix this file. It is supposed to be wrong.
+-->
+<style>
+  body { background: #ffffff; color: #bfbfbf; font: 16px system-ui; margin: 0; padding: 16px; }
+  .wide { width: 3000px; height: 8px; background: #eee; }   /* forces sideways scroll */
+  .tiny { font-size: 11px; padding: 0; border: 0; background: #eee; height: 12px; width: 60px; }
+  img.squashed { width: 120px; height: 120px; }             /* natural 2x1, drawn 1:1 */
+</style></head>
+<body>
+  <h1>🚀 Unlock seamless synergy</h1>
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+  <img class="squashed" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGM4oaEBRAAI7wIx2qPzwgAAAABJRU5ErkJggg==">
+  <div class="wide"></div>
+  <button class="tiny" aria-label="short">tap</button>
+  <a href="#"><span></span></a>
+</body></html>
