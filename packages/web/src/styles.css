@@ -226,8 +226,7 @@ button, select { color: inherit; }
   background: none; border: 1px solid transparent; color: var(--ink);
 }
 .identity-known-row:hover { background: var(--chip); border-color: var(--chip-line); }
-.identity-known-row .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-.face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.identity-known-row .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 .identity-warning { font-size: 11px; color: var(--warn); line-height: 1.35; }
 .identity-leave { justify-content: center; font-size: 12.5px; }
 
@@ -256,8 +255,7 @@ button, select { color: inherit; }
 .projects-head .who-btn:hover, .projects-head .who-btn.active {
   background: var(--chip); border-color: var(--chip-line);
 }
-.projects-head .who-btn .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-.face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.projects-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 
 /* ---------- editing a project's name ---------- */
 .project-editor { display: flex; flex-direction: column; gap: 8px; }
@@ -728,21 +726,19 @@ button, select { color: inherit; }
 /* Faces overlap, so a badge would slide under the next face — lift it. */
 .face.badged { z-index: 2; }
 .face:hover { z-index: 3; transform: translateY(-1px); }
-.face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
 .face-mark {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 999px;
   border: 2px solid var(--card);
   color: var(--accent-ink); font-size: 11px; font-weight: 700; line-height: 1;
 }
+/* Here NOW — the same ring the pins wear. */
+.face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
 /* Not here, but they left something behind. */
-.face.away .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-.face-mark { opacity: 0.45; filter: grayscale(0.5); }
-.face.self .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-.face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
+.face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
+.face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
-.face.followed .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-.face-mark { box-shadow: 0 0 0 2px var(--accent); }
+.face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }
 .face-more { background: var(--chip); color: var(--ink-muted); font-size: 10px; }
 .face-badge {
   position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px;
@@ -1545,18 +1541,6 @@ button.mt-card:hover { border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
-
-/* ---------- slash commands ---------- */
-/* A message that asked for a known piece of work. The chip is the part an
-   agent looks up; the words after it are what the person added on top. */
-.command-chip {
-  display: inline-block; margin-right: 6px; padding: 1px 6px;
-  border-radius: 5px; background: var(--accent); color: var(--accent-ink);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
-  vertical-align: baseline;
-}
-/* The body's first paragraph runs on from the chip rather than under it. */
-.body:has(> .command-chip) > .command-chip + * { display: inline; }
 
 /* ---------- slash commands ---------- */
 /* A message that asked for a known piece of work. The chip is the part an

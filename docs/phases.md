@@ -31,7 +31,17 @@ the phases: each phase carries a **Findings** section that accumulates
 dated entries as the work teaches us things. Beside the "where we are"
 line sits **Deliberately open** — the short list of decisions postponed
 on purpose, so a later session chooses them awake instead of meeting
-them mid-task and improvising. A finding that redraws
+them mid-task and improvising.
+
+Every phase also carries a **Status** line directly under its heading —
+`CLOSED` with the date and the commit that closed it, `PART-DONE` with
+what is missing, or `NOT STARTED`. It is there so completion is *stated*
+rather than inferred from whether Findings say "none yet": a phase can
+close without surprising anybody, and an empty Findings section must
+never be read as an untouched phase. `grep '^\*\*Status' docs/phases.md`
+is the whole roster in one screen. When a phase closes, its Status line
+moves in the same change as the "where we are" line — one gesture, or
+they drift. A finding that redraws
 the map edits [architecture.md](architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
@@ -78,6 +88,8 @@ is how it goes wrong.
 ---
 
 ## Phase 1 — The store seam
+
+**Status: CLOSED** 2026-08-22 (`e917de5`).
 
 **Work:** Extract the `Store` interface; today's file-backed code
 becomes `FileStore` behind it, unchanged. The engine compiles against
@@ -134,6 +146,8 @@ untouched, which is the entire point of the phase.
   handoff — and the second is still Phase 4's real work.
 
 ## Phase 2 — The badge
+
+**Status: CLOSED** 2026-08-22 (`003481e`).
 
 **Work:** The door, per the desk's mechanism 1: a door endpoint that
 mints badges; cookie carrier for browsers, bearer-in-`auth`-block for
@@ -223,6 +237,8 @@ lives through the bearer flow.
   it will be stored in. Worth knowing before that phase, not during.
 
 ## Phase 3 — Actor binding and registry scope
+
+**Status: CLOSED** 2026-08-22 (`fb6e586`).
 
 **Work:** The desk's mechanism 5: the membership check in the
 single-writer chain — an op, undo/redo, or presence beat may name only
@@ -324,6 +340,8 @@ color repaints never cross admission lines.
 
 ## Phase 4 — CloudStore
 
+**Status: CLOSED** 2026-08-22 (`a8a1e39`).
+
 **Work:** The second `Store` backing: oplog as create-only
 `ops/{seq}` Firestore documents, snapshots and blobs in GCS, per-hash
 blob meta docs, the actors pattern likewise. Boot is the existing
@@ -424,6 +442,11 @@ large-blob round trip exercises the signed-URL branch.
   that phase's Work now says so.
 
 ## Phase 5 — A home in the sky (dev) ⚑ provision
+
+**Status: PART-DONE** 2026-08-22 (`a624cd5` … `1e21c03`). All four
+provisioning stages are live and `https://dev.isocan.io` auto-deploys on
+push. The **Proof is not played**: two people, live correspondence, and
+ops landing in order across a rollout. Do not read this phase as closed.
 
 **Work:** Stand up `isocan-dev`: Cloud Run service on CloudStore, load
 balancer + CDN + managed cert at dev.isocan.io, Cloud Build triggers
@@ -632,6 +655,8 @@ observed in production conditions).
 
 ## Phase 6 — Birth at home, replica at home
 
+**Status: NOT STARTED.**
+
 **Work:** Setup creates the canvas at the home; the marker carries id
 and address; the local daemon grows its **home connection** — dial,
 present the badge, carry the two planes, reconnect by seq cursor — and
@@ -662,6 +687,8 @@ the lid-close/reopen beat played with Chrome and the CLI.
 
 ## Phase 7 — The share (Scenes 1–4)
 
+**Status: NOT STARTED.**
+
 **Work:** The link grant born at birth as a revocable row; the Share
 dialog and roster driving the grant API (button and verb, one
 endpoint); arrival thin — actor minted at the door, never provisioned;
@@ -690,6 +717,8 @@ name.
 
 ## Phase 8 — Escalation (Scene 5)
 
+**Status: NOT STARTED.**
+
 **Work:** Pass minting from an admitted session; the one-command setup
 consuming `address#pass`; the redeemed badge born knowing its person;
 `isocan open` appending a daemon-minted pass.
@@ -704,6 +733,8 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
 **Findings:** *none yet.*
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
+
+**Status: NOT STARTED.**
 
 **Work:** Firebase Auth wired as the borrowed bench (magic-link email
 as the floor, Google, GitHub); attestations written onto badges;
@@ -729,6 +760,8 @@ resumption driven in Chrome.
 
 ## Phase 10 — Offline in the browser
 
+**Status: NOT STARTED.**
+
 **Work:** The service worker: cached shell, durable browser replica,
 ops applied optimistically and queued when the network is gone,
 reconnect by the same seq cursor.
@@ -744,6 +777,8 @@ verify order and convergence on a second profile.
 
 ## Phase 11 — The thin agent (Scene 6)
 
+**Status: NOT STARTED.**
+
 **Work:** Setup notices what it stands on — headless, ephemeral, home
 address in hand — and skips the daemon; the CLI speaks straight to the
 home; `isocan wait` parks at the home itself.
@@ -758,6 +793,8 @@ cloud workspace; a kill test for ring truth.
 **Findings:** *none yet.*
 
 ## Phase 12 — Agent-on-demand (Scene 7) ⚑ provision
+
+**Status: NOT STARTED.**
 
 **Work:** Registrations per frozen delegation — custody-checked actor,
 KMS-wrapped scoped token, per-summons pass in the dispatch payload;
@@ -777,6 +814,8 @@ sweep.
 
 ## Phase 13 — Offline birth, twins, re-homing
 
+**Status: NOT STARTED.**
+
 **Work:** Adoption from seq 1 on first reconnect; first-writer wins
 and the late twin parks whole; re-homing as the generalized push —
 work travels, the guest book stays.
@@ -790,6 +829,8 @@ while the roster re-forms.
 **Findings:** *none yet.*
 
 ## Phase 14 — isocan.io ⚑ provision
+
+**Status: NOT STARTED.**
 
 **Work:** Stand up `isocan-prod`; the domain; the `release`-branch
 promotion; the front page — the home origin wearing Scene 0's three
