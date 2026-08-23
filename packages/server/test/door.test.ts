@@ -264,6 +264,11 @@ describe("the badge-less are refused, actionably", () => {
     // /healthz is the load balancer's probe AND what ensureDaemon, warnIfStale
     // and stopDaemons poll before any badge could exist.
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
+    // Its hosted sibling, badge-less for the same reason. It sits under
+    // /api/, so it is open only because the allowlist says so — which is the
+    // point: if the handler ever went away, an unbadged probe would get a 401
+    // here rather than a cheerful 200 from the SPA fallback.
+    expect((await fetch(`${base}/api/healthz`)).status).toBe(200);
     expect((await door({ carrier: "bearer" })).status).toBe(200);
   });
 

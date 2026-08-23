@@ -34,9 +34,12 @@ the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
 
-**Where we are: Phase 4 is closed — Phase 5, a home in the sky, is next,
-and it is the first ⚑ provision phase.** This line moves as phases close;
-a clean session starts by believing it.
+**Where we are: Phase 5 is PART-DONE. Stage A is provisioned and live —
+`isocan-io-dev` serves a real canvas off Firestore at its `*.run.app`
+URL, and the signed-URL smoke test passes all three assertions. Stages
+B (the domain and the load balancer, ~$18/month), C and D are not
+run.** This line moves as phases close; a clean session starts by
+believing it.
 
 ---
 
@@ -421,6 +424,68 @@ is the kind that gets discovered at 11pm during a deploy.**
    PUT again and expect the precondition to refuse the second. Until
    that runs, the branch is unproven in production.
 
+**Five more, added while writing the artifacts rather than discovered at
+deploy time.** The `infra/` scripts, the Dockerfile and the two smoke
+tests exist now; writing them against a machine nobody could reach
+turned up five places where the map meets Google and needs a word
+changing. Each is small; each would have been an evening.
+
+3. **The daemon bound `127.0.0.1` and nothing could tell it not to.**
+   Cloud Run's startup probe connects to the container's port from
+   *outside* the container, so a loopback bind fails a deploy with "the
+   user-provided container failed to start and listen on the port" — a
+   message that reads like a crash and is not one. `DaemonOptions.host`
+   plus `ISOCAN_BIND` is the answer, environment rather than flag for
+   the same reason `ISOCAN_STORE` is. Done in this phase's artifacts;
+   `http.ts`'s `loopbackBound` already anticipated it in a comment, and
+   binding wide turns the localhost-trust clause off by itself.
+4. **Cloud Scheduler cannot reach the GC endpoint, and there is no
+   home-wide GC route.** The map says "Cloud Scheduler calls the
+   existing GC endpoint … authenticated by OIDC service identity,
+   behind the door like every route." The door admits **badges**:
+   `presentedBadge` runs an `Authorization: Bearer …` value through
+   `parseBadgeToken`, a Google OIDC JWT parses as nothing, and the
+   request is refused — correctly. And the only route is
+   `POST /api/projects/:id/gc`, one canvas at a time, with nothing
+   enumerating them. Two pieces of work: a home-wide `POST /api/gc`
+   that walks `listProjects()`, and a decision about what the door
+   admits (a verified OIDC caller as a second carrier for maintenance
+   routes — a desk decision, not a provisioning one). Not urgent:
+   un-swept blobs cost cents. `infra/91-scheduler-gc.sh` refuses to
+   create a job and lays out the three ways forward.
+5. **Cloud CDN in front of a daemon that sets a cookie on the shell.**
+   `registerStaticWebApp` is the SPA fallback for every unmatched GET
+   and mints a badge with `Set-Cookie` when the caller has none — the
+   desk's "badged on the page load" beat. Cloud CDN will not cache a
+   response carrying `Set-Cookie`, so that case is safe by accident;
+   but the same URL served to an *already-badged* caller carries no
+   cookie and is cacheable, and once that copy is in the cache the next
+   badge-less arrival gets a page that badges nobody. The daemon emits
+   no `Cache-Control` at all today, so the backend is configured
+   `USE_ORIGIN_HEADERS` — nothing cached until the origin says so. The
+   work: `no-store` on the shell, `immutable` on the hashed asset
+   filenames vite already emits, then the CDN caches exactly the right
+   things.
+6. **The object store's scratch objects cannot be swept by a lifecycle
+   rule.** `GcsObjects.append` composes `<key>.part-<ts>-<rand>` beside
+   the archive and its comment says "the bucket's lifecycle rule is
+   where that gets swept". GCS lifecycle conditions match by prefix and
+   by suffix; that name's prefix is a real object's key and its suffix
+   is random, so no rule can name the scratch without also naming the
+   blobs beside it. Move scratch under a fixed `scratch/` prefix and
+   one `matchesPrefix` rule with `age: 1` does it. A fraction of a cent
+   either way — recorded because the comment currently promises
+   something the bucket cannot do.
+7. **Two flags in the map that a deploy would have argued with.** The
+   stack table says Node 22; CI pins 24, both Google client libraries
+   want ≥22, and the container is built on 24 — a lagging line rather
+   than a decision. And `--max-instances=1` is **per revision**, so it
+   does not mean one process: during a rollout the draining revision
+   and the new one each have one. That is exactly the deploy overlap
+   the map already names, and the create-only precondition is what
+   makes it safe — but nothing should be written as if the flag
+   prevented it.
+
 **Outcome:** A real hosted home. Two people at dev.isocan.io see each
 other's cursors live; a deploy in the middle of traffic loses nothing.
 
@@ -428,7 +493,56 @@ other's cursors live; a deploy in the middle of traffic loses nothing.
 ops written during a rollout all land in order (the create-only seam,
 observed in production conditions).
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-22 — Stage A is provisioned and the home is real.**
+  `isocan-io-dev` in `us-west1`, Cloud Run at `min=0/max=1`, Firestore
+  with PITR, two buckets, three service accounts. A canvas created in a
+  browser — "Acme Sprint Board", `prj_M6E50pTpki` — persisted as
+  Firestore documents and read back through a freshly minted badge.
+  Phases 2 and 4 are therefore true in production and not only in the
+  suite: the door mints, `/api/projects` is 401 without a badge and 200
+  with one, and the oplog is where CloudStore says it is.
+- **2026-08-22 — Phase 4's debt is discharged: all three signing
+  assertions PASS against a real bucket.** Including the one Phase 4 was
+  least sure of — `x-goog-if-generation-match: 0` **is** honored inside a
+  signed request, so the second PUT of a ticket is refused with 412 and
+  blob writes really are create-only. And a service account with no
+  private key signed in 423ms through the IAM `signBlob` path, which
+  worked only because `roles/iam.serviceAccountTokenCreator` went in at
+  service-account creation. One extra came back off-spec and is recorded
+  rather than smoothed: dropping a signed header returns **400, not
+  403** — GCS rejects such a request as malformed before it evaluates
+  the signature, so a client that gets an upload wrong sees "bad
+  request" rather than "forbidden".
+- **2026-08-22 — Google's frontend swallows the exact path `/healthz`,
+  and the architecture had built two things on it.** Measured against
+  the live home: `/` 200, `/nonexistent` 200, `/healthz/` 200,
+  `/HEALTHZ` 200, and `/healthz` a 404 from Google's own error page —
+  with the container's request log never seeing it at all. The uptime
+  check the map specifies would have monitored Google's frontend
+  instead of the daemon, a check that cannot fail for the right reason;
+  and `infra/70-cloud-run.sh`'s own gate ended a *successful* deploy
+  with "deployed, but not serving", which is how this was found. The
+  daemon now also answers `/api/healthz` — under `/api/`, deliberately,
+  because that is the one prefix the SPA fallback does not answer with
+  a cheerful 200, so a vanished handler shows up as a red check instead
+  of a green lie. `/healthz` is untouched and still correct on
+  localhost; this is an addition, not a rename. The interception itself
+  is unverifiable outside a deployed home, so no local test pretends
+  otherwise — what is pinned is that both paths are one handler.
+- **2026-08-22 — Two principals, one tarball.** `gcloud builds submit`
+  uploads the source as the *human*, and Cloud Build reads it as the
+  *build service account*. Nothing bridges them, so the first build died
+  on a 403 that talks about a storage object and reads like a corrupt
+  upload. Folded into `infra/40-service-account.sh`.
+- **2026-08-22 — The image's own boot test could not boot the image,
+  and was right not to.** `cloudbuild.yaml`'s smoke step starts the
+  container to check it serves; the image bakes `ISOCAN_STORE=cloud`,
+  and a cloud home correctly refuses to start without a bucket. The step
+  now overrides to the file backing: what it tests is that the *image*
+  boots, not that a build step can reach Firestore — a build step has no
+  business talking to the real home.
 
 ## Phase 6 — Birth at home, replica at home
 
@@ -438,7 +552,17 @@ present the badge, carry the two planes, reconnect by seq cursor — and
 demotes itself to syncing replica. In the same stroke the local
 daemon's page server turns home-only: people now have the one origin
 to sit at, and the localhost web door closes behind them — ops to
-CLIs, never pages to persons.
+CLIs, never pages to persons. **One thing phase 5 found so this phase
+does not:** the CLI's staleness and liveness probes (`daemonPidOn`,
+`ensureDaemon`'s startup poll, `warnIfStale`, `stopDaemons`, and
+`client.healthz()` under all of them) hardcode `/healthz`, which is
+correct against 127.0.0.1 and silently WRONG against a hosted home —
+Google's frontend swallows that exact path and answers its own 404, so
+a probe that has never left localhost will read a live home as dead the
+first time it is pointed at one. The daemon already answers
+`/api/healthz` with the same body from the same handler; the home
+connection must use that path, and the choice of path becomes a
+property of the address rather than a constant.
 
 **Outcome:** Scene 0's shape is true on dev (its front-page door is
 phase 14's): solo is the multiuser topology with one member, and

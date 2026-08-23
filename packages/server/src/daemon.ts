@@ -16,6 +16,25 @@ import { daemonFile, isocanHome } from "./paths.ts";
 export interface DaemonOptions {
   port?: number;
   home?: string;
+  /**
+   * Which interface to listen on. Loopback unless told otherwise, which is the
+   * only safe default for a daemon that trusts localhost by name (`isOpen`'s
+   * loopback clause, mechanism 5) — a local daemon that bound `0.0.0.0` by
+   * accident would hand the whole machine's trust to the network.
+   *
+   * The hosted home is the one caller that wants the other answer, and it is
+   * not a person typing a flag: Cloud Run's startup probe connects to the
+   * container's port from outside the container, so a home that bound loopback
+   * would fail to deploy with "the user-provided container failed to start and
+   * listen on the port" — a message that reads like a crash and is not one.
+   * `ISOCAN_BIND=0.0.0.0` is what the image sets, environment rather than
+   * flag, for the same reason `ISOCAN_STORE` is: this is innkeeper
+   * configuration, not a per-invocation choice an agent should be able to
+   * reach for. `http.ts`'s `loopbackBound` already reads the bound address to
+   * decide whether the localhost clause applies, so binding wide turns that
+   * trust off by itself.
+   */
+  host?: string;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -83,6 +102,7 @@ async function openBacking(home: string): Promise<{ store: Store; desk: Desk }> 
 export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> {
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
+  const host = options.host ?? process.env.ISOCAN_BIND ?? "127.0.0.1";
 
   // The composition root, and the ONE place any backing is named.
   const { store, desk } = await openBacking(home);
@@ -117,7 +137,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
   registerRoutes(app, engine, store, desk, presence);
-  await app.listen({ port, host: "127.0.0.1" });
+  await app.listen({ port, host });
   const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
 
   await fs.writeFile(
@@ -324,7 +344,12 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
         : `port ${port} is held by something that is not an isocan daemon — free it, or set ISOCAN_PORT to another port`,
     );
   }
-  console.log(`isocan daemon listening on http://127.0.0.1:${daemon.port}`);
+  // Say the bound interface, not a guess at it: "listening on 127.0.0.1" out
+  // of a container that is in fact wide open is the kind of log line that gets
+  // believed for a year.
+  const bound = daemon.app.server.address();
+  const where = bound && typeof bound !== "string" ? bound.address : "127.0.0.1";
+  console.log(`isocan daemon listening on http://${where}:${daemon.port}`);
   const shutdown = () => {
     void daemon.close().then(() => process.exit(0));
   };
