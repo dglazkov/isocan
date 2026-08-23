@@ -80,7 +80,7 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid var(--ground); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a4150; }
 
-img, svg { max-width: 100%; display: block; }
+img, svg { max-width: 100%; height: auto; display: block; }
 a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:hover { color: var(--ink); }
 
@@ -169,7 +169,7 @@ h1, h2, h3 {
   box-shadow: var(--shadow-lift);
   background: var(--card);
 }
-.shot img { width: 100%; }
+.shot img { width: 100%; height: auto; }
 .shot-note {
   display: flex; flex-wrap: wrap; gap: 6px 18px; max-width: 90ch;
   margin: 14px 2px 0; color: var(--ink-soft); font-size: 0.8125rem;
