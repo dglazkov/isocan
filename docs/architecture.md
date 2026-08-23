@@ -44,19 +44,37 @@ in the same change.
 | observability | Cloud Logging + Error Reporting, uptime check on `/api/healthz` — see the note below |
 | infra as code | `infra/` — small idempotent gcloud scripts; Terraform waits for a second operator |
 
-**Why the health check is `/api/healthz` and not `/healthz`.** A hosted
-home does not get to answer `/healthz`: Google's frontend claims that
-exact path and returns a branded 404 of its own, and the container's
-request log never shows the request at all. Measured on the dev home —
-`/` 200, an unknown path 200 through our SPA fallback, `/healthz/` with
-a trailing slash 200, `/HEALTHZ` 200, `/healthz` 404. So a check on
-`/healthz` would be watching Google's frontend rather than the daemon:
-green whether or not the home is up, and unable to fail for the right
-reason. The daemon answers `/api/healthz` from the same handler with
-the same body, on a prefix Google forwards. `/healthz` is unchanged and
-stays the localhost path — the CLI's whole daemon lifecycle probes it
-against 127.0.0.1, where no frontend is in the way. This is a
-constraint of the platform written down, not a taste in URLs.
+**Why the health check is `/api/healthz` and not `/healthz`.** Two
+reasons were given for this, one of them has since stopped being true,
+and the surviving one is the better of the pair — so both are kept, in
+order, rather than the dead one being quietly deleted.
+
+The reason that has expired: **Google's frontend used to claim the exact
+path `/healthz`.** Measured on the dev home 2026-08-22 — `/` 200, an
+unknown path 200 through our SPA fallback, `/healthz/` 200, `/HEALTHZ`
+200, and `/healthz` a branded 404 that never appeared in the container's
+request log. Re-measured 2026-08-23 against the same home, and it is
+gone: `/healthz` now returns **the daemon's own body**, `pid` and
+`root: /app` and all, byte-identical to `/api/healthz`. What changed —
+Google's frontend, or something in the load balancer between the two
+measurements — is not established, and that is the point: it is not
+ours to control and it moved under us inside a day.
+
+The reason that stands, and always did the real work: **`/api/` is the
+one prefix the SPA fallback does not answer with a cheerful 200.** The
+same re-measurement makes this sharper than before — `/healthz/` and
+`/HEALTHZ` return 1001 bytes of `index.html`, not health JSON, so a
+check pointed at a near-miss path is green forever and cannot fail for
+the right reason. If the handler ever vanishes, `/api/healthz` goes red;
+a check on some bare `/health` gets the app shell and never does. That
+argument never depended on the frontend at all.
+
+`/healthz` is unchanged and stays the localhost path — the CLI's whole
+daemon lifecycle probes it against 127.0.0.1, where no frontend is in
+the way. `healthPath()` picking `/api/healthz` for a remote address is
+therefore **defensive rather than necessary today**, and worth keeping
+on those terms: the behaviour it guards against existed, went away
+without notice, and can come back the same way.
 
 Two roads not taken, each in one line. **A VM with a persistent disk**
 would run today's daemon unchanged, but buys OS care, a deploy story,
