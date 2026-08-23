@@ -66,6 +66,13 @@ in August measured, and writes its findings back there as a dated page.
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
 
+## Journeys
+
+`docs/multiuser-journey.md` and `docs/atlas-journey.md` are written as scenes
+and held as the ideal: mechanism appears only where a scene forced it. Each
+ends with "what the scenes force" — the load-bearing minimum — which is the
+part to read before building anything they describe.
+
 ## Evals
 
 `docs/evals.md` is the staged plan for finding out whether isocan is any good
