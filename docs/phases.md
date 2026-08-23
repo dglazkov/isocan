@@ -46,12 +46,22 @@ the map edits [architecture.md](architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
+**One correction to that, learned 2026-08-23:** the numbers stopped
+being positions some time ago. Roughly fifty comments in the code name a
+phase by number — "phase 9's sweep", "phase 13's offline birth" — as
+forward references to work not yet done, and renumbering would silently
+falsify every one of them. So a phase inserted into the middle gets a
+**fractional number** rather than a renumbering, and this list is read
+in the order it is written rather than by counting. Names are the
+identity, numbers are the address, and the address is load-bearing.
 
 **Where we are: Phase 6 is closed and verified against dev.isocan.io —
 Phase 7, the share (Scenes 1–4), is next, and it inherits one debt named
 in phase 6's findings: the admission scope on `GET /api/projects`, which
 today would have a replica of a multi-tenant home mirror strangers'
-canvases onto a laptop.** This line moves as phases close; a clean
+canvases onto a laptop. Then phase 7.5, the home you answer to, which
+exists because walking Scene 0 by hand cost three environment variables
+and a scratch directory.** This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -924,6 +934,67 @@ name.
 
 **Findings:** *none yet.*
 
+## Phase 7.5 — The home you answer to
+
+**Status: NOT STARTED.**
+
+**Why this exists, since it was not in the original walk.** Phase 6
+shipped replicas, and then Dimitri tried to walk Scene 0 with them. It
+took three exported environment variables, a scratch `ISOCAN_HOME`, a
+hand-started daemon in its own terminal, and a URL read out of a marker
+file. None of that is a missing feature in the journey — it is a missing
+**verb**. `config.json` has had a `home` key since phase 6 and
+`resolveHomeUrl` has always read it; nothing was ever able to write it,
+so the only ways to become a replica are an environment variable and a
+text editor. The scratch home was not incidental either: setting the
+variable globally would have demoted the working daemon and stopped it
+serving pages, so the temp directory was self-defence against the
+configuration model.
+
+This is **not only dev ergonomics.** Commitment 2 says `isocan serve` on
+a rented VM is a complete home; anyone pointing their daemon at their
+own innkeeper's home needs this verb, and today they would have to be
+told about an environment variable. House rule 2 says an agent should
+not need a pointer for an intent, and "answer to this home" is an
+intent.
+
+**Work:** `isocan home` — show the current role, set a home, clear it —
+writing `config.json` and restarting the daemon so the change takes.
+`npm run dev:replica` for the repo's own use: a replica against dev on a
+fixed port with its own `ISOCAN_HOME`, because working on the web UI
+needs a local home and working on the home needs a replica, and that is
+inherent rather than a bug (the one-origin rule means a replica cannot
+serve pages — [offline-birth.md](design/offline-birth.md) already
+accepts it). `isocan setup` finishing the walk when a home is
+configured, printing the canvas's address at the home rather than
+leaving it to be read out of a marker file. The agent guide and the
+README told about all of it.
+
+**Not a reversal, and the comment must say so.** Phase 6 deliberately
+refused a `--home` *flag*, on the same grounds as `ISOCAN_BIND` and
+`ISOCAN_STORE`: "innkeeper configuration, not a per-invocation choice an
+agent should be able to reach for." A verb that writes persistent
+configuration is a different thing from a per-command override, and the
+original reasoning survives intact. Say that where somebody would
+otherwise read this as phase 6 being undone.
+
+**The default address stays deferred to phase 14, and this phase
+sharpens why.** A CLI that shipped with `isocan.io` as its default would
+turn `isocan serve` in this checkout into a replica of production.
+Opt-in is right for us; opt-out is right for a shipped product; the flip
+belongs with the promotion gesture, where it is one line.
+
+**Outcome:** Pointing a daemon at a home is one command. The Scene 0
+walk against dev needs no environment variables and no scratch
+directories.
+
+**Proof:** The walk played with a clean shell — no `ISOCAN_*` exported —
+against dev.isocan.io. The baseline is known and painful: phase 7's own
+proof was played with the full dance, so this phase's proof is that same
+walk with the exports deleted.
+
+**Findings:** *none yet.*
+
 ## Phase 8 — Escalation (Scene 5)
 
 **Status: NOT STARTED.**
@@ -1043,7 +1114,20 @@ while the roster re-forms.
 
 **Work:** Stand up `isocan-prod`; the domain; the `release`-branch
 promotion; the front page — the home origin wearing Scene 0's three
-steps.
+steps; and flipping the default home address from unset to isocan.io
+(phase 7.5 says why it is unset until here).
+
+**This phase bundles two things, noticed 2026-08-23, and may split.**
+Provisioning prod is genuinely last. The **front door** — the front page
+and the default address, the two things that make the product enterable
+by somebody who has read nothing — has no dependency on prod and could
+run against dev. Until it exists, every Proof from phase 6 onward is
+played by somebody who already knows the environment variables, which is
+how the phase 7.5 gap stayed invisible until a person tried the walk.
+**Scene 0 is not a phase; it is a thread through phases 6, 10 and 14** —
+which is why phase 6 could only claim its *shape* was true while this
+phase claims it "plays for real". Left as one phase for now because
+there are no strangers yet; split it the moment there are.
 
 **Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
 steps, a canvas born at its hosted home.
