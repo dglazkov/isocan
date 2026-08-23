@@ -295,6 +295,178 @@ describe("daemon HTTP", () => {
     expect(snapshot.canvas.items["itm_1"].x).toBe(5);
   });
 
+  /**
+   * Two actors doing the same thing at the same moment.
+   *
+   * Everything above interleaves actors by writing one op, awaiting it, and
+   * writing the next — which is a story about two people, told one at a time.
+   * The single-writer queue is the thing that makes it safe to tell it that
+   * way, and nothing was asking the queue to prove it. These fire both actors
+   * at once and check the two properties that undo depends on: the log has
+   * ONE order, and each actor's stack has only their own ops in it.
+   */
+  it("two actors writing at once get one order, and two separate stacks", async () => {
+    await createProjectWithItem();
+    await op({
+      type: "item.add",
+      itemId: "itm_2",
+      version: nv("ver_2"),
+      width: 50,
+      height: 50,
+      placement: { x: 900, y: 900 },
+    });
+
+    const submissions = [];
+    for (let i = 0; i < 10; i += 1) {
+      submissions.push(op({ type: "item.move", itemId: "itm_1", x: i, y: i }, "prj_1", alice));
+      submissions.push(op({ type: "item.move", itemId: "itm_2", x: 100 + i, y: 100 + i }, "prj_1", bob));
+    }
+    const landed = await Promise.all(submissions);
+
+    expect(landed.every((r) => r.status === 200)).toBe(true);
+    const seqs = landed.map((r) => r.json.seq);
+    // One order, no gaps, no seq issued twice — the property a log has to have
+    // before "undo my last op" means anything.
+    expect(new Set(seqs).size).toBe(seqs.length);
+    expect([...seqs].sort((a, b) => a - b)).toEqual(seqs.slice().sort((a, b) => a - b));
+    const log: LogEntry[] = await get("/api/projects/prj_1/oplog?since=0");
+    const all = log.map((e) => e.seq);
+    expect(all).toEqual([...all].sort((a, b) => a - b));
+    expect(new Set(all).size).toBe(all.length);
+
+    // Now both undo at the same instant. Each reverses one of their OWN moves.
+    const [undoA, undoB] = await Promise.all([
+      post("/api/projects/prj_1/undo", { actor: alice }),
+      post("/api/projects/prj_1/undo", { actor: bob }),
+    ]);
+    expect(undoA.status).toBe(200);
+    expect(undoB.status).toBe(200);
+    expect(undoA.json.envelope.op.itemId).toBe("itm_1");
+    expect(undoB.json.envelope.op.itemId).toBe("itm_2");
+
+    // And each undo landed on an op its own actor wrote.
+    const entries: LogEntry[] = await get("/api/projects/prj_1/oplog?since=0");
+    const owner = new Map(entries.map((e) => [e.seq, e.envelope.actor.id]));
+    expect(owner.get(undoA.json.cause.targetSeq)).toBe(alice.id);
+    expect(owner.get(undoB.json.cause.targetSeq)).toBe(bob.id);
+  });
+
+  /**
+   * Undo across an operation that touched several items, while somebody else
+   * was touching them too. `repairInverse` shrinks a batch to its surviving
+   * members; the covered case was items.move. This is the delete/restore
+   * pair, and the part that matters is the NEGATIVE half — the member another
+   * actor already brought back must be left exactly where they put it, not
+   * quietly re-restored on top of their work.
+   */
+  it("undoing a multi-item delete restores only the members still in the trash", async () => {
+    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    for (const id of ["itm_1", "itm_2", "itm_3"]) {
+      await op({
+        type: "item.add",
+        itemId: id,
+        version: nv(`ver_${id}`),
+        width: 10,
+        height: 10,
+        placement: { x: 0, y: 0 },
+      });
+    }
+    await op({ type: "items.delete", itemIds: ["itm_1", "itm_2", "itm_3"] }, "prj_1", alice);
+
+    // Bob brings one back himself and puts it somewhere of his own choosing.
+    await op({ type: "item.restore", itemId: "itm_2" }, "prj_1", bob);
+    await op({ type: "item.move", itemId: "itm_2", x: 777, y: 777 }, "prj_1", bob);
+
+    const undo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(undo.status).toBe(200);
+    expect(undo.json.envelope.op).toEqual({ type: "items.restore", itemIds: ["itm_1", "itm_3"] });
+
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(Object.keys(snapshot.canvas.items).sort()).toEqual(["itm_1", "itm_2", "itm_3"]);
+    expect(snapshot.canvas.trash).toEqual([]);
+    // Bob's move survived Alice's undo — she restored what she deleted, and
+    // touched nothing else.
+    expect(snapshot.canvas.items["itm_2"].x).toBe(777);
+    expect(snapshot.canvas.items["itm_2"].updatedBy).toEqual(bob);
+  });
+
+  it("a batch undo whose every member is gone is skipped, not half-applied", async () => {
+    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    for (const id of ["itm_1", "itm_2"]) {
+      await op({
+        type: "item.add",
+        itemId: id,
+        version: nv(`ver_${id}`),
+        width: 10,
+        height: 10,
+        placement: { x: 1, y: 1 },
+      });
+    }
+    await op(
+      {
+        type: "items.move",
+        moves: [
+          { itemId: "itm_1", x: 50, y: 50 },
+          { itemId: "itm_2", x: 60, y: 60 },
+        ],
+      },
+      "prj_1",
+      alice,
+    );
+    // Bob takes BOTH members away. Nothing of Alice's group move survives.
+    await op({ type: "items.delete", itemIds: ["itm_1", "itm_2"] }, "prj_1", bob);
+
+    // Her next candidate is the item.add for itm_2, whose inverse is a delete
+    // of an item already in the trash — also skipped — and so on down to the
+    // adds, which cannot apply either. She runs out rather than half-applying.
+    const undo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(undo.status).toBe(409);
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    expect(Object.keys(snapshot.canvas.items)).toEqual([]);
+    expect(snapshot.canvas.trash).toHaveLength(2);
+  });
+
+  /**
+   * Deliberately generous: the cost here is a hundred real HTTP `item.add`s
+   * through a single-writer queue that fsyncs the oplog each time, which is
+   * seconds on an idle machine and several more when fifteen other test files
+   * are doing the same thing. The first version of this ran 200 items on the
+   * default 5s timeout and failed in 3 of 3 full-suite runs while passing
+   * alone — a flake this persona introduced and then had to find. A scale
+   * test's timeout should be set from what it costs, not left at the default.
+   */
+  it("a hundred-item move is one op and one undo step", { timeout: 30_000 }, async () => {
+    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    const ids = Array.from({ length: 100 }, (_, i) => `itm_${i}`);
+    await Promise.all(
+      ids.map((id, i) =>
+        op({
+          type: "item.add",
+          itemId: id,
+          version: nv(`ver_${i}`),
+          width: 10,
+          height: 10,
+          placement: { x: i, y: i },
+        }),
+      ),
+    );
+    const moved = await op(
+      { type: "items.move", moves: ids.map((id, i) => ({ itemId: id, x: 5000 + i, y: 5000 })) },
+      "prj_1",
+      alice,
+    );
+    expect(moved.status).toBe(200);
+
+    const undo = await post("/api/projects/prj_1/undo", { actor: alice });
+    expect(undo.status).toBe(200);
+    expect(undo.json.cause.targetSeq).toBe(moved.json.seq);
+
+    const snapshot = await get("/api/projects/prj_1/canvas");
+    for (const [i, id] of ids.entries()) {
+      expect(snapshot.canvas.items[id].x, `${id} did not come back`).toBe(i);
+    }
+  });
+
   it("undo state survives a daemon restart (rebuilt from oplog)", async () => {
     await createProjectWithItem();
     await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 });

@@ -18,7 +18,7 @@ import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
-import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
 const DRAG_SLOP = 4;
@@ -556,7 +556,7 @@ function useWorkingSession(
     // working" over the item, which is every agent that ever started a session
     // without one. The fallback the type documents is the actor's name, and
     // the name that reaches a rename is the registry's.
-    const name = session.label ?? actorNameIn(s.actorNames, session.actor);
+    const name = sessionName(s.actorNames, session);
     return `${session.actor.id}\u0000${name}\u0000${session.status ?? ""}`;
   });
   const [held, setHeld] = useState<string | null>(null);
