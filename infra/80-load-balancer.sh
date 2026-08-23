@@ -116,17 +116,24 @@ else
   # start. Phase 5's Work carries the follow-up: `no-store` on the shell,
   # `immutable` on the hashed asset filenames vite already emits, at which
   # point this backend caches exactly the right things and nothing else.
+  # NO --timeout HERE, and this is measured rather than inferred. Google
+  # documents the backend-service timeout as having no effect for serverless
+  # NEGs; what it actually does is REFUSE. Setting it succeeds at create time
+  # (nothing is attached yet, so nothing validates) and then `add-backend`
+  # fails with "Timeout sec is not supported for a backend service with
+  # Serverless network endpoint groups" — leaving a backend service that
+  # exists, is misconfigured, and cannot be completed. So the socket lifetime
+  # is Cloud Run's --timeout=3600s and ONLY that, which was always the one
+  # that governed.
   gcloud compute backend-services create "${BACKEND_NAME}" \
     --project="${PROJECT_ID}" \
     --global \
     --load-balancing-scheme=EXTERNAL_MANAGED \
     --enable-cdn \
-    --cache-mode=USE_ORIGIN_HEADERS \
-    --timeout="${REQUEST_TIMEOUT}" >/dev/null
+    --cache-mode=USE_ORIGIN_HEADERS >/dev/null
   made "${BACKEND_NAME} (CDN on, cache-mode=USE_ORIGIN_HEADERS)"
-  note "the WebSocket lifetime is governed by Cloud Run's own --timeout=${REQUEST_TIMEOUT}s;"
-  note "the backend-service timeout is set to match, but for serverless NEGs Google"
-  note "documents it as having no effect. Both are an hour, so it does not matter which wins."
+  note "the WebSocket lifetime is Cloud Run's --timeout=${REQUEST_TIMEOUT}s — the backend"
+  note "service carries no timeout of its own, because a serverless NEG refuses one."
 fi
 
 if gcloud compute backend-services describe "${BACKEND_NAME}" --global \

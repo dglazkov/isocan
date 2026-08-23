@@ -69,6 +69,22 @@ make_bucket "${BACKUP_BUCKET}" "Firestore exports" 7d
 step "backup retention"
 # Exports pile up forever otherwise. 90 days of daily exports of a small
 # database is still measured in cents, and it is a real recovery window.
+#
+# AGE, and no versioning condition, and that pairing is load-bearing.
+# 90-backup-export.sh gives Firestore the BUCKET as the output prefix, so every
+# nightly run invents its own `2026-08-23T02:22:44_58412/` folder and no object
+# in this bucket is ever written twice. Two things follow:
+#
+#   - `age: 90` deletes whole exports, not pieces of them. Every object in one
+#     export is written inside the same minute, so a tree ages out with its
+#     siblings and the bucket never holds a half-swept restore point.
+#   - Object versioning here would be inert — nothing overwrites anything, so
+#     no noncurrent generation would ever exist for a `daysSinceNoncurrentTime`
+#     rule to sweep. It is not off by oversight; it is off because the shape of
+#     the thing being kept made it unnecessary. (It would also have been the
+#     WRONG tool: an export is a tree, versioning is per object, and a restore
+#     needs a set of generations that `importDocuments` cannot even address.
+#     90-backup-export.sh's header argues that in full.)
 LIFECYCLE_JSON="$(mktemp)"
 cat >"${LIFECYCLE_JSON}" <<'JSON'
 {
@@ -81,7 +97,7 @@ gcloud storage buckets update "gs://${BACKUP_BUCKET}" \
   --project="${PROJECT_ID}" \
   --lifecycle-file="${LIFECYCLE_JSON}" >/dev/null
 rm -f "${LIFECYCLE_JSON}"
-made "gs://${BACKUP_BUCKET}: delete objects older than 90 days"
+made "gs://${BACKUP_BUCKET}: delete objects older than 90 days (~90 nightly exports kept)"
 
 step "one rule that is deliberately NOT here"
 # `GcsObjects.append` composes `<key>.part-<ts>-<rand>` beside the archive and

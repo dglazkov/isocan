@@ -303,9 +303,13 @@ comes from the object store rather than from the client.
   schedule, authenticated by OIDC service identity, behind the door
   like every route.
 - **Backups** — Firestore point-in-time recovery on, plus a scheduled
-  export to the bucket; the bucket keeps a soft-delete window under
-  GC. And the best backup remains a thick replica — sovereignty by
-  replica is also disaster recovery, which is worth saying out loud.
+  export to the bucket. The export writes a **new timestamped folder
+  per run**, never a fixed one, so the bucket holds many restore points
+  and a bad export cannot land on top of a good one; a lifecycle rule
+  sweeps whole exports by age. The bucket also keeps a soft-delete
+  window under GC. And the best backup remains a thick replica —
+  sovereignty by replica is also disaster recovery, which is worth
+  saying out loud.
 
 ## Distance to the map
 

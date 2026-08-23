@@ -186,7 +186,53 @@ ISOCAN_ALERT_EMAIL=you@example.com ./infra/92-uptime-check.sh   # if you want ma
 
 `90-backup-export.sh` also **runs the export once immediately**, because a
 scheduled job nobody has ever watched run is a scheduled job that does not
-work.
+work. Re-running the script is safe and simply writes another export.
+
+**Every run lands in its own folder, and the missing path in the request is
+what makes that happen.** The job asks Firestore to export to
+`gs://isocan-io-dev-backups` — the bucket, with no folder after it — and the
+API's contract is that a bucket without a namespace path gets "a prefix
+generated based on the start time". So the bucket fills with
+`2026-08-23T02:22:44_58412/`, one complete, self-consistent tree per night,
+swept whole by the 90-day rule from `30-bucket.sh`. Ninety restore points, and
+a bad export cannot land on top of a good one, because it never writes where a
+good one already is.
+
+The earlier version of this job named a fixed folder, `.../firestore`, and that
+is a mistake worth recognising if you meet it elsewhere: it does not quietly
+overwrite. Firestore checks for `.overall_export_metadata` before it starts and
+refuses, so **the first run succeeds and every run after it returns HTTP 400**
+— `INVALID_ARGUMENT: Path already exists: /BUCKET/firestore/firestore.overall_export_metadata`
+— while the bucket goes on looking backed up. If a home was provisioned before
+this fix it still has that folder; it is a valid export and importable, the
+script points it out, and you can leave it or remove it once a new-shape run
+has landed:
+
+```bash
+gcloud storage rm --recursive gs://isocan-io-dev-backups/firestore --project=isocan-io-dev
+```
+
+To restore: `gcloud firestore import gs://isocan-io-dev-backups/FOLDER --project=isocan-io-dev`.
+
+**Object versioning is deliberately off on the backup bucket**, and this is the
+reason rather than an omission: an export is a tree of objects, versioning is
+per object, and `importDocuments` reads the live objects at a prefix and cannot
+address a noncurrent generation. Recovering a versioned export would mean
+hand-picking one generation per object — and since the number of `output-N`
+shards moves with the database, a smaller export would leave a larger one's
+tail shards live and the current tree would be a set that never existed. Under
+the per-run prefix nothing is overwritten at all, so versioning has nothing to
+retain and the ops account's `objectCreator` (create, but not replace) is
+exactly the right grant.
+
+**Firestore's own scheduled backups are not a rival to this and are not set
+up.** They keep a copy inside Firestore's control plane, restorable in one
+command into a database in the same project, retained up to 14 weeks, and they
+survive the source database being deleted — but they cannot be copied out,
+which is the whole property the export exists for. They are a sensible *third*
+rung to add later (PITR for "what did it look like at 14:32", the export for
+"give me the bytes", a managed backup for "put it back now"); they cost backup
+storage and buy speed of restore, which is what this home needs least.
 
 **The uptime check probes `/api/healthz`, not `/healthz`, and this is not a
 preference.** Google's frontend swallows the exact path `/healthz` and answers
