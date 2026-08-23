@@ -4,7 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 import type { FreeNameResponse, GrantResponse, GrantsResponse, LogEntry, Project } from "@isocan/core";
-import { FREE_NAME_ROUTE, grantRoute, grantsRoute, ISOCAN_NAMES, WS_NOT_ADMITTED } from "@isocan/core";
+import {
+  FREE_NAME_ROUTE,
+  grantRoute,
+  grantsRoute,
+  ISOCAN_NAMES,
+  projectsRoute,
+  WS_NOT_ADMITTED,
+} from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -373,6 +380,60 @@ describe("what a badge may see", () => {
     // not the grant, is what answers now.
     expect(
       ((await (await get(jordan, "/api/projects")).json()) as Project[]).map((pr) => pr.id),
+    ).toEqual([CANVAS]);
+  });
+
+  /**
+   * **Two callers, two questions, one route** — phase 8 stage 4. See
+   * `ProjectsReach`.
+   *
+   * The listing has always answered one question: "what could this badge walk
+   * into?" A replica polls it to decide what to MIRROR, and those are not the
+   * same question — a canvas whose link is merely on is one a person may open
+   * and one a laptop has no business carrying. The caller states which, and
+   * the wide answer stays the default, because narrowing it wholesale is the
+   * worse bug: on a solo home a canvas created from the CLI is admitted to the
+   * CLI's bearer badge while the person's tab carries a cookie badge that has
+   * never been in it, so a narrowed listing would hide a person's own canvas
+   * from their own front page.
+   */
+  it("narrows to admissions when the caller asks that question, and only then", async () => {
+    await makeCanvas();
+    const laptop = await stranger();
+
+    // The default: the link would admit this badge, so the canvas is listed.
+    // A person's front page, and what every client that says nothing gets —
+    // including a replica built before this parameter existed.
+    expect(
+      (((await (await get(laptop, "/api/projects")).json()) as Project[])).map((pr) => pr.id),
+    ).toEqual([CANVAS]);
+
+    // The replica's question. Same badge, same instant, same canvas, same live
+    // link grant — and nothing, because nobody has let this machine in.
+    expect(await (await get(laptop, projectsRoute("admitted"))).json()).toEqual([]);
+
+    // Asking did not admit it either: a listing is not an entering, and the
+    // narrow answer must not quietly become true by having been asked for.
+    expect((await daemon.desk.badge(laptop.badgeId))!.admissions).toEqual([]);
+
+    // Now let it in — the pass is the mechanism, and an admission is an
+    // admission however it was written. The narrow answer changes; the wide
+    // one does not, because it already said yes.
+    await daemon.desk.admit(laptop.badgeId, CANVAS, { root: "created" });
+    expect(
+      (((await (await get(laptop, projectsRoute("admitted"))).json()) as Project[])).map((pr) => pr.id),
+    ).toEqual([CANVAS]);
+
+    // A word that is not the narrowing word is the DEFAULT, not a silent
+    // narrowing and not an error. There is exactly one spelling of the
+    // parameter (`projectsRoute`), so a near-miss can only come from somebody
+    // hand-building the URL — and the safe way to be wrong about a listing is
+    // to show a person too much of their own home rather than too little.
+    const nobody = await stranger();
+    expect(
+      (((await (await get(nobody, "/api/projects?reach=admited")).json()) as Project[])).map(
+        (pr) => pr.id,
+      ),
     ).toEqual([CANVAS]);
   });
 });

@@ -2,8 +2,25 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Project } from "@isocan/core";
+import type {
+  CanvasSnapshotResponse,
+  LogEntry,
+  GrantsResponse,
+  MintPassResponse,
+  Operation,
+  PresenceSession,
+  Project,
+} from "@isocan/core";
+import {
+  grantRoute,
+  grantsRoute,
+  HOME_JOIN_ROUTE,
+  PASS_REDEEM_ROUTE,
+  passesRoute,
+  projectsRoute,
+} from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { bearerHeader, readBadge } from "../src/badge-store.ts";
 import * as p from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -158,8 +175,35 @@ async function birthAtA(): Promise<void> {
   });
 }
 
+/**
+ * **B is LET IN, which since phase 8 stage 4 is the only way it gets there.**
+ *
+ * Until that stage this helper did not exist and nothing stood in for it: B
+ * discovered the canvas by enumerating H, because the canvas's standing link
+ * grant would admit anybody and the home listed it to any badge that asked.
+ * That is discovery by enumeration — phase 7 named it the wrong primitive —
+ * and the same mechanism put a stranger's canvas on a laptop whenever a link
+ * happened to be on.
+ *
+ * So a replica now mirrors what it was let into, and being let in is a pass:
+ * minted at the home for this one canvas, redeemed through B's own daemon,
+ * which forwards it (the row belongs to the desk that answers the door) and
+ * comes back admitted. Every test below that waits for B to hold this canvas
+ * says so with this line, and the ones that do not are asserting the opposite.
+ *
+ * The admission-only form — no `actorId` — because B already speaks as Isaac
+ * and the identity half of a pass is Scene 5's, tested where it belongs.
+ */
+async function letBIn(): Promise<void> {
+  const minted = await post(H, passesRoute(CANVAS), {});
+  if (!minted.ok) throw new Error(`minting a pass at the home: ${await minted.text()}`);
+  const { token } = (await minted.json()) as MintPassResponse;
+  const redeemed = await post(B, PASS_REDEEM_ROUTE, { token });
+  if (!redeemed.ok) throw new Error(`redeeming that pass at B: ${await redeemed.text()}`);
+}
+
 describe("a canvas born on a replica is born at the home", () => {
-  it("exists at H, and reaches B", async () => {
+  it("exists at H, and reaches a B that was let in", async () => {
     await birthAtA();
 
     // At the home, because the write went there — not because anything
@@ -170,13 +214,43 @@ describe("a canvas born on a replica is born at the home", () => {
 
     // And at the OTHER replica, which never heard of it from anyone but H.
     // This is Scene 0's last line — "her laptop and her desktop show the same
-    // canvas" — with the two laptops being A and B.
+    // canvas" — with the two laptops being A and B, and Scene 5's pass as what
+    // makes the second one hers. See `letBIn`.
+    await letBIn();
     const seen = await until(
       () => projects(B),
       (list) => list.some((project) => project.id === CANVAS),
       "the canvas to reach B",
     );
     expect(seen.find((project) => project.id === CANVAS)!.title).toBe("Acme Sprint Board");
+  }, 20_000);
+
+  it("does NOT reach a B that was never let in, link grant or no link grant", async () => {
+    /**
+     * The regression phase 8 stage 4 exists to make impossible, asserted from
+     * the far side.
+     *
+     * This canvas carries the standing LINK grant every canvas is born with,
+     * and B's badge at the home can present the address any time it likes. It
+     * is still not B's canvas: nobody handed it to this machine. Before this
+     * stage the home listed it to B's badge anyway, B's sweep dialled it, and
+     * a second person's laptop started mirroring somebody else's work because
+     * a link happened to be on.
+     *
+     * A settled wait rather than one poll, because the failure this guards
+     * against is asynchronous: the sweep runs every 50ms in these fixtures, so
+     * a bare assertion would pass against the old behaviour purely by being
+     * fast. Two seconds is forty sweeps.
+     */
+    await birthAtA();
+    await until(() => canvas(A), (snap) => snap.lastSeq === 2, "A to settle");
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    expect(await B.daemon.engine.listProjects()).toEqual([]);
+    expect(await projects(B)).toEqual([]);
+    // And the home is not hiding it — it is there, and A holds it. What
+    // changed is only what B is told when it asks what it carries.
+    expect((await projects(H)).map((project) => project.id)).toEqual([CANVAS]);
   }, 20_000);
 
   it("carries the same seqs, in the same order, on the replica that was there", async () => {
@@ -221,6 +295,7 @@ describe("a canvas born on a replica is born at the home", () => {
      * it joined, never a claim to the whole history.
      */
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
     await op(A, priya, { type: "item.move", itemId: "itm_1", x: 10, y: 10 });
 
@@ -269,6 +344,7 @@ describe("a canvas born on a replica is born at the home", () => {
 
   it("puts an op written at A onto B", async () => {
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
 
     await op(A, priya, { type: "item.move", itemId: "itm_1", x: 42, y: 43 });
@@ -284,6 +360,7 @@ describe("a canvas born on a replica is born at the home", () => {
 
   it("lets each replica write, and orders both at the home", async () => {
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
 
     await op(A, priya, { type: "item.move", itemId: "itm_1", x: 1, y: 1 });
@@ -305,9 +382,173 @@ describe("a canvas born on a replica is born at the home", () => {
   }, 20_000);
 });
 
+/**
+ * **What a replica carries, and what keeps it carrying it.**
+ *
+ * Phase 8 stage 4 changed the answer to the first question from "everything
+ * its home will show it" to "what it was let into". These four are the
+ * properties that answer has to have to be worth shipping — each one measured
+ * against real daemons rather than reasoned about, which is the lesson phase 7
+ * wrote on this exact code.
+ */
+describe("what a replica carries", () => {
+  it("keeps a canvas it was let into across a restart, and catches up on what it missed", async () => {
+    /**
+     * An admission is desk state at the HOME, and a replica's badge is a
+     * durable row in its own `identity.json` — so neither half of "B was let
+     * in" lives in a process. This is the assertion that says so: B is
+     * restarted on the same directory, holds the canvas without being let in
+     * again, and takes the tail of what happened while it was down.
+     */
+    await birthAtA();
+    await letBIn();
+    await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
+
+    await B.daemon.close();
+    await op(A, priya, { type: "item.move", itemId: "itm_1", x: 77, y: 77 });
+    B = await node(await replica(bDir, H.base), bDir, isaac);
+
+    const back = await until(
+      () => canvas(B),
+      (snap) => snap.lastSeq === 3,
+      "B to come back and catch up",
+    );
+    expect(back.canvas.items["itm_1"]).toMatchObject({ x: 77, y: 77 });
+  }, 30_000);
+
+  it("keeps a canvas born HERE, for two independent reasons — and both are asserted", async () => {
+    /**
+     * The case the narrowing could plausibly have broken and did not, checked
+     * rather than argued, because "it should still work" is how phase 7's
+     * measured surprise happened.
+     *
+     * A canvas born on a replica survives on TWO legs, either of which would
+     * be enough:
+     *
+     * 1. **It is local.** `project.create` forwards to the home and the answer
+     *    lands in this machine's store, so the sweep's first line — what this
+     *    machine already holds — names it from the moment it exists. This is
+     *    also what makes "a replica whose home is down does not forget"
+     *    true, and the two are one line.
+     * 2. **The home admitted the badge that made it.** Creating a canvas is
+     *    the one provenance that is not "somebody let me in" (`{root:
+     *    "created"}`, `http.ts`'s bootstrap), and it is written onto the
+     *    daemon's badge AT THE HOME — the same badge the sweep asks with. So
+     *    the narrow listing names it too.
+     *
+     * Leg 2 is asserted directly, with the replica's own home badge, because
+     * it is the one a reader would doubt: it is invisible from this machine
+     * and it is what makes the canvas survive a store this daemon has thrown
+     * away.
+     */
+    await birthAtA();
+
+    const badge = await readBadge(aDir, H.base);
+    expect(badge, "A's daemon should hold a badge at the home").not.toBeNull();
+    const narrow = await fetch(`${H.base}${projectsRoute("admitted")}`, {
+      headers: bearerHeader(badge!),
+    });
+    expect(((await narrow.json()) as Project[]).map((project) => project.id)).toEqual([CANVAS]);
+    const admissions = (await H.daemon.desk.badge(badge!.badgeId))!.admissions;
+    expect(admissions.map((a) => a.provenance.root)).toContain("created");
+
+    // And leg 1: restarted on the same store, A holds it before any sweep has
+    // had a chance to run.
+    await A.daemon.close();
+    A = await node(await replica(aDir, H.base), aDir, priya);
+    expect((await A.daemon.engine.listProjects()).map((project) => project.id)).toEqual([CANVAS]);
+  }, 30_000);
+
+  it("does not forget what it holds when the home is unreachable", async () => {
+    /**
+     * The rule the sweep's own comment has carried since phase 6, kept true
+     * through a change that gave the sweep a different question to ask. A
+     * narrowed listing that a dead home cannot answer at all is exactly the
+     * shape that would quietly empty a laptop, and it must not: the home's
+     * answer is best-effort ON TOP OF what this machine already holds, never
+     * instead of it.
+     */
+    await birthAtA();
+    await letBIn();
+    await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
+
+    await H.daemon.close();
+    // Twenty poll intervals with every request to the home failing.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    expect((await projects(B)).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await canvas(B)).canvas.items["itm_1"]).toMatchObject({ x: 5, y: 6 });
+    expect((await projects(A)).map((project) => project.id)).toEqual([CANVAS]);
+  }, 30_000);
+});
+
+/**
+ * **Asking for one canvas by name** — the other half of narrowing the sweep,
+ * without which the narrowing would be a regression: a machine handed nothing
+ * but an ADDRESS (a cloned marker, a pass-less `isocan setup`) used to get its
+ * canvas because the home listed itself, and now has to say what it wants.
+ * `HOME_JOIN_ROUTE` carries the argument.
+ */
+describe("fetching one canvas from the home by name", () => {
+  it("brings it down when the home's door says yes, and only that one", async () => {
+    await birthAtA();
+    // A second canvas at the home that nobody handed to B. The join must not
+    // be a listing wearing a different hat.
+    await op(A, priya, { type: "project.create", projectId: "prj_other", title: "Other" }, null);
+    await until(() => projects(H), (list) => list.length === 2, "both canvases at H");
+
+    const asked = await post(B, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    expect(asked.status, await asked.clone().text()).toBe(200);
+    expect(((await asked.json()) as { project: Project }).project.title).toBe("Acme Sprint Board");
+
+    const held = await until(
+      () => B.daemon.engine.listProjects(),
+      (list) => list.length > 0,
+      "the asked-for canvas to land on B",
+    );
+    expect(held.map((project) => project.id)).toEqual([CANVAS]);
+    // Settle, then check again: the other canvas has a live link grant and is
+    // one poll away at all times. Being let into one room is not being handed
+    // the building.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect((await B.daemon.engine.listProjects()).map((project) => project.id)).toEqual([CANVAS]);
+  }, 30_000);
+
+  it("passes the home's refusal back, so a person is told rather than left watching an empty replica", async () => {
+    await birthAtA();
+    // The link off, and B was never let in by anything else: the door has
+    // nothing to admit it on.
+    const { grants } = (await get<GrantsResponse>(H, grantsRoute(CANVAS)));
+    const off = await fetch(`${H.base}${grantRoute(CANVAS, grants[0]!.id)}`, {
+      method: "DELETE",
+      headers: H.badge.headers,
+    });
+    expect(off.status).toBe(200);
+
+    const asked = await post(B, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    // The home's own status and code, unchanged by the hop — a replica is a
+    // pass-through, not a re-interpreter, and `not-admitted` is the one
+    // refusal whose remedy ("ask for a pass") depends on reading it exactly.
+    expect(asked.status).toBe(403);
+    expect(((await asked.json()) as { code: string }).code).toBe("not-admitted");
+    expect(await B.daemon.engine.listProjects()).toEqual([]);
+  }, 20_000);
+
+  it("is refused on a home, which has nowhere to fetch from", async () => {
+    // Answering 200 to "go and get this from upstream" when there is no
+    // upstream is the cheerful wrong answer this codebase keeps meeting. The
+    // code is what a speculative caller branches on: the CLI asks this of
+    // every unresolvable marker, and `not-a-replica` means "carry on".
+    const asked = await post(H, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    expect(asked.status).toBe(409);
+    expect(((await asked.json()) as { code: string }).code).toBe("not-a-replica");
+  }, 20_000);
+});
+
 describe("the lid close", () => {
   it("resumes from the seq it holds, and takes the tail rather than a snapshot", async () => {
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
 
     // The lid shuts: A's connection to H dies with the daemon.
@@ -350,6 +591,7 @@ describe("the lid close", () => {
     // of this canvas, so `since=0` is the honest cursor and a snapshot is the
     // only possible answer.
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
     expect(B.daemon.home!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
     // Adopted whole: state, title, and the home's lastSeq.
@@ -414,6 +656,7 @@ describe("what a replica will and will not do on its own", () => {
 describe("presence, carried both ways and written nowhere", () => {
   it("puts a replica's face on the home and on the other replica", async () => {
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
 
     const session = (await (
@@ -464,6 +707,7 @@ describe("presence, carried both ways and written nowhere", () => {
 
   it("takes the face down when the connection dies", async () => {
     await birthAtA();
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
     await (await post(A, `/api/projects/${CANVAS}/sessions`, { actor: priya })).json();
     await until(
@@ -514,6 +758,7 @@ describe("blobs follow the ops that name them", () => {
 
     // …and on B, which has never held these bytes: an op that named a hash
     // nobody else could resolve would replicate a list of broken items.
+    await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to catch up");
     const fromB = await fetch(`${B.base}/api/projects/${CANVAS}/blobs/${blob.blobHash}`, {
       headers: B.badge.headers,

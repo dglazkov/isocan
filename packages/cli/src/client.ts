@@ -15,6 +15,8 @@ import type {
   GrantResponse,
   GrantsResponse,
   GrantSubject,
+  JoinCanvasRequest,
+  JoinCanvasResponse,
   LogEntry,
   MintPassResponse,
   Operation,
@@ -34,6 +36,7 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  HOME_JOIN_ROUTE,
   PASS_REDEEM_ROUTE,
   passesRoute,
 } from "@isocan/core";
@@ -354,6 +357,22 @@ export class DaemonClient {
    */
   redeemPass(token: string): Promise<RedeemPassResponse> {
     return this.request("POST", PASS_REDEEM_ROUTE, { token });
+  }
+
+  /**
+   * Ask this daemon to fetch one canvas from its home — the arrival that
+   * carries an ADDRESS and no admission (a cloned marker, a pass-less
+   * `setup`). `HOME_JOIN_ROUTE` in core carries the reasoning.
+   *
+   * Refuses `not-a-replica` (409) on a home, which is a fine answer to get:
+   * callers that ask speculatively — binding resolution does — carry on and
+   * report whatever they were going to report anyway.
+   */
+  async joinFromHome(projectId: string): Promise<Project> {
+    const { project } = await this.request<JoinCanvasResponse>("POST", HOME_JOIN_ROUTE, {
+      projectId,
+    } satisfies JoinCanvasRequest);
+    return project;
   }
 
   snapshot(projectId: string): Promise<CanvasSnapshotResponse> {

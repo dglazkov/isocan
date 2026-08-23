@@ -596,6 +596,21 @@ describe("on a replica", () => {
       // what makes it closable — by enrolling that machine, which is exactly
       // the flow the test above plays.
       await cli.speakAs(nico, "cli:nico");
+      /**
+       * The machine is ENROLLED before it can mint anything, which since phase
+       * 8 stage 4 is the only way a replica comes to hold a canvas at all: it
+       * mirrors what it was let into, and nothing had let this one in. (The
+       * link grant is still on here — that used to be enough, by way of the
+       * home listing itself to any badge that asked, and it deliberately is
+       * not any more.)
+       */
+      const admission = await body<MintPassResponse>(await mint(owner));
+      const joined = await fetch(`${replicaBase}${PASS_REDEEM_ROUTE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cli.headers },
+        body: JSON.stringify({ token: admission.token }),
+      });
+      expect(joined.status, await joined.clone().text()).toBe(200);
       await waitFor(async () => {
         const res = await fetch(`${replicaBase}/api/projects/${CANVAS}/canvas`, { headers: cli.headers });
         return res.status === 200;

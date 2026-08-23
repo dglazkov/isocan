@@ -200,11 +200,28 @@ sequenceDiagram
       T->>H: mint a pass (carries B₂)
       H-->>T: pass p — single-use, short-lived,<br/>remembers B₂'s actor + admissions
       T-->>D: setup command with #p<br/>(copy button → terminal — the only hop outside the home)
-      D->>H: redeem pass p
-      H-->>D: badge B₃ {admissions: [7f3a…], claims: [jordan]}
+      D->>H: knock at the door (no badge yet)
+      H-->>D: badge B₃ — born knowing nothing
+      D->>H: redeem pass p (carries B₃)
+      H-->>D: B₃ {admissions: [7f3a…], claims: [jordan]}
       Note over H: p is dead. B₃ is durable —<br/>two badges, one actor: Jordan's tab and her daemon
       D->>H: reconnects for months (bearer B₃)
   ```
+
+  **Built in phase 8 with the minting one step to the left**, and the
+  difference is worth stating because this diagram used to draw it the
+  other way. Redemption ENDOWS THE BADGE THE CALLER ALREADY PRESENTS
+  rather than minting a fresh one in its reply. A browser — the surface
+  the dialog's own copy button serves — holds a cookie badge before it
+  can ask for anything, and the door deliberately never returns a
+  cookie's secret in a body (that is the whole of `HttpOnly`), so
+  "the reply carries a new badge" is a shape a browser cannot receive;
+  what it would mean there is re-setting the one cookie and dropping its
+  admissions on the floor. Every surface already knocks on the door the
+  moment it is 401'd, so a caller with no badge has a well-trodden way to
+  get one first. What this section is actually about is untouched: **a
+  badge that arrived knowing nothing leaves knowing its person**, and
+  badges still "differ only in dowry" — only who did the minting moved.
 - **Bootstrap (8)** stops being special — but note it starts in a
   *terminal*, not a browser. `npx skills add` never touches the home; the
   home's first caller is setup, run by Priya's agent, arriving badge-less
@@ -324,6 +341,15 @@ flowchart TD
     D -- "none of these" --> REF["refused — the door offers the attesters:<br/>verify an email, connect GitHub"]
     ADD --> OK
 ```
+
+**The pass branch is a route, not a test the door runs** — phase 8 built
+it as `POST /api/passes/redeem`, which spends the row and writes the
+admission itself. Drawn here as a branch because it belongs in the
+picture of "how a badge comes to be admitted", but a pass is redeemed
+ONCE at a moment of its own: testing it on every arrival would mean
+carrying a single-use credential on every request, which is a
+contradiction, or a desk lookup per unadmitted arrival for a row that is
+almost never there.
 
 One subtlety the diagram bakes in: `isocan open` appends a pass minted by
 her daemon's badge — Scene 5's outward flow, pointed the other way. Under

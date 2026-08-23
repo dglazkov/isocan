@@ -11,6 +11,8 @@ import type {
   Grant,
   GrantResponse,
   GrantsResponse,
+  JoinCanvasRequest,
+  JoinCanvasResponse,
   MintPassRequest,
   MintPassResponse,
   Pass,
@@ -29,12 +31,14 @@ import {
   FILENAME_HEADER,
   FREE_NAME_ROUTE,
   grantSubjectRefusal,
+  HOME_JOIN_ROUTE,
   isLive,
   newId,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
   PASS_REDEEM_ROUTE,
+  PROJECTS_REACH_PARAM,
   UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
@@ -566,43 +570,55 @@ export function registerRoutes(
   });
 
   /**
-   * The canvases this badge may see — phase 6's inherited debt, paid as far
-   * as this phase can honestly pay it.
+   * The canvases this badge may see — phase 6's inherited debt, and phase 8
+   * stage 4 paying the rest of it.
    *
    * Phase 6 found this route home-wide and named the consequence: "the moment
    * a home has two members a replica pulls down canvases it was never
    * admitted to", because `HomeLink.sweep` polls exactly this list and dials
-   * everything in it. The narrowing is the DOOR'S OWN TEST, asked per canvas:
-   * a badge sees what it is admitted to, plus what a grant would admit it to.
+   * everything in it. Phase 7 narrowed it to the DOOR'S OWN TEST, asked per
+   * canvas — a badge sees what it is admitted to, plus what a grant would
+   * admit it to — and recorded why it could not go further: a fresh replica's
+   * badge has no admissions, so narrowing to admissions alone left it
+   * discovering nothing at all. That was measured, not reasoned.
    *
-   * **What that closes, and what it does not.** A canvas whose link grant has
-   * been revoked drops out of every unadmitted badge's list immediately — a
-   * stranger's replica stops mirroring it, which is the gesture "turn off the
-   * link" is supposed to perform. A canvas whose link is ON is still listed
-   * to anyone, and that is not a bug in this route: a link grant says "anyone
-   * presenting the address may enter", and with every canvas born carrying
-   * one, "the ones you may enter" IS the home. Closing that last gap needs a
-   * grant that is about a person rather than a link (`email:`, phase 9), or a
-   * pass-enrolled second machine that inherits its household's admissions
-   * (phase 8) — and it must not be closed by narrowing to admissions alone
-   * TODAY, because a fresh replica's badge has no admissions and would
-   * discover nothing at all: Scene 0's multi-device beat, and phase 6's whole
-   * proof, run through this list. Measured, not assumed — see the phase's
-   * findings.
+   * **What changed:** the pass. Redeeming one writes an admission onto the
+   * redeeming badge (`passes.ts`), so a replica can now be TOLD what it holds
+   * instead of being SHOWN what exists. The narrowing that broke replicas in
+   * phase 7 is the right answer for a replica in phase 8.
    *
-   * The cost is one grant query per canvas the badge has not been in. It
-   * disappears after the first sweep, because dialling a canvas admits the
-   * badge to it, and an admitted canvas is answered from the badge record
-   * that the request already resolved.
+   * **But it is still the wrong answer for a browser**, which is why this
+   * route did not simply narrow. See {@link ProjectsReach}: two callers ask
+   * two questions here, the caller states which, and the wide answer stays
+   * the default so that a person opening `/` on their own home still sees the
+   * canvas their CLI just made under a different badge. A route that guessed
+   * from the carrier would be sniffing, which this codebase refuses.
+   *
+   * **What the narrow answer closes.** A replica asking `?reach=admitted`
+   * mirrors what it was let into and nothing else: a canvas whose link grant
+   * is merely ON no longer lands on a machine nobody handed it, which is the
+   * last gap phase 7 left open and could not close. The wide answer still
+   * lists a link-granted canvas to anyone, and that is not a bug in it — a
+   * link grant says "anyone presenting the address may enter", so for a
+   * person browsing their own home "the ones you may enter" IS the home.
+   *
+   * The cost of the wide answer is one grant query per canvas the badge has
+   * not been in; the narrow answer costs none at all, because admissions are
+   * on the badge record the request already resolved.
    */
   app.get("/api/projects", async (req) => {
     const badge = req.badge!;
+    const query = req.query as Record<string, string | undefined>;
+    // Anything other than the one narrowing word means the default. A typo
+    // must not silently hand a replica the wide list under a name that reads
+    // like the narrow one — it is spelled in exactly one place
+    // (`projectsRoute`) so that a caller cannot arrive here with a near-miss.
+    const narrow = query[PROJECTS_REACH_PARAM] === "admitted";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const visible: Project[] = [];
     for (const project of await engine.listProjects()) {
-      if (admitted.has(project.id) || (await admittingGrant(desk, project.id, badge))) {
-        visible.push(project);
-      }
+      if (admitted.has(project.id)) visible.push(project);
+      else if (!narrow && (await admittingGrant(desk, project.id, badge))) visible.push(project);
     }
     return visible;
   });
@@ -835,6 +851,45 @@ export function registerRoutes(
     const actor: Actor = { id: pass.actorId, name: names[pass.actorId] ?? "" };
     await engine.endowClaim(badge.badgeId, actor, pass.canvasId);
     return { canvasId: pass.canvasId, actor } satisfies RedeemPassResponse;
+  });
+
+  /**
+   * **"Fetch me this canvas from my home."** The other half of narrowing the
+   * replica's sweep to admissions — `HOME_JOIN_ROUTE` in core carries the
+   * argument for why it exists at all, and `HomeLink.join` what it does.
+   *
+   * A REPLICA-only route, refused on a home rather than quietly succeeding: a
+   * home has no home to fetch from, and answering 200 to "go get this from
+   * upstream" when there is no upstream is the cheerful wrong answer this
+   * codebase keeps meeting. The refusal is a 409 — the request is well formed
+   * and the daemon is simply not that kind of daemon — with a code a caller
+   * can branch on, because the CLI's binding resolution asks this
+   * speculatively and must be able to tell "not a replica" (fine, carry on)
+   * from "your home would not have you" (stop and say so).
+   *
+   * No local door test, on purpose. The canvas is by construction one this
+   * machine does not hold, so there is nothing local to be admitted to; the
+   * badge that gets tested is this DAEMON's badge at the home, by the home,
+   * which is the only desk with an opinion worth having about it. What a local
+   * caller can do with this route is ask its own machine to go and fetch a
+   * canvas whose id it already knows — and knowing the id is exactly what the
+   * link grant it will be tested against is about.
+   */
+  app.post(HOME_JOIN_ROUTE, async (req, reply) => {
+    const body = (req.body ?? {}) as Partial<JoinCanvasRequest>;
+    const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+    if (!projectId) {
+      return reply.status(400).send({ error: "projectId is required", code: "bad-request" });
+    }
+    if (!options.home) {
+      return reply.status(409).send({
+        error:
+          "this daemon is a home, not a replica — there is nowhere to fetch a canvas from. " +
+          "`isocan home <url>` points it at one.",
+        code: "not-a-replica",
+      });
+    }
+    return { project: await options.home.join(projectId) } satisfies JoinCanvasResponse;
   });
 
   app.get("/api/projects/:id/canvas", async (req) => {

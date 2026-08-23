@@ -377,6 +377,102 @@ export function healthPath(base: string): string {
   return LOOPBACK.test(host) ? "/healthz" : "/api/healthz";
 }
 
+// ---- the canvas listing: two callers, two questions, one route ----
+
+/**
+ * How far `GET /api/projects` may see — **stated by the caller**, never
+ * inferred from who is calling.
+ *
+ * Two clients poll this route and they are not asking the same thing:
+ *
+ * - A **browser** asks "what can I open from here?" That is a person looking
+ *   at their own home's front page, and the honest answer includes a canvas
+ *   they have never been in but could walk into by clicking it — which on a
+ *   solo home is most of them, because a canvas created from the CLI is
+ *   admitted to the CLI's BEARER badge while the tab carries a COOKIE badge
+ *   that has never been in it. Narrow this and the person opens `/` and
+ *   cannot see the canvas their own agent just made.
+ * - A **replica** asks "what am I supposed to be carrying?" A replica that
+ *   answers that with "everything a door would let me through" mirrors a
+ *   stranger's canvas onto a laptop because a link grant happened to be on —
+ *   which is discovery by enumeration, and phase 7 named it the wrong
+ *   primitive.
+ *
+ * So the route answers both and the CALLER says which. Sniffing the carrier
+ * would be the obvious shortcut and it is the one this codebase already
+ * refuses (`BadgeCarrier`: stated, never sniffed) — a bearer holder is a CLI
+ * as often as it is a replica, and the day a browser holds a bearer the
+ * sniff silently changes what a person can see.
+ *
+ * The vocabulary is deliberately the SAME two words `claimContext` already
+ * uses for the same distinction one layer down (`NameReach` in the server's
+ * engine), because it is the same distinction: what a badge has been let
+ * into, versus what the door would let it into if it knocked.
+ *
+ * - `"admissible"` — admitted ∪ what a grant would admit. **The default**,
+ *   which is what makes this change backwards compatible in the direction
+ *   that matters: an OLD replica polling a new home sends no parameter and
+ *   gets exactly the answer it always got. A NEW replica polling an old home
+ *   sends one that home ignores, and over-replicates the way it does today —
+ *   a known, pre-existing behaviour rather than a new failure.
+ * - `"admitted"` — admissions and nothing else. What a replica asks.
+ */
+export type ProjectsReach = "admitted" | "admissible";
+
+/** The query parameter carrying a {@link ProjectsReach}. One spelling, so a
+ * caller cannot get it subtly wrong and silently receive the wide answer. */
+export const PROJECTS_REACH_PARAM = "reach";
+
+/** `GET /api/projects`, optionally narrowed. Built here rather than spelled at
+ * each caller for `grantRoute`/`passesRoute`'s reason: the one place a route
+ * is written is the one place it can be got wrong. */
+export function projectsRoute(reach?: ProjectsReach): string {
+  return reach ? `/api/projects?${PROJECTS_REACH_PARAM}=${reach}` : "/api/projects";
+}
+
+// ---- joining one canvas at the home ----
+
+/**
+ * **"Fetch me this one canvas from my home."** POST `{projectId}` at a
+ * replica; the replica asks its home about that canvas with its own badge,
+ * and the home's door decides.
+ *
+ * This is the other half of narrowing the sweep, and without it the narrowing
+ * would be a regression rather than a fix. Two shipped, documented arrivals
+ * carry a canvas's ADDRESS but no admission:
+ *
+ * - a **cloned marker** — `.isocan/project.json` committed to git and checked
+ *   out on a second machine (Scene 0's multi-device beat, `second-device`), and
+ * - a **pass-less `isocan setup <address>`** — arriving thin from a terminal,
+ *   under the canvas's standing link grant.
+ *
+ * Both used to work by accident: the replica enumerated its home and the
+ * canvas was in the list, so the sweep dialled it. Enumeration is what phase 7
+ * named the wrong primitive, so the arrival has to say what it wants instead —
+ * which it can, because in both cases somebody handed this machine an id.
+ *
+ * **It is not a new privilege.** The home runs exactly the door test it always
+ * ran; the admission it writes is the same `{root: "grant"}` row that dialling
+ * the canvas would have written a second later. What changes is only that the
+ * home is asked about ONE canvas by name instead of being asked to list
+ * itself.
+ *
+ * Outside `/api/projects/` deliberately, for `PASS_REDEEM_ROUTE`'s reason: a
+ * route under that prefix runs the LOCAL door test, and the whole premise here
+ * is a canvas this machine does not have yet.
+ */
+export const HOME_JOIN_ROUTE = "/api/home/join";
+
+export interface JoinCanvasRequest {
+  projectId: string;
+}
+
+/** The home's own row for that canvas — title included, so a caller can say
+ * what arrived rather than echoing back the id it already had. */
+export interface JoinCanvasResponse {
+  project: Project;
+}
+
 export interface ApiError {
   error: string;
   code?: string;

@@ -215,6 +215,15 @@ you, and nothing else does:
   `comment list`, `wait` — is answered from this machine's copy, and the
   copy is kept current by a live connection. `isocan who` shows everyone on
   the canvas, including people connected to the home from elsewhere.
+- **This machine holds the canvases it was let into, not the home's.** A
+  replica does not mirror everything at its home — it carries what somebody
+  handed it: a canvas redeemed with a pass (`isocan setup <address>#<pass>`),
+  a canvas born in a directory here, and a canvas named by a
+  `.isocan/project.json` marker that came with a clone. So `isocan list` on
+  a replica is a short list on purpose, and a canvas at the home that is not
+  in it is not missing — nobody gave it to this machine. If you need one
+  here, ask the person for a pass; do not go looking for a way to enumerate
+  the home.
 
 `.isocan/project.json` records the home's address beside the canvas id. A
 directory whose marker names a DIFFERENT home than this daemon answers to is

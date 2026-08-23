@@ -1893,6 +1893,26 @@ program
             );
           }
           const root = standing?.root ?? (await bindableRoot(work, home));
+          /**
+           * **The pass-less arrival asks for its canvas by name.**
+           *
+           * With a pass, redemption already wrote the admission and the sweep
+           * has the canvas in `?reach=admitted` before this line runs. Without
+           * one, this machine holds nothing but the ADDRESS somebody pasted —
+           * and since phase 8 stage 4 a replica no longer enumerates its home,
+           * so nothing would ever offer it the canvas. `joinFromHome` is the
+           * arrival saying which canvas it means; the home's own door decides,
+           * exactly as it decided when the sweep used to dial it blind.
+           *
+           * Swallowed rather than thrown, because the report below already
+           * says what happened and says it better: a refusal here means the
+           * link is off, and `report.replicated` names the gesture that fixes
+           * that (ask for a pass). Turning a legible report into a stack trace
+           * would be a worse command.
+           */
+          if (!arrival.pass) {
+            await client.joinFromHome(arrival.projectId).catch(() => null);
+          }
           const landed = await canvasArrives(client, arrival.projectId, 15_000);
           if (root) {
             report.marker = await writeMarker(root, {

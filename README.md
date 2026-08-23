@@ -407,6 +407,12 @@ still answers your CLI instantly from a local copy, but every write it makes
 travels to the home and comes back, and the pages are served there, not here.
 That is the one-origin rule: people always enter through the home.
 
+A replica carries **the canvases it was let into**, not everything at its
+home: one you joined with a pass (`isocan setup <address>#<pass>`), one born
+in a directory here, one named by a `.isocan/project.json` that came with a
+clone. So a fresh replica starts empty on purpose, and a canvas at the home
+that is not on this machine is not missing — nobody has handed it over.
+
 ```sh
 isocan home                       # which of the two this daemon is, and
                                   # whether its home is answering
@@ -450,7 +456,9 @@ earlier run left behind; `isocan restart` does. From a checkout,
 ```sh
 npm run dev         # daemon + Vite with hot reload
 npm run dev:replica # a replica of dev, on :4442, with its OWN isocan home —
-                    # `-- <command>` runs any CLI command against it
+                    # `-- <command>` runs any CLI command against it. It starts
+                    # holding nothing: a replica carries the canvases it was let
+                    # into, so join one with `-- setup <address>#<pass>`
 npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages
