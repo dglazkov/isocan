@@ -1751,6 +1751,22 @@ verify order and convergence on a second profile.
 
 **Findings:**
 
+- **2026-08-24 — The unnamed flake has a name, and CI found it because CI is
+  slower than this machine.** Phase 8 recorded a single failing run whose
+  output was not captured, and noted the lesson had by then cost two phases.
+  Pushing phase 10 named it: `session-identity.test.ts` → *"presence beats
+  never cross"*, `Test timed out in 5000ms`, failing **three of six** CI runs
+  while every local run passed. The test makes **eight real CLI spawns** —
+  the most in the suite — against vitest's default 5s, which was always thin;
+  phase 10 tipped it over by adding three more test files for the workers to
+  run in parallel. It is fixed by saying how slow the test is allowed to be,
+  beside the reason it is slow, and that is **not** phase 7.5's forbidden
+  move: no signal is hidden, because the assertions are about roster state
+  and never about time. The lesson worth keeping is the one about
+  *where* it was found — a flake that hides from twenty local runs shows up
+  immediately on hardware that is merely slower, and CI had been reporting it
+  in plain language for hours while nobody read the failure.
+
 - **2026-08-24 — Runtime caching alone does not make a tab offline-capable,
   and only a browser could say so.** The service worker began as
   runtime-caching-only, argued well: no build step, no dependency, and the
