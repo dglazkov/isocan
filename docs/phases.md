@@ -78,13 +78,16 @@ identity, numbers are the address, and the address is load-bearing.
 
 **Where we are: Phase 10 is closed — a tab now survives its home, and every
 replica (tab or daemon) reconnects with the same seq-cursor gesture, which is
-journey rule 6 made physically true. Phase 11, the thin agent (Scene 6), is
-next.** One thing phase 10 surfaced that belongs to no phase yet: **the plane
-has two surfaces and only one of them works** — a tab keeps going offline, but
-a replica's CLI writes are still refused, and the two cannot see each other
-even on the same machine. See "Deliberately open" below. This line moves as
-phases close; a clean
-session starts by believing it.
+journey rule 6 made physically true. Resequenced 2026-08-24, by Dimitri:
+launch first, then features.** The written order now runs 10.3 → 10.5 → 13.5
+→ 13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as
+features added to a live isocan.io. The cut line is the journey's own built/unbuilt
+boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the entire
+unbuilt remainder, so launching first ships exactly the journey that exists.
+**Phase 10.3, one daemon many homes, is next.** The two-surfaces problem
+phase 10 surfaced now has an address — the airplane arc, phases 12.5 and
+12.7 — and its entry below stands until that design is chosen. This line
+moves as phases close; a clean session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -109,7 +112,10 @@ is how it goes wrong.
   should read the failure modes section first: this makes the local daemon
   a dependency of the browser experience, and a tab silently falling back
   to a *stale* daemon would be the cheerful-wrong-address bug in its worst
-  form yet.
+  form yet. **Scheduled 2026-08-24:** the airplane arc — phase 12.5 builds
+  the queue, phase 12.7 the bridge, both post-launch; this entry stands
+  until the full design is written and the browser hypotheses measured,
+  which gate 12.7.
 
 - **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
   **canvas** in every doc — 160 mentions against 15 of "project" — and a
@@ -135,6 +141,10 @@ is how it goes wrong.
   blank-page half is **not** open: a catch-all route that says the
   canvas is not here is phase 7's, because a share link is the one
   address strangers hand each other and its failure has to be legible.
+  **The rename settled too, 2026-08-24:** launch-first moves the
+  trigger — the first outside reader arrives at launch — so the rename
+  lands in phase 13.5, as its own mechanical commit, the last moment it
+  is free.
 - **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
   garbage collection at the hosted home, on purpose;
   [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
@@ -155,7 +165,9 @@ is how it goes wrong.
   does not depend on it. A home can run un-swept for a long time. It
   should not run un-swept forever, and whichever answer wins **redraws
   the [map](architecture.md)'s GC line**, which today promises a
-  mechanism the code cannot perform.
+  mechanism the code cannot perform. **Scheduled 2026-08-24:** the
+  in-process timer, in phase 13.7, with `POST /api/gc`; the entry stands
+  until the map's line is redrawn there.
 
 ## Standing lessons
 
@@ -506,7 +518,8 @@ connection must use that path, and the choice of path becomes a
 property of the address rather than a constant.
 
 **Outcome:** Scene 0's shape is true on dev (its front-page door is
-phase 14's): solo is the multiuser topology with one member, and
+phase 13.5's, since the 2026-08-24 resequencing): solo is the multiuser
+topology with one member, and
 multi-device falls out — plus the lid-close beat:
 tab and daemon each say "I have through N" and stream the tail.
 
@@ -750,7 +763,8 @@ resumption driven in Chrome.
 - **2026-08-23 — Decided, not fixed:** turning the link off can expel the
   person turning it off, because exempting the revoker leaves a badge rooted at
   a revoked grant. The consequence is stated before the click.
-- **2026-08-24 — Open, phase 14's:** the magic-link floor lands in **spam** —
+- **2026-08-24 — Open, phase 13.5's (was 14's before the resequencing):**
+  the magic-link floor lands in **spam** —
   Identity Platform sends from `…firebaseapp.com`, with no SPF or DKIM
   alignment to isocan.io. A sign-in link in spam is a person who cannot get in
   and cannot know why. The fix is a sender domain isocan owns, not code.
@@ -802,6 +816,189 @@ verify order and convergence on a second profile.
   number is a number — `isocan mv --to 900,900` writes `x: null, y: null` into
   the oplog forever.
 
+## Phase 10.3 — One daemon, many homes
+
+**Status: NOT STARTED.**
+
+**Why now, and why it was always latent.** Three pressures arrived at
+once, 2026-08-24. Dion's rig (phase 10.5) holds canvases born local
+beside work that should live at dev. Every developer wants to run prod
+isocan in one repo and dev isocan in another the moment prod exists —
+and phase 14's default-address flip is only *safe* if a shipped default
+cannot re-point existing work. And [innkeeper.md](design/innkeeper.md)'s
+second commitment — any innkeeper, a team running its own home — always
+implied a person working for two teams, which is two homes on one
+machine. All three are the same fact: **the home is a property of the
+canvas, not of the daemon** — which the marker has asserted since Scene
+0 (it carries the address) and the configuration model has contradicted
+since phase 6 (one `home` key, one connection, whole-daemon demotion —
+the thing phase 7.5's scratch-home dance was self-defence against).
+
+**Work:** The home-link generalizes from one connection to one per home
+named by a served canvas's marker: repo A's marker says isocan.io, repo
+B's says dev.isocan.io, and a marker with no address means this daemon
+is that canvas's home — Dion's old canvases, unchanged. Credentials
+become per-home (a badge is one home's recognition; the daemon carries
+one per home it dials). `isocan home` survives re-scoped, not reversed:
+it sets the **birth default** — where `isocan setup` births a canvas
+absent an explicit address — and reports, per canvas, who answers
+where; phase 7.5's refusal of a per-invocation `--home` flag stands,
+because a marker is committed configuration, not a flag. `npm run
+dev:replica`'s reason to exist mostly dissolves — one daemon can serve
+a local-home canvas and a dev replica side by side — and what remains
+of it is phase 10.5's doc's job to describe.
+
+**Outcome:** One machine, one daemon; canvases at prod, at dev, and at
+home itself, all served concurrently — and a shipped default address
+can never re-point existing work.
+
+**Proof:** Integration: one daemon serving three canvases — one
+homeless, one at each of two scratch homes — every write flowing to the
+right home and refused across lines. Then walked for real: a canvas at
+dev beside a locally-homed one, one machine, one daemon. (Prod's half
+of the walk waits for phase 14, by necessity.)
+
+**Findings:** *none yet.*
+
+## Phase 10.5 — Two doors into the repo
+
+**Status: NOT STARTED.**
+
+**Work:** `docs/development.md`, written for the two developers who
+actually exist rather than an abstract one. **Dion is not new** — he has
+been landing changes all along, from a rig built before multi-user: a
+local daemon serving pages the old way, canvases born local with no home
+in their markers. His door is the **upgrade**: what current main does to
+that rig — the daemon that stops serving pages to persons (phase 6
+closed that door behind him), `isocan home` and the replica/home duality
+(working on the web UI needs a local home, working on the home needs a
+replica — phase 7.5 called that inherent, and phase 10.3 softens it),
+and the fate of his pre-multiuser canvases: under 10.3's model they
+keep working, his daemon their home, unchanged — what stays phase 13's
+is moving them *to* a home (adoption) — and the doc says which is which
+plainly rather than cheerfully. **Paul is new** — clean machine, nothing
+installed. His door is the fresh entry: `git clone` to a running dev
+setup to a canvas of his own at dev.isocan.io. Both doors share the
+common matter: the clean-shell discipline (`isocan home`, never an
+exported `ISOCAN_*`), the conductor model as a human runs it, the hazard
+list (a working daemon pointed at dev by accident; `/api/healthz`, never
+`/healthz`), and one decided sentence about provisioning access — who
+holds GCP on `isocan-io-dev`, and whom a conductor's ⚑ asks. Beside the
+doc, one change: **the dev deploy gates on CI green** — Dion is already
+pushing, so deploy-on-push already means either developer can take down
+the other's dogfood home with a commit that compiles but does not boot,
+and CI is already the machine that catches what local timing hides.
+
+**Outcome:** The repo is enterable through either door by somebody who
+has read nothing but the doc, and dev.isocan.io survives having more
+than one developer pushing.
+
+**Proof:** Two walks, each proving what only its walker can — a proof is
+what was measured, and by whom. Paul, on a clean machine, goes from
+`git clone` to a canvas of his own at dev following only the doc. Dion,
+on his existing rig, follows only the upgrade section, ending with his
+daemon a well-behaved citizen of the new world and his old canvases'
+status stated by the doc rather than discovered. Every out-of-band
+question either of them asks is a finding. Both instruments are consumed
+on first use — after one walk each is an insider — which is why this
+phase runs now rather than letting the knowledge trickle in over Slack.
+
+**Findings:** *none yet.*
+
+## Phase 13.5 — The front door ⚑ provision
+
+**Status: NOT STARTED.**
+
+**Work:** The front page — the home origin wearing Scene 0's three
+steps, built and proven against dev; split out of phase 14 exactly as
+its old note predicted, now that launch-first makes the door the head of
+the train rather than the tail. Scene 0 is a thread through phases 6,
+10, this one and 14: phase 6 made its shape true, phase 10 made its tab
+durable, this phase gives it a door, and 14 gives the door its real
+address. With it, the two pieces of work whose deadline is the audience
+itself. **The rename** — settled 2026-08-24 (see Deliberately open):
+launch is the moment the canvas-or-project trigger fires, the first
+outside reader, so `projectId` and its seven hundred friends become
+canvas vocabulary here, as one mechanical commit of its own so it buries
+nothing — the last moment the rename is free. **The sender domain** —
+phase 9's spam finding: SPF/DKIM alignment so the magic-link floor lands
+in inboxes; DNS on isocan.io, nothing in prod. ⚑: the DNS records and
+the Identity Platform sender configuration.
+
+**Outcome:** Scene 0 is enterable against dev by somebody who has read
+nothing — and every proof after this phase is played through the same
+door a stranger would use.
+
+**Proof:** The front page driven in Chrome from a profile that has never
+seen isocan: three steps, a canvas. A magic link that arrives in an
+inbox rather than spam. The rename proven by the suite, green, and by
+`grep` finding project-vocabulary nowhere a stranger reads.
+
+**Findings:** *none yet.*
+
+## Phase 13.7 — The innkeeper's obligations
+
+**Status: NOT STARTED.**
+
+**Work:** What [innkeeper.md](design/innkeeper.md) obligates and no
+phase ever owned, due before strangers rather than after. **GC,
+chosen:** the in-process timer from Deliberately open — no scheduler, no
+credential, no new kind of caller at the door — plus `POST /api/gc`,
+wanted either way; the map's GC line is redrawn in the same change.
+**Metering:** badges are free to mint, and free may not mean unmetered —
+rate limits at the door; quotas stay tuning. **The words:** terms, the
+plain privacy statement — the operator can read your canvas; run your
+own home if that is unacceptable — a named operator, and the sovereignty
+caveat stated honestly: sovereignty by replica is already fact
+(`~/.isocan` holds the full store), while re-homing as one command is
+phase 13's and launches later.
+
+**Outcome:** The home can host strangers without an unstated obligation,
+and the map's GC line tells the truth.
+
+**Proof:** The sweep runs on the timer in vitest and is observed on dev;
+a mint flood is refused legibly; the terms page is served from the
+origin, caveat included.
+
+**Findings:** *none yet.*
+
+## Phase 14 — isocan.io ⚑ provision
+
+**Status: NOT STARTED.**
+
+**Work:** Stand up `isocan-prod`; the domain; the `release`-branch
+promotion; flipping the default home address from unset to isocan.io
+(phase 7.5 says why it stays unset until here — and the flip is safe
+only by phase 10.3's model: a shipped default is a *birth* default,
+markers pin every existing canvas to its home, so flipping re-points
+nobody's work). Slim now: the front door
+went to phase 13.5 and the obligations to 13.7 — the split this phase's
+old note predicted, executed by the 2026-08-24 resequencing. **One cost
+that resequencing chose, written here so no session rediscovers it as a
+surprise:** phases 12 and 13 now add their persistent structures —
+registrations, custody-wrapped tokens, adoption state — after prod
+exists, so they land as migrations under strangers rather than
+greenfield. Chosen eyes-open: the desk has migration precedent from
+phase 2, and early-prod data is small.
+
+**Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
+steps, a canvas born at its hosted home.
+
+**Proof:** The scene, played from scratch, on the real address.
+
+**Findings:** *none yet.*
+
+---
+
+**After launch: the features.** Everything below ships into a live
+isocan.io through the release promotion, and its order returns to being
+a hypothesis — real users get a vote on whether the spark or the
+airplane matters more. Two arcs are gated on design work that is
+session-shaped rather than phase-shaped, the way identity-desk.md and
+innkeeper.md were written: `design/launch.md` and its dispatch spike
+before phase 12; the completed local-bridge design, its Chrome spike,
+and the journey's missing airplane scene before phase 12.7.
+
 ## Phase 11 — The thin agent (Scene 6)
 
 **Status: NOT STARTED.**
@@ -809,6 +1006,16 @@ verify order and convergence on a second profile.
 **Work:** Setup notices what it stands on — headless, ephemeral, home
 address in hand — and skips the daemon; the CLI speaks straight to the
 home; `isocan wait` parks at the home itself.
+
+**One decision waits at this phase's door, put there on purpose.**
+Phase 9's finding defers `repo:` here, and Scene 6's own premise leans
+on it: "the committed marker is what admitted her" is true only while
+the link grant is on — turn the link off and repo members are locked out
+with the strangers. The lean, to confirm when this phase opens: play
+Scene 6 on the link grant, keep the `repo:` refusal honest, and record
+the lock-out asymmetry as a finding — the OAuth access-token custody
+decision belongs with phase 12's design, which is already in the
+token-custody business.
 
 **Outcome:** Scene 6 plays: an agent in an empty ephemeral directory
 works the canvas through dev with no replica and nothing to lose; its
@@ -829,6 +1036,23 @@ the `workflow_dispatch` hook concretely; the spark's tri-state in the
 pile; failure surfaced in the thread. Provisioning: a test repo with
 the workflow file and a token scoped to firing it.
 
+**Gated on a design that does not exist yet.** Frozen delegation
+([innkeeper.md](design/innkeeper.md), mechanism 11) answers "may the
+home mint this?"; nothing yet answers "what happens when it fires?".
+Before this phase opens, `design/launch.md` must own the operational
+half: the hook contract written down rather than sloganized; how the
+home observes the failure it promises to report — its token reads
+nothing, and `workflow_dispatch` answers 204 with no run id, so
+pass-redemption-within-a-deadline is the candidate signal; the payload
+as a channel that is not private — dispatch inputs are readable by
+anyone with repo read for the pass's TTL; the harness credential — the
+standing secret in CI the design never mentions because it lives outside
+the walls — chosen out loud anyway; a registration's second death, by
+vendor token expiry, which is a spark that lies; and summons concurrency
+plus the re-run button, which replays a spent pass and so can never
+work. With the doc, the spike: fire a real dispatch at a scratch repo
+and measure — a design that reasons about a vendor is a hypothesis.
+
 **Outcome:** An `@`-mention with nobody running boots a real workflow
 that works the lap and exits; a sabotaged hook says "couldn't start"
 where everyone can see it.
@@ -839,13 +1063,72 @@ sweep.
 
 **Findings:** *none yet.*
 
+## Phase 12.5 — The queue
+
+**Status: NOT STARTED.**
+
+**Work:** The daemon learns to queue — the debt `home-link.ts` refuses
+on purpose, payable now because phase 10 already answered every hard
+question in the harder place: client-minted ids, exactly-once replay,
+flush-before-tail, the false-refusal honesty. This ports a proven shape
+into the process that already has an oplog, durability, and an adoption
+path. Deliberately *not* the bridge: after this phase a machine still
+has two queues, both honest.
+
+**Outcome:** An agent on a plane can work: a replica's CLI writes
+succeed and queue while the home is unreachable, and land in home order
+on reconnect, before the tail comes down.
+
+**Proof:** Phase 10's actuation, replayed for the other surface: home
+stopped, CLI writes accepted, a second writer raced in first, reconnect
+— the queued ops land after it under the ids they minted offline, and
+replaying one appends nothing.
+
+**Findings:** *none yet.*
+
+## Phase 12.7 — The bridge
+
+**Status: NOT STARTED.**
+
+**Work:** One replica on a machine, not two: the tab reaches the local
+daemon through the same-origin bridge frame of
+[design/local-bridge.md](design/local-bridge.md) — taken up only after
+that design is completed and its browser hypotheses measured (the
+127.0.0.1 frame carve-out, and Private Network Access, which browsers
+have been reshaping toward permission prompts; a comment that reasons
+about a browser is a hypothesis). The journey grows the scene it lacks —
+a person and their agent, one canvas, no network — and the failure-mode
+list is the center of the work: stale daemon, wrong home, wrong port,
+unclaimed badge, each refused legibly, because a tab quietly agreeing
+with a stale daemon is the cheerful-wrong-address bug in its worst form
+yet. The "never pages to persons" bend is recorded; the frame-ancestors
+lock and the postMessage origin check derive from the served canvas's
+home under phase 10.3's many-homes model — the local-bridge design
+predates that model ("one value the daemon already holds") and must be
+revised to it; phase 10's browser replica remains the answer when no
+daemon is present.
+
+**Outcome:** The thesis survives the plane: a person in the browser and
+their agent in the terminal see each other's work with no network,
+through one replica and one queue.
+
+**Proof:** The scene, actuated in Chrome with the network gone; the
+no-daemon fallback exercised; the stale-daemon and wrong-home refusals
+driven and read.
+
+**Findings:** *none yet.*
+
 ## Phase 13 — Offline birth, twins, re-homing
 
 **Status: NOT STARTED.**
 
 **Work:** Adoption from seq 1 on first reconnect; first-writer wins
 and the late twin parks whole; re-homing as the generalized push —
-work travels, the guest book stays.
+work travels, the guest book stays. Thin now: the queue arrives proven
+from phase 12.5, so what is left is adoption, the twin rule, and the
+push itself. Re-homing's landing also retires the sovereignty caveat
+phase 13.7 wrote into the terms — deleting that sentence is part of
+this phase's outcome.
 
 **Outcome:** A plane-born canvas adopts its promised home; a twin is
 refused and parked, never merged; a re-homed canvas keeps its authors
@@ -855,30 +1138,3 @@ while the roster re-forms.
 
 **Findings:** *none yet.*
 
-## Phase 14 — isocan.io ⚑ provision
-
-**Status: NOT STARTED.**
-
-**Work:** Stand up `isocan-prod`; the domain; the `release`-branch
-promotion; the front page — the home origin wearing Scene 0's three
-steps; and flipping the default home address from unset to isocan.io
-(phase 7.5 says why it is unset until here).
-
-**This phase bundles two things, noticed 2026-08-23, and may split.**
-Provisioning prod is genuinely last. The **front door** — the front page
-and the default address, the two things that make the product enterable
-by somebody who has read nothing — has no dependency on prod and could
-run against dev. Until it exists, every Proof from phase 6 onward is
-played by somebody who already knows the environment variables, which is
-how the phase 7.5 gap stayed invisible until a person tried the walk.
-**Scene 0 is not a phase; it is a thread through phases 6, 10 and 14** —
-which is why phase 6 could only claim its *shape* was true while this
-phase claims it "plays for real". Left as one phase for now because
-there are no strangers yet; split it the moment there are.
-
-**Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
-steps, a canvas born at its hosted home.
-
-**Proof:** The scene, played from scratch, on the real address.
-
-**Findings:** *none yet.*
