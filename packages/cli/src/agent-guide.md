@@ -20,7 +20,11 @@ isocan project list            # the directory's canvas; --all for the home
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
 this guide's skill where agents look, the CLI on PATH, and the daemon behind
-the app.
+the app. A repo you do not have yet takes `isocan clone <repo>` — it clones,
+readies the directory the same way, and reports the canvas the repo's
+committed `.isocan/project.json` names, so a clone lands on THE canvas rather
+than a copy of it. It installs nothing from the repo and runs nothing: `npm
+install` executes the repo's own scripts, so that stays a line you type.
 
 **The directory you are in IS the project.** `identity --session` makes sure
 of it: if `<dir>/.isocan/project.json` already names a canvas (the marker is

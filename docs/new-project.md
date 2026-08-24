@@ -89,6 +89,38 @@ materializes it under the same id rather than forking a new one.
 Commit the skill too. It is how any harness that clones this repo discovers the
 protocol without being told.
 
+## 3½. Joining a repo that already has a canvas
+
+Everything above is the from-scratch case. Coming to a repo somebody else
+already bound is one command:
+
+```sh
+isocan clone dglazkov/isocan          # or any URL git accepts
+```
+
+That clones, readies the directory exactly as `setup` does, and reports the
+canvas the committed marker names. Because project ids are what let two homes
+agree they are working on the same canvas, the clone **adopts the id** rather
+than minting one — the first thing anybody adds materializes it under that id,
+and you are on the same canvas as the person who committed the marker, not a
+copy of it.
+
+It deliberately does not install dependencies or start anything. `npm install`
+runs the cloned repo's own `prepare` and `postinstall` scripts, and a command
+whose whole input is a link somebody sent you should not turn into arbitrary
+code execution. It prints the next line instead of running it.
+
+Two answers worth recognising in its report:
+
+- *"none committed in this repo"* — the repo has no marker. `isocan use <ref>`
+  binds it to an existing canvas, or an agent's `identity --session` makes one
+  named after the directory.
+- *"lives at &lt;address&gt; and this machine could not get it from there"* — the
+  marker names a home you have no reach to. Nothing is created, deliberately:
+  making it locally would mint a TWIN under that id. Ask for a pass
+  (`isocan pass` on a machine that is on the canvas) rather than working around
+  it.
+
 ## 4. Bring the agents in
 
 Each agent needs a name of its own — not its vendor's, and never yours. The

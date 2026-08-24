@@ -116,6 +116,7 @@ import {
   writeConfig,
 } from "./ctx.ts";
 import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
+import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
   adoptIdentity,
@@ -1908,6 +1909,121 @@ function sweptLine(swept: SweepReport): string {
   if (swept.rerooted > 0) parts.push(`${swept.rerooted} kept by another grant`);
   return parts.join(", ");
 }
+
+// ---------- clone: a repo, and the canvas it was committed with ----------
+
+/**
+ * **Clone a repo and land on the canvas it was committed with.**
+ *
+ * `.isocan/project.json` has been committable since #60 precisely so that "a
+ * clone arrives already knowing WHICH project this directory is". This is the
+ * verb that spends that: one command instead of clone, cd, setup.
+ *
+ * **It clones and readies. It does not install dependencies and does not run
+ * anything from the repo.** `clone` borrows git's verb, and `git clone` has
+ * never meant "and then execute what you fetched". The distinction earns its
+ * keep here rather than being pedantry: the whole input is a URL somebody sent
+ * you, and `npm install` runs the cloned repo's own `prepare` and
+ * `postinstall`. A command that turns a link into arbitrary code execution
+ * should be one you typed on purpose, so the next two lines are PRINTED and
+ * not run.
+ *
+ * **And it creates no canvas**, for the reason `setup` creates none: a
+ * `project.create` is stamped with whoever typed the command, which at this
+ * moment is quite possibly an agent acting for a person who has not said their
+ * name yet. The marker names the canvas; the first thing anybody ADDS
+ * materializes it under that id (`resolveProject`'s `create` path). So this
+ * reports what the clone is bound to and gets out of the way.
+ */
+program
+  .command("clone <repo> [dir]")
+  .description(
+    "Clone a repo and ready it for canvas work — the canvas its .isocan marker names, " +
+      "or a fresh one. Installs nothing from the repo",
+  )
+  .option("--force", "refresh the skill even if the cloned repo already has one")
+  .action(
+    run(
+      async (
+        repo: string,
+        dir: string | undefined,
+        opts: { force?: boolean },
+        cmd: Command,
+      ) => {
+        const globals = cmd.optsWithGlobals() as { json?: boolean };
+        const remote = gitRemote(repo);
+        const target = path.resolve(dir ?? defaultCloneDir(remote));
+        if (await exists(target)) {
+          throw new Error(
+            `${target} already exists — \`isocan setup ${dir ?? defaultCloneDir(remote)}\` ` +
+              "readies a directory you already have.",
+          );
+        }
+
+        // Inherited stdio: git's progress is the only thing to look at while
+        // this runs, and swallowing it to re-print a summary would be slower
+        // AND less informative. A failure is git's message, not ours — it
+        // knows far more about why a clone did not work than we could say.
+        const cloned = spawnSync("git", ["clone", remote, target], { stdio: "inherit" });
+        if (cloned.error) throw cloned.error;
+        if (cloned.status !== 0) {
+          throw new Error(`git clone failed (exit ${cloned.status}) — nothing was set up`);
+        }
+
+        const report: Record<string, string> = { repo: remote, directory: target };
+
+        const skill = await installSkill(target, opts.force ?? false);
+        report.skill =
+          skill.state === "differs"
+            ? `${path.relative(target, skill.path)} — differs from this build's copy; --force to refresh`
+            : `${path.relative(target, skill.path)} (${skill.state})`;
+
+        // The daemon has to be up for the next command to mean anything, and
+        // whoever typed `isocan clone` has this build on their PATH by
+        // definition — so unlike `setup` there is no CLI to install here.
+        const home = paths.isocanHome();
+        const port = daemonPort(cmd);
+        const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+        try {
+          await client.ensureDaemon();
+          report.app = client.base;
+        } catch (err) {
+          report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
+        }
+
+        // What the repo says this directory is. Read, never written: see the
+        // doc above for why nothing is created here.
+        const binding = await findBinding(target, home);
+        if (!binding) {
+          report.canvas =
+            "none committed in this repo — `isocan use <canvas>` binds it to one, " +
+            "or your agent's `isocan identity --session` makes one named after the directory";
+        } else {
+          const projects = await client.listProjects().catch(() => []);
+          const here = projects.find((p) => p.id === binding.projectId);
+          report.canvas = here
+            ? `${here.title} (${binding.projectId}) — already on this machine`
+            : `${binding.title ?? "untitled"} (${binding.projectId}) — not on this machine yet;` +
+              " the first thing anyone adds materializes it under that id";
+          if (binding.home) report.home = binding.home;
+        }
+
+        if (globals.json) return printJson(report);
+        printKeyValues(report);
+        // The two lines this deliberately did NOT run, if the repo looks like
+        // it wants them. Printed, so the decision to execute the repo's code
+        // stays the reader's.
+        const node = await exists(path.join(target, "package.json"));
+        const rel = path.relative(process.cwd(), target) || ".";
+        console.log(
+          `\ncd ${rel}` +
+            (node ? "\nnpm install        # not run for you: it executes the repo's own scripts" : "") +
+            "\n\nTell your agent to use the isocan-collab skill (or to run `isocan --agent-help`," +
+            "\nwhich is the same instructions, shipped with this build).",
+        );
+      },
+    ),
+  );
 
 // ---------- setup: one command, from any directory ----------
 
