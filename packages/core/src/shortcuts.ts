@@ -55,6 +55,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Shift-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
   { keys: ["F2", "Double-click the name"], does: "Rename — the file follows the title", group: "Items" },
   { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
+  { keys: ["Shift F"], does: "Fit the item to its content", group: "Items", note: "Grows the selection to the size its content wants and settles it so nothing overlaps. F fits the VIEW to an item; Shift F fits the ITEM to what is in it" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },

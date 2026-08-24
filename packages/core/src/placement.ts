@@ -1,4 +1,5 @@
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasState } from "./model.ts";
+import type { Box } from "./annotation.ts";
 import type { Placement } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
 
@@ -15,12 +16,8 @@ export const PLACEMENT_CLEARANCE = 12;
 /** How far the search will look before giving up and going round the side. */
 const MAX_RINGS = 14;
 
-interface Box {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+/** Anything already taking up room — an item, or one just placed this pass. */
+export type Placed = Box;
 
 const overlaps = (a: Box, b: Box, pad: number): boolean =>
   a.x < b.x + b.width + pad &&
@@ -45,7 +42,7 @@ const overlaps = (a: Box, b: Box, pad: number): boolean =>
  * reducer. It is also what makes a batch work: each `item.add` is applied in
  * turn, so the second file's search already sees the first one land.
  */
-function findFreeSpot(canvas: CanvasState, want: Box, occupied: Item[]): { x: number; y: number } {
+export function nearestFreeSpot(want: Box, occupied: Placed[]): { x: number; y: number } {
   const clear = (box: Box) => !occupied.some((item) => overlaps(box, item, PLACEMENT_CLEARANCE));
   if (clear(want)) return { x: want.x, y: want.y };
 
@@ -122,5 +119,5 @@ export function resolvePlacement(
 
   const occupied = Object.values(canvas.items);
   if (exact || height <= 0 || width <= 0 || occupied.length === 0) return want;
-  return findFreeSpot(canvas, { ...want, width, height }, occupied);
+  return nearestFreeSpot({ ...want, width, height }, occupied);
 }

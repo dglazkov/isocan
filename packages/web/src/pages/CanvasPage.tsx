@@ -33,6 +33,7 @@ import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
 import { isTyping } from "../lib/keys.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
+import { fitToContent } from "../lib/fititem.ts";
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -355,6 +356,12 @@ export function CanvasPage({
       } else if (e.shiftKey && e.code === "Digit2") {
         e.preventDefault();
         zoomToSelection();
+      } else if (e.shiftKey && e.code === "KeyF" && ui.selectedItemIds.length > 0) {
+        // F fits the VIEW to the item; ⇧F fits the ITEM to its content. Not in
+        // the ⇧0/⇧1/⇧2 family despite ⇧3 being free there: those move the
+        // camera and undo nothing, and this writes ops.
+        e.preventDefault();
+        void fitToContent(projectId!, actor, ui.selectedItemIds);
       } else if (e.key === "0") {
         zoomToFit();
       } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
