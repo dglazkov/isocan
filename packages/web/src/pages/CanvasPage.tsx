@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { itemPath } from "@isocan/core";
 import {
-  connectToProject,
+  connectToCanvas,
   disconnect,
   publishSelection,
   setPresenceActor,
@@ -81,15 +81,15 @@ export function CanvasPage(props: {
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const { projectId } = useParams<{ projectId: string }>();
-  const where = useCanvasHome(projectId ?? null);
-  if (!projectId) return null;
+  const { canvasId } = useParams<{ canvasId: string }>();
+  const where = useCanvasHome(canvasId ?? null);
+  if (!canvasId) return null;
   // A sentence, in the same voice the door uses while a pass is redeemed —
   // not a spinner and not a blank page, for the fraction of a second a
   // same-origin read of `/api/homes` takes.
   if (where.state === "asking") return <div className="page-note">Finding this canvas…</div>;
   if (where.state === "elsewhere") {
-    return <ElsewherePage projectId={projectId} home={where.home} />;
+    return <ElsewherePage canvasId={canvasId} home={where.home} />;
   }
   return <CanvasSurface {...props} />;
 }
@@ -101,7 +101,7 @@ function CanvasSurface({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const { projectId, itemId } = useParams<{ projectId: string; itemId?: string }>();
+  const { canvasId, itemId } = useParams<{ canvasId: string; itemId?: string }>();
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -123,12 +123,12 @@ function CanvasSurface({
   actorRef.current = actor;
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!canvasId) return;
     didFit.current = false;
-    restoreFavourites(projectId);
-    connectToProject(projectId, actorRef.current);
+    restoreFavourites(canvasId);
+    connectToCanvas(canvasId, actorRef.current);
     return disconnect;
-  }, [projectId]);
+  }, [canvasId]);
 
   // Becoming someone else does NOT drop the socket. The tab keeps its session
   // and simply asserts the new actor on the next presence beat, which the
@@ -194,9 +194,9 @@ function CanvasSurface({
   // drawn but not yet settled, so the strokes become an item instead of
   // evaporating with the page's local state.
   useEffect(() => {
-    if (!projectId) return;
-    return () => placeSketch(projectId, actorRef.current);
-  }, [projectId]);
+    if (!canvasId) return;
+    return () => placeSketch(canvasId, actorRef.current);
+  }, [canvasId]);
 
   // A daemon restart is where an upgrade becomes visible: the socket drops,
   // comes back, and the app this tab is running may no longer be the one being
@@ -223,7 +223,7 @@ function CanvasSurface({
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
-    if (!projectId) return;
+    if (!canvasId) return;
 
     /** Move the selection by whole world units: 1 per press, 10 with shift. */
     function nudge(dx: number, dy: number): void {
@@ -298,7 +298,7 @@ function CanvasSurface({
         .map((id) => canvas.items[id])
         .filter((item) => item !== undefined)
         .map((item) => ({ itemId: item.id, x: Math.round(item.x), y: Math.round(item.y) }));
-      if (moves.length > 0) void sendOp(projectId!, actor, moveOp(moves));
+      if (moves.length > 0) void sendOp(canvasId!, actor, moveOp(moves));
     }
     function onKeyDown(e: KeyboardEvent) {
       // ⌘K is global — the lane to your emissary opens from anywhere, even
@@ -339,11 +339,11 @@ function CanvasSurface({
           return;
         }
         const action = e.shiftKey ? redo : undo;
-        void action(projectId!, actor).catch(() => {}); // 409 = nothing to undo
+        void action(canvasId!, actor).catch(() => {}); // 409 = nothing to undo
       } else if (e.key === "Enter" && ui.sketch.length > 0) {
         // ⏎ places the drawing now instead of waiting out the settle.
         e.preventDefault();
-        placeSketch(projectId!, actor);
+        placeSketch(canvasId!, actor);
       } else if ((e.metaKey || e.ctrlKey) && NUDGES[e.key]) {
         // ⌘/Ctrl + arrow walks the selection to the next item that way.
         e.preventDefault();
@@ -362,7 +362,7 @@ function CanvasSurface({
           e.preventDefault();
           // Batch delete = one undo step for the whole selection.
           void sendOp(
-            projectId!,
+            canvasId!,
             actor,
             ids.length === 1
               ? { type: "item.delete", itemId: ids[0]! }
@@ -382,7 +382,7 @@ function CanvasSurface({
         // mode flag: the address bar ends up holding the screen you are
         // looking at, so Back leaves it and the link is sendable.
         e.preventDefault();
-        navigate(itemPath(projectId!, ui.selectedItemIds[0]!));
+        navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
       } else if (e.key === "Escape") {
         // Watching is the outermost mode: Esc hands the camera back first.
         if (ui.renamingItemId) ui.setRenaming(null);
@@ -408,7 +408,7 @@ function CanvasSurface({
         // the ⇧0/⇧1/⇧2 family despite ⇧3 being free there: those move the
         // camera and undo nothing, and this writes ops.
         e.preventDefault();
-        void fitToContent(projectId!, actor, ui.selectedItemIds);
+        void fitToContent(canvasId!, actor, ui.selectedItemIds);
       } else if (e.key === "0") {
         zoomToFit();
       } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
@@ -449,9 +449,9 @@ function CanvasSurface({
         flushNudge(); // leaving mid-nudge still records where things landed
       }
     };
-  }, [projectId, actor]);
+  }, [canvasId, actor]);
 
-  if (!projectId) return null;
+  if (!canvasId) return null;
 
   // The three ends of a connection that will not come back, each said in its
   // own words. `refused` is phase 7's: the door works now, so "this canvas
@@ -459,7 +459,7 @@ function CanvasSurface({
   // recovery is a social one, which is why the note says who to ask instead of
   // offering a retry that would be refused identically.
   const dead: Record<string, { note: string; hint?: string }> = {
-    gone: { note: "This project was deleted." },
+    gone: { note: "This canvas was deleted." },
     refused: {
       note: "This canvas will not have you.",
       hint: "Its link has been switched off. Ask whoever shared it to turn it back on, or to let you in.",
@@ -487,8 +487,8 @@ function CanvasSurface({
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
     <div className={`canvas-page${panelResizing ? " resizing-panel" : ""}`}>
-      <CanvasViewport projectId={projectId} actor={actor} />
-      <CommandBar projectId={projectId} actor={actor} />
+      <CanvasViewport canvasId={canvasId} actor={actor} />
+      <CommandBar canvasId={canvasId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
@@ -500,13 +500,13 @@ function CanvasSurface({
           Watching {followedLabel} — Esc to stop
         </button>
       )}
-      <CanvasTools projectId={projectId} actor={actor} />
-      <ZoomControls projectId={projectId} actor={actor} />
+      <CanvasTools canvasId={canvasId} actor={actor} />
+      <ZoomControls canvasId={canvasId} actor={actor} />
       <Minimap />
-      <TrashPanel projectId={projectId} actor={actor} />
-      <MainThreadPanel projectId={projectId} actor={actor} />
-      <FilesPanel projectId={projectId} />
-      <FavouritesBar projectId={projectId} />
+      <TrashPanel canvasId={canvasId} actor={actor} />
+      <MainThreadPanel canvasId={canvasId} actor={actor} />
+      <FilesPanel canvasId={canvasId} />
+      <FavouritesBar canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all
           (phase 10). Above the panels for the reason `ArrivalNotice` is:
@@ -517,7 +517,7 @@ function CanvasSurface({
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see
           FullScreen.tsx for why that distinction is the whole design. */}
-      {itemId && <FullScreen projectId={projectId} itemId={itemId} />}
+      {itemId && <FullScreen canvasId={canvasId} itemId={itemId} />}
     </div>
   );
 }

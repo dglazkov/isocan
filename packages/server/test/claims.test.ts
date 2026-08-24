@@ -42,7 +42,7 @@ async function claim(
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
-    body: JSON.stringify({ projectId: null, op: { type: "actor.claim", ...op } }),
+    body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", ...op } }),
   });
   const json = (await res.json().catch(() => null)) as any;
   return res.ok
@@ -156,7 +156,7 @@ describe("the registry is logged and recoverable", () => {
     expect(again.actor).toEqual(first.actor); // recovered from actors.jsonl
   });
 
-  it("claims are not canvas ops and cannot arrive with a projectId actor path", async () => {
+  it("claims are not canvas ops and cannot arrive with a canvasId actor path", async () => {
     // Submitting through the canvas door is refused: the engine's claim()
     // is the one way in, and /api/ops routes there by op type.
     // A badge speaks only for actors it claims (mechanism 5), so X says who
@@ -167,9 +167,9 @@ describe("the registry is logged and recoverable", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: { id: "usr_x", name: "X" },
-        op: { type: "project.create", projectId: "prj_1", title: "P" },
+        op: { type: "project.create", canvasId: "prj_1", title: "P" },
       }),
     });
     expect(res.status).toBe(200); // ordinary ops still flow
@@ -177,7 +177,7 @@ describe("the registry is logged and recoverable", () => {
     const noActor = await fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
-      body: JSON.stringify({ projectId: "prj_1", op: { type: "trash.empty" } }),
+      body: JSON.stringify({ canvasId: "prj_1", op: { type: "trash.empty" } }),
     });
     expect(noActor.status).toBe(400); // everything but a claim still needs an actor
   });

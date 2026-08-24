@@ -49,7 +49,7 @@ import { PanelResizer } from "./PanelResizer.tsx";
  * removing one deselects it — so there is one answer to "what am I pointing
  * at" rather than two that can disagree.
  */
-function Attached({ projectId }: { projectId: string }) {
+function Attached({ canvasId }: { canvasId: string }) {
   const selected = useUiStore((s) => s.selectedItemIds);
   // Which pill the pointer is on, and where it sits, so the bigger look at it
   // opens over the chip rather than under the pointer.
@@ -88,7 +88,7 @@ function Attached({ projectId }: { projectId: string }) {
     >
       {shown.map((item) => (
         <span key={item.id} className="attached-chip" data-chip-id={item.id}>
-          <ItemThumb projectId={projectId} itemId={item.id} width={18} height={18} />
+          <ItemThumb canvasId={canvasId} itemId={item.id} width={18} height={18} />
           <b>{item.title}</b>
           <button
             type="button"
@@ -105,7 +105,7 @@ function Attached({ projectId }: { projectId: string }) {
       )}
       {peek && (
         <ItemPeek
-          projectId={projectId}
+          canvasId={canvasId}
           itemId={peek.id}
           style={{ left: Math.max(8, peek.left), top: peek.top - 8, transform: "translateY(-100%)" }}
         />
@@ -160,13 +160,13 @@ function catapultBesidePanel(itemId: string): void {
   ui.select(item.id);
 }
 
-/** Open/close the panel and remember the choice per project. The left dock
+/** Open/close the panel and remember the choice per canvas. The left dock
  * holds one panel at a time; opening this one puts the files away. */
-export function openMainPanel(projectId: string, open: boolean): void {
-  openPanel(projectId, open ? "main" : null);
+export function openMainPanel(canvasId: string, open: boolean): void {
+  openPanel(canvasId, open ? "main" : null);
 }
 
-export function MainThreadPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
@@ -176,20 +176,20 @@ export function MainThreadPanel({ projectId, actor }: { projectId: string; actor
   // A stored preference from an earlier visit wins either way.
   const initedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!canvas || initedFor.current === projectId) return;
-    initedFor.current = projectId;
-    const stored = storedPanel(projectId);
+    if (!canvas || initedFor.current === canvasId) return;
+    initedFor.current = canvasId;
+    const stored = storedPanel(canvasId);
     // Never chosen here: a canvas that already has a main thread opens with it.
-    openPanel(projectId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored);
-  }, [canvas, projectId]);
+    openPanel(canvasId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored);
+  }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
   if (!canvas || !open) return null;
-  return <Panel projectId={projectId} actor={actor} />;
+  return <Panel canvasId={canvasId} actor={actor} />;
 }
 
-function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
+function Panel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
   const selected = useUiStore((s) => s.selectedItemIds);
@@ -225,7 +225,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   if (!canvas) return null; // reconnecting — parent unmounts us next render
 
   async function send(body: string, attached: string[]) {
-    await postToMain(projectId, actor, body, attached);
+    await postToMain(canvasId, actor, body, attached);
   }
 
   function chipTarget(e: { target: EventTarget }): string | null {
@@ -247,7 +247,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           <button
             className="main-detach"
             title="Demote back to a canvas pin"
-            onClick={() => sendOp(projectId, actor, { type: "thread.setMain", threadId: null })}
+            onClick={() => sendOp(canvasId, actor, { type: "thread.setMain", threadId: null })}
           >
             detach
           </button>
@@ -255,7 +255,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
         <button
           className="main-close"
           title="Collapse"
-          onClick={() => openMainPanel(projectId, false)}
+          onClick={() => openMainPanel(canvasId, false)}
         >
           ✕
         </button>
@@ -296,7 +296,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
               {(comment.items ?? [])
                 .filter((id, i, all) => all.indexOf(id) === i)
                 .map((itemId) => (
-                  <ItemCard key={itemId} projectId={projectId} itemId={itemId} />
+                  <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
                 ))}
             </div>
           ))}
@@ -304,7 +304,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
             <OnIt
                 thread={thread}
                 waiting={awaitingReply(thread, actor.id)}
-                projectId={projectId}
+                canvasId={canvasId}
                 actor={actor}
               />
           )}
@@ -330,7 +330,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           await send(body, attached);
         }}
       >
-        <Attached projectId={projectId} />
+        <Attached canvasId={canvasId} />
         <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
@@ -361,7 +361,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
  * it, and pointing at it opens the same peek the panel and the rim open,
  * beside the panel, while the item itself lights up on the canvas.
  */
-function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) {
+function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [peekTop, setPeekTop] = useState<number | null>(null);
@@ -389,7 +389,7 @@ function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) 
           useUiStore.getState().setPeeked(null);
         }}
       >
-        <ItemThumb projectId={projectId} itemId={itemId} width={44} height={34} />
+        <ItemThumb canvasId={canvasId} itemId={itemId} width={44} height={34} />
         <span className="mt-text">
           <span className="mt-title">{item.title}</span>
           <span className="mt-meta">
@@ -401,7 +401,7 @@ function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) 
       </button>
       {peekTop !== null && (
         <ItemPeek
-          projectId={projectId}
+          canvasId={canvasId}
           itemId={itemId}
           // Beside the panel, centred on the card, never off the window it is
           // meant to be read on — the files panel's peek, in the other panel.

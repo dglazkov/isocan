@@ -3,13 +3,13 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
-import type { FreeNameResponse, GrantResponse, GrantsResponse, LogEntry, Project } from "@isocan/core";
+import type { FreeNameResponse, GrantResponse, GrantsResponse, LogEntry, Canvas } from "@isocan/core";
 import {
   FREE_NAME_ROUTE,
   grantRoute,
   grantsRoute,
   ISOCAN_NAMES,
-  projectsRoute,
+  canvasesRoute,
   WS_NOT_ADMITTED,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
@@ -63,17 +63,17 @@ async function op(badge: TestBadge, body: unknown): Promise<Response> {
 
 async function makeCanvas(): Promise<void> {
   const made = await op(owner, {
-    projectId: null,
+    canvasId: null,
     actor: priya,
-    op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
   });
   if (!made.ok) throw new Error(`could not create the canvas: ${await made.text()}`);
 }
 
 const get = (badge: TestBadge, url: string) => fetch(`${base}${url}`, { headers: badge.headers });
 
-const grantsOf = async (badge: TestBadge, projectId = CANVAS): Promise<GrantsResponse> =>
-  (await get(badge, grantsRoute(projectId))).json() as Promise<GrantsResponse>;
+const grantsOf = async (badge: TestBadge, canvasId = CANVAS): Promise<GrantsResponse> =>
+  (await get(badge, grantsRoute(canvasId))).json() as Promise<GrantsResponse>;
 
 async function revokeLink(badge: TestBadge): Promise<Response> {
   const { grants } = await grantsOf(badge);
@@ -84,9 +84,9 @@ async function revokeLink(badge: TestBadge): Promise<Response> {
 }
 
 /** What a socket was told, so a refusal can be asserted as a close code. */
-function socketClose(badge: TestBadge, projectId = CANVAS): Promise<number> {
+function socketClose(badge: TestBadge, canvasId = CANVAS): Promise<number> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?projectId=${projectId}`, {
+    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
       headers: badge.headers,
     });
     ws.on("error", reject);
@@ -168,9 +168,9 @@ describe("the door", () => {
     const jordan = await stranger();
     await jordan.speakAs({ id: "usr_jordan", name: "Jordan" });
     const wrote = await op(jordan, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: { id: "usr_jordan", name: "Jordan" },
-      op: { type: "project.rename", projectId: CANVAS, title: "Not Acme" },
+      op: { type: "project.rename", canvasId: CANVAS, title: "Not Acme" },
     });
     expect(wrote.status).toBe(403);
     // `/api/ops` is the one route whose canvas is in the body rather than the
@@ -178,7 +178,7 @@ describe("the door", () => {
     // the RIGHT ORDER. A refusal that arrives after the op has landed is not
     // a refusal.
     const snapshot = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as {
-      project: Project;
+      project: Canvas;
       lastSeq: number;
     };
     expect(snapshot.project.title).toBe("Acme Sprint Board");
@@ -217,7 +217,7 @@ describe("the door", () => {
     // else turns every mistyped id into "you are not admitted" about a canvas
     // that was never there.
     expect(seen.status).toBe(404);
-    expect(((await seen.json()) as { code: string }).code).toBe("unknown-project");
+    expect(((await seen.json()) as { code: string }).code).toBe("unknown-canvas");
   });
 
   it("lets the link back on, and the next stranger walks in", async () => {
@@ -311,9 +311,9 @@ describe("the grant API", () => {
   it("will not revoke a grant that belongs to another canvas", async () => {
     await makeCanvas();
     const other = await op(owner, {
-      projectId: null,
+      canvasId: null,
       actor: priya,
-      op: { type: "project.create", projectId: "prj_other", title: "Test Board" },
+      op: { type: "project.create", canvasId: "prj_other", title: "Test Board" },
     });
     expect(other.status).toBe(200);
     const theirs = (await grantsOf(owner, "prj_other")).grants[0]!;
@@ -325,7 +325,7 @@ describe("the grant API", () => {
     expect((await grantsOf(owner, "prj_other")).grants[0]!.revokedAt).toBeUndefined();
   });
 
-  it("is only for the admitted — the hook guards it like every project route", async () => {
+  it("is only for the admitted — the hook guards it like every canvas route", async () => {
     await makeCanvas();
     await revokeLink(owner);
     const jordan = await stranger();
@@ -384,8 +384,8 @@ describe("what a badge may see", () => {
   it("stops listing a canvas whose link is off, and goes on listing it to those inside", async () => {
     await makeCanvas();
     const jordan = await stranger();
-    const before = (await (await get(jordan, "/api/projects")).json()) as Project[];
-    expect(before.map((project) => project.id)).toEqual([CANVAS]);
+    const before = (await (await get(jordan, "/api/projects")).json()) as Canvas[];
+    expect(before.map((canvas) => canvas.id)).toEqual([CANVAS]);
     // Listing is not entering, and it does not admit: what a badge "could get
     // into" is a different question from where it has been, and answering the
     // first by writing the second would hand every browsing badge an
@@ -409,13 +409,13 @@ describe("what a badge may see", () => {
     // one root a sweep never walks, so an owner cannot revoke themselves out
     // of their own home.
     expect(
-      ((await (await get(owner, "/api/projects")).json()) as Project[]).map((pr) => pr.id),
+      ((await (await get(owner, "/api/projects")).json()) as Canvas[]).map((pr) => pr.id),
     ).toEqual([CANVAS]);
   });
 
   /**
    * **Two callers, two questions, one route** — phase 8 stage 4. See
-   * `ProjectsReach`.
+   * `CanvasesReach`.
    *
    * The listing has always answered one question: "what could this badge walk
    * into?" A replica polls it to decide what to MIRROR, and those are not the
@@ -435,12 +435,12 @@ describe("what a badge may see", () => {
     // A person's front page, and what every client that says nothing gets —
     // including a replica built before this parameter existed.
     expect(
-      (((await (await get(laptop, "/api/projects")).json()) as Project[])).map((pr) => pr.id),
+      (((await (await get(laptop, "/api/projects")).json()) as Canvas[])).map((pr) => pr.id),
     ).toEqual([CANVAS]);
 
     // The replica's question. Same badge, same instant, same canvas, same live
     // link grant — and nothing, because nobody has let this machine in.
-    expect(await (await get(laptop, projectsRoute("admitted"))).json()).toEqual([]);
+    expect(await (await get(laptop, canvasesRoute("admitted"))).json()).toEqual([]);
 
     // Asking did not admit it either: a listing is not an entering, and the
     // narrow answer must not quietly become true by having been asked for.
@@ -451,24 +451,24 @@ describe("what a badge may see", () => {
     // one does not, because it already said yes.
     await daemon.desk.admit(laptop.badgeId, CANVAS, { root: "created" });
     expect(
-      (((await (await get(laptop, projectsRoute("admitted"))).json()) as Project[])).map((pr) => pr.id),
+      (((await (await get(laptop, canvasesRoute("admitted"))).json()) as Canvas[])).map((pr) => pr.id),
     ).toEqual([CANVAS]);
 
     // A word that is not the narrowing word is the DEFAULT, not a silent
     // narrowing and not an error. There is exactly one spelling of the
-    // parameter (`projectsRoute`), so a near-miss can only come from somebody
+    // parameter (`canvasesRoute`), so a near-miss can only come from somebody
     // hand-building the URL — and the safe way to be wrong about a listing is
     // to show a person too much of their own home rather than too little.
     const nobody = await stranger();
     expect(
-      (((await (await get(nobody, "/api/projects?reach=admited")).json()) as Project[])).map(
+      (((await (await get(nobody, "/api/projects?reach=admited")).json()) as Canvas[])).map(
         (pr) => pr.id,
       ),
     ).toEqual([CANVAS]);
   });
 });
 
-describe("actor.claim's projectId", () => {
+describe("actor.claim's canvasId", () => {
   /**
    * Phase 3's hole, closed. A claim widens its own name-check scope by naming
    * the canvas it was made from — which under the old policy could only ever
@@ -479,8 +479,8 @@ describe("actor.claim's projectId", () => {
    */
   const claimPriya = (badge: TestBadge) =>
     op(badge, {
-      projectId: null,
-      op: { type: "actor.claim", sessionKey: "cli:probe", name: "Priya", projectId: CANVAS },
+      canvasId: null,
+      op: { type: "actor.claim", sessionKey: "cli:probe", name: "Priya", canvasId: CANVAS },
     });
 
   it("widens the name scope while a grant would admit the asker", async () => {
@@ -535,9 +535,9 @@ describe("a free name, for a badge that has been nowhere", () => {
     const isaac = { id: "usr_isaac", name: ISOCAN_NAMES[0] };
     await owner.speakAs(isaac, "test:isaac");
     const made = await op(owner, {
-      projectId: null,
+      canvasId: null,
       actor: isaac,
-      op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+      op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
     });
     if (!made.ok) throw new Error(`could not create the canvas: ${await made.text()}`);
   }
@@ -553,7 +553,7 @@ describe("a free name, for a badge that has been nowhere", () => {
     await canvasHeldByIsaac();
     const fresh = await stranger();
     await freeName(fresh);
-    // Same line the projects listing holds: what a badge COULD get into is a
+    // Same line the canvases listing holds: what a badge COULD get into is a
     // different question from where it has been, and answering the first by
     // writing the second would hand every asking badge an admission to
     // everything — the scope mechanism 10 exists to narrow.
@@ -612,9 +612,9 @@ describe("on a replica", () => {
         method: "POST",
         headers: { "Content-Type": "application/json", ...cli.headers },
         body: JSON.stringify({
-          projectId: null,
+          canvasId: null,
           actor: isaac,
-          op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+          op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
         }),
       });
       expect(made.status, await made.clone().text()).toBe(200);

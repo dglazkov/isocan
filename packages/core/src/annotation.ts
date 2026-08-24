@@ -13,7 +13,7 @@
  */
 
 import { isDrawingItem } from "./drawing.ts";
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 
 /** The item this ink is about. */
 export const ANNOTATES_PROP = "annotates";
@@ -83,7 +83,7 @@ export function annotationRegion(item: Item): Region | null {
 
 /** Everything annotating this item — what travels with it, and what an agent
  * should clear once it has done what the ink asked. */
-export function annotationsOf(canvas: CanvasState, itemId: string): Item[] {
+export function annotationsOf(canvas: CanvasContents, itemId: string): Item[] {
   return Object.values(canvas.items).filter((item) => annotationTarget(item) === itemId);
 }
 

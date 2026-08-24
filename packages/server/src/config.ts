@@ -6,7 +6,7 @@ import { configFile } from "./paths.ts";
  * `~/.isocan/config.json` — this machine's own settings, hand-edited.
  *
  * ONE reader, deliberately. Three callers want this file for three unrelated
- * reasons (the CLI's default project, the harness-variable declarations, and
+ * reasons (the CLI's default canvas, the harness-variable declarations, and
  * now where a canvas born on this machine goes), and three `JSON.parse` calls in
  * three `try` blocks is three chances to disagree about what a malformed file
  * means. It means the same thing to all of them: nothing. A typo in a

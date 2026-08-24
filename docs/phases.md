@@ -76,23 +76,33 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 10.5 is PART-DONE — `docs/development.md` exists and the
-dev deploy gates on CI green, but the two walks it is written for have not been
-walked by the two people it names.** Writing it is what found phase 10.3's worst
-bug: on a rig that predates `homes.json`, the first `isocan home <address>`
-froze every local canvas at that home, under a verb that prints *"nothing
-already here moved"*. That is fixed, with tests that were checked to fail
-without the fix. The launch-first order set 2026-08-24 by Dimitri still runs
-10.3 → 10.5 → 13.5 → 13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7,
-13 as features added to a live isocan.io. The cut line is the journey's own
-built/unbuilt boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the
-entire unbuilt remainder, so launching first ships exactly the journey that
-exists. **Phase 13.5, the front door, is next** — with one debt trailing 10.5
-that belongs to people rather than to code: Paul's and Dion's own first walks.
-The dev deploy now gates on CI green in the cloud as well as in the repo. The two-surfaces
-problem phase 10 surfaced still has its address — the airplane arc, phases 12.5
-and 12.7. This line moves as phases close; a clean session starts by believing
-it.
+**Where we are: Phase 13.5 is CLOSED — the front door is open on dev, and the
+code says canvas.** `dev.isocan.io` serves Scene 0's three steps to a browser
+that has never been here, `marketing/` is folded into it and gone, and the
+magic-link floor now arrives **in an inbox** from `noreply@dev.isocan.io`. That
+last one turned out to be code as well as DNS: the provider moves the From:
+address and the action-link domain together, so the daemon serves
+`/__/auth/action` itself rather than sending people to a second origin. The
+rename landed with it — canvas everywhere a stranger reads, and six contracts
+deliberately still spelling `project`, each commented at its site.
+
+**Two things a clean session must know before it types anything.** The wire
+keys renamed, so **a pre-rename CLI or replica cannot WRITE to a current home**
+— it gets 426 and the upgrade command, reads still work, and Dion and Paul both
+need `npx github:dglazkov/isocan#release setup`. And phase 10.5 is still
+PART-DONE for the same reason it always was: Paul and Dion have not walked
+`development.md`. Phase 13.5's own unproven half — that Scene 0's three steps,
+*run*, produce a canvas — is that same walk, counted once, over there.
+
+The launch-first order set 2026-08-24 by Dimitri runs 10.3 → 10.5 → 13.5 → 13.7
+→ 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as features added to a
+live isocan.io. The cut line is the journey's own built/unbuilt boundary: Scenes
+0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt remainder, so
+launching first ships exactly the journey that exists. **Phase 13.7, the
+innkeeper's obligations, is next** — GC on a timer, rate limits at the door, and
+the words. The two-surfaces problem phase 10 surfaced still has its address —
+the airplane arc, phases 12.5 and 12.7. This line moves as phases close; a clean
+session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -122,34 +132,22 @@ is how it goes wrong.
   until the full design is written and the browser hypotheses measured,
   which gate 12.7.
 
-- **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
-  **canvas** in every doc — 160 mentions against 15 of "project" — and a
-  **project** in every line of code: 712 `projectId`, plus
-  `project.create`, `listProjects`, `ProjectListPage`. The map splits the
-  difference and specifies the Firestore schema as `canvases/{id}`. The
-  seam became visible where it matters most, in the address a stranger
-  pastes: the journey and the desk design both wrote
-  `isocan.io/c/7f3a…`, and **nothing ever served `/c/`** — the app has
-  had exactly two routes, `/` and `/p/:projectId`, all along. Measured
-  in a browser, `/c/<id>` returns 200, serves the app shell, and renders
-  a **blank page**: no catch-all route, so React Router matches nothing
-  and draws nothing. **Settled by Dimitri, 2026-08-23: keep `/p/`, fix
-  the docs** — it works, it is tested, and a second URL shape for one
-  canvas is a cost that lasts forever. The docs now say `/p/`.
-  What stays open is the **rename itself**, deliberately: it touches
-  every file, buys no behaviour, and would bury whatever phase it landed
-  in. It is recorded here rather than in a phase because the thing that
-  will eventually force it is not a feature but an audience — the first
-  time somebody outside this repo reads `projectId` in the agent guide
-  and asks what a project is. Until then the split is a known cost, not
-  a bug, and the one place it must never leak again is a URL. The
-  blank-page half is **not** open: a catch-all route that says the
-  canvas is not here is phase 7's, because a share link is the one
-  address strangers hand each other and its failure has to be legible.
-  **The rename settled too, 2026-08-24:** launch-first moves the
-  trigger — the first outside reader arrives at launch — so the rename
-  lands in phase 13.5, as its own mechanical commit, the last moment it
-  is free.
+- **Canvas or project — CLOSED 2026-08-24 (phase 13.5).** Kept here as a
+  headstone rather than deleted, because what it decided still binds. The
+  product was a canvas in 160 doc mentions and a project in 712 lines of code;
+  the rename landed in phase 13.5 as its own commit, at the moment the entry
+  named — the first outside reader. **What renamed:** every identifier, type,
+  file, CSS class, CLI verb (`isocan canvas`, with `project` a hidden alias),
+  help string and doc. **What did not, and never will without a migration:** the
+  op type strings `project.*`, the `/api/projects` routes, the
+  `.isocan/project.json` marker, the on-disk `projects/<id>/project.json`
+  layout, the `prj_` id prefix, and the two `CanvasState` field names. Each is
+  commented at its site. The URL settlement from 2026-08-23 stands unchanged —
+  `/p/`, one address, no `/c/` alias — and the catch-all that made a wrong one
+  legible shipped in phase 7. **The one thing this entry did not foresee** was a
+  sixth category: persisted and wire JSON *keys*, which are neither a route nor
+  an op string. Those DID rename, deliberately, and the break is real — see
+  phase 13.5's findings.
 - **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
   garbage collection at the hosted home, on purpose;
   [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
@@ -182,14 +180,20 @@ could not reach, and a lesson retold once per phase reads as trivia.
 Bracketed numbers are the phases that taught it.
 
 - **This system's default answer to a wrong address is a cheerful one**
-  [5, 6, 7, 7.5, 8, 9]. Six sightings: `/healthz/` returns the app shell at
+  [5, 6, 7, 7.5, 8, 9, 13.5]. Eight sightings: `/healthz/` returns the app shell at
   200; `/c/<id>` renders blank; a refused socket is indistinguishable from a
   network blip; an unmatched `/api/` path returns the web app, so version
   negotiation with an older home works only because HTML fails to parse as
   JSON; `address#pass` pasted into an open tab runs nothing; a provisioning
   call on the wrong path got an HTML 404 whose body held no `"error"`, and the
-  check passed. **A step that cannot read back the state it wanted has
-  verified nothing.**
+  check passed; `dev.isocan.io/__/auth/action` answered 200 with the app shell
+  while being shopped as a sender domain, which would have swallowed a sign-in
+  code; and the first `.webp` this tree ever served went out as
+  `application/octet-stream` and RENDERED anyway, because Chrome sniffs an
+  `<img>`. **A step that cannot read back the state it wanted has verified
+  nothing** — and phase 13.5 adds the sharper form: **an instrument can be
+  cheerful too.** `returnOobLink` reported the old sender domain twice while
+  real mail already carried the new one.
 - **A comment that reasons about a browser is a hypothesis** [2, 8, 9, 10].
   Wrong twice by not measuring: the blob route held open four phases on a
   cookie argument about a different request, and a service worker argued into
@@ -1037,7 +1041,17 @@ phase runs now rather than letting the knowledge trickle in over Slack.
 
 ## Phase 13.5 — The front door ⚑ provision
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-24 (`3344d42` … `ef04b68`). Two of the three
+proofs played in full and the third played in half, which this doc requires be
+said rather than rounded up. The front page is live on dev and was met by
+Dimitri from a private window — a profile that had never seen isocan — wearing
+Scene 0's three steps instead of a name prompt. The magic link arrived **in an
+inbox**, from `noreply@dev.isocan.io`, through a handler this repo now serves
+itself. The rename is green at 1321 tests with project-vocabulary gone from
+everywhere a stranger reads. **The half not proven:** "three steps, a canvas"
+— that the steps, *run*, land somebody on a canvas. Nobody ran them. That is
+not a second debt, it is phase 10.5's Paul walk wearing this phase's words, and
+it stays there rather than being counted twice.
 
 **Work:** The front page — the home origin wearing Scene 0's three
 steps, built and proven against dev; split out of phase 14 exactly as
@@ -1064,7 +1078,68 @@ seen isocan: three steps, a canvas. A magic link that arrives in an
 inbox rather than spam. The rename proven by the suite, green, and by
 `grep` finding project-vocabulary nowhere a stranger reads.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24 — This section was wrong: the spam fix is code as well as DNS.**
+  The provider moves the From: address and the action-link domain together, so
+  the sender domain must answer `/__/auth/action`. The daemon serves it now,
+  which is what let the sender be `dev.isocan.io` rather than a second origin.
+- **2026-08-24 — Two candidate sender domains were disqualified by their own
+  answers.** The apex `isocan.io` has no A record; `dev.isocan.io/__/auth/action`
+  returned **200 and the app shell** — the seventh sighting of the standing
+  lesson, met while shopping for a domain to trust.
+- **2026-08-24 — Decided: no second origin.** `auth.isocan.io` on Firebase
+  Hosting was the researched answer and was refused — a sign-in link landing on
+  a different hostname than the product would put the badge cookie, the service
+  worker and the browser replica behind two doors.
+- **2026-08-24 — Firebase Hosting is NOT required for a custom sender domain.**
+  The console accepted a Cloud Run origin. The research assumed otherwise; the
+  console settled it in one field.
+- **2026-08-24 — `returnOobLink` renders the DEFAULT domain whatever the custom
+  domain says.** Probed twice, got `firebaseapp.com` twice, and was one message
+  from reporting the change ineffective — while sent mail already said
+  `dev.isocan.io`. The only instrument for what a sent email says is a sent
+  email.
+- **2026-08-24 — An open redirect was one parser quirk from shipping.** An
+  unknown scheme is not "special", so `continueUrl=foo:\\evil.example/x` keeps
+  its backslashes into `pathname` and a `Location` of `\\evil.example/x`
+  resolves off-site with a live `oobCode` attached. Found because a worker
+  checked whether its own tests could fail.
+- **2026-08-24 — A sixth contract category nobody listed: persisted/wire JSON
+  KEYS**, as distinct from routes and op strings. `OpEnvelope.projectId` and its
+  siblings are neither. **Decided by Dimitri: take the break now**, while the
+  audience is three people — and make it legible, because it failed on WRITE
+  with `internal error`. 426 with the upgrade command; reads were unaffected,
+  which is what made it quiet.
+- **2026-08-24 — Detection of a stale client needs BOTH halves.** Mutating it to
+  "new key missing" alone turned all seven tests red: the door's own bearer
+  request carries no `canvasId`, so half a signal refuses the product.
+- **2026-08-24 — Measured, and the control is what proved it:** removing a
+  snapshot loses a canvas on PRE-rename code too, so the oplog's envelope key is
+  not read back on load. Without the control this was a false data-loss report.
+- **2026-08-24 — `marketing/` was a second front door that nothing served**, and
+  Scene 0 rules against it in words. Folded in and deleted; three of its four
+  test cases repointed rather than deleted with it.
+- **2026-08-24 — A hand-rolled 6-entry mime map served the first `.webp` as
+  `application/octet-stream`.** It rendered, because Chrome sniffs an `<img>` —
+  invisible until the day anything sets `nosniff`. The guard is the rule (every
+  extension under `public/` is named), not the instance.
+- **2026-08-24 — Namecheap's MX and SPF are NOT host records.** They are
+  synthesized by `EmailType=FWD`, so a `setHosts` that omits it deletes email
+  forwarding and the SPF with it, invisibly. Every write reads the full set
+  first and carries `EmailType` explicitly.
+- **2026-08-24 — Open, phase 14's:** at the apex, Firebase's SPF and the
+  forwarding SPF are two TXT records on one name — a **permerror**, not a merge.
+  Prod either gives up `@isocan.io` forwarding or hand-manages MX plus one
+  merged record. Subdomains do not collide, which is why dev does not.
+- **2026-08-24 — Three decorative tests in one day**, all found by the same
+  question: an image guard matching `img` as an element token (lesson #3
+  reproduced with 24 green), a "both halves" case asserting two fields of three,
+  and two security cases the URL parser was passing on the code's behalf.
+- **2026-08-24 — `packages/cli/test/restart.test.ts` asserts the repo directory
+  is named `isocan`**, so the suite fails from a worktree named anything else —
+  which lessons.md #7 tells people to use. Cost one false failure before the
+  assertion was read.
 
 ## Phase 13.7 — The innkeeper's obligations
 

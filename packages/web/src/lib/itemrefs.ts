@@ -4,7 +4,7 @@
  * only feeds it the live items and performs the catapult.
  */
 import { useMemo } from "react";
-import type { CanvasState, ItemRefCandidate } from "@isocan/core";
+import type { CanvasContents, ItemRefCandidate } from "@isocan/core";
 import { collectItemRefCandidates } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -23,7 +23,7 @@ export interface ItemRefRoster {
   entries: ItemEntry[];
 }
 
-export function itemRefRoster(canvas: CanvasState | null): ItemRefRoster {
+export function itemRefRoster(canvas: CanvasContents | null): ItemRefRoster {
   if (!canvas) return { candidates: [], entries: [] };
   const entries = Object.values(canvas.items)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

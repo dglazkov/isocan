@@ -2,7 +2,7 @@ import { createReadStream, promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { Readable } from "node:stream";
-import type { ActorRegistry, LogEntry, Project, ProjectState, SlashCommand } from "@isocan/core";
+import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "@isocan/core";
 import {
   applyActorColor,
   applyOperation,
@@ -19,13 +19,13 @@ import type {
   BlobListing,
   BlobMeta,
   BlobUploadRequest,
-  LoadedProject,
+  LoadedCanvas,
   Store,
 } from "./store.ts";
 
 /**
- * Persistence for one isocan home. Layout per project:
- *   project.json  — Project metadata
+ * Persistence for one isocan home. Layout per canvas:
+ *   project.json  — Canvas metadata
  *   canvas.json   — { lastSeq, items, threads } derived snapshot
  *   trash.json    — TrashEntry[] derived snapshot
  *   oplog.jsonl   — append-only LogEntry per line; the source of truth
@@ -39,56 +39,56 @@ import type {
 
 interface CanvasSnapshotFile {
   lastSeq: number;
-  items: ProjectState["canvas"]["items"];
-  threads: ProjectState["canvas"]["threads"];
+  items: CanvasState["canvas"]["items"];
+  threads: CanvasState["canvas"]["threads"];
 }
 
 export class FileStore implements Store {
   constructor(readonly home: string) {}
 
   async init(): Promise<void> {
-    await fs.mkdir(p.projectsDir(this.home), { recursive: true });
-    await fs.mkdir(p.deletedProjectsDir(this.home), { recursive: true });
+    await fs.mkdir(p.canvasesDir(this.home), { recursive: true });
+    await fs.mkdir(p.deletedCanvasesDir(this.home), { recursive: true });
   }
 
   /** Nothing is held open: every write here closes its own handle. The method
    * exists for the backing that does hold something open. */
   async close(): Promise<void> {}
 
-  async listProjects(): Promise<Project[]> {
+  async listCanvases(): Promise<Canvas[]> {
     let ids: string[];
     try {
-      ids = await fs.readdir(p.projectsDir(this.home));
+      ids = await fs.readdir(p.canvasesDir(this.home));
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw err;
     }
-    const projects: Project[] = [];
+    const canvases: Canvas[] = [];
     for (const id of ids) {
-      const project = await readJson<Project>(p.projectFile(this.home, id));
-      if (project) projects.push(project);
+      const canvas = await readJson<Canvas>(p.canvasMetaFile(this.home, id));
+      if (canvas) canvases.push(canvas);
     }
-    projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return projects;
+    canvases.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return canvases;
   }
 
-  async createProjectDir(id: string): Promise<void> {
+  async createCanvasDir(id: string): Promise<void> {
     await fs.mkdir(p.blobsDir(this.home, id), { recursive: true });
   }
 
-  async projectExists(id: string): Promise<boolean> {
-    return (await readJson<Project>(p.projectFile(this.home, id))) !== null;
+  async canvasExists(id: string): Promise<boolean> {
+    return (await readJson<Canvas>(p.canvasMetaFile(this.home, id))) !== null;
   }
 
-  async load(id: string): Promise<LoadedProject | null> {
-    const project = await readJson<Project>(p.projectFile(this.home, id));
-    if (!project) return null;
+  async load(id: string): Promise<LoadedCanvas | null> {
+    const record = await readJson<Canvas>(p.canvasMetaFile(this.home, id));
+    if (!record) return null;
     const snapshot = await readJson<CanvasSnapshotFile>(p.canvasFile(this.home, id));
-    const trash = (await readJson<ProjectState["canvas"]["trash"]>(p.trashFile(this.home, id))) ?? [];
+    const trash = (await readJson<CanvasState["canvas"]["trash"]>(p.trashFile(this.home, id))) ?? [];
     const entries = await readJsonLines<LogEntry>(p.oplogFile(this.home, id));
 
-    let state: ProjectState = {
-      project,
+    let state: CanvasState = {
+      project: record,
       canvas: snapshot
         ? { items: snapshot.items, threads: snapshot.threads, trash }
         : { ...emptyCanvas(), trash },
@@ -112,11 +112,11 @@ export class FileStore implements Store {
     return { state, lastSeq, entries, recoveredSeqs };
   }
 
-  async saveProject(project: Project): Promise<void> {
-    await writeFileAtomic(p.projectFile(this.home, project.id), pretty(project));
+  async saveCanvas(canvas: Canvas): Promise<void> {
+    await writeFileAtomic(p.canvasMetaFile(this.home, canvas.id), pretty(canvas));
   }
 
-  async saveSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void> {
+  async saveSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     const snapshot: CanvasSnapshotFile = {
       lastSeq,
       items: state.canvas.items,
@@ -124,7 +124,7 @@ export class FileStore implements Store {
     };
     await writeFileAtomic(p.canvasFile(this.home, id), pretty(snapshot));
     await writeFileAtomic(p.trashFile(this.home, id), pretty(state.canvas.trash));
-    await this.saveProject(state.project);
+    await this.saveCanvas(state.project);
   }
 
   async appendLog(id: string, entry: LogEntry): Promise<void> {
@@ -132,11 +132,11 @@ export class FileStore implements Store {
   }
 
   /** project.delete is soft: the directory is moved aside, recoverable by hand. */
-  async softDeleteProject(id: string): Promise<void> {
+  async softDeleteCanvas(id: string): Promise<void> {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     await fs.rename(
-      p.projectDir(this.home, id),
-      path.join(p.deletedProjectsDir(this.home), `${id}-${stamp}`),
+      p.canvasDir(this.home, id),
+      path.join(p.deletedCanvasesDir(this.home), `${id}-${stamp}`),
     );
   }
 
@@ -146,7 +146,7 @@ export class FileStore implements Store {
    * Load the registry: snapshot plus any oplog tail the snapshot doesn't
    * cover. Replay is trivial — the envelope carries the RESOLVED actor, so a
    * logged claim re-applies without re-validation — which is what makes the
-   * jsonl the source of truth and actors.json derived, same as a project.
+   * jsonl the source of truth and actors.json derived, same as a canvas.
    */
   /**
    * The slash commands this home has written. Read from disk every time

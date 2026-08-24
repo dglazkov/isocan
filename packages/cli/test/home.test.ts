@@ -165,7 +165,7 @@ describe("isocan home <url>", () => {
     // AT THE HOME rather than here, which is the whole of what this key does.
     const named = await isocanWith({ ISOCAN_SESSION_ID: "s-home-verb" }, "identity", "--session");
     expect(named.code, named.stderr).toBe(0);
-    expect((await upstream.engine.listProjects()).length).toBe(1);
+    expect((await upstream.engine.listCanvases()).length).toBe(1);
   }, 30_000);
 
   it("does not bounce a daemon whose birth default is already that home", async () => {
@@ -225,7 +225,7 @@ describe("isocan home --clear", () => {
     const session = { ISOCAN_SESSION_ID: "s-clear" };
     const named = await isocanWith(session, "identity", "--session");
     expect(named.code, named.stderr).toBe(0);
-    const [born] = await upstream.engine.listProjects();
+    const [born] = await upstream.engine.listCanvases();
     expect(born).toBeTruthy();
 
     const cleared = await json("home", "--clear");
@@ -272,7 +272,7 @@ describe("one daemon, both roles at once", () => {
     const away = { ISOCAN_SESSION_ID: "s-mixed-away" };
     await isocan("home", homeBase);
     expect((await isocanWith(away, "identity", "--session")).code).toBe(0);
-    const [there] = await upstream.engine.listProjects();
+    const [there] = await upstream.engine.listCanvases();
     expect(there).toBeTruthy();
 
     // Cleared, so the next canvas is born right here — beside the one that
@@ -285,7 +285,7 @@ describe("one daemon, both roles at once", () => {
       expect(made.code, made.stderr).toBe(0);
       const marker = JSON.parse(
         await fs.readFile(path.join(localDir, ".isocan", "project.json"), "utf8"),
-      ) as { projectId: string; home?: string };
+      ) as { projectId: string; home?: string }; // on-disk spelling: holdout
       // Born here means born here: no address in the marker at all, which is
       // the same file Dion's rig has always written.
       expect(marker.home).toBeUndefined();
@@ -341,7 +341,7 @@ describe("what a configured home puts in the marker", () => {
     const session = { ISOCAN_SESSION_ID: "s-use" };
     const named = await isocanWith(session, "identity", "--session");
     expect(named.code, named.stderr).toBe(0);
-    const made = await isocanWith(session, "project", "create", "Acme Sprint Board");
+    const made = await isocanWith(session, "canvas", "create", "Acme Sprint Board");
     expect(made.code, made.stderr).toBe(0);
 
     // The write forwarded, so the canvas exists AT THE HOME first and arrives
@@ -350,7 +350,7 @@ describe("what a configured home puts in the marker", () => {
     // the local list, like every other command.
     const deadline = Date.now() + 15_000;
     for (;;) {
-      const here = (await isocan("project", "list", "--all", "--json")).stdout;
+      const here = (await isocan("canvas", "list", "--all", "--json")).stdout;
       if (here.includes("Acme Sprint Board")) break;
       if (Date.now() > deadline) throw new Error(`the canvas never replicated back: ${here}`);
       await new Promise((r) => setTimeout(r, 200));
@@ -376,7 +376,7 @@ describe("setup finishes the walk", () => {
   it("hands over the canvas's address AT THE HOME, not a marker file to read", async () => {
     await isocan("home", homeBase);
     await isocanWith({ ISOCAN_SESSION_ID: "s-setup" }, "identity", "--session");
-    const [born] = await upstream.engine.listProjects();
+    const [born] = await upstream.engine.listCanvases();
 
     const report = await json("setup", "--no-install", "--no-open");
     expect(report.canvas).toBe(`${homeBase}/p/${born!.id}`);
@@ -390,7 +390,7 @@ describe("setup finishes the walk", () => {
     await isocan("home", homeBase);
     const report = await json("setup", "--no-install", "--no-open");
     expect(report.canvas).toContain("none in this directory yet");
-    expect(await upstream.engine.listProjects()).toEqual([]);
+    expect(await upstream.engine.listCanvases()).toEqual([]);
   }, 30_000);
 });
 

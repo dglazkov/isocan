@@ -1,4 +1,4 @@
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 
 /**
  * The design system: what this canvas has decided things look like.
@@ -40,7 +40,7 @@ export function isDesignSystem(item: Item): boolean {
  * are a mistake rather than a feature, and the newest is the likelier answer
  * to "which one is real".
  */
-export function designSystem(canvas: CanvasState): Item | null {
+export function designSystem(canvas: CanvasContents): Item | null {
   const found = Object.values(canvas.items)
     .filter(isDesignSystem)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));

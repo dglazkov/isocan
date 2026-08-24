@@ -9,7 +9,7 @@ import { adoptIdentity } from "./lib/identity.ts";
 import { faceFor } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
-import { ProjectListPage } from "./pages/ProjectListPage.tsx";
+import { CanvasListPage } from "./pages/CanvasListPage.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { NotHerePage } from "./pages/NotHerePage.tsx";
 
@@ -67,7 +67,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
       <Doorway actor={actor} onIdentity={setActor}>
         {(who) => (
           <Routes>
-            <Route path="/" element={<ProjectListPage actor={who} onIdentity={setActor} />} />
+            <Route path="/" element={<CanvasListPage actor={who} onIdentity={setActor} />} />
             {/* The canvas's address, built from core's one spelling of it — see
                 `address.ts` for why that is worth a module. */}
             <Route path={CANVAS_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />

@@ -1,8 +1,8 @@
 import type {
   ActorRegistry,
   LogEntry,
-  Project,
-  ProjectState,
+  Canvas,
+  CanvasState,
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
@@ -36,8 +36,8 @@ export interface BlobUploadRequest {
   size: number;
 }
 
-export interface LoadedProject {
-  state: ProjectState;
+export interface LoadedCanvas {
+  state: CanvasState;
   lastSeq: number;
   /** Full log, oldest first — feeds the undo stack. */
   entries: LogEntry[];
@@ -82,15 +82,15 @@ export interface Store {
    * without which the process simply never exits. */
   close(): Promise<void>;
 
-  listProjects(): Promise<Project[]>;
+  listCanvases(): Promise<Canvas[]>;
 
-  createProjectDir(id: string): Promise<void>;
+  createCanvasDir(id: string): Promise<void>;
 
-  projectExists(id: string): Promise<boolean>;
+  canvasExists(id: string): Promise<boolean>;
 
-  load(id: string): Promise<LoadedProject | null>;
+  load(id: string): Promise<LoadedCanvas | null>;
 
-  saveProject(project: Project): Promise<void>;
+  saveCanvas(canvas: Canvas): Promise<void>;
 
   /**
    * Record the derived state. Called after EVERY op, and a backing is
@@ -101,14 +101,14 @@ export interface Store {
    * routinely non-empty; that is a difference between backings and not a
    * difference in the engine's behavior.
    */
-  saveSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void>;
+  saveSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void>;
 
   /** Durable before it returns. Throws `OplogFencedError` — and only that —
    * when `entry.seq` was already claimed by another writer. */
   appendLog(id: string, entry: LogEntry): Promise<void>;
 
   /** project.delete is soft: the state is moved aside, recoverable by hand. */
-  softDeleteProject(id: string): Promise<void>;
+  softDeleteCanvas(id: string): Promise<void>;
 
   // ---- slash commands ----
 

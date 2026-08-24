@@ -18,11 +18,11 @@ import {
  * **One spelling of a canvas's address.**
  *
  * The bug this guards against was measured, not imagined: the docs wrote
- * `isocan.io/c/7f3a…`, the app served `/p/:projectId`, and nothing anywhere
+ * `isocan.io/c/7f3a…`, the app served `/p/:canvasId`, and nothing anywhere
  * reconciled them — so a doc-shaped share link returned 200, served the app
  * shell, matched no route, and rendered a **blank page**. Dimitri settled the
  * address on 2026-08-23 (keep `/p/`, fix the docs) and left the underlying
- * canvas-versus-project rename deliberately open.
+ * canvas-versus-project rename for later; it landed in phase 13.5.
  *
  * The settlement is only worth as much as the thing that keeps it true. So:
  * the prefix has exactly one definition, and the second test is a lint that
@@ -36,7 +36,7 @@ const repo = path.resolve(here, "../../..");
 describe("a canvas's address", () => {
   it("is /p/, and the router pattern is built from the same prefix", () => {
     expect(CANVAS_PATH_PREFIX).toBe("/p");
-    expect(CANVAS_ROUTE).toBe("/p/:projectId");
+    expect(CANVAS_ROUTE).toBe("/p/:canvasId");
     expect(canvasPath("prj_acme")).toBe("/p/prj_acme");
   });
 
@@ -78,26 +78,26 @@ describe("a canvas's address", () => {
     // would fail the exact paste the scene is built around.
     expect(parseCanvasAddress("isocan.io/p/prj_acme")).toEqual({
       origin: "https://isocan.io",
-      projectId: "prj_acme",
+      canvasId: "prj_acme",
     });
     expect(parseCanvasAddress("https://isocan.io/p/prj_acme#pss_1.s3cret")).toEqual({
       origin: "https://isocan.io",
-      projectId: "prj_acme",
+      canvasId: "prj_acme",
       pass: "pss_1.s3cret",
     });
     // Loopback gets http, because nobody runs TLS on 127.0.0.1 and the one
     // place a scheme-less loopback address is typed is a developer's terminal.
     expect(parseCanvasAddress("127.0.0.1:4441/p/prj_acme")).toEqual({
       origin: "http://127.0.0.1:4441",
-      projectId: "prj_acme",
+      canvasId: "prj_acme",
     });
     // A trailing slash is what a browser adds; it is not a different canvas.
-    expect(parseCanvasAddress("https://isocan.io/p/prj_acme/")?.projectId).toBe("prj_acme");
+    expect(parseCanvasAddress("https://isocan.io/p/prj_acme/")?.canvasId).toBe("prj_acme");
     // Round trip, both directions, against the one writer.
     const built = canvasUrlWithPass("https://isocan.io", "prj_acme", "pss_1.s3cret");
     expect(parseCanvasAddress(built)).toEqual({
       origin: "https://isocan.io",
-      projectId: "prj_acme",
+      canvasId: "prj_acme",
       pass: "pss_1.s3cret",
     });
   });

@@ -1,11 +1,11 @@
 import type {
   Actor,
-  CanvasState,
+  Canvas,
+  CanvasContents,
   Comment,
   Item,
   ItemVersion,
-  Project,
-  ProjectState,
+  CanvasState,
 } from "./model.ts";
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
@@ -16,24 +16,24 @@ import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
  * The shared pure reducer. The daemon runs it authoritatively; the web client
  * runs the identical function against its replica for every broadcast op.
  *
- * - `project.create` requires `state === null` and returns a fresh ProjectState.
+ * - `project.create` requires `state === null` and returns a fresh CanvasState.
  * - `project.delete` returns null (the engine moves the directory aside; the
- *   replica handles the separate "project-deleted" message).
+ *   replica handles the separate "canvas-deleted" message).
  * - Every mutation stamps `updatedAt`/`updatedBy` from the envelope. Undo
  *   restores content, not these stamps — the undoer did mutate the item.
  */
 export function applyOperation(
-  state: ProjectState | null,
+  state: CanvasState | null,
   envelope: OpEnvelope,
-): ProjectState | null {
+): CanvasState | null {
   const { op, actor, ts } = envelope;
 
   if (op.type === "project.create") {
     if (state !== null) {
-      throw new OpValidationError("bad-op", "project.create on existing project");
+      throw new OpValidationError("bad-op", "project.create on existing canvas");
     }
-    const project: Project = {
-      id: op.projectId,
+    const project: Canvas = {
+      id: op.canvasId,
       title: op.title,
       description: op.description ?? "",
       properties: { ...op.properties },
@@ -46,7 +46,7 @@ export function applyOperation(
   }
 
   if (state === null) {
-    throw new OpValidationError("bad-op", `${op.type} on missing project`);
+    throw new OpValidationError("bad-op", `${op.type} on missing canvas`);
   }
 
   if (op.type === "project.delete") {
@@ -56,7 +56,7 @@ export function applyOperation(
   const stamp = { updatedAt: ts, updatedBy: actor };
   const { project, canvas } = state;
 
-  const withCanvas = (next: CanvasState): ProjectState => ({ project, canvas: next });
+  const withCanvas = (next: CanvasContents): CanvasState => ({ project, canvas: next });
 
   const getItem = (itemId: string): Item => {
     const item = canvas.items[itemId];
@@ -64,7 +64,7 @@ export function applyOperation(
     return item;
   };
 
-  const putItem = (item: Item): ProjectState =>
+  const putItem = (item: Item): CanvasState =>
     withCanvas({ ...canvas, items: { ...canvas.items, [item.id]: item } });
 
   const getThread = (threadId: string) => {

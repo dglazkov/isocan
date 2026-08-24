@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasState, Item } from "../src/model.ts";
+import type { CanvasContents, Item } from "../src/model.ts";
 import {
   nearestFreeSpot,
   PLACEMENT_CLEARANCE,
@@ -20,8 +20,8 @@ import {
 const item = (id: string, x: number, y: number, width = 100, height = 100): Item =>
   ({ id, x, y, width, height, title: id, properties: {} }) as unknown as Item;
 
-const canvasOf = (...items: Item[]): CanvasState =>
-  ({ items: Object.fromEntries(items.map((i) => [i.id, i])), trash: [] }) as unknown as CanvasState;
+const canvasOf = (...items: Item[]): CanvasContents =>
+  ({ items: Object.fromEntries(items.map((i) => [i.id, i])), trash: [] }) as unknown as CanvasContents;
 
 describe("placing a new item", () => {
   it("honours a free spot exactly", () => {

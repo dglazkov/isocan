@@ -208,7 +208,7 @@ from here", which on a solo home includes the canvas a CLI just made
 under a badge the tab has never carried — and the caller states which,
 never the route sniffing who called. Phase 10.3 added a third question to
 the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's project list asks,
+daemon is the home of, which is what the web app's canvas list asks,
 because its links are client-side navigations that never reach the
 per-canvas page guard and the local origin would otherwise render a
 replica of a canvas that lives at dev. Enumerate-and-mirror was the
@@ -353,7 +353,7 @@ two-ledger rule:
 
 - `badges/{badgeId}` — `{secretHash, kind, createdAt, lastSeen,
   admissions: [{canvasId, provenance, at}],
-  claims: [{actorId, boundAt, sessionKey?, projectId?}],
+  claims: [{actorId, boundAt, sessionKey?, canvasId?}],
   claimIds: [actorId], claimKeys: [sessionKey], admittedTo: [canvasId],
   attestations: [{attribute, verifiedVia, at}]}`. The badge secret is
   256-bit random and stored **hashed** — the desk keeps no secret it
@@ -433,6 +433,24 @@ attribute, not the attester's vendor.
 
 **Built in phase 9 stage 2, and it redrew one line of this map: whether a
 home HAS an attester is configuration, not a property of the image.**
+
+**Phase 13.5 redrew a second line: the home serves the attester's own
+action path.** Identity Platform's sign-in mail was landing in spam — it
+sends from `noreply@<gcp-project>.firebaseapp.com`, aligned to nothing
+isocan owns. The fix is a custom sender domain at the provider, and the
+provider moves the **From: address and the action-link domain together**:
+whatever domain the mail claims to come from is the domain the link
+points at, and that domain must answer `/__/auth/action`. So the daemon
+answers it — a 302 that keeps only the path from `continueUrl` and
+discards scheme, host, port and fragment, because `continueUrl` is chosen
+by anyone holding the browser API key and honouring it would carry a live
+`oobCode` off the origin. The alternative was a second origin on Firebase
+Hosting, and it was refused: a sign-in link landing on a different
+hostname than the product would put the badge cookie, the service worker
+and the browser replica behind two doors. **A home's sender domain is
+therefore a DNS fact about that home** — dev's is `dev.isocan.io`, with
+SPF and two DKIM CNAMEs on that label — and it is one more thing an
+operator provisions rather than something the image carries.
 `ISOCAN_AUTH_PROJECT` and `ISOCAN_AUTH_API_KEY` are set on the Cloud Run
 service (`infra/70-cloud-run.sh` looks the key up rather than storing it —
 a browser key is not a secret, but a literal `AIza…` in a repository is a

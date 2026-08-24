@@ -10,7 +10,7 @@ round.
 `blobUrl` returns a same-origin path:
 
 ```ts
-`/api/projects/${projectId}/blobs/${blobHash}`
+`/api/projects/${canvasId}/blobs/${blobHash}`
 ```
 
 An HTML item is rendered into an iframe pointed at that path:
@@ -27,7 +27,7 @@ one attribute. `sandbox="allow-scripts"` gives an opaque origin, so the frame
 is cross-origin to everything, sends no cookie, and can reach nothing. Add
 `allow-same-origin` and all three reverse at once: the document becomes truly
 same-origin, its `fetch` carries the badge cookie, and it can call `/api/…` as
-the person sitting there — read every project, create, delete — as well as
+the person sitting there — read every canvas, create, delete — as well as
 reach the parent document and remove its own `sandbox` attribute.
 
 The mini-browser is the instructive contrast. `.browser-view` *does* carry
@@ -97,7 +97,7 @@ three separate things now, which is the strongest argument for doing it.)*
 - **Two origins in every URL decision** — the app builds content URLs against a
   different base, and something has to tell it what that base is.
 - **Blob addressing has to stand alone.** Content URLs already carry a hash; a
-  content origin must not be able to answer questions about *projects*, or it
+  content origin must not be able to answer questions about *canvases*, or it
   has become a second API with no door on it.
 - **It is not free in the hosted design either**: another domain, another
   certificate, another thing to provision.

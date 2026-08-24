@@ -14,7 +14,7 @@ import { makeComment } from "../components/CommentLayer.tsx";
  * agent, and both create the thread the same way on a virgin canvas.
  */
 export async function postToMain(
-  projectId: string,
+  canvasId: string,
   actor: Actor,
   body: string,
   /** Items the message is about — the selection, carried as ids so an agent
@@ -28,7 +28,7 @@ export async function postToMain(
   };
   const existing = mainThread(useCanvasStore.getState().canvas!);
   if (existing) {
-    await sendOp(projectId, actor, {
+    await sendOp(canvasId, actor, {
       type: "thread.reply",
       threadId: existing.id,
       comment: withItems(body),
@@ -40,7 +40,7 @@ export async function postToMain(
   const ui = useUiStore.getState();
   const center = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
   try {
-    await sendOp(projectId, actor, {
+    await sendOp(canvasId, actor, {
       type: "thread.create",
       threadId: newThreadId(),
       x: Math.round(center.x),
@@ -54,7 +54,7 @@ export async function postToMain(
     // now; deliver the message there.
     const winner = mainThread(useCanvasStore.getState().canvas!);
     if (winner) {
-      await sendOp(projectId, actor, {
+      await sendOp(canvasId, actor, {
         type: "thread.reply",
         threadId: winner.id,
         comment: withItems(body),

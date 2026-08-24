@@ -7,10 +7,10 @@ import { paths } from "@isocan/server";
  * A directory and its canvas (#60).
  *
  * The binding is a marker file — `<root>/.isocan/project.json` — holding the
- * project id and nothing else that matters. Identity, not state: the oplog,
+ * canvas id and nothing else that matters. Identity, not state: the oplog,
  * blobs and snapshots stay in the isocan home, so committing the marker costs
  * a repo one tiny file and buys the future — a clone arrives already knowing
- * WHICH project this directory is, and a project id shared through git is
+ * WHICH canvas this directory is, and a canvas id shared through git is
  * what lets two homes (or, later, a hosted store) agree they are working on
  * the same canvas. Resolution walks up from the cwd like `.git` discovery
  * does, so the binding holds anywhere in the tree and the nearest marker
@@ -22,8 +22,17 @@ import { paths } from "@isocan/server";
  */
 
 export interface DirMarker {
-  projectId: string;
-  /** A hint for materializing the project in a home that has never seen it
+  /**
+   * **On disk this field is spelled `projectId`, deliberately** (phase 13.5's
+   * rename). The marker is COMMITTED INTO PEOPLE'S REPOS: every one already in
+   * the wild spells it the old way, and a clone that suddenly stopped resolving
+   * would be the worst kind of breakage — silent, and in somebody else's
+   * checkout. `readMarker` accepts either spelling and `writeMarker` keeps
+   * writing the old one, so the code says canvas and the file stays readable by
+   * every isocan there has ever been.
+   */
+  canvasId: string;
+  /** A hint for materializing the canvas in a home that has never seen it
    * (a fresh clone): the id is the identity, the title is a good first
    * guess. */
   title?: string;
@@ -54,10 +63,13 @@ export const markerFile = (dir: string) => path.join(dir, ".isocan", "project.js
 
 async function readMarker(dir: string): Promise<DirMarker | null> {
   try {
-    const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as DirMarker;
-    if (typeof raw.projectId !== "string" || raw.projectId.length === 0) return null;
+    const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as MarkerFile;
+    // `projectId` is what is on disk; `canvasId` is accepted so a marker written
+    // by a future isocan that drops the old spelling still resolves.
+    const canvasId = raw.projectId ?? raw.canvasId;
+    if (typeof canvasId !== "string" || canvasId.length === 0) return null;
     // A `home` that is present but not a usable address is a MALFORMED marker,
-    // judged exactly as a malformed `projectId` is: the whole file is
+    // judged exactly as a malformed `canvasId` is: the whole file is
     // rejected. Not ignored — ignoring it would silently turn "this canvas
     // lives at the address I cannot read" into "this canvas lives wherever you
     // are", which is the one wrong answer, and it would be given quietly. An
@@ -66,7 +78,7 @@ async function readMarker(dir: string): Promise<DirMarker | null> {
       return null;
     }
     return {
-      projectId: raw.projectId,
+      canvasId,
       ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
       ...(typeof raw.home === "string" ? { home: raw.home.trim() } : {}),
     };
@@ -90,7 +102,7 @@ const canon = (p: string) => fs.realpath(p).catch(() => path.resolve(p));
 
 /** The nearest binding at or above `cwd`, walking up like `.git` discovery.
  * Stops at the user's home directory: a marker above it could only be an
- * accident, and would claim every project on the machine. */
+ * accident, and would claim every canvas on the machine. */
 export async function findBinding(cwd: string, home: string): Promise<DirBinding | null> {
   const isocanHome = await canon(home);
   const userHome = await canon(os.homedir());
@@ -136,22 +148,38 @@ export async function bindableRoot(cwd: string, home: string): Promise<string | 
   return null;
 }
 
+/** The marker AS IT IS ON DISK — `projectId`, the committed spelling. */
+interface MarkerFile {
+  projectId?: string;
+  canvasId?: string;
+  title?: string;
+  home?: string;
+}
+
 /** Write (or rewrite) the marker. Returns the file it wrote, for saying so. */
 export async function writeMarker(root: string, marker: DirMarker): Promise<string> {
   const file = markerFile(root);
+  // The old spelling goes to disk (see `DirMarker.canvasId`): a marker this
+  // build writes has to be readable by every isocan already installed, and by
+  // every clone of the repo it is committed into.
+  const onDisk: MarkerFile = {
+    projectId: marker.canvasId,
+    ...(marker.title !== undefined ? { title: marker.title } : {}),
+    ...(marker.home !== undefined ? { home: marker.home } : {}),
+  };
   await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, `${JSON.stringify(marker, null, 2)}\n`);
+  await fs.writeFile(file, `${JSON.stringify(onDisk, null, 2)}\n`);
   return file;
 }
 
-/* ── The roster: dir → projectId, cached in the home ─────────────────────
+/* ── The roster: dir → canvasId, cached in the home ─────────────────────
  *
  * The marker is authoritative and lives with the directory; the roster is
  * how the home answers "where does that canvas's directory live" without a
  * crawl. Healed lazily — every command that resolves a binding re-records
  * it — and never trusted over the marker: a row whose directory moved is
  * stale until someone works there again, which is the price of a cache.
- * Several rows may name one project (worktrees, clones); that is the truth,
+ * Several rows may name one canvas (worktrees, clones); that is the truth,
  * not a conflict. Best-effort throughout: a cache must never break a
  * command. */
 
@@ -167,13 +195,13 @@ async function readRoster(home: string): Promise<Record<string, string>> {
   }
 }
 
-export async function recordDir(home: string, root: string, projectId: string): Promise<void> {
+export async function recordDir(home: string, root: string, canvasId: string): Promise<void> {
   try {
     // realpath so a directory reached through a symlink lands on one row.
     const real = await fs.realpath(root).catch(() => path.resolve(root));
     const roster = await readRoster(home);
-    if (roster[real] === projectId) return;
-    roster[real] = projectId;
+    if (roster[real] === canvasId) return;
+    roster[real] = canvasId;
     await fs.mkdir(home, { recursive: true });
     await fs.writeFile(paths.dirsFile(home), `${JSON.stringify(roster, null, 2)}\n`);
   } catch {
@@ -181,12 +209,12 @@ export async function recordDir(home: string, root: string, projectId: string): 
   }
 }
 
-/** Every directory the roster remembers for a project — worktrees and clones
+/** Every directory the roster remembers for a canvas — worktrees and clones
  * are several honest answers, not a conflict. */
-export async function dirsOf(home: string, projectId: string): Promise<string[]> {
+export async function dirsOf(home: string, canvasId: string): Promise<string[]> {
   const roster = await readRoster(home);
   return Object.entries(roster)
-    .filter(([, id]) => id === projectId)
+    .filter(([, id]) => id === canvasId)
     .map(([dir]) => dir)
     .sort();
 }

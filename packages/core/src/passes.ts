@@ -71,7 +71,7 @@ export interface Pass {
   canvasId: string;
   /**
    * The badge that minted it — an admitted badge, by construction, because
-   * the mint route is project-scoped and the door has already run.
+   * the mint route is canvas-scoped and the door has already run.
    *
    * It is also what a redeemed admission's provenance names (`{root: "pass",
    * badgeId}`), so phase 9's sweep can walk from a revoked grant, through the
@@ -141,22 +141,23 @@ export function parsePassToken(raw: string | undefined | null): PassToken | null
 /**
  * Mint one: `POST /api/projects/:id/passes`.
  *
- * **Project-scoped on purpose**, the same argument the grant routes are
- * written on: the `onRequest` hook already asks `projectId ∈ admissions` for
+ * **Canvas-scoped on purpose**, the same argument the grant routes are
+ * written on: the `onRequest` hook already asks `canvasId ∈ admissions` for
  * everything under `/api/projects/:id/`, so "only an admitted badge may mint
  * a pass for this canvas" costs nothing per-route and cannot be forgotten by
  * a later edit. It is also where the canvas comes from — a pass names one
  * canvas, and this way it is named by the ADDRESS rather than by a body field
  * a caller could get wrong.
  */
-export const passesRoute = (projectId: string): string =>
-  `/api/projects/${encodeURIComponent(projectId)}/passes`;
+/** `/api/projects/` is a deliberate holdout (phase 13.5) — see `grantsRoute`. */
+export const passesRoute = (canvasId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/passes`;
 
 /**
  * Redeem one: `POST /api/passes/redeem` — flat, and it has to be.
  *
  * The redeemer is BY DEFINITION not admitted to the canvas yet; that is what
- * the pass is for. A project-scoped path would be refused by the door hook
+ * the pass is for. A canvas-scoped path would be refused by the door hook
  * before the handler could look at the pass at all — the door would answer
  * `not-admitted` to the one request whose entire purpose is to become
  * admitted. So redemption lives outside `/api/projects/`, and the canvas it

@@ -4,8 +4,8 @@ import type { CollectionReference, DocumentData, Firestore } from "@google-cloud
 import type {
   ActorRegistry,
   LogEntry,
-  Project,
-  ProjectState,
+  Canvas,
+  CanvasState,
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
@@ -24,7 +24,7 @@ import type {
   BlobListing,
   BlobMeta,
   BlobUploadRequest,
-  LoadedProject,
+  LoadedCanvas,
   Store,
 } from "@isocan/server";
 import type { ObjectStore } from "./objects.ts";
@@ -82,7 +82,7 @@ export interface CloudStoreOptions {
 }
 
 interface PendingSnapshot {
-  state: ProjectState;
+  state: CanvasState;
   lastSeq: number;
   opsSince: number;
   lastFlushMs: number;
@@ -91,9 +91,9 @@ interface PendingSnapshot {
 
 interface SnapshotObject {
   lastSeq: number;
-  items: ProjectState["canvas"]["items"];
-  threads: ProjectState["canvas"]["threads"];
-  trash: ProjectState["canvas"]["trash"];
+  items: CanvasState["canvas"]["items"];
+  threads: CanvasState["canvas"]["threads"];
+  trash: CanvasState["canvas"]["trash"];
 }
 
 /**
@@ -147,9 +147,9 @@ export class CloudStore implements Store {
   private readonly snapshotEveryMs: number;
   private readonly shutdown: (() => Promise<void>) | undefined;
   private readonly pending = new Map<string, PendingSnapshot>();
-  /** The project metadata last written to each canvas document, so the
+  /** The canvas metadata last written to each canvas document, so the
    * document is rewritten when it CHANGES rather than once per op. */
-  private readonly writtenProject = new Map<string, string>();
+  private readonly writtenCanvas = new Map<string, string>();
   /** This boot, named. Stamped on every op document so a fenced writer can
    * say who beat it rather than only that it lost. */
   readonly writerId = randomUUID().slice(0, 8);
@@ -171,17 +171,19 @@ export class CloudStore implements Store {
     await this.shutdown?.();
   }
 
-  // ---- projects ----
+  // ---- canvases ----
 
-  async listProjects(): Promise<Project[]> {
+  async listCanvases(): Promise<Canvas[]> {
     const found = await this.db.collection(CANVASES).where("deleted", "==", false).get();
-    const projects: Project[] = [];
+    const canvases: Canvas[] = [];
     for (const doc of found.docs) {
-      const project = doc.data()["project"] as Project | undefined;
-      if (project) projects.push(project);
+      // `project` is the stored FIELD NAME, a deliberate holdout (phase 13.5):
+      // every canvas document in dev's Firestore already carries it.
+      const record = doc.data()["project"] as Canvas | undefined;
+      if (record) canvases.push(record);
     }
-    projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return projects;
+    canvases.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return canvases;
   }
 
   /** A bucket has no directories and Firestore has no schema, so there is
@@ -189,7 +191,7 @@ export class CloudStore implements Store {
    * canvas" and it stays — renaming it would churn the engine and its tests
    * for cosmetics, and phase 1's lesson is that an honest leaky seam beats a
    * speculative clean one. */
-  async createProjectDir(_id: string): Promise<void> {}
+  async createCanvasDir(_id: string): Promise<void> {}
 
   /**
    * True for a soft-DELETED canvas too, and that is deliberate.
@@ -209,22 +211,22 @@ export class CloudStore implements Store {
    * reaches this in practice — but it is a difference, so it is written down
    * and each backing asserts its own half.
    */
-  async projectExists(id: string): Promise<boolean> {
+  async canvasExists(id: string): Promise<boolean> {
     return (await this.db.doc(canvasDoc(id)).get()).exists;
   }
 
-  async load(id: string): Promise<LoadedProject | null> {
+  async load(id: string): Promise<LoadedCanvas | null> {
     const canvas = await this.db.doc(canvasDoc(id)).get();
     if (!canvas.exists) return null;
     const data = canvas.data()!;
     if (data["deleted"] === true) return null;
-    const project = data["project"] as Project | undefined;
-    if (!project) return null;
+    const record = data["project"] as Canvas | undefined; // stored field name: holdout
+    if (!record) return null;
     const compactedThrough = (data["compactedThrough"] as number | undefined) ?? 0;
 
     const snapshot = await this.readSnapshot(id);
-    let state: ProjectState = {
-      project,
+    let state: CanvasState = {
+      project: record,
       canvas: snapshot
         ? { items: snapshot.items, threads: snapshot.threads, trash: snapshot.trash }
         : { ...emptyCanvas(), trash: [] },
@@ -248,8 +250,8 @@ export class CloudStore implements Store {
     return { state, lastSeq, entries, recoveredSeqs };
   }
 
-  async saveProject(project: Project): Promise<void> {
-    await this.writeCanvasDoc(project);
+  async saveCanvas(canvas: Canvas): Promise<void> {
+    await this.writeCanvasDoc(canvas);
   }
 
   /**
@@ -257,13 +259,13 @@ export class CloudStore implements Store {
    * enough time have passed, on idle, and on `close()`.
    *
    * The canvas DOCUMENT is not debounced with it, but neither is it written
-   * per op: it is written when the project metadata actually changes. That
-   * matters twice — `projectExists` and `listProjects` must answer correctly
+   * per op: it is written when the canvas metadata actually changes. That
+   * matters twice — `canvasExists` and `listCanvases` must answer correctly
    * the instant a canvas is created, and `canvases/{id}` is a single document
    * with Firestore's ~1 write/second limit on it, which a per-op write would
    * walk straight into.
    */
-  async saveSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void> {
+  async saveSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     await this.writeCanvasDoc(state.project);
     const pending = this.pending.get(id);
     const now = Date.now();
@@ -327,10 +329,10 @@ export class CloudStore implements Store {
    * here: the ops stay exactly where they are, so every seq this canvas ever
    * used remains claimed. A hard delete would free them all.
    */
-  async softDeleteProject(id: string): Promise<void> {
+  async softDeleteCanvas(id: string): Promise<void> {
     await this.flushSnapshot(id);
     this.pending.delete(id);
-    this.writtenProject.delete(id);
+    this.writtenCanvas.delete(id);
     await this.db.doc(canvasDoc(id)).set(
       { deleted: true, deletedAt: new Date().toISOString() },
       { merge: true },
@@ -635,16 +637,17 @@ export class CloudStore implements Store {
     return `${ACTORS}/${padSeq(seq)}.json`;
   }
 
-  /** Write the canvas document when the project metadata actually changed —
+  /** Write the canvas document when the canvas metadata actually changed —
    * see `saveSnapshot` for why this is not per-op. */
-  private async writeCanvasDoc(project: Project): Promise<void> {
-    const encoded = JSON.stringify(project);
-    if (this.writtenProject.get(project.id) === encoded) return;
-    await this.db.doc(canvasDoc(project.id)).set(
-      { project: jsonSafe(project), deleted: false },
+  private async writeCanvasDoc(canvas: Canvas): Promise<void> {
+    const encoded = JSON.stringify(canvas);
+    if (this.writtenCanvas.get(canvas.id) === encoded) return;
+    await this.db.doc(canvasDoc(canvas.id)).set(
+      // `project` is the stored field name — a deliberate holdout (phase 13.5).
+      { project: jsonSafe(canvas), deleted: false },
       { merge: true },
     );
-    this.writtenProject.set(project.id, encoded);
+    this.writtenCanvas.set(canvas.id, encoded);
   }
 
   private async readSnapshot(id: string): Promise<SnapshotObject | null> {
@@ -653,7 +656,7 @@ export class CloudStore implements Store {
     return JSON.parse(raw.toString("utf8")) as SnapshotObject;
   }
 
-  private async writeSnapshot(id: string, state: ProjectState, lastSeq: number): Promise<void> {
+  private async writeSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     const snapshot: SnapshotObject = {
       lastSeq,
       items: state.canvas.items,

@@ -59,7 +59,7 @@ export function actorName(actor: { id: string; name: string }): string {
   return lookup(useCanvasStore.getState().actorNames, actor);
 }
 
-/** Seed the names before any canvas is open: the projects page says who
+/** Seed the names before any canvas is open: the canvases page says who
  * touched a canvas last, and the first paint should not be a name its owner
  * has already replaced. */
 export async function loadActorNames(): Promise<void> {

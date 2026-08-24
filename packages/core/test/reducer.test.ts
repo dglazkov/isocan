@@ -164,7 +164,7 @@ describe("validation", () => {
     expectRejects({ type: "items.restore", itemIds: ["itm_trashed", "itm_1"] }, "not-in-trash");
   });
 
-  it("rejects ops on a missing project", () => {
+  it("rejects ops on a missing canvas", () => {
     expect(() =>
       applyOperation(null, envelope({ type: "item.move", itemId: "itm_1", x: 0, y: 0 })),
     ).toThrow(OpValidationError);
@@ -368,7 +368,7 @@ describe("semantics", () => {
     }
   });
 
-  it("project.update stamps the project, and deletes stamp the trash entry", () => {
+  it("project.update stamps the canvas, and deletes stamp the trash entry", () => {
     const meta = envelope({ type: "project.update", patch: { title: "T" } }, bob);
     const updated = applyOperation(seedState(), meta)!;
     expect(updated.project.updatedBy).toEqual(bob);

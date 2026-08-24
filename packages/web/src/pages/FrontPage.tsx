@@ -70,7 +70,7 @@ export function FrontPage({ onIdentity }: { onIdentity: (actor: Actor) => void }
             1
           </span>
           <div className="front-step-body">
-            <div className="front-step-say">Add the skill, wherever your project lives.</div>
+            <div className="front-step-say">Add the skill, wherever your canvas lives.</div>
             <CopyCommand command={SKILL_INSTALL_COMMAND} />
           </div>
         </li>

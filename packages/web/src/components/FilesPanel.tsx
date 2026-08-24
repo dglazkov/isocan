@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CanvasState, Item } from "@isocan/core";
+import type { CanvasContents, Item } from "@isocan/core";
 import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
 import { KIND_LABEL, iconKindFor } from "../lib/kinds.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
@@ -28,8 +28,8 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 /** Open/close the panel and remember it. The left dock holds one panel at a
  * time; opening the files puts the main thread away. */
-export function openFilesPanel(projectId: string, open: boolean): void {
-  openPanel(projectId, open ? "files" : null);
+export function openFilesPanel(canvasId: string, open: boolean): void {
+  openPanel(canvasId, open ? "files" : null);
 }
 
 /** Bytes as a person reads them. */
@@ -46,7 +46,7 @@ interface Row {
   kind: ItemKind;
 }
 
-function rowsOf(canvas: CanvasState, filter: string): Array<[ItemKind, Row[]]> {
+function rowsOf(canvas: CanvasContents, filter: string): Array<[ItemKind, Row[]]> {
   const needle = filter.trim().toLowerCase();
   const rows: Row[] = [];
   for (const item of Object.values(canvas.items)) {
@@ -70,7 +70,7 @@ function rowsOf(canvas: CanvasState, filter: string): Array<[ItemKind, Row[]]> {
   );
 }
 
-export function FilesPanel({ projectId }: { projectId: string }) {
+export function FilesPanel({ canvasId }: { canvasId: string }) {
   const open = useUiStore((s) => s.filesPanelOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -105,7 +105,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
           className="main-close"
           title="Close"
           aria-label="Close the files panel"
-          onClick={() => openFilesPanel(projectId, false)}
+          onClick={() => openFilesPanel(canvasId, false)}
         >
           ✕
         </button>
@@ -160,7 +160,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
           </section>
         ))}
       </div>
-      {peek && <FileCard projectId={projectId} row={peek.row} top={peek.top} />}
+      {peek && <FileCard canvasId={canvasId} row={peek.row} top={peek.top} />}
     </aside>
   );
 }
@@ -170,7 +170,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
  * edge radar opens off a beacon, because it answers the same question: what is
  * this thing, before I go to it.
  */
-function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: number }) {
+function FileCard({ canvasId, row, top }: { canvasId: string; row: Row; top: number }) {
   const names = useActorNames();
   const panelWidth = useUiStore((s) => s.panelWidth);
   const versions = row.item.versions.length;
@@ -181,7 +181,7 @@ function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: n
   // chrome that outranks the panel.
   return createPortal(
     <div className="hover-card file-card" style={{ left: panelWidth + 10, top: clamped }}>
-      <ItemThumb projectId={projectId} itemId={row.item.id} />
+      <ItemThumb canvasId={canvasId} itemId={row.item.id} />
       <div className="file-card-text">
         <b>{row.item.title}</b>
         <i>{row.filename}</i>

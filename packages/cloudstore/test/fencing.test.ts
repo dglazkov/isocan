@@ -65,7 +65,7 @@ if (!gate.ok && requireEmulator()) {
 
         expect(refusal).toBeInstanceOf(OplogFencedError);
         expect((refusal as OplogFencedError).code).toBe("writer-fenced");
-        expect((refusal as OplogFencedError).projectId).toBe("prj_1");
+        expect((refusal as OplogFencedError).canvasId).toBe("prj_1");
         expect((refusal as OplogFencedError).seq).toBe(4);
 
         // A's entry is the one that is there — the loser wrote nothing.
@@ -179,7 +179,7 @@ function move(seq: number, x: number, y: number): LogEntry {
     seq,
     envelope: {
       id: `op_move_${seq}_${x}`,
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: { id: "usr_test", name: "Tester" },
       ts: new Date(Date.UTC(2026, 0, 3) + seq * 1000).toISOString(),
       op,
@@ -193,7 +193,7 @@ function claimEntry(seq: number): LogEntry {
     seq,
     envelope: {
       id: `op_claim_${seq}`,
-      projectId: null,
+      canvasId: null,
       actor: { id: "usr_ada", name: "Ada" },
       ts: new Date(Date.UTC(2026, 0, 4) + seq * 1000).toISOString(),
       op: { type: "actor.claim", sessionKey: "test:ada", name: "Ada" },

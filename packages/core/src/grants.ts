@@ -253,16 +253,19 @@ export function isLive(grant: Grant): boolean {
 
 // ---- the routes both the button and the verb drive ----
 
-/** `GET` lists, `POST` creates. Project-scoped on purpose: the `onRequest`
- * hook's `projectId ∈ admissions` check already guards everything under
+/** `GET` lists, `POST` creates. Canvas-scoped on purpose: the `onRequest`
+ * hook's `canvasId ∈ admissions` check already guards everything under
  * `/api/projects/:id/`, so only an ADMITTED badge can read or change a
  * canvas's grants, with no per-route remembering. */
-export const grantsRoute = (projectId: string): string =>
-  `/api/projects/${encodeURIComponent(projectId)}/grants`;
+/** The `/api/projects/` path is a deliberate holdout (phase 13.5): it is the
+ * wire between an installed CLI and a home. The helper renames; the path does
+ * not. */
+export const grantsRoute = (canvasId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/grants`;
 
 /** `DELETE` revokes one. */
-export const grantRoute = (projectId: string, grantId: string): string =>
-  `${grantsRoute(projectId)}/${encodeURIComponent(grantId)}`;
+export const grantRoute = (canvasId: string, grantId: string): string =>
+  `${grantsRoute(canvasId)}/${encodeURIComponent(grantId)}`;
 
 export interface CreateGrantRequest {
   subject: GrantSubject;

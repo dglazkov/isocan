@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Actor, MetaPatch, Project } from "@isocan/core";
-import { canvasPath, newProjectId } from "@isocan/core";
-import { listProjects, sendOp } from "../lib/api.ts";
+import type { Actor, MetaPatch, Canvas } from "@isocan/core";
+import { canvasPath, newCanvasId } from "@isocan/core";
+import { listCanvases, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
-import { ProjectEditor } from "../components/ProjectEditor.tsx";
+import { CanvasEditor } from "../components/CanvasEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 
-export function ProjectListPage({
+export function CanvasListPage({
   actor,
   onIdentity,
 }: {
@@ -18,7 +18,7 @@ export function ProjectListPage({
 }) {
   const colors = useActorColors();
   const names = useActorNames();
-  const [projects, setProjects] = useState<Project[] | null>(null);
+  const [canvases, setProjects] = useState<Canvas[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function ProjectListPage({
 
   /**
    * The canvases **this origin is the home of** — not every canvas the daemon
-   * holds (phase 10.3; `listProjects` in `lib/api.ts` carries the argument).
+   * holds (phase 10.3; `listCanvases` in `lib/api.ts` carries the argument).
    *
    * Every title below is a `<Link>`, and a `<Link>` is a client-side
    * navigation that never touches the server. The daemon's per-canvas page
@@ -41,7 +41,7 @@ export function ProjectListPage({
    * home. This page is one origin talking about itself.
    */
   const refresh = useCallback(() => {
-    listProjects().then(setProjects, () => setProjects([]));
+    listCanvases().then(setProjects, () => setProjects([]));
   }, []);
   useEffect(refresh, [refresh]);
 
@@ -61,26 +61,26 @@ export function ProjectListPage({
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
-    await sendOp(null, actor, { type: "project.create", projectId: newProjectId(), title: trimmed });
+    await sendOp(null, actor, { type: "project.create", canvasId: newCanvasId(), title: trimmed });
     setTitle("");
     refresh();
   }
 
-  async function edit(project: Project, patch: MetaPatch) {
-    await sendOp(project.id, actor, { type: "project.update", patch });
+  async function edit(canvas: Canvas, patch: MetaPatch) {
+    await sendOp(canvas.id, actor, { type: "project.update", patch });
     setEditing(null);
     refresh();
   }
 
-  async function remove(project: Project) {
-    await sendOp(project.id, actor, { type: "project.delete" });
+  async function remove(canvas: Canvas) {
+    await sendOp(canvas.id, actor, { type: "project.delete" });
     setConfirmingDelete(null);
     refresh();
   }
 
   return (
-    <div className="projects-page">
-      <div className="projects-head">
+    <div className="canvases-page">
+      <div className="canvases-head">
         <h1>isocan</h1>
         <div className="who" ref={whoRef}>
           <button
@@ -99,7 +99,7 @@ export function ProjectListPage({
                 actor={actor}
                 /* No canvas here, so no pass to mint: escalation is onto one
                    canvas, and this page is about all of them. */
-                projectId={null}
+                canvasId={null}
                 onIdentity={onIdentity}
                 onClose={() => setIdentityOpen(false)}
               />
@@ -107,44 +107,44 @@ export function ProjectListPage({
           )}
         </div>
       </div>
-      <div className="project-grid">
-        {(projects ?? []).map((project) => (
-          <div className="project-card" key={project.id}>
-            {editing === project.id ? (
-              <ProjectEditor
-                title={project.title}
-                description={project.description}
-                onSave={(patch) => edit(project, patch)}
+      <div className="canvas-grid">
+        {(canvases ?? []).map((canvas) => (
+          <div className="canvas-card" key={canvas.id}>
+            {editing === canvas.id ? (
+              <CanvasEditor
+                title={canvas.title}
+                description={canvas.description}
+                onSave={(patch) => edit(canvas, patch)}
                 onCancel={() => setEditing(null)}
               />
             ) : (
               <>
                 <h3>
-                  <Link to={canvasPath(project.id)} style={{ color: "inherit", textDecoration: "none" }}>
-                    {project.title}
+                  <Link to={canvasPath(canvas.id)} style={{ color: "inherit", textDecoration: "none" }}>
+                    {canvas.title}
                   </Link>
                 </h3>
-                <div className="desc">{project.description || "No description"}</div>
+                <div className="desc">{canvas.description || "No description"}</div>
                 <div className="meta">
-                  updated {new Date(project.updatedAt).toLocaleString()} by {actorNameIn(names, project.updatedBy)}
+                  updated {new Date(canvas.updatedAt).toLocaleString()} by {actorNameIn(names, canvas.updatedBy)}
                 </div>
                 <div className="row">
-                  <Link className="btn" to={canvasPath(project.id)}>
+                  <Link className="btn" to={canvasPath(canvas.id)}>
                     Open
                   </Link>
                   <button
                     className="btn"
                     title="Edit title and description"
                     onClick={() => {
-                      setEditing(project.id);
+                      setEditing(canvas.id);
                       setConfirmingDelete(null);
                     }}
                   >
                     Edit
                   </button>
-                  {confirmingDelete === project.id ? (
+                  {confirmingDelete === canvas.id ? (
                     <>
-                      <button className="btn danger" onClick={() => remove(project)}>
+                      <button className="btn danger" onClick={() => remove(canvas)}>
                         Really delete
                       </button>
                       <button className="btn" onClick={() => setConfirmingDelete(null)}>
@@ -152,7 +152,7 @@ export function ProjectListPage({
                       </button>
                     </>
                   ) : (
-                    <button className="btn danger" onClick={() => setConfirmingDelete(project.id)}>
+                    <button className="btn danger" onClick={() => setConfirmingDelete(canvas.id)}>
                       Delete
                     </button>
                   )}
@@ -161,19 +161,19 @@ export function ProjectListPage({
             )}
           </div>
         ))}
-        <form className="project-card create" onSubmit={create}>
+        <form className="canvas-card create" onSubmit={create}>
           <input
             className="text-input"
-            placeholder="New project title"
+            placeholder="New canvas title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <button className="btn primary" type="submit" disabled={!title.trim()}>
-            Create project
+            Create canvas
           </button>
         </form>
       </div>
-      {projects === null && <p style={{ color: "var(--ink-muted)" }}>Loading…</p>}
+      {canvases === null && <p style={{ color: "var(--ink-muted)" }}>Loading…</p>}
     </div>
   );
 }

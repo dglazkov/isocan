@@ -40,11 +40,11 @@ import { mintPass } from "../lib/api.ts";
  */
 export function TerminalDialog({
   actor,
-  projectId,
+  canvasId,
   onClose,
 }: {
   actor: Actor;
-  projectId: string;
+  canvasId: string;
   onClose: () => void;
 }) {
   const [minted, setMinted] = useState<{ command: string; expiresAt: string } | null>(null);
@@ -61,17 +61,17 @@ export function TerminalDialog({
     // tab IS the home's web app — so the address to redeem at is the address
     // this page is being served from. (In dev that is Vite's port, which is
     // where the person reading it is standing.)
-    mintPass(projectId, actor.id)
+    mintPass(canvasId, actor.id)
       .then(({ pass, token }) => {
         if (cancelled) return;
-        setMinted({ command: setupCommand(location.origin, projectId, token), expiresAt: pass.expiresAt });
+        setMinted({ command: setupCommand(location.origin, canvasId, token), expiresAt: pass.expiresAt });
         setNow(Date.now());
       })
       .catch((err: Error) => !cancelled && setError(err.message));
     return () => {
       cancelled = true;
     };
-  }, [projectId, actor.id, nonce]);
+  }, [canvasId, actor.id, nonce]);
 
   // A minute's resolution needs a coarse tick; the point is only that the
   // number on screen cannot be a lie somebody acts on.

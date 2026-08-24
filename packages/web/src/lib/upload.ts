@@ -51,7 +51,7 @@ async function measure(file: File, mimeType: string): Promise<{ width: number; h
  * placement already sees the one before it land.
  */
 export async function addFiles(
-  projectId: string,
+  canvasId: string,
   actor: Actor,
   files: File[],
   placement: Placement,
@@ -59,11 +59,11 @@ export async function addFiles(
   const ids: string[] = [];
   for (const file of files) {
     const mimeType = mimeTypeOf(file);
-    const upload = await uploadBlob(projectId, file, file.name);
+    const upload = await uploadBlob(canvasId, file, file.name);
     const { width, height } = await measure(file, mimeType);
 
     const itemId = newItemId();
-    await sendOp(projectId, actor, {
+    await sendOp(canvasId, actor, {
       type: "item.add",
       itemId,
       version: {
@@ -90,7 +90,7 @@ export const BROWSER_SIZE = { width: 800, height: 600 };
  * a text/uri-list naming the URL. Throws on a URL that isn't http(s).
  */
 export async function addBrowserItem(
-  projectId: string,
+  canvasId: string,
   actor: Actor,
   rawUrl: string,
   placement: Placement,
@@ -98,9 +98,9 @@ export async function addBrowserItem(
   const site = normalizeSiteUrl(rawUrl);
   const filename = siteFilename(site);
   const blob = new Blob([`${site}\n`], { type: BROWSER_MIME });
-  const upload = await uploadBlob(projectId, blob, filename);
+  const upload = await uploadBlob(canvasId, blob, filename);
   const itemId = newItemId();
-  await sendOp(projectId, actor, {
+  await sendOp(canvasId, actor, {
     type: "item.add",
     itemId,
     version: {
@@ -124,7 +124,7 @@ export async function addBrowserItem(
  * Throws on strokes with no points.
  */
 export async function addDrawing(
-  projectId: string,
+  canvasId: string,
   actor: Actor,
   strokes: InkStroke[],
   /** The item this ink is about, when it was drawn over one. */
@@ -142,9 +142,9 @@ export async function addDrawing(
   };
   const svg = drawingSvg(strokes, bounds);
   const blob = new Blob([svg], { type: DRAWING_MIME });
-  const upload = await uploadBlob(projectId, blob, DRAWING_FILENAME);
+  const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
   const itemId = newItemId();
-  await sendOp(projectId, actor, {
+  await sendOp(canvasId, actor, {
     type: "item.add",
     itemId,
     version: {
@@ -176,14 +176,14 @@ export async function addDrawing(
 
 /** Upload a file as a NEW VERSION of an existing item. */
 export async function addVersionFromFile(
-  projectId: string,
+  canvasId: string,
   actor: Actor,
   itemId: string,
   file: File,
 ): Promise<void> {
   const mimeType = mimeTypeOf(file);
-  const upload = await uploadBlob(projectId, file, file.name);
-  await sendOp(projectId, actor, {
+  const upload = await uploadBlob(canvasId, file, file.name);
+  await sendOp(canvasId, actor, {
     type: "item.addVersion",
     itemId,
     version: {

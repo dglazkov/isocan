@@ -152,9 +152,9 @@ describe("what the upgrade writes down about canvases that already exist", () =>
         method: "POST",
         headers: { "Content-Type": "application/json", ...badge.headers },
         body: JSON.stringify({
-          projectId: null,
+          canvasId: null,
           actor: { id: "usr_dion", name: "Dion" },
-          op: { type: "project.create", projectId: id, title },
+          op: { type: "project.create", canvasId: id, title },
         }),
       });
       expect(made.status).toBe(200);
@@ -288,14 +288,14 @@ describe("a pure replica does not serve pages", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: { id: "usr_isaac", name: "Isaac" },
-        op: { type: "project.create", projectId: "prj_1", title: "Acme Sprint Board" },
+        op: { type: "project.create", canvasId: "prj_1", title: "Acme Sprint Board" },
       }),
     });
     expect(created.status).toBe(200);
-    const projects = await fetch(`${base}/api/projects`, { headers: badge.headers });
-    expect(((await projects.json()) as { id: string }[]).map((p) => p.id)).toEqual(["prj_1"]);
+    const canvases = await fetch(`${base}/api/projects`, { headers: badge.headers });
+    expect(((await canvases.json()) as { id: string }[]).map((p) => p.id)).toEqual(["prj_1"]);
   });
 
   it("records the birth default, and it is the whole-daemon answer that survives", async () => {
@@ -354,9 +354,9 @@ describe("a daemon that is the home of some canvases and a replica for others", 
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: { id: "usr_dion", name: "Dion" },
-        op: { type: "project.create", projectId: local, title: "Acme Sprint Board" },
+        op: { type: "project.create", canvasId: local, title: "Acme Sprint Board" },
       }),
     });
     expect(made.status).toBe(200);
@@ -431,9 +431,9 @@ describe("a name allocated on a replica is a name the home will accept", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: isaac,
-        op: { type: "project.create", projectId: "prj_acme", title: "Acme Sprint Board" },
+        op: { type: "project.create", canvasId: "prj_acme", title: "Acme Sprint Board" },
       }),
     });
     expect(created.status).toBe(200);
@@ -451,7 +451,7 @@ describe("a name allocated on a replica is a name the home will accept", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey },
       }),
     });
@@ -513,7 +513,7 @@ describe("a name allocated on a replica is a name the home will accept", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...mine.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "claude-code:s-1", name: "Isaac" },
       }),
     });

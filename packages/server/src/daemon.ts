@@ -166,7 +166,9 @@ async function openBacking(home: string): Promise<{ store: Store; desk: Desk }> 
   return openCloudBacking({
     bucket,
     ...(process.env.ISOCAN_GCP_PROJECT !== undefined
-      ? { projectId: process.env.ISOCAN_GCP_PROJECT }
+      ? // A Google Cloud project id, not a canvas id — `Storage`/`Firestore`
+        // name this option `projectId` and always will.
+        { projectId: process.env.ISOCAN_GCP_PROJECT }
       : {}),
   });
 }
@@ -199,17 +201,17 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   await runMigrations(home, store, desk, birthHome);
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
-  const engine = new Engine(store, desk, { liveness: (projectId) => presence.roster(projectId) });
+  const engine = new Engine(store, desk, { liveness: (canvasId) => presence.roster(canvasId) });
 
   // Op piggyback: an op bound to a session (clientId === sessionId) moves
   // that session's cursor to the op's locus — presence traces real work.
-  engine.onEvent((projectId, message) => {
+  engine.onEvent((canvasId, message) => {
     if (message.type !== "op-applied") return;
     void engine
-      .getSnapshot(projectId)
+      .getSnapshot(canvasId)
       .then((snapshot) =>
         presence.opApplied(
-          projectId,
+          canvasId,
           message.entry.envelope.clientId,
           message.entry.envelope.actor,
           message.entry.envelope.op,
@@ -247,13 +249,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * used to hold the canvas that had that name.
    *
    * Hung off the engine's own event rather than written into the three places
-   * a delete lands (a local one, a forwarded one, a `project-deleted` from a
+   * a delete lands (a local one, a forwarded one, a `canvas-deleted` from a
    * home) for the reason `HomeLink`'s dial is hung off the same event: one
    * subscription cannot be forgotten by the next person who adds a fourth path.
    */
-  engine.onEvent((projectId, message) => {
-    if (message.type !== "project-deleted") return;
-    void homes.release(projectId).catch(() => {});
+  engine.onEvent((canvasId, message) => {
+    if (message.type !== "canvas-deleted") return;
+    void homes.release(canvasId).catch(() => {});
   });
 
   // forceCloseConnections: shutdown must not hang on a browser's idle

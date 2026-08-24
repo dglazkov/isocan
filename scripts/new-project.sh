@@ -174,11 +174,11 @@ fi
 
 step "The canvas"
 if [ -f .isocan/project.json ]; then
-  note "already bound — $(isocan project list 2>/dev/null | head -1)"
+  note "already bound — $(isocan canvas list 2>/dev/null | head -1)"
 else
-  project="$(isocan project create "$title" --json | sed -n 's/.*"projectId" *: *"\([^"]*\)".*/\1/p')"
-  [ -n "$project" ] || die "could not read the new canvas's id out of \`project create --json\`"
-  isocan use "$project"
+  canvas="$(isocan canvas create "$title" --json | sed -n 's/.*"canvasId" *: *"\([^"]*\)".*/\1/p')"
+  [ -n "$canvas" ] || die "could not read the new canvas's id out of \`canvas create --json\`"
+  isocan use "$canvas"
 fi
 
 # ---------- 5. one channel to listen on ----------

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 /**
  * `isocan --agent-help` is how an agent learns to work a canvas (#75). It has
- * to answer with no daemon, no identity, no project and no network — an agent
+ * to answer with no daemon, no identity, no canvas and no network — an agent
  * that has just met this tool has none of those, and the guide is what tells
  * it how to get them.
  */

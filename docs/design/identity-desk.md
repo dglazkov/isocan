@@ -43,7 +43,7 @@ The address is the secret, and the daemon believes every field it is
 handed. Concretely, in code:
 
 - The door checks nothing but the URL; the WS connect carries only a
-  `projectId` (`packages/server/src/ws.ts`).
+  `canvasId` (`packages/server/src/ws.ts`).
 - Every op's `actor` is client-supplied (`PostOpRequest.actor`), and
   `actor.claim` with `as:` reassigns any actor to any session key.
   `engine.ts` says so out loud: "there is no authentication here, and a
@@ -90,7 +90,7 @@ each item's fate is tagged.
    her" currently reduces to URL-knowledge; "can read the repo ⇒ admitted"
    needs a real mechanism.
 10. **Scoped registry / tenancy.** *(→ registry scope, below)* The actor registry (names, claims,
-    colors) is per-home, and claims consult every project on it
+    colors) is per-home, and claims consult every canvas on it
     (`Engine.heldNames()`). On a multi-tenant home that is cross-tenant
     name collision and leakage. The registry's scope must be chosen.
 11. **Bounded standing mint** (Scene 7). *(→ designed in [innkeeper.md](innkeeper.md))* Registrations mint passes with
@@ -360,7 +360,7 @@ things the paragraph above does not say turned out to decide the shape:
 - **The browser key is served from the home at run time**, on the same
   route that answers "what can you verify" — never compiled into the
   bundle. Otherwise the bundle is a per-home artifact, and the page a local
-  daemon serves carries a dangling reference to somebody else's project.
+  daemon serves carries a dangling reference to somebody else's canvas.
 - **Nothing beside the token is believed.** The address is read out of the
   verified token, so the attest request carries a token and nothing else: a
   body naming the mailbox to attest would be the caller attesting for
@@ -568,7 +568,7 @@ teaches as the first act.
 someone else's work by naming them), and every presence beat — including
 a daemon's *relayed* presence, where one connection carries several
 actors and each must be in the badge's claims. Alongside actor checks,
-every project-scoped route checks `projectId ∈ badge.admissions` — the
+every canvas-scoped route checks `canvasId ∈ badge.admissions` — the
 door's test, re-asked cheaply on each request rather than only at entry.
 Resume vouches (`as:`) are enforced in the same place claims apply:
 attestation match for a person's actor, a pass (holder- or

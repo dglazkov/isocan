@@ -11,7 +11,7 @@
  * which is the more useful of the two.
  */
 
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 import type { MetaPatch } from "./ops.ts";
 
 export const STAR_PROP = "star";
@@ -27,7 +27,7 @@ export function starPatch(on: boolean): MetaPatch {
 
 /** Everything starred, most recently touched first: a shortlist reads best in
  * the order things last happened. */
-export function starredItems(canvas: CanvasState): Item[] {
+export function starredItems(canvas: CanvasContents): Item[] {
   return Object.values(canvas.items)
     .filter(isStarred)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));

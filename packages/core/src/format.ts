@@ -2,7 +2,7 @@ import { annotationTarget } from "./annotation.ts";
 import { itemKind } from "./kinds.ts";
 import type { Move } from "./layout.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 
 /**
  * One tidy for the whole canvas: the arrangement `/format` means.
@@ -53,7 +53,7 @@ export interface FormatOptions {
 
 /** What an item counts as, for arranging: something you look at, something you
  * referred to, or something that belongs to another item. */
-function role(canvas: CanvasState, item: Item): "screen" | "reference" | "attached" {
+function role(canvas: CanvasContents, item: Item): "screen" | "reference" | "attached" {
   if (annotationTarget(item) && canvas.items[annotationTarget(item)!]) return "attached";
   const kind = itemKind(item);
   return kind === "image" || kind === "video" ? "reference" : "screen";
@@ -63,7 +63,7 @@ function role(canvas: CanvasState, item: Item): "screen" | "reference" | "attach
  * The moves that arrange the canvas. Only what actually changes, so running it
  * twice does nothing the second time — a formatted canvas is a fixed point.
  */
-export function formatMoves(canvas: CanvasState, options: FormatOptions = {}): Move[] {
+export function formatMoves(canvas: CanvasContents, options: FormatOptions = {}): Move[] {
   const items = Object.values(canvas.items);
   if (items.length === 0) return [];
 

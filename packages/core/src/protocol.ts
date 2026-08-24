@@ -1,5 +1,6 @@
+import { INSTALL_SPEC } from "./address.ts";
 import type { ActorColors, ActorNames } from "./identity.ts";
-import type { Actor, CanvasState, Project } from "./model.ts";
+import type { Actor, Canvas, CanvasContents } from "./model.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 
 /** Default daemon port, localhost only. */
@@ -10,8 +11,8 @@ export const DEFAULT_PORT = 4441;
 export type ServerMessage =
   | {
       type: "snapshot";
-      project: Project;
-      canvas: CanvasState;
+      project: Canvas;
+      canvas: CanvasContents;
       lastSeq: number;
       /** Chosen identity colors, so the first paint is already right. */
       colors: ActorColors;
@@ -47,7 +48,7 @@ export type ServerMessage =
       names: ActorNames;
     }
   | { type: "op-applied"; entry: LogEntry }
-  | { type: "project-deleted" }
+  | { type: "canvas-deleted" }
   /** The roster carries the chosen identity colors with it: they change about
    * as often as who is here, and every client that needs one is already
    * listening. A color nobody else can see is not an identity, so it travels
@@ -171,18 +172,18 @@ export interface UpdateSessionRequest {
 // ---- watching the whole home ----
 
 /**
- * The cross-project long-poll behind `isocan wait`. An on-call agent listens
+ * The cross-canvas long-poll behind `isocan wait`. An on-call agent listens
  * to canvases it has never opened — including ones created while it waits —
- * so the cursor is a MAP of per-project seqs rather than one number.
+ * so the cursor is a MAP of per-canvas seqs rather than one number.
  *
  * Omit `cursors` to seed: the daemon returns no entries and the current tip
- * of every project, which is "everything from now on". A project missing from
+ * of every canvas, which is "everything from now on". A canvas missing from
  * a supplied map is watched from its very first op — exactly right for a
  * canvas born mid-wait.
  */
 export interface WatchLogRequest {
   cursors?: Record<string, number>;
-  /** Watch exactly these canvases and no others — what `wait --project` uses.
+  /** Watch exactly these canvases and no others — what `wait --canvas` uses.
    * Omit to watch the whole home, canvases yet to be created included. */
   only?: string[];
   /** Hold the request open this long when nothing has landed yet. */
@@ -190,23 +191,145 @@ export interface WatchLogRequest {
 }
 
 export interface WatchedLogEntry extends LogEntry {
-  projectId: string;
+  canvasId: string;
   /** The canvas's title, so a waiter can name where it was summoned. */
-  projectTitle: string;
+  canvasTitle: string;
 }
 
 export interface WatchLogResponse {
-  /** Across all watched projects, oldest first. */
+  /** Across all watched canvases, oldest first. */
   entries: WatchedLogEntry[];
   /** Feed straight back into the next request. */
   cursors: Record<string, number>;
+}
+
+// ---- a client older than this home ----
+
+/**
+ * **The keys phase 13.5 renamed on the wire, and what they used to be
+ * called.** The pairs are `[what this build requires, what a pre-13.5 client
+ * sends]`.
+ *
+ * The rename was taken as a BREAK — no shim, no both-spellings, no migration
+ * — because the audience is three people and launch has not happened. What a
+ * break still owes anyone who hits it is a sentence they can act on, and
+ * without one this is the codebase's oldest recurring failure wearing a new
+ * coat: a pre-rename CLI can still READ from a post-rename daemon (a `GET`
+ * carries its canvas in the path, which did not change) and dies on the first
+ * WRITE with `error: internal error`, because `projectId` is not `canvasId`,
+ * so no canvas is named, and the engine throws where nothing is looking.
+ *
+ * `BADGE_RESTART_HINT` above is the same shape one phase earlier, and its
+ * comment is the rule: *a break that explains itself is a different thing
+ * from a break.*
+ */
+export const RENAMED_WIRE_KEYS: ReadonlyArray<readonly [now: string, before: string]> = [
+  ["canvasId", "projectId"],
+  ["canvasTitle", "projectTitle"],
+];
+
+/**
+ * The wire code for it — branchable, like every other refusal here, and its
+ * own word rather than `bad-request`: nothing the caller can put in the body
+ * fixes this one, so a client that retries on `bad-request` must not retry on
+ * this.
+ */
+export const STALE_CLIENT_CODE = "stale-client";
+
+/**
+ * **426, not 400**, and the difference is who has to change.
+ *
+ * The 400s around it (`bad-op`, `actor is required`, `canvasId is required`)
+ * all say *fix your request and send it again* — a caller reading them edits a
+ * field. There is no field to edit here: the request is well formed for the
+ * protocol the client was BUILT against, and the only thing that makes it
+ * legal is a different binary. 426 is the registered status for exactly that
+ * sentence, so it is the one status a proxy, a log line or a future client can
+ * read without also reading the body.
+ *
+ * (RFC 7231 pairs 426 with an `Upgrade` header naming a transport protocol to
+ * switch to. There is none — the version that changed is the application's —
+ * so the header is deliberately omitted rather than filled with an invented
+ * token that an intermediary might act on. The `code` field is where a machine
+ * looks; the status is for everyone who never gets that far.)
+ */
+export const STALE_CLIENT_STATUS = 426;
+
+/** The socket half of {@link STALE_CLIENT_STATUS}, continuing ws.ts's
+ * 4400/4401/4404/4500 convention of 4000 + the HTTP status it mirrors. */
+export const WS_STALE_CLIENT = 4426;
+
+/** A WebSocket close reason is capped at 123 BYTES by the protocol itself, and
+ * a longer one throws rather than truncating — so the socket gets its own,
+ * shorter, sentence and this is the limit it is measured against. */
+export const WS_CLOSE_REASON_BYTES = 123;
+
+export interface StaleClientRefusal {
+  code: typeof STALE_CLIENT_CODE;
+  /** The `error` field of the refusal body — what a person reads in their
+   * terminal, because the CLI prints `error: <message>` and nothing else. */
+  error: string;
+  /** The same refusal inside {@link WS_CLOSE_REASON_BYTES}. */
+  closeReason: string;
+}
+
+/** Present enough to have been *sent*: `{projectId: null}` is what a
+ * pre-rename CLI puts on `project.create`, so null is present, not absent. */
+function sent(carrier: Record<string, unknown> | URLSearchParams, key: string): boolean {
+  if (carrier instanceof URLSearchParams) return (carrier.get(key) ?? "") !== "";
+  return carrier[key] !== undefined;
+}
+
+/** Absent enough to be missing: a null `canvasId` is what `project.create` and
+ * `actor.claim` legitimately send, and neither names a canvas. */
+function missing(carrier: Record<string, unknown> | URLSearchParams, key: string): boolean {
+  if (carrier instanceof URLSearchParams) return (carrier.get(key) ?? "") === "";
+  return carrier[key] === undefined || carrier[key] === null;
+}
+
+/**
+ * **"Is this caller speaking the protocol from before the rename?"** — asked
+ * in one place, by every surface that would otherwise answer it differently.
+ *
+ * The honest signal is BOTH halves: the key this build requires is absent AND
+ * the key it replaced is present. Sniffing the old key alone would be wrong
+ * the moment anything ever sends both; sniffing nothing at all and inferring
+ * from the failure would relabel every malformed request in the product as a
+ * version problem, which is a worse lie than `internal error` because it is a
+ * confident one. A request carrying NEITHER key is simply malformed, and it
+ * keeps the refusal it already had.
+ *
+ * Pass every object the key could have arrived in — a JSON body, the nested
+ * `op`, a socket's query string. The first pair that matches wins; the message
+ * names the pair, so it stays true if this list ever grows.
+ */
+export function staleClientRefusal(
+  ...carriers: Array<Record<string, unknown> | URLSearchParams | null | undefined>
+): StaleClientRefusal | null {
+  for (const carrier of carriers) {
+    // A body that parsed to a string, a number or an array carries no keys and
+    // is somebody else's refusal.
+    if (!carrier || typeof carrier !== "object") continue;
+    for (const [now, before] of RENAMED_WIRE_KEYS) {
+      if (!missing(carrier, now) || !sent(carrier, before)) continue;
+      return {
+        code: STALE_CLIENT_CODE,
+        error:
+          `this home speaks isocan's post-rename protocol: it needs \`${now}\`, ` +
+          `and this request sent \`${before}\` instead. Your isocan is older than this ` +
+          `home — upgrade it with \`npx ${INSTALL_SPEC} setup\` and run this again.`,
+        closeReason: `isocan: this home needs ${now}, not ${before}; upgrade: npx ${INSTALL_SPEC} setup`,
+      };
+    }
+  }
+  return null;
 }
 
 // ---- REST payloads ----
 
 export interface PostOpRequest {
   /** null only for project.create and actor.claim. */
-  projectId: string | null;
+  canvasId: string | null;
   /** Who is speaking. Optional for actor.claim only — a claim RESOLVES who
    * is speaking, and the response envelope carries the answer. */
   actor?: Actor;
@@ -260,7 +383,7 @@ export interface PostOpRequest {
    * reducer produces it; a hosted home cannot state its own public address
    * (`homeUrl` means "the address I answer to", and dev.isocan.io's daemon has
    * none), so it could never write the field truthfully for a canvas born
-   * there; and `adoptRemoteSnapshot` rewrites the local project record from
+   * there; and `adoptRemoteSnapshot` rewrites the local canvas record from
    * the home's copy, so a replicated field would be clobbered on exactly the
    * machine whose routing depends on it. Worst of all, a replicated field
    * would let one machine rewrite another machine's routing. This is request
@@ -357,8 +480,8 @@ export function decodeFilename(raw: string | string[] | undefined): string {
 }
 
 export interface CanvasSnapshotResponse {
-  project: Project;
-  canvas: CanvasState;
+  project: Canvas;
+  canvas: CanvasContents;
   lastSeq: number;
   /** Chosen identity colors (actor id → hex); absent entries are derived. */
   colors: ActorColors;
@@ -486,7 +609,7 @@ export function healthPath(base: string): string {
  * - `"admitted"` — admissions and nothing else. What a replica asks.
  * - `"here"` — of the admissible ones, the canvases **this daemon is the home
  *   of** (phase 10.3). A third question rather than a narrowing of the other
- *   two, and it exists because of a real hole: the web app's project list
+ *   two, and it exists because of a real hole: the web app's canvas list
  *   links to a canvas with a react-router `<Link>`, which is a client-side
  *   navigation that never touches the server, so the per-canvas page guard on
  *   `GET /p/<id>` is simply bypassed for anything in that list. A local origin
@@ -498,23 +621,24 @@ export function healthPath(base: string): string {
  *   standing rule — **the caller states which, the route never sniffs who
  *   called**.
  */
-export type ProjectsReach = "admitted" | "admissible" | "here";
+export type CanvasesReach = "admitted" | "admissible" | "here";
 
-/** The query parameter carrying a {@link ProjectsReach}. One spelling, so a
+/** The query parameter carrying a {@link CanvasesReach}. One spelling, so a
  * caller cannot get it subtly wrong and silently receive the wide answer. */
-export const PROJECTS_REACH_PARAM = "reach";
+export const CANVASES_REACH_PARAM = "reach";
 
 /** `GET /api/projects`, optionally narrowed. Built here rather than spelled at
  * each caller for `grantRoute`/`passesRoute`'s reason: the one place a route
  * is written is the one place it can be got wrong. */
-export function projectsRoute(reach?: ProjectsReach): string {
-  return reach ? `/api/projects?${PROJECTS_REACH_PARAM}=${reach}` : "/api/projects";
+/** `/api/projects` is a deliberate holdout (phase 13.5) — see `grantsRoute`. */
+export function canvasesRoute(reach?: CanvasesReach): string {
+  return reach ? `/api/projects?${CANVASES_REACH_PARAM}=${reach}` : "/api/projects";
 }
 
 // ---- joining one canvas at the home ----
 
 /**
- * **"Fetch me this one canvas from my home."** POST `{projectId}` at a
+ * **"Fetch me this one canvas from my home."** POST `{canvasId}` at a
  * replica; the replica asks its home about that canvas with its own badge,
  * and the home's door decides.
  *
@@ -545,7 +669,7 @@ export function projectsRoute(reach?: ProjectsReach): string {
 export const HOME_JOIN_ROUTE = "/api/home/join";
 
 export interface JoinCanvasRequest {
-  projectId: string;
+  canvasId: string;
   /**
    * **Which home to fetch it from** (phase 10.3) — the marker's address, or
    * the one a person pasted into `isocan setup`.
@@ -567,7 +691,7 @@ export interface JoinCanvasRequest {
 /** The home's own row for that canvas — title included, so a caller can say
  * what arrived rather than echoing back the id it already had. */
 export interface JoinCanvasResponse {
-  project: Project;
+  canvas: Canvas;
 }
 
 /**

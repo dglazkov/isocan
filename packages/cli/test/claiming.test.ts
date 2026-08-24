@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Project } from "@isocan/core";
+import type { Canvas } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 import { mintTestBadge } from "./badge.ts";
@@ -89,9 +89,9 @@ async function upgradedHome(): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json", ...setup.headers },
     body: JSON.stringify({
-      projectId: null,
+      canvasId: null,
       actor: nico,
-      op: { type: "project.create", projectId: "prj_1", title: "The Old Canvas" },
+      op: { type: "project.create", canvasId: "prj_1", title: "The Old Canvas" },
     }),
   });
   // Now take the claim away, under a stopped daemon so the log tail does not
@@ -119,8 +119,8 @@ const identityFile = async () =>
     auth?: Record<string, { badgeId: string; secret: string }>;
   };
 
-const projects = (headers: Record<string, string>): Promise<Project[]> =>
-  fetch(`${base}/api/projects`, { headers }).then((r) => r.json() as Promise<Project[]>);
+const canvases = (headers: Record<string, string>): Promise<Canvas[]> =>
+  fetch(`${base}/api/projects`, { headers }).then((r) => r.json() as Promise<Canvas[]>);
 
 /** Every claim on the desk, flattened — a machine has one badge, so this
  * reads exactly as the claims table did. */
@@ -135,7 +135,7 @@ describe("an upgraded machine claims its person", () => {
     // what "a solo human must not meet a refusal" has to mean in practice.
     await upgradedHome();
 
-    const made = await isocan("project", "create", "Nico's New Canvas");
+    const made = await isocan("canvas", "create", "Nico's New Canvas");
     expect(made.stderr).not.toContain("not-your-actor");
     expect(made.stderr).not.toContain("does not speak for");
     expect(made.code).toBe(0);
@@ -144,7 +144,7 @@ describe("an upgraded machine claims its person", () => {
     // upgrade that minted a stranger would leave every canvas he ever
     // touched behind.
     const reader = await mintTestBadge(base);
-    const canvas = (await projects(reader.headers)).find((p) => p.title === "Nico's New Canvas")!;
+    const canvas = (await canvases(reader.headers)).find((p) => p.title === "Nico's New Canvas")!;
     expect(canvas.createdBy).toEqual(nico);
     expect((await identityFile()).id).toBe(nico.id);
 
@@ -158,10 +158,10 @@ describe("an upgraded machine claims its person", () => {
 
   it("pays for it once — the second command does not go round again", async () => {
     await upgradedHome();
-    await isocan("project", "create", "First");
+    await isocan("canvas", "create", "First");
     const claimsAfterFirst = (await claimsOnDesk()).filter((c) => c.actorId === nico.id).length;
 
-    const again = await isocan("project", "create", "Second");
+    const again = await isocan("canvas", "create", "Second");
     expect(again.code).toBe(0);
     // One claim, not one per command: the badge already speaks for him, so
     // the home never asks again.
@@ -172,7 +172,7 @@ describe("an upgraded machine claims its person", () => {
 
   it("carries a rename to the desk, so the registry stops answering with the old name", async () => {
     await upgradedHome();
-    await isocan("project", "create", "First");
+    await isocan("canvas", "create", "First");
 
     const renamed = await isocan("identity", "--name", "Nico G", "--home");
     expect(renamed.code).toBe(0);
@@ -206,14 +206,14 @@ describe("an upgraded machine claims its person", () => {
     const browser = await mintTestBadge(base);
     await browser.speakAs({ id: "usr_web_nico", name: "Nico" }, "web:tab-1");
     // And this machine has been in that room, so the collision is in scope.
-    expect((await isocan("ls", "--project", "prj_1")).code).toBe(0);
+    expect((await isocan("ls", "--canvas", "prj_1")).code).toBe(0);
 
-    const made = await isocan("project", "create", "Nico's New Canvas");
+    const made = await isocan("canvas", "create", "Nico's New Canvas");
     expect(made.stderr).not.toContain("taken here");
     expect(made.code).toBe(0);
 
     const reader = await mintTestBadge(base);
-    const canvas = (await projects(reader.headers)).find((p) => p.title === "Nico's New Canvas")!;
+    const canvas = (await canvases(reader.headers)).find((p) => p.title === "Nico's New Canvas")!;
     expect(canvas.createdBy).toEqual(nico);
   });
 
@@ -222,7 +222,7 @@ describe("an upgraded machine claims its person", () => {
 describe("a badge replaced under a running command", () => {
   it("re-claims before it replays, so the first act after recovery lands", async () => {
     await upgradedHome();
-    await isocan("project", "create", "Before");
+    await isocan("canvas", "create", "Before");
     const before = await identityFile();
     const slot = `http://127.0.0.1:${port}`;
 
@@ -235,7 +235,7 @@ describe("a badge replaced under a running command", () => {
       JSON.stringify({ ...before, auth: { [slot]: { ...before.auth![slot]!, secret: "x".repeat(43) } } }),
     );
 
-    const after = await isocan("project", "create", "After");
+    const after = await isocan("canvas", "create", "After");
     expect(after.stderr).not.toContain("not-your-actor");
     expect(after.code).toBe(0);
 
@@ -251,7 +251,7 @@ describe("a badge replaced under a running command", () => {
 
     // And the work landed as Nico, not as somebody new.
     const reader = await mintTestBadge(base);
-    const canvas = (await projects(reader.headers)).find((p) => p.title === "After")!;
+    const canvas = (await canvases(reader.headers)).find((p) => p.title === "After")!;
     expect(canvas.createdBy).toEqual(nico);
   });
 });

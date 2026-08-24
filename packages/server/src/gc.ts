@@ -1,4 +1,4 @@
-import type { GcReport, GcRequest, LogEntry, Operation, ProjectState } from "@isocan/core";
+import type { GcReport, GcRequest, LogEntry, Operation, CanvasState } from "@isocan/core";
 
 /**
  * Pure pieces of blob garbage collection: choosing the compaction horizon and
@@ -68,7 +68,7 @@ export function hashesInOperation(op: Operation): string[] {
 }
 
 /** The mark set: live state ∪ trash ∪ retained entries (ops and inverses). */
-export function reachableHashes(state: ProjectState, retained: LogEntry[]): Set<string> {
+export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string> {
   const marked = new Set<string>();
   for (const item of Object.values(state.canvas.items)) {
     for (const version of item.versions) marked.add(version.blobHash);

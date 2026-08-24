@@ -1,4 +1,4 @@
-import type { CanvasState, CommentThread } from "@isocan/core";
+import type { CanvasContents, CommentThread } from "@isocan/core";
 
 /** The viewport transform: screen = world * scale + t. One transform node. */
 export interface Viewport {
@@ -47,7 +47,7 @@ export function centerOn(
 /** Where a thread's pin sits in the world: anchored threads store an offset
  * from their item's origin, so the pin travels with the item. */
 export function threadWorldPos(
-  canvas: CanvasState,
+  canvas: CanvasContents,
   thread: CommentThread,
 ): { x: number; y: number } {
   const item = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
@@ -62,7 +62,7 @@ export interface Box {
 }
 
 /** "Full canvas" = bounding box of all live items. Null when empty. */
-export function itemsBounds(canvas: CanvasState): Box | null {
+export function itemsBounds(canvas: CanvasContents): Box | null {
   const items = Object.values(canvas.items);
   if (items.length === 0) return null;
   const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };

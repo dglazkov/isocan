@@ -6,17 +6,25 @@ export function isocanHome(): string {
   return process.env.ISOCAN_HOME ?? path.join(os.homedir(), ".isocan");
 }
 
-export const projectsDir = (home: string) => path.join(home, "projects");
-export const deletedProjectsDir = (home: string) => path.join(home, "deleted-projects");
-export const projectDir = (home: string, id: string) => path.join(projectsDir(home), id);
-export const projectFile = (home: string, id: string) => path.join(projectDir(home, id), "project.json");
-export const canvasFile = (home: string, id: string) => path.join(projectDir(home, id), "canvas.json");
-export const trashFile = (home: string, id: string) => path.join(projectDir(home, id), "trash.json");
-export const oplogFile = (home: string, id: string) => path.join(projectDir(home, id), "oplog.jsonl");
+/**
+ * **The on-disk layout is a deliberate holdout** (phase 13.5's rename). The
+ * helpers say canvas; the directory and file names on disk — `projects/<id>/`,
+ * `deleted-projects/`, and the `project.json` record inside each — do not,
+ * because every `~/.isocan` on every machine is already laid out that way and
+ * a rename would be a migration bought for a word nobody outside this file
+ * reads.
+ */
+export const canvasesDir = (home: string) => path.join(home, "projects");
+export const deletedCanvasesDir = (home: string) => path.join(home, "deleted-projects");
+export const canvasDir = (home: string, id: string) => path.join(canvasesDir(home), id);
+export const canvasMetaFile = (home: string, id: string) => path.join(canvasDir(home, id), "project.json");
+export const canvasFile = (home: string, id: string) => path.join(canvasDir(home, id), "canvas.json");
+export const trashFile = (home: string, id: string) => path.join(canvasDir(home, id), "trash.json");
+export const oplogFile = (home: string, id: string) => path.join(canvasDir(home, id), "oplog.jsonl");
 export const oplogArchiveFile = (home: string, id: string) =>
-  path.join(projectDir(home, id), "oplog-archive.jsonl");
-export const blobsDir = (home: string, id: string) => path.join(projectDir(home, id), "blobs");
-export const blobsIndexFile = (home: string, id: string) => path.join(projectDir(home, id), "blobs.json");
+  path.join(canvasDir(home, id), "oplog-archive.jsonl");
+export const blobsDir = (home: string, id: string) => path.join(canvasDir(home, id), "blobs");
+export const blobsIndexFile = (home: string, id: string) => path.join(canvasDir(home, id), "blobs.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");
@@ -47,7 +55,7 @@ export const badgesFile = (home: string) => path.join(deskDir(home), "badges.jso
 export const badgesLogFile = (home: string) => path.join(deskDir(home), "badges.jsonl");
 /** Says the phase 7 link-grant migration has run here. A marker file rather
  * than a renamed-aside input, because that migration has no input file to
- * rename: what it reads is the project list. See
+ * rename: what it reads is the canvas list. See
  * `grantTheLinkOnOldCanvases` for what a container with no durable
  * filesystem does with it. */
 export const linkGrantsMigratedFile = (home: string) =>
@@ -66,19 +74,19 @@ export const configFile = (home: string) => path.join(home, "config.json");
 export const commandsDir = (home: string) => path.join(home, "commands");
 export const commandFile = (home: string, name: string) =>
   path.join(commandsDir(home), `${name}.md`);
-/** The directory roster: realpath → projectId, a discovery cache healed by
+/** The directory roster: realpath → canvasId, a discovery cache healed by
  * the CLI whenever a command runs from a bound directory (#60). The
  * authoritative binding is the `.isocan/project.json` marker in the
  * directory itself; this file only answers "where on disk does that canvas's
  * work live" without a filesystem crawl. */
 export const dirsFile = (home: string) => path.join(home, "dirs.json");
 /**
- * **Which home each canvas on this machine belongs to** — `projectId →
+ * **Which home each canvas on this machine belongs to** — `canvasId →
  * homeUrl | null`, phase 10.3's one new file.
  *
  * A sibling of `dirs.json` and `config.json` rather than anything inside
  * `projects/<id>/`, and the placement carries the argument. `project.json` in
- * there IS the replicated `Project` record, so a home written into it would be
+ * there IS the replicated `Canvas` record, so a home written into it would be
  * overwritten by the next snapshot from the home — on the machine that most
  * needs it stable. A sidecar beside it would be a fifth file-shaped thing
  * crossing the `Store` seam for data no backing has any business holding:

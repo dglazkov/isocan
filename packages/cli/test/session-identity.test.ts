@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Project } from "@isocan/core";
+import type { Canvas } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 import { mintTestBadge } from "./badge.ts";
@@ -122,9 +122,9 @@ async function age(key: string, hours: number): Promise<void> {
 const badgeHeaders = async (): Promise<Record<string, string>> =>
   (await mintTestBadge(base)).headers;
 
-const projects = async (): Promise<Project[]> =>
+const canvases = async (): Promise<Canvas[]> =>
   fetch(`${base}/api/projects`, { headers: await badgeHeaders() }).then(
-    (r) => r.json() as Promise<Project[]>,
+    (r) => r.json() as Promise<Canvas[]>,
   );
 const idOf = (out: string) => /\((usr_[^)]+)\)/.exec(out)?.[1];
 
@@ -136,9 +136,9 @@ describe("two agents in one directory", () => {
     expect((await asAgent(claude("s-1"), "whoami")).stdout).toContain("Kenny");
     expect((await asAgent(claude("s-2"), "whoami")).stdout).toContain("Isaac");
 
-    await asAgent(claude("s-1"), "project", "create", "Kenny's Canvas");
-    await asAgent(claude("s-2"), "project", "create", "Isaac's Canvas");
-    const by = Object.fromEntries((await projects()).map((p) => [p.title, p.createdBy.name]));
+    await asAgent(claude("s-1"), "canvas", "create", "Kenny's Canvas");
+    await asAgent(claude("s-2"), "canvas", "create", "Isaac's Canvas");
+    const by = Object.fromEntries((await canvases()).map((p) => [p.title, p.createdBy.name]));
     expect(by["Kenny's Canvas"]).toBe("Kenny");
     expect(by["Isaac's Canvas"]).toBe("Isaac");
 
@@ -232,11 +232,11 @@ describe("ask, receive", () => {
   });
 
   it("allocation skips names the canvases answer to, not just claimed ones", async () => {
-    await asAgent({}, "project", "create", "Isaac's Own"); // Nico's canvas...
-    await asAgent({}, "session", "start", "--project", "Isaac's Own");
+    await asAgent({}, "canvas", "create", "Isaac's Own"); // Nico's canvas...
+    await asAgent({}, "session", "start", "--canvas", "Isaac's Own");
     // ...but rename the human to Isaac so the name is on the canvas's record.
     await asAgent({}, "identity", "--name", "Isaac", "--home");
-    await asAgent({}, "ls", "--project", "Isaac's Own"); // put the new name on a live face
+    await asAgent({}, "ls", "--canvas", "Isaac's Own"); // put the new name on a live face
 
     const claimed = await asAgent(claude("s-1"), "identity", "--session");
     expect(claimed.code).toBe(0);
@@ -249,21 +249,21 @@ describe("two agents, two faces", () => {
   it("presence beats never cross — each agent touches only its own session", async () => {
     await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
     await asAgent(claude("s-2"), "identity", "--name", "Osian", "--session");
-    await asAgent(claude("s-1"), "project", "create", "Surfaces");
-    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
-    await asAgent(claude("s-2"), "session", "start", "--project", "Surfaces", "--label", "Osian 🤖");
+    await asAgent(claude("s-1"), "canvas", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--canvas", "Surfaces", "--label", "Iona 🤖");
+    await asAgent(claude("s-2"), "session", "start", "--canvas", "Surfaces", "--label", "Osian 🤖");
 
     // The facepile bug: the session pointer was ONE file per home, and every
     // update re-states who is holding the session — so Iona's next command
     // read the pointer Osian had just overwritten and beat HER actor into
     // HIS session: Iona's face under the label "Osian 🤖", while Iona's own
     // session starved. Narrating commands are the beats that did it.
-    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
-    await asAgent(claude("s-2"), "comment", "list", "--project", "Surfaces");
-    await asAgent(claude("s-1"), "ls", "--project", "Surfaces");
+    await asAgent(claude("s-1"), "ls", "--canvas", "Surfaces");
+    await asAgent(claude("s-2"), "comment", "list", "--canvas", "Surfaces");
+    await asAgent(claude("s-1"), "ls", "--canvas", "Surfaces");
 
-    const project = (await projects()).find((p) => p.title === "Surfaces")!;
-    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
+    const canvas = (await canvases()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${canvas.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
       r.json(),
     )) as { sessionId: string; label: string | null; actor: { id: string; name: string } }[];
 
@@ -302,15 +302,15 @@ describe("leaving is leaving", () => {
     // the face blinked on until its TTL. End by ACTOR instead: the pointer
     // is a cache, the daemon is the truth.
     await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
-    await asAgent(claude("s-1"), "project", "create", "Surfaces");
-    await asAgent(claude("s-1"), "session", "start", "--project", "Surfaces", "--label", "Iona 🤖");
+    await asAgent(claude("s-1"), "canvas", "create", "Surfaces");
+    await asAgent(claude("s-1"), "session", "start", "--canvas", "Surfaces", "--label", "Iona 🤖");
     await fs.rm(path.join(home, "sessions"), { recursive: true, force: true });
 
-    const ended = await asAgent(claude("s-1"), "session", "end", "--project", "Surfaces");
+    const ended = await asAgent(claude("s-1"), "session", "end", "--canvas", "Surfaces");
     expect(ended.stdout).toContain("session ended");
 
-    const project = (await projects()).find((p) => p.title === "Surfaces")!;
-    const roster = (await fetch(`${base}/api/projects/${project.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
+    const canvas = (await canvases()).find((p) => p.title === "Surfaces")!;
+    const roster = (await fetch(`${base}/api/projects/${canvas.id}/sessions`, { headers: await badgeHeaders() }).then((r) =>
       r.json(),
     )) as unknown[];
     expect(roster).toEqual([]); // nobody left blinking
@@ -400,8 +400,8 @@ describe("one name, one agent", () => {
   it("a live name is taken however its wearer got it — the human's counts too", async () => {
     // The reducer compares against everyone a canvas answers to, not just the
     // registry: here the Nico on the canvas belongs to no session at all.
-    await asAgent({}, "project", "create", "Shared");
-    await asAgent({}, "session", "start", "--project", "Shared");
+    await asAgent({}, "canvas", "create", "Shared");
+    await asAgent({}, "session", "start", "--canvas", "Shared");
 
     const taken = await asAgent(claude("s-1"), "identity", "--name", "Nico", "--session");
     expect(taken.code).not.toBe(0);

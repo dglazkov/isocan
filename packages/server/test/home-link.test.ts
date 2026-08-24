@@ -9,7 +9,7 @@ import type {
   MintPassResponse,
   Operation,
   PresenceSession,
-  Project,
+  Canvas,
 } from "@isocan/core";
 import {
   grantRoute,
@@ -17,7 +17,7 @@ import {
   HOME_JOIN_ROUTE,
   PASS_REDEEM_ROUTE,
   passesRoute,
-  projectsRoute,
+  canvasesRoute,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { bearerHeader, readBadge } from "../src/badge-store.ts";
@@ -116,9 +116,9 @@ async function op(
   node: Node,
   actor: { id: string; name: string },
   operation: Operation,
-  projectId: string | null = CANVAS,
+  canvasId: string | null = CANVAS,
 ): Promise<{ seq: number }> {
-  const res = await post(node, "/api/ops", { projectId, actor, op: operation });
+  const res = await post(node, "/api/ops", { canvasId, actor, op: operation });
   if (!res.ok) throw new Error(`${operation.type} refused by ${node.base}: ${await res.text()}`);
   return (await res.json()) as { seq: number };
 }
@@ -130,7 +130,7 @@ async function get<T>(node: Node, url: string): Promise<T> {
 }
 
 const canvas = (node: Node) => get<CanvasSnapshotResponse>(node, `/api/projects/${CANVAS}/canvas`);
-const projects = (node: Node) => get<Project[]>(node, "/api/projects");
+const canvases = (node: Node) => get<Canvas[]>(node, "/api/projects");
 const oplog = (node: Node) => get<LogEntry[]>(node, `/api/projects/${CANVAS}/oplog?since=0`);
 const roster = (node: Node) =>
   get<PresenceSession[]>(node, `/api/projects/${CANVAS}/sessions`);
@@ -162,7 +162,7 @@ async function birthAtA(): Promise<void> {
   await op(
     A,
     priya,
-    { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
     null,
   );
   await op(A, priya, {
@@ -208,8 +208,8 @@ describe("a canvas born on a replica is born at the home", () => {
 
     // At the home, because the write went there — not because anything
     // afterwards pushed it.
-    const atHome = await projects(H);
-    expect(atHome.map((project) => project.id)).toEqual([CANVAS]);
+    const atHome = await canvases(H);
+    expect(atHome.map((canvas) => canvas.id)).toEqual([CANVAS]);
     expect(atHome[0]!.title).toBe("Acme Sprint Board");
 
     // And at the OTHER replica, which never heard of it from anyone but H.
@@ -218,11 +218,11 @@ describe("a canvas born on a replica is born at the home", () => {
     // makes the second one hers. See `letBIn`.
     await letBIn();
     const seen = await until(
-      () => projects(B),
-      (list) => list.some((project) => project.id === CANVAS),
+      () => canvases(B),
+      (list) => list.some((canvas) => canvas.id === CANVAS),
       "the canvas to reach B",
     );
-    expect(seen.find((project) => project.id === CANVAS)!.title).toBe("Acme Sprint Board");
+    expect(seen.find((canvas) => canvas.id === CANVAS)!.title).toBe("Acme Sprint Board");
   }, 20_000);
 
   it("does NOT reach a B that was never let in, link grant or no link grant", async () => {
@@ -246,11 +246,11 @@ describe("a canvas born on a replica is born at the home", () => {
     await until(() => canvas(A), (snap) => snap.lastSeq === 2, "A to settle");
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    expect(await B.daemon.engine.listProjects()).toEqual([]);
-    expect(await projects(B)).toEqual([]);
+    expect(await B.daemon.engine.listCanvases()).toEqual([]);
+    expect(await canvases(B)).toEqual([]);
     // And the home is not hiding it — it is there, and A holds it. What
     // changed is only what B is told when it asks what it carries.
-    expect((await projects(H)).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await canvases(H)).map((canvas) => canvas.id)).toEqual([CANVAS]);
   }, 20_000);
 
   it("carries the same seqs, in the same order, on the replica that was there", async () => {
@@ -423,7 +423,7 @@ describe("what a replica carries", () => {
      *
      * It used to assert TWO independent legs, either of which was enough:
      *
-     * 1. *It is local.* The sweep's first line was "every project in this
+     * 1. *It is local.* The sweep's first line was "every canvas in this
      *    machine's store", so a forwarded `project.create` landing here put the
      *    canvas in the wanted set from the moment it existed.
      * 2. *The home admitted the badge that made it.* Creating a canvas is the
@@ -457,10 +457,10 @@ describe("what a replica carries", () => {
 
     const badge = await readBadge(aDir, H.base);
     expect(badge, "A's daemon should hold a badge at the home").not.toBeNull();
-    const narrow = await fetch(`${H.base}${projectsRoute("admitted")}`, {
+    const narrow = await fetch(`${H.base}${canvasesRoute("admitted")}`, {
       headers: bearerHeader(badge!),
     });
-    expect(((await narrow.json()) as Project[]).map((project) => project.id)).toEqual([CANVAS]);
+    expect(((await narrow.json()) as Canvas[]).map((canvas) => canvas.id)).toEqual([CANVAS]);
     const admissions = (await H.daemon.desk.badge(badge!.badgeId))!.admissions;
     expect(admissions.map((a) => a.provenance.root)).toContain("created");
 
@@ -469,7 +469,7 @@ describe("what a replica carries", () => {
     // chance to run.
     await A.daemon.close();
     A = await node(await replica(aDir, H.base), aDir, priya);
-    expect((await A.daemon.engine.listProjects()).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await A.daemon.engine.listCanvases()).map((canvas) => canvas.id)).toEqual([CANVAS]);
     expect(A.daemon.homes.homeOf(CANVAS)).toBe(H.base);
   }, 30_000);
 
@@ -490,9 +490,9 @@ describe("what a replica carries", () => {
     // Twenty poll intervals with every request to the home failing.
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    expect((await projects(B)).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await canvases(B)).map((canvas) => canvas.id)).toEqual([CANVAS]);
     expect((await canvas(B)).canvas.items["itm_1"]).toMatchObject({ x: 5, y: 6 });
-    expect((await projects(A)).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await canvases(A)).map((canvas) => canvas.id)).toEqual([CANVAS]);
   }, 30_000);
 });
 
@@ -508,24 +508,24 @@ describe("fetching one canvas from the home by name", () => {
     await birthAtA();
     // A second canvas at the home that nobody handed to B. The join must not
     // be a listing wearing a different hat.
-    await op(A, priya, { type: "project.create", projectId: "prj_other", title: "Other" }, null);
-    await until(() => projects(H), (list) => list.length === 2, "both canvases at H");
+    await op(A, priya, { type: "project.create", canvasId: "prj_other", title: "Other" }, null);
+    await until(() => canvases(H), (list) => list.length === 2, "both canvases at H");
 
-    const asked = await post(B, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    const asked = await post(B, HOME_JOIN_ROUTE, { canvasId: CANVAS });
     expect(asked.status, await asked.clone().text()).toBe(200);
-    expect(((await asked.json()) as { project: Project }).project.title).toBe("Acme Sprint Board");
+    expect(((await asked.json()) as { canvas: Canvas }).canvas.title).toBe("Acme Sprint Board");
 
     const held = await until(
-      () => B.daemon.engine.listProjects(),
+      () => B.daemon.engine.listCanvases(),
       (list) => list.length > 0,
       "the asked-for canvas to land on B",
     );
-    expect(held.map((project) => project.id)).toEqual([CANVAS]);
+    expect(held.map((canvas) => canvas.id)).toEqual([CANVAS]);
     // Settle, then check again: the other canvas has a live link grant and is
     // one poll away at all times. Being let into one room is not being handed
     // the building.
     await new Promise((resolve) => setTimeout(resolve, 500));
-    expect((await B.daemon.engine.listProjects()).map((project) => project.id)).toEqual([CANVAS]);
+    expect((await B.daemon.engine.listCanvases()).map((canvas) => canvas.id)).toEqual([CANVAS]);
   }, 30_000);
 
   it("passes the home's refusal back, so a person is told rather than left watching an empty replica", async () => {
@@ -539,13 +539,13 @@ describe("fetching one canvas from the home by name", () => {
     });
     expect(off.status).toBe(200);
 
-    const asked = await post(B, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    const asked = await post(B, HOME_JOIN_ROUTE, { canvasId: CANVAS });
     // The home's own status and code, unchanged by the hop — a replica is a
     // pass-through, not a re-interpreter, and `not-admitted` is the one
     // refusal whose remedy ("ask for a pass") depends on reading it exactly.
     expect(asked.status).toBe(403);
     expect(((await asked.json()) as { code: string }).code).toBe("not-admitted");
-    expect(await B.daemon.engine.listProjects()).toEqual([]);
+    expect(await B.daemon.engine.listCanvases()).toEqual([]);
   }, 20_000);
 
   it("is refused on a home, which has nowhere to fetch from", async () => {
@@ -553,7 +553,7 @@ describe("fetching one canvas from the home by name", () => {
     // upstream is the cheerful wrong answer this codebase keeps meeting. The
     // code is what a speculative caller branches on: the CLI asks this of
     // every unresolvable marker, and `not-a-replica` means "carry on".
-    const asked = await post(H, HOME_JOIN_ROUTE, { projectId: CANVAS });
+    const asked = await post(H, HOME_JOIN_ROUTE, { canvasId: CANVAS });
     expect(asked.status).toBe(409);
     expect(((await asked.json()) as { code: string }).code).toBe("not-a-replica");
   }, 20_000);
@@ -633,7 +633,7 @@ describe("what a replica will and will not do on its own", () => {
     await H.daemon.close();
 
     const res = await post(A, "/api/ops", {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: priya,
       op: { type: "item.move", itemId: "itm_1", x: 99, y: 99 },
     });
@@ -658,7 +658,7 @@ describe("what a replica will and will not do on its own", () => {
     // 409 that a client must never retry, and a replica that flattened every
     // refusal to 500 would turn "do not retry" into "worth another go".
     const res = await post(A, "/api/ops", {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: priya,
       op: { type: "item.move", itemId: "itm_nope", x: 1, y: 1 },
     });

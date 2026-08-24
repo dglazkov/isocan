@@ -1,4 +1,4 @@
-import type { Actor, Operation, ProjectState } from "@isocan/core";
+import type { Actor, Operation, CanvasState } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
 import type { StoredWrite } from "./replica.ts";
 
@@ -85,17 +85,17 @@ export function retire(queue: QueuedWrite[], lastSeq: number): QueuedWrite[] {
  * whose refusal counts. Nothing is decided on a client-side validation.
  */
 export function foldQueue(
-  confirmed: ProjectState | null,
+  confirmed: CanvasState | null,
   queue: QueuedWrite[],
-): ProjectState | null {
+): CanvasState | null {
   if (!confirmed) return null;
-  let state: ProjectState = confirmed;
+  let state: CanvasState = confirmed;
   for (const write of queue) {
     if (write.refused) continue;
     try {
       const next = applyOperation(state, {
         id: write.opId,
-        projectId: confirmed.project.id,
+        canvasId: confirmed.project.id,
         actor: write.actor,
         ts: new Date(write.at).toISOString(),
         op: write.op,
@@ -114,7 +114,7 @@ export function foldQueue(
  * Two families cannot, and both refusals are deliberate rather than
  * unimplemented:
  *
- * - **Home-scoped ops** (`projectId: null` — `project.create`, `actor.claim`,
+ * - **Home-scoped ops** (`canvasId: null` — `project.create`, `actor.claim`,
  *   `actor.setColor`). A canvas born with no network is offline BIRTH, which
  *   is a whole design of its own (`docs/design/offline-birth.md`) and phase
  *   13's work: it needs a promise written at birth, an adoption path from seq
@@ -126,8 +126,8 @@ export function foldQueue(
  *   one canvas's confirmed state, because that state is what an op is folded
  *   over; an op about somewhere else has nothing to be optimistic against.
  */
-export function queueable(projectId: string | null, openCanvasId: string | null): boolean {
-  return projectId !== null && projectId === openCanvasId;
+export function queueable(canvasId: string | null, openCanvasId: string | null): boolean {
+  return canvasId !== null && canvasId === openCanvasId;
 }
 
 /** Mint the queue's record of one gesture. */

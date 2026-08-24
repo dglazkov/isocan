@@ -28,12 +28,12 @@ import { homesFile } from "./paths.ts";
  *    Neither silently wins. (The refusal itself is the CLI's, where the
  *    marker is read.)
  *
- * **Why not a field on the replicated `Project` record**, which is the obvious
+ * **Why not a field on the replicated `Canvas` record**, which is the obvious
  * alternative and is wrong three ways: no `Operation` produces it, so it is
  * not canvas state; **a home does not know its own public address** —
  * `homeUrl` means "the address I answer to", and the hosted daemon at
  * dev.isocan.io has none, so it could never write the field truthfully for a
- * canvas born there; and `adoptRemoteSnapshot` rewrites the local project
+ * canvas born there; and `adoptRemoteSnapshot` rewrites the local canvas
  * record from the home's copy, so the field would be clobbered by replication
  * on exactly the machine whose routing depends on it.
  *
@@ -45,7 +45,7 @@ import { homesFile } from "./paths.ts";
  * different homes would hand the daemon a contradiction with no arbiter.
  */
 
-/** `projectId → homeUrl | null`. A normalized address, or null for "here". */
+/** `canvasId → homeUrl | null`. A normalized address, or null for "here". */
 export type HomeAssignments = Record<string, string | null>;
 
 /**
@@ -74,9 +74,9 @@ export async function readHomes(home: string): Promise<HomeAssignments> {
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
   const rows: HomeAssignments = {};
-  for (const [projectId, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof value === "string" && value.trim()) rows[projectId] = normalizeHomeUrl(value);
-    else rows[projectId] = null;
+  for (const [canvasId, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value === "string" && value.trim()) rows[canvasId] = normalizeHomeUrl(value);
+    else rows[canvasId] = null;
   }
   return rows;
 }

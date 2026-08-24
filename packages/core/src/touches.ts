@@ -10,7 +10,7 @@
  * answer whenever it highlights what just changed.
  */
 
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 import type { Operation, OperationType } from "./ops.ts";
 
 /**
@@ -19,7 +19,7 @@ import type { Operation, OperationType } from "./ops.ts";
  * Thread ops need the canvas to resolve a thread back to what it is pinned to;
  * without one they contribute nothing rather than guessing.
  */
-export function itemsTouchedBy(op: Operation, canvas?: CanvasState | null): string[] {
+export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): string[] {
   const anchorOf = (threadId: string): string[] => {
     const anchor = canvas?.threads[threadId]?.anchorItemId;
     return anchor ? [anchor] : [];
@@ -79,7 +79,7 @@ export function opTypeMatches(type: OperationType, wanted: readonly string[]): b
 export function opMatchesFilters(
   op: Operation,
   filters: { items?: readonly string[]; types?: readonly string[] },
-  canvas?: CanvasState | null,
+  canvas?: CanvasContents | null,
 ): boolean {
   if (!opTypeMatches(op.type, filters.types ?? [])) return false;
   const items = filters.items ?? [];

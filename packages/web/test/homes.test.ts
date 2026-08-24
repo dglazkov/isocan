@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HomesResponse } from "@isocan/core";
-import { HOMES_ROUTE, projectsRoute } from "@isocan/core";
-import { fetchHomes, listProjects } from "../src/lib/api.ts";
+import { HOMES_ROUTE, canvasesRoute } from "@isocan/core";
+import { fetchHomes, listCanvases } from "../src/lib/api.ts";
 import { homeOfCanvas } from "../src/lib/homes.ts";
 
 /**
@@ -57,15 +57,15 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-describe("what the project list asks for", () => {
+describe("what the canvas list asks for", () => {
   it("asks for the canvases this origin is the home of, in core's spelling", async () => {
     answer = [{ id: "prj_acme", title: "Acme Sprint Board" }];
-    await listProjects();
+    await listCanvases();
 
-    // Built by `projectsRoute`, never spelled here or in the page: the daemon
+    // Built by `canvasesRoute`, never spelled here or in the page: the daemon
     // narrows on ONE word, and a near-miss silently hands back the wide list
     // under a name that reads like the narrow one.
-    expect(seen).toEqual([`GET ${projectsRoute("here")}`]);
+    expect(seen).toEqual([`GET ${canvasesRoute("here")}`]);
   });
 
   it("reads where the canvases live from the one route that can say", async () => {

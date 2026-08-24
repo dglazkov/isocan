@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PresenceSession, Project } from "@isocan/core";
+import type { PresenceSession, Canvas } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -51,9 +51,9 @@ beforeEach(async () => {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
-      projectId: null,
+      canvasId: null,
       actor: seeder,
-      op: { type: "project.create", projectId: "prj_1", title: "P" },
+      op: { type: "project.create", canvasId: "prj_1", title: "P" },
     }),
   });
 });
@@ -105,8 +105,8 @@ function roster(): Promise<PresenceSession[]> {
   );
 }
 
-const projects = (): Promise<Project[]> =>
-  fetch(`${base}/api/projects`, { headers: badge.headers }).then((r) => r.json() as Promise<Project[]>);
+const canvases = (): Promise<Canvas[]> =>
+  fetch(`${base}/api/projects`, { headers: badge.headers }).then((r) => r.json() as Promise<Canvas[]>);
 
 describe("two parties, two identity slots", () => {
   it("an automated caller with no session is refused a name, not handed a slot", async () => {
@@ -123,10 +123,10 @@ describe("two parties, two identity slots", () => {
 
   it("ops with a session are the agent's; without one they are the person's", async () => {
     await isocan(claude("s-1"), "identity", "--name", "Isaac", "--session");
-    await isocan(claude("s-1"), "project", "create", "Agent Canvas");
-    await isocan({}, "project", "create", "Human Canvas");
+    await isocan(claude("s-1"), "canvas", "create", "Agent Canvas");
+    await isocan({}, "canvas", "create", "Human Canvas");
 
-    const by = Object.fromEntries((await projects()).map((p) => [p.title, p.createdBy.name]));
+    const by = Object.fromEntries((await canvases()).map((p) => [p.title, p.createdBy.name]));
     expect(by["Agent Canvas"]).toBe("Isaac");
     expect(by["Human Canvas"]).toBe("Nico");
   });
@@ -143,7 +143,7 @@ describe("two parties, two identity slots", () => {
 describe("a rename reaches the live face", () => {
   it("immediately, keeping the same actor id", async () => {
     await isocan(claude("s-1"), "identity", "--name", "Isaac", "--session");
-    await isocan(claude("s-1"), "session", "start", "--project", "prj_1");
+    await isocan(claude("s-1"), "session", "start", "--canvas", "prj_1");
     const [live] = await roster();
     const isaac = live!.actor;
     expect(isaac.name).toBe("Isaac");
@@ -190,7 +190,7 @@ describe("the auth block", () => {
     // Any command that reaches the daemon goes through the door and keeps
     // what it is handed. (`whoami` for a bare shell answers offline from the
     // home file, so it never asks — which is itself the right behaviour.)
-    await isocan({}, "project", "list");
+    await isocan({}, "canvas", "list");
     const before = await read();
     const slot = `http://127.0.0.1:${port}`;
     expect(before.auth?.[slot]?.badgeId).toMatch(/^bdg_/);
@@ -221,7 +221,7 @@ describe("a machine that lost its badge", () => {
    * machine an agent set up for itself. */
   const loseTheBadge = async () => {
     await fs.rm(path.join(home, "identity.json")); // the name AND the badge
-    await isocan(claude("s-1"), "project", "list"); // heals itself onto a NEW badge
+    await isocan(claude("s-1"), "canvas", "list"); // heals itself onto a NEW badge
   };
 
   it("says what actually happened, and names the actor to come back as", async () => {

@@ -110,7 +110,7 @@ async function recordWhereTheCanvasesAlreadyLive(
    * restart walked back into this function, and the branch below froze every
    * locally-born canvas at a home it had never been to — under a verb whose own
    * output says *"nothing already here moved"*. Measured on a reconstructed
-   * rig: both canvases 404'd and `isocan add` answered `project not found`.
+   * rig: both canvases 404'd and `isocan add` answered `canvas not found`.
    *
    * Writing `{}` disarms it. The comment above this function has said so since
    * the day it was written ("an empty `{}` is a real answer and must be
@@ -149,8 +149,8 @@ async function recordWhereTheCanvasesAlreadyLive(
   const everDialled =
     configuredHome !== null && (await readBadge(home, normalizeHomeUrl(configuredHome))) !== null;
   if (configuredHome !== null && everDialled) {
-    for (const project of await store.listProjects()) {
-      rows[project.id] = normalizeHomeUrl(configuredHome);
+    for (const canvas of await store.listCanvases()) {
+      rows[canvas.id] = normalizeHomeUrl(configuredHome);
     }
   }
   await writeHomes(home, rows);
@@ -187,8 +187,8 @@ async function recordWhereTheCanvasesAlreadyLive(
 async function grantTheLinkOnOldCanvases(home: string, store: Store, desk: Desk): Promise<void> {
   const marker = p.linkGrantsMigratedFile(home);
   if (await fs.stat(marker).then(() => true, () => false)) return;
-  for (const project of await store.listProjects()) {
-    await ensureLinkGrant(desk, project.id, GRANTED_BY_MIGRATION);
+  for (const canvas of await store.listCanvases()) {
+    await ensureLinkGrant(desk, canvas.id, GRANTED_BY_MIGRATION);
   }
   await fs.mkdir(p.deskDir(home), { recursive: true }).catch(() => {});
   await fs.writeFile(marker, new Date().toISOString()).catch(() => {});
@@ -197,7 +197,7 @@ async function grantTheLinkOnOldCanvases(home: string, store: Store, desk: Desk)
 /** The registry as it looked before the badge. */
 interface PreBadgeActors {
   lastSeq?: number;
-  claims?: Record<string, { id?: string; name?: string; boundAt?: string; projectId?: string }>;
+  claims?: Record<string, { id?: string; name?: string; boundAt?: string; canvasId?: string }>;
   colors?: ActorRegistry["colors"];
   names?: ActorRegistry["names"];
 }
@@ -232,7 +232,7 @@ async function migrateLegacyClaims(home: string, store: Store, desk: Desk): Prom
       actorId: binding.id,
       boundAt,
       sessionKey: key,
-      ...(binding.projectId !== undefined ? { projectId: binding.projectId } : {}),
+      ...(binding.canvasId !== undefined ? { canvasId: binding.canvasId } : {}),
     };
   }
 
@@ -295,7 +295,7 @@ async function migrateLegacyAgents(home: string, store: Store, desk: Desk): Prom
     } as const;
     const envelope: OpEnvelope = {
       id: newOpId(),
-      projectId: null,
+      canvasId: null,
       actor: { id: binding.id, name: binding.name },
       ts,
       op,

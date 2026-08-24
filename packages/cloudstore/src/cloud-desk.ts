@@ -8,7 +8,7 @@ export const BADGES = "badges";
  * queried by `canvasId`. A collection rather than an array on the canvas
  * because the canvas lives in the OTHER ledger entirely: canvas state
  * replicates, the desk's ledgers never leave the home, and a grant that rode
- * on a project document would be a grant that travelled. */
+ * on a canvas document would be a grant that travelled. */
 export const GRANTS = "grants";
 /** `passes/{id}` — the desk's third row (phase 8). A collection for the same
  * reason grants are one, plus a sharper one: a pass is redeemed exactly once,
@@ -541,7 +541,7 @@ function unique(values: string[]): string[] {
 }
 
 /** What `JSON.stringify` would have written to a file — Firestore rejects
- * `undefined` outright, and a claim row's `sessionKey` and `projectId` are
+ * `undefined` outright, and a claim row's `sessionKey` and `canvasId` are
  * both genuinely optional. See the same helper in `cloud-store.ts`. */
 function jsonSafe<T>(value: T): DocumentData {
   return JSON.parse(JSON.stringify(value)) as DocumentData;

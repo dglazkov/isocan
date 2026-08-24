@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Project } from "@isocan/core";
+import type { Canvas } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { mintTestBadge } from "./badge.ts";
 
@@ -60,10 +60,10 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
   );
 }
 
-const projects = (): Promise<Project[]> =>
+const canvases = (): Promise<Canvas[]> =>
   mintTestBadge(`http://127.0.0.1:${port}`).then((badge) =>
     fetch(`http://127.0.0.1:${port}/api/projects`, { headers: badge.headers }).then(
-      (r) => r.json() as Promise<Project[]>,
+      (r) => r.json() as Promise<Canvas[]>,
     ),
   );
 
@@ -85,7 +85,7 @@ describe("isocan setup", () => {
     const report = JSON.parse(done.stdout) as Record<string, string>;
     expect(report.app).toBe(`http://127.0.0.1:${port}`);
     expect(report).not.toHaveProperty("canvas");
-    expect(await projects()).toEqual([]); // the human makes that, in the app
+    expect(await canvases()).toEqual([]); // the human makes that, in the app
   });
 
   it("needs no identity at all — nobody is named on the way through", async () => {
@@ -130,12 +130,12 @@ describe("isocan setup", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: nico,
-        op: { type: "project.create", projectId: "prj_1", title: "Reading Room" },
+        op: { type: "project.create", canvasId: "prj_1", title: "Reading Room" },
       }),
     });
-    const [canvas] = await projects();
+    const [canvas] = await canvases();
     expect(canvas!.createdBy.name).toBe("Nico");
   });
 });

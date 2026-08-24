@@ -2,13 +2,13 @@ import { create } from "zustand";
 import type {
   Actor,
   ActorColors,
-  CanvasState,
+  CanvasContents,
   ClientMessage,
   OpEnvelope,
   Operation,
   PresenceSession,
-  Project,
-  ProjectState,
+  Canvas,
+  CanvasState,
   ServerMessage,
   ActorNames,
   SlashCommand,
@@ -33,7 +33,7 @@ import {
   type RefusedWrite,
 } from "../lib/writequeue.ts";
 import { useUiStore } from "./uiStore.ts";
-import { markRead, noticeComment, syncProject } from "./unreadStore.ts";
+import { markRead, noticeComment, syncCanvas } from "./unreadStore.ts";
 
 /**
  * What the socket is doing — and, from phase 7, two answers that are FINAL.
@@ -69,14 +69,14 @@ export type Connection =
   | "absent";
 
 interface CanvasStore {
-  projectId: string | null;
+  canvasId: string | null;
   /**
    * What is on screen: the confirmed state with this tab's un-landed work
    * folded over it. Read by every component; written by nothing except the
    * two functions below `render`.
    */
-  project: Project | null;
-  canvas: CanvasState | null;
+  project: Canvas | null;
+  canvas: CanvasContents | null;
   /**
    * **The home's own truth, at `lastSeq` and not one op further** (phase 10).
    *
@@ -86,7 +86,7 @@ interface CanvasStore {
    * state would embed this tab's guesses into what it then calls the home's
    * history, and the two would silently disagree forever after.
    */
-  confirmed: ProjectState | null;
+  confirmed: CanvasState | null;
   /** Writes this tab has made that the home's history has not caught up with
    * — offline ones waiting to be sent, and sent ones waiting for the tail. */
   queue: QueuedWrite[];
@@ -121,7 +121,7 @@ interface CanvasStore {
  * the isomorphism guarantee.
  */
 export const useCanvasStore = create<CanvasStore>(() => ({
-  projectId: null,
+  canvasId: null,
   project: null,
   canvas: null,
   confirmed: null,
@@ -147,7 +147,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
  * one place where "the truth advanced" and "the view was rebuilt" happen
  * together, and no path that can do one without the other.
  */
-function confirm(state: ProjectState, lastSeq: number): void {
+function confirm(state: CanvasState, lastSeq: number): void {
   const queue = retire(useCanvasStore.getState().queue, lastSeq);
   const view = foldQueue(state, queue);
   useCanvasStore.setState({
@@ -175,10 +175,10 @@ function render(): void {
 /** Write the replica down. Immediate when there is work in the queue: a
  * queued op is the only copy of a person's gesture in the world. */
 function persist(): void {
-  const { projectId, confirmed, lastSeq, queue } = useCanvasStore.getState();
-  if (!projectId || !confirmed) return;
+  const { canvasId, confirmed, lastSeq, queue } = useCanvasStore.getState();
+  if (!canvasId || !confirmed) return;
   const record: StoredReplica = {
-    projectId,
+    canvasId,
     project: confirmed.project,
     canvas: confirmed.canvas,
     lastSeq,
@@ -203,13 +203,13 @@ function persist(): void {
  * watching a gesture evaporate.
  */
 export function queueOfflineWrite(
-  projectId: string | null,
+  canvasId: string | null,
   actor: Actor,
   op: Operation,
   opId: string,
 ): boolean {
-  const { projectId: open, confirmed, queue } = useCanvasStore.getState();
-  if (!queueable(projectId, open) || !confirmed) return false;
+  const { canvasId: open, confirmed, queue } = useCanvasStore.getState();
+  if (!queueable(canvasId, open) || !confirmed) return false;
   useCanvasStore.setState({
     queue: [...queue, newWrite(opId, actor, op)],
     // The socket may still think it is alive — a POST discovers the truth
@@ -259,12 +259,12 @@ function flushQueue(): Promise<boolean> {
 
 async function drainQueue(): Promise<boolean> {
   for (;;) {
-    const { projectId, queue } = useCanvasStore.getState();
-    if (!projectId) return true;
+    const { canvasId, queue } = useCanvasStore.getState();
+    if (!canvasId) return true;
     const next = pendingWrites(queue)[0];
     if (!next) return true;
     try {
-      const answer = await postOp(projectId, next.actor, next.op, next.opId);
+      const answer = await postOp(canvasId, next.actor, next.op, next.opId);
       // Not removed — marked. It retires when the tail reaches its seq, so the
       // view never rewinds between the answer and the history that carries it.
       useCanvasStore.setState({
@@ -340,8 +340,8 @@ export function publishCursor(cursor: { x: number; y: number } | null): void {
  */
 export function setPresenceActor(actor: Actor): void {
   presenceActor = actor;
-  const { projectId, canvas } = useCanvasStore.getState();
-  if (projectId && canvas) syncProject(projectId, canvas, actor.id);
+  const { canvasId, canvas } = useCanvasStore.getState();
+  if (canvasId && canvas) syncCanvas(canvasId, canvas, actor.id);
   flushPresence();
 }
 
@@ -395,7 +395,7 @@ export function applyLocalEcho(op: Operation, actor: Actor): void {
   try {
     const next = applyOperation(
       { project, canvas },
-      { id: "op_local", projectId: project.id, actor, ts: new Date().toISOString(), op },
+      { id: "op_local", canvasId: project.id, actor, ts: new Date().toISOString(), op },
     );
     if (next) useCanvasStore.setState({ project: next.project, canvas: next.canvas });
   } catch {
@@ -428,12 +428,12 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentProjectId: string | null = null;
 
-export function connectToProject(projectId: string, actor: Actor): void {
+export function connectToCanvas(canvasId: string, actor: Actor): void {
   disconnect();
-  currentProjectId = projectId;
+  currentProjectId = canvasId;
   presenceActor = actor;
   useCanvasStore.setState({
-    projectId,
+    canvasId,
     project: null,
     canvas: null,
     confirmed: null,
@@ -444,7 +444,7 @@ export function connectToProject(projectId: string, actor: Actor): void {
     connection: "connecting",
     sessions: [],
   });
-  void restoreThenOpen(projectId);
+  void restoreThenOpen(canvasId);
 }
 
 /**
@@ -459,9 +459,9 @@ export function connectToProject(projectId: string, actor: Actor): void {
  * exactly `HomeLink.localSeq`'s reasoning from the daemon's end: *"a cursor
  * has to be a fact."*
  */
-async function restoreThenOpen(projectId: string): Promise<void> {
-  const stored = await loadReplica(projectId);
-  if (currentProjectId !== projectId) return; // navigated away mid-read
+async function restoreThenOpen(canvasId: string): Promise<void> {
+  const stored = await loadReplica(canvasId);
+  if (currentProjectId !== canvasId) return; // navigated away mid-read
   if (stored && useCanvasStore.getState().confirmed === null) {
     const confirmed = { project: stored.project, canvas: stored.canvas };
     const queue = stored.queue as QueuedWrite[];
@@ -473,9 +473,9 @@ async function restoreThenOpen(projectId: string): Promise<void> {
       project: view?.project ?? confirmed.project,
       canvas: view?.canvas ?? confirmed.canvas,
     });
-    syncProject(projectId, view?.canvas ?? confirmed.canvas, presenceActor?.id);
+    syncCanvas(canvasId, view?.canvas ?? confirmed.canvas, presenceActor?.id);
   }
-  void open(projectId);
+  void open(canvasId);
 }
 
 export function disconnect(): void {
@@ -494,7 +494,7 @@ export function disconnect(): void {
   doomed?.close();
 }
 
-function wsUrl(projectId: string, since: number): string {
+function wsUrl(canvasId: string, since: number): string {
   // In dev the page is served by Vite but the daemon owns /ws — connect
   // straight to the daemon. Proxying WebSockets through Vite added a flaky
   // hop that spammed "ws proxy error: write EPIPE" whenever either end tore
@@ -511,14 +511,14 @@ function wsUrl(projectId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?projectId=${projectId}&since=${since}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}`;
 }
 
 /**
  * The cursor to reconnect with: the last seq this tab actually holds, or 0
  * when it holds nothing for this canvas.
  *
- * Both halves of the guard matter. `projectId` must match, because a store
+ * Both halves of the guard matter. `canvasId` must match, because a store
  * still carrying the last canvas's `lastSeq` would ask a DIFFERENT canvas for
  * a tail from a seq that means nothing there — the home would happily serve
  * one, and the tab would apply another canvas's ops to this one's state.
@@ -532,9 +532,9 @@ function wsUrl(projectId: string, since: number): string {
  * view has this tab's un-landed guesses folded in and is a claim about
  * nothing anybody else can check.
  */
-function resumeCursor(projectId: string): number {
-  const { projectId: held, confirmed, lastSeq } = useCanvasStore.getState();
-  return held === projectId && confirmed ? lastSeq : 0;
+function resumeCursor(canvasId: string): number {
+  const { canvasId: held, confirmed, lastSeq } = useCanvasStore.getState();
+  return held === canvasId && confirmed ? lastSeq : 0;
 }
 
 /** Between reconnect attempts, growing while the home stays away. The daemon's
@@ -580,29 +580,29 @@ const OFFLINE_AFTER_FAILED_DIALS = 2;
  * If the flush cannot reach the home there is no point dialling: stay offline
  * and try the whole gesture again after the backoff.
  */
-async function open(projectId: string): Promise<void> {
-  if (currentProjectId !== projectId || socket) return;
+async function open(canvasId: string): Promise<void> {
+  if (currentProjectId !== canvasId || socket) return;
   if (!(await flushQueue())) {
-    if (currentProjectId !== projectId) return;
+    if (currentProjectId !== canvasId) return;
     useCanvasStore.setState({ connection: "offline" });
-    return retryLater(projectId);
+    return retryLater(canvasId);
   }
-  if (currentProjectId !== projectId || socket) return;
-  openSocket(projectId);
+  if (currentProjectId !== canvasId || socket) return;
+  openSocket(canvasId);
 }
 
-function retryLater(projectId: string): void {
+function retryLater(canvasId: string): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   const wait = backoffMs;
   backoffMs = Math.min(backoffMs * 2, RECONNECT_MAX_MS);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    if (currentProjectId === projectId && socket === null) void open(projectId);
+    if (currentProjectId === canvasId && socket === null) void open(canvasId);
   }, wait);
 }
 
-function openSocket(projectId: string): void {
-  const ws = new WebSocket(wsUrl(projectId, resumeCursor(projectId)));
+function openSocket(canvasId: string): void {
+  const ws = new WebSocket(wsUrl(canvasId, resumeCursor(canvasId)));
   socket = ws;
   /**
    * While a resumed tail is streaming, this is the seq it ends at.
@@ -624,7 +624,7 @@ function openSocket(projectId: string): void {
   // this, StrictMode's double-mount let a superseded socket's late onclose
   // schedule a reconnect and leave TWO live sockets — every broadcast then
   // processed twice, tripping the seq-gap check and flapping "reconnecting".
-  const stale = () => socket !== ws || currentProjectId !== projectId;
+  const stale = () => socket !== ws || currentProjectId !== canvasId;
 
   ws.onmessage = (event) => {
     if (stale()) return;
@@ -645,7 +645,7 @@ function openSocket(projectId: string): void {
       // drew on a plane.
       confirm({ project: message.project, canvas: message.canvas }, message.lastSeq);
       const view = useCanvasStore.getState().canvas!;
-      syncProject(projectId, view, presenceActor?.id);
+      syncCanvas(canvasId, view, presenceActor?.id);
       // Announce this tab's presence immediately so it shows up in rosters
       // (and `isocan who`) even before the mouse moves.
       schedulePresenceFlush();
@@ -686,7 +686,7 @@ function openSocket(projectId: string): void {
         ws.close();
         return;
       }
-      let next: ProjectState | null;
+      let next: CanvasState | null;
       try {
         next = applyOperation(confirmed, message.entry.envelope);
       } catch {
@@ -695,14 +695,14 @@ function openSocket(projectId: string): void {
         ws.close();
         return;
       }
-      if (next === null) return; // project.delete arrives as project-deleted too
+      if (next === null) return; // project.delete arrives as canvas-deleted too
       confirm(next, message.entry.seq);
       if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
-    } else if (message.type === "project-deleted") {
+    } else if (message.type === "canvas-deleted") {
       useCanvasStore.setState({ connection: "gone" });
       // A replica of a canvas that no longer exists is how a tab shows a
       // person work nobody else can see.
-      void forgetReplica(projectId);
+      void forgetReplica(canvasId);
       disconnect();
     }
   };
@@ -739,11 +739,11 @@ function openSocket(projectId: string): void {
     }
     if (event.code === WS_NO_BADGE) {
       void knockOnDoor().then(() => {
-        if (currentProjectId === projectId && socket === null) void open(projectId);
+        if (currentProjectId === canvasId && socket === null) void open(canvasId);
       });
       return;
     }
-    retryLater(projectId);
+    retryLater(canvasId);
   };
 }
 

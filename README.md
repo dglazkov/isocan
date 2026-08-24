@@ -70,7 +70,7 @@ npm run build          # build the web app once (daemon serves it)
 
 cd packages/cli
 node bin/isocan.js identity --name "You"
-node bin/isocan.js project create "My canvas"
+node bin/isocan.js canvas create "My canvas"
 node bin/isocan.js add notes.md
 node bin/isocan.js open          # opens the canvas in your browser
 ```
@@ -233,7 +233,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 - **The Shelf**: every verb in one dock at bottom center, in grouped
   segments — create (`＋ File`) · converse (comment mode, main thread) ·
   history (undo/redo) · navigate (zoom, `⌖ Fit`). The top bar holds identity
-  only: project, connection, trash, and who's here. When the main-thread
+  only: canvas, connection, trash, and who's here. When the main-thread
   panel is open the Shelf recenters in the canvas the panel leaves visible.
 - **Who's here, and who wants you**: a facepile in the top right holds
   everyone on the canvas — live people and agents in their identity color,
@@ -323,7 +323,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   facepile — including one created after it started waiting — and the `@`
   picker offers it there. So a brand-new space is never empty: @-mention the
   agent, or just write in its main thread, and `wait` wakes, names the canvas
-  that summoned it, and hands back a `--project` command that lands there.
+  that summoned it, and hands back a `--canvas` command that lands there.
 - **New comments announce themselves**: one arriving raises a toast naming who
   wrote it; clicking it flies to the pin. Until you read it the pin wears an
   unread badge, its author's face is badged in the pile, and the tab title
@@ -354,11 +354,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   own — one hiding in the letters of "isocan" (Isaac, Kenny, Nico, …), not
   their vendor's — checking `isocan who --all` first so no two collaborators
   answer to the same `@Name`.
-- **Trash & undo**: deletes go to a per-project trash; undo is
+- **Trash & undo**: deletes go to a per-canvas trash; undo is
   **actor-scoped** (`⌘Z`/`⇧⌘Z`, `isocan undo|redo`) — your undo walks your
   own ops, never a collaborator's. Entries invalidated by others (your target
   got deleted) are skipped; batch inverses shrink to their surviving members.
-  Trash-empty and project-delete are confirmation-gated and not undoable.
+  Trash-empty and canvas-delete are confirmation-gated and not undoable.
 - **Offline, in the browser**: a tab that loses its network keeps working. A
   service worker caches the app shell, the canvas and its seq cursor live in
   IndexedDB — so a reload with no network comes back to the canvas, not to a
@@ -372,22 +372,22 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   than a duplicate-id refusal. Two things deliberately do not work offline
   and say so: adding a **file** (bytes are not queued) and **undo** (the
   stack is the home's, walked over the whole oplog).
-- **Projects**: each project is its own canvas; create/list/edit/delete from
+- **Canvases**: a canvas is the unit of work; create/list/edit/delete from
   either surface.
-- **A directory is its project** (#60): `<dir>/.isocan/project.json` binds a
+- **A directory is its canvas** (#60): `<dir>/.isocan/project.json` binds a
   directory (git toplevel when in a repo) to a canvas — identity only, the
   state stays in `~/.isocan`. Written automatically when an agent names
-  itself (`identity --session` creates the project if needed, named after
-  the directory), or by hand with `isocan use <project>`. Resolution walks
-  up like `.git`; a committed marker means a clone knows which project it
+  itself (`identity --session` creates the canvas if needed, named after
+  the directory), or by hand with `isocan use <canvas>`. Resolution walks
+  up like `.git`; a committed marker means a clone knows which canvas it
   is. A marker this machine has never seen that names **no** home is
   materialized under its own id on the first addition; one that names a home
   this machine has never dialled is **fetched from there** — the daemon opens
   a link, that home's door decides, and the row is written, with nothing else
-  on the machine moving. In a bound directory `project list` narrows to
+  on the machine moving. In a bound directory `canvas list` narrows to
   that canvas (`--all` widens) and `wait` listens to it alone — there is no
   home-wide listening; the old "on call" presence was retired with this
-  change. `~/.isocan/dirs.json` is the dir→project roster, a lazily healed
+  change. `~/.isocan/dirs.json` is the dir→canvas roster, a lazily healed
   cache.
 
 ## CLI surface
@@ -405,8 +405,8 @@ isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
-isocan project create|list [--all]|show|edit|delete
-isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
+isocan canvas create|list [--all]|show|edit|delete
+isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
@@ -461,7 +461,7 @@ which nothing served and which drifted from the app the day it was written; it
 was folded into `packages/web` and the directory deleted, because two front
 doors is one too many.
 
-Storage lives under `~/.isocan` (override with `ISOCAN_HOME`): per-project
+Storage lives under `~/.isocan` (override with `ISOCAN_HOME`): per-canvas
 directories with human-readable JSON snapshots, an append-only `oplog.jsonl`
 as the source of truth (crash recovery replays the tail), and sha256
 content-addressed blobs. Every op's inverse is computed from pre-state and

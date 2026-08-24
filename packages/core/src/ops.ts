@@ -47,8 +47,8 @@ export type Operation =
   | {
       /**
        * Naming yourself, as a mutation like any other (#57). Home-scoped:
-       * `projectId` is null, the entry lands in the home's actors log, and
-       * the ENGINE applies it against the actor registry — a per-project
+       * `canvasId` is null, the entry lands in the home's actors log, and
+       * the ENGINE applies it against the actor registry — a per-canvas
        * reducer never sees it. NOT undoable (see project.delete's precedent).
        * The envelope's `actor` is the RESULT: the daemon stamps the resolved
        * actor, which is how the caller learns who it is.
@@ -84,7 +84,7 @@ export type Operation =
       /**
        * The canvas this claim is made FROM — the bound directory for a CLI
        * (#60), the canvas in the address bar for a browser. Recorded on the
-       * binding so the registry can say which project an agent is of.
+       * binding so the registry can say which canvas an agent is of.
        *
        * It is also the ROOM this name is being taken in, and mechanism 10
        * makes that count: name uniqueness is judged against the rosters the
@@ -96,16 +96,16 @@ export type Operation =
        * It widens the QUESTION, never the answer: it grants no admission and
        * carries no authority, and today it can only reach a canvas the
        * address would have admitted the asker to anyway. Absent on the very
-       * first handshake in a fresh directory, whose project is only created
+       * first handshake in a fresh directory, whose canvas is only created
        * after the claim answers.
        */
-      projectId?: string;
+      canvasId?: string;
     }
   | {
       /**
        * Choosing the color you wear — cursor, face, pins, and the Pen's
        * default ink (#identity colors). Home-scoped like `actor.claim`:
-       * `projectId` is null, it lands in the home's actors log, and the
+       * `canvasId` is null, it lands in the home's actors log, and the
        * ENGINE applies it against the actor registry. NOT undoable, for the
        * same reason naming yourself is not.
        *
@@ -116,10 +116,17 @@ export type Operation =
       actorId: string;
       color: string | null;
     }
-  // ---- projects ----
+  // ---- canvases ----
+  //
+  // **`project.*` is a deliberate holdout** (phase 13.5's rename). Everything
+  // else here says canvas; these three type strings do not, because they are
+  // written into every oplog line this product has ever produced — on disk, in
+  // dev's Firestore, and in the replicas that have replayed them. The word is
+  // data, not vocabulary: renaming it would mean a migration over every log for
+  // a cosmetic gain nobody outside this file ever reads.
   | {
       type: "project.create";
-      projectId: string;
+      canvasId: string;
       title: string;
       description?: string;
       properties?: Record<string, string>;
@@ -147,7 +154,7 @@ export type Operation =
       /** Rename the file under the CURRENT version too. Renaming an item and
        * renaming its file are one act — one op, so they are one undo — and the
        * filename is a property of the version, which is why it rides here
-       * rather than in the patch (which projects share). */
+       * rather than in the patch (which canvases share). */
       filename?: string;
     }
   | { type: "item.addVersion"; itemId: string; version: NewVersion }
@@ -256,8 +263,8 @@ export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
 export interface OpEnvelope {
   /** Op id (nanoid). */
   id: string;
-  /** null only for project.create (the project doesn't exist yet). */
-  projectId: string | null;
+  /** null only for project.create (the canvas doesn't exist yet). */
+  canvasId: string | null;
   /** Identity stamped on the mutation. */
   actor: Actor;
   /** Originating connection, for attribution in UI. */
@@ -268,7 +275,7 @@ export interface OpEnvelope {
 }
 
 export interface LogEntry {
-  /** Monotonic per project. */
+  /** Monotonic per canvas. */
   seq: number;
   /** Op normalized (placement resolved to concrete coordinates). */
   envelope: OpEnvelope;

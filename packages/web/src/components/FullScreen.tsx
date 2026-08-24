@@ -29,12 +29,12 @@ import { iconKindFor } from "../lib/kinds.ts";
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
-export function FullScreen({ projectId, itemId }: { projectId: string; itemId: string }) {
+export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: string }) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
   const loaded = useCanvasStore((s) => s.canvas !== null);
 
-  const back = () => navigate(canvasPath(projectId));
+  const back = () => navigate(canvasPath(canvasId));
 
   // Esc is the way out, and it is bound HERE rather than in the page's key
   // handler on purpose: full screen is the outermost layer, so it must answer
@@ -97,7 +97,7 @@ export function FullScreen({ projectId, itemId }: { projectId: string; itemId: s
           className="fullscreen-copy"
           title="Copy a link to this screen"
           onClick={() => {
-            void navigator.clipboard?.writeText(itemUrl(location.origin, projectId, item.id));
+            void navigator.clipboard?.writeText(itemUrl(location.origin, canvasId, item.id));
           }}
         >
           Copy link
@@ -105,7 +105,7 @@ export function FullScreen({ projectId, itemId }: { projectId: string; itemId: s
       </div>
       <div className="fullscreen-stage">
         <VersionContent
-          projectId={projectId}
+          canvasId={canvasId}
           blobHash={current.blobHash}
           mimeType={current.mimeType}
           filename={current.filename}

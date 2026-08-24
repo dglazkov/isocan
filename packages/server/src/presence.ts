@@ -1,4 +1,4 @@
-import type { Actor, CanvasState, Operation, PresenceActivity, PresenceSession } from "@isocan/core";
+import type { Actor, CanvasContents, Operation, PresenceActivity, PresenceSession } from "@isocan/core";
 import { newId } from "@isocan/core";
 
 /**
@@ -48,7 +48,7 @@ const SWEEP_INTERVAL_MS = 10_000;
 
 export class PresenceHub {
   private rooms = new Map<string, Map<string, SessionState>>();
-  private listeners: Array<(projectId: string) => void> = [];
+  private listeners: Array<(canvasId: string) => void> = [];
   private sweeper: ReturnType<typeof setInterval>;
 
   constructor(private readonly ttlMs = SESSION_TTL_MS) {
@@ -60,38 +60,38 @@ export class PresenceHub {
     clearInterval(this.sweeper);
   }
 
-  onChange(listener: (projectId: string) => void): void {
+  onChange(listener: (canvasId: string) => void): void {
     this.listeners.push(listener);
   }
 
-  private emit(projectId: string): void {
-    for (const listener of this.listeners) listener(projectId);
+  private emit(canvasId: string): void {
+    for (const listener of this.listeners) listener(canvasId);
   }
 
-  private room(projectId: string): Map<string, SessionState> {
-    let room = this.rooms.get(projectId);
+  private room(canvasId: string): Map<string, SessionState> {
+    let room = this.rooms.get(canvasId);
     if (!room) {
       room = new Map();
-      this.rooms.set(projectId, room);
+      this.rooms.set(canvasId, room);
     }
     return room;
   }
 
   createSession(
-    projectId: string,
+    canvasId: string,
     actor: Actor,
     kind: "web" | "cli",
     options: { label?: string; sessionId?: string } = {},
   ): PresenceSession {
     const session = blankSession(actor, kind, options);
-    this.room(projectId).set(session.sessionId, session);
-    this.emit(projectId);
+    this.room(canvasId).set(session.sessionId, session);
+    this.emit(canvasId);
     return session;
   }
 
   /** Update + heartbeat. Returns false if the session is gone (expired). */
   touch(
-    projectId: string,
+    canvasId: string,
     sessionId: string,
     patch: {
       /** Who is holding this session now. Presence is client-asserted on every
@@ -106,16 +106,16 @@ export class PresenceHub {
       onThread?: string | null;
     } = {},
   ): boolean {
-    const session = this.rooms.get(projectId)?.get(sessionId);
+    const session = this.rooms.get(canvasId)?.get(sessionId);
     if (!session) return false;
     patchSession(session, patch);
-    this.emit(projectId);
+    this.emit(canvasId);
     return true;
   }
 
-  endSession(projectId: string, sessionId: string): void {
-    const room = this.rooms.get(projectId);
-    if (room?.delete(sessionId)) this.emit(projectId);
+  endSession(canvasId: string, sessionId: string): void {
+    const room = this.rooms.get(canvasId);
+    if (room?.delete(sessionId)) this.emit(canvasId);
   }
 
   /**
@@ -127,7 +127,7 @@ export class PresenceHub {
    */
   endActorSessions(actorId: string, kind?: "web" | "cli"): number {
     let ended = 0;
-    for (const [projectId, room] of this.rooms) {
+    for (const [canvasId, room] of this.rooms) {
       let changed = false;
       for (const [sessionId, session] of room) {
         if (session.actor.id !== actorId) continue;
@@ -136,15 +136,15 @@ export class PresenceHub {
         changed = true;
         ended += 1;
       }
-      if (changed) this.emit(projectId);
+      if (changed) this.emit(canvasId);
     }
     return ended;
   }
 
   /** Who this canvas sees: everyone actually on it — this daemon's own
    * clients and every face mirrored in from a connection. */
-  roster(projectId: string): PresenceSession[] {
-    const here = [...(this.rooms.get(projectId)?.values() ?? [])];
+  roster(canvasId: string): PresenceSession[] {
+    const here = [...(this.rooms.get(canvasId)?.values() ?? [])];
     return here.map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
   }
 
@@ -155,8 +155,8 @@ export class PresenceHub {
    * back the faces it just sent us, and every roster either end published
    * would provoke another.
    */
-  localRoster(projectId: string): PresenceSession[] {
-    const here = [...(this.rooms.get(projectId)?.values() ?? [])];
+  localRoster(canvasId: string): PresenceSession[] {
+    const here = [...(this.rooms.get(canvasId)?.values() ?? [])];
     return here
       .filter((session) => session.origin === null)
       .map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
@@ -179,8 +179,8 @@ export class PresenceHub {
    * Presence is still never written down: this is daemon memory and WS fan-out
    * exactly as before, and nothing here reaches a store or an oplog.
    */
-  mirror(projectId: string, origin: string, sessions: readonly PresenceSession[]): void {
-    const room = this.room(projectId);
+  mirror(canvasId: string, origin: string, sessions: readonly PresenceSession[]): void {
+    const room = this.room(canvasId);
     const wanted = new Map(sessions.map((session) => [session.sessionId, session]));
     let changed = false;
     for (const [sessionId, session] of room) {
@@ -206,29 +206,29 @@ export class PresenceHub {
       room.set(sessionId, next);
       if (before !== JSON.stringify(stripped(next))) changed = true;
     }
-    if (room.size === 0) this.rooms.delete(projectId);
-    if (changed) this.emit(projectId);
+    if (room.size === 0) this.rooms.delete(canvasId);
+    if (changed) this.emit(canvasId);
   }
 
   /** Every face mirrored in from this origin, gone — on every canvas. What a
    * dropped home connection (or a closed relaying socket) means: nobody on the
    * other side of it is visibly here any more. */
   dropMirror(origin: string): void {
-    for (const [projectId, room] of this.rooms) {
+    for (const [canvasId, room] of this.rooms) {
       let changed = false;
       for (const [sessionId, session] of room) {
         if (session.origin !== origin) continue;
         room.delete(sessionId);
         changed = true;
       }
-      if (room.size === 0) this.rooms.delete(projectId);
-      if (changed) this.emit(projectId);
+      if (room.size === 0) this.rooms.delete(canvasId);
+      if (changed) this.emit(canvasId);
     }
   }
 
   /** What this session says it is answering, and since when. */
-  onThreadOf(projectId: string, sessionId: string): { threadId: string; since: string | null } | null {
-    const session = this.rooms.get(projectId)?.get(sessionId);
+  onThreadOf(canvasId: string, sessionId: string): { threadId: string; since: string | null } | null {
+    const session = this.rooms.get(canvasId)?.get(sessionId);
     if (!session?.onThread) return null;
     return { threadId: session.onThread, since: session.onThreadAt };
   }
@@ -238,17 +238,17 @@ export class PresenceHub {
    * A CLI session that expired mid-task (ids are "ses_…") is auto-revived
    * from the op's own actor: working makes you visible again. */
   opApplied(
-    projectId: string,
+    canvasId: string,
     clientId: string | undefined,
     actor: Actor,
     op: Operation,
-    canvas: CanvasState,
+    canvas: CanvasContents,
   ): void {
     if (!clientId) return;
-    let session = this.rooms.get(projectId)?.get(clientId);
+    let session = this.rooms.get(canvasId)?.get(clientId);
     if (!session && clientId.startsWith("ses_")) {
-      this.createSession(projectId, actor, "cli", { sessionId: clientId });
-      session = this.rooms.get(projectId)?.get(clientId);
+      this.createSession(canvasId, actor, "cli", { sessionId: clientId });
+      session = this.rooms.get(canvasId)?.get(clientId);
     }
     if (!session) return;
     const locus = opLocus(op, canvas);
@@ -257,7 +257,7 @@ export class PresenceHub {
     // the receipt for the whole work episode, so it clears even a status the
     // actor said out loud; other ops only sweep derived narration.
     const receipt = op.type === "thread.create" || op.type === "thread.reply";
-    this.touch(projectId, clientId, {
+    this.touch(canvasId, clientId, {
       activity: null,
       status: null,
       statusSource: receipt ? "lifecycle" : "inferred",
@@ -271,7 +271,7 @@ export class PresenceHub {
 
   private sweep(): void {
     const cutoff = Date.now() - this.ttlMs;
-    for (const [projectId, room] of this.rooms) {
+    for (const [canvasId, room] of this.rooms) {
       let changed = false;
       for (const [sessionId, session] of room) {
         // Mirrored faces are somebody else's to expire — see `origin`.
@@ -281,8 +281,8 @@ export class PresenceHub {
           changed = true;
         }
       }
-      if (room.size === 0) this.rooms.delete(projectId);
-      if (changed) this.emit(projectId);
+      if (room.size === 0) this.rooms.delete(canvasId);
+      if (changed) this.emit(canvasId);
     }
   }
 }
@@ -355,7 +355,7 @@ function patchSession(
 }
 
 /** Where on the canvas an op "happened", given post-apply state. */
-export function opLocus(op: Operation, canvas: CanvasState): { x: number; y: number } | null {
+export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: number } | null {
   const itemCenter = (itemId: string) => {
     const item = canvas.items[itemId] ?? canvas.trash.find((t) => t.item.id === itemId)?.item;
     return item ? { x: item.x + item.width / 2, y: item.y + item.height / 2 } : null;

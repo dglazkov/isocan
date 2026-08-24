@@ -26,7 +26,7 @@ function sayWhy(err: unknown): void {
   if (err instanceof OfflineError) setNotice(err.message);
 }
 
-export function ZoomControls({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const scale = useUiStore((s) => s.viewport.scale);
   const hasSelection = useUiStore((s) => s.selectedItemIds.length > 0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,10 +42,10 @@ export function ZoomControls({ projectId, actor }: { projectId: string; actor: A
 
   return (
     <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()}>
-      <button className="btn icon" title="Undo (⌘Z)" onClick={() => void undo(projectId, actor).catch(sayWhy)}>
+      <button className="btn icon" title="Undo (⌘Z)" onClick={() => void undo(canvasId, actor).catch(sayWhy)}>
         ↩︎
       </button>
-      <button className="btn icon" title="Redo (⇧⌘Z)" onClick={() => void redo(projectId, actor).catch(sayWhy)}>
+      <button className="btn icon" title="Redo (⇧⌘Z)" onClick={() => void redo(canvasId, actor).catch(sayWhy)}>
         ↪︎
       </button>
       <div className="zoom-group" ref={menuRef}>

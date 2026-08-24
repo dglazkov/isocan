@@ -82,7 +82,7 @@ falls in two ledgers with different rules:
   already exists (offline is not an error state in this architecture).
   The answerability is for *liveness*, priced accordingly.
 - **Abuse — the desk already forged the tools.** Kill a badge, revoke a
-  grant (provenance sweep), delete a project, refuse the door. Takedown
+  grant (provenance sweep), delete a canvas, refuse the door. Takedown
   of hosted blobs is `project.delete` plus GC, both extant. What the
   innkeeper adds is policy — terms for what it will host — and rate
   limits at the door (badges are free to mint; free may not mean

@@ -55,7 +55,7 @@ export function InkLayer() {
  * FAILED: the placement did not land. The ink is still on screen, still yours,
  * and one button away from another try.
  */
-export function SketchBar({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function SketchBar({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const colors = useActorColors();
   const error = useUiStore((s) => s.sketchError);
   const strokes = useUiStore((s) => s.sketch.length);
@@ -84,7 +84,7 @@ export function SketchBar({ projectId, actor }: { projectId: string; actor: Acto
       <button
         className="btn primary"
         title="Try to place the drawing again"
-        onClick={() => placeSketch(projectId, actor)}
+        onClick={() => placeSketch(canvasId, actor)}
       >
         Retry
       </button>

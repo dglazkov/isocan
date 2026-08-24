@@ -61,7 +61,7 @@ describe("one item's address", () => {
     // named. The canvas address itself still parses, which is the control.
     expect(parseCanvasAddress(itemUrl("https://isocan.io", "prj_1", "itm_2"))).toBeNull();
     expect(parseCanvasAddress(canvasUrl("https://isocan.io", "prj_1"))).toMatchObject({
-      projectId: "prj_1",
+      canvasId: "prj_1",
     });
   });
 });

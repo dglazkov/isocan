@@ -179,12 +179,12 @@ describe("presence over the daemon", () => {
     // each of them has to be a claim on this badge.
     for (const who of [alice, kenny, nico]) await badge.speakAs(who);
     await post("/api/ops", {
-      projectId: null,
+      canvasId: null,
       actor: alice,
-      op: { type: "project.create", projectId: "prj_1", title: "P" },
+      op: { type: "project.create", canvasId: "prj_1", title: "P" },
     });
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: alice,
       op: {
         type: "item.add",
@@ -226,7 +226,7 @@ describe("presence over the daemon", () => {
 
     // Bound op moves the session cursor to the op's locus (item center).
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: kenny,
       clientId: sid,
       op: { type: "item.move", itemId: "itm_1", x: 1000, y: 2000 },
@@ -260,7 +260,7 @@ describe("presence over the daemon", () => {
   it("an expired CLI session is revived by its own ops", async () => {
     // No session exists for this id — the op resurrects it from its actor.
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: kenny,
       clientId: "ses_ghost1234",
       op: { type: "item.move", itemId: "itm_1", x: 40, y: 60 },
@@ -280,7 +280,7 @@ describe("presence over the daemon", () => {
 
   it("web presence flows to the roster and other clients", async () => {
     const messages: ServerMessage[] = [];
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_1`, {
+    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
       headers: badge.headers,
     });
     ws.on("message", (data) => messages.push(JSON.parse(String(data))));

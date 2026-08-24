@@ -2,12 +2,12 @@ import { useState } from "react";
 import type { MetaPatch } from "@isocan/core";
 
 /**
- * The web half of `isocan project edit`: title + description, straight to a
- * `project.update` patch. Shared by the project list (inline on the card) and
+ * The web half of `isocan canvas edit`: title + description, straight to a
+ * `project.update` patch. Shared by the canvas list (inline on the card) and
  * the canvas toolbar (popover under the name), so renaming reads the same way
  * wherever you are.
  */
-export function ProjectEditor({
+export function CanvasEditor({
   title: initialTitle,
   description: initialDescription,
   onSave,
@@ -51,7 +51,7 @@ export function ProjectEditor({
 
   return (
     <form
-      className="project-editor"
+      className="canvas-editor"
       onSubmit={submit}
       onKeyDown={(e) => {
         if (e.key === "Escape") onCancel();
@@ -60,8 +60,8 @@ export function ProjectEditor({
       <input
         className="text-input"
         autoFocus
-        placeholder="Project title"
-        aria-label="Project title"
+        placeholder="Canvas title"
+        aria-label="Canvas title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
@@ -69,7 +69,7 @@ export function ProjectEditor({
         className="text-input"
         rows={2}
         placeholder="Description"
-        aria-label="Project description"
+        aria-label="Canvas description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         onKeyDown={(e) => {
@@ -77,7 +77,7 @@ export function ProjectEditor({
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(e);
         }}
       />
-      {error && <div className="project-editor-error">{error}</div>}
+      {error && <div className="canvas-editor-error">{error}</div>}
       <div className="row">
         <button className="btn primary" type="submit" disabled={!trimmedTitle || busy}>
           Save

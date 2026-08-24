@@ -39,7 +39,7 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
-export function CanvasViewport({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
@@ -288,7 +288,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     if (delay === null) return;
     settleTimer.current = window.setTimeout(() => {
       settleTimer.current = null;
-      placeSketch(projectId, actor);
+      placeSketch(canvasId, actor);
     }, delay);
   }
   useEffect(() => holdSettle, []);
@@ -494,7 +494,7 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       if (link) {
         const { addBrowserItem } = await import("../lib/upload.ts");
         try {
-          ui.select(await addBrowserItem(projectId, actor, link, world));
+          ui.select(await addBrowserItem(canvasId, actor, link, world));
         } catch {
           // Not http(s) — nothing to project.
         }
@@ -506,13 +506,13 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
     const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");
     if (targetItem && files.length === 1) {
       const { addVersionFromFile } = await import("../lib/upload.ts");
-      await addVersionFromFile(projectId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+      await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
       return;
     }
     // The drop's own failure, said out loud rather than left as an unhandled
     // rejection: offline, files are not queued (phase 10's deferred scope) and
     // `uploadBlob` throws with the sentence that explains why.
-    const ids = await addFiles(projectId, actor, files, world).catch((err: unknown) => {
+    const ids = await addFiles(canvasId, actor, files, world).catch((err: unknown) => {
       setNotice(err instanceof Error ? err.message : "Those files could not be added.");
       return [] as string[];
     });
@@ -562,19 +562,19 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
         }
       >
         {items.map((item) => (
-          <ItemView key={item.id} item={item} projectId={projectId} actor={actor} />
+          <ItemView key={item.id} item={item} canvasId={canvasId} actor={actor} />
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
-          <VersionFanOut item={canvas.items[fannedItemId]!} projectId={projectId} actor={actor} />
+          <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
         )}
         <InkLayer />
       </div>
-      <CommentLayer projectId={projectId} actor={actor} />
+      <CommentLayer canvasId={canvasId} actor={actor} />
       <CursorLayer />
       <MarqueeRect />
       <GuideLines />
-      <EdgeRadar projectId={projectId} />
-      <SketchBar projectId={projectId} actor={actor} />
+      <EdgeRadar canvasId={canvasId} />
+      <SketchBar canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
     </div>
   );

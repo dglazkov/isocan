@@ -61,21 +61,21 @@ const codeOf = async (res: Response) => ((await res.json()) as { code?: string }
 /** A canvas with one item on it, made by an actor this badge speaks for. */
 async function seed(
   badge: TestBadge,
-  projectId: string,
+  canvasId: string,
   actor: { id: string; name: string },
 ): Promise<void> {
   await badge.speakAs(actor);
   await post(badge, "/api/ops", {
-    projectId: null,
+    canvasId: null,
     actor,
-    op: { type: "project.create", projectId, title: projectId },
+    op: { type: "project.create", canvasId, title: canvasId },
   });
   await post(badge, "/api/ops", {
-    projectId,
+    canvasId,
     actor,
     op: {
       type: "item.add",
-      itemId: `itm_${projectId}`,
+      itemId: `itm_${canvasId}`,
       version: { id: "ver_1", blobHash: "h", mimeType: "text/markdown", filename: "a.md", size: 1 },
       width: 10,
       height: 10,
@@ -87,9 +87,9 @@ async function seed(
 /** Open a socket on a room and collect what it is told. */
 async function room(
   badge: TestBadge,
-  projectId: string,
+  canvasId: string,
 ): Promise<{ socket: WebSocket; messages: ServerMessage[] }> {
-  const socket = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=${projectId}`, {
+  const socket = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`, {
     headers: badge.headers,
   });
   const messages: ServerMessage[] = [];
@@ -129,7 +129,7 @@ describe("an actor a badge does not claim", () => {
     expect((await fetch(`${base}/api/projects/prj_1/canvas`, { headers: theirs.headers })).status).toBe(200);
 
     const forged = await post(theirs, "/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: kenny,
       op: { type: "item.move", itemId: "itm_prj_1", x: 99, y: 99 },
     });
@@ -140,7 +140,7 @@ describe("an actor a badge does not claim", () => {
     // a free one, or "assert whoever you like" would still be the rule for
     // anybody willing to make up an id.
     const invented = await post(theirs, "/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: stranger,
       op: { type: "item.move", itemId: "itm_prj_1", x: 99, y: 99 },
     });
@@ -158,7 +158,7 @@ describe("an actor a badge does not claim", () => {
     const mine = await mintTestBadge(base);
     await seed(mine, "prj_1", kenny);
     await post(mine, "/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: kenny,
       op: { type: "item.move", itemId: "itm_prj_1", x: 42, y: 42 },
     });
@@ -218,7 +218,7 @@ describe("an actor a badge does not claim", () => {
     // Speaking as themselves, but changing somebody else's face: two
     // assertions in one op, and both are checked.
     const repaint = await post(theirs, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       actor: stranger,
       op: { type: "actor.setColor", actorId: kenny.id, color: "#c93a55" },
     });
@@ -283,7 +283,7 @@ describe("the honest paths, unchanged", () => {
     await seed(badge, "prj_1", kenny);
 
     const moved = await post(badge, "/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: kenny,
       op: { type: "item.move", itemId: "itm_prj_1", x: 42, y: 42 },
     });
@@ -300,7 +300,7 @@ describe("the honest paths, unchanged", () => {
     expect(
       (
         await post(badge, "/api/ops", {
-          projectId: null,
+          canvasId: null,
           actor: kenny,
           op: { type: "actor.setColor", actorId: kenny.id, color: "#0f8a80" },
         })
@@ -341,8 +341,8 @@ describe("two tenants, one home", () => {
     // never a global property: uniqueness exists so `@`-mentions resolve and
     // the facepile reads, and neither roster contains the other.
     const named = await post(jordan, "/api/ops", {
-      projectId: null,
-      op: { type: "actor.claim", sessionKey: "codex:t-1", name: "Isaac", projectId: "prj_jordan" },
+      canvasId: null,
+      op: { type: "actor.claim", sessionKey: "codex:t-1", name: "Isaac", canvasId: "prj_jordan" },
     });
     expect(named.status).toBe(200);
     const { envelope } = (await named.json()) as { envelope: { actor: { id: string; name: string } } };
@@ -353,8 +353,8 @@ describe("two tenants, one home", () => {
     // could already see — the leak closes for free, because the check never
     // consulted anybody else.
     const taken = await post(priya, "/api/ops", {
-      projectId: null,
-      op: { type: "actor.claim", sessionKey: "claude-code:s-9", name: "Isaac", projectId: "prj_priya" },
+      canvasId: null,
+      op: { type: "actor.claim", sessionKey: "claude-code:s-9", name: "Isaac", canvasId: "prj_priya" },
     });
     expect(taken.status).toBe(400);
     const refusal = (await taken.json()) as { code: string; error: string };
@@ -370,8 +370,8 @@ describe("two tenants, one home", () => {
     // another canvas wears it.
     const { jordan } = await tenants();
     const allocated = await post(jordan, "/api/ops", {
-      projectId: null,
-      op: { type: "actor.claim", sessionKey: "codex:t-2", projectId: "prj_jordan" },
+      canvasId: null,
+      op: { type: "actor.claim", sessionKey: "codex:t-2", canvasId: "prj_jordan" },
     });
     const { envelope } = (await allocated.json()) as { envelope: { actor: { name: string } } };
     expect(envelope.actor.name).toBe("Isaac");
@@ -390,7 +390,7 @@ describe("two tenants, one home", () => {
     ).toBe(200);
 
     const refused = await post(visitor, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "cli:s-1", as: "usr_elsewhere", name: "Isaac" },
     });
     expect(refused.status).toBe(400);
@@ -403,7 +403,7 @@ describe("two tenants, one home", () => {
     // on the desk, however far away its holder sits.
     const { jordan } = await tenants();
     const stolen = await post(jordan, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "codex:t-3", as: "usr_isaac_p" },
     });
     expect(stolen.status).toBe(400);
@@ -424,7 +424,7 @@ describe("two tenants, one home", () => {
     expect(
       (
         await post(priya, "/api/ops", {
-          projectId: null,
+          canvasId: null,
           actor: { id: "usr_isaac_p", name: "Isaac" },
           op: { type: "actor.setColor", actorId: "usr_isaac_p", color: "#7a3fd0" },
         })
@@ -453,7 +453,7 @@ describe("two tenants, one home", () => {
     expect(
       (
         await post(priya, "/api/ops", {
-          projectId: null,
+          canvasId: null,
           // Her own session, renaming itself in place — the id is the
           // history, so it stays.
           op: {

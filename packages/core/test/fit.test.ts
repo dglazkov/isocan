@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasState, Item } from "../src/model.ts";
+import type { CanvasContents, Item } from "../src/model.ts";
 import { fitMoves } from "../src/fit.ts";
 
 /**
@@ -10,10 +10,10 @@ import { fitMoves } from "../src/fit.ts";
  */
 const item = (id: string, x: number, y: number, width = 420, height = 320): Item =>
   ({ id, x, y, width, height, title: id, properties: {} }) as unknown as Item;
-const canvasOf = (...items: Item[]): CanvasState =>
-  ({ items: Object.fromEntries(items.map((i) => [i.id, i])), trash: [] }) as unknown as CanvasState;
+const canvasOf = (...items: Item[]): CanvasContents =>
+  ({ items: Object.fromEntries(items.map((i) => [i.id, i])), trash: [] }) as unknown as CanvasContents;
 
-const rects = (canvas: CanvasState, r: ReturnType<typeof fitMoves>) => {
+const rects = (canvas: CanvasContents, r: ReturnType<typeof fitMoves>) => {
   const out = Object.values(canvas.items).map((i) => ({ ...i }));
   for (const z of r.resizes) {
     const found = out.find((i) => i.id === z.itemId)!;

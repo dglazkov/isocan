@@ -58,24 +58,24 @@ afterEach(async () => {
 
 async function post(
   op: Operation,
-  projectId: string | null,
+  canvasId: string | null,
   opId?: string,
 ): Promise<{ status: number; body: any }> {
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
-    body: JSON.stringify({ projectId, actor: priya, op, ...(opId ? { opId } : {}) }),
+    body: JSON.stringify({ canvasId, actor: priya, op, ...(opId ? { opId } : {}) }),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
-async function log(projectId: string): Promise<LogEntry[]> {
-  const res = await fetch(`${base}/api/projects/${projectId}/oplog`, { headers: badge.headers });
+async function log(canvasId: string): Promise<LogEntry[]> {
+  const res = await fetch(`${base}/api/projects/${canvasId}/oplog`, { headers: badge.headers });
   return (await res.json()) as LogEntry[];
 }
 
-async function items(projectId: string): Promise<string[]> {
-  const res = await fetch(`${base}/api/projects/${projectId}/canvas`, { headers: badge.headers });
+async function items(canvasId: string): Promise<string[]> {
+  const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
   const body = (await res.json()) as { canvas: { items: Record<string, unknown> } };
   return Object.keys(body.canvas.items);
 }
@@ -97,8 +97,8 @@ const addAcme: Operation = {
   placement: { x: 0, y: 0 },
 };
 
-async function makeCanvas(projectId = "prj_1"): Promise<void> {
-  const made = await post({ type: "project.create", projectId, title: "Acme" }, null);
+async function makeCanvas(canvasId = "prj_1"): Promise<void> {
+  const made = await post({ type: "project.create", canvasId, title: "Acme" }, null);
   expect(made.status).toBe(200);
 }
 
@@ -206,7 +206,7 @@ describe("an op sent twice, meant once", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: "prj_1",
+        canvasId: "prj_1",
         actor: sam,
         op: { type: "item.move", itemId: "itm_acme", x: 99, y: 99 } satisfies Operation,
         opId: "op_samsownwrit",
@@ -224,8 +224,8 @@ describe("an op sent twice, meant once", () => {
   });
 
   it("covers the create, whose canvas is named in the op rather than in the request", async () => {
-    const first = await post({ type: "project.create", projectId: "prj_2", title: "Acme" }, null, "op_born0000001");
-    const second = await post({ type: "project.create", projectId: "prj_2", title: "Acme" }, null, "op_born0000001");
+    const first = await post({ type: "project.create", canvasId: "prj_2", title: "Acme" }, null, "op_born0000001");
+    const second = await post({ type: "project.create", canvasId: "prj_2", title: "Acme" }, null, "op_born0000001");
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect((second.body as PostOpResponse).seq).toBe((first.body as PostOpResponse).seq);

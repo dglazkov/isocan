@@ -30,8 +30,8 @@ import { fetchHomes } from "./api.ts";
  * the page must not get a different story than the one the app just told
  * them.**
  */
-export function homeOfCanvas(homes: HomesResponse, projectId: string): string | null {
-  return homes.canvases[projectId] ?? null;
+export function homeOfCanvas(homes: HomesResponse, canvasId: string): string | null {
+  return homes.canvases[canvasId] ?? null;
 }
 
 /**
@@ -72,16 +72,16 @@ export type CanvasHome =
  * Everything the app does from here is still refused by the daemon when it
  * comes back, and refused by the home's door beyond it.
  */
-export function useCanvasHome(projectId: string | null): CanvasHome {
+export function useCanvasHome(canvasId: string | null): CanvasHome {
   const [answer, setAnswer] = useState<CanvasHome>({ state: "asking" });
   useEffect(() => {
-    if (!projectId) return;
+    if (!canvasId) return;
     let live = true;
     setAnswer({ state: "asking" });
     void fetchHomes().then(
       (homes) => {
         if (!live) return;
-        const home = homeOfCanvas(homes, projectId);
+        const home = homeOfCanvas(homes, canvasId);
         setAnswer(home === null ? { state: "here" } : { state: "elsewhere", home });
       },
       () => live && setAnswer({ state: "here" }),
@@ -89,6 +89,6 @@ export function useCanvasHome(projectId: string | null): CanvasHome {
     return () => {
       live = false;
     };
-  }, [projectId]);
+  }, [canvasId]);
   return answer;
 }

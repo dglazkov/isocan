@@ -168,7 +168,7 @@ function resume(persona: Persona): Promise<Actor> {
 
 async function claimInto(key: string, op: ActorClaimOp): Promise<Actor> {
   const from = canvasInUrl();
-  const { envelope } = await claimActor(from ? { ...op, projectId: from } : op);
+  const { envelope } = await claimActor(from ? { ...op, canvasId: from } : op);
   return become({ id: envelope.actor.id, name: envelope.actor.name, key });
 }
 

@@ -106,16 +106,16 @@ async function bornCanvas(): Promise<string> {
 }
 
 /** The home's own rows, read past the CLI entirely. */
-async function grantsAtHome(projectId: string): Promise<Grant[]> {
+async function grantsAtHome(canvasId: string): Promise<Grant[]> {
   const badge = await mintTestBadge(homeBase);
-  const res = await fetch(`${homeBase}${grantsRoute(projectId)}`, { headers: badge.headers });
+  const res = await fetch(`${homeBase}${grantsRoute(canvasId)}`, { headers: badge.headers });
   return ((await res.json()) as { grants: Grant[] }).grants;
 }
 
 /** A badge that has never been anywhere: does the door let it at the canvas? */
-async function strangerCanRead(projectId: string): Promise<number> {
+async function strangerCanRead(canvasId: string): Promise<number> {
   const badge = await mintTestBadge(homeBase);
-  const res = await fetch(`${homeBase}/api/projects/${projectId}/canvas`, {
+  const res = await fetch(`${homeBase}/api/projects/${canvasId}/canvas`, {
     headers: badge.headers,
   });
   return res.status;
@@ -123,33 +123,33 @@ async function strangerCanRead(projectId: string): Promise<number> {
 
 describe("isocan share", () => {
   it("prints the address a person is sent, and says the link is on", async () => {
-    const projectId = await bornCanvas();
+    const canvasId = await bornCanvas();
 
     const shown = await cli("share");
     expect(shown.code, shown.stderr).toBe(0);
     // The home's address, never the laptop's 127.0.0.1: people always enter
     // through the one origin, and a replica serves no pages at all.
-    expect(shown.stdout).toContain(canvasUrl(homeBase, projectId));
+    expect(shown.stdout).toContain(canvasUrl(homeBase, canvasId));
     expect(shown.stdout).toMatch(/link\s+on —/);
   }, 60_000);
 
   it("--link off closes the door AT THE HOME, and --link on opens it again", async () => {
-    const projectId = await bornCanvas();
-    expect(await strangerCanRead(projectId)).toBe(200);
+    const canvasId = await bornCanvas();
+    expect(await strangerCanRead(canvasId)).toBe(200);
 
     const off = await cli("share", "--link", "off");
     expect(off.code, off.stderr).toBe(0);
     expect(off.stdout).toMatch(/link\s+off —/);
     // The witness is the door, at the home, for a badge this test just minted.
-    expect(await strangerCanRead(projectId)).toBe(403);
+    expect(await strangerCanRead(canvasId)).toBe(403);
 
     const on = await cli("share", "--link", "on");
     expect(on.code, on.stderr).toBe(0);
-    expect(await strangerCanRead(projectId)).toBe(200);
+    expect(await strangerCanRead(canvasId)).toBe(200);
 
     // Two rows, not one resurrected: revocation is a tombstone, so the desk
     // remembers that the link was off and who turned it back on.
-    const rows = await grantsAtHome(projectId);
+    const rows = await grantsAtHome(canvasId);
     expect(rows).toHaveLength(1); // the listing hides tombstones…
     expect(rows[0]!.id).not.toBe("");
   }, 60_000);
@@ -196,12 +196,12 @@ describe("isocan share", () => {
   }, 60_000);
 
   it("--json carries the address and the live rows", async () => {
-    const projectId = await bornCanvas();
+    const canvasId = await bornCanvas();
     const json = await cli("share", "--json");
     expect(json.code, json.stderr).toBe(0);
     const payload = JSON.parse(json.stdout) as { address: string; grants: Grant[] };
-    expect(payload.address).toBe(canvasUrl(homeBase, projectId));
+    expect(payload.address).toBe(canvasUrl(homeBase, canvasId));
     expect(payload.grants.map((g) => g.subject)).toEqual(["link"]);
-    expect(payload.grants[0]!.canvasId).toBe(projectId);
+    expect(payload.grants[0]!.canvasId).toBe(canvasId);
   }, 60_000);
 });

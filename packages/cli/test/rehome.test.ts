@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Project } from "@isocan/core";
+import type { Canvas } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { findBinding, markerFile, writeMarker } from "../src/binding.ts";
 import { harnessVars } from "../src/harness.ts";
@@ -109,8 +109,8 @@ async function marker(dir: string): Promise<Record<string, unknown>> {
   return JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as Record<string, unknown>;
 }
 
-async function atHome(): Promise<Project[]> {
-  return home.engine.listProjects();
+async function atHome(): Promise<Canvas[]> {
+  return home.engine.listCanvases();
 }
 
 describe("a canvas born on a replica is stamped with its home", () => {
@@ -126,7 +126,7 @@ describe("a canvas born on a replica is stamped with its home", () => {
     // but because the write that created it forwarded. That is the phase's
     // claim about birth, checked against the home's own store.
     const there = await atHome();
-    expect(there.map((project) => project.id)).toEqual([written.projectId]);
+    expect(there.map((canvas) => canvas.id)).toEqual([written.projectId]);
   }, 30_000);
 
   it("says on `status` which of the two things the daemon is", async () => {
@@ -154,7 +154,7 @@ describe("a marker naming a home this machine has never been to", () => {
      * is offline birth of a twin, which is phase 13's.
      */
     await writeMarker(work, {
-      projectId: "prj_elsewhere",
+      canvasId: "prj_elsewhere",
       title: "Acme Sprint Board",
       home: "https://other.invalid",
     });
@@ -171,7 +171,7 @@ describe("a marker naming a home this machine has never been to", () => {
 
     // Nothing anywhere: not at the home this machine does have, and not here.
     expect(await atHome()).toEqual([]);
-    expect(await replica.engine.listProjects()).toEqual([]);
+    expect(await replica.engine.listCanvases()).toEqual([]);
   }, 30_000);
 });
 
@@ -186,7 +186,7 @@ describe("a marker that disagrees with what this machine recorded", () => {
      * that must not happen is a command picking a side and migrating work.
      *
      * This is design §9's assertion (c) at the CLI level, and its load-bearing
-     * half is the last two lines: **neither home's project list changes**.
+     * half is the last two lines: **neither home's canvas list changes**.
      */
     const second = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rehome-second-"));
     const otherHome = await startDaemon({ port: 0, home: second, birthHome: null });
@@ -199,14 +199,14 @@ describe("a marker that disagrees with what this machine recorded", () => {
       expect(born.code, born.stderr).toBe(0);
       const written = await marker(work);
       expect(written.home).toBe(homeBase);
-      const projectId = written.projectId as string;
+      const canvasId = written.projectId as string;
       const atH1 = (await atHome()).map((p) => p.id);
-      expect(atH1).toEqual([projectId]);
+      expect(atH1).toEqual([canvasId]);
 
       // Somebody rewrites the address in the committed file. Same canvas id;
       // a different home.
       await writeMarker(work, {
-        projectId,
+        canvasId,
         title: "Acme Sprint Board",
         home: h2,
       });
@@ -220,7 +220,7 @@ describe("a marker that disagrees with what this machine recorded", () => {
       // Nothing moved. H1 still holds exactly what it held, and H2 — which the
       // marker claims is the home — was never asked to make anything.
       expect((await atHome()).map((p) => p.id)).toEqual(atH1);
-      expect(await otherHome.engine.listProjects()).toEqual([]);
+      expect(await otherHome.engine.listCanvases()).toEqual([]);
     } finally {
       await otherHome.close();
       await fs.rm(second, { recursive: true, force: true });
@@ -236,11 +236,31 @@ describe("what readMarker will accept", () => {
       JSON.stringify({ projectId: "prj_old", title: "Acme Sprint Board" }),
     );
     const found = await findBinding(work, homeDir);
-    expect(found).toMatchObject({ projectId: "prj_old", title: "Acme Sprint Board" });
+    expect(found).toMatchObject({ canvasId: "prj_old", title: "Acme Sprint Board" });
     expect(found!.home).toBeUndefined();
   });
 
-  it("rejects a malformed home the way it rejects a malformed projectId", async () => {
+  it("reads the committed spelling, and writes it back", async () => {
+    // The marker's on-disk key stayed `projectId` through phase 13.5's rename
+    // precisely because it lives in other people's repos. Both halves matter:
+    // an old committed marker still resolves, and a marker this build writes
+    // is still readable by an isocan that predates the rename.
+    await fs.mkdir(path.join(work, ".isocan"), { recursive: true });
+    await fs.writeFile(markerFile(work), JSON.stringify({ projectId: "prj_committed" }));
+    expect((await findBinding(work, homeDir))!.canvasId).toBe("prj_committed");
+
+    await writeMarker(work, { canvasId: "prj_written", title: "Acme Sprint Board" });
+    expect(await marker(work)).toMatchObject({ projectId: "prj_written" });
+    expect((await findBinding(work, homeDir))!.canvasId).toBe("prj_written");
+  });
+
+  it("also accepts the new spelling, so a future marker is not a dead file", async () => {
+    await fs.mkdir(path.join(work, ".isocan"), { recursive: true });
+    await fs.writeFile(markerFile(work), JSON.stringify({ canvasId: "prj_future" }));
+    expect((await findBinding(work, homeDir))!.canvasId).toBe("prj_future");
+  });
+
+  it("rejects a malformed home the way it rejects a malformed canvasId", async () => {
     // Ignoring it would turn "this canvas lives at the address I cannot read"
     // into "this canvas lives wherever you are", quietly — which is the one
     // wrong answer available here.

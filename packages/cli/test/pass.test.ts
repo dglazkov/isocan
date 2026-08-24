@@ -152,14 +152,14 @@ const away = (...args: string[]) => cli(awayWork, awayDir, awayPort, {}, ...args
 
 /** The canvas Priya is standing on when she reaches for her second machine. */
 async function acmeCanvas(): Promise<string> {
-  const made = await atHome("project", "create", "Acme Sprint Board", "--json");
+  const made = await atHome("canvas", "create", "Acme Sprint Board", "--json");
   expect(made.code, made.stderr).toBe(0);
-  return (JSON.parse(made.stdout) as { projectId: string }).projectId;
+  return (JSON.parse(made.stdout) as { canvasId: string }).canvasId;
 }
 
 describe("isocan pass — minting the escalation credential from a terminal", () => {
   it("prints the whole command to paste, with the pass in the fragment", async () => {
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const minted = await atHome("pass", "--json");
     expect(minted.code, minted.stderr).toBe(0);
     const out = JSON.parse(minted.stdout) as {
@@ -176,7 +176,7 @@ describe("isocan pass — minting the escalation credential from a terminal", ()
     const home = `http://127.0.0.1:${homePort}`;
     expect(out.command.startsWith(`npx ${INSTALL_SPEC} setup `)).toBe(true);
     expect(out.command).toContain(out.address);
-    expect(out.canvas).toBe(canvasUrl(home, projectId));
+    expect(out.canvas).toBe(canvasUrl(home, canvasId));
     // The credential is in the FRAGMENT — never sent to a server, never in an
     // access log — and the clean address is the same address `isocan share`
     // prints, built by the same core function.
@@ -216,7 +216,7 @@ describe("isocan pass — minting the escalation credential from a terminal", ()
 
 describe("isocan setup <address>#<pass> — one command, three steps collapsed", () => {
   it("points at the home, redeems, writes the marker, and becomes her", async () => {
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const minted = await atHome("pass", "--json");
     expect(minted.code, minted.stderr).toBe(0);
     const { address } = JSON.parse(minted.stdout) as { address: string };
@@ -251,21 +251,21 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
       home: string;
       title?: string;
     };
-    expect(marker.projectId).toBe(projectId);
+    expect(marker.projectId).toBe(canvasId);
     expect(marker.home).toBe(home);
 
     // 4. The canvas really replicated. Verified rather than assumed: this is a
     //    background sweep, and a setup that printed an address for a canvas
     //    that never arrived would be a cheerful wrong address.
     expect(report.replicated).toContain("Acme Sprint Board");
-    expect(report.canvas).toBe(canvasUrl(home, projectId));
+    expect(report.canvas).toBe(canvasUrl(home, canvasId));
 
     // And the CLI on the new machine can now write to the canvas AS PRIYA —
     // the whole point of the handoff. This is the step that was refused with
     // `not-your-actor` before a pass existed: two badges, one actor.
     const wrote = await away("comment", "add", "on it from the laptop", "--at", "10,10");
     expect(wrote.code, wrote.stderr).toBe(0);
-    const snapshot = await homeDaemon.engine.getSnapshot(projectId);
+    const snapshot = await homeDaemon.engine.getSnapshot(canvasId);
     const authors = Object.values(snapshot.canvas.threads).flatMap((thread) =>
       thread.comments.map((comment) => comment.author.name),
     );
@@ -273,7 +273,7 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
   }, 120_000);
 
   it("a pass is single-use: the same command on a third machine is refused, and says why", async () => {
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const minted = await atHome("pass", "--json");
     const { address } = JSON.parse(minted.stdout) as { address: string };
     const first = await away("setup", "--no-install", "--no-open", "--json", address);
@@ -303,25 +303,25 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
      * It is also the form that STOPS working when the link is switched off,
      * which is the whole reason a pass exists.
      */
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const home = `http://127.0.0.1:${homePort}`;
     const done = await away(
       "setup",
       "--no-install",
       "--no-open",
       "--json",
-      `${home}/p/${projectId}`,
+      `${home}/p/${canvasId}`,
     );
     expect(done.code, done.stderr).toBe(0);
     const report = JSON.parse(done.stdout) as Record<string, string>;
     expect(report.home).toBe(home);
     expect(report.replicated).toContain("Acme Sprint Board");
-    expect(report.canvas).toBe(canvasUrl(home, projectId));
+    expect(report.canvas).toBe(canvasUrl(home, canvasId));
     const marker = JSON.parse(await fs.readFile(markerFile(awayWork), "utf8")) as {
       projectId: string;
       home: string;
     };
-    expect(marker).toMatchObject({ projectId, home });
+    expect(marker).toMatchObject({ projectId: canvasId, home });
 
     // Nobody was handed over, so nobody was adopted. (The file exists — it is
     // also where the machine's BADGE lives — but it names no person.)
@@ -348,14 +348,14 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
      * one un-normalized spelling this repo's own fixtures have ever held, and
      * it belongs in the fixture that has always carried it.)
      */
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     await fs.writeFile(
       path.join(awayDir, "config.json"),
       JSON.stringify({ home: "http://127.0.0.1:9/" }),
     );
 
     const home = `http://127.0.0.1:${homePort}`;
-    const done = await away("setup", "--no-install", "--no-open", "--json", `${home}/p/${projectId}`);
+    const done = await away("setup", "--no-install", "--no-open", "--json", `${home}/p/${canvasId}`);
     expect(done.code, done.stderr).toBe(0);
     const report = JSON.parse(done.stdout) as Record<string, string>;
 
@@ -372,12 +372,12 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
     // The canvas arrived all the same, from the home the pasted address named.
     // That is the whole phase in one assertion: two homes, one daemon.
     expect(report.replicated).toContain("Acme Sprint Board");
-    expect(report.canvas).toBe(canvasUrl(home, projectId));
+    expect(report.canvas).toBe(canvasUrl(home, canvasId));
     const marker = JSON.parse(await fs.readFile(markerFile(awayWork), "utf8")) as {
       projectId: string;
       home: string;
     };
-    expect(marker).toMatchObject({ projectId, home });
+    expect(marker).toMatchObject({ projectId: canvasId, home });
   }, 120_000);
 
   it("redeems a pass at the home the address named, not at the birth default", async () => {
@@ -401,7 +401,7 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
      * The birth default here answers nothing and must STAY that way: enrolling
      * at a home is not a gesture that repoints a machine.
      */
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const minted = await atHome("pass", "--json");
     const { address } = JSON.parse(minted.stdout) as { address: string };
     await fs.writeFile(
@@ -419,7 +419,7 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
       await fs.readFile(path.join(awayDir, "identity.json"), "utf8"),
     ) as { name?: string };
     expect(identity.name).toBeTruthy();
-    expect(report.canvas).toBe(canvasUrl(`http://127.0.0.1:${homePort}`, projectId));
+    expect(report.canvas).toBe(canvasUrl(`http://127.0.0.1:${homePort}`, canvasId));
 
     // And the birth default never moved — the machine is enrolled at a second
     // home without a single directory bound to the first one changing.
@@ -467,7 +467,7 @@ describe("minting from a replica", () => {
      * This is also the beat `isocan open` depends on for every thick machine
      * that is not the home — which is all of them.
      */
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const enrol = JSON.parse((await atHome("pass", "--json")).stdout) as { address: string };
     const joined = await away("setup", "--no-install", "--no-open", "--json", enrol.address);
     expect(joined.code, joined.stderr).toBe(0);
@@ -479,21 +479,21 @@ describe("minting from a replica", () => {
 
     // The address is the HOME's, never `127.0.0.1` — a replica serves no pages
     // and people always enter through the one origin.
-    expect(out.address.startsWith(canvasUrl(`http://127.0.0.1:${homePort}`, projectId))).toBe(true);
+    expect(out.address.startsWith(canvasUrl(`http://127.0.0.1:${homePort}`, canvasId))).toBe(true);
     expect(out.actor.id).toBe(priya.id);
 
     // And the row is on the HOME's desk, under the home's own badge for that
     // machine — not on the laptop's.
     const passId = out.address.split("#")[1]!.split(".")[0]!;
     const atTheHome = await homeDaemon.desk.pass(passId);
-    expect(atTheHome?.canvasId).toBe(projectId);
+    expect(atTheHome?.canvasId).toBe(canvasId);
     expect(atTheHome?.actorId).toBe(priya.id);
   }, 120_000);
 });
 
 describe("isocan open — the browser arrives as her, the terminal gets a clean line", () => {
   it("spawns the browser with a pass and prints the address without one", async () => {
-    const projectId = await acmeCanvas();
+    const canvasId = await acmeCanvas();
     const log = await browserRecorder(fakeBrowser);
 
     const opened = await atHome("open");
@@ -502,7 +502,7 @@ describe("isocan open — the browser arrives as her, the terminal gets a clean 
     // The printed line is what an agent copies onto a thread. A bearer
     // credential that rides into a chat log because a verb printed it is not a
     // mistake anybody gets to make twice.
-    const clean = canvasUrl(`http://127.0.0.1:${homePort}`, projectId);
+    const clean = canvasUrl(`http://127.0.0.1:${homePort}`, canvasId);
     expect(opened.stdout.trim()).toBe(clean);
     expect(opened.stdout).not.toContain("#");
 

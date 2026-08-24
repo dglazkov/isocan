@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Project } from "@isocan/core";
+import type { Canvas } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { markerFile } from "../src/binding.ts";
 import { harnessVars } from "../src/harness.ts";
@@ -155,7 +155,7 @@ describe("a second machine, holding nothing but the marker", () => {
      * down anyway would make the rest of this test pass for the old reason.
      */
     await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(await second.engine.listProjects()).toEqual([]);
+    expect(await second.engine.listCanvases()).toEqual([]);
 
     /**
      * **The marker is the hand-off, and the CLI is what speaks it.**
@@ -177,8 +177,8 @@ describe("a second machine, holding nothing but the marker", () => {
     // home already holds; the binding landed on the existing canvas instead.
     expect(read.stderr).not.toContain("materialized");
 
-    const listed = await second.engine.listProjects();
-    expect(listed.map((project: Project) => project.id)).toEqual([marker.projectId]);
+    const listed = await second.engine.listCanvases();
+    expect(listed.map((canvas: Canvas) => canvas.id)).toEqual([marker.projectId]);
     expect(listed[0]!.title).toBe(path.basename(firstWork));
 
     // A write from the second machine forwards to the home like any other,
@@ -188,17 +188,17 @@ describe("a second machine, holding nothing but the marker", () => {
       secondDir,
       portOf(second),
       claude("s-2"),
-      "project",
+      "canvas",
       "edit",
       "--title",
       "Acme Sprint Board",
     );
     expect(wrote.code, wrote.stderr).toBe(0);
     const atHome = await until(
-      () => homeDaemon.engine.listProjects(),
-      (projects) => projects.some((project) => project.title === "Acme Sprint Board"),
+      () => homeDaemon.engine.listCanvases(),
+      (canvases) => canvases.some((canvas) => canvas.title === "Acme Sprint Board"),
       "the rename to reach the home",
     );
-    expect(atHome.map((project) => project.id)).toEqual([marker.projectId]);
+    expect(atHome.map((canvas) => canvas.id)).toEqual([marker.projectId]);
   }, 60_000);
 });

@@ -163,7 +163,7 @@ describe("both carriers are one badge", () => {
         ...bearer.headers,
       },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny" },
       }),
     });
@@ -181,14 +181,14 @@ describe("both carriers are one badge", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: usrA,
-        op: { type: "project.create", projectId: "prj_1", title: "P" },
+        op: { type: "project.create", canvasId: "prj_1", title: "P" },
       }),
     });
     const wsBase = base.replace("http", "ws");
 
-    const badged = new WebSocket(`${wsBase}/ws?projectId=prj_1`, { headers: badge.headers });
+    const badged = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, { headers: badge.headers });
     const hello = await new Promise<string>((resolve, reject) => {
       badged.on("message", (data) => resolve(String(data)));
       badged.on("error", reject);
@@ -199,13 +199,13 @@ describe("both carriers are one badge", () => {
     // A browser cannot set headers on a handshake, so the cookie is the other
     // carrier; with neither, the socket is closed with a code the client can
     // act on rather than a silent hang.
-    const bare = new WebSocket(`${wsBase}/ws?projectId=prj_1`);
+    const bare = new WebSocket(`${wsBase}/ws?canvasId=prj_1`);
     bare.on("error", () => {});
     const code = await new Promise<number>((resolve) => bare.on("close", resolve));
     expect(code).toBe(WS_NO_BADGE);
 
     const cookieBadge = await door({ carrier: "cookie" });
-    const viaCookie = new WebSocket(`${wsBase}/ws?projectId=prj_1`, {
+    const viaCookie = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
       headers: { cookie: cookieBadge.setCookie!.split(";")[0]! },
     });
     const cookieHello = await new Promise<string>((resolve, reject) => {
@@ -300,9 +300,9 @@ describe("the badge-less are refused, actionably", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: usrA,
-        op: { type: "project.create", projectId: "prj_1", title: "P" },
+        op: { type: "project.create", canvasId: "prj_1", title: "P" },
       }),
     });
     const upload = await fetch(`${base}/api/projects/prj_1/blobs`, {
@@ -394,7 +394,7 @@ describe("the Origin check", () => {
     process.env.ISOCAN_ALLOWED_ORIGINS = `http://127.0.0.1:${port}`;
     try {
       const cookieBadge = await door({ carrier: "cookie" });
-      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_1`, {
+      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
         headers: {
           cookie: cookieBadge.setCookie!.split(";")[0]!,
           Origin: "http://evil.example",
@@ -419,7 +419,7 @@ describe("what a badge holds", () => {
         method: "POST",
         headers: { "Content-Type": "application/json", ...badge.headers },
         body: JSON.stringify({
-          projectId: null,
+          canvasId: null,
           op: { type: "actor.claim", sessionKey, name },
         }),
       }).then((r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>);
@@ -443,7 +443,7 @@ describe("what a badge holds", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...mine.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny" },
       }),
     });
@@ -460,7 +460,7 @@ describe("what a badge holds", () => {
   it("writes down where it has been, and which grant let it in", async () => {
     /**
      * Phase 2 wrote this down unenforced — "the address still admits",
-     * recorded as data instead of assumed, so phase 3's `projectId ∈
+     * recorded as data instead of assumed, so phase 3's `canvasId ∈
      * admissions` was a check rather than a backfill. **Phase 7 makes it the
      * door**: the visitor is still admitted, but now BY A ROW — the canvas's
      * standing link grant — and the admission names it.
@@ -479,9 +479,9 @@ describe("what a badge holds", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...creator.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: usrA,
-        op: { type: "project.create", projectId: "prj_1", title: "P" },
+        op: { type: "project.create", canvasId: "prj_1", title: "P" },
       }),
     });
     const visitor = await mintTestBadge(base);
@@ -512,7 +512,7 @@ describe("a badge that was lost", () => {
     fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
-      body: JSON.stringify({ projectId: null, op: { type: "actor.claim", sessionKey, name } }),
+      body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", sessionKey, name } }),
     }).then((r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>);
 
   const orphaned = (badge: { headers: Record<string, string> }, keys: string) =>
@@ -585,7 +585,7 @@ describe("a badge that was lost", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...replacement.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "claude-code:s-1", as: claimed.envelope.actor.id },
       }),
     });
@@ -609,7 +609,7 @@ describe("the claims half is durable", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny" },
       }),
     });
@@ -650,17 +650,17 @@ describe("the claims half is durable", () => {
     // 1. Claim a name, say something under it, then rename. The canvas now
     //    carries "Kenny" forever; the registry says "Kenny the Second".
     const claimed = await post({
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny" },
     });
     const actorId = claimed.envelope.actor.id;
     await post({
-      projectId: null,
+      canvasId: null,
       actor: { id: actorId, name: "Kenny" },
-      op: { type: "project.create", projectId: "prj_1", title: "Kenny's" },
+      op: { type: "project.create", canvasId: "prj_1", title: "Kenny's" },
     });
     await post({
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny the Second" },
     });
 
@@ -779,7 +779,7 @@ describe("the pre-badge home", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...stranger.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "cli:new", name: "Kenny" },
       }),
     });
@@ -790,7 +790,7 @@ describe("the pre-badge home", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...stranger.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         op: { type: "actor.claim", sessionKey: "cli:new", as: "usr_kenny" },
       }),
     });

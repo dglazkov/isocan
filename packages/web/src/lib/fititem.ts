@@ -16,7 +16,7 @@ import { naturalSize } from "./measure.ts";
  * page out. The MOVES are computed by `fitMoves` in core, so the arrangement
  * this produces is the arrangement the CLI would produce.
  */
-export async function fitToContent(projectId: string, actor: Actor, itemIds: string[]): Promise<void> {
+export async function fitToContent(canvasId: string, actor: Actor, itemIds: string[]): Promise<void> {
   const state = useCanvasStore.getState();
   const canvas = state.canvas;
   if (!canvas) return;
@@ -27,7 +27,7 @@ export async function fitToContent(projectId: string, actor: Actor, itemIds: str
     if (!item) continue;
     const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
     if (!version) continue;
-    const size = await naturalSize(blobUrl(projectId, version.blobHash), version.mimeType);
+    const size = await naturalSize(blobUrl(canvasId, version.blobHash), version.mimeType);
     targets.push({ itemId: id, ...size });
   }
   if (targets.length === 0) return;
@@ -39,11 +39,11 @@ export async function fitToContent(projectId: string, actor: Actor, itemIds: str
   const { resizes, moves } = fitMoves(fresh, targets);
 
   for (const r of resizes) {
-    await sendOp(projectId, actor, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
+    await sendOp(canvasId, actor, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
   }
   // One op for the lot, so settling the group is one undo step rather than
   // six — the same bargain `items.delete` already makes.
   if (moves.length > 0) {
-    await sendOp(projectId, actor, { type: "items.move", moves });
+    await sendOp(canvasId, actor, { type: "items.move", moves });
   }
 }

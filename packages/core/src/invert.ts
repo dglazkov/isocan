@@ -1,4 +1,4 @@
-import type { ProjectState } from "./model.ts";
+import type { CanvasState } from "./model.ts";
 import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 
@@ -11,16 +11,16 @@ import { OpValidationError, unknownOperation } from "./errors.ts";
  * project.delete). Both are confirmation-gated at the client.
  */
 export function invertOperation(
-  stateBefore: ProjectState | null,
+  stateBefore: CanvasState | null,
   op: Operation,
 ): Operation | null {
   if (op.type === "project.create") {
-    // Not undoable: its inverse would be project.delete, and project deletion
+    // Not undoable: its inverse would be project.delete, and canvas deletion
     // must never be reachable through a casual ⌘Z — it stays confirmation-gated.
     return null;
   }
   if (stateBefore === null) {
-    throw new OpValidationError("bad-op", `${op.type} on missing project`);
+    throw new OpValidationError("bad-op", `${op.type} on missing canvas`);
   }
   const { project, canvas } = stateBefore;
 
@@ -33,7 +33,7 @@ export function invertOperation(
   switch (op.type) {
     case "actor.claim":
     case "actor.setColor":
-      return null; // home-scoped and never undoable; never reaches a project
+      return null; // home-scoped and never undoable; never reaches a canvas
 
     case "project.update":
       return { type: "project.update", patch: invertMetaPatch(project, op.patch) };

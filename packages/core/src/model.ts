@@ -12,7 +12,7 @@ export interface Actor {
   name: string;
 }
 
-export interface Project {
+export interface Canvas {
   id: string;
   title: string;
   description: string;
@@ -98,23 +98,33 @@ export interface TrashEntry {
   deletedBy: Actor;
 }
 
-export interface CanvasState {
+export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
   trash: TrashEntry[];
 }
 
-/** Everything the reducer operates on for one project. */
-export interface ProjectState {
-  project: Project;
-  canvas: CanvasState;
+/**
+ * Everything the reducer operates on for one canvas.
+ *
+ * **The two field names are deliberate holdouts** (phase 13.5's rename).
+ * `project` and `canvas` are the field names `CanvasSnapshotResponse` and the
+ * `snapshot` websocket message put on the wire, and `canvas` is what
+ * `canvas.json` on disk holds; renaming either would break an installed CLI
+ * quietly rather than loudly, because `canvas` would keep parsing and start
+ * meaning the other thing. `project` is the canvas RECORD (title, properties,
+ * who touched it last); `canvas` is what is ON the canvas.
+ */
+export interface CanvasState {
+  project: Canvas;
+  canvas: CanvasContents;
 }
 
-export function emptyCanvas(): CanvasState {
+export function emptyCanvas(): CanvasContents {
   return { items: {}, threads: {}, trash: [] };
 }
 
 /** The designated main thread, if the canvas has one. */
-export function mainThread(canvas: CanvasState): CommentThread | null {
+export function mainThread(canvas: CanvasContents): CommentThread | null {
   return Object.values(canvas.threads).find((thread) => thread.main) ?? null;
 }

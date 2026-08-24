@@ -44,7 +44,7 @@ export async function mintTestBadge(base: string): Promise<TestBadge> {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
-          projectId: null,
+          canvasId: null,
           op: { type: "actor.claim", sessionKey, as: actor.id, name: actor.name },
         }),
       });

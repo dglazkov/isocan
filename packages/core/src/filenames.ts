@@ -11,7 +11,7 @@
  * enough to keep them apart.
  */
 
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 
 /** The extension, dot included, or "" — the part a rename must not touch. */
 export function extensionOf(filename: string): string {
@@ -85,7 +85,7 @@ export function uniqueFilename(candidate: string, taken: Iterable<string>): stri
 
 /** Every filename in use on this canvas, ignoring one item — the one being
  * renamed does not collide with itself. */
-export function filenamesInUse(canvas: CanvasState, exceptItemId?: string): string[] {
+export function filenamesInUse(canvas: CanvasContents, exceptItemId?: string): string[] {
   const names: string[] = [];
   for (const item of Object.values(canvas.items)) {
     if (item.id === exceptItemId) continue;
@@ -97,7 +97,7 @@ export function filenamesInUse(canvas: CanvasState, exceptItemId?: string): stri
 /** The filename a rename should land on: derived from the title, then moved
  * aside if the canvas is already using it. */
 export function renamedFilename(
-  canvas: CanvasState,
+  canvas: CanvasContents,
   itemId: string,
   title: string,
   previous: string,

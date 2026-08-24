@@ -4,7 +4,7 @@ import type {
   LogEntry,
   OpEnvelope,
   Operation,
-  ProjectState,
+  CanvasState,
   ServerMessage,
 } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
@@ -66,7 +66,7 @@ function envelope(op: Operation, actor: Actor = priya): OpEnvelope {
   seq += 1;
   return {
     id: `op_${seq}`,
-    projectId: op.type === "project.create" ? null : "prj_1",
+    canvasId: op.type === "project.create" ? null : "prj_1",
     actor,
     ts: new Date(Date.UTC(2026, 7, 22) + seq * 1000).toISOString(),
     op,
@@ -78,10 +78,10 @@ function entry(op: Operation, at: number, actor: Actor = priya): LogEntry {
 }
 
 /** A synthetic canvas: one item, nothing else. */
-function seed(): ProjectState {
+function seed(): CanvasState {
   const created = applyOperation(null, envelope({
     type: "project.create",
-    projectId: "prj_1",
+    canvasId: "prj_1",
     title: "Acme Sprint Board",
   }))!;
   return applyOperation(created, envelope({
@@ -138,10 +138,10 @@ async function settle(): Promise<void> {
 
 /** Connect and land a snapshot at `lastSeq`, which is where every test starts:
  * a tab that already holds state for this canvas. */
-async function connected(lastSeq: number): Promise<ProjectState> {
-  const { connectToProject } = await store();
+async function connected(lastSeq: number): Promise<CanvasState> {
+  const { connectToCanvas } = await store();
   const state = seed();
-  connectToProject("prj_1", priya);
+  connectToCanvas("prj_1", priya);
   await settle();
   FakeSocket.last.deliver({
     type: "snapshot",
@@ -272,12 +272,12 @@ describe("reconnecting with a cursor", () => {
   });
 
   it("asks for no tail on a canvas it holds nothing for", async () => {
-    const { connectToProject } = await store();
+    const { connectToCanvas } = await store();
     await connected(5);
     // Switching canvases: a cursor from the last one is a seq that means
     // something else here, and applying that canvas's tail to this one would
     // be worse than a slow reconnect.
-    connectToProject("prj_2", priya);
+    connectToCanvas("prj_2", priya);
     await settle();
     expect(FakeSocket.opened[FakeSocket.opened.length - 1]).toContain("since=0");
   });
