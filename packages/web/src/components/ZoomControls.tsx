@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
-import { redo, undo } from "../lib/api.ts";
+import { OfflineError, redo, undo } from "../lib/api.ts";
+import { setNotice } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
@@ -11,6 +12,20 @@ import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomaction
  * a keyboard shortcut. History and navigation only; nothing here mutates the
  * canvas's content (that lives up top now).
  */
+/**
+ * Undo that could not happen, said out loud (phase 10).
+ *
+ * These two `catch`es used to be `() => {}` — "nothing to undo" is the
+ * ordinary answer and not worth a word — and that swallow was fine until there
+ * was a second reason to fail. Offline, the button did nothing and said
+ * nothing, which is precisely the shape of failure this phase is about.
+ * `OfflineError` is the one refusal here worth a sentence: nothing left on the
+ * stack still is not.
+ */
+function sayWhy(err: unknown): void {
+  if (err instanceof OfflineError) setNotice(err.message);
+}
+
 export function ZoomControls({ projectId, actor }: { projectId: string; actor: Actor }) {
   const scale = useUiStore((s) => s.viewport.scale);
   const hasSelection = useUiStore((s) => s.selectedItemIds.length > 0);
@@ -27,18 +42,10 @@ export function ZoomControls({ projectId, actor }: { projectId: string; actor: A
 
   return (
     <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()}>
-      <button
-        className="btn icon"
-        title="Undo (⌘Z)"
-        onClick={() => void undo(projectId, actor).catch(() => {})}
-      >
+      <button className="btn icon" title="Undo (⌘Z)" onClick={() => void undo(projectId, actor).catch(sayWhy)}>
         ↩︎
       </button>
-      <button
-        className="btn icon"
-        title="Redo (⇧⌘Z)"
-        onClick={() => void redo(projectId, actor).catch(() => {})}
-      >
+      <button className="btn icon" title="Redo (⇧⌘Z)" onClick={() => void redo(projectId, actor).catch(sayWhy)}>
         ↪︎
       </button>
       <div className="zoom-group" ref={menuRef}>

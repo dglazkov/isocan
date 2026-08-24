@@ -41,6 +41,7 @@ import {
   grantSubjectRefusal,
   HOME_JOIN_ROUTE,
   isLive,
+  isOpId,
   newId,
   normalizeSubject,
   NO_ATTESTER,
@@ -553,6 +554,21 @@ export function registerRoutes(
 
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
+    /**
+     * The idempotency key, shape-checked before it can reach the oplog
+     * (phase 10). A caller that sends one gets exactly-once for this op; a
+     * caller that sends nonsense is told so here rather than having it written
+     * into the canvas's permanent history where every replica will carry it.
+     *
+     * Home-scoped ops are deliberately outside this: `actor.claim` and
+     * `actor.setColor` land in the actors log, which has no per-canvas live
+     * log to look a key up in, and neither is a queued write — a browser that
+     * cannot reach the home cannot become somebody either. They ignore the
+     * field, which is why the check is here and not below.
+     */
+    if (body.opId !== undefined && !isOpId(body.opId)) {
+      return reply.status(400).send({ error: `not an op id: ${body.opId}`, code: "bad-op" });
+    }
     if (body.op?.type === "actor.claim") {
       // A claim resolves who is speaking, so it is the one op that arrives
       // without an actor; the response envelope carries the answer. It is

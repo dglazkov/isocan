@@ -114,6 +114,10 @@ export interface SubmitRequest {
   projectId: string | null;
   actor: Actor;
   clientId?: string;
+  /** The client's own name for this op — the idempotency key. See
+   * `PostOpRequest.opId` in core for what it is for, and `alreadyWritten`
+   * below for what the engine does with it. */
+  opId?: string;
   op: Operation;
   /**
    * The badge that presented this request — resolved by the transport and
@@ -426,9 +430,64 @@ export class Engine {
       // leaves the machine. The home then checks badge-level, which is all it
       // can honestly see.
       await this.requireActor(request.badgeId, request.actor.id);
+      /**
+       * **The answer that never came, asked again** (phase 10).
+       *
+       * On the writer chain and before anything is forwarded or applied, so a
+       * retry and the op it retries can never interleave. On a REPLICA this is
+       * deliberately not consulted — the forward carries `opId` up and the home
+       * is the single writer, so the home is where the question is answered;
+       * asking here as well would be a replica holding an opinion about an
+       * order it does not own.
+       */
+      if (!this.home && request.opId !== undefined) {
+        const already = await this.alreadyWritten(request);
+        if (already) return already;
+      }
       if (this.home) return this.forwardSubmit(this.home, request);
       return this.applyAndPersist(request, undefined);
     });
+  }
+
+  /**
+   * Has this exact op already been written here? Then hand back the entry it
+   * became, and append nothing.
+   *
+   * **A backwards scan of the live log rather than an index**, and that is a
+   * measured choice rather than laziness. The live log is what compaction
+   * keeps (`DEFAULT_KEEP_OPS`), a write is a human gesture rather than a
+   * packet, and a scan of a few thousand strings costs microseconds — so the
+   * index this does not have would be a second copy of the truth to keep in
+   * step across four call sites, bought with nothing. Backwards because a
+   * replay is by construction the most recent thing that could match: a queue
+   * retries within seconds of the answer it lost.
+   *
+   * **The horizon, said out loud: compaction.** An op whose entry has been
+   * compacted out of the live log is not found here and is applied again — and
+   * what happens then is exactly what happened before phase 10 and is
+   * therefore already safe. Every op that CREATES something carries a
+   * client-minted id and the reducer refuses the second one with
+   * `duplicate-id`; everything else is absolute-valued (and so idempotent by
+   * shape) or refuses on the second pass. Past the horizon a replay degrades
+   * from "here is your entry" to "that was refused" — a worse sentence, never
+   * a duplicate item.
+   *
+   * `project.create` is included, and it has to be: its canvas is named in the
+   * op rather than in the request, and a create is the one op whose replay
+   * would otherwise meet `duplicate-id` at its most confusing — a person told
+   * their canvas could not be made, about a canvas that exists.
+   */
+  private async alreadyWritten(request: SubmitRequest): Promise<LogEntry | null> {
+    const canvasId =
+      request.op.type === "project.create" ? request.op.projectId : request.projectId;
+    if (canvasId === null) return null;
+    const runtime = await this.runtime(canvasId).catch(() => null);
+    if (!runtime) return null;
+    for (let i = runtime.entries.length - 1; i >= 0; i--) {
+      const entry = runtime.entries[i]!;
+      if (entry.envelope.id === request.opId) return entry;
+    }
+    return null;
   }
 
   /**
@@ -987,6 +1046,11 @@ export class Engine {
       actor: request.actor,
       op: request.op,
       ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+      // The key travels, because the writer it is a question for is up there.
+      // A replica has nothing to dedupe against — it holds no order of its own
+      // — and passing it through is what lets a CLI's retry mean the same
+      // thing at the home as a tab's does.
+      ...(request.opId !== undefined ? { opId: request.opId } : {}),
     });
     const projectId =
       request.op.type === "project.create" ? request.op.projectId : request.projectId;
@@ -1548,7 +1612,11 @@ export class Engine {
 
   private envelope(request: SubmitRequest, op: Operation): OpEnvelope {
     return {
-      id: newOpId(),
+      // The client's name for this op when it brought one (phase 10's
+      // idempotency key): the id IS the key, so the key has to be what the
+      // log remembers, or the next retry has nothing to find. Shape-checked
+      // at the route; absent for everything the daemon writes for itself.
+      id: request.opId ?? newOpId(),
       projectId: request.projectId,
       actor: request.actor,
       ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),

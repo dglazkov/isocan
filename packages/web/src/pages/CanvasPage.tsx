@@ -29,6 +29,7 @@ import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx"
 import { FilesPanel } from "../components/FilesPanel.tsx";
 import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
+import { OfflineBar } from "../components/OfflineBar.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
 import { isTyping } from "../lib/keys.ts";
@@ -458,6 +459,10 @@ export function CanvasPage({
       <FilesPanel projectId={projectId} />
       <FavouritesBar projectId={projectId} />
       <CommentToasts />
+      {/* Offline, refusals, and anything that could not be done at all
+          (phase 10). Above the panels for the reason `ArrivalNotice` is:
+          it is about the connection, not about what is on the canvas. */}
+      <OfflineBar />
       <HelpPanel />
       <OwnCursor actor={actor} />
     </div>

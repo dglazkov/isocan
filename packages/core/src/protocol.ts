@@ -211,6 +211,39 @@ export interface PostOpRequest {
    * is speaking, and the response envelope carries the answer. */
   actor?: Actor;
   clientId?: string;
+  /**
+   * **This op's name, minted by the client — the idempotency key** (phase 10).
+   *
+   * The envelope id, sent up instead of being minted at the daemon, so that
+   * SENDING an op twice and MEANING it twice are different sentences on the
+   * wire. A queue that retries is at-least-once by construction: the tab
+   * posted, the network died before the answer came back, and it has no way
+   * to know whether the op landed. Supplying the id makes the retry
+   * answerable — the engine finds the entry it already wrote and hands back
+   * the same `{ seq, envelope }`, appending nothing.
+   *
+   * **What it is NOT for.** It does not stop a second item appearing; nothing
+   * ever did, because the vocabulary is already duplicate-proof by
+   * construction — `item.add` carries a client-minted `itemId`,
+   * `thread.create` a `threadId`, `thread.reply` a `comment.id`, and the
+   * reducer refuses each of those with `duplicate-id`. Everything else is
+   * either absolute-valued (`item.move`, `item.resize`, `item.update`, and so
+   * idempotent by shape) or refuses on the second pass (`item.delete` →
+   * `unknown-item`). What the key buys is that a REPLAY IS NOT MISTAKEN FOR A
+   * REFUSAL: without it, a retried `item.add` comes back 400 `duplicate-id`,
+   * indistinguishable from the home genuinely rejecting the work, and the
+   * honest thing a client does with a refusal — roll the optimistic change
+   * back and tell the person — would be a lie about an item that is sitting
+   * in the canvas.
+   *
+   * `clientId` cannot do this job and never could: it names a CLIENT, not an
+   * op, and a browser mints a fresh one on every page load — including the
+   * reload-while-offline this phase exists to survive.
+   *
+   * Optional, and absence means "mint me one", so every caller that predates
+   * phase 10 is unchanged.
+   */
+  opId?: string;
   op: Operation;
 }
 

@@ -376,9 +376,29 @@ replica durable.
    to CLIs, never pages to persons; offline in the browser is the service
    worker's job — cached shell, durable browser replica, queued ops — so
    per-viewer state has exactly one home, and every replica (tab or
-   daemon) reconnects with the same seq-cursor gesture.
+   daemon) reconnects with the same seq-cursor gesture. (Built in phase
+   10; the mechanism, and the questions it forced about retrying an op
+   whose answer never came, are in
+   [design/offline-tab.md](design/offline-tab.md).)
 
 ## Open debts
+
+- **The plane has two surfaces and only one of them works** (opened
+  2026-08-24 by phase 10; designed, not chosen, in
+  [design/local-bridge.md](design/local-bridge.md)). Rule 6 below says
+  offline in the browser is the service worker's job, and phase 10 made
+  that true. What the rule quietly assumes is that the browser is the
+  only surface needing to survive a lost network — and on a machine
+  running a daemon it is not. Offline, a tab keeps working and a
+  replica's CLI writes are refused; worse, the two cannot see each other
+  even on the same laptop, because one is served from the home's origin
+  and the other lives at `127.0.0.1`. Two replicas of one canvas,
+  queueing toward a home neither can reach, invisible to one another.
+  The journey has no scene for this, which is why nobody noticed: "a
+  person in the browser and an agent in the terminal, on one canvas" is
+  the thesis, and it is the half that quietly suspends when the network
+  goes. A scene would force the mechanism, the way every other debt here
+  was forced.
 
 - **The identity desk** (three appearances, load-bearing; now **designed**
   in [design/identity-desk.md](design/identity-desk.md)): who may enter a
