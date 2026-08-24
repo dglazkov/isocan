@@ -70,6 +70,9 @@ export function ProjectListPage({
             <div className="identity-popover">
               <IdentityMenu
                 actor={actor}
+                /* No canvas here, so no pass to mint: escalation is onto one
+                   canvas, and this page is about all of them. */
+                projectId={null}
                 onIdentity={onIdentity}
                 onClose={() => setIdentityOpen(false)}
               />

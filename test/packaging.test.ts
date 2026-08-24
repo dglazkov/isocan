@@ -86,8 +86,32 @@ describe("installable straight from git", () => {
     // (or `workspaces`, or `build`) on main, runs a nested install inside its
     // staging clone, and that install inherits the outer `-g`. Every spec we
     // print, run, or document therefore ends in #release.
-    const main = await fs.readFile(path.join(repo, "packages/cli/src/main.ts"), "utf8");
-    expect(main).toContain('const INSTALL_SPEC = "github:dglazkov/isocan#release"');
+    //
+    // Phase 8 moved the constant into `@isocan/core`: the command Scene 5
+    // hands a person is `npx <spec> setup <address>#<pass>`, printed by the
+    // CLI's `isocan pass` AND by the web app's "Work from your terminal…"
+    // dialog, so the spec and the address are now one string with one builder
+    // (`setupCommand`). The assertion moved with it — and grew a forcing
+    // function, because a second copy in `packages/web/src` is exactly the
+    // branchless spec this test exists to prevent and is the one place the
+    // doc sweep below could never see.
+    const address = await fs.readFile(path.join(repo, "packages/core/src/address.ts"), "utf8");
+    expect(address).toContain('const INSTALL_SPEC = "github:dglazkov/isocan#release"');
+    const strays: string[] = [];
+    for (const file of await sourceFiles(path.join(repo, "packages"))) {
+      if (file.endsWith(path.join("core", "src", "address.ts"))) continue; // the definition
+      const text = await fs.readFile(file, "utf8");
+      for (const [i, line] of text.split("\n").entries()) {
+        if (line.includes("github:dglazkov/isocan")) {
+          strays.push(`${path.relative(repo, file)}:${i + 1}: ${line.trim()}`);
+        }
+      }
+    }
+    expect(
+      strays,
+      `import INSTALL_SPEC/setupCommand from @isocan/core instead:\n${strays.join("\n")}`,
+    ).toEqual([]);
+
     for (const doc of ["README.md", ".agents/skills/isocan-collab/SKILL.md"]) {
       const text = await fs.readFile(path.join(repo, doc), "utf8");
       const specs = text.match(/github:dglazkov\/isocan[^\s`.,)]*/g) ?? [];
@@ -146,3 +170,24 @@ describe("installable straight from git", () => {
     expect(gitignore).toMatch(/^dist$/m); // on main it stays an artifact
   });
 });
+
+/** Every `.ts`/`.tsx` under the workspaces' `src` directories — the same walk
+ * `core/test/address.test.ts` uses for its own forcing function, and for the
+ * same reason: a rule that only holds where somebody remembered to look is not
+ * a rule. */
+async function sourceFiles(packages: string): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === "dist") continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (/\.tsx?$/.test(entry.name)) found.push(full);
+    }
+  };
+  for (const pkg of await fs.readdir(packages)) {
+    const src = path.join(packages, pkg, "src");
+    if (await fs.stat(src).then((s) => s.isDirectory(), () => false)) await walk(src);
+  }
+  return found;
+}

@@ -21,6 +21,13 @@ import { harnessVars } from "../src/harness.ts";
  * lets both of them in is the standing **link grant**, at the home and in the
  * replica's own ledger, and nothing else does.
  *
+ * **Phase 8 stage 4 changed WHEN that happens, not whether.** A replica no
+ * longer enumerates its home, so nothing offers this machine the canvas any
+ * more; the marker has to be spoken. The CLI speaks it — the binding resolves,
+ * finds nothing here, and asks the daemon to fetch that one canvas by name.
+ * The door test is the same one; what is gone is the machine helping itself to
+ * a listing.
+ *
  * So this is the regression that had to be verified rather than assumed. It
  * is a second `ISOCAN_HOME` whose only knowledge of the canvas is a copied
  * `.isocan/project.json` — the clone case, with two real daemons and the real
@@ -131,30 +138,48 @@ describe("a second machine, holding nothing but the marker", () => {
     // badge that has never been admitted anywhere.
     second = await machine(secondDir);
 
-    // Discovery: the home lists the canvas to a badge with NO admissions,
-    // because the canvas's link grant would admit it. This is the exact step
-    // that narrowing the listing to admissions alone would have broken — a
-    // fresh replica would then discover nothing, forever, and Scene 0's
-    // multi-device beat would be over before the CLI ran.
-    const listed = await until(
-      () => second!.engine.listProjects(),
-      (projects) => projects.some((project) => project.id === marker.projectId),
-      "the second machine to replicate the canvas",
-    );
-    expect(listed.find((project: Project) => project.id === marker.projectId)!.title).toBe(
-      path.basename(firstWork),
-    );
+    /**
+     * **Nothing arrives on its own, and that is phase 8 stage 4's whole
+     * point.**
+     *
+     * Until that stage this machine replicated the canvas before the CLI ever
+     * ran: the daemon enumerated its home, the canvas's link grant would admit
+     * anybody, so the listing offered it and the sweep dialled. That is
+     * discovery by enumeration — the primitive phase 7 named wrong — and it is
+     * also how a replica ended up mirroring a stranger's canvas because a link
+     * happened to be on.
+     *
+     * So the replica now asks its home only what it was let INTO, and this
+     * badge has been let into nothing. A settled beat of it holding nothing is
+     * asserted rather than assumed: a replica that quietly pulled the canvas
+     * down anyway would make the rest of this test pass for the old reason.
+     */
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(await second.engine.listProjects()).toEqual([]);
 
-    // And the CLI on that machine — a THIRD brand-new badge, minted at the
-    // replica's own door — resolves the marker and reads the canvas through
-    // the local daemon's door, which admits it under the link grant the
-    // replica wrote when the canvas arrived.
+    /**
+     * **The marker is the hand-off, and the CLI is what speaks it.**
+     *
+     * A THIRD brand-new badge, minted at the replica's own door, resolves the
+     * marker — finds the canvas is not here — and asks this machine's daemon
+     * to fetch that one canvas from its home by name (`HOME_JOIN_ROUTE`). The
+     * home runs the same door test it always ran, the link grant admits the
+     * daemon's badge there, and the canvas replicates while the command waits.
+     *
+     * Scene 0's multi-device beat, with the discovery step made deliberate:
+     * this machine holds what somebody put in this directory, and not the rest
+     * of the home.
+     */
     const read = await cli(secondWork, secondDir, portOf(second), claude("s-2"), "ls", "--json");
     expect(read.code, read.stderr).toBe(0);
     expect(read.stderr).not.toContain("not admitted");
     // Materializing would have meant a second `project.create` for an id the
     // home already holds; the binding landed on the existing canvas instead.
     expect(read.stderr).not.toContain("materialized");
+
+    const listed = await second.engine.listProjects();
+    expect(listed.map((project: Project) => project.id)).toEqual([marker.projectId]);
+    expect(listed[0]!.title).toBe(path.basename(firstWork));
 
     // A write from the second machine forwards to the home like any other,
     // and the door lets it: the daemon's badge was admitted when it dialled.

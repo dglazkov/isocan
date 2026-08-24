@@ -4,7 +4,7 @@ import type { Command } from "commander";
 import type { Actor, MetaPatch, Project } from "@isocan/core";
 import { DEFAULT_PORT, newProjectId } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
-import { DaemonClient, type Health } from "./client.ts";
+import { ApiError, DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
 import {
@@ -176,6 +176,11 @@ export async function resolveProject(ctx: Ctx, opts: ResolveOptions = {}): Promi
       await recordDir(ctx.home, ctx.binding.root, bound.id);
       return bound;
     }
+    const fromHome = await fetchFromHome(ctx.client, ctx.homeUrl, ctx.binding);
+    if (fromHome) {
+      await recordDir(ctx.home, ctx.binding.root, fromHome.id);
+      return fromHome;
+    }
     if (opts.create) return materializeBinding(ctx, ctx.binding);
     throw new Error(
       `this directory is bound to project ${ctx.binding.projectId} ` +
@@ -220,10 +225,79 @@ async function projectById(client: DaemonClient, id: string): Promise<Project> {
 }
 
 /**
+ * **A marker naming a canvas this machine does not hold, on a machine that has
+ * a home: ask the home for it.**
+ *
+ * This is the clone case — `.isocan/project.json` committed to git and checked
+ * out on a second machine, Scene 0's multi-device beat. It used to need
+ * nothing: the daemon enumerated its home, the canvas was in the list because
+ * its link grant would admit anybody, and by the time the CLI ran the canvas
+ * had already replicated. Phase 8 stage 4 stopped a replica enumerating its
+ * home — a machine now mirrors what it was let INTO — so this arrival, which
+ * carries an address and no admission, has to say what it wants.
+ *
+ * It can, and that is the whole argument: somebody put the id in this
+ * directory. The marker is the hand-off. What comes back is the home's own
+ * door test on the badge this daemon holds there — the same test that used to
+ * run a second later when the sweep dialled the socket — so nothing is
+ * admitted here that would not have been admitted then.
+ *
+ * **Null means "nothing to try", never "refused".** A daemon that is its own
+ * home has nowhere to ask (and answers `not-a-replica` if asked anyway, which
+ * is a fine answer to get: this is asked speculatively). A REFUSAL is thrown,
+ * because "your home will not let this machine onto that canvas" is the one
+ * sentence that turns a mystifying empty replica into a thing a person can
+ * act on — and the thing they act on is `isocan pass`.
+ */
+async function fetchFromHome(
+  client: DaemonClient,
+  homeUrl: string | null,
+  binding: DirBinding,
+): Promise<Project | null> {
+  if (!homeUrl) return null;
+  try {
+    await client.joinFromHome(binding.projectId);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "not-a-replica") return null;
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw new Error(
+      `${homeUrl} would not hand this machine ${binding.projectId} ` +
+        `(${markerFile(binding.root)}): ${(err as Error).message}\n` +
+        "If that canvas is yours, mint a pass from a session that is already on it " +
+        "(`isocan pass`) and run the command it prints here.",
+    );
+  }
+  /**
+   * The home said yes; the canvas still has to travel. `join` kicks the sweep
+   * rather than carrying the canvas back in its own response, because what
+   * makes a canvas present on this machine is a socket and a snapshot, not a
+   * JSON body — and a CLI that returned the home's row while the local store
+   * was still empty would hand every command after it a canvas that is not
+   * there.
+   */
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    const here = (await client.listProjects()).find((p) => p.id === binding.projectId);
+    if (here) return here;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `${homeUrl} let this machine onto ${binding.projectId}, but the canvas has not ` +
+          "arrived yet. It replicates in the background — try again in a moment.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/**
  * A marker whose project this home has never seen — a fresh clone, or a
  * teammate's directory. ADOPT the id rather than minting one: project ids
  * are what let two homes agree they are working on the same canvas, so the
  * store is created under the id the marker carries.
+ *
+ * On a REPLICA this is the last resort rather than the first: `fetchFromHome`
+ * runs before it, so a marker whose canvas lives at this machine's home
+ * arrives by replication instead of being re-created under its id.
  */
 async function materializeBinding(ctx: Ctx, binding: DirBinding): Promise<Project> {
   const title = binding.title ?? path.basename(binding.root);
@@ -282,6 +356,15 @@ export async function ensureDirBinding(
     if (existing) {
       await recordDir(home, binding.root, existing.id);
       return { project: existing, root: binding.root, created: false };
+    }
+    // Same order as `resolveProject`: a marker whose canvas lives at this
+    // machine's home is FETCHED, not re-created. `created: false` because
+    // nothing was — the canvas has existed at the home all along, and an agent
+    // told it created a canvas it merely joined would say so on the thread.
+    const fromHome = await fetchFromHome(client, homeUrl, binding);
+    if (fromHome) {
+      await recordDir(home, binding.root, fromHome.id);
+      return { project: fromHome, root: binding.root, created: false };
     }
     const title = binding.title ?? path.basename(binding.root);
     await client.sendOp(null, actor, {

@@ -46,3 +46,145 @@ export function canvasPath(projectId: string): string {
 export function canvasUrl(origin: string, projectId: string): string {
   return `${origin.replace(/\/+$/, "")}${canvasPath(projectId)}`;
 }
+
+/**
+ * The same address with an escalation pass on the end — Scene 5's one command
+ * (`… setup isocan.io/p/7f3a…#<pass>`).
+ *
+ * **A fragment, not a query parameter**, and that is the whole reason this
+ * lives in one function. A `#` fragment is never sent to a server: it does not
+ * reach the home's access log, it does not reach a proxy's, and if somebody
+ * pastes the whole command into a browser instead of a terminal, the home is
+ * asked for the canvas and never sees the credential. A `?pass=` would be
+ * logged by everything it passed through. The address carrying its own
+ * credential is what collapses Priya's three setup steps into Jordan's one
+ * line — "the address carries everything setup would otherwise ask".
+ *
+ * It is here, in core, for the reason `canvasUrl` is: the web dialog BUILDS
+ * this string and the CLI's `setup` PARSES it, and one spelling in two clients
+ * is the exact bug this module was created by.
+ */
+export function canvasUrlWithPass(origin: string, projectId: string, token: string): string {
+  return `${canvasUrl(origin, projectId)}#${token}`;
+}
+
+/**
+ * Split an address into the address and the pass it carries, if any.
+ *
+ * Everything after the FIRST `#` is the token — a pass token is
+ * `<passId>.<secret>` with a base64url secret, so it contains no `#` of its
+ * own, and taking the remainder rather than splitting again means a mangled
+ * paste is refused by the desk (as an unknown pass) instead of being silently
+ * truncated into a different, wrong one.
+ *
+ * An empty fragment (`…/p/7f3a…#`) is NO pass, not an empty one: a trailing
+ * `#` is what a copy-paste leaves behind, and asking the home to redeem the
+ * empty string would turn a harmless typo into a refusal.
+ */
+export function splitPassFragment(address: string): { address: string; pass?: string } {
+  const hash = address.indexOf("#");
+  if (hash < 0) return { address };
+  const pass = address.slice(hash + 1);
+  const rest = address.slice(0, hash);
+  return pass ? { address: rest, pass } : { address: rest };
+}
+
+/** A canvas address taken apart: where the canvas lives, which canvas, and
+ * the pass it was carrying (if any). */
+export interface CanvasAddress {
+  /** The home's origin — `https://isocan.io`, `http://127.0.0.1:4441`. */
+  origin: string;
+  projectId: string;
+  /** The `#fragment`, when one rode along. Never logged, never printed. */
+  pass?: string;
+}
+
+/**
+ * **The inverse of `canvasUrl` — the one reader of an address a person typed.**
+ *
+ * `canvasUrl` has always been the one writer; phase 8 is when something has to
+ * READ one back, because Scene 5's whole payoff is a person pasting an address
+ * into `isocan setup`. Both halves belong to the same file for the reason the
+ * file exists at all: the `/c/` bug was one spelling drifting from another,
+ * and a parser that knew about `/p/` independently of `canvasPath` would be
+ * that bug wearing a different hat.
+ *
+ * **A missing scheme is filled in, because the journey's own command has
+ * none.** Scene 5 writes `setup isocan.io/p/7f3a…#<pass>`, and a person
+ * copying a canvas address out of a browser's address bar gets the same thing
+ * — Chrome and Safari both hide `https://` on display. `https` is the default;
+ * loopback gets `http`, because nobody runs TLS on `127.0.0.1` and the one
+ * place a scheme-less loopback address is typed is a developer's terminal.
+ * Refusing instead would be technically defensible and would fail the exact
+ * paste the scene is built around.
+ *
+ * **Null rather than a throw**, and rather than a partial answer: the caller
+ * (`isocan setup`) has to decide between "this is an address" and "this is a
+ * directory", and a function that threw would force that decision to be made
+ * by catching. What is NOT null-tolerant is the shape — `origin/p/<id>` with a
+ * non-empty id and nothing after it — because an address that is nearly right
+ * is exactly the case phase 7's cheerful-wrong-address finding is about.
+ */
+export function parseCanvasAddress(raw: string): CanvasAddress | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const { address, pass } = splitPassFragment(trimmed);
+  const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address)
+    ? address
+    : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
+  let url: URL;
+  try {
+    url = new URL(schemed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  // The path must be exactly one canvas: `/p/<id>`, nothing before it and
+  // nothing after. A trailing slash is forgiven (browsers add them); a deeper
+  // path is a different page and must not be mistaken for a canvas.
+  const parts = url.pathname.replace(/\/+$/, "").split("/");
+  if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
+  const projectId = decodeURIComponent(parts[2] ?? "");
+  if (!projectId) return null;
+  return { origin: url.origin, projectId, ...(pass !== undefined ? { pass } : {}) };
+}
+
+/**
+ * **How to get this CLI without a registry**, in the one place that spells it.
+ *
+ * The repo is the package and the `release` branch is the installable face of
+ * it: installing from `main` puts an EMPTY directory on your disk and a
+ * dangling `isocan` on your PATH (#47 — `scripts/release.mjs` has the whole
+ * story), so every spec this product prints, runs or documents ends in
+ * `#release`.
+ *
+ * It lives in core, beside the address, because phase 8 made the two into one
+ * string: the command a person pastes is `npx <spec> setup <address>#<pass>`,
+ * and the CLI's `isocan pass` and the web app's "Work from your terminal…"
+ * dialog both hand it over. Two surfaces printing one string is house rule 4's
+ * definition of a computation that belongs to neither of them — and a second
+ * copy in the web app would be a branchless spec waiting to happen, in the one
+ * place `test/packaging.test.ts` could not see it. It sees this one.
+ */
+export const INSTALL_SPEC = "github:dglazkov/isocan#release";
+
+/**
+ * **Scene 5's one command, built rather than written.**
+ *
+ *     npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
+ *
+ * "Priya's three steps collapsed to a line, because the address carries
+ * everything setup would otherwise ask." `npx` and not `npm i -g` on purpose:
+ * the person pasting this has, by construction, never installed isocan — the
+ * whole point of the scene is that they were thin a second ago — and `setup`
+ * installs the CLI properly on its way through.
+ *
+ * The token is optional so that the same builder produces the *pass-less*
+ * command, which is what a person is handed when the canvas's link grant is
+ * open and no credential is needed to arrive.
+ */
+export function setupCommand(origin: string, projectId: string, token?: string): string {
+  const address = token ? canvasUrlWithPass(origin, projectId, token) : canvasUrl(origin, projectId);
+  return `npx ${INSTALL_SPEC} setup ${address}`;
+}

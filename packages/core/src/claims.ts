@@ -326,6 +326,42 @@ export function bindClaim(
 }
 
 /**
+ * A claim that was HANDED OVER rather than made — what redeeming a pass
+ * writes onto the redeeming badge's list (phase 8).
+ *
+ * It sits beside `bindClaim` because it is the other way a row gets onto a
+ * badge, and it is a separate function because the two differ in every detail
+ * that matters:
+ *
+ * - **No session key.** Nobody presented one. A pass is redeemed by a surface
+ *   that has not yet decided which of its conversations this is, and inventing
+ *   a key here would put a string the home cannot verify into the one field
+ *   the design says the home must never trust. The row is still found by every
+ *   question that matters, because `claimsActor` — the membership check that
+ *   decides whether this badge may speak as this actor — asks about the actor
+ *   and never about the key.
+ * - **No eviction by key**, for the same reason; only the badge's own earlier
+ *   row for the SAME actor is replaced, so redeeming twice (two passes, one
+ *   actor) leaves one row rather than two.
+ * - **It is not `applyClaim`, and it is not `as`.** `as` is reincarnation, and
+ *   `reincarnate` refuses while the actor is visibly somebody — which, at the
+ *   exact moment a pass is redeemed, it always is: Jordan's tab is open on the
+ *   canvas she just minted from. A handoff is the opposite gesture from a
+ *   claim. Nobody is asserting anything; a holder that already is this actor
+ *   said so, on the record, when it minted the pass.
+ */
+export function bindHandoff(
+  claims: readonly ActorClaim[],
+  envelope: { actor: Actor; ts: string; projectId?: string },
+): ActorClaim[] {
+  const { actor, ts, projectId } = envelope;
+  return [
+    ...claims.filter((row) => row.actorId !== actor.id),
+    { actorId: actor.id, boundAt: ts, ...(projectId !== undefined ? { projectId } : {}) },
+  ];
+}
+
+/**
  * The membership check — mechanism 5, entire.
  *
  * Everywhere an actor is named, the name must be one the speaker's badge
@@ -410,18 +446,55 @@ function reincarnate(
       `no actor ${as} is known here — pass a name to bring one in from elsewhere`,
     );
   }
-  const wornLive = mine?.actorId !== as && ctx.held.some((h) => h.live && h.actor.id === as);
+  /**
+   * This badge holds a HANDED-OVER claim on this actor — a row with no session
+   * key, which is what redeeming a pass writes (`bindHandoff`).
+   *
+   * When that is true both refusals below are switched off, and the reasoning
+   * is the design's rather than a convenience: "a badge already holding the
+   * claim vouches for anyone" (mechanism 3's resumption rule). Keying an actor
+   * this badge can already speak as grants it nothing it did not have a moment
+   * ago — mechanism 5's check is `claimsActor`, which asks about the BADGE and
+   * never about the key, so every process presenting this badge could already
+   * write as this actor before it asked.
+   *
+   * **Phase 8 forced it, and without it the pass does not work.** A pass hands
+   * one actor to a SECOND badge — "Jordan's tab and her daemon", which
+   * `bindClaim` below has anticipated since phase 3 — so from the moment a
+   * pass is redeemed there are legitimately two holders of one actor. Every
+   * later `as` from the endowed badge (a replica's `ensureClaim` after a
+   * restart, a CLI keying the identity it was just handed) would otherwise
+   * meet `wornLive`, because the OTHER holder's tab is live, or
+   * `otherSession`, because that holder claimed within the half hour — and be
+   * refused from being the person it was handed thirty seconds ago.
+   *
+   * **Deliberately NOT "any row on this badge".** A keyed row belongs to a
+   * session: on one machine every agent shares the CLI's badge, so letting a
+   * second session key an actor a first is holding would unseat a working
+   * agent (`bindClaim` evicts the old key), and that refusal is exactly what
+   * `claims.test.ts`'s "`as` is refused while the actor was claimed moments
+   * ago" protects. A handoff row belongs to no session, so there is nothing to
+   * unseat — one row per actor per badge is what `bindClaim` and `bindHandoff`
+   * both maintain, so "there is a keyless row" and "no session holds it here"
+   * are the same statement.
+   */
+  const alreadyMine =
+    mine?.actorId === as ||
+    ctx.own.some((row) => row.actorId === as && row.sessionKey === undefined);
+  const wornLive = !alreadyMine && ctx.held.some((h) => h.live && h.actor.id === as);
   // Somebody else's claim on this actor, anywhere on the desk — another badge,
   // another session key on this one, or a shelved legacy row. Rows under THIS
   // session key are excluded wherever they sit: a browser persona resuming
   // itself sends `as` AND its own key, and must not be refused as theft by its
   // own past self.
-  const otherSession = ctx.claimants.some(
-    (row) =>
-      row.sessionKey !== op.sessionKey &&
-      row.actorId === as &&
-      Date.parse(ctx.now) - Date.parse(row.boundAt) < CLAIM_STANDS_MS,
-  );
+  const otherSession =
+    !alreadyMine &&
+    ctx.claimants.some(
+      (row) =>
+        row.sessionKey !== op.sessionKey &&
+        row.actorId === as &&
+        Date.parse(ctx.now) - Date.parse(row.boundAt) < CLAIM_STANDS_MS,
+    );
   if (wornLive || otherSession) {
     throw new OpValidationError(
       "name-taken",

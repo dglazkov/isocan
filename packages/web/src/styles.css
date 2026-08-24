@@ -274,6 +274,33 @@ button, select { color: inherit; }
 .share-roster-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .share-roster-kind { color: var(--ink-soft); font-size: 11px; }
 
+/* ---------- work from your terminal (Scene 5) ---------- */
+/* The escalation dialog takes over the identity popover rather than opening a
+   second panel beside it. It needs more room than the menu does for the same
+   reason the Share popover does — it holds a command, and a command that wraps
+   into soup is a command nobody trusts — so the shell widens when this is what
+   is inside it — the same argument the Share popover's extra width is written
+   on, one step further: it holds a whole command, not just an address.
+   The child combinator is spelled out because that is what this actually
+   means (the dialog replaces the menu as the popover's one child), and
+   because `oneblock.test.ts` reads a class chained onto another as a STATE
+   class — `:has(.terminal-menu)` would look to it like a stranded `.away`. */
+.identity-popover:has(> .terminal-menu) { width: 360px; }
+.terminal-menu { display: flex; flex-direction: column; gap: 10px; }
+/* The line itself: monospace, selectable, and allowed to wrap — the address
+   inside it can be any length, and a horizontal scrollbar in a popover hides
+   half a credential. */
+.terminal-command {
+  margin: 0; padding: 8px 9px; border-radius: 8px;
+  background: var(--chip); border: 1px solid var(--chip-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  line-height: 1.45; white-space: pre-wrap; word-break: break-all; user-select: all;
+}
+.terminal-actions { display: flex; align-items: center; gap: 8px; }
+/* The clock, beside the button that copies the thing it is counting down. */
+.terminal-expiry { color: var(--ink-soft); font-size: 11px; }
+.identity-terminal { justify-content: center; font-size: 12.5px; }
+
 /* Light / dark / system — a segmented pill; the active segment lifts like a card. */
 .theme-switch {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
@@ -1410,6 +1437,28 @@ button.mt-card:hover { border-color: var(--accent); }
 .follow-banner:hover { opacity: 0.9; }
 /* Same shape, different claim: the app on disk moved on, this tab did not. */
 .update-banner { background: var(--ink); color: var(--ground); }
+
+/* ---------- a pass that did not work (Scene 5's other half) ---------- */
+/* Fixed rather than absolute, and at the dialog layer, because this can land
+   over the canvas OR over the door — it is about how you arrived, not about
+   what you arrived at. It clears the top bar at the same 56px the follow
+   banner does, so it never sits on top of the controls it is talking about.
+   Wide enough for two sentences, because "expired" with nothing after it is
+   the cheerful wrong address wearing an apology. */
+.arrival-notice {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: var(--z-dialog); max-width: min(560px, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 34px 10px 14px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+}
+.arrival-note { font-size: 12.5px; font-weight: 600; }
+.arrival-hint { font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; }
+.arrival-dismiss {
+  position: absolute; top: 6px; right: 6px; padding: 2px 6px;
+  border: none; background: none; color: var(--ink-soft); font-size: 12px;
+}
+.arrival-dismiss:hover { color: var(--ink); }
 
 /* ---------- the edge radar: what is out there, and which way ---------- */
 /* A bar lies flush along the wall, as long as the thing it stands for would

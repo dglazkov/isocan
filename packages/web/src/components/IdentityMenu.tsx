@@ -4,6 +4,7 @@ import { adoptIdentity, knownIdentities, renameIdentity, signOut } from "../lib/
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 import { setActorColor } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
+import { TerminalDialog } from "./TerminalDialog.tsx";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -26,6 +27,12 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   default ink. It is `actor.setColor`, stored in the daemon's actor
  *   registry beside your name, because a color only you can see would not be
  *   an identity: everyone on every canvas sees you change.
+ * - WORK FROM YOUR TERMINAL is Scene 5, and it belongs here rather than
+ *   beside Share for a reason the journey states: this menu is *how I'm
+ *   connected here*, and escalation is another way to be connected — a second
+ *   surface of the same person. Share is *who may be here*, which is about
+ *   somebody else. It appears only on a canvas, because a pass names exactly
+ *   one canvas and there is nothing to name on the project list.
  *
  * All of it is `actor.claim` under the hood (#58): the daemon applies one
  * continuity rule for every client, and a refusal — a name somebody on a
@@ -40,10 +47,14 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  */
 export function IdentityMenu({
   actor,
+  projectId,
   onIdentity,
   onClose,
 }: {
   actor: Actor;
+  /** The canvas this menu was opened on, or null on the project list. A pass
+   * names one canvas, so with none there is nothing to escalate onto. */
+  projectId: string | null;
   /** null = signed out; App swaps in the door. */
   onIdentity: (actor: Actor | null) => void;
   onClose: () => void;
@@ -52,6 +63,7 @@ export function IdentityMenu({
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
+  const [terminal, setTerminal] = useState(false);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
@@ -65,6 +77,13 @@ export function IdentityMenu({
       })
       .catch((err: Error) => setError(err.message));
   };
+
+  // The dialog takes the popover over rather than opening a second one beside
+  // it: it was reached from this menu, it is about the same subject, and two
+  // stacked panels hanging off one face is a worse thing to look at than one.
+  if (terminal && projectId) {
+    return <TerminalDialog actor={actor} projectId={projectId} onClose={onClose} />;
+  }
 
   return (
     <div
@@ -145,6 +164,18 @@ export function IdentityMenu({
           </button>
         ))}
       </div>
+      {/* Escalation, one click from your own face — "the canvas teaches its
+          own escalation", so nobody is ever sent to documentation to find out
+          how to bring their own machine in. */}
+      {projectId && (
+        <button
+          className="btn identity-terminal"
+          title="Bring your own machine onto this canvas"
+          onClick={() => setTerminal(true)}
+        >
+          Work from your terminal…
+        </button>
+      )}
       <button
         className="btn identity-leave"
         onClick={() => {

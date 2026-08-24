@@ -215,6 +215,15 @@ you, and nothing else does:
   `comment list`, `wait` — is answered from this machine's copy, and the
   copy is kept current by a live connection. `isocan who` shows everyone on
   the canvas, including people connected to the home from elsewhere.
+- **This machine holds the canvases it was let into, not the home's.** A
+  replica does not mirror everything at its home — it carries what somebody
+  handed it: a canvas redeemed with a pass (`isocan setup <address>#<pass>`),
+  a canvas born in a directory here, and a canvas named by a
+  `.isocan/project.json` marker that came with a clone. So `isocan list` on
+  a replica is a short list on purpose, and a canvas at the home that is not
+  in it is not missing — nobody gave it to this machine. If you need one
+  here, ask the person for a pass; do not go looking for a way to enumerate
+  the home.
 
 `.isocan/project.json` records the home's address beside the canvas id. A
 directory whose marker names a DIFFERENT home than this daemon answers to is
@@ -269,6 +278,69 @@ Two things to know before you use it:
   you included. That is a reason to be careful, not a licence: change who may
   enter a canvas when the person asked you to, and say on the thread that you
   did.
+
+## Passes: a credential, not an invitation
+
+A **pass** is a short-lived, single-use string that puts *another machine* on
+this canvas. It is not the address, and the difference is the whole point:
+
+- `isocan share` prints an **address**. You hand that to a *person*. They open
+  it in a browser, the door decides whether to let them in, and nothing is
+  installed. It is safe on a thread — it is the invitation.
+- `isocan pass` prints a **command carrying a credential**. You hand that to a
+  *machine* — by pasting it into a terminal on that machine. Whatever redeems
+  it is admitted **whether or not the link grant is on**, and by default
+  arrives speaking as the actor this CLI speaks as.
+
+```sh
+isocan pass               # the whole command to paste on the other machine
+isocan pass --admit-only  # admit it, but hand over no identity
+```
+
+**A pass is a credential. Treat it like one.**
+
+- **Never post one on a thread, in a comment, or anywhere a person will read
+  it later.** It is a bearer token: whoever has the string gets in, link grant
+  or not. If you have already put one somewhere it should not be, say so
+  immediately and mint nothing further — it expires in fifteen minutes and is
+  spent by the first machine to use it, which is exactly why saying so quickly
+  is enough.
+- **Never commit one.** Not in a marker, not in a config file, not in a
+  scratch note. Nothing in `.isocan/` holds one, and nothing you write should.
+- It is spent the first time it is redeemed. "That pass was already used"
+  usually means the machine you were setting up is already enrolled.
+
+**When it is your business to mint one:** when the person asks you to set up
+another of *their* machines, or a sandbox they are launching for themselves,
+and you are handing the line straight to that machine. Say on the thread that
+you minted one — not the string, the fact.
+
+**When it is not:** to get somebody *else* onto the canvas (that is
+`isocan share`, and the address); to work around a `not-admitted` refusal (see
+below — stop and ask); or on your own initiative because it seemed helpful. A
+pass hands over an identity by default, and handing over the identity you speak
+as is not a thing to do unprompted.
+
+**Joining from a pass** is the other end of the same gesture — this is the
+command a person pastes on the new machine, and it does the whole enrolment in
+one line:
+
+```sh
+npx github:dglazkov/isocan#release setup https://<home>/p/<canvas>#<pass>
+isocan setup https://<home>/p/<canvas>          # no pass: arrive under the link grant
+```
+
+It points this daemon at that home, redeems the pass so this machine is
+admitted and knows whose it is, writes `.isocan/project.json` with the canvas
+id and the home's address, and waits for the canvas to actually replicate
+before telling you it did. `isocan setup <directory>` still means what it
+always did.
+
+**`isocan open` already does this for the browser**, and you do not have to
+think about it: it hands the browser it spawns a pass so the tab arrives as
+this machine's person, and prints the **clean, pass-less address** on stdout.
+The line it prints is the one to copy onto a thread. Do not go looking for the
+one it gave the browser.
 
 ## When a canvas refuses you
 
@@ -648,7 +720,9 @@ make),
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
 `set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
-`share`, `open`, `setup`, `home` (which home this daemon answers to — read it
+`share`, `pass` (a credential for another MACHINE — never post it, never
+commit it; `share`'s address is what you hand a person),
+`open`, `setup`, `home` (which home this daemon answers to — read it
 freely, set it only when asked).
 
 Every one of these is the same operation the web app sends. If you find

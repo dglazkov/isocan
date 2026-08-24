@@ -127,6 +127,7 @@ export function Toolbar({
           <div className="identity-popover">
             <IdentityMenu
               actor={actor}
+              projectId={project?.id ?? null}
               onIdentity={onIdentity}
               onClose={() => useUiStore.getState().setIdentityOpen(false)}
             />

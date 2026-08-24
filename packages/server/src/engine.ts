@@ -31,6 +31,8 @@ import {
   mergeCommands,
   applyClaim,
   applyOperation,
+  bindHandoff,
+  bindName,
   claimsActor,
   collectCanvasNames,
   invertOperation,
@@ -468,6 +470,54 @@ export class Engine {
        */
       if (this.home) void this.home.announceActor(entry.envelope.actor);
       return entry;
+    });
+  }
+
+  /**
+   * **The pass's handoff: this badge now speaks as this actor** (phase 8).
+   *
+   * Small and named rather than a widening of `claim()`, because it is not a
+   * claim. A claim is an assertion made by whoever is asking, judged against
+   * everything the home can see — names, live faces, other claimants — and
+   * `applyClaim` is where that judging lives. A handoff has already been
+   * judged, by the only party in a position to: the badge that IS this actor
+   * said so when it minted the pass, and the pass's own single use is the
+   * receipt. Running it through `applyClaim` would mean sending `as`, and
+   * `reincarnate` refuses `as` while the actor is visibly somebody — which,
+   * at the exact moment Jordan redeems, it is: her tab is open on the canvas
+   * she minted from. The gesture would refuse itself.
+   *
+   * It is on the writer chain like every other claims write. `Desk.setClaims`
+   * says it is "called from the engine's chain", and it means it: a handoff
+   * and a claim racing must serialize, or the loser's read-modify-write
+   * erases the winner's row.
+   *
+   * **The name is filled in, never overwritten.** At a home the registry
+   * already knows this actor (its minter claimed it there), so there is
+   * nothing to write. On a replica the actor may be arriving on this machine
+   * for the first time — the redemption is what tells this daemon that
+   * `usr_jordan` is called Jordan, before any op she wrote has replicated —
+   * and a hole in the registry means her own name renders as nothing. Filling
+   * a hole is safe; overwriting is not, because the name that travels with a
+   * pass is the name as of REDEMPTION and a roster arriving a second later is
+   * the authority.
+   */
+  endowClaim(badgeId: string, actor: Actor, projectId?: string): Promise<void> {
+    return this.enqueue(async () => {
+      const ts = new Date().toISOString();
+      await this.desk.setClaims(
+        badgeId,
+        bindHandoff(await this.desk.claimsOf(badgeId), {
+          actor,
+          ts,
+          ...(projectId !== undefined ? { projectId } : {}),
+        }),
+      );
+      if (!actor.name) return;
+      const runtime = await this.actors();
+      if (runtime.registry.names[actor.id]) return;
+      runtime.registry = bindName(runtime.registry, { actor, ts });
+      await this.store.saveActors(runtime.registry, runtime.lastSeq);
     });
   }
 

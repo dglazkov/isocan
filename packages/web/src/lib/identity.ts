@@ -110,6 +110,39 @@ export async function reclaimIdentity(): Promise<void> {
 }
 
 /**
+ * **The person a pass handed this tab** — Scene 5's arrival, and the browser's
+ * half of an obligation the CLI's `setup` meets by writing `identity.json`.
+ *
+ * The endowed identity is announced EXACTLY ONCE, in the redemption response.
+ * A handed claim carries no session key on purpose (`bindHandoff`), and
+ * `GET /api/actors` answers by session key — so nothing can ever ask again. A
+ * tab that read that response and moved on would have stranded a person in
+ * their own browser, one reload from being a stranger on their own canvas.
+ *
+ * **No claim goes out, and that is the point.** The badge behind this tab's
+ * cookie already holds the row; mechanism 5's check is `claimsActor`, which
+ * asks about the badge and never about the key, so every op this tab writes as
+ * this actor is already permitted. Sending `actor.claim` here would be the tab
+ * ASSERTING an identity it was HANDED — the one gesture `reincarnate` refuses
+ * while somebody is visibly wearing the name, which at the moment of
+ * redemption is always: the tab that minted the pass is open on the canvas.
+ * The key gets bound the first time this browser does something that needs one
+ * (a rename, a resume after the badge is replaced), where `as` is accepted
+ * precisely because the keyless row is there.
+ *
+ * **It overwrites whoever this browser was, and the CLI deliberately does not.**
+ * `setup` refuses to make a pasted command rename the human who owns a laptop,
+ * because `identity.json` is that machine's one durable answer with nothing
+ * behind it. A browser has a roster: the persona being displaced is still in
+ * "Switch to", one click away, and the tab was opened by a link that says who
+ * it is for. Refusing here would burn a single-use pass and leave the person
+ * looking at somebody else's face, which is the opposite of what they clicked.
+ */
+export function adoptHandedIdentity(actor: Actor): Actor {
+  return become({ id: actor.id, name: actor.name });
+}
+
+/**
  * Step out. The roster survives — leaving is not forgetting — so the dialog
  * can offer the way back in.
  */

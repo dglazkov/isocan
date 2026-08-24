@@ -8,10 +8,12 @@ import type {
   GrantsResponse,
   GrantSubject,
   LogEntry,
+  MintPassResponse,
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
   Project,
+  RedeemPassResponse,
   ServerMessage,
   UndoRedoRequest,
 } from "@isocan/core";
@@ -22,6 +24,9 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  PASS_REDEEM_ROUTE,
+  passesRoute,
+  projectsRoute,
   WS_NO_CANVAS,
 } from "@isocan/core";
 import type { Engine } from "./engine.ts";
@@ -147,6 +152,32 @@ export interface HomeConnection {
   grants(projectId: string): Promise<GrantsResponse>;
   createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
+  /**
+   * The pass routes, forwarded — for the grant routes' reason, one turn
+   * sharper.
+   *
+   * A pass is desk state and desk state does not replicate, so the row lives
+   * at the home. But a pass is also SINGLE-USE, and single-use is only a
+   * property of the desk that holds the row: a replica that minted its own
+   * passes would be handing out admissions to a canvas whose door it does not
+   * answer, and one minted here and redeemed there would be spent twice.
+   *
+   * `actor` rather than an id, because the home may never have heard of this
+   * actor: `mintPass` claims it onto this daemon's badge first (the home
+   * verifies badge-level, which is all it can see), and bringing an actor in
+   * from elsewhere needs its name.
+   */
+  mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse>;
+  redeemPass(token: string): Promise<RedeemPassResponse>;
+  /**
+   * Ask the home for ONE canvas by name, so this replica starts carrying it.
+   *
+   * The counterpart of the sweep's narrowing (`sync()`): the sweep asks "what
+   * was I let into", and this is how a machine that was handed nothing but an
+   * ADDRESS gets let in. See `HOME_JOIN_ROUTE` for which arrivals those are
+   * and why they are not a new privilege.
+   */
+  join(projectId: string): Promise<Project>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
     projectId: string,
@@ -326,13 +357,17 @@ export class HomeLink implements HomeConnection {
    * line true ("her laptop and her desktop show the same canvas") without
    * inventing a home-wide channel this phase would then have to defend.
    *
-   * **What this over-reaches, said out loud:** `GET /api/projects` is
-   * home-wide today, not scoped to the badge's admissions, so on a shared home
-   * a replica would mirror canvases it has no business holding. That narrowing
-   * is mechanism 10's and phase 7's — the route, not this caller, is where it
-   * belongs — and until it lands, a replica of a MULTI-TENANT home pulls down
-   * more than it should. A solo home (Scene 0, and everything this phase
-   * proves) has exactly one member, so today it is right.
+   * **What it asks for, and why that sentence changed in phase 8.** Phase 6
+   * asked the home-wide question and said so out loud: "a replica of a
+   * MULTI-TENANT home pulls down more than it should". Phase 7 narrowed the
+   * route to the door's own test and found it could go no further, because a
+   * fresh replica's badge had no admissions and nothing ever gave it one.
+   *
+   * The pass gives it one. So this caller now states the narrow question —
+   * `?reach=admitted`, see `ProjectsReach` — and a replica mirrors **what it
+   * was let into** rather than everything a home will show it. Enumeration
+   * was never the design; it was the easiest thing that worked when a home
+   * had one member.
    */
   private sync(): Promise<void> {
     if (this.stopped) return Promise.resolve();
@@ -347,10 +382,34 @@ export class HomeLink implements HomeConnection {
 
   private async sweep(): Promise<void> {
     const wanted = new Set<string>();
+    /**
+     * **What this machine already holds**, first and unconditionally.
+     *
+     * Two things ride on this line and both are load-bearing:
+     *
+     * - A home that is down must not make a replica forget what it holds —
+     *   the local list is a fact about this disk, and the home's answer below
+     *   is best-effort on top of it.
+     * - It is why a canvas BORN here keeps replicating after the narrowing. A
+     *   forwarded `project.create` lands locally, so it is in this list from
+     *   the moment it exists — and independently the home admitted this badge
+     *   when it created the canvas (`{root: "created"}`, see `http.ts`), so
+     *   the narrow listing names it too. Two independent reasons, which is
+     *   why the birth-on-a-replica case survives a change that removed the
+     *   only reason a *stranger's* canvas had.
+     */
     for (const project of await this.engine.listProjects()) wanted.add(project.id);
-    // The home's list is best-effort: a home that is down must not make a
-    // replica forget the canvases it already holds.
-    const theirs = await this.api<Project[]>("GET", "/api/projects").catch(() => null);
+    /**
+     * **And what the home says this badge was let into** — admissions alone,
+     * not what a door would open. That is the whole of phase 8 stage 4: a
+     * replica is TOLD what it carries instead of enumerating a home.
+     *
+     * Still best-effort, for the reason above. Note also what a re-badge
+     * costs and does not: a badge that had to go back to the door holds no
+     * admissions, so this half comes back empty until the replica is let in
+     * again — and the local half above means nothing already here is dropped.
+     */
+    const theirs = await this.api<Project[]>("GET", projectsRoute("admitted")).catch(() => null);
     if (theirs) for (const project of theirs) wanted.add(project.id);
     for (const projectId of wanted) {
       if (this.stopped) return;
@@ -651,8 +710,18 @@ export class HomeLink implements HomeConnection {
    * most plausibly the same person's browser tab, which claimed them at the
    * one origin — the home refuses with `name-taken`, correctly, because two
    * badges holding one actor is what a PASS is for (mechanism 1's "Jordan's
-   * tab and her daemon"), and passes are phase 8. The refusal is surfaced with
-   * the home's own words rather than swallowed.
+   * tab and her daemon"). The refusal is surfaced with the home's own words
+   * rather than swallowed.
+   *
+   * **Phase 8 built the pass, and the seam narrowed rather than closed** —
+   * which is the design's answer, not a shortfall. A machine whose person is
+   * already somebody at the home enrols by REDEEMING a pass minted from the
+   * surface that is her (`redeemPass`, below); after that the home's badge
+   * holds the claim outright and this call has nothing left to ask. What is
+   * still refused is the thing that should be: announcing your way into an
+   * identity somebody else is currently wearing, with nobody vouching. "First
+   * surface versus every later surface of the same person" is exactly how
+   * mechanism 1 puts it.
    */
   announceActor(actor: Actor): Promise<void> {
     return this.ensureClaim(actor).catch((err: unknown) => {
@@ -734,6 +803,94 @@ export class HomeLink implements HomeConnection {
 
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
     return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
+  }
+
+  /**
+   * Mint a pass at the home, on this daemon's badge.
+   *
+   * The claim goes up first, exactly as it does before a forwarded write: the
+   * home refuses to endow a pass with an actor the presenting badge does not
+   * hold, and the badge that presents here is this daemon's one badge at the
+   * home rather than the local CLI's. That is mechanism 5's split doing its
+   * job — the local daemon already checked that the asking process may speak
+   * as this actor, which the home could never know, and the home checks that
+   * this machine may, which is all it can honestly see.
+   */
+  async mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<MintPassResponse>(
+      "POST",
+      passesRoute(projectId),
+      actor ? { actorId: actor.id } : {},
+    );
+  }
+
+  /**
+   * Redeem one at the home, on this daemon's badge — the enrolling half of
+   * Scene 5, from the new machine's end.
+   *
+   * Two things happen here that are easy to miss, and both are the point:
+   *
+   * - **This badge comes back admitted at the home**, so the canvas now
+   *   appears in `GET /api/projects` for it and the next sweep dials it. That
+   *   is how a replica stops discovering canvases by enumerating a home and
+   *   starts replicating the ones it was actually let into — phase 7's open
+   *   question, answered by the mechanism phase 7 said would answer it.
+   * - **The vouch cache is primed rather than left to be discovered.** The
+   *   home has just written this actor onto this badge's claims, so
+   *   `ensureClaim` has nothing to do; without priming it, the first forwarded
+   *   write would spend a round trip re-claiming an actor the badge already
+   *   holds. (It would also *succeed* — `reincarnate` lets a badge re-key an
+   *   actor it already claims, which phase 8 had to make true anyway, because
+   *   after a pass there are legitimately two badges holding one actor and the
+   *   other one is a live tab.) A re-badge clears this cache along with
+   *   everything else, which is correct: a badge that had to go back to the
+   *   door is a different holder, and it holds nothing.
+   *
+   * A sweep is kicked immediately rather than waiting out the poll interval:
+   * the person at the terminal has just typed the enrolling command, and the
+   * next thing they expect is their canvas.
+   */
+  async redeemPass(token: string): Promise<RedeemPassResponse> {
+    const answer = await this.api<RedeemPassResponse>("POST", PASS_REDEEM_ROUTE, { token });
+    if (answer.actor) this.claimed.add(`${answer.actor.id}\u0000${answer.actor.name}`);
+    void this.sync().catch(() => {});
+    return answer;
+  }
+
+  /**
+   * One canvas, asked for by name — the arrival that carries an address and no
+   * admission (`HOME_JOIN_ROUTE` says which arrivals those are).
+   *
+   * **It is an ordinary read, and that is the point.** `GET
+   * /api/projects/:id` is a project-scoped route, so at the home it passes
+   * through the same `admit` hook every other project-scoped route does: if a
+   * grant admits this badge, the hook writes the admission (`{root: "grant"}`,
+   * the provenance phase 9's sweep walks) before the route answers, and if
+   * nothing admits it the answer is the door's own 403 — passed back through
+   * `HomeRefusedError` with the home's status and code intact, so the person
+   * who pasted an address to a canvas whose link is off is TOLD that, rather
+   * than watching an empty replica and guessing.
+   *
+   * Nothing here writes an admission itself, and nothing here decides
+   * anything. A replica that granted itself entry to its home's canvases would
+   * be a laptop answering a door it does not own.
+   *
+   * Dialling the socket would ALSO admit — it is how a replica has always got
+   * its admissions — but a socket's refusal is a close code arriving some
+   * milliseconds later on a connection nobody is awaiting, and the caller here
+   * is a person at a terminal waiting for a sentence. So the asking is done
+   * with the request that can be answered synchronously, and the sweep kicked
+   * below (for `redeemPass`'s reason: somebody just typed the command) opens
+   * the socket.
+   */
+  async join(projectId: string): Promise<Project> {
+    const project = await this.api<Project>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}`,
+    );
+    void this.sync().catch(() => {});
+    return project;
   }
 
   async undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {
