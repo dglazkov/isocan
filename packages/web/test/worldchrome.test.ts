@@ -118,6 +118,19 @@ describe("chrome inside the zoomed world", () => {
     ".item.selected",
     ".item.peeked",
     ".item-titlebar",
+    /* The two badge corners, named separately for the same reason the handles
+       are: the shared `.version-badge` rule gives the badge its size and these
+       two give it its position, and the bug was in the position.
+
+       This is the titlebar's bug in the sibling beside it, found the run after.
+       ItemView counter-scales all three of these elements; two had been moved
+       to screen units and the badge had not, so its gap below the card ran
+       11.93 screen px at 149% and 1.60 at 20% and it slid under the SE handle
+       below 43% zoom. `.version-badge` itself is deliberately NOT on this list
+       — its `padding: 3px 7px` is screen pixels already, by the counter-scale,
+       exactly as the titlebar's two ends are. */
+    ".version-badge-se",
+    ".version-badge-ne",
   ];
 
   it("has rules for every selector it claims to check", () => {
@@ -167,6 +180,40 @@ describe("chrome inside the zoomed world", () => {
         }
       }
     }
+  });
+
+  /**
+   * The badge clears the corner handle by a distance that does not shrink.
+   *
+   * "Both are screen-measured" is not the invariant — two screen-measured
+   * numbers can still overlap. The rule is that the badge's right edge sits
+   * FURTHER in than the handle reaches, and the handles offset from the same
+   * padding box the badge does, so the item's border cancels and this is one
+   * comparison rather than a box-model argument.
+   *
+   * Stated as the inequality rather than as `14` and `6`, so moving either
+   * number is allowed and closing the gap is not.
+   */
+  it("keeps the badge clear of the corner handle at every zoom", () => {
+    const screenPx = (body: string, property: string): number => {
+      const found = body.match(
+        new RegExp(`(?:^|[;{\\s])${property}\\s*:\\s*calc\\(\\s*(-?[\\d.]+)px\\s*/\\s*var\\(--scale`),
+      );
+      expect(found, `${property} is not a screen-measured length`).not.toBeNull();
+      return Number(found![1]);
+    };
+
+    const badgeIn = screenPx(ownRule(".version-badge-se") ?? "", "right");
+    // The handle hangs OUTSIDE the corner, so its offset is negative and the
+    // distance it reaches back inside the edge is its width plus that offset.
+    const handleOut = -screenPx(ownRule(".resize-handle-se") ?? "", "right");
+    const handleSize = screenPx(ownRule(".resize-handle") ?? "", "width");
+    const handleIn = handleSize - handleOut;
+
+    expect(
+      badgeIn,
+      `the badge's right edge is ${badgeIn}px in and the handle reaches ${handleIn}px in — a press near the badge resizes`,
+    ).toBeGreaterThan(handleIn);
   });
 
   it("gives the outline a visible width at every zoom", () => {

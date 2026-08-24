@@ -2005,7 +2005,7 @@ button.mt-card:hover { border-color: var(--accent); }
    one click selects the whole command, whatever the clipboard API answered. */
 .front-command-line {
   flex: 1 1 auto; min-width: 0;
-  padding: 8px 10px; border-radius: 8px;
+  padding: 8px 10px; border-radius: var(--radius);
   background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
   line-height: 1.45; white-space: pre-wrap; word-break: break-all; user-select: all;

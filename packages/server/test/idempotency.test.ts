@@ -150,6 +150,79 @@ describe("an op sent twice, meant once", () => {
     expect((second.body as PostOpResponse).seq).toBe((first.body as PostOpResponse).seq + 1);
   });
 
+  /**
+   * **The retry is not always the last thing in the log**, and the scan has to
+   * go further back than one entry to know it.
+   *
+   * Every other case in this file posts the retry immediately after the op it
+   * retries, so `alreadyWritten`'s backwards scan could be reduced to *look at
+   * the most recent entry only* and the whole file stayed green. It is a real
+   * shape and not a hypothetical: the tab that lost its answer is a tab whose
+   * queue has several ops in it, and the seconds it waits before retrying are
+   * seconds in which anybody on the canvas can write. Past the depth the scan
+   * reaches, a replay is applied a second time.
+   *
+   * The comment on `alreadyWritten` argues for the DIRECTION of the scan —
+   * backwards, because a replay is recent — and nothing there argues for a
+   * depth of one. This is that argument, held as a test.
+   */
+  it("is still the same entry after other ops have landed on top of it", async () => {
+    await makeCanvas();
+    const first = await post(addAcme, "prj_1", "op_burieddeep1");
+    expect(first.status).toBe(200);
+
+    // Five more writes on the canvas, so the retry is nowhere near the tail.
+    for (let n = 0; n < 5; n++) {
+      const move: Operation = { type: "item.move", itemId: "itm_acme", x: n * 10, y: n * 10 };
+      expect((await post(move, "prj_1", `op_between0000${n}`)).status).toBe(200);
+    }
+    const buried = (await log("prj_1")).length;
+
+    const retry = await post(addAcme, "prj_1", "op_burieddeep1");
+    expect(retry.status, "a buried replay must not read as a refusal").toBe(200);
+    expect(retry.body.code).toBeUndefined();
+    expect((retry.body as PostOpResponse).seq).toBe((first.body as PostOpResponse).seq);
+    expect((retry.body as PostOpResponse).envelope).toEqual(
+      (first.body as PostOpResponse).envelope,
+    );
+    // Nothing was appended, and the item did not double.
+    expect((await log("prj_1")).length).toBe(buried);
+    expect(await items("prj_1")).toEqual(["itm_acme"]);
+  });
+
+  /**
+   * The same shape with the writes in between belonging to SOMEBODY ELSE,
+   * which is the ordinary case rather than the exotic one: two people on a
+   * canvas, one of them on a bad connection.
+   */
+  it("is still the same entry after another actor has written", async () => {
+    await makeCanvas();
+    const first = await post(addAcme, "prj_1", "op_twopeople01");
+    expect(first.status).toBe(200);
+
+    const sam = { id: "usr_sam", name: "Sam" };
+    await badge.speakAs(sam, "test:usr_sam");
+    const bySam = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        projectId: "prj_1",
+        actor: sam,
+        op: { type: "item.move", itemId: "itm_acme", x: 99, y: 99 } satisfies Operation,
+        opId: "op_samsownwrit",
+      }),
+    });
+    expect(bySam.status).toBe(200);
+
+    const retry = await post(addAcme, "prj_1", "op_twopeople01");
+    expect(retry.status).toBe(200);
+    expect((retry.body as PostOpResponse).seq).toBe((first.body as PostOpResponse).seq);
+    // Sam's move stands: a replay is a no-op, not a rewind.
+    const canvas = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
+    const body = (await canvas.json()) as { canvas: { items: Record<string, { x: number }> } };
+    expect(body.canvas.items["itm_acme"]!.x).toBe(99);
+  });
+
   it("covers the create, whose canvas is named in the op rather than in the request", async () => {
     const first = await post({ type: "project.create", projectId: "prj_2", title: "Acme" }, null, "op_born0000001");
     const second = await post({ type: "project.create", projectId: "prj_2", title: "Acme" }, null, "op_born0000001");

@@ -26,25 +26,65 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 
-/** Every rule whose selector list mentions the title row, comments stripped. */
+/** Every rule whose selector list mentions the title row, comments stripped.
+ *  `\b`-anchored rather than `includes`, so `.item-titlebar-row` is a
+ *  different class and not this one wearing a suffix. */
 function titlebarRules(): { selector: string; body: string }[] {
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const out: { selector: string; body: string }[] = [];
   for (const rule of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     for (const selector of (rule[1] ?? "").split(",").map((s) => s.trim())) {
-      if (selector.includes(".item-titlebar")) out.push({ selector, body: rule[2] ?? "" });
+      if (/\.item-titlebar(?![-\w])/.test(selector)) out.push({ selector, body: rule[2] ?? "" });
     }
   }
   return out;
+}
+
+/** The rule for exactly `.item-titlebar` — the one that PLACES the row, as
+ *  opposed to the six that colour it, reveal it or reach through it. */
+function ownRule(): string | null {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const rule of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectors = (rule[1] ?? "").split(",").map((one) => one.trim());
+    if (selectors.includes(".item-titlebar")) return rule[2] ?? "";
+  }
+  return null;
 }
 
 /** What would move the row or change the room it gives the name. */
 const PLACEMENT = /(?:^|[;{\s])(top|right|bottom|left|padding|padding-top|padding-right|padding-bottom|padding-left)\s*:\s*([^;]+)/g;
 
 describe("the item title row", () => {
-  it("has rules to check", () => {
-    // Without this the file passes vacuously the day the class is renamed.
-    expect(titlebarRules().length).toBeGreaterThan(0);
+  /**
+   * The vacuity check, and it took two goes.
+   *
+   * `titlebarRules().length > 0` was the first version and it could not say
+   * no. Six other rules mention this class — `.item.peeked .item-titlebar`,
+   * `.item.selected .item-titlebar`, `.canvas-viewport.pen .item-titlebar`
+   * and so on — so DELETING the rule that actually places the row left the
+   * list non-empty, gave the two checks below nothing to look at, and this
+   * file passed 3/3 with the title row unpositioned. Renaming it to
+   * `.item-titlebar-row` passed too, because a class name is a substring of
+   * its own superstring.
+   *
+   * So: the row's OWN rule has to exist, and it has to place the row. That is
+   * the thing the rest of this file is about, and a check that any relative
+   * can satisfy answers a different question (lessons.md #16).
+   */
+  it("has the rule that places the row, under that exact name", () => {
+    const own = ownRule();
+    expect(own, "no `.item-titlebar` rule of its own — renamed, or deleted").not.toBeNull();
+    expect(
+      own,
+      "`.item-titlebar` does not place the row in screen pixels, so there is nothing here to guard",
+    ).toMatch(/(top|bottom):\s*calc\([^;]*var\(--scale/);
+  });
+
+  it("has every rule that mentions the row", () => {
+    // The six that colour it, reveal it and reach through it are what the
+    // selection check below sweeps; if the parser stops finding them it stops
+    // being able to fail.
+    expect(titlebarRules().length, "the parser found no rules — it is wrong").toBeGreaterThan(3);
   });
 
   it("is placed in screen pixels, like the label it holds", () => {
