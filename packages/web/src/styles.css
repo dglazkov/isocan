@@ -1777,6 +1777,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .notfound-page code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
 }
+/* Two ways out of "this canvas lives elsewhere": its home, and this one's
+   list. Wraps rather than shrinks — a home address is long. */
+.notfound-page .row { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------- ⌘K command bar: the lane to your emissary ---------- */
 .cmdbar-backdrop {

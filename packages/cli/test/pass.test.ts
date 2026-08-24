@@ -89,7 +89,7 @@ beforeEach(async () => {
     path.join(homeDir, "identity.json"),
     JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
   );
-  homeDaemon = await startDaemon({ port: 0, home: homeDir, homeUrl: null });
+  homeDaemon = await startDaemon({ port: 0, home: homeDir, birthHome: null });
   const address = homeDaemon.app.server.address();
   homePort = typeof address === "object" && address ? address.port : 0;
   awayPort = await freePort();
@@ -273,7 +273,7 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
   }, 120_000);
 
   it("a pass is single-use: the same command on a third machine is refused, and says why", async () => {
-    await acmeCanvas();
+    const projectId = await acmeCanvas();
     const minted = await atHome("pass", "--json");
     const { address } = JSON.parse(minted.stdout) as { address: string };
     const first = await away("setup", "--no-install", "--no-open", "--json", address);
@@ -330,27 +330,101 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
     expect(identity.name).toBeUndefined();
   }, 120_000);
 
-  it("refuses to repoint a machine that already answers to a different home", async () => {
-    // Escalation is one command; it is not one command with a demolition
-    // inside it. A machine already answering to another home has directories
-    // bound there, and every one of them would start refusing every command.
-    await acmeCanvas();
-    const minted = await atHome("pass", "--json");
-    const { address } = JSON.parse(minted.stdout) as { address: string };
+  it("joins a canvas without moving the birth default a machine already has", async () => {
+    /**
+     * **The test that used to say the opposite.**
+     *
+     * It was *"refuses to repoint a machine that already answers to a
+     * different home"*, and it was right for as long as joining a canvas meant
+     * repointing a whole machine: every directory bound to the old home would
+     * have started refusing every command. Phase 10.3 removed the thing it
+     * guarded — the home is a property of the canvas now — so the refusal went
+     * with it, and what stands in its place is the capability that made it
+     * unnecessary.
+     *
+     * The machine's birth default here is an address that answers nothing, and
+     * it STAYS that way: joining a canvas at a real home is an ordinary act
+     * that moves nothing else. (The trailing slash is deliberate — it is the
+     * one un-normalized spelling this repo's own fixtures have ever held, and
+     * it belongs in the fixture that has always carried it.)
+     */
+    const projectId = await acmeCanvas();
     await fs.writeFile(
       path.join(awayDir, "config.json"),
       JSON.stringify({ home: "http://127.0.0.1:9/" }),
     );
 
-    const done = await away("setup", "--no-install", "--no-open", address);
-    expect(done.code).not.toBe(0);
-    expect(done.stderr).toContain("answers to");
-    // Both addresses named, and the deliberate way through offered.
-    expect(done.stderr).toContain(`isocan home http://127.0.0.1:${homePort}`);
-    // …and nothing was moved: the config file it found is the config file it
-    // left, so the machine's other directories keep working.
+    const home = `http://127.0.0.1:${homePort}`;
+    const done = await away("setup", "--no-install", "--no-open", "--json", `${home}/p/${projectId}`);
+    expect(done.code, done.stderr).toBe(0);
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+
+    // Nothing moved: the config file it found is the config file it left, so
+    // every other directory on this machine keeps working exactly as it did.
     expect(JSON.parse(await fs.readFile(path.join(awayDir, "config.json"), "utf8"))).toEqual({
       home: "http://127.0.0.1:9/",
+    });
+    // And it SAYS so, naming both — where new canvases still go, and where
+    // this one lives.
+    expect(report.birth).toContain("127.0.0.1:9");
+    expect(report.birth).toContain(home);
+
+    // The canvas arrived all the same, from the home the pasted address named.
+    // That is the whole phase in one assertion: two homes, one daemon.
+    expect(report.replicated).toContain("Acme Sprint Board");
+    expect(report.canvas).toBe(canvasUrl(home, projectId));
+    const marker = JSON.parse(await fs.readFile(markerFile(awayWork), "utf8")) as {
+      projectId: string;
+      home: string;
+    };
+    expect(marker).toMatchObject({ projectId, home });
+  }, 120_000);
+
+  it("redeems a pass at the home the address named, not at the birth default", async () => {
+    /**
+     * **Scene 5's one command, on a machine that is already somebody's.**
+     *
+     * A pass token is opaque — nothing on the receiving machine can read which
+     * desk holds its row — so a replica with more than one home had to guess,
+     * and `HomeLinks.homeScoped` guesses the birth default. On a machine whose
+     * birth default is somewhere else that home has never heard of the pass,
+     * and the person is told their credential is invalid: a cheerful wrong
+     * answer about the one thing that must never get one.
+     *
+     * The fix is that **a pass is never handed over alone.** It arrives as
+     * `address#pass`, one pasted string, so whoever holds the token holds the
+     * address too — and `RedeemPassRequest.home` carries it, so the daemon
+     * presents the credential at the desk that minted it. This is the one
+     * home-scoped act with an honest local answer; badges and attestations
+     * have none and stay behind that seam.
+     *
+     * The birth default here answers nothing and must STAY that way: enrolling
+     * at a home is not a gesture that repoints a machine.
+     */
+    const projectId = await acmeCanvas();
+    const minted = await atHome("pass", "--json");
+    const { address } = JSON.parse(minted.stdout) as { address: string };
+    await fs.writeFile(
+      path.join(awayDir, "config.json"),
+      JSON.stringify({ home: "http://127.0.0.1:9" }),
+    );
+
+    const done = await away("setup", "--no-install", "--no-open", "--json", address);
+    expect(done.code, done.stderr).toBe(0);
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+
+    // The pass was spent at the home that minted it: the identity it carried
+    // is on this machine, which only the minting desk could have handed over.
+    const identity = JSON.parse(
+      await fs.readFile(path.join(awayDir, "identity.json"), "utf8"),
+    ) as { name?: string };
+    expect(identity.name).toBeTruthy();
+    expect(report.canvas).toBe(canvasUrl(`http://127.0.0.1:${homePort}`, projectId));
+
+    // And the birth default never moved — the machine is enrolled at a second
+    // home without a single directory bound to the first one changing.
+    expect(JSON.parse(await fs.readFile(path.join(awayDir, "config.json"), "utf8"))).toEqual({
+      home: "http://127.0.0.1:9",
     });
   }, 120_000);
 

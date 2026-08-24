@@ -194,12 +194,21 @@ it render as cards that fly the reader to the item. Treat it as the primary
 conversation — reply to main-thread asks in the main thread, and keep
 item-specific critique on the item's own anchored threads.
 
-## When the daemon is a replica
+## When a canvas's home is somewhere else
 
-`isocan status` may say **`role: replica of <address>`**. Then the daemon on
-this machine is not the canvas's home — it holds a synced copy, and the home
-at that address is the single writer of everything. Three things change for
-you, and nothing else does:
+**The home is a property of the canvas, not of this machine.** One daemon can
+be the home of the canvas in one directory and a replica for the canvas in the
+next; `isocan status`'s role line says which, and on a mixed machine it says
+all of it at once:
+
+```
+role: home of 2 canvases; replica of https://dev.isocan.io (3); new canvases → https://dev.isocan.io
+```
+
+`isocan home` lists it per canvas — which of your canvases live here, which
+live at a home, and whether that home is answering. When a canvas's home is
+elsewhere, that home is the single writer of everything on it. Four things
+change for you on that canvas, and nothing else does:
 
 - **Every write travels.** Adding an item, posting a comment, `undo` — each
   goes to the home and comes back, so a write can now fail for a reason that
@@ -207,10 +216,11 @@ you, and nothing else does:
   the home could not be reached and **your write did not happen**. Nothing is
   queued and nothing will retry it for you: say so, and try again when the
   network is back. Do not paper over it by working around the canvas.
-- **The page is at the home, not here.** `isocan open` prints the home's
-  address; `http://127.0.0.1:4441` serves you ops and answers a browser with a
-  404 that names the home. If you are telling a person where to look, give
-  them the address `isocan open` printed.
+- **The page is at that canvas's home, not here.** `isocan open` prints the
+  right address for the canvas you are on; `http://127.0.0.1:4441` serves you
+  ops and answers a browser with a 404 naming that canvas's home. A canvas
+  whose home IS this machine opens right here. Either way, the address to give
+  a person is the one `isocan open` printed — never one you assembled.
 - **Reads are local and instant.** Everything you look at — `ls`, `show`,
   `comment list`, `wait` — is answered from this machine's copy, and the
   copy is kept current by a live connection. `isocan who` shows everyone on
@@ -225,33 +235,41 @@ you, and nothing else does:
   here, ask the person for a pass; do not go looking for a way to enumerate
   the home.
 
-`.isocan/project.json` records the home's address beside the canvas id. A
-directory whose marker names a DIFFERENT home than this daemon answers to is
-refused, loudly and by every command: moving a canvas between homes is a
-deliberate act, not something a command should do because you ran it in the
-wrong directory. Report it rather than editing the marker.
+`.isocan/project.json` records the canvas's home beside its id, and **the
+marker decides**. A directory whose marker names a home this machine has never
+been to is not refused — it is JOINED: the daemon opens a link to that address,
+the far door decides whether this machine may have the canvas, and nothing else
+here moves. What IS refused, loudly and by every command, is a marker that
+disagrees with what this machine has already recorded about that canvas —
+because moving a canvas between homes is a deliberate act (re-homing), not
+something a command should do because you ran it in the wrong directory. Report
+that rather than editing the marker.
 
-**`isocan home`** is which home this daemon answers to:
+**`isocan home`** is where a canvas born here is born, and where each canvas
+already here lives:
 
 ```sh
-isocan home                    # a home, or a replica of what — and whether
-                               # that home is answering right now
-isocan home https://isocan.io  # answer to that home from now on: writes the
-                               # setting, restarts the daemon so it takes
-isocan home --clear            # answer to nobody — be a home again
+isocan home                    # the birth default, plus every canvas and its
+                               # home — and whether that home is answering
+isocan home https://isocan.io  # canvases born here go there from now on:
+                               # writes the setting, restarts the daemon
+isocan home --clear            # canvases born here stay here from now on
 ```
 
 It is **configuration, not a per-command flag**: there is no way to point one
-command at one home and the next at another, and there should not be. Setting
-a home checks the address answers before committing to it, because a replica
-that cannot reach its home refuses every write — `--force` sets it anyway if
+command at one home and the next at another, and there should not be. What
+travels with a birth is the directory's committed marker, never a flag. Setting
+it checks the address answers before committing to it, because a canvas that
+lives at an unreachable home refuses every write — `--force` sets it anyway if
 that is genuinely what was meant.
 
-**Do not run it on your own initiative.** Which home a machine answers to is
-the person's decision about their machine, and setting it moves where every
-canvas here is written. Run it when they ask you to point their daemon
-somewhere, and say on the thread that you did. Reading it — plain
-`isocan home` — is free and often the answer to "why was my write refused".
+**Do not run it on your own initiative.** Where a person's canvases are born is
+their decision about their machine. It **moves nothing that already exists** —
+setting or clearing it changes only where the NEXT canvas goes, and every
+canvas already at a home still answers to that home — but it is still theirs to
+decide. Run it when they ask, and say on the thread that you did. Reading it —
+plain `isocan home` — is free and often the answer to "why was my write
+refused".
 
 ## Sharing a canvas
 
@@ -368,11 +386,13 @@ npx github:dglazkov/isocan#release setup https://<home>/p/<canvas>#<pass>
 isocan setup https://<home>/p/<canvas>          # no pass: arrive under the link grant
 ```
 
-It points this daemon at that home, redeems the pass so this machine is
+It joins that canvas from that home, redeems the pass so this machine is
 admitted and knows whose it is, writes `.isocan/project.json` with the canvas
 id and the home's address, and waits for the canvas to actually replicate
-before telling you it did. `isocan setup <directory>` still means what it
-always did.
+before telling you it did. On a machine that has no birth default yet it also
+makes that home the place new canvases are born, and says so; a machine that
+already has one keeps it, and joining moves nothing else. `isocan setup
+<directory>` still means what it always did.
 
 **`isocan open` already does this for the browser**, and you do not have to
 think about it: it hands the browser it spawns a pass so the tab arrives as

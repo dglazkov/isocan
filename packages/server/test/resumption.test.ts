@@ -61,7 +61,7 @@ async function boot(attester: typeof auth | null): Promise<void> {
   daemon = await startDaemon({
     port: 0,
     home,
-    homeUrl: null,
+    birthHome: null,
     auth: attester,
     signingKeys: async () => keys,
   });

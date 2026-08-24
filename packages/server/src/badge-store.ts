@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import type { DoorResponse } from "@isocan/core";
-import { BADGE_SCHEME, DOOR_ROUTE, formatBadgeToken } from "@isocan/core";
+import { BADGE_SCHEME, DOOR_ROUTE, formatBadgeToken, normalizeHomeUrl } from "@isocan/core";
+import { writeFileAtomic } from "./fsutil.ts";
 import { identityFile } from "./paths.ts";
 
 /**
@@ -30,6 +31,22 @@ import { identityFile } from "./paths.ts";
  * free: a machine holds its badge at `http://127.0.0.1:4441` (its own daemon)
  * AND its badge at `https://isocan.io` (the daemon's home) in the same file,
  * under two keys, with neither aware of the other.
+ *
+ * **From phase 10.3 the key is NORMALIZED** (`normalizeHomeUrl`), and here
+ * rather than at each call site — house rule 4's ordinary argument, sharpened
+ * by what this file already says: two answers to "which credential is in that
+ * file" on one machine is the divergence the module exists to prevent, and a
+ * trailing slash would have been exactly that. A daemon holds one badge per
+ * home now, so an address that spelled itself two ways would knock on one
+ * door twice and hold two badges, of which only one carries the admissions.
+ *
+ * **No on-disk migration, and that is measured rather than assumed.** The
+ * `auth` block was already keyed per address, and the only spellings that
+ * CHANGE under normalization are a trailing slash and a mixed-case host. A
+ * machine whose config carried one re-badges exactly once: the fresh badge
+ * holds no admissions, the local half of the sweep keeps every canvas, and the
+ * machine is let back in by a pass. That cost belongs in 10.5's upgrade doc,
+ * not in engineering around it.
  */
 export interface StoredBadge {
   badgeId: string;
@@ -49,30 +66,60 @@ export async function readBadge(home: string, base: string): Promise<StoredBadge
     const raw = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as {
       auth?: Record<string, StoredBadge>;
     };
-    const badge = raw.auth?.[base];
+    const badge = raw.auth?.[normalizeHomeUrl(base)];
     return badge?.badgeId && badge.secret ? badge : null;
   } catch {
     return null;
   }
 }
 
+/**
+ * Badge writes, serialized within this process.
+ *
+ * A read-modify-write on one file, which was safe while one thing in a daemon
+ * ever wrote it. Phase 10.3 put several home links in one process, each
+ * fetching its own badge, and two of them badging at the same moment BOTH read
+ * the pre-write file and the second write erased the first's key — a machine
+ * that had been let into a canvas at one home losing that badge, silently, and
+ * re-badging into an admissionless one at the next boot.
+ *
+ * A chain rather than a lock file: the writers are all in this process (the
+ * CLI writes its local badge, the daemon writes its home badges), badge writes
+ * are rare, and a cross-process lock would be ceremony for a file two
+ * processes touch minutes apart. The honest limit, stated: a CLI and a daemon
+ * writing in the same millisecond can still clobber, exactly as before, and
+ * the cost is one re-badge.
+ */
+let badgeWrites: Promise<unknown> = Promise.resolve();
+
 /** Read-merge, never clobber: `identity.json` also holds the human's name,
  * and a badge write that rewrote the file from scratch would delete it (and
  * the mirror bug — `isocan identity --name` deleting the badge — is why
  * `writeIdentity` merges too). The same argument now covers a second badge:
- * a daemon writing its home badge must not erase the CLI's local one. */
+ * a daemon writing its home badge must not erase the CLI's local one, nor its
+ * own badge at another home. */
 export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
-  await fs.mkdir(home, { recursive: true });
-  let current: Record<string, unknown> = {};
-  try {
-    current = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as Record<string, unknown>;
-  } catch {
-    // No identity yet: an agent-only machine gets a file holding just its
-    // badge. `readIdentity` returns null without id/name, so nothing
-    // mis-resolves.
-  }
-  const auth = { ...((current.auth as Record<string, StoredBadge>) ?? {}), [base]: badge };
-  await fs.writeFile(identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
+  const work = badgeWrites.then(async () => {
+    await fs.mkdir(home, { recursive: true });
+    let current: Record<string, unknown> = {};
+    try {
+      current = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as Record<string, unknown>;
+    } catch {
+      // No identity yet: an agent-only machine gets a file holding just its
+      // badge. `readIdentity` returns null without id/name, so nothing
+      // mis-resolves.
+    }
+    const auth = {
+      ...((current.auth as Record<string, StoredBadge>) ?? {}),
+      [normalizeHomeUrl(base)]: badge,
+    };
+    // Atomic, for `homes.json`'s reason and with more at stake: this file
+    // holds the human's name AND every badge, a torn read of it is a machine
+    // with no identity and no credentials, and the daemon reads it at boot.
+    await writeFileAtomic(identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
+  });
+  badgeWrites = work.catch(() => {});
+  return work;
 }
 
 /**

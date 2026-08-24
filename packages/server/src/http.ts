@@ -18,6 +18,7 @@ import type {
   GrantsResponse,
   KillBadgeResponse,
   JoinCanvasRequest,
+  HomesResponse,
   JoinCanvasResponse,
   MintPassRequest,
   MintPassResponse,
@@ -39,7 +40,9 @@ import {
   FILENAME_HEADER,
   FREE_NAME_ROUTE,
   grantSubjectRefusal,
+  CANVAS_PATH_PREFIX,
   HOME_JOIN_ROUTE,
+  HOMES_ROUTE,
   isLive,
   isOpId,
   newId,
@@ -49,6 +52,8 @@ import {
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
+  AMBIGUOUS_HOME,
+  normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   PROJECTS_REACH_PARAM,
   SHELF,
@@ -79,7 +84,8 @@ import {
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
-import { HomeRefusedError, HomeUnreachableError, type HomeConnection } from "./home-link.ts";
+import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
+import type { HomeLinks } from "./home-links.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -214,15 +220,22 @@ function isOpen(method: string, pathname: string): boolean {
 }
 
 export interface RouteOptions {
-  /** The home this daemon replicates, or null when it is a home itself. The
-   * only thing it decides here is whether pages are served at all — see
-   * `registerStaticWebApp` and `registerHomeElsewhere` — plus saying so on the
-   * health route, which is how a CLI learns there are no pages here. */
-  homeUrl?: string | null;
-  /** The live connection to that home. Routes need it for exactly one thing:
-   * bytes this replica has never held (see the blob GET). Writes reach it
-   * through the engine, never from here. */
-  home?: HomeConnection | null;
+  /** Where a canvas born here, naming nothing, is born — or null when it stays
+   * here. What the health route reports as `home` (redefined in phase 10.3,
+   * because `stalenessOf` and older CLIs read that key and the birth default
+   * is the one whole-daemon answer that still exists), and what a `POST
+   * /api/home/join` with no address falls back to. */
+  birthHome?: string | null;
+  /**
+   * **Every home this daemon dials, and which canvas belongs to which.**
+   *
+   * It decides three things here: which canvas's writes and reads forward and
+   * to where, whether a given page is served at this origin at all (see
+   * `registerPages` — the one-origin rule is per canvas now), and what `GET
+   * /api/homes` answers. Absent means a daemon that is the home of everything
+   * it holds, which is every daemon a test constructs without one.
+   */
+  homes?: HomeLinks | null;
   /**
    * **The attester this home has borrowed**, or null when it has borrowed
    * none — which is every local daemon and is not a defect.
@@ -360,13 +373,13 @@ export function registerRoutes(
    * Nothing matched. **Under `/api/`, say so in JSON with a code** — phase
    * 7.5's open finding, closed (see `apiNotFound`).
    *
-   * This handler is where an unmatched non-GET lands, and — on a daemon with
-   * no built web app — an unmatched GET too, because `registerStaticWebApp`
-   * registers nothing when `packages/web/dist` is absent. The two `GET /*`
-   * handlers below shadow it for GETs when they ARE registered, so each of
-   * them takes the same `/api/` branch: three call sites, one answer, because
-   * a 404 that differs by which fallback caught it is a 404 nobody can reason
-   * about.
+   * This handler is where an unmatched non-GET lands. An unmatched GET is
+   * `registerPages`'s, which is always registered now (phase 10.3 — a daemon
+   * is no longer one of two things, so what it does with a page request is one
+   * handler that asks per canvas) — and which takes the same `/api/` branch,
+   * and answers this same sentence when there is no built web app to serve.
+   * Two call sites, one answer, because a 404 that differs by which fallback
+   * caught it is a 404 nobody can reason about.
    *
    * Non-`/api/` paths keep the plain 404 they always had, in this codebase's
    * `{error}` shape rather than Fastify's own — the SPA fallback for a person
@@ -384,12 +397,22 @@ export function registerRoutes(
     ok: true,
     pid: process.pid,
     startedAt: STARTED_AT,
-    // Which of the two things this daemon is, on the one call every client
-    // already makes. A replica serves no pages, so `isocan open` and `isocan
-    // setup` have to send a person somewhere else — and the marker a new
-    // canvas gets has to carry the address (offline-birth's "birth writes a
-    // promise"). Both need to find it out without a second route.
-    ...(options.homeUrl ? { home: options.homeUrl } : {}),
+    /**
+     * **The birth default**, on the one call every client already makes — and
+     * the marker a new canvas gets carries exactly this address
+     * (offline-birth's "birth writes a promise").
+     *
+     * The key survived phase 10.3 with its meaning redefined rather than being
+     * dropped or renamed. It used to be "the home this daemon answers to",
+     * which is now a per-canvas question with no whole-daemon answer; the
+     * birth default is the one whole-daemon answer that still exists, and it
+     * is the one this key's readers want. `stalenessOf` reads this body, and
+     * so does every CLI older than this daemon — dropping the key would break
+     * them, and the transitional wrongness (an old CLI printing this address
+     * for a canvas that does not live there) is the acceptable half of that
+     * trade, made deliberately. Per-canvas questions go to `GET /api/homes`.
+     */
+    ...(options.birthHome ? { home: options.birthHome } : {}),
     ...buildStamp(),
   });
   for (const route of HEALTH_ROUTES) app.get(route, health);
@@ -569,6 +592,26 @@ export function registerRoutes(
     if (body.opId !== undefined && !isOpId(body.opId)) {
       return reply.status(400).send({ error: `not an op id: ${body.opId}`, code: "bad-op" });
     }
+    /**
+     * **`home` is a birth's address and nothing else** (phase 10.3), refused
+     * here rather than quietly ignored below.
+     *
+     * The whole safety of putting an address beside the op is that it can only
+     * ever say "the canvas I am creating right now is born at X" — write-once,
+     * about one canvas, unable to re-point anything that exists. An address on
+     * an `item.move` would mean nothing today and would be read as meaning
+     * something the day somebody wired it up, which is how a bounded surface
+     * stops being bounded. Ignoring it silently is the cheerful wrong answer;
+     * saying so is the refusal.
+     */
+    if (body.home !== undefined && body.op?.type !== "project.create") {
+      return reply.status(400).send({
+        error:
+          "`home` says where a canvas is being BORN, so it belongs only on project.create — " +
+          "a canvas that already exists has a home, and no op re-points it (that is re-homing)",
+        code: "bad-op",
+      });
+    }
     if (body.op?.type === "actor.claim") {
       // A claim resolves who is speaking, so it is the one op that arrives
       // without an actor; the response envelope carries the answer. It is
@@ -746,14 +789,51 @@ export function registerRoutes(
     // must not silently hand a replica the wide list under a name that reads
     // like the narrow one — it is spelled in exactly one place
     // (`projectsRoute`) so that a caller cannot arrive here with a near-miss.
-    const narrow = query[PROJECTS_REACH_PARAM] === "admitted";
+    const reach = query[PROJECTS_REACH_PARAM];
+    const narrow = reach === "admitted";
+    /**
+     * `?reach=here` — of the ones this badge may see, the canvases **this
+     * daemon is the home of** (phase 10.3). What the web app's project list
+     * asks, because its links are client-side navigations that never reach the
+     * per-canvas page guard: without this the local origin would render a replica of
+     * a canvas that lives at dev, giving that canvas two doors, two cookies,
+     * two service workers and two browser replicas.
+     *
+     * It stacks ON the admissible answer rather than replacing it — being the
+     * home of a canvas does not admit anybody to it, and a route that answered
+     * "here" without the door's test would be a page server handing out a
+     * roster of the machine.
+     */
+    const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const visible: Project[] = [];
     for (const project of await engine.listProjects()) {
+      if (hereOnly && (options.homes?.homeOf(project.id) ?? null) !== null) continue;
       if (admitted.has(project.id)) visible.push(project);
       else if (!narrow && (await admittingGrant(desk, project.id, badge))) visible.push(project);
     }
     return visible;
+  });
+
+  /**
+   * **Which canvas lives where** — one read, and the only route that can
+   * answer a per-canvas home question (phase 10.3).
+   *
+   * See `HOMES_ROUTE` in core for the four callers this exists for. The
+   * reachability figures come from what each link last observed on its own
+   * poll rather than from a probe made here: `isocan status` reads this, an
+   * agent runs `isocan status` dozens of times, and a network round trip per
+   * home per invocation is a cost nobody asked for.
+   */
+  app.get(HOMES_ROUTE, async () => {
+    return {
+      birth: options.birthHome ?? null,
+      canvases: options.homes?.assignments() ?? {},
+      links: (options.homes?.links() ?? []).map((link) => ({
+        url: link.homeUrl,
+        reachable: link.answering,
+      })),
+    } satisfies HomesResponse;
   });
 
   app.get("/api/projects/:id", async (req) => {
@@ -785,7 +865,11 @@ export function registerRoutes(
 
   app.get("/api/projects/:id/grants", async (req) => {
     const { id } = req.params as { id: string };
-    if (options.home) return options.home.grants(id);
+    // THIS canvas's home (phase 10.3): a grant is desk state and the row
+    // that decides who may enter lives at the home that answers the door for
+    // this canvas, which under many homes is a per-canvas question.
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.grants(id);
     await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
     return { grants: liveGrants(await desk.grantsFor(id)) } satisfies GrantsResponse;
   });
@@ -828,7 +912,8 @@ export function registerRoutes(
     // policy that is about to change — refusing an invitation the home would
     // have accepted, on the strength of its own configuration. Same reason
     // `isocan share <email>` has no client-side "not yet".
-    if (options.home) return options.home.createGrant(id, subject);
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.createGrant(id, subject);
     const unverifiable = attesterRefusal(subject, attesters);
     if (unverifiable) {
       return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
@@ -875,7 +960,8 @@ export function registerRoutes(
    */
   app.delete("/api/projects/:id/grants/:grantId", async (req, reply) => {
     const { id, grantId } = req.params as { id: string; grantId: string };
-    if (options.home) return options.home.revokeGrant(id, grantId);
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.revokeGrant(id, grantId);
     await engine.getSnapshot(id);
     // Read through this canvas's own rows, so a grant id belonging to another
     // canvas cannot be revoked through a canvas the caller happens to be in.
@@ -925,8 +1011,11 @@ export function registerRoutes(
    * A badge with no claims sees exactly itself, which is correct: it has no
    * identity in common with anything, so nothing else is one of its surfaces.
    */
-  app.get(BADGES_ROUTE, async (req) => {
-    if (options.home) return options.home.badges();
+  app.get(BADGES_ROUTE, async (req, reply) => {
+    const stuck = refuseAmbiguousHome(reply, options.homes, "list your surfaces");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.badges();
     return { badges: await mySurfaces(desk, engine, req.badge!) } satisfies BadgesResponse;
   });
 
@@ -941,7 +1030,10 @@ export function registerRoutes(
    */
   app.delete(`${BADGES_ROUTE}/:badgeId`, async (req, reply) => {
     const { badgeId } = req.params as { badgeId: string };
-    if (options.home) return options.home.killBadge(badgeId);
+    const stuck = refuseAmbiguousHome(reply, options.homes, "end a badge");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.killBadge(badgeId);
     const mine = await mySurfaces(desk, engine, req.badge!);
     const target = mine.find((row) => row.badgeId === badgeId);
     if (!target) {
@@ -982,8 +1074,17 @@ export function registerRoutes(
   // its own desk would have proved something to the only party that was
   // already trusting it, while the home went on refusing.
 
-  app.get(ATTEST_ROUTE, async (req) => {
-    if (options.home) return options.home.attestOffer();
+  app.get(ATTEST_ROUTE, async (req, reply) => {
+    // Refused on an ambiguous rig like the POST beside it, and for the half of
+    // this answer people forget it carries: not just "what can be verified"
+    // but "what has this badge already proved", which is a fact about one
+    // home's desk. Its caller is a dialog a person opened on purpose, and it
+    // already renders the refusal it is handed — so this arrives as a sentence
+    // in the dialog rather than a broken page load.
+    const stuck = refuseAmbiguousHome(reply, options.homes, "ask what you have proved");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.attestOffer();
     return {
       attesters,
       auth,
@@ -1012,7 +1113,10 @@ export function registerRoutes(
    * never read it, and nobody could say why.
    */
   app.post(ATTEST_ROUTE, async (req, reply) => {
-    if (options.home) return options.home.attest((req.body ?? {}) as AttestRequest);
+    const stuck = refuseAmbiguousHome(reply, options.homes, "write an attestation");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.attest((req.body ?? {}) as AttestRequest);
     if (!auth) {
       return reply.status(400).send({
         error:
@@ -1092,12 +1196,15 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<MintPassRequest>;
     const actorId = typeof body.actorId === "string" && body.actorId ? body.actorId : undefined;
     if (actorId) await engine.requireActor(req.badge!.badgeId, actorId);
-    if (options.home) {
+    // THIS canvas's home: a pass admits to one canvas, and single-use is only
+    // a property of the desk that holds the row.
+    const home = options.homes?.for(id) ?? null;
+    if (home) {
       // The name rides up with the actor so the home can vouch for an actor it
       // has never heard of — `HomeLink.mintPass` claims before it asks, and
       // `reincarnate` refuses an unknown `as` with no name to go on.
       const names = actorId ? await engine.actorNames() : {};
-      return options.home.mintPass(
+      return home.mintPass(
         id,
         actorId ? { id: actorId, name: names[actorId] ?? "" } : undefined,
       );
@@ -1146,14 +1253,46 @@ export function registerRoutes(
    * different sentence, pointing at a badge id that means nothing on this
    * machine.
    */
-  app.post(PASS_REDEEM_ROUTE, async (req) => {
+  app.post(PASS_REDEEM_ROUTE, async (req, reply) => {
     const body = (req.body ?? {}) as Partial<RedeemPassRequest>;
     // No special case for a missing token: `redeemPass` parses it, and an
     // empty string is not a pass in exactly the way a mangled one is not.
     const token = typeof body.token === "string" ? body.token : "";
     const badge = req.badge!;
-    if (options.home) {
-      const answer = await options.home.redeemPass(token);
+    /**
+     * **Which desk holds this pass's row.**
+     *
+     * `home` when the caller named one, because a pass is never handed over
+     * alone — it arrives as `address#pass`, so the caller that has the token
+     * has the address too (see `RedeemPassRequest.home`). This is the one act
+     * `homeScoped` used to swallow that has a right answer, and presenting a
+     * credential at the wrong desk reports a valid pass as invalid.
+     *
+     * **Never this daemon's own address**, or a daemon asked to redeem a pass
+     * minted at itself would open a link to itself and become its own
+     * replica. The CLI already declines to send its own base; this is the
+     * server refusing to be talked into it by anybody else, which it can do
+     * because `Host` is the one address a request always carries.
+     *
+     * Absent — every caller older than the field, and the browser at a home —
+     * falls back to `homeScoped`, whose seam is named where it lives.
+     */
+    const asked = typeof body.home === "string" ? body.home.trim() : "";
+    const askedHost = asked === "" ? null : hostOf(asked);
+    const self = askedHost !== null && askedHost === String(req.headers.host ?? "");
+    if (asked === "") {
+      // Only when the caller named nothing: an address in the request IS the
+      // answer, so a pass pasted with its address is never ambiguous. This is
+      // the older caller, and the browser at a home.
+      const stuck = refuseAmbiguousHome(reply, options.homes, "redeem a pass");
+      if (stuck) return stuck;
+    }
+    const home =
+      asked !== "" && !self
+        ? (options.homes?.linkFor(normalizeHomeUrl(asked)) ?? null)
+        : (options.homes?.homeScoped() ?? null);
+    if (home) {
+      const answer = await home.redeemPass(token);
       if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);
       return answer;
     }
@@ -1191,6 +1330,21 @@ export function registerRoutes(
    * caller can do with this route is ask its own machine to go and fetch a
    * canvas whose id it already knows — and knowing the id is exactly what the
    * link grant it will be tested against is about.
+   *
+   * **Phase 10.3 made the address part of the request, and narrowed the
+   * refusal to match.** The good case — the one the phase exists for — is a
+   * marker naming a home this daemon has never dialled: a repo cloned onto a
+   * second machine whose `.isocan/project.json` says the canvas lives at dev.
+   * That used to be refused outright ("this daemon answers to X and that
+   * canvas lives at Y"), because a daemon had one home and joining meant
+   * re-pointing the whole machine. It does not any more: a new link is opened,
+   * the badge comes from `identity.json`'s `auth` block or is knocked for, the
+   * home runs its own door test, and the row is written. Nothing else on this
+   * machine moves.
+   *
+   * So the refusal is now only about having nowhere at all to ask: no address
+   * named AND no birth default. A door that refuses passes its own status and
+   * code back untouched, as it always did.
    */
   app.post(HOME_JOIN_ROUTE, async (req, reply) => {
     const body = (req.body ?? {}) as Partial<JoinCanvasRequest>;
@@ -1198,15 +1352,35 @@ export function registerRoutes(
     if (!projectId) {
       return reply.status(400).send({ error: "projectId is required", code: "bad-request" });
     }
-    if (!options.home) {
+    const named = typeof body.home === "string" && body.home.trim() ? body.home.trim() : null;
+    const address = named ?? options.birthHome ?? null;
+    if (!address || !options.homes) {
       return reply.status(409).send({
         error:
-          "this daemon is a home, not a replica — there is nowhere to fetch a canvas from. " +
-          "`isocan home <url>` points it at one.",
+          "no home was named and this daemon has no birth default, so there is nowhere to " +
+          "fetch a canvas from. Say which home (the canvas's marker carries the address), " +
+          "or `isocan home <url>` to set where canvases born here go.",
         code: "not-a-replica",
       });
     }
-    return { project: await options.home.join(projectId) } satisfies JoinCanvasResponse;
+    const home = options.homes.linkFor(address);
+    let project: Project;
+    try {
+      project = await home.join(projectId);
+    } catch (err) {
+      // A link opened for a join that failed has nothing to do and nobody to
+      // answer; leaving it polling would be a socket and a timer per typo'd
+      // address, forever.
+      await options.homes.dropIfUnused(address);
+      throw err;
+    }
+    // The row is written only once the home has said yes. A join that the door
+    // refused must leave nothing behind: a row naming a home that will not have
+    // this machine would send every later write to a 403, and the CLI would
+    // have to un-write it — which is the CLI writing `homes.json`, which is
+    // exactly what ruling 1 forbids.
+    await options.homes.bind(projectId, address);
+    return { project } satisfies JoinCanvasResponse;
   });
 
   app.get("/api/projects/:id/canvas", async (req) => {
@@ -1481,9 +1655,10 @@ export function registerRoutes(
      * Range requests go up with the request, so seeking a video does not drag
      * the whole object across twice.
      */
-    if (!meta && options.home) {
+    const blobHome = options.homes?.for(id) ?? null;
+    if (!meta && blobHome) {
       const range = parseRange(req.headers.range, Number.MAX_SAFE_INTEGER);
-      const remote = await options.home.openBlob(
+      const remote = await blobHome.openBlob(
         id,
         hash,
         range && range !== "unsatisfiable" ? range : undefined,
@@ -1527,13 +1702,8 @@ export function registerRoutes(
     return reply.header("Content-Length", String(meta.size)).send(stream);
   });
 
-  // The one-origin rule, in one branch. A daemon that knows a home is a
-  // REPLICA: it serves ops to CLIs and never pages to persons, so the page
-  // server — and, with it, the cookie badge the page server mints — does not
-  // exist here at all. A daemon that knows no home is a home, which is every
-  // daemon in this repo today and stays exactly as it was.
-  if (options.homeUrl) registerHomeElsewhere(app, options.homeUrl);
-  else registerStaticWebApp(app, desk);
+  // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
+  registerPages(app, desk, options);
 }
 
 /**
@@ -1722,11 +1892,97 @@ function loopbackBound(app: FastifyInstance): boolean {
   return address.address === "127.0.0.1" || address.address === "::1";
 }
 
-/** Serve packages/web/dist (if built) so `isocan open` works without Vite. */
-function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
+/**
+ * **Which pages this origin serves, and which it signposts** — the one-origin
+ * rule, made per-canvas by phase 10.3.
+ *
+ * It used to be one branch on one field: a daemon with a home configured
+ * served no pages at all, a daemon without one served everything. Under many
+ * homes a daemon is simultaneously the home of canvas 1 and a replica for
+ * canvases 2 and 3, and that branch has no input.
+ *
+ * **The rule the one-origin constraint actually is:** a given CANVAS must have
+ * exactly one door, so that per-viewer state for it — the badge cookie, the
+ * service worker registration, the phase-10 IndexedDB replica — lives in one
+ * origin's storage. A local daemon serving the shell for a canvas whose home
+ * is dev.isocan.io would give that canvas two doors, two cookies, two service
+ * workers and two browser replicas, the local one stale by construction:
+ * `local-bridge.md`'s own worst case, *"two surfaces agreeing with each other
+ * and both wrong."* But a canvas whose home IS this daemon has exactly one
+ * origin already, and refusing to serve it would make every locally-born
+ * canvas unopenable in a browser — which phase 10.5 explicitly promises does
+ * not happen to Dion.
+ *
+ * So: **a daemon serves the app for the canvases whose home it is, and for no
+ * others.** `GET /p/<id>` serves the shell when `homes.json` says that canvas
+ * is local and signposts its actual home when it is not. `/` and the assets
+ * are served unless this daemon is a PURE replica — a birth default set and
+ * not one canvas of its own — which keeps a clean machine with no canvases
+ * serving the app, and a fresh `isocan setup` depends on that.
+ *
+ * A pure home is byte-for-byte today's behaviour. A pure replica is
+ * byte-for-byte today's behaviour. A mixed rig gets pages for what it hosts
+ * and a legible signpost for what it does not — and that signpost is strictly
+ * better than the one it replaces, which named the daemon's one home whether
+ * or not the canvas lived there.
+ *
+ * Two rejected alternatives, recorded: "serve pages only when EVERY canvas is
+ * local" stops Dion's rig serving pages the instant he joins one dev canvas,
+ * which is the exact surprise 10.5 exists to prevent; "always serve pages"
+ * abandons the rule.
+ *
+ * **One cost, recorded rather than waved through.** The SPA fallback mints a
+ * cookie badge, so a mixed rig now mints them where a replica minted none. No
+ * new authority — a person at the local origin already reaches everything on
+ * that machine through the CLI — but the sentence that used to justify the
+ * old shape ("a daemon that no longer serves pages must not go on minting
+ * cookie badges for people it is not serving") has changed and is edited below
+ * rather than left standing false: a daemon mints them only where it is
+ * somebody's home.
+ */
+function registerPages(app: FastifyInstance, desk: Desk, options: RouteOptions): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(here, "../../web/dist");
-  if (!existsSync(path.join(dist, "index.html"))) return;
+  const built = existsSync(path.join(dist, "index.html"));
+
+  /**
+   * Is this daemon a PURE replica — a birth default set, and not one canvas of
+   * its own?
+   *
+   * Asked per request rather than computed at registration, because both
+   * inputs change while the process runs: a canvas can be born locally, and a
+   * canvas can be deleted. A boot-time answer would have a daemon that gained
+   * its first local canvas go on refusing to serve the page for it until
+   * somebody restarted, which is the shape of bug this codebase calls
+   * cheerful.
+   */
+  const pureReplica = (): boolean => {
+    if (!options.birthHome) return false;
+    const rows = options.homes?.assignments() ?? {};
+    return !Object.values(rows).some((home) => home === null);
+  };
+
+  /**
+   * Where the canvas this request is about actually lives, or null when this
+   * origin is the right one to answer.
+   *
+   * A path that names no canvas (`/`, an asset, anything the SPA routes
+   * client-side) is judged by the daemon rather than by a canvas: a pure
+   * replica has no pages of its own to serve and says so, and everybody else
+   * serves. A path that DOES name a canvas is judged by that canvas's row —
+   * including an id with no row at all, which means local, which is the same
+   * sentence the marker has always carried.
+   */
+  const elsewhere = (pathname: string): string | null => {
+    const canvasId = canvasIdIn(pathname);
+    if (canvasId === null) return pureReplica() ? (options.birthHome ?? null) : null;
+    const home = options.homes?.homeOf(canvasId) ?? null;
+    if (home !== null) return home;
+    // No row: this canvas is this daemon's — unless this daemon serves no
+    // pages at all, in which case there is nothing here to open and the birth
+    // default is the honest place to send a person.
+    return pureReplica() ? (options.birthHome ?? null) : null;
+  };
 
   const send = (reply: { header: Function; send: Function; type: Function }, file: string) => {
     const types: Record<string, string> = {
@@ -1743,11 +1999,26 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
 
   app.get("/*", async (req, reply) => {
     const url = (req.params as { "*": string })["*"] ?? "";
+    const pathname = (req.url ?? "/").split("?")[0]!;
     // An unmatched `/api/` path is a MISSING ROUTE, not a page. This one line
     // is phase 7.5's finding: without it the SPA fallback answers 200 and the
     // web app to `GET /api/actors/free-name`, and a replica negotiating with an
-    // older home is correct only because parsing HTML as JSON throws.
+    // older home is correct only because parsing HTML as JSON throws. It
+    // matters just as much on the signposting side: telling a CLI "this canvas
+    // lives at https://…" when it asked for a route that does not exist would
+    // be the cheerful wrong address again, in HTML this time.
     if (`/${url}`.startsWith("/api/")) return apiNotFound(reply, req.method, `/${url}`);
+
+    const home = elsewhere(pathname);
+    if (home !== null) return signpost(reply, req.headers.accept, home);
+
+    // Nothing built to serve. A daemon with no `packages/web/dist` has always
+    // answered the plain 404 its not-found handler answers; keep saying the
+    // same sentence rather than inventing a second one.
+    if (!built) {
+      return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
+    }
+
     const resolved = path.resolve(dist, url);
     if (resolved.startsWith(dist) && url && existsSync(resolved)) {
       return send(reply, resolved);
@@ -1759,6 +2030,14 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
     // way in. The guard matters: this handler is the SPA fallback for any
     // unmatched GET, so minting unconditionally would mint a badge per
     // stray asset request.
+    //
+    // Phase 10.3 changed the sentence this used to be paired with. It read "a
+    // daemon that no longer serves pages must not go on minting cookie badges
+    // for people it is not serving"; a daemon is no longer one of two things,
+    // so it reads: **a daemon mints them only where it is somebody's home**,
+    // which is exactly where this line can be reached from — the signpost
+    // above returns first for every canvas that lives elsewhere, and for every
+    // request at all on a pure replica.
     if (!req.badge) {
       const { record, token } = mintBadge("cookie");
       await desk.put(record);
@@ -1769,21 +2048,86 @@ function registerStaticWebApp(app: FastifyInstance, desk: Desk): void {
   });
 }
 
+/**
+ * The canvas a page request is about, or null when it is about no canvas.
+ *
+ * Built from `canvasPath` in core rather than from a literal `/p/`, because
+ * that is the whole reason `address.ts` exists: the `/c/` bug was one spelling
+ * of a canvas address drifting from another, and a guard that knew about the
+ * prefix independently would be that bug wearing a different hat.
+ */
+/**
+ * **Refuse a home-scoped act this daemon cannot place**, or null to carry on.
+ *
+ * Badges, attestations and (before it learned to carry its own address) pass
+ * redemption are facts about a DESK, and a desk belongs to a home. On a mixed
+ * rig with two homes and no birth default there is no true answer, and the
+ * available wrong ones are both bad: forwarding to whichever link sorted first
+ * asks a stranger's desk about you, and answering from the local desk hands
+ * back this laptop's own ledger as though it were the home's.
+ *
+ * The local-desk fallback is the one that would have shipped, because it is
+ * what the code did when a daemon had one home and the branch simply never
+ * fired. It is a short, plausible, completely wrong list delivered in silence
+ * — the cheerful wrong address, about a credential. So: 409, both homes named,
+ * and the person chooses.
+ */
+function refuseAmbiguousHome(
+  reply: FastifyReply,
+  homes: HomeLinks | null | undefined,
+  act: string,
+): FastifyReply | null {
+  const contested = homes?.homeScopedAmbiguity() ?? null;
+  if (contested === null) return null;
+  return reply.status(409).send({
+    error:
+      `this machine holds work at ${contested.join(" and ")}, and no birth default to break ` +
+      `the tie — so "${act}" has more than one true answer and none of them is this laptop's ` +
+      "own ledger. A badge belongs to a home's desk, and nothing in this request names one. " +
+      "Pick a home for new canvases (`isocan home <address>`) and this asks that one, or " +
+      "run the command against the home you mean.",
+    code: AMBIGUOUS_HOME,
+  });
+}
+
+/**
+ * The host[:port] of an address, or null when it is not one at all.
+ *
+ * Its one caller compares against a request's `Host` header, which carries no
+ * scheme — so this deliberately compares hosts and not origins. A daemon
+ * reached over http at the address a marker spells with https is still the
+ * same daemon, and the question here is only ever "is this me".
+ */
+function hostOf(address: string): string | null {
+  try {
+    return new URL(address).host || null;
+  } catch {
+    return null;
+  }
+}
+
+function canvasIdIn(pathname: string): string | null {
+  const parts = pathname.replace(/\/+$/, "").split("/");
+  if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
+  const id = decodeURIComponent(parts[2] ?? "");
+  return id || null;
+}
+
 /** The header a replica names its home in — a machine-readable copy of what
  * the body says, for a `curl` or a script that would rather not scrape prose.
  * Deliberately NOT `Location`, and deliberately not a 3xx: see below. */
 export const HOME_HEADER = "X-Isocan-Home";
 
 /**
- * What a replica answers a person with instead of the web app.
+ * What this origin answers a person with, when the canvas they asked for is
+ * not this daemon's to serve.
  *
- * This takes the place of `registerStaticWebApp` exactly — same `GET /*`
- * shape, same position as the last thing registered — so what a replica does
- * with an unmatched GET is *this* rather than whatever Fastify's default 404
- * happens to be. It replaces the page server's OTHER half too: the SPA
- * fallback is where a browser gets badged (`if (!req.badge) mintBadge`), and a
- * daemon that no longer serves pages must not go on minting cookie badges for
- * people it is not serving. That half is simply not here.
+ * It sits inside the one `GET /*` handler now (phase 10.3) rather than
+ * replacing it, because the answer is per canvas: the same daemon serves the
+ * app for what it hosts and shows this for what it does not. **The address it
+ * names is THAT CANVAS's home** — which is strictly better than what it
+ * replaced, a signpost that named the daemon's one configured home whether or
+ * not the canvas lived there.
  *
  * **404, and no redirect.** The canvas genuinely is not at this address, so
  * 404 is the true status; and a `Location` would send a browser to the home
@@ -1794,38 +2138,33 @@ export const HOME_HEADER = "X-Isocan-Home";
  * reads as a broken daemon, and this codebase's instinct is that a failure may
  * not be silent.
  */
-function registerHomeElsewhere(app: FastifyInstance, homeUrl: string): void {
-  app.get("/*", async (req, reply) => {
-    // The same `/api/` branch the page server takes. A replica answers API
-    // calls for real — it is a daemon, not a signpost — so an unmatched one
-    // here is a missing route, and telling a CLI "this canvas lives at
-    // https://…" when it asked for a route that does not exist would be the
-    // cheerful wrong address again, in HTML this time.
-    const pathname = (req.url ?? "/").split("?")[0]!;
-    if (pathname.startsWith("/api/")) return apiNotFound(reply, req.method, pathname);
-    const accepts = String(req.headers.accept ?? "");
-    reply.status(404).header(HOME_HEADER, homeUrl).header("Cache-Control", "no-store");
-    // A person gets a page; a script gets a line. Not content negotiation for
-    // its own sake — `curl` and an agent's `fetch` are the callers most likely
-    // to reach a local daemon by accident, and a wall of markup is a worse
-    // answer to them than one sentence.
-    if (!accepts.includes("text/html")) {
-      return reply
-        .type("text/plain; charset=utf-8")
-        .send(`this canvas lives at ${homeUrl} — open it there\n`);
-    }
-    const safe = escapeHtml(homeUrl);
-    return reply.type("text/html; charset=utf-8").send(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-        `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-        `<title>This canvas lives elsewhere</title></head><body>` +
-        `<h1>This canvas lives at <a href="${safe}">${safe}</a></h1>` +
-        `<p>Open it there. This is a local isocan daemon: it serves ops to the ` +
-        `<code>isocan</code> CLI and to agents on this machine, and never pages ` +
-        `to people — everyone sits at the one origin.</p>` +
-        `</body></html>\n`,
-    );
-  });
+function signpost(
+  reply: FastifyReply,
+  accept: string | undefined,
+  homeUrl: string,
+): FastifyReply {
+  const accepts = String(accept ?? "");
+  reply.status(404).header(HOME_HEADER, homeUrl).header("Cache-Control", "no-store");
+  // A person gets a page; a script gets a line. Not content negotiation for
+  // its own sake — `curl` and an agent's `fetch` are the callers most likely
+  // to reach a local daemon by accident, and a wall of markup is a worse
+  // answer to them than one sentence.
+  if (!accepts.includes("text/html")) {
+    return reply
+      .type("text/plain; charset=utf-8")
+      .send(`this canvas lives at ${homeUrl} — open it there\n`);
+  }
+  const safe = escapeHtml(homeUrl);
+  return reply.type("text/html; charset=utf-8").send(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>This canvas lives elsewhere</title></head><body>` +
+      `<h1>This canvas lives at <a href="${safe}">${safe}</a></h1>` +
+      `<p>Open it there. This is a local isocan daemon: it serves ops to the ` +
+      `<code>isocan</code> CLI and to agents on this machine, and serves pages ` +
+      `only for the canvases it is the home of — every canvas has one door.</p>` +
+      `</body></html>\n`,
+  );
 }
 
 /** Enough escaping for a configured address dropped into markup. The value

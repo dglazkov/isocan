@@ -72,3 +72,28 @@ export const commandFile = (home: string, name: string) =>
  * directory itself; this file only answers "where on disk does that canvas's
  * work live" without a filesystem crawl. */
 export const dirsFile = (home: string) => path.join(home, "dirs.json");
+/**
+ * **Which home each canvas on this machine belongs to** — `projectId →
+ * homeUrl | null`, phase 10.3's one new file.
+ *
+ * A sibling of `dirs.json` and `config.json` rather than anything inside
+ * `projects/<id>/`, and the placement carries the argument. `project.json` in
+ * there IS the replicated `Project` record, so a home written into it would be
+ * overwritten by the next snapshot from the home — on the machine that most
+ * needs it stable. A sidecar beside it would be a fifth file-shaped thing
+ * crossing the `Store` seam for data no backing has any business holding:
+ * this is a fact about ONE MACHINE's relationship to a canvas, not canvas
+ * state, and canvas state is the only thing that replicates.
+ *
+ * **Absent and `null` mean the same thing** — this daemon is that canvas's
+ * home. Both spellings exist because absent is what a pre-10.3 machine has
+ * and `null` is what a post-10.3 local birth writes, and collapsing them at
+ * read time is exactly what makes the upgrade a no-op for Dion.
+ *
+ * **Daemon-owned. The CLI never writes it.** `dirs.json` next door is a
+ * CLI-owned discovery cache and this is deliberately not modelled on it: this
+ * is routing state the daemon needs at boot with no CLI running, and two
+ * writers on one file is how a file drifts. The CLI's way to change a row is
+ * `POST /api/home/join`, which goes through the daemon like everything else.
+ */
+export const homesFile = (home: string) => path.join(home, "homes.json");

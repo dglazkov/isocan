@@ -14,7 +14,7 @@ import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
-import { HomeLink } from "./home-link.ts";
+import { HomeLinks } from "./home-links.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -39,32 +39,38 @@ export interface DaemonOptions {
    */
   host?: string;
   /**
-   * The home this daemon is a REPLICA of — `https://isocan.io`. Absent (the
-   * default, and every daemon in this repo today) means this daemon IS a home.
+   * **Where a canvas born on this machine, naming nothing, is born** —
+   * `https://isocan.io`. Absent (the default, and every daemon in this repo
+   * today) means a canvas born here stays here.
    *
    * Read from `ISOCAN_HOME_URL`, then `~/.isocan/config.json`'s `home`, by
    * `resolveHomeUrl` — environment and configuration rather than a flag, for
    * the same reason `ISOCAN_BIND` and `ISOCAN_STORE` are.
    *
-   * **`isocan home <url>` (phase 7.5) is not a reversal of that.** It writes
-   * the configuration file and restarts the daemon so the file is read exactly
-   * as it always was; it adds no per-invocation override, and there is still
-   * no way to point one command at one home and the next at another. The
-   * refusal above is of a `--home` FLAG, and it stands. What phase 7.5 removed
-   * was the absurdity that the only ways to WRITE the key were an environment
-   * variable and a text editor.
+   * **Phase 10.3 narrowed what this means, from destructive to harmless.** It
+   * used to be "the home this daemon is a REPLICA of" — a whole-daemon
+   * property that demoted every canvas on the disk at once, which is what
+   * phase 7.5's scratch-home dance was self-defence against. It is now the
+   * BIRTH DEFAULT and nothing else: it decides where the *next* canvas goes,
+   * it re-points nothing that already exists, and which home an existing
+   * canvas belongs to is a per-canvas row in `homes.json` (see
+   * `HomeLinks`). That narrowing is what makes phase 14's shipped default
+   * address safe to flip.
    *
-   * Setting it does one
-   * thing in stage 1: the page server stops. The one-origin rule is that a
-   * local daemon serves **ops to CLIs, never pages to persons**, and
-   * `registerStaticWebApp` is precisely the code a home needs and precisely
-   * what a replica must not run — same code, one configuration answer.
+   * The key it is read from was deliberately NOT renamed. An upgraded daemon
+   * reading an old `config.json` for a `birthHome` key would find nothing,
+   * silently birth new canvases locally, and report "home" to a person who
+   * configured a replica — a silent behaviour change bought for nothing. The
+   * boot migration freezes every canvas already held at that home, so upgrade
+   * day behaves identically.
    *
-   * Stage 2 hangs the home CONNECTION off the same answer: with an address
-   * here, `HomeLink` dials it per canvas, forwards every write to it, and
-   * carries presence both ways.
+   * **`isocan home <url>` (phase 7.5) is not a per-invocation override.** It
+   * writes the configuration file and restarts the daemon so the file is read
+   * exactly as it always was; the refusal of a `--home` FLAG stands, and phase
+   * 10.3 is where somebody would reintroduce one — see `HomeLinks`, where that
+   * refusal is written down beside the thing that would tempt them.
    */
-  homeUrl?: string | null;
+  birthHome?: string | null;
   /**
    * The identity provider this home has borrowed, or null for none.
    *
@@ -104,16 +110,21 @@ export interface Daemon {
    * replicates through the store, the desk's ledgers never leave. */
   desk: Desk;
   port: number;
-  /** The home this daemon replicates, or null when it is a home itself.
-   * Recorded rather than merely acted on: stage 2's home connection dials
-   * exactly this, and a daemon that cannot say which it is would be a daemon
-   * nothing could ask. */
-  homeUrl: string | null;
-  /** The live connection to that home, or null when this daemon is a home.
-   * Exposed so a test — and, later, a status route — can ask what the last
-   * handshake actually was: "resumed from 241" and "re-snapshotted" are the
-   * two answers this phase exists to tell apart. */
-  home: HomeLink | null;
+  /** Where a canvas born here, naming nothing, is born — or null when it stays
+   * here. Recorded rather than merely acted on: a daemon that cannot say what
+   * it would do next would be a daemon nothing could ask. */
+  birthHome: string | null;
+  /**
+   * **Every home this daemon dials, and which canvas belongs to which.**
+   *
+   * Never null — a daemon that is the home of everything it holds has an empty
+   * registry rather than a missing one, which is what lets every caller ask
+   * one kind of question instead of branching on whether there is anywhere to
+   * ask. Exposed so a test can reach one link and ask what its last handshake
+   * actually was ("resumed from 241" versus "re-snapshotted"), and, as
+   * importantly, what a link did NOT do.
+   */
+  homes: HomeLinks;
   close: () => Promise<void>;
 }
 
@@ -167,7 +178,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // Undefined means "nobody has said" — go and look. An explicit `null` is a
   // caller saying "this one is a home", which a test needs to be able to say
   // on a machine whose config.json names one.
-  const homeUrl = options.homeUrl !== undefined ? options.homeUrl : await resolveHomeUrl(home);
+  const birthHome =
+    options.birthHome !== undefined ? options.birthHome : await resolveHomeUrl(home);
   // The attester, resolved the same way and at the same moment as the home:
   // both are innkeeper configuration that decides what kind of daemon this is,
   // and an explicit value is a caller (a test) saying so on a machine whose
@@ -178,9 +190,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const { store, desk } = await openBacking(home);
   await store.init();
   await desk.init();
-  // Both one-time migrations, composed across the two ledgers: the pre-badge
-  // claims table and the pre-#57 `agents.json`, folded in once each.
-  await runMigrations(home, store, desk);
+  // The one-time migrations, composed across the two ledgers: the pre-badge
+  // claims table, the pre-#57 `agents.json`, the link grants a pre-door world
+  // has no rows for — and phase 10.3's, which writes down where the canvases
+  // this machine already holds actually live before "no row means local"
+  // starts being true. The birth default is handed in because that migration
+  // turns on whether one is configured; see `recordWhereTheCanvasesAlreadyLive`.
+  await runMigrations(home, store, desk, birthHome);
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
   const engine = new Engine(store, desk, { liveness: (projectId) => presence.roster(projectId) });
@@ -204,31 +220,48 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   });
 
   /**
-   * The demotion, wired.
+   * The demotion, wired — per canvas since phase 10.3.
    *
    * Built BEFORE the port is bound and before anything is dialled, so there is
    * no window in which this daemon accepts a write it would have applied
    * locally and a moment later would have forwarded. `forwardTo` is the whole
-   * switch: with it set, the engine stops assigning seqs and the home does.
+   * switch: with a row naming a home, the engine stops assigning seqs for that
+   * canvas and the home does.
+   *
+   * Constructed unconditionally, including on a daemon that is the home of
+   * everything it holds: the registry is then simply empty, and every caller
+   * asks it the same question instead of branching on whether it exists.
    */
-  const homeLink =
-    homeUrl === null
-      ? null
-      : new HomeLink({
-          homeUrl,
-          home,
-          engine,
-          presence,
-          ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
-        });
-  engine.forwardTo(homeLink);
+  const homes = new HomeLinks({
+    home,
+    engine,
+    presence,
+    birthHome,
+    ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
+  });
+  engine.forwardTo(homes);
+
+  /**
+   * A canvas is gone, so its routing goes with it (ruling 3): a re-created id
+   * would otherwise inherit a dead one and forward its birth to whichever home
+   * used to hold the canvas that had that name.
+   *
+   * Hung off the engine's own event rather than written into the three places
+   * a delete lands (a local one, a forwarded one, a `project-deleted` from a
+   * home) for the reason `HomeLink`'s dial is hung off the same event: one
+   * subscription cannot be forgotten by the next person who adds a fourth path.
+   */
+  engine.onEvent((projectId, message) => {
+    if (message.type !== "project-deleted") return;
+    void homes.release(projectId).catch(() => {});
+  });
 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
   registerRoutes(app, engine, store, desk, presence, {
-    homeUrl,
-    home: homeLink,
+    birthHome,
+    homes,
     auth,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   });
@@ -236,7 +269,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // Dialling starts only once we are serving: the first thing that arrives
   // down a canvas socket is written through the engine, and an engine whose
   // daemon is still coming up is a race for no benefit.
-  if (homeLink) await homeLink.start();
+  await homes.start();
   const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
 
   await fs.writeFile(
@@ -246,11 +279,12 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const close = async () => {
     presence.close();
-    // The home connection first, and before the store: it is the one thing
+    // The home connections first, and before the store: they are the one thing
     // here that is still WRITING (an entry may be mid-apply), and a socket
     // left open is a process that never exits — which phase 4's finding
-    // already paid for once.
-    if (homeLink) await homeLink.close();
+    // already paid for once. All of them, together: `HomeLinks.close()` is
+    // where `homeLink.close()` used to be, for the same reason.
+    await homes.close();
     closeWebSockets();
     await app.close();
     /**
@@ -292,7 +326,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     await store.close();
   };
 
-  return { app, engine, store, desk, port, homeUrl, home: homeLink, close };
+  return { app, engine, store, desk, port, birthHome, homes, close };
 }
 
 // ---------- stale daemons ----------
@@ -480,24 +514,34 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
   const bound = daemon.app.server.address();
   const where = bound && typeof bound !== "string" ? bound.address : "127.0.0.1";
   console.log(`isocan daemon listening on http://${where}:${daemon.port}`);
-  // Which of the two things this daemon is, said out loud at boot. A replica
-  // that stopped serving pages without saying so is a canvas that "just
-  // stopped opening in the browser" — the one-origin rule is a design
-  // decision, and a design decision nobody is told about reads as a bug.
-  if (daemon.homeUrl !== null) {
-    console.log(`isocan replica of ${daemon.homeUrl} — serving ops to CLIs, not pages to people`);
+  /**
+   * What kind of daemon this is, said out loud at boot — and since phase 10.3
+   * that is no longer one of two things. A daemon is the home of some canvases
+   * and a replica for others, so what gets said is the birth default (where
+   * the next canvas goes) and how many canvases are somewhere else.
+   *
+   * Still said, and still at boot, for the original reason: a daemon that
+   * stopped serving pages for a canvas without saying so is a canvas that
+   * "just stopped opening in the browser", and a design decision nobody is
+   * told about reads as a bug.
+   */
+  if (daemon.birthHome !== null) {
+    console.log(
+      `isocan: canvases born here are born at ${daemon.birthHome} — serving ops to CLIs, and pages only for the canvases this daemon is the home of`,
+    );
     // And whether that address is actually answering, said once, in the
-    // background so a home that is down never delays a boot. A replica pointed
+    // background so a home that is down never delays a boot. A daemon pointed
     // at a typo'd address otherwise behaves exactly like one pointed at a home
     // that happens to be busy — every write refused, nothing on screen
     // explaining why. The probe goes through `healthPath`, so it asks a hosted
     // home the path Google's frontend will forward rather than the one it
-    // swallows (phase 5's finding).
-    void daemon.home?.reachable().then((up) => {
+    // swallows (phase 5's finding). This is why the birth default keeps an
+    // open link even with no canvas assigned to it — see `HomeLinks.start`.
+    void daemon.homes.link(daemon.birthHome)?.reachable().then((up) => {
       console.log(
         up
-          ? `home ${daemon.homeUrl} is answering`
-          : `WARNING: home ${daemon.homeUrl} is NOT answering — reads work from the local copy, writes will be refused until it does`,
+          ? `home ${daemon.birthHome} is answering`
+          : `WARNING: home ${daemon.birthHome} is NOT answering — reads work from the local copy, writes to canvases that live there will be refused until it does`,
       );
     });
   }

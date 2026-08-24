@@ -76,18 +76,23 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 10 is closed — a tab now survives its home, and every
-replica (tab or daemon) reconnects with the same seq-cursor gesture, which is
-journey rule 6 made physically true. Resequenced 2026-08-24, by Dimitri:
-launch first, then features.** The written order now runs 10.3 → 10.5 → 13.5
-→ 13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as
-features added to a live isocan.io. The cut line is the journey's own built/unbuilt
-boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the entire
-unbuilt remainder, so launching first ships exactly the journey that exists.
-**Phase 10.3, one daemon many homes, is next.** The two-surfaces problem
-phase 10 surfaced now has an address — the airplane arc, phases 12.5 and
-12.7 — and its entry below stands until that design is chosen. This line
-moves as phases close; a clean session starts by believing it.
+**Where we are: Phase 10.3 is closed — the home turned out to be a property of
+the canvas, and one daemon now serves canvases at two homes and at itself,
+concurrently, with a shipped default address that can never re-point existing
+work.** That last clause is what phase 14's flip was waiting for. The
+launch-first order set 2026-08-24 by Dimitri still runs 10.3 → 10.5 → 13.5 →
+13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as features
+added to a live isocan.io. The cut line is the journey's own built/unbuilt
+boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt
+remainder, so launching first ships exactly the journey that exists.
+**Phase 10.5, two doors into the repo, is next** — and 10.3 changed what its
+Dion door has to say: his pre-multiuser canvases keep working with nothing
+done, because a marker naming no home means this daemon is that canvas's home,
+and the one-daemon-one-home dance he would have had to learn no longer exists.
+The two-surfaces problem phase 10 surfaced still has its address — the
+airplane arc, phases 12.5 and 12.7 — and its entry below stands until that
+design is chosen. This line moves as phases close; a clean session starts by
+believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -818,7 +823,21 @@ verify order and convergence on a second profile.
 
 ## Phase 10.3 — One daemon, many homes
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-24. Both halves of the Proof played. The
+integration suite stands up one daemon over three canvases — one homeless, one
+at each of two scratch homes — and asserts the negative as well as the
+positive: each link's handshake count for the other's canvases is
+`{resumed: 0, snapshots: 0}`, one home going down refuses exactly its own
+canvas while the other two keep taking writes, and a twin offered under a
+recorded id is refused rather than adopted. Then walked for real by the
+conductor against **dev.isocan.io** on one daemon: two canvases born at dev
+and one born local, `isocan home` reporting all three by name, `isocan share`
+printing **two different origins from one machine**, an item written from the
+terminal landing at dev at seq 2 while the local canvas 404s there, and in
+Chrome the local canvas rendering at `127.0.0.1:4471` while the dev-homed one
+at that same origin answers the signpost — with the front page listing only
+the canvas this daemon is the home of. (Prod's half waits for phase 14, by
+necessity.)
 
 **Why now, and why it was always latent.** Three pressures arrived at
 once, 2026-08-24. Dion's rig (phase 10.5) holds canvases born local
@@ -858,7 +877,54 @@ right home and refused across lines. Then walked for real: a canvas at
 dev beside a locally-homed one, one machine, one daemon. (Prod's half
 of the walk waits for phase 14, by necessity.)
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24** — The sweep's "every canvas on this disk is this home's" was a
+  **data-loss bug waiting for a second home**, not a tidy-up: two homes can
+  hold one canvas id, and the wrong home answers a dial with a *snapshot* that
+  `adoptRemoteSnapshot` writes over the local copy. The narrowing is the fix
+  and its test is a refusal test.
+- **2026-08-24 — Measured, and it reversed the design.** The two-home name flap
+  does **not** self-heal: a stale roster overwrites a rename permanently, and a
+  live relay never corrects it, because the roster overwrites the name before
+  `ensureClaim`'s cache can see it. A one-home control shows the identical
+  flap, so the seam **predates this phase** — what 10.3 changed is the window,
+  because a down home used to refuse every write on the machine and nobody
+  worked through an outage. The fix is timestamps on the wire; deliberately not
+  made here.
+- **2026-08-24** — Lazy link creation exposed two races that were safe only by
+  accident: `ensureBadge` had un-gated awaits (boot awaited `start()` before the
+  port was bound, so the first call always ran alone), and two links racing it
+  made the home answer `not-your-actor` about an actor just claimed;
+  `writeBadge` was an unserialized read-modify-write whose second writer erased
+  the first's key.
+- **2026-08-24** — A home-scoped question with no canvas in it — `isocan
+  badges`, an attestation — has no honest answer on a mixed rig, and the code's
+  instinct was to fall through to the **local desk**: a short, plausible,
+  completely wrong ledger, in silence, about a credential. Refused with
+  `ambiguous-home` instead. **A pass escaped that seam by carrying its own
+  address**, which it can because a pass is never handed over alone — it
+  arrives as `address#pass`.
+- **2026-08-24 — Open:** the badge and attest routes still have no home to name,
+  so on a mixed rig with no birth default they are refused rather than
+  answered. The fix is the one the pass already got: let the request carry its
+  home.
+- **2026-08-24** — A React page cannot ask "is this canvas mine" inside its own
+  render. `CanvasPage`'s mount effect dials the socket and opens the IndexedDB
+  replica, and effects run before any later conditional render can undo them —
+  so the check has to be a **gate in front of the page**, not a branch inside
+  it. A check made inside is a check made after the damage.
+- **2026-08-24 — Open:** on a mixed rig, creating a canvas from the web front
+  page births it at the birth default, so it does not appear in the
+  `?reach=here` list it just came from — the button looks like it silently
+  failed.
+- **2026-08-24** — The map's socket ceiling was wrong *before* this phase, and
+  in the wrong direction: `/ws` is per canvas, so a thick replica is one socket
+  **per canvas**, not one per machine. Phase 6 built it that way on its first
+  day and nobody revisited the arithmetic.
+- **2026-08-24** — A raw NUL byte in a source file makes it non-text, and
+  **`grep` then skips the whole file in silence** — in a repo whose own tests
+  grep its sources. Write the escape, never the byte.
 
 ## Phase 10.5 — Two doors into the repo
 
@@ -1101,12 +1167,15 @@ a person and their agent, one canvas, no network — and the failure-mode
 list is the center of the work: stale daemon, wrong home, wrong port,
 unclaimed badge, each refused legibly, because a tab quietly agreeing
 with a stale daemon is the cheerful-wrong-address bug in its worst form
-yet. The "never pages to persons" bend is recorded; the frame-ancestors
-lock and the postMessage origin check derive from the served canvas's
-home under phase 10.3's many-homes model — the local-bridge design
-predates that model ("one value the daemon already holds") and must be
-revised to it; phase 10's browser replica remains the answer when no
-daemon is present.
+yet. The "never pages to persons" bend is recorded — and phase
+10.3 already bent it, since a daemon now serves pages for the canvases it
+is the home of, so what 12.7 adds is a frame and not the first exception.
+The frame-ancestors lock and the postMessage origin check derive from the
+served canvas's home; **that correction is made** — phase 10.3 rewrote
+the line in local-bridge.md that said both derive from "one value the
+daemon already holds", and `GET /api/homes` is the route that answers it
+per canvas. Phase 10's browser replica remains the answer when no daemon
+is present.
 
 **Outcome:** The thesis survives the plane: a person in the browser and
 their agent in the terminal see each other's work with no network,

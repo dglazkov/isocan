@@ -447,7 +447,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
     // fallback that matters still holds: a nameless claim on a replica is
     // allocated locally rather than failing.
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-old-"));
-    const replica = await startDaemon({ port: 0, home: replicaDir, homeUrl: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {
@@ -464,7 +464,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
       // what an older home now looks like from a replica. Injected rather than
       // deployed, because the other way to get one is to check out phase 7.
       let asked = false;
-      replica.home!.freeName = async () => {
+      replica.homes.link(base)!.freeName = async () => {
         asked = true;
         throw new HomeRefusedError(404, "no such route", UNKNOWN_ROUTE);
       };
@@ -532,7 +532,7 @@ describe("on a replica", () => {
     await revokeLink();
 
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-replica-"));
-    const replica = await startDaemon({ port: 0, home: replicaDir, homeUrl: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {
@@ -596,7 +596,7 @@ describe("on a replica", () => {
 
   it("does not mint passes of its own — the row belongs to the desk that answers the door", async () => {
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-replica2-"));
-    const replica = await startDaemon({ port: 0, home: replicaDir, homeUrl: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {

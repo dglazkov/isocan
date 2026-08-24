@@ -1,9 +1,10 @@
 import { promises as fs } from "node:fs";
 import type { ActorClaim, ActorRegistry, LogEntry, OpEnvelope } from "@isocan/core";
-import { bindName, GRANTED_BY_MIGRATION, newOpId } from "@isocan/core";
+import { bindName, GRANTED_BY_MIGRATION, newOpId, normalizeHomeUrl } from "@isocan/core";
 import * as p from "./paths.ts";
 import type { Desk } from "./desk.ts";
 import { ensureLinkGrant } from "./grants.ts";
+import { homesRecorded, writeHomes, type HomeAssignments } from "./homes.ts";
 import type { Store } from "./store.ts";
 
 /**
@@ -35,10 +36,74 @@ import type { Store } from "./store.ts";
  * use `--as`. A sessionKey names one conversation on one machine, so that
  * should be approximately nobody.
  */
-export async function runMigrations(home: string, store: Store, desk: Desk): Promise<void> {
+export async function runMigrations(
+  home: string,
+  store: Store,
+  desk: Desk,
+  /** The home this machine has configured, as `resolveHomeUrl` answers it —
+   * the birth default from phase 10.3 on. Null when nothing is configured,
+   * which is every daemon in this repo and every hosted home. */
+  configuredHome: string | null,
+): Promise<void> {
   await migrateLegacyClaims(home, store, desk);
   await migrateLegacyAgents(home, store, desk);
   await grantTheLinkOnOldCanvases(home, store, desk);
+  await recordWhereTheCanvasesAlreadyLive(home, store, configuredHome);
+}
+
+/**
+ * **Write down what is true today** — phase 10.3's one migration, and the
+ * whole of it is one wrinkle the upgrade must not fall into.
+ *
+ * From 10.3 on, a canvas with no row in `homes.json` is one this daemon is the
+ * home of. That reading is correct for Dion — his canvases were born local,
+ * their markers name no home, and they keep working with nothing done. It is
+ * catastrophically wrong for the OTHER upgraded machine: one whose
+ * `config.json` already carries a `home`, holding canvases that were born on
+ * it as a replica in the phase 6→7.5 window. Their markers say nothing (the
+ * marker only started carrying an address later), they genuinely live at that
+ * home, and re-reading "absent" as "local" would silently FORK every one of
+ * them — two divergent copies of one canvas id, which is the twin case this
+ * codebase refuses by name everywhere else.
+ *
+ * So: **if there is no `homes.json` yet and a home is configured, every canvas
+ * this store currently holds gets a row naming that home. Otherwise nothing is
+ * written at all.**
+ *
+ * The "otherwise" is not a shrug, it is the load-bearing half:
+ *
+ * - **A hosted home writes nothing.** It has no configured home, and — the
+ *   part that would hurt — a container starts from a fresh filesystem and
+ *   re-runs its migrations at EVERY cold start (see
+ *   `grantTheLinkOnOldCanvases`, which pays that cost knowingly and says so).
+ *   A per-canvas write there, once per cold start, for canvases that are all
+ *   local by definition, would be unacceptable. This writes zero bytes.
+ * - **Dion writes nothing.** No configured home, so absent-means-local is
+ *   already the truth about his machine and there is nothing to record.
+ * - **The replica writes its truth once**, explicitly, and is then frozen at
+ *   that home — which is exactly the promise: `config.json`'s `home` is
+ *   re-purposed as the BIRTH default, so what it means for new canvases
+ *   changes, and what it means for existing ones is pinned here so it does
+ *   not.
+ *
+ * The file's existence is its own marker. An empty `{}` is a real answer (this
+ * machine has a home configured and holds nothing yet) and must be written, or
+ * the migration re-runs at the next boot and freezes canvases that arrived in
+ * between — which would be harmless today and is the kind of "harmless" that
+ * stops being true when somebody adds a case.
+ */
+async function recordWhereTheCanvasesAlreadyLive(
+  home: string,
+  store: Store,
+  configuredHome: string | null,
+): Promise<void> {
+  if (configuredHome === null) return;
+  if (await homesRecorded(home)) return;
+  const rows: HomeAssignments = {};
+  for (const project of await store.listProjects()) {
+    rows[project.id] = normalizeHomeUrl(configuredHome);
+  }
+  await writeHomes(home, rows);
 }
 
 /**

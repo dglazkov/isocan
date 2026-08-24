@@ -91,6 +91,10 @@ import {
   newProjectId,
   newThreadId,
   newVersionId,
+  // Core's is the pure, total computation; this file's `normalizeHomeUrl`
+  // wraps it with the refusals a person typing an address has earned. Two
+  // names because they answer two questions — see both doc comments.
+  normalizeHomeUrl as normalizeAddress,
   normalizeSiteUrl,
   siteFilename,
   siteLabel,
@@ -98,11 +102,14 @@ import {
 import { paths, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
+  type HomeRecord,
   type ResolveOptions,
   ensureDirBinding,
+  homeAddressOf,
   makeCtx,
   metaPatch,
   readConfig,
+  readHomeRecord,
   resolveProject,
   writeConfig,
 } from "./ctx.ts";
@@ -470,13 +477,24 @@ async function nameCollision(
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (!(await client.health())) return null;
+    // A hand-built context, for one lookup that must not start a daemon. The
+    // home questions are answered from the same record `makeCtx` uses and by
+    // the same helpers — a second spelling of "where does this canvas live"
+    // would be a second thing to keep in step (`readHomeRecord`).
+    const birthHome = (await client.healthz())?.home ?? null;
+    let record: Promise<HomeRecord> | null = null;
+    const homes = () => (record ??= readHomeRecord(client, birthHome));
     const ctx: Ctx = {
       client,
       actor,
       json: false,
       home,
       binding: await findBinding(process.cwd(), home),
-      homeUrl: (await client.healthz())?.home ?? null,
+      birthHome,
+      homes,
+      async homeOf(projectId: string) {
+        return homeAddressOf(await homes(), projectId);
+      },
       ...(globals.project !== undefined ? { projectRef: globals.project } : {}),
     };
     const project = await resolveProject(ctx);
@@ -612,8 +630,11 @@ program
             // Best-effort — the name was saved either way, and saying why the
             // binding failed beats failing a command that did its job.
             try {
-              // A canvas born through the handshake is born at the home when
-              // this daemon is a replica, and the marker it writes says so.
+              // A canvas born through the handshake is born at the BIRTH
+              // DEFAULT when this machine has one, and the marker it writes
+              // says so. Nothing else on the machine is consulted: where the
+              // canvas in the next directory lives has nothing to do with
+              // where this new one goes.
               const landed = await ensureDirBinding(
                 client,
                 home,
@@ -757,14 +778,39 @@ program
         codeAt?: string;
         home?: string;
       };
-      if (globals.json) return printJson(health);
+      /**
+       * **Which canvases live where** — the second read, and the one that
+       * makes the role line true.
+       *
+       * The health body's `home` is the BIRTH DEFAULT now and nothing else, so
+       * a status built from it alone would describe a machine holding six
+       * canvases at two homes as "replica of one of them". `GET /api/homes` is
+       * the route that can answer, and this is one of the four callers it was
+       * built for. Best-effort: a daemon older than the route still gets the
+       * old sentence out of its own one field, which for that daemon is the
+       * whole truth.
+       */
+      const record = await readHomeRecord(
+        new DaemonClient(daemonBase, paths.isocanHome()),
+        health.home ?? null,
+      ).catch(() => null);
+      const summary: HomeSummary = { birth: record?.birth ?? health.home ?? null, rows: record?.rows ?? {} };
+      if (globals.json) {
+        // The health body verbatim — `stalenessOf` and older readers parse
+        // this — plus the two things it cannot say for itself.
+        return printJson({
+          ...health,
+          role: roleLine(summary, daemonBase),
+          ...(record && !record.legacy ? { canvases: record.rows, links: record.links } : {}),
+        });
+      }
       const { stale, why } = stalenessOf(health);
       printKeyValues({
         daemon: `running on http://127.0.0.1:${port}`,
-        // Which of the two things it is. A replica that stopped serving pages
-        // without saying so reads as a broken daemon, and `status` is the
-        // first place anybody looks.
-        ...(health.home ? { role: roleLine(health.home, daemonBase) } : {}),
+        // What this daemon is. A daemon that stopped serving pages for a canvas
+        // without saying so reads as a broken daemon, and `status` is the first
+        // place anybody looks.
+        role: roleLine(summary, daemonBase),
         pid: String(health.pid),
         since: health.startedAt,
         version: health.version,
@@ -778,16 +824,63 @@ program
   );
 
 /**
- * Which of the two things a daemon is, in ONE phrasing.
+ * **What this daemon is, in ONE phrasing** — shared by `isocan status` and
+ * `isocan home`, because two commands answering the same question in two
+ * vocabularies is how a person ends up believing they are different questions.
  *
- * `isocan status` has said it since phase 6 and `isocan home` says it now;
- * two commands answering the same question in two vocabularies is how a
- * person ends up believing they are different questions.
+ * It takes a summary rather than an address now (phase 10.3), and that is the
+ * whole change: a daemon is no longer one of two things. It is the home of
+ * some canvases and a replica for others, and the mixed sentence has nowhere
+ * else to be said.
+ *
+ * **The two degenerate cases render byte-compatibly with what they always
+ * did**, and deliberately so — a pure home and a pure replica are the two rigs
+ * everybody actually has, phase 10.5's Dion walk reads the first out loud, and
+ * a phase that changed the words for both would be a phase that made everyone
+ * re-learn a sentence to be told nothing new.
  */
-function roleLine(homeUrl: string | null | undefined, base: string): string {
-  return homeUrl
-    ? `replica of ${homeUrl} — ops to CLIs, pages at the home`
-    : `home — this daemon holds the canvases and serves the app at ${base}`;
+interface HomeSummary {
+  /** Where a canvas born here goes; null for "it stays here". */
+  birth: string | null;
+  /** Every canvas this daemon holds → its home, null for "here". */
+  rows: Record<string, string | null>;
+}
+
+function roleLine(summary: HomeSummary, base: string): string {
+  const homeLine = `home — this daemon holds the canvases and serves the app at ${base}`;
+  const replicaLine = (url: string) => `replica of ${url} — ops to CLIs, pages at the home`;
+  const values = Object.values(summary.rows);
+  const local = values.filter((home) => home === null).length;
+  const remote = new Map<string, number>();
+  for (const home of values) if (home !== null) remote.set(home, (remote.get(home) ?? 0) + 1);
+
+  // A machine with nothing on it yet is described by where it is HEADING —
+  // which is what `isocan home <url>` on a fresh machine, and `isocan setup`
+  // against a home, both produce, and what both have always printed.
+  if (local === 0 && remote.size === 0) return summary.birth ? replicaLine(summary.birth) : homeLine;
+  // A pure home: everything here is its own, and nothing is going anywhere else.
+  if (remote.size === 0 && summary.birth === null) return homeLine;
+  // A pure replica: nothing of its own, one home, and that home is also where
+  // the next canvas goes. The birth check matters — a machine that holds one
+  // dev canvas but births locally still serves pages, so "pages at the home"
+  // would be a lie about it.
+  if (local === 0 && remote.size === 1 && summary.birth !== null && remote.has(summary.birth)) {
+    return replicaLine(summary.birth);
+  }
+  // The mixed rig, which had no sentence at all before this phase. Ordered
+  // biggest first: on a machine with six canvases at dev and one at prod, the
+  // first thing to say is dev.
+  const parts: string[] = [];
+  if (local > 0) parts.push(`home of ${local} canvas${local === 1 ? "" : "es"}`);
+  if (remote.size > 0) {
+    const listed = [...remote.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([url, count]) => `${url} (${count})`);
+    const last = listed.pop()!;
+    parts.push(`replica of ${listed.length > 0 ? `${listed.join(", ")} and ${last}` : last}`);
+  }
+  if (summary.birth) parts.push(`new canvases → ${summary.birth}`);
+  return parts.join("; ");
 }
 
 /**
@@ -838,36 +931,53 @@ program
   );
 
 /**
- * **The home this daemon answers to** — phase 7.5's whole verb.
+ * **Where a canvas born here is born, and where each canvas already here
+ * lives** — phase 7.5's verb, re-scoped by phase 10.3.
  *
  * `config.json` has had a `home` key since phase 6 and `resolveHomeUrl` has
- * always read it; nothing could ever WRITE it, so the only ways to become a
- * replica were an environment variable and a text editor. That is a missing
- * verb, not a missing feature, and it is not only a developer's problem:
- * commitment 2 says `isocan serve` on a rented VM is a complete home, so
- * anybody pointing their daemon at their own innkeeper's home walks straight
- * into it.
+ * always read it; nothing could ever WRITE it, so the only ways to reach it
+ * were an environment variable and a text editor. That is a missing verb, not
+ * a missing feature, and it is not only a developer's problem: commitment 2
+ * says `isocan serve` on a rented VM is a complete home, so anybody pointing
+ * their daemon at their own innkeeper's home walks straight into it.
  *
- * **This is not phase 6 being undone.** Phase 6 refused a `--home` FLAG on
- * `isocan serve`, on the same grounds as `ISOCAN_BIND` and `ISOCAN_STORE`:
- * which home a daemon answers to is innkeeper configuration, not a
- * per-invocation choice an agent should be able to reach for. That reasoning
- * survives intact — and this verb obeys it. It writes the configuration file
- * and restarts the daemon so the file is read the way it always was; it does
- * not add a per-command override, and there is still no way to point one
- * command at one home and the next at another. `daemon.ts`'s `homeUrl`
- * comment is still true.
+ * **What it sets narrowed, and the narrowing is the point.** It used to demote
+ * a whole daemon: every canvas on the machine started being written somewhere
+ * else. Now the home is a property of the CANVAS — the marker has said so
+ * since Scene 0 — and this key is the **birth default**, consulted when a
+ * canvas is minted and never again. So `isocan home <url>` moves nothing that
+ * already exists, `--clear` un-moves nothing either, and phase 14's flip of a
+ * shipped default address cannot re-point anybody's work. The key was
+ * re-purposed rather than renamed on purpose: an upgraded daemon reading an
+ * old `config.json` finds `home` set, births new canvases there, and — with
+ * the boot migration freezing everything already held at that address — behaves
+ * on upgrade day exactly as it did the day before.
+ *
+ * **This is not phase 6 being undone, and it is not phase 7.5 being undone
+ * either.** Phase 6 refused a `--home` FLAG on `isocan serve`, on the same
+ * grounds as `ISOCAN_BIND` and `ISOCAN_STORE`: where canvases go is innkeeper
+ * configuration, not a per-invocation choice an agent reaches for. Phase 10.3
+ * is exactly where somebody would reintroduce it — "just let this one command
+ * name a home" — and the answer is still no. What travels beside a birth is
+ * not a flag; it is the marker's assertion, committed configuration read out
+ * of `.isocan/project.json`.
  *
  * **No compiled-in default, still.** `isocan home` with no address SHOWS;
  * there is no address baked in for it to fall back to, because a CLI
  * shipping with `isocan.io` as its default would turn `isocan serve` in this
  * checkout into a replica of production. The flip belongs with phase 14's
  * promotion gesture, where it is one line.
+ *
+ * **It keeps its restart** (phase 10.3's ruling 5). Correctness no longer
+ * demands one — a live `PUT /api/homes/birth` is filed as a follow-up — but
+ * `pointDaemonAtHome`'s read-back verification is this repo's own standing
+ * lesson embodied: a step that cannot read back the state it wanted has
+ * verified nothing.
  */
 program
   .command("home [url]")
-  .description("What this daemon answers to: show it, point it at a home, or be a home again")
-  .option("--clear", "answer to no home — be a home again")
+  .description("Where new canvases are born, and where each canvas here lives")
+  .option("--clear", "birth canvases here from now on — nothing already here moves")
   .option("--force", "set the address even though nothing answered there")
   .action(
     run(async (
@@ -887,15 +997,21 @@ program
       }
 
       // What the daemon ACTUALLY is, off the health route — the same source
-      // `Ctx.homeUrl` reads and for the same reason: a config file edited five
-      // minutes ago and a daemon running since Tuesday must not be allowed to
-      // disagree about where the pages are. The config file is read too, but
-      // only to NOTICE that disagreement.
+      // `Ctx.birthHome` reads and for the same reason: a config file edited
+      // five minutes ago and a daemon running since Tuesday must not be allowed
+      // to disagree about where a canvas born now would go. The config file is
+      // read too, but only to NOTICE that disagreement.
       const health = await client.healthz(500);
       const config = await readConfig(isocanHome);
       const written = typeof config.home === "string" ? config.home.trim() : "";
       const configured = written || null;
       const live = health?.home ?? null;
+      // The per-canvas half, which the health route cannot answer — see
+      // `HOMES_ROUTE`. Null when no daemon is running, which is a state this
+      // verb deliberately supports: it is what somebody runs to find out why
+      // nothing works.
+      const record = health ? await readHomeRecord(client, live).catch(() => null) : null;
+      const summary: HomeSummary = { birth: live, rows: record?.rows ?? {} };
 
       // `resolveHomeUrl` reads the environment FIRST, and `ensureDaemon` hands
       // the daemon this process's environment — so with `ISOCAN_HOME_URL` set,
@@ -907,33 +1023,64 @@ program
       if (url === undefined && !opts.clear) {
         const target = live ?? configured;
         const reachable = target ? await homeAnswers(target) : null;
+        /**
+         * **Per canvas, because that is where the answer lives now.**
+         *
+         * The reading half of this verb used to have one thing to say and it
+         * was about the machine. A person on a machine holding work at two
+         * homes has a different question — *which of my canvases is at which,
+         * and is that home up* — and before this there was no way to ask it
+         * short of reading `.isocan/project.json` files by hand.
+         *
+         * Titles come from the daemon's own list, so a canvas that is recorded
+         * but has not replicated yet still gets a row (its id, no title): the
+         * record is the thing being reported, and hiding a row because the
+         * canvas has not arrived would hide exactly the case somebody is
+         * debugging.
+         */
+        const titles = new Map<string, string>();
+        for (const project of health ? await client.listProjects().catch(() => []) : []) {
+          titles.set(project.id, project.title);
+        }
+        const answering = new Map(record?.links.map((link) => [link.url, link.reachable]) ?? []);
+        const canvases = Object.entries(record?.rows ?? {})
+          .map(([id, at]) => ({ id, title: titles.get(id) ?? "(not here yet)", home: at }))
+          .sort((a, b) => a.title.localeCompare(b.title));
         if (globals.json) {
           return printJson({
+            // `role` and `home` keep their names and their shapes; what they
+            // MEAN is the birth default now, which is the one whole-daemon
+            // answer that survived the phase. `canvases` is the new question.
             role: live ? "replica" : "home",
             home: live,
+            birth: live,
             daemon: base,
             running: health !== null,
             ...(configured !== live ? { configured } : {}),
             ...(reachable
               ? { reachable: reachable.ok, ...(reachable.ok ? {} : { why: reachable.why }) }
               : {}),
+            ...(record ? { canvases: record.rows, links: record.links } : {}),
             ...(override ? { override } : {}),
           });
         }
         printKeyValues({
-          role: health ? roleLine(live, base) : `unknown — no daemon is running on ${base}`,
+          role: health ? roleLine(summary, base) : `unknown — no daemon is running on ${base}`,
+          "birth default": live
+            ? `${live} — a canvas born here is born there; nothing already here moved`
+            : "here — a canvas born here stays here",
           ...(health
             ? {}
             : {
                 configured: configured
                   ? `${configured} (config.json) — start a daemon to make it so`
-                  : "nothing — this machine is a home",
+                  : "nothing — canvases born here stay here",
               }),
           ...(reachable
             ? {
                 answering: reachable.ok
                   ? `yes — ${target} is up`
-                  : `NO (${reachable.why}) — writes are refused while it cannot be reached`,
+                  : `NO (${reachable.why}) — writes to canvases there are refused while it cannot be reached`,
               }
             : {}),
           // The one disagreement worth naming: somebody wrote the file and
@@ -945,6 +1092,23 @@ program
             : {}),
           ...(override ? { note: `ISOCAN_HOME_URL=${override} is set and overrides all of this` } : {}),
         });
+        if (canvases.length > 0) {
+          console.log("\ncanvases");
+          printTable(
+            canvases.map((canvas) => ({
+              canvas: canvas.title,
+              id: canvas.id,
+              home:
+                canvas.home === null
+                  ? "here — this daemon is its home"
+                  : `${canvas.home}${
+                      answering.get(canvas.home) === false
+                        ? "  (NOT answering — writes refused)"
+                        : ""
+                    }`,
+            })),
+          );
+        }
         return;
       }
 
@@ -958,18 +1122,35 @@ program
         force: opts.force ?? false,
       });
 
+      // The sentence that makes the change safe to make, said in both
+      // directions. What everybody wants to know when they type this is not
+      // "did it write the file" but "what did that do to the work I already
+      // have" — and the answer is now *nothing*, which is worth saying rather
+      // than leaving somebody to find out.
+      const already = Object.values(summary.rows).filter((at) => at !== null).length;
+      const moved = target
+        ? `canvases born here will be born at ${target} — nothing already here moved`
+        : `canvases born here stay here from now on` +
+          (already > 0
+            ? ` — the ${already} canvas${already === 1 ? "" : "es"} already at a home still answer${already === 1 ? "s" : ""} to it`
+            : "");
+      const after: HomeSummary = { birth: target, rows: summary.rows };
+
       if (!changed) {
         if (globals.json) {
           return printJson({
             role: target ? "replica" : "home",
             home: target,
+            birth: target,
             restarted: false,
             daemon: base,
           });
         }
         printKeyValues({
-          role: roleLine(target, base),
-          unchanged: target ? "this daemon already answers to that home" : "this daemon is already a home",
+          role: roleLine(after, base),
+          unchanged: target
+            ? "canvases born here already go to that home"
+            : "canvases born here already stay here",
         });
         return;
       }
@@ -978,6 +1159,7 @@ program
         return printJson({
           role: target ? "replica" : "home",
           home: target,
+          birth: target,
           restarted: true,
           stopped,
           daemon: base,
@@ -985,14 +1167,19 @@ program
         });
       }
       printKeyValues({
-        role: roleLine(target, base),
+        role: roleLine(after, base),
+        birth: moved,
         wrote: paths.configFile(isocanHome),
         daemon:
           stopped.length > 0
             ? `restarted on ${base} (was ${stopped.join(", ")})`
             : `started on ${base}`,
         ...(reachable && !reachable.ok
-          ? { warning: `${target} did not answer (${reachable.why}) — writes will be refused until it does` }
+          ? {
+              warning:
+                `${target} did not answer (${reachable.why}) — a canvas born there ` +
+                "will be refused until it does",
+            }
           : {}),
       });
     }),
@@ -1016,14 +1203,19 @@ program
  * - the environment variable WINS over the file, so writing the file while it
  *   is set changes nothing and the restart would silently come back on the
  *   variable's address. Refusing is the only honest answer.
- * - a home that does not answer is REPORTED, not quietly accepted: a replica
- *   that cannot reach its home refuses every write and queues nothing.
- *   `--force` is the escape, and it is the caller's to offer.
+ * - a home that does not answer is REPORTED, not quietly accepted: a canvas
+ *   that lives at an unreachable home refuses every write and queues nothing.
+ *   `--force` is the escape, and it is the caller's to offer. (Phase 10.3
+ *   makes this warning much less urgent and no less honest — nothing breaks
+ *   until a canvas is born there — so the escape stays.)
  * - a no-op does not bounce the daemon — anything parked on `isocan wait`
- *   loses its socket to a restart, and pointing a daemon at the home it
- *   already answers to should cost nobody their connection.
- * - the daemon reads its home once, at boot, so the restart is what makes the
- *   write true, and the health route afterwards is what proves it did.
+ *   loses its socket to a restart, and setting the birth default to what it
+ *   already is should cost nobody their connection.
+ * - the daemon reads this once, at boot, so the restart is what makes the
+ *   write true, and the health route afterwards is what proves it did. Phase
+ *   10.3's ruling 5 kept that restart deliberately: correctness no longer
+ *   needs it (a live `PUT /api/homes/birth` is a filed follow-up), but a step
+ *   that cannot read back the state it wanted has verified nothing.
  */
 async function pointDaemonAtHome(opts: {
   isocanHome: string;
@@ -1051,8 +1243,8 @@ async function pointDaemonAtHome(opts: {
   if (reachable && !reachable.ok && !force) {
     throw new Error(
       `nothing answered at ${target} (${reachable.why}) — a daemon whose home is ` +
-        "unreachable refuses every write, and nothing is queued. " +
-        `\`isocan home ${target} --force\` sets it anyway.`,
+        "unreachable refuses every write to a canvas that lives there, and nothing is " +
+        `queued. \`isocan home ${target} --force\` sets it anyway.`,
     );
   }
   if (configured === target && live === target) return { changed: false, stopped: [], reachable };
@@ -1066,8 +1258,8 @@ async function pointDaemonAtHome(opts: {
   const became = after?.home ?? null;
   if (became !== target) {
     throw new Error(
-      `wrote ${paths.configFile(isocanHome)} but the daemon came back as ` +
-        `${became ? `a replica of ${became}` : "a home"} — check that file`,
+      `wrote ${paths.configFile(isocanHome)} but the daemon came back birthing canvases ` +
+        `${became ? `at ${became}` : "here"} — check that file`,
     );
   }
   return { changed: true, stopped, reachable };
@@ -1081,6 +1273,14 @@ async function pointDaemonAtHome(opts: {
  * `http://192.168.1.9:4441` on a LAN as it is `https://isocan.io`. Strict
  * about WHAT, because the two mistakes are predictable — a bare hostname, and
  * a canvas link pasted out of a browser bar.
+ *
+ * **The computation moved to `@isocan/core` in phase 10.3; the REFUSALS
+ * stayed here**, and the split is the point rather than a tidy-up. Under many
+ * homes the daemon normalizes addresses it reads off disk — config keys,
+ * marker fields, `identity.json`'s `auth` block — where a throw would be a
+ * daemon that will not boot over a trailing slash, so `normalizeAddress` is
+ * total. What a PERSON typed is a different question with a different right
+ * answer, and it is asked in exactly one place: here, where the person is.
  */
 function normalizeHomeUrl(input: string): string {
   const raw = input.trim();
@@ -1100,7 +1300,7 @@ function normalizeHomeUrl(input: string): string {
     // origin it contains is more useful than naming the rule it broke.
     throw new Error(`that is a page at ${url.origin}, not a home — try \`isocan home ${url.origin}\``);
   }
-  return url.origin;
+  return normalizeAddress(raw);
 }
 
 /** Does the address answer as a home? The health route, which is what the
@@ -1245,18 +1445,23 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const project = await resolveProject(ctx);
-      // A replica has no page to open. The one-origin rule is that people
-      // always enter through the home, so the address a person is handed is
-      // the home's when there is one — opening `127.0.0.1` on a replica lands
-      // them on `registerHomeElsewhere`'s 404, which is a correct answer to
-      // the wrong question. (On a replica the pass is minted at the home too,
-      // by the daemon forwarding: that is where the badge lives that the
-      // browser's redemption will be judged against.)
-      const url = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+      // **THIS canvas's home, never the daemon's** (phase 10.3). The
+      // one-origin rule is per canvas: a canvas has exactly one door, and it is
+      // the door of the home that holds it. Opening `127.0.0.1` for a canvas
+      // that lives at dev lands a person on the daemon's page signpost — a 404
+      // that is a correct answer to the wrong question — and opening dev's
+      // address for a canvas that lives on this laptop is the same mistake
+      // pointing the other way, which is the one this rename exists to make
+      // unwriteable. `null` means this daemon really is its home, and then its
+      // own base is the right origin. (The pass is minted at that same home, by
+      // the daemon forwarding: that is where the badge lives that the browser's
+      // redemption will be judged against.)
+      const origin = (await ctx.homeOf(project.id)) ?? ctx.client.base;
+      const url = canvasUrl(origin, project.id);
       const token = await browserPass(ctx, project.id);
       spawn(
         process.platform === "darwin" ? "open" : "xdg-open",
-        [token ? canvasUrlWithPass(ctx.homeUrl ?? ctx.client.base, project.id, token) : url],
+        [token ? canvasUrlWithPass(origin, project.id, token) : url],
         { stdio: "ignore", detached: true },
       ).unref();
       console.log(url);
@@ -1328,7 +1533,8 @@ async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> 
  *   the link is on. On a home that has borrowed no attester the request is
  *   still sent and the home's own `no-attester` explains why it cannot: a
  *   client-side "not yet" would be a second copy of a policy that varies by
- *   which home this daemon answers to.
+ *   which home the canvas lives at — and on a machine with two homes, by which
+ *   canvas you are standing in.
  * - `isocan share --revoke <email>` — un-invite, which EXPELS them unless a
  *   surviving grant still covers them. It takes the sentence, not the row id:
  *   a person who wants somebody out knows their address.
@@ -1363,10 +1569,14 @@ program
     run(async (who: string | undefined, opts: { link?: string; revoke?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const project = await resolveProject(ctx);
-      // The one origin: people always enter through the home, so a replica
-      // hands out the home's address and never its own 127.0.0.1 — the same
-      // rule `isocan open` follows, from the same function.
-      const address = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+      // The one origin, per canvas: people always enter through the home that
+      // holds THIS canvas, so the address handed out is that home's and never
+      // this machine's 127.0.0.1 — the same rule `isocan open` follows, from
+      // the same function. This is the string a person pastes to another
+      // person, which makes it the worst place in the CLI to be approximately
+      // right: a daemon-wide value here would send a stranger to a home that
+      // has never heard of this canvas.
+      const address = canvasUrl((await ctx.homeOf(project.id)) ?? ctx.client.base, project.id);
       /**
        * What the sweeps this invocation ran did, added up.
        *
@@ -1516,9 +1726,11 @@ program
     run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const project = await resolveProject(ctx);
-      // The one origin again: a pass is redeemed at the home, and the address
-      // it rides on is the address a person enters through.
-      const origin = ctx.homeUrl ?? ctx.client.base;
+      // The one origin again, and per canvas: a pass is minted at the home
+      // that holds this canvas and redeemed there, so the address it rides on
+      // is that home's — not this machine's next one, which is all a birth
+      // default ever knows.
+      const origin = (await ctx.homeOf(project.id)) ?? ctx.client.base;
       /**
        * **Two real shapes, and the default endows.**
        *
@@ -1587,12 +1799,22 @@ program
  * and it is what makes the listing small and the gesture safe: a stranger has
  * no claim in common with you, so nobody can use this to expel anybody.
  *
- * **On a replica it asks the HOME**, and that is the point rather than a
- * detail. A laptop holds two badges — one at its own daemon, one at the home
- * — and the local one is not a boundary against somebody sitting at that
- * keyboard. What actually stops a stolen machine is that its badge AT THE
- * HOME is ended: its ops are refused and replication goes stale. So this verb
- * shows the home's list, and `--kill` ends a badge there.
+ * **It asks the HOME**, and that is the point rather than a detail. A laptop
+ * holds two badges — one at its own daemon, one at the home — and the local
+ * one is not a boundary against somebody sitting at that keyboard. What
+ * actually stops a stolen machine is that its badge AT THE HOME is ended: its
+ * ops are refused and replication goes stale. So this verb shows the home's
+ * list, and `--kill` ends a badge there.
+ *
+ * **Which home, on a machine with several?** A badge is not about one canvas,
+ * so there is no canvas to read the answer off, and phase 10.3 left that as a
+ * named seam rather than a solved problem: the daemon asks the birth default
+ * when there is one, else the single home it dials, else nothing
+ * (`HomeLinks.homeScoped`). On the two rigs anybody has — a pure home and a
+ * machine with one home — that is exactly what it always did. On a mixed rig
+ * it means this verb reports one home's surfaces and not the other's, which
+ * is a narrow answer rather than a wrong one, and the fix when a scene forces
+ * it is for the question to name its home.
  *
  * `--kill` rather than a second command, following `share --link off`: the
  * destructive act names its target explicitly, so no invocation of the bare
@@ -1917,13 +2139,30 @@ program
         let daemonUp = report.app === client.base;
 
         /**
-         * **Step one of the collapsed three: answer to that home.**
+         * **Step one of the collapsed three: make this the machine's birth
+         * default — but only if it has not got one.**
+         *
+         * This step used to be "answer to that home", and joining a canvas
+         * meant repointing the whole machine. It does not any more: the home
+         * is a property of the canvas, this key is only where the NEXT canvas
+         * goes, and the refusal that used to stand here — *"this daemon
+         * answers to X and that canvas lives at Y, joining it would repoint
+         * this whole machine"* — defended a model phase 10.3 deleted. It is
+         * gone with it.
+         *
+         * What replaced it is a narrower rule (ruling 4): **set the birth
+         * default only when none is set, and say so.** Scene 5's one command
+         * on a fresh machine behaves exactly as it always did — nothing is
+         * configured, so the pasted address becomes where canvases are born,
+         * which is what somebody joining their first team home wants. A
+         * machine that already has one keeps it: joining a canvas at a second
+         * home is now an ordinary thing to do, and silently moving where every
+         * future canvas gets born would be a side effect nobody asked for.
          *
          * `isocan home`'s machinery, not a second copy of it — same refusals
-         * (an `ISOCAN_HOME_URL` in the shell wins over the file and is
-         * refused rather than silently ignored; a home that does not answer is
-         * named rather than accepted), same write, same restart, because a
-         * daemon reads its home once at boot.
+         * (an `ISOCAN_HOME_URL` in the shell wins over the file and is refused
+         * rather than silently ignored; a home that does not answer is named
+         * rather than accepted), same write, same restart.
          *
          * `--force` is deliberately NOT passed through. On `isocan home` it is
          * the escape for somebody who knows their home is down and means it
@@ -1934,44 +2173,29 @@ program
         if (arrival && daemonUp) {
           const health = await client.healthz(2000);
           const configured = (await readConfig(home)).home?.trim() || null;
-          /**
-           * **A machine that already answers to a different home is not
-           * repointed by a pasted line.**
-           *
-           * The same refusal `ctx.ts` makes about a marker naming a foreign
-           * home, one level up: this one moves the whole MACHINE, so every
-           * other directory bound to the old home would start refusing every
-           * command, and the person would have no idea why. Escalation is
-           * supposed to be one command; it is not supposed to be one command
-           * with a demolition inside it.
-           *
-           * Deliberately narrow. A daemon that is its own home IS repointed
-           * without argument — that is `isocan home <url>` doing exactly what
-           * phase 7.5 shipped it to do, and it is Scene 5's case: a fresh
-           * machine, an empty directory, nothing to lose. (A home holding
-           * canvases of its own is demoted the same way; `isocan home --clear`
-           * puts it back, and no guard here would be honest about what a
-           * person meant.)
-           */
-          const answering = health?.home ?? null;
-          if (answering && answering !== arrival.origin) {
-            throw new Error(
-              `this daemon answers to ${answering}, and that canvas lives at ${arrival.origin}. ` +
-                "Joining it would repoint this whole machine — every directory bound to " +
-                `${answering} would stop working. If that is really what you mean, do it on ` +
-                `purpose: \`isocan home ${arrival.origin}\`, then run this again.`,
-            );
+          const birth = health?.home ?? configured;
+          if (!birth) {
+            await pointDaemonAtHome({
+              isocanHome: home,
+              port,
+              target: arrival.origin,
+              configured,
+              live: health?.home ?? null,
+              force: false,
+            });
+            daemonUp = await client.health(2000);
+            report.home = arrival.origin;
+            report.birth =
+              `new canvases here will be born at ${arrival.origin} — ` +
+              "`isocan home --clear` if you would rather they stayed local";
+          } else {
+            report.home = birth;
+            report.birth =
+              birth === arrival.origin
+                ? `${birth} — unchanged; that is already where canvases born here go`
+                : `${birth} — unchanged. This canvas lives at ${arrival.origin} and stays ` +
+                  `there; \`isocan home ${arrival.origin}\` if you want new ones born there too`;
           }
-          await pointDaemonAtHome({
-            isocanHome: home,
-            port,
-            target: arrival.origin,
-            configured,
-            live: health?.home ?? null,
-            force: false,
-          });
-          daemonUp = await client.health(2000);
-          report.home = arrival.origin;
         }
 
         /**
@@ -1996,7 +2220,7 @@ program
          * A pass-less address is a real and supported form; see below.
          */
         if (arrival?.pass && daemonUp) {
-          const answer = await client.redeemPass(arrival.pass);
+          const answer = await client.redeemPass(arrival.pass, arrival.origin);
           if (!answer.actor) {
             report.identity = "admitted — this pass carried no identity, so name yourself here";
           } else {
@@ -2009,20 +2233,11 @@ program
           }
         }
 
-        /**
-         * Where the person is sent.
-         *
-         * A replica serves no pages — that IS the one-origin rule — so every
-         * line below that names an address has to name the home's when there
-         * is one. `report.app` keeps saying where the daemon is, because "is
-         * my daemon up" is still the question it answers; `report.canvas` is
-         * the new line, and it is the one a person reads.
-         */
-        const homeUrl = daemonUp ? ((await client.healthz(2000))?.home ?? null) : null;
-        const origin = homeUrl ?? client.base;
-        if (homeUrl) {
-          report.app = `${client.base} — replica of ${homeUrl} (ops to CLIs, no pages here)`;
-        }
+        /** Where a canvas made here would go — the health route's one field,
+         * which is all it means now. The per-canvas answers come from the
+         * record, and are read below, AFTER the join has had its chance to
+         * write a row. */
+        const birthHome = daemonUp ? ((await client.healthz(2000))?.home ?? null) : null;
 
         /**
          * **Step three: the marker, and the wait that proves the canvas is
@@ -2049,8 +2264,12 @@ program
           if (standing && standing.projectId !== arrival.projectId) {
             // Not a merge and not a re-home: two canvases cannot share one
             // directory, and quietly rewriting the marker would orphan the
-            // work the first one holds. `ctx.ts`'s `refuseForeignHome` makes
-            // the same refusal about the same file for the same reason.
+            // work the first one holds. `ctx.ts`'s `refuseHomeDisagreement`
+            // makes a refusal about the same file in the same spirit. This one
+            // is deliberately untouched by phase 10.3: it is about the
+            // DIRECTORY holding two canvases, which no amount of many-homes
+            // makes sensible, and it never had anything to do with which home
+            // this machine answers to.
             throw new Error(
               `this directory is already this canvas: ${standing.projectId} ` +
                 `(${markerFile(standing.root)}). Joining ${arrival.projectId} here would ` +
@@ -2076,7 +2295,14 @@ program
            * would be a worse command.
            */
           if (!arrival.pass) {
-            await client.joinFromHome(arrival.projectId).catch(() => null);
+            // **Naming the address is what makes it work on a machine that has
+            // never been to that home** (phase 10.3). Before, the join went
+            // wherever the daemon answered to and this call was only sensible
+            // because setup had just pointed it there; now the arrival says
+            // which home it came from, the daemon opens a link, and a machine
+            // with a birth default somewhere else joins this canvas without
+            // anything else moving.
+            await client.joinFromHome(arrival.projectId, arrival.origin).catch(() => null);
           }
           const landed = await canvasArrives(client, arrival.projectId, 15_000);
           if (root) {
@@ -2112,10 +2338,42 @@ program
          * to guess.
          */
         const bound = daemonUp ? await findBinding(work, home) : null;
+        /**
+         * **The record, read last, and read per canvas.**
+         *
+         * Last, because the join above is what writes the row for a canvas
+         * this machine has just been let onto — reading before it would
+         * describe the machine as it was a second ago. Per canvas, because
+         * that is the only honest question now: this directory's canvas has a
+         * home, and it is not necessarily the one the next canvas would be
+         * born at. A daemon serves the pages for the canvases whose home it
+         * is, so `null` here really does mean "open it right here".
+         */
+        //
+        // Asked only when there is something it could change: a canvas in this
+        // directory, an address just joined, or a birth default. A plain
+        // `isocan setup` on a fresh machine must stay the one command that
+        // touches NOTHING — it creates no canvas, names nobody, and (because
+        // this route is behind the door, and knocking on the door is what
+        // mints and stores a badge) it must not even write `identity.json`.
+        // That is asserted in `setup.test.ts`, and it is the reason this is
+        // conditional rather than unconditional.
+        const record =
+          daemonUp && (arrival || bound || birthHome)
+            ? await readHomeRecord(client, birthHome).catch(() => null)
+            : null;
+        // Said only when it is not the sentence a plain local daemon would
+        // give: "your daemon is at 127.0.0.1 — and it is a home" is a line
+        // that costs a reader a second and tells them nothing.
+        if (record && (record.birth || Object.values(record.rows).some((at) => at !== null))) {
+          report.app = `${client.base} — ${roleLine({ birth: record.birth, rows: record.rows }, client.base)}`;
+        }
+        const origin =
+          (bound && record ? homeAddressOf(record, bound.projectId) : birthHome) ?? client.base;
         const where = bound ? canvasUrl(origin, bound.projectId) : origin;
         if (bound) report.canvas = where;
-        else if (homeUrl) {
-          report.canvas = `${homeUrl} — none in this directory yet: make one there, or \`isocan identity --session\` here`;
+        else if (birthHome) {
+          report.canvas = `${birthHome} — none in this directory yet: make one there, or \`isocan identity --session\` here`;
         }
 
         // A person at a terminal gets the app opened for them; a script or an
@@ -2350,10 +2608,18 @@ program
       // repo got "wherever the daemon reading this lives" for a canvas that
       // demonstrably lives somewhere. Absent still means that, and still has
       // to — every marker written before phase 6 lacks the key.
+      //
+      // **THIS canvas's home** (phase 10.3), not the birth default. The marker
+      // is the assertion everything else in the phase reads back, so writing
+      // "wherever the next canvas goes" into it for a canvas that lives
+      // somewhere else would commit the disagreement that
+      // `refuseHomeDisagreement` exists to refuse — to git, where a teammate
+      // would clone it.
+      const livesAt = await ctx.homeOf(p.id);
       const file = await writeMarker(root, {
         projectId: p.id,
         title: p.title,
-        ...(ctx.homeUrl ? { home: ctx.homeUrl } : {}),
+        ...(livesAt ? { home: livesAt } : {}),
       });
       await recordDir(ctx.home, root, p.id);
       console.log(`this directory now means "${p.title}" (${p.id}) — bound via ${file}`);

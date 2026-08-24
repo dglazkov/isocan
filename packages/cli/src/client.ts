@@ -16,6 +16,7 @@ import type {
   GrantResponse,
   GrantsResponse,
   GrantSubject,
+  HomesResponse,
   JoinCanvasRequest,
   JoinCanvasResponse,
   KillBadgeResponse,
@@ -41,6 +42,8 @@ import {
   grantsRoute,
   healthPath,
   HOME_JOIN_ROUTE,
+  HOMES_ROUTE,
+  normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
 } from "@isocan/core";
@@ -52,11 +55,24 @@ export interface Health extends Partial<BuildStamp> {
   ok: true;
   pid: number;
   startedAt: string;
-  /** The home this daemon is a REPLICA of, when it is one. Absent means the
-   * daemon IS a home — every daemon before phase 6, and every daemon nobody
-   * has configured. The CLI reads it to know where the pages are: a replica
-   * serves none, so `isocan open` and `setup` must point at this address
-   * instead of at `127.0.0.1`. */
+  /**
+   * **The BIRTH DEFAULT** — where a canvas born on this daemon, naming
+   * nothing, is born. Absent means it is born right here.
+   *
+   * The key is older than that meaning. Until phase 10.3 it said "the home
+   * this daemon is a replica of", which was a whole-daemon fact because a
+   * daemon had one home; now the home is a property of the canvas and that
+   * sentence has no referent. The key survived with its meaning redefined
+   * rather than dropped, because `stalenessOf` reads this body and so does
+   * every CLI older than the daemon answering it — and the birth default is
+   * the one whole-daemon answer that still exists.
+   *
+   * **Never use it to build a canvas's address.** That is now
+   * `Ctx.homeOf(projectId)`, off `GET /api/homes`: on a machine with two
+   * homes this value is where the NEXT canvas goes, and printing it for a
+   * canvas that lives somewhere else is the cheerful wrong address in the one
+   * string a person pastes to another person.
+   */
   home?: string;
 }
 
@@ -255,17 +271,32 @@ export class DaemonClient {
     return this.request("GET", `/api/actors/orphaned${query}`);
   }
 
+  /**
+   * One op, to this daemon.
+   *
+   * `home` is **where a canvas being born belongs** and is meaningful for
+   * nothing else — the daemon refuses it on any other op rather than ignoring
+   * it (`PostOpRequest.home` carries the whole argument). What the CLI puts
+   * there is never a flag: it is the directory marker's own assertion, or the
+   * birth default when the marker makes none. Phase 7.5 refused a
+   * per-invocation `--home` override and that refusal stands — this is the
+   * committed configuration of the directory a command is standing in, which
+   * is why an agent can say "the canvas I am creating right now is born at X"
+   * and can never say "send this command somewhere else".
+   */
   sendOp(
     projectId: string | null,
     actor: Actor,
     op: Operation,
     clientId?: string,
+    home?: string,
   ): Promise<PostOpResponse> {
     return this.request("POST", "/api/ops", {
       projectId,
       actor,
       op,
       ...(clientId !== undefined ? { clientId } : {}),
+      ...(home !== undefined ? { home } : {}),
     });
   }
 
@@ -375,8 +406,21 @@ export class DaemonClient {
    * machine even though the badge still holds it. `isocan setup` writes it
    * into `identity.json` for exactly that reason.
    */
-  redeemPass(token: string): Promise<RedeemPassResponse> {
-    return this.request("POST", PASS_REDEEM_ROUTE, { token });
+  redeemPass(token: string, home?: string): Promise<RedeemPassResponse> {
+    /**
+     * `home` is the address the pass was pasted with, and it is sent only when
+     * it is not this daemon's own base — a daemon told to redeem a pass minted
+     * "at itself" would open a link to itself and become its own replica.
+     * Omitted, the daemon decides (`HomeLinks.homeScoped`), which is right for
+     * the pure home and the pure replica and is what every caller did before
+     * phase 10.3.
+     */
+    const elsewhere =
+      home !== undefined && normalizeHomeUrl(home) !== normalizeHomeUrl(this.base);
+    return this.request("POST", PASS_REDEEM_ROUTE, {
+      token,
+      ...(elsewhere ? { home: normalizeHomeUrl(home!) } : {}),
+    });
   }
 
   /**
@@ -387,12 +431,33 @@ export class DaemonClient {
    * Refuses `not-a-replica` (409) on a home, which is a fine answer to get:
    * callers that ask speculatively — binding resolution does — carry on and
    * report whatever they were going to report anyway.
+   *
+   * **`home` is the address the MARKER names**, and passing it is what makes
+   * phase 10.3's good case work: a repo cloned onto a machine that has never
+   * dialled the home its `.isocan/project.json` names. That used to be refused
+   * outright, because joining meant repointing the whole machine; now the
+   * daemon opens a link to that address, is tested at its door, and writes the
+   * row — and nothing else on this machine moves. Omitting it falls back to
+   * the birth default, which is what a marker naming no home deserves.
    */
-  async joinFromHome(projectId: string): Promise<Project> {
+  async joinFromHome(projectId: string, home?: string): Promise<Project> {
     const { project } = await this.request<JoinCanvasResponse>("POST", HOME_JOIN_ROUTE, {
       projectId,
+      ...(home !== undefined ? { home } : {}),
     } satisfies JoinCanvasRequest);
     return project;
+  }
+
+  /**
+   * **Which canvas lives where, and which homes are answering.**
+   *
+   * The one read behind every per-canvas home question (`HOMES_ROUTE` in core
+   * has the list). It replaces the health route's `home` field for everything
+   * except "where would the next canvas be born", which is the only thing that
+   * field still means.
+   */
+  homes(): Promise<HomesResponse> {
+    return this.request("GET", HOMES_ROUTE);
   }
 
   snapshot(projectId: string): Promise<CanvasSnapshotResponse> {

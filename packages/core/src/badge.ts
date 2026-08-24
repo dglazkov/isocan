@@ -333,6 +333,32 @@ export interface KillBadgeResponse {
  */
 export const NOT_YOUR_BADGE = "not-your-badge";
 
+/**
+ * **Which home did you mean?** — phase 10.3, and the one refusal that phase
+ * had to invent rather than inherit.
+ *
+ * A badge, an attestation and a pass are **home-scoped**: they are facts about
+ * a desk, and a desk belongs to a home. While a daemon had exactly one home
+ * that question answered itself. With several it does not, and there is no
+ * canvas in the request to answer it with — `isocan badges` asks "what
+ * surfaces of mine exist THERE" without ever saying where.
+ *
+ * `HomeLinks.homeScoped` answers the two rigs that have an honest answer (a
+ * birth default; or exactly one link). Where it cannot, the tempting thing is
+ * to fall back to the LOCAL desk, and that is precisely the trap: a person
+ * asking which of their surfaces exist would be shown this laptop's own
+ * ledger — a short, plausible, completely wrong list — and told nothing. This
+ * codebase's oldest standing lesson is that its default answer to a wrong
+ * address is a cheerful one, and a credential is the worst place to be
+ * cheerful. So the request is refused, the homes are named, and the person
+ * chooses.
+ *
+ * 409 rather than 400: nothing is wrong with the request. The daemon is in a
+ * state where the question has more than one true answer, which is a conflict
+ * and is exactly what a 409 is for.
+ */
+export const AMBIGUOUS_HOME = "ambiguous-home";
+
 // ---- the provenance sweep (phase 9) ----
 
 /**

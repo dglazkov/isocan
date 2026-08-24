@@ -16,7 +16,17 @@ export type { HomeConfig } from "./config.ts";
 export { bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
 export type { StoredBadge } from "./badge-store.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
-export type { HomeConnection, HomeHandshakes, HomeHello } from "./home-link.ts";
+export type {
+  HomeConnection,
+  HomeDirectory,
+  HomeHandshakes,
+  HomeHello,
+  HomeRegistry,
+} from "./home-link.ts";
+export { HomeLinks } from "./home-links.ts";
+export type { HomeLinksOptions } from "./home-links.ts";
+export { homesRecorded, readHomes, writeHomes } from "./homes.ts";
+export type { HomeAssignments } from "./homes.ts";
 export { HOME_HEADER } from "./http.ts";
 export { buildStamp, stalenessOf } from "./build.ts";
 export type { BuildStamp } from "./build.ts";

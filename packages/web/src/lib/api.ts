@@ -13,6 +13,7 @@ import type {
   GrantResponse,
   GrantsResponse,
   GrantSubject,
+  HomesResponse,
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
@@ -32,10 +33,12 @@ import {
   FILENAME_HEADER,
   grantRoute,
   grantsRoute,
+  HOMES_ROUTE,
   newClientId,
   newOpId,
   PASS_REDEEM_ROUTE,
   passesRoute,
+  projectsRoute,
 } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
@@ -273,8 +276,49 @@ export function fetchCommands(): Promise<SlashCommand[]> {
   return request("GET", "/api/commands");
 }
 
+/**
+ * **The canvases this origin is the home of** — and deliberately not every
+ * canvas this daemon holds (phase 10.3).
+ *
+ * A daemon is no longer one of two things. It is the home of some canvases and
+ * a replica for others, and it serves pages only for the ones it is the home
+ * of: `GET /p/<id>` for a canvas that lives at dev.isocan.io answers a
+ * signpost, not the app shell. But the project list links to canvases with a
+ * react-router `<Link>`, which is a client-side navigation that **never
+ * touches the server** — so a wide list here would walk straight past that
+ * guard and render a local replica of a dev canvas. Two doors onto one canvas,
+ * two cookies, two service worker registrations, two browser replicas with the
+ * local one stale by construction: `local-bridge.md`'s own worst case, *"two
+ * surfaces agreeing with each other and both wrong."*
+ *
+ * So the caller states which reach it wants. That is the route's own standing
+ * rule — **the caller states which, the route never sniffs who called** — and
+ * the alternative (the daemon narrowing the list whenever a cookie carried it,
+ * because a cookie means a browser) would have been that rule broken in the
+ * one place it is load-bearing.
+ *
+ * `here` stacks ON the admissible answer rather than replacing it: being the
+ * home of a canvas does not admit anybody to it. A tab still sees only what
+ * its badge may see.
+ */
 export function listProjects(): Promise<Project[]> {
-  return request("GET", "/api/projects");
+  return request("GET", projectsRoute("here"));
+}
+
+/**
+ * **Which canvas lives where, and which homes are answering** (phase 10.3).
+ *
+ * One read, and the only route that can answer a per-canvas home question —
+ * the health payload's `home` is the *birth default* now, which is a fact
+ * about the daemon and says nothing about the canvas in front of you.
+ *
+ * The app asks for exactly one reason: `CanvasPage` must not render a canvas
+ * this origin is not the home of. See `lib/homes.ts` for what it does with the
+ * answer, and why an unreachable daemon is not an obstacle to opening a canvas
+ * this tab already holds offline.
+ */
+export function fetchHomes(): Promise<HomesResponse> {
+  return request("GET", HOMES_ROUTE);
 }
 
 export function getSnapshot(projectId: string): Promise<CanvasSnapshotResponse> {

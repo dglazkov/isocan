@@ -45,7 +45,7 @@ import {
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
-import type { HomeConnection } from "./home-link.ts";
+import type { HomeConnection, HomeDirectory } from "./home-link.ts";
 import { UndoStacks } from "./undo.ts";
 import {
   DEFAULT_GRACE_MS,
@@ -119,6 +119,19 @@ export interface SubmitRequest {
    * `PostOpRequest.opId` in core for what it is for, and `alreadyWritten`
    * below for what the engine does with it. */
   opId?: string;
+  /**
+   * **Where this canvas is being born** — meaningful for `project.create`
+   * alone, and refused by the route on anything else (phase 10.3).
+   *
+   * See `PostOpRequest.home` in core for the whole argument. The short version
+   * is that it is WRITE-ONCE and about one canvas: it establishes a row for a
+   * canvas coming into existence and can never re-point one that already
+   * exists, because a second create for an existing id is `duplicate-id` or a
+   * replay. That bound is what makes it safe as request metadata beside `opId`
+   * and `clientId` rather than a `--home` flag on every verb, which phase 7.5
+   * refused and phase 10.3 goes on refusing.
+   */
+  home?: string;
   op: Operation;
   /**
    * The badge that presented this request — resolved by the transport and
@@ -179,19 +192,25 @@ export class Engine {
   private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
 
   /**
-   * The home this engine is a REPLICA of, or null when it is a home itself.
+   * The homes this engine is a REPLICA of, per canvas — empty (or null) when
+   * this daemon is the home of everything it holds.
    *
-   * This one field is the demotion. With it set, the engine stops being a
-   * writer: every mutation is forwarded, the home assigns the seq, and what
-   * comes back is applied here VERBATIM through `applyRemoteEntry`. The
-   * single-writer promise chain below is untouched and still does exactly what
-   * it always did — it just serializes forwarded writes and arriving entries
+   * This one field is the demotion, and phase 10.3 made the demotion **per
+   * canvas** rather than per daemon: for a canvas whose row names a home, the
+   * engine stops being a writer — the mutation is forwarded, that home assigns
+   * the seq, and what comes back is applied here VERBATIM through
+   * `applyRemoteEntry`. For a canvas with no row, this daemon IS the home and
+   * nothing changes at all. Both kinds of canvas can sit in one store, which
+   * is the whole of the phase.
+   *
+   * The single-writer promise chain below is untouched and still does exactly
+   * what it always did — it serializes forwarded writes and arriving entries
    * against each other instead of serializing writes against writes. There is
    * still exactly one thing mutating this daemon's state at a time; what
-   * changed is who decides the order, and that is the whole point of a
-   * replica.
+   * changed is who decides the order, and (now) that the answer to "who"
+   * depends on which canvas.
    */
-  private home: HomeConnection | null = null;
+  private homes: HomeDirectory | null = null;
 
   constructor(
     private readonly store: Store,
@@ -202,18 +221,23 @@ export class Engine {
   ) {}
 
   /**
-   * Point this engine at a home — the composition root's last wire, set in
+   * Point this engine at its homes — the composition root's last wire, set in
    * `startDaemon` before the port is bound, so no request can ever see the
    * engine half-demoted.
    *
    * A setter rather than a constructor argument because the two objects need
-   * each other: the home connection applies what it receives THROUGH the
-   * engine, and the engine forwards what it is asked THROUGH the connection.
+   * each other: a home connection applies what it receives THROUGH the engine,
+   * and the engine forwards what it is asked THROUGH the connection.
    * Constructing one with the other would be a cycle; one setter at the
    * composition root is the honest cut.
+   *
+   * It keeps its name under phase 10.3's widening from one connection to a
+   * directory, because it still reads correctly — this is still where the
+   * engine is told there is somewhere else to send things — and every word of
+   * the reasoning above survives with `home` reading `homes`.
    */
-  forwardTo(home: HomeConnection | null): void {
-    this.home = home;
+  forwardTo(directory: HomeDirectory | null): void {
+    this.homes = directory;
   }
 
   /** Subscribe to project events; returns an unsubscribe function. */
@@ -322,19 +346,37 @@ export class Engine {
       if (request.op.actorId !== request.actor.id) {
         await this.requireActor(request.badgeId, request.op.actorId);
       }
-      // A color is the actor's own, home-scoped, and every screen that paints
-      // that face is at the home — so on a replica it goes up first and is
-      // applied here after. It does not come back down: the actors log is
-      // home-scoped and `/ws` is per canvas, so nothing replicates it. What
-      // brings it to the other replicas is `mergeRemoteIdentity`, off the
-      // `colors` map every snapshot, resume and roster already carries.
-      if (this.home) {
-        await this.home.submitOp({
-          projectId: null,
-          actor: request.actor,
-          op: request.op,
-          ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
-        });
+      /**
+       * A color is the actor's own, home-scoped, and every screen that paints
+       * that face is at a home — so on a replica it goes up first and is
+       * applied here after. It does not come back down: the actors log is
+       * home-scoped and `/ws` is per canvas, so nothing replicates it. What
+       * brings it to the other replicas is `mergeRemoteIdentity`, off the
+       * `colors` map every snapshot, resume and roster already carries.
+       *
+       * **Every home, not one** (phase 10.3), and that follows directly from
+       * the sentence above rather than being a new policy. The actors log is
+       * home-scoped and never replicates down, so this face exists separately
+       * at each home it has ever appeared at — telling one of them would leave
+       * the other painting the old colour forever, on the same person, with
+       * nothing to correct it.
+       *
+       * Best-effort and in parallel, per home. A colour is a preference: one
+       * home being unreachable must not refuse a repaint the person can see
+       * happening locally the moment this returns.
+       */
+      const homes = this.homes?.all() ?? [];
+      if (homes.length > 0) {
+        await Promise.allSettled(
+          homes.map((home) =>
+            home.submitOp({
+              projectId: null,
+              actor: request.actor,
+              op: request.op,
+              ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+            }),
+          ),
+        );
       }
       const runtime = await this.actors();
       const ts = new Date().toISOString();
@@ -432,22 +474,53 @@ export class Engine {
       // can honestly see.
       await this.requireActor(request.badgeId, request.actor.id);
       /**
+       * **Which home this op goes to, resolved once** (phase 10.3).
+       *
+       * A birth is the one op that ESTABLISHES a routing rather than following
+       * one, so it is the one that takes the address stated in the request —
+       * the marker's assertion, ridden up beside the op. `bind` writes the row
+       * (naming the stated address, else the birth default, else null for
+       * "here") before anything is forwarded, and hands back the connection.
+       *
+       * Every other op FOLLOWS the row its canvas already has. A home-scoped
+       * op with no canvas (`actor.setColor` never reaches here; a claim goes
+       * through `claim()`) resolves to nothing and is applied locally, which is
+       * what it always did.
+       */
+      const home = await this.homeFor(request);
+      /**
        * **The answer that never came, asked again** (phase 10).
        *
        * On the writer chain and before anything is forwarded or applied, so a
-       * retry and the op it retries can never interleave. On a REPLICA this is
-       * deliberately not consulted — the forward carries `opId` up and the home
-       * is the single writer, so the home is where the question is answered;
-       * asking here as well would be a replica holding an opinion about an
-       * order it does not own.
+       * retry and the op it retries can never interleave. For a canvas whose
+       * home is elsewhere this is deliberately not consulted — the forward
+       * carries `opId` up and that home is the single writer, so that is where
+       * the question is answered; asking here as well would be a replica
+       * holding an opinion about an order it does not own.
        */
-      if (!this.home && request.opId !== undefined) {
+      if (!home && request.opId !== undefined) {
         const already = await this.alreadyWritten(request);
         if (already) return already;
       }
-      if (this.home) return this.forwardSubmit(this.home, request);
+      if (home) return this.forwardSubmit(home, request);
       return this.applyAndPersist(request, undefined);
     });
+  }
+
+  /**
+   * Where this op's write belongs: a home, or null for "this daemon".
+   *
+   * On the writer chain by construction (its one caller is inside `enqueue`),
+   * which is what makes the row `bind` writes and the forward that follows it
+   * one indivisible step. Two births of one id cannot interleave and end up
+   * with a row from one and a forward from the other.
+   */
+  private async homeFor(request: SubmitRequest): Promise<HomeConnection | null> {
+    if (!this.homes) return null;
+    if (request.op.type === "project.create") {
+      return this.homes.bind(request.op.projectId, request.home ?? null);
+    }
+    return request.projectId === null ? null : this.homes.for(request.projectId);
   }
 
   /**
@@ -527,8 +600,17 @@ export class Engine {
        * upward before the claim is applied. See `preferredName`. Everything
        * this comment says about the claim itself is untouched: the session key
        * still never leaves, and the two tables still hold different things.
+       *
+       * **Every home, not one** (phase 10.3), for `setActorColor`'s reason
+       * exactly: a badge at each home has to be made to vouch for this actor
+       * separately, because a claim is a fact about one desk's badge and no
+       * desk tells another. Announcing at one home would leave a forwarded
+       * write to a canvas at the OTHER refused `not-your-actor` until
+       * `HomeLink.ensureClaim` re-made the claim on its way — which it does,
+       * so this stays what it always was: a latency saving, never the only
+       * chance.
        */
-      if (this.home) void this.home.announceActor(entry.envelope.actor);
+      for (const home of this.homes?.all() ?? []) void home.announceActor(entry.envelope.actor);
       return entry;
     });
   }
@@ -720,7 +802,11 @@ export class Engine {
       // 4's "and in Priya's `~/.isocan` by hash", which is how an agent's
       // hands reach it. Content addressing makes "both" cheap to be right
       // about — the same bytes hash the same on either side.
-      if (this.home) await this.home.putBlob(projectId, data, meta);
+      //
+      // THIS canvas's home, since phase 10.3: bytes follow the ops that name
+      // them, and the ops go where the canvas's row says.
+      const home = this.homes?.for(projectId) ?? null;
+      if (home) await home.putBlob(projectId, data, meta);
       return this.store.putBlob(projectId, data, meta);
     });
   }
@@ -765,11 +851,13 @@ export class Engine {
       // rebuilt from the log, and a replica whose live log was re-snapshotted
       // (the home could not serve a tail) holds no entries to walk. Choosing
       // what to undo here and forwarding the resulting op would be a second
-      // opinion about a stack that has one owner.
-      if (this.home) {
+      // opinion about a stack that has one owner. That reasoning was always
+      // per canvas; phase 10.3 is only where the lookup caught up with it.
+      const home = this.homes?.for(projectId) ?? null;
+      if (home) {
         return this.landRemote(
           projectId,
-          await this.home.undo(projectId, {
+          await home.undo(projectId, {
             actor,
             ...(clientId !== undefined ? { clientId } : {}),
           }),
@@ -801,10 +889,12 @@ export class Engine {
   redo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       await this.requireActor(badgeId, actor.id);
-      if (this.home) {
+      // This canvas's home; see `undo` above.
+      const home = this.homes?.for(projectId) ?? null;
+      if (home) {
         return this.landRemote(
           projectId,
-          await this.home.redo(projectId, {
+          await home.redo(projectId, {
             actor,
             ...(clientId !== undefined ? { clientId } : {}),
           }),
@@ -1010,6 +1100,56 @@ export class Engine {
    * claimed here a second ago, whose announcement is still in flight) keeps
    * its local row instead of being erased by an answer that simply does not
    * mention it.
+   *
+   * ---
+   *
+   * **A RENAME THAT DID NOT REACH A HOME IS LOST WHEN THAT HOME COMES BACK.
+   * Measured, 2026-08-24 (phase 10.3), not reasoned about.**
+   *
+   * The mechanism is the loop below: `at: now` is stamped on whatever a roster
+   * carries and a differing name is overwritten unconditionally. The wire
+   * carries `names: Record<actorId, string>` with **no timestamps**, so
+   * last-writer-wins is not available here without a protocol change — the
+   * only thing this code can know about a name is that a home said it just
+   * now, which is exactly what makes the stale one win.
+   *
+   * What the measurement did: two homes, one daemon holding a canvas at each.
+   * Kenny renames himself to Isaac while H2 is down. The announcement reaches
+   * H1. H2 comes back on the same address. What was observed at the daemon:
+   *
+   * - `Isaac → Kenny`, within a couple of seconds of H2's first roster, **and
+   *   it stayed Kenny.** Five seconds of sampling, one transition, no
+   *   recovery. H1 went on saying Isaac and H2 went on saying Kenny, so the
+   *   two homes now disagree permanently and the machine sides with the stale
+   *   one.
+   * - **A live relay does NOT correct it.** There was a session on H2's canvas
+   *   relaying continuously throughout, which is the mechanism that was
+   *   supposed to heal this (`ensureClaim`'s cache is keyed by id AND name, so
+   *   a relay carrying the new name would re-claim it). It carried the name
+   *   the roster had just overwritten, which is the old one, so the cache was
+   *   never asked about the new one.
+   * - **A WRITE does correct it — but only if the new name is still held
+   *   somewhere outside this daemon.** Posting an op with `actor: {id, name:
+   *   "Isaac"}` brought both the daemon and H2 back to Isaac immediately. In
+   *   practice a person's CLI resolves its name FROM this registry, which by
+   *   then says Kenny, so a real rename is not flapping — it is gone.
+   *
+   * **And it is NOT new**, which is the half the design got wrong and the half
+   * that matters most for what to do about it. The control — the same rename
+   * against a daemon with ONE home — flapped identically: `Kenny`, with no
+   * transition away from it, from the moment the home returned. Phase 10.3 did
+   * not create this seam. It made the WINDOW ordinary: before it, a daemon
+   * whose home was down refused every write on the machine, so nobody carried
+   * on working through an outage and nobody renamed themselves during one.
+   * Now a canvas at a reachable home keeps working while another home is
+   * away, so the window is a normal afternoon.
+   *
+   * Left as a named seam rather than fixed here, deliberately: the fix is
+   * timestamps on the wire (`names: Record<actorId, {name, at}>`), which is a
+   * protocol change on three message types, and this phase's Work is
+   * elsewhere. What is NOT acceptable is the version of this comment that said
+   * "transient and self-healing" — that was a hypothesis, and it measured
+   * false.
    */
   mergeRemoteIdentity(colors: ActorColors, names: ActorNames): Promise<void> {
     return this.enqueue(async () => {
@@ -1429,11 +1569,29 @@ export class Engine {
    *   old to know the route — falls back to local allocation, which is what a
    *   replica did before and what keeps it usable with no home in sight.
    *
-   * The seam left, named rather than smoothed: two replicas asking in the same
-   * instant can be handed the same name, and the second one's `announceActor`
-   * meets the home's refusal exactly as it does today. Closing that would mean
-   * RESERVING a name at the home, and a reservation is a claim — which is the
-   * thing that must not forward.
+   * **WHICH home is asked, under many of them** (phase 10.3), and this is the
+   * one site in the table that did not simply fall out. A nameless claim is
+   * not about a canvas, so `for(projectId)` has nothing to look up; and asking
+   * every home and intersecting the answers is **not available**, because
+   * `freeName` returns one name out and never the taken set, on purpose (see
+   * `heldNames` — a route that could return the taken set would be the home
+   * listing its rosters to anyone who knocked).
+   *
+   * Two things make it tractable. `actor.claim` carries an optional
+   * `projectId` — phase 7's marked hole, exactly the shape needed here — so a
+   * claim that names a canvas asks THAT canvas's home. A claim that names none
+   * asks `birth()`: the home this machine's next canvas goes to, which is the
+   * best available proxy for where this identity is heading.
+   *
+   * The seam left, named rather than smoothed, and **widened by exactly one
+   * notch**: two replicas asking in the same instant can be handed the same
+   * name, and now also a name free at one home may be taken at another. Both
+   * end the same way — the second one's `announceActor` meets that home's
+   * refusal exactly as it does today, with the home's own words. Closing
+   * either would mean RESERVING a name at a home, and a reservation is a claim
+   * — which is the thing that must not forward. So no reservation is built
+   * here; the fallback below is the answer, and it is the same fallback as
+   * "the home did not answer".
    */
   private async preferredName(
     request: ClaimRequest,
@@ -1441,14 +1599,16 @@ export class Engine {
     shelved: ActorClaim | undefined,
   ): Promise<{ preferred?: string }> {
     const op = request.op;
-    if (!this.home) return {};
+    if (!this.homes) return {};
     if (op.name !== undefined || op.as !== undefined) return {};
     // `fresh` allocates even for a key that is already somebody — that is what
     // being a second Kenny on purpose means — so it asks even when resuming
     // would not.
     if (!op.fresh && (own.some((row) => row.sessionKey === op.sessionKey) || shelved)) return {};
+    const home = op.projectId !== undefined ? this.homes.for(op.projectId) : this.homes.birth();
+    if (!home) return {};
     try {
-      return { preferred: await this.home.freeName() };
+      return { preferred: await home.freeName() };
     } catch {
       return {};
     }

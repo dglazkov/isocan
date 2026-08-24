@@ -244,6 +244,41 @@ export interface PostOpRequest {
    * phase 10 is unchanged.
    */
   opId?: string;
+  /**
+   * **Where this canvas is being born** — `project.create` only (phase 10.3).
+   *
+   * The home is a property of the CANVAS, not of the daemon, and this is how
+   * the daemon is told which one at the only moment it can be told: a birth.
+   * The value is the address the CLI resolved once, from the directory's
+   * marker if it has one and the birth default otherwise — so what travels is
+   * **the marker's assertion**, committed configuration read out of
+   * `.isocan/project.json`, and not a flag.
+   *
+   * **It sits here, beside `opId` and `clientId`, and NOT in the op
+   * vocabulary**, and the refusal is worth stating where somebody would
+   * otherwise propose the op. A home assignment is not canvas state: no
+   * reducer produces it; a hosted home cannot state its own public address
+   * (`homeUrl` means "the address I answer to", and dev.isocan.io's daemon has
+   * none), so it could never write the field truthfully for a canvas born
+   * there; and `adoptRemoteSnapshot` rewrites the local project record from
+   * the home's copy, so a replicated field would be clobbered on exactly the
+   * machine whose routing depends on it. Worst of all, a replicated field
+   * would let one machine rewrite another machine's routing. This is request
+   * metadata about one hop, the same category as `opId`.
+   *
+   * **Meaningful only for `project.create`, refused elsewhere, and
+   * write-once.** It ESTABLISHES a row for a canvas coming into existence and
+   * can never re-point one that exists, because a second create for a live id
+   * is `duplicate-id` or a replay. That bound is what makes the surface an
+   * agent can reach exactly "the canvas I am creating right now is born at X"
+   * — the same authority `isocan setup <address>` already has — rather than
+   * "point this machine somewhere else", which is what a `--home` flag would
+   * be and which phase 7.5 refused.
+   *
+   * Absent means "wherever this daemon's birth default says", which for a
+   * daemon with no default is right here.
+   */
+  home?: string;
   op: Operation;
 }
 
@@ -449,8 +484,21 @@ export function healthPath(base: string): string {
  *   sends one that home ignores, and over-replicates the way it does today —
  *   a known, pre-existing behaviour rather than a new failure.
  * - `"admitted"` — admissions and nothing else. What a replica asks.
+ * - `"here"` — of the admissible ones, the canvases **this daemon is the home
+ *   of** (phase 10.3). A third question rather than a narrowing of the other
+ *   two, and it exists because of a real hole: the web app's project list
+ *   links to a canvas with a react-router `<Link>`, which is a client-side
+ *   navigation that never touches the server, so the per-canvas page guard on
+ *   `GET /p/<id>` is simply bypassed for anything in that list. A local origin
+ *   would then happily render a replica of a canvas that lives at dev —
+ *   two doors onto one canvas, two cookies, two service workers, two browser
+ *   replicas, the local one stale by construction, which is `local-bridge.md`'s
+ *   own worst case: *"two surfaces agreeing with each other and both wrong."*
+ *   The list route learns the question instead, and — per this route's own
+ *   standing rule — **the caller states which, the route never sniffs who
+ *   called**.
  */
-export type ProjectsReach = "admitted" | "admissible";
+export type ProjectsReach = "admitted" | "admissible" | "here";
 
 /** The query parameter carrying a {@link ProjectsReach}. One spelling, so a
  * caller cannot get it subtly wrong and silently receive the wide answer. */
@@ -498,12 +546,63 @@ export const HOME_JOIN_ROUTE = "/api/home/join";
 
 export interface JoinCanvasRequest {
   projectId: string;
+  /**
+   * **Which home to fetch it from** (phase 10.3) — the marker's address, or
+   * the one a person pasted into `isocan setup`.
+   *
+   * Before many homes there was one possible answer and the field would have
+   * been noise. Now the good case is precisely a marker naming a home this
+   * daemon has never dialled: a repo checked out on a new machine, whose
+   * `.isocan/project.json` says the canvas lives at dev. That must WORK rather
+   * than refuse — a new link, a badge from `identity.json`'s `auth` block or
+   * knocked for, the home's own door test, and a row written — which is what
+   * makes "the marker decides" true rather than aspirational.
+   *
+   * Absent falls back to the birth default, which is what a pre-10.3 caller
+   * sends and what keeps `fetchFromHome`'s speculative ask working unchanged.
+   */
+  home?: string;
 }
 
 /** The home's own row for that canvas — title included, so a caller can say
  * what arrived rather than echoing back the id it already had. */
 export interface JoinCanvasResponse {
   project: Project;
+}
+
+/**
+ * **Which canvas lives where, and which homes are answering** — the one read
+ * behind everything `isocan` needs to say about homes (phase 10.3).
+ *
+ * One round trip answers four questions that used to be one field on the
+ * health route and are now genuinely plural: `isocan home`'s per-canvas
+ * report, `isocan status`'s role line, the CLI's per-canvas URL building (the
+ * cheerful-wrong-address hazard in its 10.3 form is printing
+ * `dev.isocan.io/p/<a canvas that lives on this laptop>`), and — named here so
+ * phase 12.7 finds it — **the value the local bridge's `frame-ancestors` lock
+ * and its `postMessage` origin check must derive from.** Those two were
+ * specified against "the home this daemon answers to", a value that no longer
+ * exists; they derive from the SERVED CANVAS's home, and this is the route
+ * that answers it.
+ *
+ * The health payload keeps its `home` key, redefined as the birth default,
+ * because `stalenessOf` and older CLIs already read that body and the birth
+ * default is the one whole-daemon answer that survives. Per-canvas questions
+ * come here.
+ */
+export const HOMES_ROUTE = "/api/homes";
+
+export interface HomesResponse {
+  /** Where a canvas born here, naming nothing, would be born. Null: here. */
+  birth: string | null;
+  /** Every canvas this daemon holds → its home, or null for "this daemon is
+   * its home". Absent rows and null rows mean the same thing; this map spells
+   * them all out so a caller does not have to know that. */
+  canvases: Record<string, string | null>;
+  /** Every home this daemon is dialling. `reachable` is null until the first
+   * poll has been answered — the daemon reports what it last observed rather
+   * than probing per request, because `isocan status` asks this often. */
+  links: { url: string; reachable: boolean | null }[];
 }
 
 export interface ApiError {

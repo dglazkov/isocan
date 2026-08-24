@@ -21,7 +21,14 @@ in the same change.
   touches it, and the protocol never learns it exists.
 - Constraints inherited from the journey and designs, not re-argued:
   the home is an ordinary isocan daemon (the deployment-detail thesis);
-  people enter through one origin; each canvas has a single writer; the
+  people enter through one origin — **per canvas**, and phase 10.3 is
+  where that had to be said out loud: the constraint was never about the
+  daemon, it is that a given canvas has exactly one door, so its badge
+  cookie, its service-worker registration and its IndexedDB replica live
+  in one origin's storage. A daemon therefore serves pages for the
+  canvases whose home it is and signposts the ones it does not hold,
+  which is how it can serve pages while being somebody's replica at the
+  same time; each canvas has a single writer; the
   two-ledger rule (canvas state replicated, desk ledgers
   innkeeper-private); presence is ephemeral and never written; isocan
   never runs compute; and the protocol admits any innkeeper —
@@ -89,11 +96,11 @@ already serves its own shell, and the CDN in front of it does the rest.
 flowchart LR
     subgraph clients["clients — all speak the same ops"]
         B["browsers<br/>(web app + service worker)"]
-        LD["local daemons<br/>(thick replicas)"]
+        LD["local daemons<br/>(home to some canvases,<br/>replica for others)"]
         TC["thin CLIs<br/>(cloud agents)"]
     end
     B --> LB["isocan.io<br/>HTTPS LB + CDN"]
-    LD --> LB
+    LD -->|"per canvas's home"| LB
     TC --> LB
     LB --> CR["Cloud Run — one instance<br/>the daemon: door · engine (single writer) ·<br/>presence hub · WS rooms · shell"]
     CR --> FS["Firestore<br/>oplog docs · desk ledgers"]
@@ -102,6 +109,14 @@ flowchart LR
     CR -.fires dispatch.-> HOOK["launch hooks<br/>(repo CI, harness clouds)"]
     FBA["Firebase Auth"] -.ID tokens, verified once.-> CR
 ```
+
+The `LD` box is a **role, not a state**, and since phase 10.3 that is
+literal: one local daemon is the home of the canvases born on it and a
+replica for the ones it joined, holding one link per home its
+`~/.isocan/homes.json` names. So its arrow is labelled per canvas rather
+than per machine: a laptop with work at dev and work at a team's own home
+draws two arrows out of that one box, and the canvases it is itself the
+home of draw none at all — nothing about them leaves the machine.
 
 The process is still one daemon. Everything that makes it correct
 stays in-process exactly as it is today: the engine's single-writer
@@ -137,8 +152,12 @@ snapshot, replay the oplog tail through the reducer. An instance
 restart, a deploy, a crash — all the same path, now reading from GCS
 and Firestore, and already tested every day by the file backing.
 
-**What a replica's store actually holds, as of phase 6.** "Canvas state
-replicates through the store" is true of the state and not of the
+**What a replica of a given home holds, as of phase 6.** "A replica" is
+a role a daemon holds toward **one home and the canvases recorded as
+that home's** — never a state a whole machine is in, which is what phase
+10.3 deleted — so everything below is about one such relationship, and a
+daemon in three of them has three of these stories at once. "Canvas
+state replicates through the store" is true of the state and not of the
 history. A joining replica can only present cursor 0, and the connect
 handshake answers a cursor it cannot serve with a snapshot — so a
 replica's oplog begins at the moment it joined, and a replica that ever
@@ -149,20 +168,53 @@ and redo are the home's, and `wait` and `tail` are cursor-based — but
 "sovereignty by replica is also disaster recovery" is a claim about the
 canvas, not about its oplog, and this is the line that says so.
 
-**Which canvases a replica holds, as of phase 8.** Not "the ones its
-home will show it" — **the ones it was let into**. A replica's sweep asks
-its home `GET /api/projects?reach=admitted`, which is that badge's
-admissions and nothing else, and unions the answer with what this machine
-already holds locally (so a home that is down cannot make a laptop forget
-its work, and a canvas born here survives on its own store as well as on
-the `{root: "created"}` admission the home wrote when it was made). The
-listing route still answers the WIDE question by default, because a
+**Which canvases a replica holds, as of phase 8 — narrowed again in
+phase 10.3.** Not "the ones its home will show it" — **the ones it was
+let into**. A replica's sweep asks its home `GET
+/api/projects?reach=admitted`, which is that badge's admissions and
+nothing else, and unions the answer with the canvases this machine has
+**recorded** as that home's: `~/.isocan/homes.json`, one row per canvas,
+written at binding — a birth, a join, a redeemed pass — and never
+inferred. That local half used to be *everything on this disk*, and with
+one home per daemon the two were the same set. With several they are not,
+and the old line has a dev link dialling a prod canvas: a 404 is the good
+outcome, and the bad one is the clone-and-twin shape, where the wrong
+home answers with a **snapshot** and `adoptRemoteSnapshot` overwrites the
+local copy with a stranger's canvas of the same name. The narrowing is a
+data-loss fix, not tidiness.
+
+What that half was there for is **preserved, and stronger**: a home that
+is down still cannot make a laptop forget its work, because the record is
+now a durable row rather than a set derived from a listing at sweep time.
+A canvas born here still survives on two legs, one of them replaced — the
+row written at birth naming this home, and the `{root: "created"}`
+admission the home wrote when it was made; "it is in the local store" was
+the leg that had to go, because that is precisely what must no longer be
+enough.
+
+And the union gained an arbiter. A canvas the home offers that this
+machine has recorded as living **somewhere else** — or as living right
+here — is **refused rather than adopted**: not dialled, and said out loud
+once, naming both addresses and the id. Two homes claiming one canvas id
+is the twin case; it belongs to phase 13's re-homing, a poll cannot
+resolve it, and silently adopting either is the worst outcome available,
+because the loser's copy is overwritten with nothing anywhere saying so.
+A log line and not a throw — the other canvases at that home are
+innocent.
+
+The listing route still answers the WIDE question by default, because a
 browser asks a different question on the same route — "what can I open
 from here", which on a solo home includes the canvas a CLI just made
 under a badge the tab has never carried — and the caller states which,
-never the route sniffing who called. Enumerate-and-mirror was the easiest
-thing that worked while a home had one member; it is how a stranger's
-canvas landed on a laptop the moment a link grant was on. An arrival that
+never the route sniffing who called. Phase 10.3 added a third question to
+the same route for the same reason: `?reach=here`, the canvases this
+daemon is the home of, which is what the web app's project list asks,
+because its links are client-side navigations that never reach the
+per-canvas page guard and the local origin would otherwise render a
+replica of a canvas that lives at dev. Enumerate-and-mirror was the
+easiest thing that worked while a home had one member; it is how a
+stranger's canvas landed on a laptop the moment a link grant was on. An
+arrival that
 holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
 `isocan setup` — asks for that one canvas by name (`POST
 /api/home/join`), and the home runs the same door test it would have run
@@ -198,11 +250,29 @@ those needs a coordination story — so there is one instance, and the
 ceiling is stated in numbers instead of hidden.
 
 **The ceiling.** Cloud Run tops out at 1000 concurrent requests per
-instance, and a WebSocket holds one for its lifetime. Every person is
-one socket, every thick daemon one, every thin agent one: the ceiling
-is roughly a thousand simultaneous connections, minus long-polls —
-hundreds of concurrently active collaborators before anything has to
-change, with a vertical lever (4 vCPU) before an architectural one.
+instance, and a WebSocket holds one for its lifetime — so the ceiling is
+roughly a thousand simultaneous sockets, minus long-polls.
+
+**What counts as one, corrected 2026-08-24 (phase 10.3).** This line used
+to read "every person is one socket, every thick daemon one, every thin
+agent one", and the middle third was never true: `/ws` is **per canvas**,
+so a thick replica holds one socket per canvas it carries, not one per
+machine. A laptop replicating twelve canvases is twelve of the thousand.
+The unit is a **(replica, canvas) pair**, and it always was — phase 6
+built `HomeLink` with a socket per canvas on its first day, and nobody
+went back to the arithmetic. A person is genuinely one (a tab shows one
+canvas), and a thin agent is genuinely one; it is the machines that were
+undercounted, which is the wrong direction for a ceiling to be wrong in.
+
+Phase 10.3 changes the shape of that count without changing its total: a
+daemon's sockets now divide across the homes it dials, so **a given home
+sees one socket per canvas that machine has recorded as its own** rather
+than for everything on its disk. The narrowing that made writes go to
+the right home also stopped a two-home laptop opening every canvas
+against both. The order of magnitude is unchanged — hundreds of
+concurrently active collaborators before anything has to change, with a
+vertical lever (4 vCPU) before an architectural one — but the number to
+divide by is canvases-in-use, not people.
 
 **The second ceiling, which is Firestore's.** A collection whose
 document ids increase monotonically concentrates on one tablet —
@@ -467,6 +537,20 @@ deliberately unchosen; if it is ever taken up, the browser replica above
 becomes the fallback for machines with no daemon rather than the only
 answer.
 
+One line of that design changed under phase 10.3, and it is on the map
+rather than only in the design doc because it is the input phase 12.7
+builds against. The bridge's two locks — `Content-Security-Policy:
+frame-ancestors` on the bridge document, and the `event.origin` check on
+every `postMessage` — were drawn deriving from "the home this daemon
+answers to", a whole-daemon value that no longer exists. They derive from
+**the home of the canvas the framing page is showing**, and the route
+that answers that is `GET /api/homes` (`{birth, canvases, links}`, one
+round trip). A daemon that is the home of the canvas in the frame is
+being framed by its own origin and locks to it; a daemon replicating that
+canvas locks to the home that serves it; and the same daemon can be both
+at once for two different tabs, which is exactly why the value cannot be
+read off the machine.
+
 ## Distance to the map
 
 What the code does not have yet — an inventory, not a sequence (the
@@ -512,6 +596,17 @@ libraries are 156 packages and ~43 MiB, and
 `npm i -g github:dglazkov/isocan#release` resolves the ROOT manifest
 only — so an installed CLI stays at 81 packages and 18.6 MiB, and could
 not resolve the specifier even if something asked for it.
+
+**Phase 10.3 turned that commitment from permitted into physical.** It
+was always true that a team could run its own home; it was true one
+machine at a time, because a daemon answered to exactly one address and
+pointing it at a second home demoted every canvas on the disk. The home
+is now a property of the **canvas** — a row per canvas in
+`~/.isocan/homes.json` — so one laptop holds work at two innkeepers and
+work of its own simultaneously, and moving one canvas to a different home
+does not conscript the others. "Which innkeeper" stopped being a setting
+on the machine, which is what a commitment to *any* innkeeper has to mean
+in practice for somebody who works for two teams.
 
 The litmus test, to be kept passing: `isocan serve` on a rented VM with
 a disk is a complete home. A feature that only works on the GCP home has
