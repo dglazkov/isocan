@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CanvasState, Item } from "@isocan/core";
 import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
+import { KIND_GLYPH, KIND_LABEL } from "../lib/kinds.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
@@ -28,24 +29,6 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 export function openFilesPanel(projectId: string, open: boolean): void {
   openPanel(projectId, open ? "files" : null);
 }
-
-const KIND_LABEL: Record<ItemKind, string> = {
-  drawing: "Drawings",
-  image: "Images",
-  video: "Video",
-  document: "Documents",
-  site: "Sites",
-  other: "Files",
-};
-
-const KIND_GLYPH: Record<ItemKind, string> = {
-  drawing: "✎",
-  image: "▣",
-  video: "▶",
-  document: "▤",
-  site: "◍",
-  other: "◇",
-};
 
 /** Bytes as a person reads them. */
 function formatSize(bytes: number): string {

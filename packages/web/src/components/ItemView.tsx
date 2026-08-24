@@ -5,6 +5,7 @@ import type { Actor, Item, Operation } from "@isocan/core";
 import {
   isDesignSystem,
   BROWSER_MIME,
+  itemKind,
   annotationsOf,
   isAnnotation,
   isStarred,
@@ -20,7 +21,8 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome, nameFits, nameRoom } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome, nameFits, nameRoom, underSlotFor } from "../lib/chrome.ts";
+import { KIND_GLYPH, KIND_NOUN } from "../lib/kinds.ts";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
@@ -87,7 +89,16 @@ export function ItemView({
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
   // name row rather than another corner.
+  const kind = itemKind(item);
   const isBrowser = current.mimeType === BROWSER_MIME;
+  // What the strip under the item says right now. The rule lives in
+  // lib/chrome.ts, where it is argued and tested.
+  const underSlot = underSlotFor({
+    entered,
+    resizing: resize !== null,
+    soleSelection,
+    interactive: current.mimeType === "text/html" || isBrowser,
+  });
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
   const isInk = isDrawingItem(item);
@@ -402,12 +413,21 @@ export function ItemView({
             ...(namesFit || renaming ? null : { display: "none" }),
           }}
         >
+        {/* What this item IS, before its name — so a canvas of cards reads as
+            screens, images and notes at a glance, without opening the Files
+            panel. Same glyph the panel groups under (lib/kinds.ts), because a
+            mark that means one thing in a list and another on the thing itself
+            is worse than no mark. It is not a button: the kind is derived from
+            the file and there is nothing to set. */}
+        <span className="kind-glyph" aria-hidden="true" title={KIND_NOUN[kind]}>
+          {KIND_GLYPH[kind]}
+        </span>
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : (
           <span
             className="name"
-            title={`${item.title} (${current.filename}) — double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
+            title={`${item.title} (${current.filename}) — ${KIND_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
           >
             {item.title}
           </span>
@@ -479,7 +499,24 @@ export function ItemView({
 
         {worker && <div className="work-sheen" />}
       </div>
-      {(current.mimeType === "text/html" || isBrowser) && !entered && roomy && (
+      {/* One slot under the item, and two things that want it.
+          
+          They are different KINDS of message and they have different triggers,
+          which is what lets them share: the size is a fact about the thing you
+          are currently manipulating (selected, or mid-resize), and the hint is
+          an evergreen tip shown while you point at it. When both apply the size
+          wins — if you are dragging a corner, the live number is the whole
+          point, and "double-click to interact" is something you have already
+          read. Sharing the slot rather than stacking two pills also keeps the
+          space under an item quiet, which is where comment pins land. */}
+      {underSlot === "size" && roomy && (
+        <div className="item-hint size" style={chrome}>
+          <span>
+            {Math.round(width)} × {Math.round(height)}
+          </span>
+        </div>
+      )}
+      {underSlot === "hint" && roomy && (
         <div className="item-hint" style={chrome}>
           <span>double-click to interact</span>
         </div>
