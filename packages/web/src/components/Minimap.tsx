@@ -123,7 +123,7 @@ export function Minimap() {
           y={mapY(item.y)}
           width={Math.max(item.width * scale, 2)}
           height={Math.max(item.height * scale, 2)}
-          fill="#c6c9c0"
+          className="minimap-item"
           rx={1}
         />
       ))}
@@ -132,12 +132,11 @@ export function Minimap() {
           key={session.sessionId}
           className={`minimap-dot${session.activity ? " working" : ""}${
             quietFor(session) ? " quiet" : ""
-          }`}
+          }${session.sessionId === followSessionId ? " followed" : ""}`}
           cx={mapX(locus.x)}
           cy={mapY(locus.y)}
           r={3}
           fill={actorColorIn(colors, session.actor.id)}
-          stroke={session.sessionId === followSessionId ? "#1f3fd0" : "#fff"}
           strokeWidth={1.2}
         >
           <title>{session.label ?? session.actor.name}</title>
@@ -148,8 +147,8 @@ export function Minimap() {
             y={mapY(vpTopLeft.y)}
             width={(vpBottomRight.x - vpTopLeft.x) * scale}
             height={(vpBottomRight.y - vpTopLeft.y) * scale}
+            className="minimap-viewport"
             fill="none"
-            stroke="#1f3fd0"
             strokeWidth={1.5}
             rx={2}
           />

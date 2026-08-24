@@ -105,7 +105,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   return (
     <div className="own-cursor" ref={ref} aria-hidden style={{ opacity: 0 }}>
       <svg width="18" height="20" viewBox="0 0 18 20">
-        <path d="M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z" fill={color} stroke="#fff" strokeWidth="1" />
+        <path d="M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z" fill={color} strokeWidth="1" />
       </svg>
       <span className="cursor-chip" style={{ background: color }}>
         {actorName(actor)}

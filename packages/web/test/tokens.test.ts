@@ -156,3 +156,48 @@ describe("every token used is a token defined", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The stylesheet parses at all.
+ *
+ * Every check above reads the CSS with a regex, which is the right tool for
+ * asking what it SAYS and useless for asking whether a browser can read it.
+ * That gap shipped: a comment lost its opening `/*` during an edit, six lines
+ * of prose became top-level CSS, postcss refused the file, the app rendered a
+ * blank page with an error overlay — and the entire suite stayed green,
+ * because `npm test` never asks anyone to parse this file. Same shape as
+ * lessons.md #16 and as `var(--nope)` above: a bad value that never threw.
+ *
+ * Not a CSS parser, and not trying to be. Two structural facts a browser
+ * needs, both of which the real failure broke.
+ */
+describe("the stylesheet is something a browser can read", () => {
+  it("closes every comment it opens", () => {
+    const opens = (css.match(/\/\*/g) ?? []).length;
+    const closes = (css.match(/\*\//g) ?? []).length;
+    expect(opens, "an unpaired /* or */ — the prose after it becomes CSS").toBe(closes);
+  });
+
+  it("nests its braces, and puts every declaration inside one", () => {
+    // Comments blanked, line numbers kept, so a failure points somewhere.
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+    let depth = 0;
+    let line = 1;
+    const loose: string[] = [];
+    for (const ch of text) {
+      if (ch === "\n") line++;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        expect(depth, `a } with no { before it, line ${line}`).toBeGreaterThanOrEqual(0);
+      } else if (ch === ";" && depth === 0) loose.push(`line ${line}`);
+    }
+    expect(depth, "the file ends inside a block — an unclosed {").toBe(0);
+    // No `@import`/`@charset` here, so at the top level a `;` can only be a
+    // declaration that has escaped its rule, or prose that has escaped its
+    // comment. Both are the same bug.
+    expect(loose, "a ; outside every block — a declaration or a comment lost its wrapper").toEqual(
+      [],
+    );
+  });
+});

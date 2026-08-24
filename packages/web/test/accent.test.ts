@@ -19,10 +19,14 @@ import { describe, expect, it } from "vitest";
  * below can be deleted — which is the point. A guard should expire when the
  * thing it guards becomes impossible.
  *
- * The third case is a ratchet. The fourteen rules that predate it are listed;
- * the list must shrink and must never grow. Every entry is removed the same
- * way: `var(--accent)` -> `var(--accent-text)`. That substitution is a no-op
- * in light mode, where the two tokens hold the identical value.
+ * The third case was a ratchet over a list of fourteen rules that predated it,
+ * each one measured at 2.17–3.32:1 on a dark surface. The list is empty now —
+ * every entry came off the same way, `var(--accent)` -> `var(--accent-text)`,
+ * which is a no-op in light where the two tokens hold the identical value —
+ * so the ratchet has closed into a plain rule: nothing paints text in the fill
+ * accent. Three of the fourteen were confirmed in a browser first
+ * (`.shelf-glyph` 2.50, `.main-glyph` 2.90, `.promote` 2.90) and re-measured
+ * after at 6.32, 6.32 and 7.33.
  */
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
@@ -102,39 +106,17 @@ function paintsAccentText(): string[] {
   return out;
 }
 
-/**
- * Fourteen rules, measured at 2.5–2.9:1 in dark. Shrink this list; do not add
- * to it. `var(--accent)` -> `var(--accent-text)` is the whole fix.
- */
-const KNOWN_UNREADABLE_IN_DARK = [
-  ".item.selected .item-titlebar",
-  ".star-btn.on",
-  ".thread-popover .thread-actions button.promote",
-  ".main-glyph, .main-pill-glyph",
-  ".mt-glyph",
-  ".mention-dot.command-dot",
-  ".command-card b",
-  ".favourites-glyph",
-  ".favourite-name b",
-  ".files-glyph",
-  ".files-row.active .files-kind",
-  ".files-size em",
-  ".shelf-glyph",
-  ".drop-overlay",
-];
-
-describe("nothing new is painted in the fill accent", () => {
-  it("adds no rule beyond the known list", () => {
-    const added = paintsAccentText().filter((s) => !KNOWN_UNREADABLE_IN_DARK.includes(s));
-    expect(
-      added,
-      "these paint text in --accent, which is 2.5:1 on graphite — use var(--accent-text)",
-    ).toEqual([]);
+describe("nothing is painted in the fill accent", () => {
+  it("finds the rules at all — the parser has to work for this to mean anything", () => {
+    // `--accent` is still a fill in plenty of places; if the stylesheet stopped
+    // mentioning it entirely, the check below would pass by being blind.
+    expect(rules).toMatch(/background:\s*var\(--accent\)/);
   });
 
-  it("keeps the known list honest: every entry still exists", () => {
-    const found = paintsAccentText();
-    const stale = KNOWN_UNREADABLE_IN_DARK.filter((s) => !found.includes(s));
-    expect(stale, "these were fixed or renamed — delete them from the list").toEqual([]);
+  it("paints no text in it", () => {
+    expect(
+      paintsAccentText(),
+      "these paint text in --accent, which is 2.5:1 on graphite — use var(--accent-text)",
+    ).toEqual([]);
   });
 });

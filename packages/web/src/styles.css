@@ -72,6 +72,22 @@
   /* Snapping feedback: blue says "aligned to this line", purple says "these
      two gaps are equal". */
   --guide-spacing: #8b46e0;
+  /* An item drawn in the minimap. Its own token because the literal it
+     replaces was a LIGHT value with no dark twin: #c6c9c0 is a soft grey on a
+     white panel (1.67:1) and a near-white slab on a graphite one (10.51:1),
+     which made the minimap the loudest thing in the dark app. Both values are
+     measured against the panel they sit on and land at the same 1.67. */
+  --map-item: #c6c9c0;
+  /* How much of an actor's own colour survives when it is used as INK.
+     The identity palette is chosen for discs — one literal colour, shared by
+     every client and carried into SVG drawings, so it cannot be re-valued per
+     theme. As words it has to be pulled toward the ink of whichever ground it
+     landed on, and the two grounds need different amounts: 65% of the colour
+     on vellum and 55% on graphite put the whole palette at the same floor
+     (4.90 and 4.94 on the tightest bed either has, the `.mention-me` wash).
+     Higher is more hue and less contrast; these are the highest that clear
+     4.5:1 for all seven colours. */
+  --identity-mix: 65%;
 }
 
 /* Dark: a graphite ground under the same dot grid, slate cards, a brighter
@@ -116,6 +132,8 @@
      `--card`. */
   --running: #3fca8b;
   --guide-spacing: #a672f0;
+  --map-item: #3b3f48;
+  --identity-mix: 55%;
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
@@ -606,7 +624,7 @@ button, select { color: inherit; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
-.item.selected .item-titlebar { color: var(--accent); }
+.item.selected .item-titlebar { color: var(--accent-text); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
 .star-btn {
@@ -615,7 +633,7 @@ button, select { color: inherit; }
   user-select: none; -webkit-user-select: none; cursor: pointer;
 }
 .star-btn:hover { color: var(--ink); }
-.star-btn.on { color: var(--accent); }
+.star-btn.on { color: var(--accent-text); }
 
 /* Renaming in place: the label IS the field. Same type, same spot, a hairline
    to say it is live — no fill, no chunky box, nothing that reads as a form.
@@ -987,21 +1005,28 @@ button, select { color: inherit; }
   100% { box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 10px -3px var(--accent-shadow); }
 }
 /* An identity colour written as TEXT. The palette was chosen so every colour
-   reads on both grounds as a DISC; as small text on graphite, Violet is 2.75:1
-   and Forest is 3.3:1, which is unreadable and excludes people. Mixing 40% of
-   the ink into it keeps the hue and takes the whole palette past 5:1. Light
-   mode leaves it exactly as chosen. */
-.who { color: var(--who, currentColor); }
-:root[data-theme="dark"] .who,
-:root[data-theme="dark"] .mention {
-  color: color-mix(in srgb, var(--who, var(--mention-color, var(--accent-text))) 55%, var(--ink));
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .who,
-  :root:not([data-theme="light"]) .mention {
-    color: color-mix(in srgb, var(--who, var(--mention-color, var(--accent-text))) 55%, var(--ink));
-  }
-}
+   reads on both grounds as a DISC; as small text it does not, on EITHER
+   ground, and for the same reason on both — a disc needs 3:1 and a word needs
+   4.5:1. On graphite Violet was 2.75:1. On vellum the failure was quieter and
+   went unfixed for longer: every one of the seven reads at 3.11–4.22:1 inside
+   a `.mention-me` chip, because that chip's background is a 24% wash of the
+   very colour being written on it.
+
+   So the ink is pulled toward whichever ground it landed on, in both themes,
+   by `--identity-mix` — 65% of the colour on vellum, 55% on graphite, each the
+   most hue that still clears 4.5:1 for all seven. One rule now, not a dark
+   one: this used to be a `[data-theme="dark"]` rule plus a
+   `prefers-color-scheme` copy of itself, and the copy was already dead — the
+   theme is stamped on <html> before first paint, so there is no unstamped
+   state for a media query to catch.
+
+   `.mention` gets the same treatment in its own section below; the two have
+   different fallbacks and the fallback is the whole behaviour when nothing set
+   a colour. Here it is `currentColor`, which mixed with `--ink` IS `--ink` —
+   so `.who` on a layout wrapper (the project list puts one around the identity
+   button) stays a no-op instead of tinting what it contains, which is what the
+   old shared rule did in dark. */
+.who { color: color-mix(in srgb, var(--who, currentColor) var(--identity-mix), var(--ink)); }
 
 /* ---------- facepile (who's on canvas) ---------- */
 .facepile {
@@ -1138,7 +1163,7 @@ button, select { color: inherit; }
 .thread-popover .thread-actions button {
   background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
 }
-.thread-popover .thread-actions button.promote { color: var(--accent); }
+.thread-popover .thread-actions button.promote { color: var(--accent-text); }
 
 /* ---------- main thread (#36): docked panel + collapsed pill ---------- */
 /* The designated agent↔user channel. Docked left like the trash panel's
@@ -1158,7 +1183,7 @@ button, select { color: inherit; }
 }
 .main-panel header b { font-size: 12.5px; }
 .main-panel header .spacer { flex: 1; }
-.main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.main-glyph, .main-pill-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
 .main-detach, .main-close {
   background: none; border: none; color: var(--ink-soft); font-size: 11px; padding: 2px 4px;
 }
@@ -1195,7 +1220,7 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-wash);
   border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--card));
-  color: var(--accent); font-size: 13px;
+  color: var(--accent-text); font-size: 13px;
 }
 .mt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mt-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1249,7 +1274,11 @@ button.mt-card:hover { border-color: var(--accent); }
    background is drawn with a spread box-shadow rather than padding so the
    same rule can sit under live text in the composer without moving it. */
 .mention {
-  color: var(--mention-color, var(--accent));
+  /* The wash is the RAW identity colour; the ink on it is that same colour
+     pulled toward the ground by `--identity-mix` — see `.who` above for why.
+     A mention with no actor behind it is a reference, so it falls back to the
+     accent's readable value rather than to whatever colour it inherited. */
+  color: color-mix(in srgb, var(--mention-color, var(--accent-text)) var(--identity-mix), var(--ink));
   background: color-mix(in srgb, var(--mention-color, var(--accent)) 13%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mention-color, var(--accent)) 13%, transparent);
   border-radius: 3px; font-weight: 600;
@@ -1338,7 +1367,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Commands in the "/" menu: the slash itself, not a colour that means nobody. */
 .mention-dot.command-dot {
   width: auto; height: auto; border-radius: 0;
-  color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1;
+  color: var(--accent-text); font-weight: 700; font-size: 12px; line-height: 1;
 }
 /* The row is wider here: a command is a name you may not know, so the menu has
    to say what it does rather than trusting the name to. */
@@ -1355,7 +1384,7 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; flex-direction: column; gap: 5px;
   pointer-events: none;
 }
-.command-card b { font-size: 12px; font-weight: 700; color: var(--accent); }
+.command-card b { font-size: 12px; font-weight: 700; color: var(--accent-text); }
 .command-card b em { font-style: normal; font-weight: 400; color: var(--ink-soft); }
 .command-card span { font-size: 12px; line-height: 1.45; color: var(--ink); }
 .command-card i {
@@ -1420,8 +1449,21 @@ button.mt-card:hover { border-color: var(--accent); }
      others, and it was the one left out. */
   .minimap-dock, .minimap-panel, .minimap-handle { transition-duration: 0.01ms; }
 }
+/* What the map is made of. These three were SVG presentation attributes with
+   colour literals in them until the theme audit found them: a presentation
+   attribute takes no `var()`, so the values could not move with the theme and
+   did not — `#c6c9c0` items read as a soft grey on the white panel (1.67:1)
+   and as a near-white slab on the graphite one (10.51:1), the loudest thing in
+   the dark app; the viewport rectangle drew in the LIGHT accent, 2.25:1 on
+   graphite; and the ring cut around a collaborator's dot was `#fff`, which is
+   the panel in light and a hard white halo in dark. As CSS `fill`/`stroke`
+   they take tokens, and the tokens test can see them. */
+.minimap-item { fill: var(--map-item); }
+.minimap-viewport { stroke: var(--accent); }
 /* A collaborator's place on the map. Clicking one recenters there like any
    minimap click — the dot IS the answer to "where is the agent?" (#39). */
+.minimap-dot { stroke: var(--card); }
+.minimap-dot.followed { stroke: var(--accent); }
 .minimap-dot.working { animation: dot-pulse 1.6s ease-in-out infinite; }
 .minimap-dot.quiet { opacity: 0.55; }
 @keyframes dot-pulse {
@@ -1433,7 +1475,9 @@ button.mt-card:hover { border-color: var(--accent); }
    the canvas says how long that took from its own timestamps. */
 .worked {
   margin-left: 6px; padding: 0 6px; border-radius: 999px;
-  background: var(--chip); color: var(--ink-soft);
+  /* `--ink-soft` here measured 4.41:1 on `--chip` in dark — the one place in
+     the app where the softer of the two muted inks lands on a chip. */
+  background: var(--chip); color: var(--ink-muted);
   font-size: 10px; line-height: 15px; white-space: nowrap;
 }
 
@@ -1499,7 +1543,7 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .favourites header b { font-size: 12.5px; }
 .favourites header .spacer { flex: 1; }
-.favourites-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.favourites-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
 .favourites-empty {
   margin: 0; padding: 16px 14px; color: var(--ink-soft); line-height: 1.5;
 }
@@ -1526,7 +1570,7 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; gap: 5px; padding: 0 2px;
   font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.favourite-name b { color: var(--accent); font-size: 10px; }
+.favourite-name b { color: var(--accent-text); font-size: 10px; }
 
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
@@ -1542,7 +1586,7 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .files-panel header b { font-size: 12.5px; }
 .files-panel header .spacer { flex: 1; }
-.files-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.files-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
 .files-count {
   padding: 0 6px; border-radius: 999px; background: var(--chip);
   color: var(--ink-muted); font-size: 10.5px; line-height: 16px;
@@ -1567,12 +1611,12 @@ button.mt-card:hover { border-color: var(--accent); }
   flex: none; width: 16px; height: 16px; display: block; color: var(--ink-soft);
 }
 .files-kind * { vector-effect: non-scaling-stroke; }
-.files-row.active .files-kind { color: var(--accent); }
+.files-row.active .files-kind { color: var(--accent-text); }
 .files-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .files-name b { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .files-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .files-size { flex: none; color: var(--ink-soft); font-size: 10.5px; font-variant-numeric: tabular-nums; }
-.files-size em { font-style: normal; margin-left: 5px; color: var(--accent); }
+.files-size em { font-style: normal; margin-left: 5px; color: var(--accent-text); }
 
 /* ---------- the Shelf ---------- */
 /* Every verb in one dock at bottom center: create · converse · history ·
@@ -1601,7 +1645,7 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; top: calc(100% + 4px); left: 10px;
   font-size: 10.5px; color: var(--danger); white-space: nowrap;
 }
-.shelf-glyph { color: var(--accent); }
+.shelf-glyph { color: var(--accent-text); }
 .btn.active .shelf-glyph { color: var(--accent-ink); }
 .shelf-badge {
   min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
@@ -1860,6 +1904,13 @@ button.mt-card:hover { border-color: var(--accent); }
   pointer-events: none; will-change: transform;
   transition: opacity 0.12s ease;
 }
+/* The outline that keeps a cursor off the thing it is pointing at. It was
+   `stroke="#fff"` on both arrows — the panel colour in light, where it does
+   nothing and is meant to, and a hard white halo in dark. `--card` is the
+   surface a cursor is usually over, so it reads as a cut rather than a glow,
+   and it is the same white it always was in light. */
+.own-cursor svg path,
+.remote-cursor svg path { stroke: var(--card); }
 .own-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
 /* The OS arrow would be a second cursor saying the same thing in a different
    colour. Only under Select, where this component renders at all. */
@@ -1918,7 +1969,7 @@ button.mt-card:hover { border-color: var(--accent); }
   border: 2px dashed var(--accent); border-radius: 12px;
   background: var(--accent-wash);
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent); font-weight: 600;
+  color: var(--accent-text); font-weight: 600;
 }
 /* Dragging the textarea taller than the clamped popover scrolls, not spills. */
 .compose-popover form { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
