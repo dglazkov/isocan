@@ -514,7 +514,7 @@ export function ItemView({
           read. Sharing the slot rather than stacking two pills also keeps the
           space under an item quiet, which is where comment pins land. */}
       {underSlot === "size" && roomy && (
-        <div className="item-hint size" style={chrome}>
+        <div className={`item-hint size${resize ? " live" : ""}`} style={chrome}>
           {/* The click path into full screen, in the one place there is room
               for a word. It sits beside the size rather than up in the title
               row because that row's width is the name's, and a control there
@@ -522,17 +522,29 @@ export function ItemView({
               session. Every kind gets it, not just the interactive ones: a
               picture worth opening big is as ordinary as a screen worth
               clicking through. */}
+          {/* "Full screen", not "Open" — which was the first label and said
+              nothing. Open in what? A new tab, a menu, an editor? Worse, this
+              product already uses the word: `isocan open` means "open the
+              canvas in your browser", and you are ALREADY in the browser when
+              you press this, so the same word would have had to mean two
+              things a surface apart. The button says the state it puts you in,
+              which is also what the shortcut list calls it. */}
+          {/* Not while a corner is being dragged: your pointer is busy, the
+              button would be under it, and the number beside it is the thing
+              you are actually reading. */}
+          {!resize && (
           <button
-            className="open-btn"
-            title="Open full screen (Enter)"
+            className="fullscreen-btn"
+            title="Fill the window with this item (Enter) — Esc comes back"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               navigate(itemPath(projectId, item.id));
             }}
           >
-            Open
+            Full screen
           </button>
+          )}
           <span>
             {Math.round(width)} × {Math.round(height)}
           </span>

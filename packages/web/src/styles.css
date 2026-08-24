@@ -761,14 +761,20 @@ button, select { color: inherit; }
    while the item is the sole selection or mid-resize (ItemView decides), which
    is why this can be unconditional. */
 .item-hint.size { opacity: 1; }
-/* And it wears the selection's colour rather than the chip's, because that is
-   what it belongs to: the same accent as the outline and the handles it is
-   reporting on. Tabular figures so the number does not jitter its own width
-   while you drag a corner. */
+/* The size is a FACT, and it reads as one: the same quiet chip as the hint it
+   replaces. It wore the accent at first, which put a solid blue pill next to a
+   pale ghost button — the eye went to the number, and the thing that looked
+   pressable was the thing that was not. Emphasis has to point at the control.
+   Tabular figures so the number does not jitter its own width while you drag. */
 .item-hint.size span {
+  font-variant-numeric: tabular-nums;
+}
+/* …except mid-drag, when it stops being a fact you can look up and becomes the
+   readout for the gesture your hand is making. That is what the accent is for,
+   and the button is gone by then, so nothing is competing with it. */
+.item-hint.size.live span {
   background: var(--accent); border-color: var(--accent);
   color: var(--accent-ink); font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 .item-hint span {
   padding: 1px 9px; border-radius: 999px;
@@ -905,12 +911,22 @@ button, select { color: inherit; }
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
    and a control up there would cost the name at every zoom for something you
    press twice a session. */
-.open-btn {
+.fullscreen-btn {
   flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
   padding: 1px 9px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--line-soft); background: var(--chip); color: var(--ink-muted);
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  /* **The whole strip is `pointer-events: none`** — it exists so a hint under
+     an item never eats a click meant for the canvas. This is the one thing in
+     it that is a control, so it takes its own events back. Without this the
+     button rendered, lit up nothing, and did nothing: `elementFromPoint` over
+     its middle returned the canvas viewport. */
+  pointer-events: auto;
 }
-.open-btn:hover { border-color: var(--accent); color: var(--accent-text); }
+.fullscreen-btn:hover {
+  border-color: var(--accent); color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 7%, var(--card));
+}
+.fullscreen-btn:active { transform: translateY(0.5px); }
 
 /* ---------- version fan-out ---------- */
 .fan-card {
