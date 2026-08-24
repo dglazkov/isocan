@@ -11,6 +11,8 @@ import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { resolvePlacement } from "./placement.ts";
+import { DRAWING_MIME } from "./drawing.ts";
+import { ANNOTATES_PROP } from "./annotation.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -90,7 +92,12 @@ export function applyOperation(
       if (canvas.items[op.itemId] || canvas.trash.some((t) => t.item.id === op.itemId)) {
         throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
       }
-      const { x, y } = resolvePlacement(canvas, op.placement, op.width);
+      // Ink and annotations mean their position — the pen put them there, or
+      // they sit over the thing they are about — so they are never tidied.
+      // Everything else asks for a spot and is given the nearest free one.
+      const meansIt =
+        op.version.mimeType === DRAWING_MIME || op.properties?.[ANNOTATES_PROP] !== undefined;
+      const { x, y } = resolvePlacement(canvas, op.placement, op.width, op.height, meansIt);
       const item: Item = {
         id: op.itemId,
         x,

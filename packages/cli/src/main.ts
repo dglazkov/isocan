@@ -21,6 +21,8 @@ import type {
   WatchedLogEntry,
 } from "@isocan/core";
 import {
+  fitMoves,
+  type FitTarget,
   BROWSER_MIME,
   DEFAULT_PORT,
   DRAWING_FILENAME,
@@ -2575,6 +2577,50 @@ program
   );
 
 program
+  .command("fit <items...>")
+  .description("Grow items to the size their content wants, and settle them so nothing overlaps")
+  .option("--size <WxH>", "the size to grow to, when the file cannot say")
+  .action(
+    run(async (refs: string[], opts: { size?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      const asked = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : null;
+
+      const targets: FitTarget[] = [];
+      const unmeasurable: string[] = [];
+      for (const item of items) {
+        if (asked) {
+          targets.push({ itemId: item.id, ...asked });
+          continue;
+        }
+        // What the file itself says. An SVG carries a viewBox and a PNG or
+        // JPEG carries its dimensions in the header; an HTML page carries
+        // nothing, because its size is whatever a browser decides when it lays
+        // it out. So the CLI asks for one rather than inventing it.
+        const size = await intrinsicSize(ctx, p.id, item);
+        if (size) targets.push({ itemId: item.id, ...size });
+        else unmeasurable.push(item.title || item.id);
+      }
+      if (unmeasurable.length > 0 && targets.length === 0) {
+        throw new Error(
+          `only a browser can measure a page: pass --size WxH for ${unmeasurable.join(", ")} ` +
+            `(or press Shift F on the canvas, which measures it)`,
+        );
+      }
+      const { resizes, moves } = fitMoves(snapshot.canvas, targets);
+      for (const r of resizes) {
+        await sendOp(ctx, p.id, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
+      }
+      if (moves.length > 0) await applyMoves(ctx, p.id, moves, `fitted ${targets.length} items`);
+      else console.log(`fitted ${targets.length} items`);
+      for (const name of unmeasurable) {
+        console.log(`  skipped ${name} — only a browser can measure a page; pass --size`);
+      }
+    }),
+  );
+
+program
   .command("distribute <items...>")
   .description("Even out the gaps between items — the canvas's spacing measures, as a verb")
   .requiredOption("--axis <h|v>", "h across, v down")
@@ -4252,4 +4298,60 @@ if (process.argv.slice(2).includes("--agent-help")) {
     console.error(`error: ${(err as Error).message}`);
     process.exit(1);
   });
+}
+
+/**
+ * The size a file itself declares, or null when only a renderer could know.
+ *
+ * An SVG carries a viewBox and a PNG or JPEG carries its dimensions a few
+ * bytes into the header. An HTML page carries nothing: its size is whatever a
+ * browser decides when it lays the thing out, which is why `isocan fit` asks
+ * for `--size` there rather than guessing a number and calling it measured.
+ */
+async function intrinsicSize(
+  ctx: Ctx,
+  projectId: string,
+  item: Item,
+): Promise<{ width: number; height: number } | null> {
+  const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
+  if (!version) return null;
+  const cap = (w: number, h: number) => ({
+    width: Math.max(80, Math.min(2400, Math.round(w))),
+    height: Math.max(80, Math.min(2400, Math.round(h))),
+  });
+  if (version.mimeType === "image/svg+xml") {
+    const bytes = await ctx.client.downloadBlob(projectId, version.blobHash);
+    const box = drawingViewBox(bytes.toString("utf8"));
+    return box ? cap(box.maxX - box.minX, box.maxY - box.minY) : null;
+  }
+  if (version.mimeType === "image/png" || version.mimeType === "image/jpeg") {
+    const bytes = await ctx.client.downloadBlob(projectId, version.blobHash);
+    const size = version.mimeType === "image/png" ? pngSize(bytes) : jpegSize(bytes);
+    return size ? cap(size.width, size.height) : null;
+  }
+  return null;
+}
+
+/** IHDR is always the first chunk of a PNG. */
+function pngSize(b: Uint8Array): { width: number; height: number } | null {
+  if (b.length < 24 || b[1] !== 0x50 || b[2] !== 0x4e || b[3] !== 0x47) return null;
+  const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/** Walk the JPEG segments to the frame header that carries the dimensions. */
+function jpegSize(b: Uint8Array): { width: number; height: number } | null {
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < b.length) {
+    if (b[i] !== 0xff) return null;
+    const marker = b[i + 1]!;
+    const length = (b[i + 2]! << 8) | b[i + 3]!;
+    // SOF0..SOF15, skipping the four that are not frame headers.
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+      return { height: (b[i + 5]! << 8) | b[i + 6]!, width: (b[i + 7]! << 8) | b[i + 8]! };
+    }
+    i += 2 + length;
+  }
+  return null;
 }

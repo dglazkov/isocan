@@ -317,6 +317,11 @@ export function ItemView({
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
     ui.setEntered(item.id);
+    // The double-click that entered the item is also the browser's
+    // select-the-paragraph gesture, and the content stops being
+    // `user-select: none` at the same moment — so stepping inside a document
+    // arrived with the whole document highlighted. Entering is not selecting.
+    window.getSelection()?.removeAllRanges();
   }
 
   /**

@@ -390,6 +390,7 @@ that woke you, with no `session start` needed.
   in your reply so the human knows the history is there.
 - **Leave the canvas tidy.** What a person does by dragging — edges snapping
   together, gaps evening out — you do with `isocan align <items…> --to
+isocan fit <items...>                  # grow items to the size their content wants, and settle them apart
   left|hcenter|right|top|vcenter|bottom` and `isocan distribute <items…>
   --axis h|v`. Both are one op, so one undo, and both are no-ops when things
   are already in place. `isocan mv <item> --by 0,-40` nudges without doing the
