@@ -20,7 +20,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome, nameFits, nameRoom } from "../lib/chrome.ts";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
@@ -34,13 +34,6 @@ const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
 const MIN_H = 60;
-
-const STAR_ROOM = 26;
-/** Under this many screen pixels a name says nothing, so it is not shown. */
-const MIN_NAME_ROOM = 48;
-/** What the corner handles ask the title row to step in by, per side. Must
- *  match `.item.selected .item-titlebar`'s padding in styles.css. */
-const SELECTED_CHROME_INSET = 10;
 
 export function ItemView({
   item,
@@ -82,14 +75,14 @@ export function ItemView({
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
-  // The room the star keeps at the other end of the row, and the least the
-  // name is ever given, both in screen pixels.
   const chrome = { transform: `scale(${1 / scale})` };
   const roomy = hasRoomForChrome(width, height, scale);
-  // Screen pixels available to the name, once the star and — when the corner
-  // handles are out — the step-in they need are taken off the top.
-  const nameRoom = width * scale - STAR_ROOM - (selected ? SELECTED_CHROME_INSET * 2 : 0);
-  const namesFit = nameRoom >= MIN_NAME_ROOM;
+  // Screen pixels available to the name, once the star at the other end and
+  // the row's own inset are taken off the top. Constant across selection.
+  // The rule lives in lib/chrome.ts so a test can reach it without a browser —
+  // there is no floor, and chrome.test.ts is where that is held.
+  const room = nameRoom(width, scale);
+  const namesFit = nameFits(width, scale);
   const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
@@ -399,18 +392,13 @@ export function ItemView({
             transformOrigin: "left bottom",
             // The item's width in the label's own units — screen pixels, since
             // the label is counter-scaled — less the room the star needs at the
-            // other end, and less the step-in the corner handles ask for while
-            // this item is selected. The name stretches to here and stops.
+            // other end and the row's inset. The name stretches to here and
+            // stops.
             //
-            // NO FLOOR. It used to be `Math.max(MIN_NAME_ROOM, …)`, which
-            // guaranteed the name a width the item might not have: at 13% a
-            // 480px item is 62 screen px, the star wants 26, and the floor
-            // handed the name 48 — so it was drawn straight through the star.
-            // A minimum that exceeds what exists is not a minimum. Below the
-            // width where a name says anything the name is dropped instead,
-            // and the star stays, because a star still means something at
-            // three pixels and "H…" does not.
-            maxWidth: nameRoom,
+            // NO FLOOR, and `nameRoom` in lib/chrome.ts is where that is
+            // argued and tested. Below the width where a name says anything
+            // the name is dropped instead, and the star stays.
+            maxWidth: room,
             ...(namesFit || renaming ? null : { display: "none" }),
           }}
         >

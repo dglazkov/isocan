@@ -485,27 +485,33 @@ button, select { color: inherit; }
    It stays out of the way until you point at the item — a canvas of sketches
    should read as the sketches, not as a column of the word "Sketch". */
 .item-titlebar {
-  position: absolute; left: 1px; right: 1px; top: -20px;
+  position: absolute; left: 0; right: 0;
+  /* The row's SIZE is screen-measured — ItemView counter-scales both ends — so
+     its OFFSET is measured the same way. It used to be world units, and the
+     mismatch is what made selecting an item hop: the gap above the card was
+     3.6 screen px at 100% and half a pixel at 13%, while the nudge that
+     cleared the corner handles was a flat 7 screen px, so the row jumped 7 up
+     and 7 in the moment you clicked it.
+
+     One position, held in both states, and as tight to the corner as the
+     selection chrome allows. The handles are 12 screen px centred on each
+     corner, so they reach exactly 6px above the top edge and 6px outside each
+     side: a row whose BOTTOM sits 6px above the edge sits directly on top of
+     them, touching nothing. That clearance is why there is no step-in — being
+     above the handle means the row can start flush with the item's left edge
+     the way the name of a thing normally does, rather than stepping inward
+     around a control that is only sometimes there.
+
+     `bottom` rather than `top` so the offset pins the edge that has to do the
+     clearing, without depending on the row's own height. The `+ 1px` is the
+     item's border: percentages resolve against the padding box, and without it
+     the gap would drift by a border width across the zoom range. */
+  bottom: calc(100% + 1px + 6px / var(--scale, 1));
   display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
-  padding: 0 3px; font-size: 11px; color: var(--ink-muted);
+  padding: 0; font-size: 11px; color: var(--ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
-/* Selected, the corner handles move into the strip this row sits in: 12 screen
-   px square and centred on the corner, so each reaches 6px inside the item and
-   6px above it. Measured at 13% zoom, the title's bottom-left corner sat under
-   the NW handle by 6x5 and the star's under the NE by 5x5.
-   
-   So the row steps in and up — in SCREEN units, because that is what the
-   handles are, so one nudge holds at every zoom. Only while selected: the
-   handles are not there otherwise, and the title is short of width already
-   without paying for a control that is absent. */
-.item.selected .item-titlebar {
-  top: calc(-20px - 7px / var(--scale, 1));
-  padding-left: calc(10px / var(--scale, 1));
-  padding-right: calc(10px / var(--scale, 1));
-}
-
 /* Each side holds its size about its OWN edge. Counter-scaling the whole row
    instead makes the row wider than the item — five times wider at 20% zoom —
    and anything pushed to its right end lands out in the grid. */
