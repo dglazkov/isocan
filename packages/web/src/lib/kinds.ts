@@ -1,20 +1,29 @@
-import type { ItemKind } from "@isocan/core";
+import type { Item, ItemKind } from "@isocan/core";
+import { isDesignSystem, itemKind } from "@isocan/core";
 
 /**
- * How a kind shows itself: the word a list groups under, and the one glyph
- * that stands for it.
+ * How a kind shows itself: the word a list groups under, the word a tooltip
+ * uses, and (in `KindIcon.tsx`) the picture.
  *
  * ONE set, for every surface that names a kind. The files panel had these
  * inline, and then the cards grew a type icon — at which point a second set
- * would have meant a canvas where the same item is ▤ in the panel and
- * something else on its own card. `kinds.ts` in core says it about the words
- * ("a kind that means one thing in a list and another in a filter is worse
- * than no kinds at all"); it is just as true of the picture.
- *
- * Glyphs, not an icon font or SVGs: this mark is rendered at 11px inside
- * counter-scaled chrome, next to text, and it has to hold its weight beside a
- * type face rather than beside other icons. A character does that by being one.
+ * would have meant a canvas where the same item is one thing in the panel and
+ * another on its own card. `kinds.ts` in core says it about the words ("a kind
+ * that means one thing in a list and another in a filter is worse than no
+ * kinds at all"); it is just as true of the picture.
  */
+
+/**
+ * The kinds, plus the one thing that is not a kind but reads as one.
+ *
+ * A design system is a markdown document by mime, so `itemKind` calls it a
+ * document — correctly, for filtering. But it is the canvas's style, the thing
+ * every screen is built against, and being able to spot it from across the
+ * board is worth a mark of its own. It is a presentation distinction, which is
+ * why it lives here and not in core's vocabulary: `isocan ls --kind document`
+ * still finds it, which is right.
+ */
+export type IconKind = ItemKind | "design-system";
 
 export const KIND_LABEL: Record<ItemKind, string> = {
   drawing: "Drawings",
@@ -27,7 +36,8 @@ export const KIND_LABEL: Record<ItemKind, string> = {
 };
 
 /** The singular, for a tooltip on one item rather than a group heading. */
-export const KIND_NOUN: Record<ItemKind, string> = {
+export const ICON_NOUN: Record<IconKind, string> = {
+  "design-system": "design system",
   drawing: "drawing",
   screen: "screen",
   image: "image",
@@ -37,14 +47,16 @@ export const KIND_NOUN: Record<ItemKind, string> = {
   other: "file",
 };
 
-export const KIND_GLYPH: Record<ItemKind, string> = {
-  drawing: "✎",
-  // A wide frame, against the image's filled square and the document's ruled
-  // one: a screen is a viewport, and the shape says so before the word does.
-  screen: "▭",
-  image: "▣",
-  video: "▶",
-  document: "▤",
-  site: "◍",
-  other: "◇",
-};
+/**
+ * Which mark an item gets.
+ *
+ * The design system is checked FIRST and deliberately: it is a markdown file,
+ * so its kind is "document" — correctly, and `isocan ls --kind document` still
+ * finds it, which is the behaviour to keep. But it is the canvas's style, the
+ * thing every screen is built against, and being able to pick it out from
+ * across the board is worth a mark of its own. Presentation may be more
+ * specific than the filter; it may not disagree with it.
+ */
+export function iconKindFor(item: Item): IconKind {
+  return isDesignSystem(item) ? "design-system" : itemKind(item);
+}

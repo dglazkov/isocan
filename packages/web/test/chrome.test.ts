@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CHROME_INSET,
-  GLYPH_ROOM,
+  ICON_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
   STAR_ROOM,
@@ -143,7 +143,7 @@ describe("the room a name is given", () => {
     // flattens it to zero below the knee.
     //
     // Compared only WITHIN one layout, because there is now one honest step in
-    // this function: the glyph appears, and its room stops being the name's.
+    // this function: the icon appears, and its room stops being the name's.
     // The step is the next case's business.
     for (const scale of SCALES) {
       for (const width of WIDTHS) {
@@ -153,7 +153,7 @@ describe("the room a name is given", () => {
         // meaningless where the name is hidden, so a case that compares a
         // hidden name to a shown one compares one real number to one that was
         // never a promise.
-        if (!here.name || !twice.name || here.glyph !== twice.glyph) continue;
+        if (!here.name || !twice.name || here.icon !== twice.icon) continue;
         expect(
           nameRoom(2 * width, scale) - nameRoom(width, scale),
           `a bend at ${width} world units @ ${scale}`,
@@ -165,7 +165,7 @@ describe("the room a name is given", () => {
   it("never claims more of the item than is left after whatever else the row shows", () => {
     // Only where the name is actually SHOWN: below that it is hidden, and what
     // a hidden element was offered is not a thing anybody can see. The budget
-    // is conditional on the glyph now — subtracting for a glyph that is not
+    // is conditional on the glyph now — subtracting for an icon that is not
     // there would be the mirror of the original bug, a name given LESS than
     // exists rather than more.
     for (const scale of SCALES) {
@@ -174,15 +174,15 @@ describe("the room a name is given", () => {
         if (!row.name) continue;
         expect(
           row.nameRoom,
-          `${width} world units @ ${scale} overflows the star or the kind glyph`,
+          `${width} world units @ ${scale} overflows the star or the kind icon`,
         ).toBeLessThanOrEqual(
-          width * scale - STAR_ROOM - (row.glyph ? GLYPH_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
+          width * scale - STAR_ROOM - (row.icon ? ICON_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
         );
       }
     }
   });
 
-  it("costs the name at most the glyph's room when the glyph arrives", () => {
+  it("costs the name at most the icon's room when the icon arrives", () => {
     // Zooming IN can shorten the visible name by one step, once, as the glyph
     // appears and takes its room back. That is a real cost and it is bounded:
     // never more than the glyph occupies, and never below the width where a
@@ -191,12 +191,12 @@ describe("the room a name is given", () => {
       for (let width = 40; width < 2000; width += 1) {
         const before = titleRow(width, scale);
         const after = titleRow(width + 1, scale);
-        if (before.glyph || !after.glyph || !after.name) continue;
+        if (before.icon || !after.icon || !after.name) continue;
         expect(after.nameRoom).toBeGreaterThanOrEqual(MIN_NAME_ROOM);
         expect(
           before.nameRoom - after.nameRoom,
-          `the glyph cost the name more than it occupies at ${width} @ ${scale}`,
-        ).toBeLessThanOrEqual(GLYPH_ROOM + 1e-9);
+          `the icon cost the name more than it occupies at ${width} @ ${scale}`,
+        ).toBeLessThanOrEqual(ICON_ROOM + 1e-9);
       }
     }
   });
@@ -225,7 +225,7 @@ describe("the room a name is given", () => {
     expect(MIN_NAME_ROOM).toBeLessThan(120);
     // And the star's room is real: an item with nothing left over must not be
     // told it can show a name.
-    expect(nameFits(STAR_ROOM + GLYPH_ROOM + CHROME_INSET * 2, 1)).toBe(false);
+    expect(nameFits(STAR_ROOM + ICON_ROOM + CHROME_INSET * 2, 1)).toBe(false);
   });
 });
 
@@ -331,7 +331,7 @@ describe("the strip under an item", () => {
  *
  * Reported from a real canvas: between roughly 12% and 19% zoom on a 480-unit
  * item, the title row showed a bare star. The name had been dropped (correctly
- * — text is a smudge down there) and the kind glyph went with it, because both
+ * — text is a smudge down there) and the kind icon went with it, because both
  * lived in one element that was hidden as a pair. Adding the glyph had also
  * pushed the name's own vanish threshold up by three points of zoom, since its
  * room came out of the name's.
@@ -347,7 +347,7 @@ describe("what a card says as it shrinks", () => {
       if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue; // no chrome at all: fine
       const row = titleRow(WIDTH, scale);
       expect(
-        row.glyph || row.name,
+        row.icon || row.name,
         `a bare star at ${pct}% — the card says nothing about itself`,
       ).toBe(true);
     }
@@ -360,11 +360,11 @@ describe("what a card says as it shrinks", () => {
       const scale = pct / 100;
       if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue;
       const row = titleRow(WIDTH, scale);
-      if (!row.name) expect(row.glyph, `nothing at all at ${pct}%`).toBe(true);
+      if (!row.name) expect(row.icon, `nothing at all at ${pct}%`).toBe(true);
     }
   });
 
-  it("does not make the name disappear earlier than it did before the glyph", () => {
+  it("does not make the name disappear earlier than it did before the icon", () => {
     // The regression the glyph introduced, stated as the property rather than
     // as the number: the kind mark must never be the reason a name is gone.
     // Room for a name is decided against the star and the inset alone.
@@ -374,7 +374,7 @@ describe("what a card says as it shrinks", () => {
         if (withoutGlyph >= MIN_NAME_ROOM) {
           expect(
             titleRow(width, scale).name,
-            `${width} @ ${scale}: room for a name, but the glyph took it`,
+            `${width} @ ${scale}: room for a name, but the icon took it`,
           ).toBe(true);
         }
       }
@@ -382,9 +382,9 @@ describe("what a card says as it shrinks", () => {
   });
 
   it("shows all three the moment there is room for all three", () => {
-    const scale = (MIN_NAME_ROOM + STAR_ROOM + GLYPH_ROOM + CHROME_INSET * 2) / WIDTH;
+    const scale = (MIN_NAME_ROOM + STAR_ROOM + ICON_ROOM + CHROME_INSET * 2) / WIDTH;
     const row = titleRow(WIDTH, scale);
-    expect(row).toMatchObject({ glyph: true, name: true });
+    expect(row).toMatchObject({ icon: true, name: true });
     expect(row.nameRoom).toBeCloseTo(MIN_NAME_ROOM, 6);
   });
 });
