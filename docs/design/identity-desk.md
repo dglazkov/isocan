@@ -78,7 +78,7 @@ each item's fate is tagged.
    the *connection* is, instead of trusting the asserted `actor` field.
    Turns `comment.update`'s "only the author," actor-scoped undo, and
    honest presence from conventions into enforcement.
-6. **Person resumption across browsers.** *(collapsed: email attestation)* A way for Jordan's phone to *be*
+6. **Person resumption across browsers.** *(collapsed: email attestation; built phase 9 stage 2)* A way for Jordan's phone to *be*
    Jordan. Today the honest path is refused (name taken) and the dishonest
    one (`as:`) is open to anyone — exactly backwards.
 7. **Pass → durable credential exchange.** *(collapsed: the pass mints a badge)* The Scene 5 pass is single-use
@@ -251,6 +251,21 @@ sequenceDiagram
   ```
 - **Kill-a-badge** is revocation's enforcement primitive (4): not yet
   "revoke Jordan," but "end that holder's recognition" exists.
+
+  **Who may end one, settled in phase 9 because the gesture needed it:**
+  a badge may end a badge that **shares an identity with it** — one
+  holding a claim on an actor this badge also claims. That is what a
+  claim already means, so it needs no new notion of ownership, and it is
+  exactly the stolen-laptop case: Jordan's phone ending the laptop that
+  is also her. The flat posture the grant routes take ("anyone admitted
+  may share or un-share") was refused here, because a badge is not
+  scoped to a canvas: under it a stranger admitted by a link could end
+  the recognition of the person who shared it, everywhere at once. A
+  stranger has no claim in common with anybody, so the narrow rule makes
+  that unreachable by construction rather than by a check. Naming a
+  badge to end needs a listing, and the listing is the same query — the
+  home can only ever show you surfaces reached through an actor you
+  already speak as, so it can never become a roster of people to expel.
 - **Server-side actor binding (5)** gets its anchor: once claims key on
   badges, an op still names its actor (a daemon's badge vouches for
   several), but the home *verifies the named actor is among the badge's
@@ -326,6 +341,38 @@ from the committed marker (her cloud agent enters by pass, as the journey
 plays it). Verifying never *creates* anything; it decorates the badge the
 holder already carries.
 
+Built in phase 9 stage 2 as `server/attest.ts` plus one route, and three
+things the paragraph above does not say turned out to decide the shape:
+
+- **Which attesters a home has is CONFIGURATION, not a property of the
+  build.** Stage 1 shipped the roster as a constant, arguing that "a home
+  that could be told it has an email attester by setting a variable is a
+  home that can be made to lie". The instinct was right and the conclusion
+  was backwards: the verification ships in every build, identically, so
+  what a home *can do* is not what varies. What varies is whether it has a
+  project to check tokens against — and that same value is what `iss` and
+  `aud` are bound to, so the configuration is not a claim that could be
+  false, it is the thing verification is performed with. `ISOCAN_AUTH_PROJECT`
+  and `ISOCAN_AUTH_API_KEY`; a daemon with neither has borrowed nothing,
+  which is every daemon in this repo and is not a defect. One image, many
+  homes — the deployment-detail thesis reaching a home's *capabilities* for
+  the first time rather than its storage.
+- **The browser key is served from the home at run time**, on the same
+  route that answers "what can you verify" — never compiled into the
+  bundle. Otherwise the bundle is a per-home artifact, and the page a local
+  daemon serves carries a dangling reference to somebody else's project.
+- **Nothing beside the token is believed.** The address is read out of the
+  verified token, so the attest request carries a token and nothing else: a
+  body naming the mailbox to attest would be the caller attesting for
+  itself with a signature stapled on.
+
+`repo:` is **not** attested yet, deliberately: checking repository access
+means holding a GitHub OAuth *access* token (not the ID token this
+verifies) and asking GitHub on a request path, which is Scene 6's work and
+lands with the thin agent that needs it. What matters is that the refusal
+stays honest — a `repo:` grant that could be written and admitted nobody
+would be a dialog that lies, which is worse than a refusal.
+
 **The door, then, is one test.** A badge asking after a canvas is admitted
 if any of three things holds — and everything the desk has built so far is
 one of them:
@@ -375,6 +422,41 @@ semantics every sharing product has taught. Kill-a-badge (mechanism 1)
 handles the stolen-laptop case; grant revocation handles the un-invite.
 The two compose.
 
+Built in phase 9 as `server/sweep.ts`, and three things the paragraph
+above does not say turned out to be load-bearing:
+
+- **A chain adopts its minter's OUTCOME, not its stale root.** "Inherits
+  the root of the badge that minted the pass" reads as a lookup and is
+  not one: the minter's own root may be about to change in the same
+  sweep, and resolving against what it says *now* makes the answer
+  depend on the order the badges came back in. Jordan's daemon was
+  expelled a moment before Jordan's tab re-rooted onto the grant that
+  had invited her by name — this paragraph's named failure, one hop
+  down. The implementation decides each badge once, recursively, so
+  order cannot decide anything.
+- **A root can stop standing without any grant being revoked.** Kill a
+  badge and everything it passed onto a canvas is hanging off a holder
+  the home no longer recognises; two badges can also come to vouch for
+  each other in a cycle that names no grant at all. So the sweep's
+  question is "which roots no longer stand", which is the revoked
+  grant's beneficiaries plus exactly these — and ending a badge sweeps
+  the canvases it had been in, which is what makes "the two compose"
+  true rather than merely adjacent.
+- **The `link` provenance phases 2–6 wrote is unreachable.** It names no
+  row, so no revocation can find it and re-testing it would invent a
+  root the desk never wrote. Those badges survive every revocation and
+  only kill-a-badge reaches them. Bounded to homes that have run
+  continuously since phase 7, and stated rather than quietly swept.
+
+**And the revoker is not spared.** Turning the link off from a browser
+that came in *on* that link expels that browser — on a canvas created
+from a terminal, that is the owner's own tab. It is left that way
+because exempting them would leave an admission rooted at a revoked
+grant for the next sweep to expel anyway, and there is no honest root to
+give them instead: the thing that would provide one is a subject that
+binds to a person, which is the roles question left open below. What the
+surfaces do instead is say so before the click.
+
 **What this collapses downstream:**
 
 - **Revocation (4)** is now designed in outline: delete the grant, sweep
@@ -390,7 +472,37 @@ The two compose.
   what the actor has: a person's actor resumes on a matching attestation
   (a person has an inbox); an agent's on a pass — minted by a holder, or
   by the badge that **sponsored** the holder into existence, the
-  provenance parent whose pass vouched it in. A sponsor already
+  provenance parent whose pass vouched it in.
+
+  Built in phase 9 stage 2, as **one predicate with two satisfiers rather
+  than two special cases**: `vouched` in `core/claims.ts` is a keyless
+  handoff row (phase 8's pass) OR an attribute this badge and a badge
+  claiming that actor have both proved. Everything downstream reads
+  `vouched` and never asks which. Two things the sentence above hides:
+
+  - **The tightening is what makes the vouch worth having, and it stops
+    short of where it could go.** `as` used to be refused only while the
+    actor was *visibly* somebody — live on a canvas, or claimed within the
+    half hour — so half an hour after Jordan closed her laptop anybody who
+    knew her actor id could be her, which is this document's own complaint
+    about mechanism 6, verbatim. It is now refused whenever another badge
+    holds that claim **under a different session key**. The same-key case
+    is deliberately left open: it is the shipped lost-badge recovery
+    (`/api/actors/orphaned` names the actor behind a key you already hold,
+    and `--as` brings it back), and a replacement badge holds no claims, so
+    it cannot even see the badge holding its actor, let alone kill it.
+    Honestly stated: **a session key is a weak vouch and an attestation is
+    a strong one.** What closes is every caller who knows the actor id and
+    not the conversation — which is every stranger on a shared canvas,
+    because actor ids ride in the oplog and session keys do not.
+  - **What a surface is offered and what the reducer accepts are one
+    computation.** The resumable listing and the vouch are the same query,
+    the way kill-a-badge's listing and its authorization are, so a person
+    cannot be shown a button that is then refused.
+  - **It composes with kill-a-badge in a fixed order.** A badge that has
+    only proved an address holds no claim, so it is not yet one of your
+    surfaces and cannot end the laptop. Prove, resume, then end it — which
+    is the gesture the person wanted anyway. A sponsor already
   authored that agent's whole existence, so re-vouching it grants
   nothing new — and it is what survives a thin agent's death: Sonia's
   claim sits on a badge whose bearer secret died with the sandbox, and

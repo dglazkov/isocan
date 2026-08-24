@@ -325,6 +325,27 @@ token: one API check, one attestation row. If Firebase Auth were
 swapped out tomorrow, the desk wouldn't notice — attestations name the
 attribute, not the attester's vendor.
 
+**Built in phase 9 stage 2, and it redrew one line of this map: whether a
+home HAS an attester is configuration, not a property of the image.**
+`ISOCAN_AUTH_PROJECT` and `ISOCAN_AUTH_API_KEY` are set on the Cloud Run
+service (`infra/70-cloud-run.sh` looks the key up rather than storing it —
+a browser key is not a secret, but a literal `AIza…` in a repository is a
+secret-scanner alarm that teaches people to ignore alarms). A daemon with
+neither has borrowed nothing: it refuses `email:` grants with a reason and
+its web app shows no sign-in control. So the container that runs at
+`dev.isocan.io` is byte-identical to the one on a laptop, and the browser
+key reaches the page **from the home at run time** rather than through the
+bundle — otherwise the bundle would be a per-home artifact and the
+deployment-detail thesis would have its first exception. The ID token is
+used once and dropped: no Firebase SDK ships in the page, because an SDK
+holding a refresh token would be a second credential with its own
+lifetime beside the badge.
+
+`repo:` is **not** on this bench yet. It needs the OAuth *access* token
+(Identity Platform hands that back only at sign-in) and an outbound call
+to GitHub on a request path; it lands with Scene 6 in phase 11, and until
+then the grant is refused rather than written.
+
 ## Blobs
 
 One catch was seen during mapping (so it lives here, not in the

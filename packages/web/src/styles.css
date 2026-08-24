@@ -301,6 +301,22 @@ button, select { color: inherit; }
 .terminal-expiry { color: var(--ink-soft); font-size: 11px; }
 .identity-terminal { justify-content: center; font-size: 12.5px; }
 
+/* ---------- your surfaces (kill-a-badge, phase 9) ---------- */
+/* It reuses `.terminal-menu` for the shell — same popover takeover, same
+   widening rule, and a second identical block would be exactly the duplication
+   `oneblock.test.ts` exists to catch. What is its own is the row: a description
+   that may wrap and a button that must not, which is a different shape from
+   `.share-roster-row`'s face-name-kind line. */
+.surface-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; padding: 4px 0;
+}
+.surface-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+/* The surface you are reading this on. Not dimmed and not coloured like a
+   warning — it is a fact about the row, and the warning is on the button that
+   would end it. */
+.surface-self { color: var(--ink-soft); font-size: 11px; }
+
 /* Light / dark / system — a segmented pill; the active segment lifts like a card. */
 .theme-switch {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;

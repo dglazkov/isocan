@@ -22,6 +22,7 @@ and three of them cost different amounts of money.
 | **B · the front door** | `dev.isocan.io`, HTTPS, Cloud CDN | **~$18/month** | a DNS A record |
 | **C · the keeping** | nightly Firestore export, uptime check | ~$0.05/month | an email address (optional) |
 | **D · continuous deploy** | push to `main` → dev is running it | $0 | a browser OAuth step |
+| **E · the attesters** | Identity Platform: a badge can prove an email, so `email:` grants mean something | **$0** | OAuth apps, only for Google/GitHub |
 
 Stage A is the interesting one and the cheap one. **You can stop after it,
 look at a real home, and decide about the domain separately.** That is why it
@@ -45,6 +46,7 @@ Those are two different lists.
 | Artifact Registry | ~$0.05 | first 0.5 GiB free; the cleanup policy keeps the last 10 images. |
 | Cloud Scheduler, uptime check, Cloud Logging, managed cert | $0.00 | all inside free tiers at this size. |
 | **Stage A + C floor** | **≈ $0.15–0.30 / month** | |
+| Identity Platform (Stage E) | $0.00 | billed per monthly active user, first 49,999 free for email-link, Google and GitHub. A dev home never leaves that. |
 | **Global load balancer (Stage B)** | **≈ $18.25 / month** | ~$0.025/hour for the forwarding rules, charged by the hour, forever, with zero traffic. |
 | **Stage A + B + C floor** | **≈ $18.50 / month** | |
 
@@ -134,6 +136,16 @@ ISOCAN_IMAGE_TAG=<sha> ./infra/70-cloud-run.sh
 ```
 
 **Then stop.** You have a home. Open the `*.run.app` URL it prints.
+
+One thing `70-cloud-run.sh` does that is worth knowing before you read it:
+if `100-identity-platform.sh` has run, the deploy adds `ISOCAN_AUTH_PROJECT`
+and `ISOCAN_AUTH_API_KEY` to the service, **looking the key up rather than
+storing it anywhere**. Whether a home can verify an email address is
+configuration, not a property of the image — the same container runs on a
+laptop with neither set and simply has no attester, which is a working home.
+Re-running the deploy is how the values get onto the service; setting them on
+an existing service without a redeploy is `gcloud run services update
+--update-env-vars`, which is a new revision of the same image.
 
 And run the proof phase 4 could not:
 

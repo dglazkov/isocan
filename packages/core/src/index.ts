@@ -38,3 +38,4 @@ export * from "./designcheck.ts";
 export * from "./tokens.ts";
 export * from "./favourites.ts";
 export * from "./fit.ts";
+export * from "./attest.ts";

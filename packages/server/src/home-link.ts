@@ -2,11 +2,16 @@ import { Readable } from "node:stream";
 import { WebSocket } from "ws";
 import type {
   Actor,
+  AttestOffer,
+  AttestRequest,
+  AttestResponse,
+  BadgesResponse,
   BlobUploadResponse,
   FreeNameResponse,
   GrantResponse,
   GrantsResponse,
   GrantSubject,
+  KillBadgeResponse,
   LogEntry,
   MintPassResponse,
   PostOpRequest,
@@ -18,6 +23,9 @@ import type {
   UndoRedoRequest,
 } from "@isocan/core";
 import {
+  ATTEST_ROUTE,
+  BADGES_ROUTE,
+  badgeRoute,
   encodeFilename,
   FILENAME_HEADER,
   FREE_NAME_ROUTE,
@@ -152,6 +160,38 @@ export interface HomeConnection {
   grants(projectId: string): Promise<GrantsResponse>;
   createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
+  /**
+   * Your surfaces at the HOME, and ending one there — forwarded for the grant
+   * routes' reason, arriving at the machine it is most obviously about.
+   *
+   * A stolen laptop holds two badges: one at its own daemon and one at the
+   * home. Killing the local one accomplishes nothing anybody cares about —
+   * the thief has the whole machine, and a local desk is not a boundary
+   * against somebody sitting at the keyboard. What stops the laptop is that
+   * its badge AT THE HOME is ended: ops are refused, replication goes stale,
+   * and the copy on its disk is a snapshot instead of a canvas.
+   *
+   * `grants.ts` has said since phase 7 that this is what the local ledger's
+   * deliberate non-inheritance of revocation rests on — *"what actually stops
+   * that laptop is that its badge is expelled at the home and replication
+   * stops"*. This is the verb that does it.
+   */
+  badges(): Promise<BadgesResponse>;
+  killBadge(badgeId: string): Promise<KillBadgeResponse>;
+  /**
+   * The attest routes, forwarded — for the badge routes' reason, and it is the
+   * same sentence one word further on.
+   *
+   * An attestation rides a BADGE, and a laptop holds two of them: one at its
+   * own daemon and one at the home. The door that reads attestations is the
+   * home's, so a proof written into the local desk would have convinced the
+   * only party that was already trusting this machine, while the home went on
+   * refusing. What the local ledger is for is who on THIS machine may reach
+   * the local copy; who may enter the canvas is the home's row and the home's
+   * badge.
+   */
+  attestOffer(): Promise<AttestOffer>;
+  attest(body: AttestRequest): Promise<AttestResponse>;
   /**
    * The pass routes, forwarded — for the grant routes' reason, one turn
    * sharper.
@@ -803,6 +843,26 @@ export class HomeLink implements HomeConnection {
 
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
     return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
+  }
+
+  /** Your surfaces AT THE HOME. This daemon's own badge there is one of them
+   * and comes back marked `self` — so `isocan badges` run on a laptop shows
+   * that laptop's row as the one it is standing on, which is exactly what a
+   * person needs to see before they end the other one. */
+  attestOffer(): Promise<AttestOffer> {
+    return this.api<AttestOffer>("GET", ATTEST_ROUTE);
+  }
+
+  attest(body: AttestRequest): Promise<AttestResponse> {
+    return this.api<AttestResponse>("POST", ATTEST_ROUTE, body);
+  }
+
+  badges(): Promise<BadgesResponse> {
+    return this.api<BadgesResponse>("GET", BADGES_ROUTE);
+  }
+
+  killBadge(badgeId: string): Promise<KillBadgeResponse> {
+    return this.api<KillBadgeResponse>("DELETE", badgeRoute(badgeId));
   }
 
   /**

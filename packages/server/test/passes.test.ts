@@ -205,6 +205,18 @@ describe("minting is for the admitted, and only for what they hold", () => {
 describe("redeeming: the surface arrives knowing who it is", () => {
   it("admits the redeemer and hands over the named claim — and it could do neither before", async () => {
     const tab = await jordansTab();
+    /**
+     * **The pass is minted BEFORE the link goes off, and phase 9 is why.**
+     *
+     * Jordan's tab came in on the link, so revoking it now SWEEPS her — she
+     * cannot mint anything from a canvas she has just been expelled from, and
+     * minting is project-scoped precisely so that only an admitted badge can.
+     * The order here is the honest one and it makes a sharper point than the
+     * old order did: a pass is a desk ROW with a life of its own, so it
+     * outlives the admission that produced it. That is what "admitted
+     * whatever the link says" actually rests on.
+     */
+    const { token } = await body<MintPassResponse>(await mint(tab, jordan.id));
     await revokeLink();
     const laptop = await fresh();
 
@@ -218,7 +230,6 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     });
     expect(notHer.status).toBe(403);
 
-    const { token } = await body<MintPassResponse>(await mint(tab, jordan.id));
     const redeemed = await redeem(laptop, token);
     expect(redeemed.status, await redeemed.clone().text()).toBe(200);
     expect(await body<RedeemPassResponse>(redeemed)).toEqual({ canvasId: CANVAS, actor: jordan });
@@ -512,9 +523,12 @@ describe("on a replica", () => {
    */
   it("forwards the redemption, and leaves the local ledger correct", async () => {
     const tab = await jordansTab();
-    // The link is off, so nothing but the pass can let this machine in — which
-    // is what makes the assertions below about the pass rather than about the
-    // link that admits everybody.
+    // Minted first, then the link goes off — see the note on the redemption
+    // test above: a tab that came in on the link is swept when the link is
+    // revoked, and a pass is a desk row that outlives the admission that
+    // produced it. With the link off, nothing but that row can let this
+    // machine in, which is what makes the assertions below about the pass.
+    const { pass, token } = await body<MintPassResponse>(await mint(tab, jordan.id));
     await revokeLink();
 
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-replica-"));
@@ -528,7 +542,6 @@ describe("on a replica", () => {
       // 404 is "not replicated (yet)", which is the honest local answer.
       expect((await fetch(`${replicaBase}/api/projects/${CANVAS}/canvas`, { headers: cli.headers })).status).toBe(404);
 
-      const { pass, token } = await body<MintPassResponse>(await mint(tab, jordan.id));
       const redeemed = await fetch(`${replicaBase}${PASS_REDEEM_ROUTE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...cli.headers },

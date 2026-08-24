@@ -236,14 +236,33 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   instructions on purpose: whoever receives it lands on the populated canvas in
   a browser with nothing installed, and the canvas offers a terminal to anyone
   who reaches for one. Underneath is one revocable row: **"anyone with the
-  link"** is a grant the canvas is born with, and turning it off turns the next
-  stranger away while everybody already here keeps working. `isocan share`,
+  link"** is a grant the canvas is born with. Turning it off turns the next
+  stranger away **and expels the ones who got in on it** — and it tells you how
+  many, because the other half of that gesture is the half nobody expects:
+  anyone another grant still covers stays where they are, so turning off the
+  link does not throw out the people who were invited by name. `isocan share`,
   `isocan share --link off|on` is the same endpoint from a terminal — sharing
   is the one gesture that is not a canvas op, because it acts on who may knock
   rather than on what is on the canvas, so it never appears in the oplog and
   `undo` will not take it back. A canvas that will not have you says so:
   `403 not-admitted`, which means ask whoever shared it — not "get a new
-  credential".
+  credential". Beside the toggle is **one field for one person**: invite an
+  email address, and whoever proves that address is let in whether or not the
+  link is on. `isocan share <email>` and `isocan share --revoke <email>` are the
+  same two gestures from a terminal.
+- **Proving an address, which is not a login**: isocan has no accounts and does
+  not want any. What a person can do is **borrow an attester they already
+  have** — click your own face, pick **"Prove your address…"**, and a link
+  arrives in the inbox; opening it writes one line onto the badge this browser
+  already carries. Nothing is created: no user record, no password, nothing to
+  reset, and a person who never does it keeps using isocan exactly as before.
+  What it buys is two things. Somebody can invite **you** by name instead of
+  handing out the link — that is what an `email:` grant is satisfied by — and a
+  second surface that proves the same address may **resume the person your
+  first one already is**, which is how a phone becomes you without anybody
+  asserting anything. A home that has borrowed no attester says so and offers
+  no control, because the link is how sharing works there; whether a home has
+  one is configuration, so the same build runs on a laptop and at isocan.io.
 - **Escalation**: a thin guest goes thick in one command, and the canvas hands
   it to you — click your own face and pick **"Work from your terminal…"**: one
   sentence of concept, one command, a copy button, and a clock, because the
@@ -266,6 +285,19 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   not into a `Referer` — and a tab that arrives on one comes up already being
   that person, or says in words which of "expired", "already used" and "no such
   pass" it met.
+- **Your surfaces**: a canvas you can reach from four machines is four
+  credentials, and one of them can go missing. Click your own face and pick
+  **"Your surfaces…"** — every holder that carries your identity, what each
+  speaks as, how many canvases it is in, and when it was last seen, with the
+  one you are reading this on marked. Ending one stops it speaking as you
+  anywhere, immediately, and takes with it anything that machine had passed
+  onto a canvas. `isocan badges` and `isocan badges --kill <id>` are the same
+  two gestures from a terminal, and on a laptop they act on the **home's**
+  ledger, because that is the one that stops a machine you no longer have.
+  Ending a surface is not the same as un-inviting it: it comes back as a
+  stranger with none of your personas, and whether a stranger gets in is what
+  the link grant decides. The two gestures compose, and neither pretends to be
+  the other.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -337,9 +369,12 @@ isocan setup [dir | <address>#<pass>]  # ready a directory — or join that canv
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan home [<url>|--clear]        # which home this daemon answers to
-isocan share [--link on|off]     # the canvas's address, and who may enter it
+isocan share [<email>] [--link on|off] [--revoke <email>]
+                                   # the address, and who may enter this canvas
 isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
+isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
+                                   # what each has proved; end one
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

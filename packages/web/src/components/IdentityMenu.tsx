@@ -5,6 +5,8 @@ import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts"
 import { setActorColor } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { TerminalDialog } from "./TerminalDialog.tsx";
+import { SurfacesDialog } from "./SurfacesDialog.tsx";
+import { VerifyDialog } from "./VerifyDialog.tsx";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -27,6 +29,17 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   default ink. It is `actor.setColor`, stored in the daemon's actor
  *   registry beside your name, because a color only you can see would not be
  *   an identity: everyone on every canvas sees you change.
+ * - PROVE YOUR ADDRESS is the borrowed attester (phase 9 stage 2). Not a
+ *   login — isocan has no accounts — but the one gesture that makes an
+ *   `email:` grant able to admit you, and the one that lets this browser
+ *   RESUME a person your other machines already are. It sits here because
+ *   what this browser has proved is another fact about how it is connected.
+ * - YOUR SURFACES is kill-a-badge (phase 9): every holder that carries this
+ *   identity, and the button that ends one. It sits here for the reason the
+ *   escalation dialog does — this menu is *how I'm connected here*, and a
+ *   surface of yours is another way you are connected. Unlike escalation it
+ *   needs no canvas: a badge is not about one room, which is exactly why
+ *   ending one ends it everywhere.
  * - WORK FROM YOUR TERMINAL is Scene 5, and it belongs here rather than
  *   beside Share for a reason the journey states: this menu is *how I'm
  *   connected here*, and escalation is another way to be connected — a second
@@ -64,6 +77,8 @@ export function IdentityMenu({
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
+  const [surfaces, setSurfaces] = useState(false);
+  const [verify, setVerify] = useState(false);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
@@ -83,6 +98,10 @@ export function IdentityMenu({
   // stacked panels hanging off one face is a worse thing to look at than one.
   if (terminal && projectId) {
     return <TerminalDialog actor={actor} projectId={projectId} onClose={onClose} />;
+  }
+  if (surfaces) return <SurfacesDialog onClose={onClose} />;
+  if (verify) {
+    return <VerifyDialog actor={actor} onIdentity={onIdentity} onClose={onClose} />;
   }
 
   return (
@@ -176,6 +195,35 @@ export function IdentityMenu({
           Work from your terminal…
         </button>
       )}
+      {/* Proving an address — phase 9 stage 2, and it belongs on this menu for
+          the reason the whole menu exists: what this browser has proved is a
+          fact about how it is connected here. Above "Your surfaces…" because
+          it is the thing that CREATES a second surface of one person, and
+          reading a list of your surfaces makes more sense after you have one.
+
+          Shown unconditionally rather than only on a home that has borrowed an
+          attester: the panel behind it says, in one sentence, that this home
+          has borrowed nothing and that the link is how sharing works. Hiding
+          the entry would make a person hunt for a control that is deliberately
+          absent, which is a worse answer than being told. */}
+      <button
+        className="btn identity-terminal"
+        title="Prove an email address — so somebody can invite you by name, and so this browser can be a person your other machines already are"
+        onClick={() => setVerify(true)}
+      >
+        Prove your address…
+      </button>
+      {/* Kill-a-badge, one click from your own face. It is above Leave on
+          purpose: both end something, and the one that ends a holder's
+          recognition everywhere should not sit under the one that only
+          forgets a persona in this browser. */}
+      <button
+        className="btn identity-terminal"
+        title="Every surface that carries your identity — and end one that should not"
+        onClick={() => setSurfaces(true)}
+      >
+        Your surfaces…
+      </button>
       <button
         className="btn identity-leave"
         onClick={() => {
