@@ -566,6 +566,21 @@ button, select { color: inherit; }
   position: absolute; visibility: hidden; pointer-events: none;
   white-space: pre; font: inherit; padding: 0 3px;
 }
+/* The kind mark, ahead of the name. Quieter than the name on purpose: it
+   answers a question you did not ask ("what is this?") and must not compete
+   with the one you did ("which one is this?"). Quieter via a TOKEN and not
+   via opacity — dimmed text is a contrast decision no colour test can see,
+   which `dimmed.test.ts` refuses on sight, and it caught this rule's first
+   draft. It keeps `--ink-soft` when the row turns accent, exactly as the
+   unstarred star at the other end of the row does: selecting an item should
+   light up its name, not everything standing near it. No pointer events — it
+   is a statement about the file, not a control. */
+.kind-glyph {
+  flex: none; font-size: 10px; line-height: 1;
+  color: var(--ink-soft); pointer-events: none;
+  user-select: none; -webkit-user-select: none;
+}
+
 /* The name hugs its own text rather than stretching the row, so the cursor can
    tell the truth about each part: over the words, a double-press edits them;
    over the bare strip, a press drags the item. */
@@ -641,6 +656,20 @@ button, select { color: inherit; }
   opacity: 0; transition: opacity 0.12s ease;
 }
 .item:hover .item-hint { opacity: 1; }
+/* The size is not a tip you might want — it is the readout for the gesture you
+   are making, so it does not wait to be hovered. It is only ever RENDERED
+   while the item is the sole selection or mid-resize (ItemView decides), which
+   is why this can be unconditional. */
+.item-hint.size { opacity: 1; }
+/* And it wears the selection's colour rather than the chip's, because that is
+   what it belongs to: the same accent as the outline and the handles it is
+   reporting on. Tabular figures so the number does not jitter its own width
+   while you drag a corner. */
+.item-hint.size span {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .item-hint span {
   padding: 1px 9px; border-radius: 999px;
   background: var(--chip); border: 1px solid var(--line-soft);

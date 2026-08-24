@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CHROME_INSET,
+  GLYPH_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
   STAR_ROOM,
@@ -11,6 +12,7 @@ import {
   hasRoomForChrome,
   nameFits,
   nameRoom,
+  underSlotFor,
 } from "../src/lib/chrome.ts";
 
 const actor = { id: "usr_a", name: "A" };
@@ -148,7 +150,7 @@ describe("the room a name is given", () => {
     }
   });
 
-  it("never claims more of the item than is left after the star and the inset", () => {
+  it("never claims more of the item than is left after everything sharing the row", () => {
     // Only where the name is actually SHOWN: below that it is hidden, and what
     // a hidden element was offered is not a thing anybody can see.
     for (const scale of SCALES) {
@@ -156,8 +158,10 @@ describe("the room a name is given", () => {
         if (!nameFits(width, scale)) continue;
         expect(
           nameRoom(width, scale),
-          `${width} world units @ ${scale} overflows the star`,
-        ).toBeLessThanOrEqual(width * scale - STAR_ROOM - CHROME_INSET * 2 + 1e-9);
+          `${width} world units @ ${scale} overflows the star or the kind glyph`,
+        ).toBeLessThanOrEqual(
+          width * scale - STAR_ROOM - GLYPH_ROOM - CHROME_INSET * 2 + 1e-9,
+        );
       }
     }
   });
@@ -186,7 +190,7 @@ describe("the room a name is given", () => {
     expect(MIN_NAME_ROOM).toBeLessThan(120);
     // And the star's room is real: an item with nothing left over must not be
     // told it can show a name.
-    expect(nameFits(STAR_ROOM + CHROME_INSET * 2, 1)).toBe(false);
+    expect(nameFits(STAR_ROOM + GLYPH_ROOM + CHROME_INSET * 2, 1)).toBe(false);
   });
 });
 
@@ -242,6 +246,47 @@ describe("the row's inset is one number", () => {
         rule[2] ?? "",
         `${selector} moves or insets the row only while selected — ItemView cannot see that`,
       ).not.toMatch(/(^|[;{\s])(padding|padding-left|padding-right|top|bottom|left|right)\s*:/);
+    }
+  });
+});
+
+/**
+ * One slot under the item, two things that want it.
+ *
+ * The size chip and "double-click to interact" occupy the same strip. They can
+ * share it because their triggers differ, but "differ" is only true if
+ * something enforces the precedence — otherwise the day both apply you get two
+ * pills stacked under the card, in the space comment pins land in.
+ */
+describe("the strip under an item", () => {
+  const idle = { entered: false, resizing: false, soleSelection: false, interactive: false };
+
+  it("says nothing under a plain unselected image", () => {
+    expect(underSlotFor(idle)).toBeNull();
+  });
+
+  it("offers the hint on something you could open", () => {
+    expect(underSlotFor({ ...idle, interactive: true })).toBe("hint");
+  });
+
+  it("shows the size once the item is the sole selection", () => {
+    expect(underSlotFor({ ...idle, soleSelection: true })).toBe("size");
+  });
+
+  it("prefers the size when both apply — the collision this rule exists for", () => {
+    expect(underSlotFor({ ...idle, soleSelection: true, interactive: true })).toBe("size");
+    expect(underSlotFor({ ...idle, resizing: true, interactive: true })).toBe("size");
+  });
+
+  it("shows the size mid-resize even when the item is not the sole selection", () => {
+    // Resizing IS the gesture the number reports on; nothing outranks it.
+    expect(underSlotFor({ ...idle, resizing: true })).toBe("size");
+  });
+
+  it("says nothing at all once you are inside the item", () => {
+    // Entered, your clicks belong to the page — chrome stops talking over it.
+    for (const on of [{ soleSelection: true }, { resizing: true }, { interactive: true }]) {
+      expect(underSlotFor({ ...idle, ...on, entered: true })).toBeNull();
     }
   });
 });

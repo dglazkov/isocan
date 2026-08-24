@@ -54,6 +54,16 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
 
 /** Screen pixels the star keeps at the far end of the name row. */
 export const STAR_ROOM = 26;
+/**
+ * Screen pixels the kind glyph keeps at the near end — the mark itself plus
+ * the row's gap after it. Measured on the rendered row, not guessed.
+ *
+ * It is budgeted for the same reason the star is, and the reason is written in
+ * `nameRoom` below: anything sharing the row that is NOT subtracted here gets
+ * drawn through once the item is small enough on screen. That already happened
+ * once with the star.
+ */
+export const GLYPH_ROOM = 16;
 /** Under this many screen pixels a name says nothing, so it is not shown. */
 export const MIN_NAME_ROOM = 48;
 /**
@@ -89,7 +99,7 @@ export const CHROME_INSET = 0;
  * asks.
  */
 export function nameRoom(width: number, scale: number): number {
-  return width * scale - STAR_ROOM - CHROME_INSET * 2;
+  return width * scale - STAR_ROOM - GLYPH_ROOM - CHROME_INSET * 2;
 }
 
 /**
@@ -129,4 +139,32 @@ export function badgeCorner(item: Item, canvas: CanvasState | null, scale: numbe
     if (Math.abs(pin.x - right) < reach && Math.abs(pin.y - bottom) < reach) return "ne";
   }
   return "se";
+}
+
+/**
+ * What the strip UNDER an item says, when anything does.
+ *
+ * There is one slot there and two things that want it, and they can share
+ * because they are different kinds of message with different triggers: the
+ * size is a fact about the thing you are manipulating right now, and the hint
+ * is an evergreen tip shown while you point at something you could open.
+ *
+ * When both apply the SIZE wins. If you are dragging a corner the live number
+ * is the entire point, and "double-click to interact" is a sentence you have
+ * already read. Stacking both would also fill the space under an item, which
+ * is where comment pins land.
+ *
+ * Entering an item silences both: inside, your clicks belong to the page.
+ */
+export type UnderSlot = "size" | "hint" | null;
+
+export function underSlotFor(state: {
+  entered: boolean;
+  resizing: boolean;
+  soleSelection: boolean;
+  interactive: boolean;
+}): UnderSlot {
+  if (state.entered) return null;
+  if (state.resizing || state.soleSelection) return "size";
+  return state.interactive ? "hint" : null;
 }
