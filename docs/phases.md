@@ -87,9 +87,9 @@ without the fix. The launch-first order set 2026-08-24 by Dimitri still runs
 13 as features added to a live isocan.io. The cut line is the journey's own
 built/unbuilt boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the
 entire unbuilt remainder, so launching first ships exactly the journey that
-exists. **Phase 13.5, the front door, is next** — with two debts trailing 10.5
-that belong to people rather than to code: Paul's and Dion's own first walks,
-and the ⚑ that repoints the Cloud Build trigger at `green`. The two-surfaces
+exists. **Phase 13.5, the front door, is next** — with one debt trailing 10.5
+that belongs to people rather than to code: Paul's and Dion's own first walks.
+The dev deploy now gates on CI green in the cloud as well as in the repo. The two-surfaces
 problem phase 10 surfaced still has its address — the airplane arc, phases 12.5
 and 12.7. This line moves as phases close; a clean session starts by believing
 it.
@@ -935,14 +935,17 @@ pre-multiuser rig for Dion's. The dev deploy now gates on CI green: `release.yml
 fast-forwards a `green` ref once `npm test` and `npm run typecheck` pass with the
 emulator required, and `infra/95-build-trigger.sh` watches `^green$`.
 
-**Two things are missing and neither is the doc.** First, **the two walks
-themselves** — the Proof names Paul and Dion by name, and a proof is what was
-measured and by whom: the conductor verified that the commands work, and cannot
-verify that the doc is legible to somebody who has not read the codebase. That
-half is their first run, and every out-of-band question either asks is a
-finding. Second, **the trigger is not repointed yet** — the gate exists in the
-repo and the live Cloud Build trigger still watches `main` until
-`infra/provision.sh d` is run, which is a ⚑ and is Dimitri's to authorize.
+The ⚑ is **done**: authorized by Dimitri and applied the same day, the live
+`isocan-dev-deploy` trigger watches `^green$`, read back and verified — one
+trigger, and `_DEPLOY` still the string `"yes"` rather than a YAML boolean,
+which is the difference between deploying and reporting success while deploying
+nothing.
+
+**What is missing is the doc's own Proof: the two walks themselves.** It names
+Paul and Dion, and a proof is what was measured and by whom — the conductor
+verified that every command works, and cannot verify that the doc is legible to
+somebody who has not read this codebase. That half is their first run, and every
+out-of-band question either asks is a finding.
 
 **Work:** `docs/development.md`, written for the two developers who
 actually exist rather than an abstract one. **Dion is not new** — he has
@@ -1018,6 +1021,19 @@ phase runs now rather than letting the knowledge trickle in over Slack.
   nor the history. Everything it automates works by hand.
 - **2026-08-24** — Both instruments are consumed on first use, which is why the
   Status above is PART-DONE rather than closed on the doc's existence.
+- **2026-08-24 — Two things about repointing a Cloud Build trigger**, learned
+  doing it. `infra/provision.sh d` **cannot**: the script exits early when a
+  trigger exists, and deleting to re-create is what forces the browser step that
+  rebuilds the GitHub App connection. And `gcloud builds triggers update github`
+  refuses a first-generation GitHub App trigger with `INVALID_ARGUMENT` — its
+  repo is `github.owner/name`, not a second-generation `repository` resource.
+  `triggers import` with the `id` kept updates in place.
+- **2026-08-24** — `_DEPLOY: yes` unquoted in an imported trigger is a **YAML
+  boolean**, and `cloudbuild.yaml` tests `[ "${_DEPLOY}" != "yes" ]` — so the
+  round trip yields a pipeline that builds, pushes, reports success and deploys
+  nothing. `--format=json` is the only way to see which one is stored; the YAML
+  rendering prints `yes` for both. Caught before it shipped, by quoting it and
+  then reading the type back.
 
 ## Phase 13.5 — The front door ⚑ provision
 
