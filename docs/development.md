@@ -409,13 +409,30 @@ or re-run build), and the deployed home stays where it is rather than moving
 backwards. It logs a warning and the release still publishes, because the two
 pipelines are independent by design.
 
-**Honest status: the trigger in GCP has not been repointed yet.** The workflow
-advances `green`, `infra/95-build-trigger.sh` is written to watch `^green$`, and
-`AGENTS.md` says so — but until somebody runs `infra/provision.sh d` against
-`isocan-io-dev`, the live Cloud Build trigger is still whatever it was
-configured with, which was push-to-`main`. That is a **⚑ provision** step and it
-has not been run. Until it is, assume dev deploys on push to `main` and that the
-gate is a property of the repo rather than of the cloud.
+**Status: live since 2026-08-24.** The `isocan-dev-deploy` trigger in
+`isocan-io-dev` watches `^green$`, verified by reading it back. So a push to
+`main` no longer deploys by itself — **"I pushed and dev did not change" is now
+an expected state**, for about the length of a CI run, and a permanent one if
+CI is red. `gh run list --workflow=release.yml` is where to look first, not the
+build history.
+
+Two things about how it got there, because the next person to touch a trigger
+will meet both. `infra/provision.sh d` **cannot repoint an existing trigger** —
+`95-build-trigger.sh` exits early when one exists, saying to delete and re-run,
+and deleting is what forces the browser step that rebuilds the GitHub App
+connection. And `gcloud builds triggers update github` refuses this trigger with
+`INVALID_ARGUMENT`: it was created through the GitHub App (first generation), so
+its repo is `github.owner/name` rather than a second-generation `repository`
+resource, and the `update github` verb does not handle that shape. What works is
+`gcloud builds triggers import` with the full resource, keeping `id` so it
+updates in place instead of creating a second trigger.
+
+One trap in that file, worth more than it looks: **quote `_DEPLOY: "yes"`.**
+Unquoted, `yes` is a YAML boolean, and `cloudbuild.yaml`'s deploy step tests
+`[ "${_DEPLOY}" != "yes" ]` — so a round-trip through an unquoted import gives a
+pipeline that builds, pushes, reports success, and deploys nothing. `--format=json`
+is how you check what was actually stored; the YAML rendering prints `yes` either
+way and cannot tell you which one you have.
 
 ### Who holds provisioning, and whom a ⚑ asks
 
