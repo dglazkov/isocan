@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { lengthPx, readableInk } from "../src/lib/designview.ts";
 
 /**
  * Colours come from tokens, so both themes work by construction.
@@ -56,5 +57,39 @@ describe("colours come from tokens", () => {
     // UA's buttontext. Black on white looks deliberate; black on graphite is
     // an empty card.
     expect(css).toMatch(/button[^{]*\{[^}]*color:\s*inherit/);
+  });
+});
+
+/**
+ * The two pure decisions behind the design-system view. Both exist because a
+ * design system has to be shown as the thing it describes: a colour that can
+ * carry words says so on the swatch, and a spacing step is drawn to scale
+ * rather than listed, because the rhythm is what a table of numbers hides.
+ */
+describe("drawing a design system", () => {
+  it("picks the ink a swatch can actually carry, with the ratio", () => {
+    expect(readableInk("#000000")).toEqual({ color: "#ffffff", ratio: 21 });
+    expect(readableInk("#ffffff")).toEqual({ color: "#000000", ratio: 21 });
+    const cobalt = readableInk("#1f3fd0");
+    expect(cobalt?.color).toBe("#ffffff");
+    expect(cobalt!.ratio).toBeGreaterThan(4.5);
+  });
+
+  it("says nothing rather than inventing a number it cannot compute", () => {
+    expect(readableInk("not a colour")).toBeNull();
+    expect(readableInk("var(--accent)")).toBeNull();
+  });
+
+  it("reads the lengths it can draw to scale", () => {
+    expect(lengthPx(16)).toBe(16);
+    expect(lengthPx("16px")).toBe(16);
+    expect(lengthPx("1.5rem")).toBe(24);
+    expect(lengthPx("0")).toBe(0);
+  });
+
+  it("refuses the ones it cannot", () => {
+    for (const v of ["50%", "clamp(1rem, 2vw, 3rem)", "auto", "", undefined]) {
+      expect(lengthPx(v), String(v)).toBeNull();
+    }
   });
 });
