@@ -41,8 +41,14 @@ async function measure(file: File, mimeType: string): Promise<{ width: number; h
 }
 
 /**
- * Upload files and add them as items. The first lands at `placement`;
- * subsequent files cascade down-right from it.
+ * Upload files and add them as items, all asking for the same spot.
+ *
+ * They used to cascade by 28px each, which is not a layout — six files made a
+ * fanned pile you had to drag apart, and an ANCHORED placement did not even
+ * cascade, so every file resolved to the identical coordinates. Neither is
+ * this function's problem to solve: the reducer places a new item clear of
+ * whatever is already there, and applies these in turn, so each file's
+ * placement already sees the one before it land.
  */
 export async function addFiles(
   projectId: string,
@@ -51,15 +57,11 @@ export async function addFiles(
   placement: Placement,
 ): Promise<string[]> {
   const ids: string[] = [];
-  let offset = 0;
   for (const file of files) {
     const mimeType = mimeTypeOf(file);
     const upload = await uploadBlob(projectId, file, file.name);
     const { width, height } = await measure(file, mimeType);
-    const placed: Placement =
-      "anchorItemId" in placement || offset === 0
-        ? placement
-        : { x: placement.x + offset, y: placement.y + offset };
+
     const itemId = newItemId();
     await sendOp(projectId, actor, {
       type: "item.add",
@@ -73,10 +75,9 @@ export async function addFiles(
       },
       width,
       height,
-      placement: placed,
+      placement,
     });
     ids.push(itemId);
-    offset += 28;
   }
   return ids;
 }

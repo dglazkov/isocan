@@ -450,6 +450,16 @@ describe("daemon HTTP", () => {
         }),
       ),
     );
+    // Where they actually landed, which is not where they were asked for:
+    // placement nudges a new item clear of anything already there, and a
+    // hundred 10x10 items requested one pixel apart all collide. The subject
+    // here is undo, so it asserts undo returns them to where the ADD put them
+    // rather than re-asserting a placement rule that lives elsewhere.
+    const placed = await get("/api/projects/prj_1/canvas");
+    const before = Object.fromEntries(
+      ids.map((id) => [id, { x: placed.canvas.items[id].x, y: placed.canvas.items[id].y }]),
+    );
+
     const moved = await op(
       { type: "items.move", moves: ids.map((id, i) => ({ itemId: id, x: 5000 + i, y: 5000 })) },
       "prj_1",
@@ -462,8 +472,11 @@ describe("daemon HTTP", () => {
     expect(undo.json.cause.targetSeq).toBe(moved.json.seq);
 
     const snapshot = await get("/api/projects/prj_1/canvas");
-    for (const [i, id] of ids.entries()) {
-      expect(snapshot.canvas.items[id].x, `${id} did not come back`).toBe(i);
+    for (const id of ids) {
+      expect(
+        { x: snapshot.canvas.items[id].x, y: snapshot.canvas.items[id].y },
+        `${id} did not come back`,
+      ).toEqual(before[id]);
     }
   });
 
