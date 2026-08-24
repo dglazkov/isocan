@@ -189,16 +189,19 @@ describe("the door", () => {
     expect(await socketClose(jordan)).toBe(WS_NOT_ADMITTED);
   });
 
-  it("still lets in a badge that was already admitted — revocation stops arrivals, not attendees", async () => {
+  it("EXPELS the badges it let in — phase 9's sweep, where phase 7 left a note", async () => {
     await makeCanvas();
     const jordan = await stranger();
     expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
     await revokeLink(owner);
-    // The provenance sweep that expels an admitted badge is phase 9's: it has
-    // to RE-RUN the door test per badge and re-root the ones another grant
-    // still covers, or turning off the link would expel the people invited by
-    // name. Until then, this is what revocation means and the test says so.
-    expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    // Phase 7 asserted the opposite here and said why: the sweep has to RE-RUN
+    // the door test per badge and re-root the ones another grant still covers,
+    // or turning off the link would expel the people invited by name. That is
+    // built (`server/sweep.ts`, and `sweep.test.ts` for the shapes), so this
+    // is now an expulsion.
+    expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(403);
+    // The badge that MADE the canvas is untouched: `{root: "created"}` is the
+    // one root a sweep never walks.
     expect((await get(owner, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
   });
 
@@ -237,7 +240,18 @@ describe("the door", () => {
 });
 
 describe("the grant API", () => {
-  it("refuses `email:` and `repo:` by naming the phase that will serve them", async () => {
+  /**
+   * **Two refusals, and the difference is the phase-9 seam being honest.**
+   *
+   * `email:` and `repo:` are REAL subjects now — the door checks them against
+   * a badge's attestations, and `sweep.test.ts` proves it admits and re-roots
+   * on them. What is still missing is an ATTESTER: nothing in stage 1 verifies
+   * an email or a GitHub identity, because that needs a borrowed bench and a
+   * cloud resource nobody may provision without asking. So the refusal moved
+   * from core (a phase boundary) to `server/attest.ts` (a fact about this
+   * home's configuration), and it says which of the two it is.
+   */
+  it("refuses a well-formed subject this home has no attester for, and says so", async () => {
     await makeCanvas();
     for (const subject of ["email:jordan@example.com", "repo:github.com/acme/board"]) {
       const asked = await fetch(`${base}${grantsRoute(CANVAS)}`, {
@@ -247,25 +261,28 @@ describe("the grant API", () => {
       });
       expect(asked.status, subject).toBe(400);
       const body = (await asked.json()) as { error: string; code: string };
-      expect(body.code).toBe("bad-grant");
-      // An `email:` row is one nothing can satisfy until a badge carries
-      // attestations, so accepting it would write a grant that admits nobody
-      // while the dialog said somebody had been invited.
-      expect(body.error).toContain("phase 9");
+      // NOT `bad-grant`: the subject is fine, and a caller told "not a grant
+      // subject" about a perfectly good address goes hunting for a typo that
+      // is not there.
+      expect(body.code).toBe("no-attester");
+      expect(body.error).toMatch(/borrowed|cannot/);
+      expect(body.error).toContain("Share the link instead");
     }
-    // And the rows are not there.
+    // And the rows are not there: a grant nothing can satisfy is a dialog
+    // claiming somebody was invited when nobody was.
     expect((await grantsOf(owner)).grants.map((row) => row.subject)).toEqual(["link"]);
   });
 
-  it("refuses a subject that is not one at all", async () => {
+  it("refuses a subject that is not one at all — a different answer, on purpose", async () => {
     await makeCanvas();
-    for (const subject of [undefined, "", "everyone", 42]) {
+    for (const subject of [undefined, "", "everyone", 42, "email:Jordan"]) {
       const asked = await fetch(`${base}${grantsRoute(CANVAS)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...owner.headers },
         body: JSON.stringify({ subject }),
       });
       expect(asked.status, String(subject)).toBe(400);
+      expect(((await asked.json()) as { code: string }).code, String(subject)).toBe("bad-grant");
     }
   });
 
@@ -376,10 +393,15 @@ describe("what a badge may see", () => {
     // it, so an un-narrowed list is a replica mirroring strangers' canvases
     // onto a laptop. With the link off, there is nothing here to mirror.
     expect(await (await get(outsider, "/api/projects")).json()).toEqual([]);
-    // And the badge that was already admitted still sees it — its admission,
-    // not the grant, is what answers now.
+    // And Jordan, who came in on that link, is gone from her own listing too —
+    // phase 9's sweep, which took the admission that used to answer here.
+    // Phase 7 asserted the opposite line and said the sweep would change it.
+    expect(await (await get(jordan, "/api/projects")).json()).toEqual([]);
+    // The badge that MADE the canvas still sees it: `{root: "created"}` is the
+    // one root a sweep never walks, so an owner cannot revoke themselves out
+    // of their own home.
     expect(
-      ((await (await get(jordan, "/api/projects")).json()) as Project[]).map((pr) => pr.id),
+      ((await (await get(owner, "/api/projects")).json()) as Project[]).map((pr) => pr.id),
     ).toEqual([CANVAS]);
   });
 
@@ -542,13 +564,17 @@ describe("a free name, for a badge that has been nowhere", () => {
 
   it("still answers an ADMITTED badge from what it is admitted to", async () => {
     await canvasHeldByIsaac();
-    const inside = await stranger();
-    expect((await get(inside, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
     await revokeLink(owner);
-    // The link is off, so no grant would admit anybody now — but this badge
-    // has already been in, and its admission is what answers. The widening
-    // adds to the admissions; it never replaces them.
-    expect(await freeName(inside)).toBe(ISOCAN_NAMES[1]);
+    // The link is off, so no grant would admit anybody now — but the badge
+    // that MADE the canvas has an admission the sweep never walks, and that
+    // admission is what answers. The widening adds to the admissions; it never
+    // replaces them.
+    //
+    // The badge here is the creator's rather than a link-admitted stranger's,
+    // and that is phase 9 showing through: a stranger who had merely been in
+    // is SWEPT when the link goes off, so there is no longer any such thing as
+    // "admitted by a grant that is gone".
+    expect(await freeName(owner)).toBe(ISOCAN_NAMES[1]);
     expect(await freeName(await stranger())).toBe(ISOCAN_NAMES[0]);
   });
 });
@@ -598,7 +624,12 @@ describe("on a replica", () => {
         headers: cli.headers,
       });
       expect(off.status).toBe(200);
-      expect((await grantsOf(owner)).grants).toEqual([]);
+      // Read off the home's own desk rather than through a badge: the sweep
+      // that rides on the revocation has just expelled every badge the link
+      // let in, and `owner` — admitted a few lines above by asking for the
+      // grants — is one of them. That is the phase-9 behaviour under test
+      // elsewhere; here it would only be a confusing 403.
+      expect((await daemon.desk.grantsFor(CANVAS)).every((row) => row.revokedAt)).toBe(true);
       const jordan = await stranger();
       expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(403);
     } finally {

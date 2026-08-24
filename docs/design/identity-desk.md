@@ -251,6 +251,21 @@ sequenceDiagram
   ```
 - **Kill-a-badge** is revocation's enforcement primitive (4): not yet
   "revoke Jordan," but "end that holder's recognition" exists.
+
+  **Who may end one, settled in phase 9 because the gesture needed it:**
+  a badge may end a badge that **shares an identity with it** — one
+  holding a claim on an actor this badge also claims. That is what a
+  claim already means, so it needs no new notion of ownership, and it is
+  exactly the stolen-laptop case: Jordan's phone ending the laptop that
+  is also her. The flat posture the grant routes take ("anyone admitted
+  may share or un-share") was refused here, because a badge is not
+  scoped to a canvas: under it a stranger admitted by a link could end
+  the recognition of the person who shared it, everywhere at once. A
+  stranger has no claim in common with anybody, so the narrow rule makes
+  that unreachable by construction rather than by a check. Naming a
+  badge to end needs a listing, and the listing is the same query — the
+  home can only ever show you surfaces reached through an actor you
+  already speak as, so it can never become a roster of people to expel.
 - **Server-side actor binding (5)** gets its anchor: once claims key on
   badges, an op still names its actor (a daemon's badge vouches for
   several), but the home *verifies the named actor is among the badge's
@@ -374,6 +389,41 @@ covers: it stops strangers without expelling the invited, which is the
 semantics every sharing product has taught. Kill-a-badge (mechanism 1)
 handles the stolen-laptop case; grant revocation handles the un-invite.
 The two compose.
+
+Built in phase 9 as `server/sweep.ts`, and three things the paragraph
+above does not say turned out to be load-bearing:
+
+- **A chain adopts its minter's OUTCOME, not its stale root.** "Inherits
+  the root of the badge that minted the pass" reads as a lookup and is
+  not one: the minter's own root may be about to change in the same
+  sweep, and resolving against what it says *now* makes the answer
+  depend on the order the badges came back in. Jordan's daemon was
+  expelled a moment before Jordan's tab re-rooted onto the grant that
+  had invited her by name — this paragraph's named failure, one hop
+  down. The implementation decides each badge once, recursively, so
+  order cannot decide anything.
+- **A root can stop standing without any grant being revoked.** Kill a
+  badge and everything it passed onto a canvas is hanging off a holder
+  the home no longer recognises; two badges can also come to vouch for
+  each other in a cycle that names no grant at all. So the sweep's
+  question is "which roots no longer stand", which is the revoked
+  grant's beneficiaries plus exactly these — and ending a badge sweeps
+  the canvases it had been in, which is what makes "the two compose"
+  true rather than merely adjacent.
+- **The `link` provenance phases 2–6 wrote is unreachable.** It names no
+  row, so no revocation can find it and re-testing it would invent a
+  root the desk never wrote. Those badges survive every revocation and
+  only kill-a-badge reaches them. Bounded to homes that have run
+  continuously since phase 7, and stated rather than quietly swept.
+
+**And the revoker is not spared.** Turning the link off from a browser
+that came in *on* that link expels that browser — on a canvas created
+from a terminal, that is the owner's own tab. It is left that way
+because exempting them would leave an admission rooted at a revoked
+grant for the next sweep to expel anyway, and there is no honest root to
+give them instead: the thing that would provide one is a subject that
+binds to a person, which is the roles question left open below. What the
+surfaces do instead is say so before the click.
 
 **What this collapses downstream:**
 

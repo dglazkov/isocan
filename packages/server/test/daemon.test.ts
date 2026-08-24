@@ -606,14 +606,14 @@ describe("daemon HTTP", () => {
     const { blobHash, size } = (await upload.json()) as { blobHash: string; size: number };
     expect(size).toBe(body.length);
 
-    const res = await fetch(`${base}/api/projects/prj_1/blobs/${blobHash}`);
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/${blobHash}`, { headers: badge.headers });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/html");
     expect(res.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(await res.text()).toBe(body);
 
-    const missing = await fetch(`${base}/api/projects/prj_1/blobs/deadbeef`);
+    const missing = await fetch(`${base}/api/projects/prj_1/blobs/deadbeef`, { headers: badge.headers });
     expect(missing.status).toBe(404);
   });
 

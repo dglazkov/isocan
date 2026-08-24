@@ -7,6 +7,7 @@ import type {
   Actor,
   ActorBindingRecord,
   ActorClaimOp,
+  BadgesResponse,
   BlobUploadResponse,
   CanvasSnapshotResponse,
   CreateSessionResponse,
@@ -17,6 +18,7 @@ import type {
   GrantSubject,
   JoinCanvasRequest,
   JoinCanvasResponse,
+  KillBadgeResponse,
   LogEntry,
   MintPassResponse,
   Operation,
@@ -33,6 +35,8 @@ import type {
 import {
   encodeFilename,
   FILENAME_HEADER,
+  badgeRoute,
+  BADGES_ROUTE,
   grantRoute,
   grantsRoute,
   healthPath,
@@ -322,6 +326,22 @@ export class DaemonClient {
    * should not announce a content type. */
   revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
     return this.request("DELETE", grantRoute(projectId, grantId));
+  }
+
+  // ---- your own surfaces: kill-a-badge (phase 9) ----
+  //
+  // Not project-scoped, unlike the grant routes above, because a badge is not
+  // about one canvas: ending one ends that holder's recognition everywhere at
+  // once. On a replica the daemon forwards both to the home, which is where
+  // the badge that matters lives — see `HomeConnection.badges`.
+
+  badges(): Promise<BadgesResponse> {
+    return this.request("GET", BADGES_ROUTE);
+  }
+
+  /** No body, for `revokeGrant`'s reason. */
+  killBadge(badgeId: string): Promise<KillBadgeResponse> {
+    return this.request("DELETE", badgeRoute(badgeId));
   }
 
   // ---- passes: the escalation credential (Scene 5) ----

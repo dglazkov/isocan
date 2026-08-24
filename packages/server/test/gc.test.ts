@@ -56,7 +56,7 @@ async function uploadBlob(content: string, filename: string): Promise<string> {
 }
 
 async function blobStatus(hash: string): Promise<number> {
-  const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`);
+  const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, { headers: badge.headers });
   await res.arrayBuffer().catch(() => {}); // drain so the connection frees up
   return res.status;
 }

@@ -104,7 +104,9 @@ describe("isocan browse", () => {
     expect(version.mimeType).toBe(BROWSER_MIME);
     expect(version.filename).toBe("localhost-9999.uri");
 
-    const blob = await fetch(`${base}/api/projects/prj_1/blobs/${version.blobHash}`);
+    const blob = await fetch(`${base}/api/projects/prj_1/blobs/${version.blobHash}`, {
+      headers: badge.headers,
+    });
     expect(await blob.text()).toBe("http://localhost:9999/\n");
   });
 

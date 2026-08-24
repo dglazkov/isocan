@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   Actor,
+  BadgeSummary,
+  BadgesResponse,
   CreateGrantRequest,
   DoorRequest,
   DoorResponse,
@@ -11,6 +13,7 @@ import type {
   Grant,
   GrantResponse,
   GrantsResponse,
+  KillBadgeResponse,
   JoinCanvasRequest,
   JoinCanvasResponse,
   MintPassRequest,
@@ -24,6 +27,7 @@ import type {
 } from "@isocan/core";
 import {
   BADGE_RESTART_HINT,
+  BADGES_ROUTE,
   cancelledSince,
   COMMAND_NAME,
   decodeFilename,
@@ -34,15 +38,20 @@ import {
   HOME_JOIN_ROUTE,
   isLive,
   newId,
+  normalizeSubject,
+  NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
   PASS_REDEEM_ROUTE,
   PROJECTS_REACH_PARAM,
+  SHELF,
   UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
+import { attesterRefusal } from "./attest.ts";
 import { admittingGrant, NotAdmittedError } from "./grants.ts";
+import { killAndSweep, sweepCanvas } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
@@ -73,13 +82,13 @@ const STARTED_AT = new Date().toISOString();
  * `daemonPidOn`, `ensureDaemon`'s startup poll, `warnIfStale` and
  * `stopDaemons` all call — before any badge could exist. The door obviously
  * cannot ask for what it hands out. The static web app is the page that SETS
- * the cookie; closing it is a bootstrap paradox. And the blob GET is the one
- * named hole — see `blobRoute` below.
+ * the cookie; closing it is a bootstrap paradox.
+ *
+ * **The blob GET used to be here, and phase 9 closed it** — see `isOpen`.
  *
  * Everything else under `/api/*` and the `/ws` upgrade is refused, by one
  * hook with one allowlist, so a route added later is refused by DEFAULT
  * rather than by somebody remembering. */
-const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
 
 /** TWO paths, one answer.
  *
@@ -101,35 +110,92 @@ const BLOB_ROUTE = /^\/api\/projects\/[^/]+\/blobs\/[^/?]+(\?|$)/;
  * there is no second thing to keep in sync. */
 const HEALTH_ROUTES = ["/healthz", "/api/healthz"] as const;
 
+/**
+ * How a blob may be cached — and **`private` is phase 9's, not decoration.**
+ *
+ * A blob's bytes are immutable by construction (the URL is their hash), so a
+ * year is the honest freshness. What changed is who may hold the copy. The
+ * route now requires a badge and an admission, and the hosted home sits behind
+ * a Cloud CDN backend running `--cache-mode=USE_ORIGIN_HEADERS`
+ * (`infra/80-load-balancer.sh`) — which means *this header* is what decides
+ * whether the edge keeps a copy. A shared cache holding a credentialed
+ * response would hand a swept badge exactly the bytes it was just expelled
+ * from, and it would do it without the request ever reaching the door: a
+ * closed route with an open back gate.
+ *
+ * `private` keeps the browser cache, which is the one that matters for a
+ * canvas full of images being panned around, and gives up the edge copy. That
+ * is the cost of closing the route, paid in bandwidth rather than in
+ * correctness, and it is the right way round.
+ */
+const CACHE_BLOB = "private, immutable, max-age=31536000";
+
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
  * so `projectId ∈ admissions` is re-asked on all of them, including the ones
  * a later phase adds. `/api/ops` is deliberately not here: its canvas is in
  * the body, and it says so itself. */
 const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
 
+/**
+ * **The blob route is closed, and the argument that kept it open was wrong —
+ * measured in Chrome, 2026-08-23.**
+ *
+ * Phases 2 and 3 left `GET /api/projects/:id/blobs/:hash` open to badge-less
+ * callers, and the comment here argued why it had to be: `ItemView` renders an
+ * HTML blob in an iframe with `sandbox="allow-scripts"` and no
+ * `allow-same-origin`, which gives the document an opaque origin and a null
+ * site-for-cookies, so "nothing it then requests carries a `SameSite` cookie
+ * at all". `phases.md` recorded the consequence as the limit of revocation: a
+ * sweep that expels somebody does not expel the hashes they wrote down.
+ *
+ * Every clause of that is true and the conclusion did not follow. The
+ * measurement, against a server that logged the request headers a real Chrome
+ * actually sent for each of the sub-requests the canvas makes:
+ *
+ * | request | `Sec-Fetch-Site` | badge cookie |
+ * | --- | --- | --- |
+ * | the sandboxed iframe's own load | `same-origin` | **SENT** |
+ * | `<img>` / `<video>` from the page | `same-origin` | **SENT** |
+ * | `fetch` from the app (markdown, uri-list) | `same-origin` | **SENT** |
+ * | `pic.png` from INSIDE the sandboxed blob | `cross-site` | absent |
+ *
+ * The opaque origin governs what the loaded document may do AFTERWARDS. The
+ * request that loads the iframe is issued by the PARENT page, same-site, on a
+ * `Lax` cookie that is sent because it is not a cross-site request at all.
+ * The old comment described row four and generalised it to row one.
+ *
+ * And row four is moot anyway, which was the second half of the hypothesis and
+ * is also measured: a relative `<img src="pic.png">` inside a blob resolves
+ * against the blob's own URL, so the browser asks for
+ * `/api/projects/:id/blobs/pic.png` — which is not a content hash, and
+ * `store.blobMeta` has never had anything to answer with. The relative-asset
+ * case this route was held open for has never worked and cannot: blobs are
+ * addressed by hash, and a hash is not a directory.
+ *
+ * **So the decision `phases.md` demanded is made: closed.** Expulsion now
+ * reaches the bytes. A badge that is swept out of a canvas cannot fetch that
+ * canvas's blobs, because the route is project-scoped and the `onRequest` hook
+ * re-asks `projectId ∈ admissions` on everything under `/api/projects/:id/`
+ * — the hash stops being a capability the moment the holder stops being
+ * admitted. The alternative on the table was a per-blob short-lived token in
+ * the URL, and it buys nothing here: the cookie already rides, and a token in
+ * a URL is a credential in a place people copy and paste.
+ *
+ * **What closing it costs, stated so nobody rediscovers it as a bug.** A blob
+ * URL pasted into a browser with no badge for this canvas is now a 401 or a
+ * 403 rather than the bytes. That is the point of the change and it is also
+ * the only behaviour anybody could have been relying on. Every in-app path
+ * carries the cookie (rows one to three above), and every CLI and daemon path
+ * carries a bearer.
+ *
+ * See also the `Cache-Control` on the route itself, which had to become
+ * `private` in the same change: a credentialed response cached at a shared
+ * edge is a closed route with an open back gate.
+ */
 function isOpen(method: string, pathname: string): boolean {
   if ((HEALTH_ROUTES as readonly string[]).includes(pathname)) return true;
   if (!pathname.startsWith("/api/")) return true; // the web app and its assets
   if (method === "POST" && pathname === DOOR_ROUTE) return true;
-  /**
-   * The sandboxed HTML blob, deliberately. `ItemView` renders a blob in an
-   * iframe with `sandbox="allow-scripts"` and no `allow-same-origin`, which
-   * gives that document an OPAQUE ORIGIN — and a document with an opaque
-   * origin has a null site-for-cookies, so nothing it then requests (a
-   * relative `<img>`, a stylesheet, a `fetch`) carries a `SameSite` cookie at
-   * all. The security comment in `ItemView.tsx` says this out loud as a
-   * feature, and it is right; it just means an HTML blob with relative asset
-   * references breaks the moment this route wants a badge.
-   *
-   * So it stays open, in writing. It is open today, so this changes nothing,
-   * and the phase's outcome is recognition rather than policy. The honest
-   * long-term answer is that a blob hash IS a capability — 256 bits of
-   * content address, unguessable, already how the route is reasoned about —
-   * and PHASE 3, which re-asks `projectId ∈ admissions` per route, is the
-   * phase that decides whether that is capability enough or whether HTML
-   * blobs get a per-blob token in the URL.
-   */
-  if (method === "GET" && BLOB_ROUTE.test(pathname)) return true;
   return false;
 }
 
@@ -387,7 +453,10 @@ export function registerRoutes(
    * link grant is that knowing the id is what gets you in.
    */
   const admit = async (req: FastifyRequest, canvasId: string, bootstrap = false) => {
-    if (!req.badge) return; // an open route (the blob GET); nothing to admit
+    // Nothing to admit. It used to mean "an open route (the blob GET)"; phase
+    // 9 closed that one, so the only callers left here already hold a badge
+    // and this is the belt on `/api/ops`, whose canvas is in its body.
+    if (!req.badge) return;
     if (req.badge.admissions.some((a) => a.canvasId === canvasId)) return;
 
     // The bootstrap: this badge is creating the canvas, and it is the only
@@ -658,10 +727,24 @@ export function registerRoutes(
   });
 
   /**
-   * Share it. Today that means one subject — `link` — and the refusal for the
-   * others is the honest half: `email:` and `repo:` are satisfied by
-   * attestations, phase 9 owns attesters, and a row written now would admit
-   * nobody while the dialog claimed somebody had been invited.
+   * Share it. **Two refusals, and they are different questions on purpose.**
+   *
+   * `grantSubjectRefusal` (core) asks whether this is a grant subject at all —
+   * a shape question, the same answer on every home. `attesterRefusal`
+   * (`attest.ts`) asks whether THIS home can verify it: `email:` and `repo:`
+   * are satisfied by attestations, an attestation needs a borrowed attester,
+   * and a home that has borrowed none would be writing a row that admits
+   * nobody while the dialog claimed somebody had been invited. Phase 7 refused
+   * these subjects with the same argument and a different reason ("phase 9
+   * owns attesters"); phase 9 owns them now, and what is left is a fact about
+   * one home's configuration rather than about the vocabulary. A caller told
+   * "not a subject" about a perfectly good address goes hunting for a typo
+   * that is not there, which is why these did not stay one function.
+   *
+   * The subject is NORMALIZED before it is written, and that is load-bearing
+   * rather than tidiness: the door satisfies these rows by string equality
+   * against a badge's attestations, so `Jordan@Acme.Test` written raw is a row
+   * that never matches the mailbox it names. One spelling, in core, both ends.
    *
    * Re-granting a subject that is already live hands back the row that is
    * already there rather than writing a second one. The gesture is a TOGGLE,
@@ -673,8 +756,19 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
     const refusal = grantSubjectRefusal(body.subject);
     if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
-    const subject = body.subject!;
+    const subject = normalizeSubject(body.subject!);
+    // A REPLICA forwards without asking its own opinion, and the order of
+    // these two lines is that decision. Shape is universal and refused above;
+    // "can anything here verify that" is a fact about the home that OWNS the
+    // grant, and a laptop that answered it locally would be a second copy of a
+    // policy that is about to change — refusing an invitation the home would
+    // have accepted, on the strength of its own configuration. Same reason
+    // `isocan share <email>` has no client-side "not yet".
     if (options.home) return options.home.createGrant(id, subject);
+    const unverifiable = attesterRefusal(subject);
+    if (unverifiable) {
+      return reply.status(400).send({ error: unverifiable, code: "no-attester" });
+    }
     await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
     if (live) return { grant: live } satisfies GrantResponse;
@@ -691,19 +785,29 @@ export function registerRoutes(
 
   /**
    * Un-share it — "turn off the link", and the same gesture for every other
-   * subject.
+   * subject. **Both halves, since phase 9.**
    *
-   * **What this does and does not do, stated where somebody would otherwise
-   * expect the sweep.** The row stops admitting NEW arrivals: a badge that
-   * has not been here is now refused, and the canvas drops out of its
-   * listing. Badges ALREADY admitted under this grant keep their admissions
-   * until phase 9's provenance sweep, which is not a shortcut — the sweep has
-   * to RE-RUN the door test per badge and re-root the ones another grant
-   * still covers, or turning off the link would expel the very people who
-   * were invited by name. That re-rooting needs attestations to be worth
-   * anything, and attestations are phase 9's. So: this revocation is the
-   * "stop strangers" half, in full, and the "expel" half is deliberately not
-   * half-built here.
+   * Phase 7 shipped the first half and said in this comment where the second
+   * would go: the row stops admitting NEW arrivals, and *"badges ALREADY
+   * admitted under this grant keep their admissions until phase 9's provenance
+   * sweep, which is not a shortcut — the sweep has to RE-RUN the door test per
+   * badge and re-root the ones another grant still covers, or turning off the
+   * link would expel the very people who were invited by name."*
+   *
+   * That is now `sweepCanvas`, called here and nowhere else on the revocation
+   * path, and the ORDER is the whole of it: revoke first, sweep second. The
+   * sweep asks the door about roots that no longer stand, so it has to run
+   * against a desk where this row is already a tombstone — sweeping first
+   * would find every root standing and expel nobody.
+   *
+   * **The report rides back on the response.** A gesture whose point is
+   * expulsion has to be able to say who it expelled: "the link is off" and
+   * "the link is off and four people just lost this canvas" are different
+   * sentences, and both surfaces print the second one.
+   *
+   * On a REPLICA this forwards, sweep and all — the row that decides who may
+   * enter lives at the home, so the expulsion does too, and what a laptop
+   * gets back is the home's own count.
    */
   app.delete("/api/projects/:id/grants/:grantId", async (req, reply) => {
     const { id, grantId } = req.params as { id: string; grantId: string };
@@ -716,7 +820,82 @@ export function registerRoutes(
       return reply.status(404).send({ error: `no grant ${grantId} on ${id}`, code: "unknown-grant" });
     }
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
-    return { grant: revoked ?? mine } satisfies GrantResponse;
+    const swept = await sweepCanvas(desk, id);
+    return { grant: revoked ?? mine, swept } satisfies GrantResponse;
+  });
+
+  // ---- your own surfaces: kill-a-badge (identity desk, mechanism 1) ----
+  //
+  // The enforcement primitive the badge was always going to need: *"not yet
+  // 'revoke Jordan', but 'end that holder's recognition' exists."* Phase 9
+  // makes it exist, and makes it something a person and an agent can actually
+  // perform — which needs a way to NAME a badge, so there are two routes and
+  // not one.
+  //
+  // **Who may kill what, and why it is not "any admitted badge".** The grant
+  // routes take the deliberately flat posture ("anyone in the doc can share
+  // the doc"), and the same posture here would be a much bigger hammer: a
+  // stranger admitted by a link could end the recognition of the person who
+  // shared it, on every canvas at once, because a badge is not scoped to a
+  // room. So the rule is narrower and needs no notion of ownership either:
+  // **you may end a surface that shares an identity with you.** A badge
+  // holding a claim on an actor this badge also claims IS one of your
+  // surfaces — that is what a claim means — and it is exactly the
+  // stolen-laptop case: Jordan, on her phone, ending the laptop that is her.
+  // A stranger has no claim in common with anybody, so this is unreachable
+  // for them by construction rather than by a check somebody has to remember.
+  //
+  // It composes with grant revocation rather than duplicating it, as the
+  // design says. Killing does not un-invite: a killed holder that knocks
+  // again gets a fresh badge and, under a live link grant, gets back in as a
+  // STRANGER — with none of the claims, so it cannot speak as anybody. That
+  // is the property that matters ("a badge bounds a compromise"), and
+  // stopping the re-entry is the other gesture, on the grant.
+
+  /**
+   * Your surfaces. One query — every badge holding a claim on an actor this
+   * badge claims — plus this badge itself, which is always in the list and
+   * always marked, because the row a person most needs warning about is the
+   * one that signs them out of the tab they are reading.
+   *
+   * A badge with no claims sees exactly itself, which is correct: it has no
+   * identity in common with anything, so nothing else is one of its surfaces.
+   */
+  app.get(BADGES_ROUTE, async (req) => {
+    if (options.home) return options.home.badges();
+    return { badges: await mySurfaces(desk, engine, req.badge!) } satisfies BadgesResponse;
+  });
+
+  /**
+   * End one. `killAndSweep`, because ending a holder unstands the root of
+   * everybody that holder passed onto a canvas — see the argument there.
+   *
+   * The authorization is a membership test against the list above rather than
+   * a second spelling of the rule, so "what you may kill" and "what you are
+   * shown" cannot drift apart. Killing an already-dead badge is a 404 and not
+   * an error: the caller wanted that holder gone and it is.
+   */
+  app.delete(`${BADGES_ROUTE}/:badgeId`, async (req, reply) => {
+    const { badgeId } = req.params as { badgeId: string };
+    if (options.home) return options.home.killBadge(badgeId);
+    const mine = await mySurfaces(desk, engine, req.badge!);
+    const target = mine.find((row) => row.badgeId === badgeId);
+    if (!target) {
+      return reply.status(403).send({
+        error:
+          `${badgeId} is not one of your surfaces — you can end a badge that shares an ` +
+          "identity with yours, which is what makes this the stolen-laptop gesture and " +
+          "not a way to expel other people",
+        code: NOT_YOUR_BADGE,
+      });
+    }
+    const outcome = await killAndSweep(desk, badgeId, req.badge!.badgeId);
+    if (!outcome) {
+      return reply
+        .status(404)
+        .send({ error: `${badgeId} is already ended`, code: "unknown-badge" });
+    }
+    return { killed: target, swept: outcome.swept } satisfies KillBadgeResponse;
   });
 
   // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
@@ -1108,9 +1287,9 @@ export function registerRoutes(
 
   /**
    * Ask for somewhere to put bytes too big to post (see
-   * `MAX_DIRECT_UPLOAD_BYTES`). POST, so `isOpen`'s GET-only blob hole does
-   * not cover it, and under `/api/projects/:id/…`, so the door re-asks
-   * `projectId ∈ admissions` before a single byte is signed for.
+   * `MAX_DIRECT_UPLOAD_BYTES`). Under `/api/projects/:id/…`, so the door
+   * re-asks `projectId ∈ admissions` before a single byte is signed for —
+   * which since phase 9 is true of the blob GET beside it as well.
    */
   app.post("/api/projects/:id/blobs/upload-url", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -1176,7 +1355,7 @@ export function registerRoutes(
         .header("Content-Type", remote.mimeType)
         .header("Content-Security-Policy", "sandbox allow-scripts")
         .header("X-Content-Type-Options", "nosniff")
-        .header("Cache-Control", "immutable, max-age=31536000")
+        .header("Cache-Control", CACHE_BLOB)
         .send(remote.stream);
     }
     if (!meta) return reply.status(404).send({ error: "blob not found" });
@@ -1188,7 +1367,7 @@ export function registerRoutes(
       .header("Content-Type", meta.mimeType)
       .header("Content-Security-Policy", "sandbox allow-scripts")
       .header("X-Content-Type-Options", "nosniff")
-      .header("Cache-Control", "immutable, max-age=31536000")
+      .header("Cache-Control", CACHE_BLOB)
       // Said unconditionally, so a player knows it may seek BEFORE it asks.
       .header("Accept-Ranges", "bytes");
 
@@ -1217,6 +1396,77 @@ export function registerRoutes(
   // daemon in this repo today and stays exactly as it was.
   if (options.homeUrl) registerHomeElsewhere(app, options.homeUrl);
   else registerStaticWebApp(app, desk);
+}
+
+/**
+ * **Your own surfaces** — every badge that shares an identity with this one,
+ * with this one first.
+ *
+ * "A surface of yours" has a definition rather than a policy: a badge holding
+ * a claim on an actor this badge also claims. That is what a claim IS — the
+ * home vouching that this holder may speak as that actor — so two badges
+ * holding one is the home already saying they are the same person's. Jordan's
+ * phone and Jordan's laptop, Priya's daemon and Priya's tab.
+ *
+ * It is ONE query per actor this badge claims (`Desk.claimants`, an indexed
+ * `array-contains` over `claimIds`) and one document read per surface found.
+ * A badge claims a handful of actors and a person has a handful of surfaces,
+ * so this is small — and it is small for a reason worth keeping: **there is no
+ * shape of this call that lists the home.** Every badge it can return was
+ * reached through an actor the caller already speaks as, which is the same
+ * narrowing `orphanedClaims` is built on and for the same reason. A route that
+ * could enumerate badges would be a roster of people to kill.
+ *
+ * The shelf is skipped: a shelved row belongs to no badge, so there is nothing
+ * to name and nothing to end.
+ *
+ * Self is always included and always marked, even for a badge with no claims
+ * at all — a person is entitled to end the surface they are sitting at, and
+ * the marking is what stops them doing it by accident.
+ */
+async function mySurfaces(
+  desk: Desk,
+  engine: Engine,
+  badge: BadgeRecord,
+): Promise<BadgeSummary[]> {
+  const found = new Map<string, BadgeRecord>([[badge.badgeId, badge]]);
+  for (const actorId of new Set(badge.claims.map((claim) => claim.actorId))) {
+    for (const holder of await desk.claimants(actorId)) {
+      if (holder.badgeId === SHELF || found.has(holder.badgeId)) continue;
+      const record = await desk.badge(holder.badgeId);
+      if (record) found.set(record.badgeId, record);
+    }
+  }
+  const names = await engine.actorNames();
+  return [...found.values()]
+    .map((record) => summarize(record, record.badgeId === badge.badgeId, names))
+    // Self first, then most-recently-seen: the surface you are reading this
+    // on, then the one you used yesterday, then the one you are trying to
+    // remember owning — which is the order that puts a stolen laptop at the
+    // bottom of the list, where somebody looking for it will look.
+    .sort((a, b) => (a.self === b.self ? b.lastSeen.localeCompare(a.lastSeen) : a.self ? -1 : 1));
+}
+
+function summarize(
+  record: BadgeRecord,
+  self: boolean,
+  names: Record<string, string>,
+): BadgeSummary {
+  return {
+    badgeId: record.badgeId,
+    kind: record.kind,
+    createdAt: record.createdAt,
+    lastSeen: record.lastSeen,
+    self,
+    // De-duplicated by actor: one badge can hold several rows for one actor
+    // (a keyed claim and a handed-over one), and a person reading a list of
+    // their own surfaces does not want to see themselves twice on one line.
+    actors: [...new Map(record.claims.map((c) => [c.actorId, c])).values()].map((claim) => ({
+      id: claim.actorId,
+      name: names[claim.actorId] ?? "",
+    })),
+    canvases: record.admissions.length,
+  };
 }
 
 /**

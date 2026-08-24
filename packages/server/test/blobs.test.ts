@@ -48,8 +48,17 @@ async function upload(content: string, filename: string): Promise<string> {
   return ((await res.json()) as { blobHash: string }).blobHash;
 }
 
-async function fetchBlob(hash: string): Promise<{ status: number; body: string }> {
-  const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`);
+/** The blob GET carries a badge, because since phase 9 it must: the route was
+ * the one named hole in `isOpen` and is now behind the door like everything
+ * else about a canvas. */
+async function fetchBlob(
+  hash: string,
+  init: RequestInit = {},
+): Promise<{ status: number; body: string }> {
+  const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, {
+    ...init,
+    headers: { ...badge.headers, ...(init.headers as Record<string, string> | undefined) },
+  });
   return { status: res.status, body: await res.text() };
 }
 
@@ -102,7 +111,7 @@ describe("the blob route honors Range", () => {
 
   async function range(hash: string, header: string) {
     const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, {
-      headers: { Range: header },
+      headers: { Range: header, ...badge.headers },
     });
     return {
       status: res.status,
@@ -113,7 +122,9 @@ describe("the blob route honors Range", () => {
 
   it("advertises byte ranges on every blob, before anybody asks", async () => {
     const hash = await upload(CONTENT, "digits.txt");
-    const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`);
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, {
+      headers: badge.headers,
+    });
     expect(res.headers.get("accept-ranges")).toBe("bytes");
     expect(res.headers.get("content-length")).toBe(String(CONTENT.length));
     expect(await res.text()).toBe(CONTENT);
@@ -223,6 +234,80 @@ describe("the direct-upload routes on a file home", () => {
     expect(res.status).toBe(401);
   });
 });
+
+/**
+ * **The route phase 9 closed, and the reason it could be** (see `isOpen`).
+ *
+ * It was the one named hole in the badge check, held open by an argument about
+ * sandboxed iframes that turned out to describe the wrong request — measured
+ * in Chrome rather than reasoned about: the request that LOADS a sandboxed
+ * iframe is issued by the parent page, same-site, and carries the `Lax` badge
+ * cookie. `phases.md` had recorded the hole as the limit of revocation ("a
+ * sweep that expels somebody does not expel the hashes they wrote down"), and
+ * closing it is what makes expulsion reach the bytes.
+ */
+describe("the blob route is behind the door", () => {
+  it("refuses a badge-less caller, so a hash on its own is not a capability", async () => {
+    const hash = await upload("# secret\n", "secret.md");
+    const res = await fetch(`${base}/api/projects/prj_1/blobs/${hash}`);
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { code: string }).code).toBe("no-badge");
+  });
+
+  it("EXPULSION REACHES THE BYTES — the whole point of closing it", async () => {
+    const hash = await upload("# secret\n", "secret.md");
+    const stranger = await mintTestBadge(base);
+    const url = `${base}/api/projects/prj_1/blobs/${hash}`;
+
+    // While the link is on, a stranger who presents the address is admitted
+    // and gets the bytes. That is the link grant working, not a hole.
+    expect((await fetch(url, { headers: stranger.headers })).status).toBe(200);
+
+    // Turn the link off. The sweep expels the badges rooted in it — and now
+    // the hash they wrote down is worth nothing, which is exactly what
+    // `phases.md` said revocation could not reach.
+    const { grants } = (await (
+      await fetch(`${base}/api/projects/prj_1/grants`, { headers: badge.headers })
+    ).json()) as { grants: { id: string }[] };
+    await fetch(`${base}/api/projects/prj_1/grants/${grants[0]!.id}`, {
+      method: "DELETE",
+      headers: badge.headers,
+    });
+
+    const res = await fetch(url, { headers: stranger.headers });
+    // 403 rather than 401 because the credential is fine — sending it back to
+    // the door would mint badges forever and none of them would get in.
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe("not-admitted");
+    // And the badge that made the canvas is untouched: `{root: "created"}` is
+    // the one root a sweep never walks.
+    expect((await fetch(url, { headers: badge.headers })).status).toBe(200);
+  });
+
+  it("marks the bytes private, so a shared cache cannot serve what the door refused", async () => {
+    const hash = await upload("# cached\n", "cached.md");
+    const res = await fetchBlobResponse(hash);
+    // `USE_ORIGIN_HEADERS` at the hosted home means this header IS the CDN
+    // policy. A credentialed response cached at an edge would hand a swept
+    // badge exactly the bytes it was expelled from, without the request ever
+    // reaching the door.
+    expect(res.headers.get("cache-control")).toContain("private");
+    expect(res.headers.get("cache-control")).toContain("immutable");
+  });
+
+  it("cannot resolve a relative asset inside a blob, which is why it never needed to stay open", async () => {
+    // A blob is addressed by content hash, so `<img src="pic.png">` inside one
+    // resolves to `…/blobs/pic.png` — not a hash, and nothing has ever been
+    // able to answer it. The relative-asset case the route was held open for
+    // has never worked and cannot.
+    await upload("<img src=\"pic.png\">", "page.html");
+    expect((await fetchBlob("pic.png")).status).toBe(404);
+  });
+});
+
+async function fetchBlobResponse(hash: string): Promise<Response> {
+  return fetch(`${base}/api/projects/prj_1/blobs/${hash}`, { headers: badge.headers });
+}
 
 describe("filenames that are not ByteStrings", () => {
   /**

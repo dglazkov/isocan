@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import type {
   Actor,
+  BadgeSummary,
   CanvasAddress,
   CanvasSnapshotResponse,
   GrantSubject,
@@ -18,6 +19,7 @@ import type {
   Placement,
   PresenceSession,
   Project,
+  SweepReport,
   WatchedLogEntry,
 } from "@isocan/core";
 import {
@@ -1336,7 +1338,10 @@ program
   .command("share")
   .description("Who may enter this canvas: the address to send, and the \"anyone with the link\" grant")
   .argument("[who]", "an email or repo to grant access to — the home answers why it cannot yet")
-  .option("--link <on|off>", "turn the link grant on (anyone with the address) or off")
+  .option(
+    "--link <on|off>",
+    "turn the link grant on (anyone with the address) or off — OFF EXPELS the badges that came in on it",
+  )
   .action(
     run(async (who: string | undefined, opts: { link?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -1345,6 +1350,7 @@ program
       // hands out the home's address and never its own 127.0.0.1 — the same
       // rule `isocan open` follows, from the same function.
       const address = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+      let swept: SweepReport | undefined;
 
       if (opts.link !== undefined) {
         const want = opts.link.toLowerCase();
@@ -1356,7 +1362,15 @@ program
         // Off with no live row is not an error: the gesture is "the link is
         // off", and it already is. Two people flipping the same toggle at once
         // must not turn one of them into a failure.
-        if (want === "off" && live) await ctx.client.revokeGrant(project.id, live.id);
+        if (want === "off" && live) {
+          // **What the sweep did is remembered, not printed here.** Phase 9
+          // made revocation expel people, and a gesture whose point is
+          // expulsion has to be able to name its effect — but it belongs
+          // BELOW the status lines, not above them, or the command opens with
+          // a number nobody has been given a subject for yet. Absent from a
+          // home that predates the sweep, which reads as nothing swept.
+          ({ swept } = await ctx.client.revokeGrant(project.id, live.id));
+        }
       }
 
       if (who !== undefined) {
@@ -1369,13 +1383,20 @@ program
 
       const { grants } = await ctx.client.grants(project.id);
       const link = grants.find((g) => g.subject === LINK) ?? null;
-      if (ctx.json) return printJson({ address, grants });
+      if (ctx.json) return printJson({ address, grants, ...(swept ? { swept } : {}) });
       printKeyValues({
         address,
         link: link
           ? `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
-          : "off — new arrivals are turned away; people already on this canvas keep their access",
+          : // Phase 7's line here read "people already on this canvas keep
+            // their access", and phase 9 made that false. Worse, with the
+            // sweep's own count printed beside it the two lines contradicted
+            // each other in one screen — which a walk against a real daemon
+            // caught and no test would have.
+            "off — new arrivals are turned away, and the badges that came in on it were expelled",
       });
+      // Below the status, where a number has a subject.
+      if (swept) console.log(sweptLine(swept));
       const others = grants.filter((g) => g.subject !== LINK);
       if (others.length > 0) {
         printTable(
@@ -1484,6 +1505,94 @@ program
       );
     }),
   );
+
+/**
+ * **`isocan badges` — your own surfaces, and ending one.**
+ *
+ * The verb half of kill-a-badge (identity desk, mechanism 1), and the agent's
+ * hands for the gesture the design describes as *"the stolen-laptop case"*.
+ * It is here rather than only in a browser for the reason every verb in this
+ * file is here: a canvas for people AND agents, and an agent that cannot see
+ * which machines carry its identity cannot end one.
+ *
+ * **A surface is a badge that shares an identity with yours** — a badge
+ * holding a claim on an actor your badge also claims. That is the whole rule,
+ * and it is what makes the listing small and the gesture safe: a stranger has
+ * no claim in common with you, so nobody can use this to expel anybody.
+ *
+ * **On a replica it asks the HOME**, and that is the point rather than a
+ * detail. A laptop holds two badges — one at its own daemon, one at the home
+ * — and the local one is not a boundary against somebody sitting at that
+ * keyboard. What actually stops a stolen machine is that its badge AT THE
+ * HOME is ended: its ops are refused and replication goes stale. So this verb
+ * shows the home's list, and `--kill` ends a badge there.
+ *
+ * `--kill` rather than a second command, following `share --link off`: the
+ * destructive act names its target explicitly, so no invocation of the bare
+ * verb can ever end anything. And killing your OWN row is allowed and warned
+ * about — signing this surface out is a real thing to want, and doing it by
+ * accident is not.
+ */
+program
+  .command("badges")
+  .description("Every surface that carries your identity — and end one that should not")
+  .option("--kill <badgeId>", "end that surface's recognition: it can no longer speak as you")
+  .action(
+    run(async (opts: { kill?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.kill !== undefined) {
+        const { killed, swept } = await ctx.client.killBadge(opts.kill);
+        if (ctx.json) return printJson({ killed, swept });
+        printKeyValues({
+          ended: `${killed.badgeId} (${surfaceKind(killed)})`,
+          identity:
+            killed.actors.map((a) => a.name || a.id).join(", ") ||
+            "none — it spoke as nobody",
+          canvases: `${killed.canvases} — ${sweptLine(swept)}`,
+        });
+        console.log(
+          "\nThat holder is not recognised here any more. It composes with the link:\n" +
+            "if it knocks again it gets a NEW badge with none of these claims, and the\n" +
+            "grant decides whether that stranger is let back in — `isocan share --link off`.",
+        );
+        return;
+      }
+      const { badges } = await ctx.client.badges();
+      if (ctx.json) return printJson({ badges });
+      const now = new Date().toISOString();
+      printTable(
+        badges.map((badge) => ({
+          badge: badge.badgeId,
+          what: surfaceKind(badge),
+          identity: badge.actors.map((a) => a.name || a.id).join(", ") || "—",
+          canvases: String(badge.canvases),
+          seen: badge.self ? "now (this one)" : `${elapsedLabel(badge.lastSeen, now)} ago`,
+        })),
+      );
+      console.log(
+        "\n`isocan badges --kill <badge>` ends one. The row marked (this one) is the surface\n" +
+          "you are typing at, so ending it signs this machine out.",
+      );
+    }),
+  );
+
+/** A browser tab or a machine, in one word. The carrier IS the answer — a
+ * cookie badge is a browser by construction, because nothing else has a
+ * cookie jar at the home's origin. */
+function surfaceKind(badge: BadgeSummary): string {
+  return badge.kind === "cookie" ? "browser" : "machine";
+}
+
+/** What a sweep did, in one line both this verb and `share` print. */
+function sweptLine(swept: SweepReport): string {
+  if (swept.expelled === 0 && swept.rerooted === 0) return "nobody was expelled";
+  const parts = [`${swept.expelled} expelled`];
+  // Named even when it is zero would be noise; named when it is not is the
+  // half nobody expects — somebody stayed, because another grant still covers
+  // them, which is the design's whole point about not expelling the invited.
+  if (swept.rerooted > 0) parts.push(`${swept.rerooted} kept by another grant`);
+  return parts.join(", ");
+}
 
 /**
  * What a person typed, as a grant subject.

@@ -5,6 +5,7 @@ import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts"
 import { setActorColor } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { TerminalDialog } from "./TerminalDialog.tsx";
+import { SurfacesDialog } from "./SurfacesDialog.tsx";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -27,6 +28,12 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   default ink. It is `actor.setColor`, stored in the daemon's actor
  *   registry beside your name, because a color only you can see would not be
  *   an identity: everyone on every canvas sees you change.
+ * - YOUR SURFACES is kill-a-badge (phase 9): every holder that carries this
+ *   identity, and the button that ends one. It sits here for the reason the
+ *   escalation dialog does — this menu is *how I'm connected here*, and a
+ *   surface of yours is another way you are connected. Unlike escalation it
+ *   needs no canvas: a badge is not about one room, which is exactly why
+ *   ending one ends it everywhere.
  * - WORK FROM YOUR TERMINAL is Scene 5, and it belongs here rather than
  *   beside Share for a reason the journey states: this menu is *how I'm
  *   connected here*, and escalation is another way to be connected — a second
@@ -64,6 +71,7 @@ export function IdentityMenu({
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
+  const [surfaces, setSurfaces] = useState(false);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
@@ -84,6 +92,7 @@ export function IdentityMenu({
   if (terminal && projectId) {
     return <TerminalDialog actor={actor} projectId={projectId} onClose={onClose} />;
   }
+  if (surfaces) return <SurfacesDialog onClose={onClose} />;
 
   return (
     <div
@@ -176,6 +185,17 @@ export function IdentityMenu({
           Work from your terminal…
         </button>
       )}
+      {/* Kill-a-badge, one click from your own face. It is above Leave on
+          purpose: both end something, and the one that ends a holder's
+          recognition everywhere should not sit under the one that only
+          forgets a persona in this browser. */}
+      <button
+        className="btn identity-terminal"
+        title="Every surface that carries your identity — and end one that should not"
+        onClick={() => setSurfaces(true)}
+      >
+        Your surfaces…
+      </button>
       <button
         className="btn identity-leave"
         onClick={() => {

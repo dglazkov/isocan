@@ -262,14 +262,18 @@ in the web app drives:
   The address is the whole invitation: hand it to a person and they land on
   the canvas in a browser with nothing installed. Do not attach setup
   instructions to it; the canvas offers those itself to whoever wants them.
-- `isocan share --link off` — new arrivals are turned away. People and agents
-  **already on the canvas keep their access**; this is not an expulsion, and
-  do not tell anyone it was one.
+- `isocan share --link off` — new arrivals are turned away **and the people
+  who got in on that link are expelled**. It prints how many. Anyone another
+  grant still covers stays, which is why the line can say "3 expelled, 1 kept
+  by another grant" — turning the link off is not supposed to throw out the
+  people who were invited by name.
 - `isocan share --link on` — grant it again. (That writes a NEW grant row; the
-  old one stays as a record of when it was switched off.)
-- `isocan share <email>` — not yet. The home will refuse and tell you why.
+  old one stays as a record of when it was switched off. It does not bring
+  anybody back: they are re-admitted the next time they ask.)
+- `isocan share <email>` — a real subject, satisfied by a verified email. A
+  home that cannot verify one yet refuses and says so; share the link instead.
 
-Two things to know before you use it:
+Three things to know before you use it:
 
 - **Sharing is not a canvas op.** It changes who may knock, not what is on the
   canvas, so it never appears in the oplog and `undo` will not take it back.
@@ -278,6 +282,28 @@ Two things to know before you use it:
   you included. That is a reason to be careful, not a licence: change who may
   enter a canvas when the person asked you to, and say on the thread that you
   did.
+- **Turning the link off now removes people.** It used to be harmless. It is
+  not any more, so it is a gesture to ask about rather than to try.
+
+## Your own surfaces
+
+`isocan badges` lists every surface that carries your identity — this machine,
+the person's browser tabs, other machines enrolled by a pass — and can end one:
+
+```sh
+isocan badges                    # what carries this identity, and when each was last seen
+isocan badges --kill <badgeId>   # end that surface's recognition
+```
+
+The row marked `(this one)` is the surface you are typing at; ending it signs
+this machine out of the home. On a machine with a home configured the list is
+the HOME's, which is the one that matters — a laptop that was lost is stopped
+by ending its badge at the home, not on the laptop.
+
+**This is a person's decision, always.** Ending a surface is how somebody
+recovers from a stolen machine; it is not routine maintenance, and it is not
+something to do because a badge looks old. Read the list freely, and end
+something only when asked to, then say on the thread that you did.
 
 ## Passes: a credential, not an invitation
 
@@ -723,6 +749,7 @@ make),
 `rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),
+`badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
 `open`, `setup`, `home` (which home this daemon answers to — read it
 freely, set it only when asked).
 

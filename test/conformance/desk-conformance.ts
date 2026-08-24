@@ -111,7 +111,10 @@ export function deskConformance(
         // Two badges that share no canvas at all still both answer, because
         // actor ids are global and never recycled.
         const found = await desk.claimants("usr_ada");
-        expect(found.map((row) => row.sessionKey).sort()).toEqual(["cli:ada", "web:ada"]);
+        expect(found.map((row) => row.claim.sessionKey).sort()).toEqual(["cli:ada", "web:ada"]);
+        // The badge id rides along, which is what kill-a-badge names a
+        // surface by (see `Desk.claimants`).
+        expect(found.map((row) => row.badgeId).sort()).toEqual(["bdg_1", "bdg_2"]);
         expect(await desk.claimants("usr_nobody")).toEqual([]);
       }),
     );
@@ -285,7 +288,10 @@ export function deskConformance(
 
         // A shelved row belongs to no badge and therefore to no admission, so
         // it is in EVERY scope on the one home that has one.
-        expect((await desk.claimants("usr_old")).map((row) => row.actorId)).toEqual(["usr_old"]);
+        expect((await desk.claimants("usr_old")).map((row) => row.claim.actorId)).toEqual([
+          "usr_old",
+        ]);
+        expect((await desk.claimants("usr_old"))[0]!.badgeId).toBe(SHELF);
         const holders = await desk.holdersOf("legacy:one");
         expect(holders).toHaveLength(1);
         expect(holders[0]!.badgeId).toBe(SHELF);
@@ -301,6 +307,144 @@ export function deskConformance(
         expect((await desk.holdersOf("legacy:one")).map((row) => row.badgeId)).toEqual(["bdg_1"]);
 
         await desk.shelve({}); // a no-op, not an error
+      }),
+    );
+
+    // ---- phase 9: attestations, the sweep's query, kill-a-badge ----
+
+    test(
+      "attestations ride the badge, and re-verifying replaces rather than piles up",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        expect((await desk.badge("bdg_1"))!.attestations ?? []).toEqual([]);
+
+        await desk.attest("bdg_1", {
+          attribute: "email:ada@example.test",
+          verifiedVia: "magic-link",
+          at: "2026-01-02T00:00:00.000Z",
+        });
+        await desk.attest("bdg_1", {
+          attribute: "repo:github.com/acme/widgets",
+          verifiedVia: "github",
+          at: "2026-01-02T00:00:00.000Z",
+        });
+        // The SAME attribute again is one proof and a fresher date, never two
+        // rows: a badge holding two proofs of one mailbox is the drift
+        // `upsertAttestation` exists to prevent.
+        await desk.attest("bdg_1", {
+          attribute: "email:Ada@Example.Test",
+          verifiedVia: "google",
+          at: "2026-01-03T00:00:00.000Z",
+        });
+
+        const held = (await desk.badge("bdg_1"))!.attestations!;
+        expect(held.map((row) => row.attribute).sort()).toEqual([
+          "email:ada@example.test",
+          "repo:github.com/acme/widgets",
+        ]);
+        const email = held.find((row) => row.attribute === "email:ada@example.test")!;
+        expect(email.verifiedVia).toBe("google");
+        expect(email.at).toBe("2026-01-03T00:00:00.000Z");
+
+        // Attesting a badge this desk does not know writes nothing and does
+        // not throw: the caller's remedy is the door, not an exception.
+        await desk.attest("bdg_nope", {
+          attribute: "email:nobody@example.test",
+          verifiedVia: "magic-link",
+          at: "2026-01-02T00:00:00.000Z",
+        });
+      }),
+    );
+
+    test(
+      "badgesIn: every live badge admitted to one canvas — the sweep's population",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.put(mint("bdg_2"));
+        await desk.put(mint("bdg_3"));
+        await desk.admit("bdg_1", "prj_a", { root: "created" });
+        await desk.admit("bdg_2", "prj_a", { root: "grant", grantId: "gnt_1" });
+        await desk.admit("bdg_3", "prj_b", { root: "grant", grantId: "gnt_2" });
+
+        expect((await desk.badgesIn("prj_a")).map((b) => b.badgeId).sort()).toEqual([
+          "bdg_1",
+          "bdg_2",
+        ]);
+        expect(await desk.badgesIn("prj_nobody")).toEqual([]);
+      }),
+    );
+
+    test(
+      "reroot rewrites one admission's provenance; expel drops it",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.admit("bdg_1", "prj_a", { root: "grant", grantId: "gnt_1" });
+        await desk.admit("bdg_1", "prj_b", { root: "grant", grantId: "gnt_1" });
+
+        await desk.reroot("bdg_1", "prj_a", { root: "grant", grantId: "gnt_2" });
+        const after = await desk.badge("bdg_1");
+        expect(after!.admissions.find((a) => a.canvasId === "prj_a")!.provenance).toEqual({
+          root: "grant",
+          grantId: "gnt_2",
+        });
+        // The OTHER canvas is untouched: a sweep is per-canvas, and a reroot
+        // that reached sideways would expel people from rooms nobody revoked.
+        expect(after!.admissions.find((a) => a.canvasId === "prj_b")!.provenance).toEqual({
+          root: "grant",
+          grantId: "gnt_1",
+        });
+
+        await desk.expel("bdg_1", "prj_a");
+        expect((await desk.badge("bdg_1"))!.admissions.map((a) => a.canvasId)).toEqual(["prj_b"]);
+
+        // Both are idempotent: the second of two racing sweeps must not throw,
+        // and must not resurrect what the first dropped.
+        await desk.expel("bdg_1", "prj_a");
+        await desk.reroot("bdg_1", "prj_a", { root: "grant", grantId: "gnt_3" });
+        expect((await desk.badge("bdg_1"))!.admissions.map((a) => a.canvasId)).toEqual(["prj_b"]);
+      }),
+    );
+
+    test(
+      "kill-a-badge: nobody holds it, it answers nothing, and the first stamp stands",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.put(mint("bdg_2"));
+        await desk.setClaims("bdg_1", [claim("usr_ada", "cli:ada")]);
+        await desk.setClaims("bdg_2", [claim("usr_ada", "web:ada")]);
+        await desk.admit("bdg_1", "prj_a", { root: "grant", grantId: "gnt_1" });
+
+        const killed = await desk.killBadge("bdg_1", "2026-02-01T00:00:00.000Z", "bdg_2");
+        // The record as it was ALIVE — the caller sweeps these canvases and
+        // names these actors.
+        expect(killed!.admissions.map((a) => a.canvasId)).toEqual(["prj_a"]);
+        expect(killed!.claims.map((c) => c.actorId)).toEqual(["usr_ada"]);
+
+        // A badge nobody holds: it cannot authenticate, and it is out of every
+        // query — so its claims stop counting as held and its admissions stop
+        // counting as scope.
+        expect(await desk.badge("bdg_1")).toBeNull();
+        expect(await desk.claimsOf("bdg_1")).toEqual([]);
+        expect((await desk.claimants("usr_ada")).map((row) => row.badgeId)).toEqual(["bdg_2"]);
+        expect(await desk.holdersOf("cli:ada")).toEqual([]);
+        expect(await desk.claimsIn(["prj_a"])).toEqual([]);
+        expect(await desk.badgesIn("prj_a")).toEqual([]);
+
+        // Idempotent, and the SECOND caller is told there was nothing to do —
+        // which is what stops two people ending one laptop sweeping twice.
+        expect(await desk.killBadge("bdg_1", "2026-03-01T00:00:00.000Z", "bdg_2")).toBeNull();
+        // And a dead badge takes no more writes.
+        await desk.setClaims("bdg_1", [claim("usr_eve", "cli:eve")]);
+        await desk.admit("bdg_1", "prj_b", { root: "created" });
+        await desk.attest("bdg_1", {
+          attribute: "email:eve@example.test",
+          verifiedVia: "magic-link",
+          at: "2026-03-01T00:00:00.000Z",
+        });
+        expect(await desk.badgesIn("prj_b")).toEqual([]);
+        expect(await desk.claimants("usr_eve")).toEqual([]);
+
+        expect(await desk.killBadge("bdg_nope", "2026-03-01T00:00:00.000Z", "bdg_2")).toBeNull();
       }),
     );
   });

@@ -38,6 +38,20 @@ export const BADGE_SCHEME = "Bearer";
  * edges, and one field in a body is honest and costs nothing. */
 export type BadgeCarrier = "cookie" | "bearer";
 
+/**
+ * Which carrier a badge was MINTED for — the stored twin of `BadgeCarrier`,
+ * and deliberately an alias rather than a second union with the same two
+ * words. One is what a caller asks the door for and the other is what the
+ * desk wrote down; they can never legitimately differ, and two independent
+ * unions would let a later edit make them.
+ *
+ * It lives here rather than beside `BadgeRecord` because phase 9 puts it on
+ * the wire: `BadgeSummary` says which of your surfaces is a browser tab and
+ * which is a machine, which is most of how a person recognises the one they
+ * mean to end.
+ */
+export type BadgeKind = BadgeCarrier;
+
 // ---- the token on the wire ----
 
 /**
@@ -188,6 +202,138 @@ export interface ActorClaim {
 
 /** badgeId → that badge's claims. */
 export type ClaimTable = Record<string, ActorClaim[]>;
+
+// ---- attestations: what a badge has PROVED about its holder (phase 9) ----
+
+/**
+ * One verified attribute, riding the badge (identity desk, mechanism 3).
+ *
+ * **"Borrow, never mint."** isocan holds no passwords and no user table, so
+ * the only thing a grant can bind to is an attribute the holder can
+ * demonstrate with an attester they already have — an inbox, a Google or
+ * GitHub sign-in, a token that can read a repo. Verifying never *creates*
+ * anything: it decorates the badge the holder already carries.
+ *
+ * **`attribute` is spelled in the grant-subject namespace, deliberately** —
+ * `email:jordan@acme.test`, not a bare address. A grant's subject IS an
+ * attribute, so the door's question ("does anything this badge proved satisfy
+ * this row?") is string equality over one namespace rather than a table of
+ * per-subject-type comparisons that could disagree with the parser that wrote
+ * them. `normalizeAttribute` in `grants.ts` is the one spelling; both sides
+ * go through it.
+ *
+ * This lives in core, next to `ActorClaim`, for `ActorClaim`'s reason: the
+ * record it sits on is desk-private, but the *shape* is spoken by the server
+ * that writes it, the door test that reads it, and the surfaces that show a
+ * person what they have proved. Two hand-rolled spellings of `{attribute,
+ * verifiedVia, at}` would disagree as a refusal with no explanation.
+ *
+ * **No expiry field, on purpose.** The design says `{attribute, verifiedVia,
+ * at}` and means it. An expiry is a policy nothing has chosen — how long a
+ * proved email stays proved is a different question from how long a *session*
+ * lasts, and inventing a TTL here would bake an answer into the ledger where
+ * it is hardest to change. `at` is recorded, so a later phase that wants a
+ * freshness rule has everything it needs to apply one at the door.
+ */
+export interface Attestation {
+  /** The attribute proved, in the grant-subject namespace: `email:<addr>` or
+   * `repo:<host>/<owner>/<name>`, normalized. */
+  attribute: string;
+  /** Which borrowed attester said so — `google`, `github`, `magic-link`. Free
+   * text on purpose: the roster of attesters is configuration, not a type, and
+   * a union here would need editing every time a home borrows a new one. */
+  verifiedVia: string;
+  /** When it was proved. */
+  at: string;
+}
+
+// ---- a badge as its own holder may see it (phase 9's kill-a-badge) ----
+
+/**
+ * One of YOUR surfaces, as the home will describe it.
+ *
+ * A `BadgeRecord` never crosses the wire — this is the summary that does, and
+ * it exists so kill-a-badge is a gesture a person can actually perform: you
+ * cannot end a holder's recognition without a way to name it. Deliberately
+ * thin. No secret hash (obviously), no admissions list (which canvases a
+ * surface has been in is the desk's ledger, not a roster to publish), and no
+ * claims beyond the actors — enough to recognise "my old laptop" and nothing
+ * that would make this route worth reading for any other reason.
+ */
+export interface BadgeSummary {
+  badgeId: string;
+  kind: BadgeKind;
+  createdAt: string;
+  lastSeen: string;
+  /** Is this the badge asking? The one row a person must be warned about
+   * before they end it — killing it signs THIS surface out. */
+  self: boolean;
+  /** Who this surface may speak as. The reason it is one of yours. */
+  actors: { id: string; name: string }[];
+  /** How many canvases it has been let into. A count and not a list: the
+   * gesture needs "this thing is still in nine rooms", not the nine rooms. */
+  canvases: number;
+}
+
+export interface BadgesResponse {
+  badges: BadgeSummary[];
+}
+
+/**
+ * Your own surfaces — `GET` lists, `DELETE /:badgeId` kills one.
+ *
+ * NOT project-scoped, and that is the difference from the grant routes: a
+ * badge is not about one canvas. Killing one ends that holder's recognition
+ * everywhere at once, which is exactly the stolen-laptop gesture — the
+ * laptop is not in one room, it is in all of them.
+ */
+export const BADGES_ROUTE = "/api/badges";
+export const badgeRoute = (badgeId: string): string =>
+  `${BADGES_ROUTE}/${encodeURIComponent(badgeId)}`;
+
+/**
+ * What killing one did. Both halves are load-bearing: `killed` is the summary
+ * of the surface that is now unrecognisable, and `swept` is what happened to
+ * everybody that surface had vouched into a canvas by pass — because a badge
+ * that can no longer authenticate can no longer be the root of anybody else's
+ * admission either. See `SweepReport`.
+ */
+export interface KillBadgeResponse {
+  killed: BadgeSummary;
+  swept: SweepReport;
+}
+
+/**
+ * Why a badge will not be killed by this caller.
+ *
+ * 403 and its own code, for `not-admitted`'s reason: the caller's badge is
+ * perfectly good, and sending it back to the door would mint credentials
+ * forever without ever earning the right to end somebody else's.
+ */
+export const NOT_YOUR_BADGE = "not-your-badge";
+
+// ---- the provenance sweep (phase 9) ----
+
+/**
+ * What a revocation actually did to the people already inside.
+ *
+ * It rides back on the revoke response, and on kill-a-badge, because a
+ * gesture whose whole point is expulsion has to be able to say who it
+ * expelled — "the link is off" and "the link is off and four people just lost
+ * this canvas" are different sentences and a person is entitled to the second
+ * one. Both surfaces print it.
+ *
+ * `rerooted` is the half nobody expects and the half the design insists on: a
+ * badge whose attestations satisfy a *surviving* grant re-roots instead of
+ * dropping, so turning off the link does not expel the very people who were
+ * invited by name.
+ */
+export interface SweepReport {
+  /** Badges that lost this canvas. */
+  expelled: number;
+  /** Badges that stayed, under a different grant. */
+  rerooted: number;
+}
 
 /**
  * The migration shelf's key in a `ClaimTable`: rows that belong to no badge

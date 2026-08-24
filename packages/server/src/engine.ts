@@ -1229,8 +1229,15 @@ export class Engine {
       ...(shelved !== undefined ? { shelved } : {}),
       ...(await this.preferredName(request, own, shelved)),
       scoped,
-      // Only `as` asks a global question, so only `as` pays for one.
-      claimants: request.op.as ? await this.desk.claimants(request.op.as) : [],
+      // Only `as` asks a global question, so only `as` pays for one. The
+      // badge ids the desk hands back are dropped here: `reincarnate` judges
+      // whether an actor is visibly SOMEBODY, which is a question about
+      // claims and never about who is holding them (mechanism 5's "the
+      // reducer judges actors, never badges", one layer up). They are on that
+      // answer for kill-a-badge's sake — see `Desk.claimants`.
+      claimants: request.op.as
+        ? (await this.desk.claimants(request.op.as)).map((row) => row.claim)
+        : [],
       held: await this.heldNames(canvasIds),
       now,
     };

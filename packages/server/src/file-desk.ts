@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import type { ActorClaim, Grant } from "@isocan/core";
-import { SHELF } from "@isocan/core";
+import type { ActorClaim, Attestation, Grant } from "@isocan/core";
+import { SHELF, upsertAttestation } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
@@ -19,13 +19,19 @@ import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./des
  * a write is acknowledged.
  *
  * WHAT IS LOGGED: mints, claim-list replacements, shelving, adoption, grants
- * and their revocations (phase 7), and — from phase 8 — passes and their
- * redemptions. Everything that would otherwise be unrecoverable. A grant is
- * policy: losing the row that says "the link is off" would quietly turn a
- * closed canvas back on, which is the one direction a lost file must never
- * fail in. A REDEMPTION is the same shape of fact: losing it would un-spend a
- * single-use pass, and a pass that can be used twice is not single-use at
- * all — so the redemption is fsynced before the redeemer is told it worked.
+ * and their revocations (phase 7), passes and their redemptions (phase 8),
+ * and — from phase 9 — attestations and kills. Everything that would
+ * otherwise be unrecoverable. A grant is policy: losing the row that says
+ * "the link is off" would quietly turn a closed canvas back on, which is the
+ * one direction a lost file must never fail in. A REDEMPTION is the same
+ * shape of fact: losing it would un-spend a single-use pass, and a pass that
+ * can be used twice is not single-use at all — so the redemption is fsynced
+ * before the redeemer is told it worked. **A KILL is the sharpest of the
+ * three**: losing it resurrects a stolen laptop's credential, so it is
+ * durable before the person who ended it is told it is over. And an
+ * ATTESTATION is logged because it is the only record that a holder ever
+ * proved anything — an attester is a round trip to somebody else's service,
+ * and losing the answer means asking a person to go and prove it again.
  *
  * WHAT IS NOT: `lastSeen` and `admissions`, which re-derive themselves — a
  * badge that lost its admissions re-admits itself on its next request, and
@@ -34,9 +40,18 @@ import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./des
  * goes through the door, so a badge that lost its admissions gets back in
  * only if a grant still admits it. That is the correct behaviour (it is the
  * door's answer, freshly asked) — but it means a lost SNAPSHOT can expel a
- * badge from a canvas whose link has since been turned off, and phase 9,
- * which owns kill-a-badge and the sweep, is where "admissions are durable"
- * gets re-decided if anything ever needs them to be.
+ * badge from a canvas whose link has since been turned off.
+ *
+ * **Phase 9 re-decided this and left it exactly where it was**, which is
+ * worth stating because the sweep looks at first like the thing that would
+ * force durable admissions. It is the opposite: losing the admissions is
+ * indistinguishable from running the sweep with nothing surviving, because
+ * both end at the same question — `admittingGrant`, asked fresh. The one
+ * thing a lost snapshot costs that the sweep does not is PROVENANCE, so a
+ * badge that re-enters is re-rooted at whatever grant admits it today rather
+ * than the one that admitted it a month ago. That is a worse audit trail and
+ * an identical door. A kill, by contrast, IS logged, because there is no
+ * question anybody could re-ask that would derive it.
  *
  * The desk serializes its own writes on its OWN promise chain, independent of
  * the engine's. Admissions are written by the transport layer and claims by
@@ -53,7 +68,9 @@ type DeskLogEntry =
   | { seq: number; type: "grant"; grant: Grant; at: string }
   | { seq: number; type: "revoke"; grantId: string; by: string; at: string }
   | { seq: number; type: "pass"; pass: PassRecord; at: string }
-  | { seq: number; type: "redeem"; passId: string; by: string; at: string };
+  | { seq: number; type: "redeem"; passId: string; by: string; at: string }
+  | { seq: number; type: "attest"; badgeId: string; attestation: Attestation; at: string }
+  | { seq: number; type: "kill"; badgeId: string; by: string; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -131,13 +148,16 @@ export class FileDesk implements Desk {
     });
   }
 
+  /** A killed badge answers null, exactly like one this home never minted —
+   * the desk seam's contract, and what turns a kill into `bad-badge` at the
+   * next request the holder makes. */
   async badge(badgeId: string): Promise<BadgeRecord | null> {
-    const found = this.state.badges[badgeId];
+    const found = this.live(badgeId);
     return found ? { ...found } : null;
   }
 
   async touch(badgeId: string, at: string): Promise<void> {
-    const badge = this.state.badges[badgeId];
+    const badge = this.live(badgeId);
     if (!badge) return;
     const drift = Date.parse(at) - Date.parse(badge.lastSeen);
     badge.lastSeen = at;
@@ -147,7 +167,7 @@ export class FileDesk implements Desk {
 
   async setClaims(badgeId: string, claims: ActorClaim[]): Promise<void> {
     await this.enqueue(async () => {
-      const badge = this.state.badges[badgeId];
+      const badge = this.live(badgeId);
       if (!badge) return;
       badge.claims = claims;
       await this.append({ type: "claims", badgeId, claims, at: new Date().toISOString() });
@@ -155,16 +175,17 @@ export class FileDesk implements Desk {
   }
 
   async claimsOf(badgeId: string): Promise<ActorClaim[]> {
-    return [...(this.state.badges[badgeId]?.claims ?? [])];
+    return [...(this.live(badgeId)?.claims ?? [])];
   }
 
-  async claimants(actorId: string): Promise<ActorClaim[]> {
-    const rows: ActorClaim[] = [];
-    for (const badge of Object.values(this.state.badges)) {
-      for (const row of badge.claims) if (row.actorId === actorId) rows.push(row);
+  async claimants(actorId: string): Promise<{ badgeId: string; claim: ActorClaim }[]> {
+    const rows: { badgeId: string; claim: ActorClaim }[] = [];
+    for (const [badgeId, badge] of Object.entries(this.state.badges)) {
+      if (badge.killedAt !== undefined) continue;
+      for (const row of badge.claims) if (row.actorId === actorId) rows.push({ badgeId, claim: row });
     }
     for (const row of Object.values(this.state.shelf)) {
-      if (row.actorId === actorId) rows.push(row);
+      if (row.actorId === actorId) rows.push({ badgeId: SHELF, claim: row });
     }
     return rows;
   }
@@ -172,6 +193,7 @@ export class FileDesk implements Desk {
   async holdersOf(sessionKey: string): Promise<{ badgeId: string; claim: ActorClaim }[]> {
     const held: { badgeId: string; claim: ActorClaim }[] = [];
     for (const [badgeId, badge] of Object.entries(this.state.badges)) {
+      if (badge.killedAt !== undefined) continue;
       for (const row of badge.claims) {
         if (row.sessionKey === sessionKey) held.push({ badgeId, claim: row });
       }
@@ -189,6 +211,7 @@ export class FileDesk implements Desk {
     const rows: ActorClaim[] = [...Object.values(this.state.shelf)];
     if (wanted.size > 0) {
       for (const badge of Object.values(this.state.badges)) {
+        if (badge.killedAt !== undefined) continue;
         if (!badge.admissions.some((a) => wanted.has(a.canvasId))) continue;
         rows.push(...badge.claims);
       }
@@ -197,11 +220,69 @@ export class FileDesk implements Desk {
   }
 
   async admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
-    const badge = this.state.badges[badgeId];
+    const badge = this.live(badgeId);
     if (!badge || badge.admissions.some((a) => a.canvasId === canvasId)) return;
     const admission: Admission = { canvasId, provenance, at: new Date().toISOString() };
     badge.admissions = [...badge.admissions, admission];
     await this.enqueue(() => this.writeSnapshot());
+  }
+
+  // ---- the sweep, and kill-a-badge ----
+
+  async badgesIn(canvasId: string): Promise<BadgeRecord[]> {
+    // A walk is the honest implementation of a query here; the SEAM is the
+    // query, so `CloudDesk` serves it from `admittedTo` with an index.
+    return Object.values(this.state.badges)
+      .filter((badge) => badge.killedAt === undefined)
+      .filter((badge) => badge.admissions.some((a) => a.canvasId === canvasId))
+      .map((badge) => ({ ...badge }));
+  }
+
+  async reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+    await this.enqueue(async () => {
+      const badge = this.live(badgeId);
+      const admission = badge?.admissions.find((a) => a.canvasId === canvasId);
+      if (!badge || !admission) return;
+      badge.admissions = badge.admissions.map((a) =>
+        a.canvasId === canvasId ? { ...a, provenance } : a,
+      );
+      await this.writeSnapshot();
+    });
+  }
+
+  async expel(badgeId: string, canvasId: string): Promise<void> {
+    await this.enqueue(async () => {
+      const badge = this.live(badgeId);
+      if (!badge || !badge.admissions.some((a) => a.canvasId === canvasId)) return;
+      badge.admissions = badge.admissions.filter((a) => a.canvasId !== canvasId);
+      await this.writeSnapshot();
+    });
+  }
+
+  async killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null> {
+    return this.enqueue(async () => {
+      const badge = this.state.badges[badgeId];
+      // Already dead is not an error and is not a second kill: the caller
+      // wanted this holder gone and it is, so hand back nothing to sweep.
+      if (!badge || badge.killedAt !== undefined) return null;
+      badge.killedAt = at;
+      badge.killedBy = by;
+      // The record as it was ALIVE — admissions and claims intact — because
+      // the caller sweeps those canvases and names those actors. Killing the
+      // badge is not forgetting where it had been.
+      const wasAlive: BadgeRecord = { ...badge };
+      await this.append({ type: "kill", badgeId, by, at });
+      return wasAlive;
+    });
+  }
+
+  async attest(badgeId: string, attestation: Attestation): Promise<void> {
+    await this.enqueue(async () => {
+      const badge = this.live(badgeId);
+      if (!badge) return;
+      badge.attestations = upsertAttestation(badge.attestations, attestation);
+      await this.append({ type: "attest", badgeId, attestation, at: attestation.at });
+    });
   }
 
   // ---- grants ----
@@ -282,7 +363,7 @@ export class FileDesk implements Desk {
   async adopt(sessionKey: string, badgeId: string): Promise<ActorClaim | null> {
     return this.enqueue(async () => {
       const row = this.state.shelf[sessionKey];
-      const badge = this.state.badges[badgeId];
+      const badge = this.live(badgeId);
       if (!row || !badge) return null;
       delete this.state.shelf[sessionKey];
       badge.claims = [...badge.claims.filter((c) => c.actorId !== row.actorId), row];
@@ -300,6 +381,18 @@ export class FileDesk implements Desk {
   }
 
   // ---- internals ----
+
+  /**
+   * The badge behind an id, **or nothing if it was killed** — the one lookup
+   * every method here goes through, so "a killed badge is a badge nobody
+   * holds" is a property of the file rather than a rule each method
+   * remembers. `killBadge` and `replay` are the two deliberate exceptions:
+   * they are the code that reads the tombstone.
+   */
+  private live(badgeId: string): BadgeRecord | undefined {
+    const badge = this.state.badges[badgeId];
+    return badge && badge.killedAt === undefined ? badge : undefined;
+  }
 
   /** Serialize this desk's own writes. Not the engine's chain: a badge write
    * is not an op and must not be able to stall behind one. */
@@ -376,6 +469,21 @@ export class FileDesk implements Desk {
         if (!pass || pass.redeemedAt !== undefined) return;
         pass.redeemedAt = entry.at;
         pass.redeemedBy = entry.by;
+        return;
+      }
+      case "attest": {
+        const badge = this.state.badges[entry.badgeId];
+        if (badge) badge.attestations = upsertAttestation(badge.attestations, entry.attestation);
+        return;
+      }
+      case "kill": {
+        // Reads the raw record rather than `live`, and does not care whether
+        // the badge is already dead: replaying a kill over a kill must leave
+        // the FIRST stamp standing, exactly as replaying a revoke does.
+        const badge = this.state.badges[entry.badgeId];
+        if (!badge || badge.killedAt !== undefined) return;
+        badge.killedAt = entry.at;
+        badge.killedBy = entry.by;
         return;
       }
     }

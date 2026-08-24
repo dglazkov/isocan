@@ -55,13 +55,15 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 8 is closed and dev.isocan.io is running phases 7
-through 8 — Phase 9, attesters and revocation, is next, and it inherits a
-pass-shaped debt: an admission rooted `{root: "pass", badgeId}` is a chain
-the sweep must walk a hop at a time, and nothing has ever walked one.** The
-question phase 8 inherited is settled: a replica no longer enumerates its
-home, it mirrors the canvases it was let into, and the pass is what writes
-the admission that lets one in. This line moves as phases close; a clean
+**Where we are: Phase 9 is PART-DONE. Its machinery is built and its
+provisioning is finished — revocation now expels down a pass chain,
+kill-a-badge exists, and Identity Platform is live on dev with all three
+attesters. What is left is stage 2: the code that BORROWS them, and person
+resumption, which stands on it.** The pass-shaped debt phase 8 left is
+paid — the sweep walks the chain, deciding each badge once so that list
+order cannot decide who stays. Note the one thing stage 1 could not prove:
+re-rooting has no reachable surface until an attester exists, so half of
+the sweep's outcome is tested and not yet demonstrated. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1387,7 +1389,14 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** Stage 1 (the machinery revocation needs) is built,
+green, and verified by the conductor by hand. **The ⚑ provisioning is
+DONE** — Identity Platform is live on `isocan-io-dev` with all three
+attesters confirmed (`211e893`, `infra/100-identity-platform.sh`, stage
+`e`): magic-link email as the floor, plus Google and GitHub, whose OAuth
+apps Dimitri created. What remains is stage 2 — the CODE that borrows
+them: reading an ID token, writing the attestation, the Share dialog's
+"who" field, and person resumption across browsers.
 
 **Work:** Firebase Auth wired as the borrowed bench (magic-link email
 as the floor, Google, GitHub); attestations written onto badges;
@@ -1401,6 +1410,11 @@ while admission is the only gate, but a sweep that expels somebody does
 *not* expel the hashes they wrote down. Either accept it in writing as
 the limit of revocation, or give blob URLs a short-lived token — but
 decide it here, where expulsion is supposed to mean something.
+**Decided 2026-08-24: neither — the route is CLOSED.** The premise was
+measured and found false; see the Findings.
+**Decided, 2026-08-23: the route is CLOSED** — the argument that held it
+open turned out to describe a different request, measured in Chrome. See
+the finding below and the comment on `isOpen`.
 
 **Outcome:** Revoking Jordan's email grant expels tab, daemon, and
 agent in one sweep; turning off the link stops strangers without
@@ -1409,7 +1423,155 @@ expelling the invited; a phone resumes its person by attestation.
 **Proof:** Sweep and re-rooting in vitest; the magic-link arrival and
 resumption driven in Chrome.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24 — The floor works, and it landed in spam.** The first
+  `EMAIL_SIGNIN` from the freshly provisioned dev project reached
+  Dimitri's inbox — as spam. That is not a configuration slip, it is the
+  default: Identity Platform sends from `noreply@isocan-io-dev.firebaseapp.com`,
+  a domain with no relationship to isocan.io and no SPF or DKIM alignment
+  a receiver can use, which is precisely the profile a spam filter is
+  built to catch. **It matters more than it looks, because the magic link
+  is not a notification — it is the arrival itself.** A canvas link that
+  lands in spam is an inconvenience; a *sign-in* link that lands in spam
+  is a person who cannot get in at all and has no way to know why. The
+  design leans on this: "a magic link to the inbox attests it with no IdP
+  at all" is the FLOOR, the thing that works when somebody has neither a
+  Google nor a GitHub account. A floor that silently fails for a fraction
+  of arrivals is not a floor.
+  Recorded rather than fixed, deliberately, and the fix is not code: it
+  is a sender domain isocan actually owns, with SPF and DKIM published,
+  configured in Identity Platform's email templates. That is a
+  **`isocan.io` concern and belongs with phase 14's promotion gesture** —
+  dev can live in a spam folder, because everyone who uses dev has been
+  told to look there. What must not happen is that phase 14 meets this
+  for the first time on launch day, so it is written here, where the
+  attesters were chosen.
+- **2026-08-24 — The provisioning taught the provisioning script two
+  things, and both were the repo's own recurring bugs wearing gcloud.**
+  `infra/100-identity-platform.sh` was written from the API docs and then
+  rewritten from what its first run MEASURED. First: a user credential
+  from `gcloud auth login` bills its API quota to **gcloud's own shared
+  client project**, not the one named in the URL — so identitytoolkit
+  answers `403 SERVICE_DISABLED` naming a project nobody has heard of,
+  moments after the script watched the API turn on for ours. Every call
+  sends `x-goog-user-project` now. It is exactly the disease
+  `lib/common.sh` exists to prevent — an ambient default deciding which
+  project a command really touches — one layer below where `--project`
+  can reach, because curl is not gcloud. Second: `initializeAuth` lives
+  under `v2/` while every neighbouring call is `admin/v2/`, and the
+  wrong path answers an **HTML 404**, so the first version's check for
+  `"error"` in the body found none and reported success. That is the
+  cheerful-wrong-address shape for the sixth time, reproduced *by the
+  conductor* in a provisioning script on the day the phase that closed it
+  was committed. The lesson that generalises is not "check for HTML": it
+  is that **a step which cannot read back the state it wanted has not
+  verified anything**, and every step in that script now does.
+- **2026-08-24 — What the conductor verified by hand, and the one half
+  that has no surface to verify through yet.** Measured against a real
+  daemon: a link-admitted tab, a daemon holding a pass from that tab, and
+  an agent holding a pass from the daemon were **all three expelled by one
+  revocation** — two hops down a chain nothing had ever walked — while the
+  creator's `{root: "created"}` admission was untouched, and the answer
+  came back `{expelled: 3, rerooted: 0}` on the response both surfaces
+  read. The blob ruling was re-measured independently: badge-less `curl`
+  is 401, a badged one is 200 with `Cache-Control: private`, and a real
+  browser renders the sandboxed HTML blob **with its script running**.
+  What could NOT be verified end to end is **re-rooting**, and the reason
+  is structural rather than an oversight: the only subject a badge can
+  satisfy today is `link`, a canvas has exactly one live link row, and
+  `email:` cannot be granted until something can attest one. So the half
+  of the sweep that stops a revocation being a purge is real code with
+  eleven tests and **no reachable surface until stage 2 borrows an
+  attester**. Stated rather than glossed: a phase that can only prove half
+  its outcome should say which half.
+
+- **2026-08-23 — The blob route was open on an argument about the wrong
+  request, and it is closed.** `isOpen` had held `GET
+  /api/projects/:id/blobs/:hash` open to badge-less callers since phase 2,
+  reasoning that a `sandbox="allow-scripts"` iframe has an opaque origin and
+  therefore a null site-for-cookies, so "nothing it then requests carries a
+  `SameSite` cookie at all". Every clause of that is true; the conclusion did
+  not follow. Measured in Chrome against a server that logged the request
+  headers of each sub-request the canvas actually makes: the **iframe's own
+  load** arrives `Sec-Fetch-Site: same-origin` and **carries the badge
+  cookie**, because it is issued by the PARENT page — the opaque origin
+  governs what the loaded document does afterwards, and the blob's own
+  subresources (`Origin: null`, `cross-site`, no cookie) are what the old
+  comment described. The second half of the hypothesis held too: a relative
+  `<img src="pic.png">` inside a blob resolves to `…/blobs/pic.png`, which is
+  not a content hash and has never resolved, so the relative-asset case the
+  route was held open for was never working. Re-measured in the real app with
+  the route closed: the HTML blob renders, its scripts run, and a badge-less
+  `curl` of the same URL gets 401. **Expulsion now reaches the bytes**, which
+  is what the phase's Work said had to be decided here. One consequence that
+  had to move with it: the response's `Cache-Control` gained `private`,
+  because the hosted home's Cloud CDN backend runs `USE_ORIGIN_HEADERS` and a
+  credentialed response cached at an edge is a closed route with an open back
+  gate. The general shape is worth keeping: **a comment that reasons about a
+  browser is a hypothesis, and this codebase has now been wrong twice by not
+  measuring one.**
+- **2026-08-23 — A sweep in list order is a coin toss, and the design named
+  the failure before it happened.** The first implementation walked the
+  canvas's badges in whatever order the desk returned and asked of each "does
+  its root still stand?". With Jordan's tab admitted by the link and her
+  daemon by a pass from the tab, considering the daemon FIRST resolved its
+  chain through a tab whose root had just been revoked — so the daemon was
+  expelled a moment before the tab was re-rooted onto the email grant that had
+  invited her by name. Two badges of one person, one kept and one thrown out,
+  decided by an array's order. That is "turning off the link would expel the
+  very people who were invited by name" arriving one hop down from where the
+  design warns about it. The fix is that a chain adopts its minter's
+  **outcome** rather than its stale **root**: a memoized recursion, so every
+  badge is decided once per round whatever order they arrive in. The suite
+  caught it on the first run because the test was written from the design's
+  named failure rather than from the happy path.
+- **2026-08-23 — Turning the link off can expel the person turning it off,
+  and it is left that way on purpose.** Measured against a real daemon: a
+  canvas created from a terminal (`{root: "created"}` on the CLI's bearer
+  badge) and opened in a browser (`{root: "grant"}` on the cookie badge) can
+  be locked out of that browser by its own Share dialog — the sweep expels
+  the tab, and phase 7's terminal page then tells the person who just switched
+  the link off to "ask whoever shared it". Exempting the revoker was
+  considered and refused: it would leave that badge rooted at a revoked grant,
+  which the next sweep of the canvas would expel anyway — a one-gesture
+  reprieve that evaporates silently — and there is no honest root to give them
+  instead. The thing that would provide one is a subject that binds to a
+  person, which is the roles question the design deliberately leaves open.
+  What changed instead is that the consequence is stated BEFORE the click, in
+  the dialog and in `isocan share --link off`'s own help. **Recorded as a
+  decision rather than fixed**, with a test that pins it, because the real
+  answer is a scene nobody has played yet.
+- **2026-08-23 — The verb contradicted itself in one screen, and only a walk
+  caught it.** `isocan share --link off` printed the sweep's "1 expelled" and
+  then, two lines later, phase 7's "people already on this canvas keep their
+  access". Both lines were individually defensible — one was new and one had
+  been true for a phase — and no test compared them, because no test reads a
+  command's whole output as prose. The general shape: **when a behaviour
+  inverts, the copy that described the old behaviour is a bug in every place
+  it survives**, and the places are found by running the thing, not by
+  grepping for the feature's name.
+- **2026-08-23 — Phase 2's refused field, earned.** `BadgeRecord.attestations`
+  was left out on purpose with the reason written down — "an array that is
+  always empty is a speculative clean seam where phase 1's lesson asks for an
+  honest leaky one" — and this is the phase that made it read. The same
+  instinct killed the first version of `server/attest.ts`, which had an
+  `Attester` interface, an always-empty registry and a route that only ever
+  answered 501: an interface with no implementations is a design by somebody
+  who has not talked to Firebase yet, and every test written around it proves
+  something about a stub. What ships instead is a list of what this home can
+  verify, which is empty and says so, plus the refusal that follows from it.
+  The real seam is `Desk.attest`, and it is real because the door above it
+  reads what it writes.
+- **2026-08-23 — The refusal moved rather than disappearing, and that is the
+  honest shape of a half-built phase.** `email:` and `repo:` used to be
+  refused by core with "phase 9 owns attesters". They are real subjects now —
+  the door genuinely checks them against a badge's attestations — so core
+  refuses only SHAPE, and the server refuses "this home has borrowed nowhere
+  to verify that". The two answers are deliberately distinguishable: a caller
+  told "not a grant subject" about a perfectly good address goes hunting for a
+  typo that is not there. Stage 2 flips the second one by adding a word to a
+  constant, and touches nothing else.
 
 ## Phase 10 — Offline in the browser
 

@@ -165,15 +165,17 @@ describe("isocan share", () => {
     expect(bad.stderr).toMatch(/on or off/);
   }, 60_000);
 
-  it("hands back the HOME's refusal for an email, naming the phase that will serve it", async () => {
+  it("hands back the HOME's refusal for an email — a home with no attester, not a stub", async () => {
     await bornCanvas();
     const refused = await cli("share", "jordan@example.com");
     expect(refused.code).toBe(1);
     // Not a client-side "not yet": the request went up, and the message is the
     // one the API gives, so a later build that can satisfy the subject needs
-    // no change here.
-    expect(refused.stderr).toMatch(/attester/);
-    expect(refused.stderr).toMatch(/phase 9/);
+    // no change here. Phase 9 made `email:` a real subject and moved the
+    // refusal from "the phase has not happened" to "this home has borrowed
+    // nowhere to verify it" — the verb did not have to be touched for either.
+    expect(refused.stderr).toMatch(/verify an email/);
+    expect(refused.stderr).toMatch(/borrowed/);
     expect(refused.stderr).toContain("jordan@example.com");
   }, 60_000);
 
