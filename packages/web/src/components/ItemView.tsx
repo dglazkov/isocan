@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
 import {
+  isDesignSystem,
   BROWSER_MIME,
   annotationsOf,
   isAnnotation,
@@ -13,6 +14,8 @@ import {
   renamedFilename,
 } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
+import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
+import { DesignSystemView } from "./DesignSystemView.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -458,6 +461,7 @@ export function ItemView({
           mimeType={current.mimeType}
           filename={current.filename}
           entered={entered}
+          designSystem={isDesignSystem(item)}
           reloadToken={reloadToken}
         />
 
@@ -599,26 +603,7 @@ function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
 
 // ---------------- renderers ----------------
 
-const textCache = new Map<string, string>();
-
-/**
- * A blob's body as text, memoized. Only a 2xx is cached — a 404's body is the
- * daemon's `{"error":"blob not found"}`, and reading it as the document is how
- * that JSON ends up rendered on the canvas, then remembered as the file's
- * contents for the rest of the session.
- */
-async function fetchBlobText(url: string): Promise<string> {
-  const cached = textCache.get(url);
-  if (cached !== undefined) return cached;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.text();
-  textCache.set(url, body);
-  return body;
-}
-
-/** Loaded text, a load failure, or neither yet. */
-type TextLoad = { text: string } | { failed: string } | null;
+// Text loading lives in lib/blobtext.ts — two renderers read files now.
 
 function BlobError({ reason }: { reason: string }) {
   return (
@@ -636,6 +621,7 @@ export function VersionContent({
   filename,
   entered,
   reloadToken = 0,
+  designSystem,
 }: {
   projectId: string;
   blobHash: string;
@@ -644,8 +630,14 @@ export function VersionContent({
   entered: boolean;
   /** Bumped by the titlebar's ⟳ to remount a browser item's iframe. */
   reloadToken?: number;
+  /** `role=design-system`: draw the tokens as the things they describe rather
+   *  than as the text that declares them. */
+  designSystem?: boolean;
 }) {
   const url = blobUrl(projectId, blobHash);
+  if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
+    return <DesignSystemView url={url} />;
+  }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return <MarkdownView url={url} plain={mimeType === "text/plain"} />;
   }
@@ -689,7 +681,7 @@ export function VersionContent({
  */
 function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: number }) {
   const [load, setLoad] = useState<TextLoad>(() => {
-    const cached = textCache.get(blobUrl);
+    const cached = peekBlobText(blobUrl);
     return cached === undefined ? null : { text: cached };
   });
 
@@ -720,7 +712,7 @@ function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: n
 
 function MarkdownView({ url, plain }: { url: string; plain: boolean }) {
   const [load, setLoad] = useState<TextLoad>(() => {
-    const cached = textCache.get(url);
+    const cached = peekBlobText(url);
     return cached === undefined ? null : { text: cached };
   });
 

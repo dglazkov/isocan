@@ -1776,3 +1776,81 @@ button.mt-card:hover { border-color: var(--accent); }
   font: inherit; font-size: 10.5px; cursor: pointer;
 }
 .onit-cancel:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- a design system, drawn as itself ---------- */
+/* Every token rendered as the thing it describes: a colour is a swatch, a type
+   style is set in its own face, a spacing step is a bar that long, a radius is
+   a corner that round. The value sits beside it, because this is a
+   specification and somebody has to copy the number. */
+.ds-view {
+  height: 100%; overflow: auto; padding: 16px 18px 20px;
+  background: var(--card); color: var(--ink); font-size: 13px; line-height: 1.5;
+}
+.ds-masthead { padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.ds-title { display: flex; align-items: baseline; gap: 8px; }
+.ds-title h2 { font-size: 17px; letter-spacing: -0.01em; }
+.ds-version {
+  font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
+  background: var(--chip); color: var(--ink-muted);
+}
+.ds-masthead p { margin-top: 5px; color: var(--ink-muted); max-width: 62ch; }
+
+.ds-section { margin-top: 18px; }
+.ds-section > h3, .ds-prose h3, .ds-problems h3 {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-soft); margin-bottom: 9px;
+}
+.ds-section > h3 span { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.7; }
+
+.ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.ds-swatch b { display: block; margin-top: 5px; font-size: 12px; }
+.ds-swatch code { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ds-chip {
+  height: 52px; border-radius: 7px; border: 1px solid var(--line);
+  display: flex; align-items: flex-end; justify-content: flex-end; padding: 5px 6px;
+}
+/* The best contrast this colour can carry, said out loud: a palette that
+   cannot hold text is a finding, not a detail. */
+.ds-ratio { font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
+
+.ds-type { display: flex; flex-direction: column; gap: 12px; }
+.ds-specimen { padding-bottom: 11px; border-bottom: 1px solid var(--line-soft); }
+.ds-specimen:last-child { border-bottom: none; padding-bottom: 0; }
+.ds-specimen-head { display: flex; align-items: baseline; gap: 8px; }
+.ds-specimen-head b { font-size: 12px; }
+.ds-specimen-head code { font-size: 10.5px; color: var(--ink-soft); }
+.ds-specimen p { margin-top: 4px; overflow-wrap: anywhere; }
+.ds-family { display: block; margin-top: 3px; font-size: 10.5px; color: var(--ink-soft); }
+
+.ds-scale { display: flex; flex-direction: column; gap: 5px; }
+.ds-step { display: grid; grid-template-columns: 44px 1fr auto; gap: 9px; align-items: center; }
+.ds-step b { font-size: 11.5px; color: var(--ink-muted); }
+.ds-step code { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ds-bar { height: 8px; border-radius: 2px; background: var(--accent); min-width: 2px; }
+
+.ds-radii { display: flex; flex-wrap: wrap; gap: 12px; }
+.ds-radius { text-align: center; }
+.ds-radius span {
+  display: block; width: 54px; height: 40px;
+  background: var(--chip); border: 1px solid var(--line);
+}
+.ds-radius b { display: block; margin-top: 4px; font-size: 11.5px; }
+.ds-radius code { font-size: 10.5px; color: var(--ink-soft); }
+
+.ds-components { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.ds-component { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+.ds-component > b { font-size: 12px; }
+.ds-component dl { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.ds-component dl > div { display: flex; align-items: baseline; gap: 6px; }
+.ds-component dt { flex: none; min-width: 74px; font-size: 10.5px; color: var(--ink-soft); }
+.ds-component dd { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.ds-component dd code { font-size: 10.5px; overflow-wrap: anywhere; }
+/* The reference kept beside the value it resolved to — the file said
+   {colors.primary} and the reader deserves both. */
+.ds-ref { font-size: 10px; color: var(--ink-soft); opacity: 0.75; }
+.ds-dot { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
+
+.ds-problems { margin-top: 16px; padding: 9px 11px; border-radius: 8px; background: var(--chip); }
+.ds-problems ul { margin: 0; padding-left: 16px; color: var(--warn); font-size: 12px; }
+.ds-prose { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.ds-prose h3 { margin-top: 14px; }
