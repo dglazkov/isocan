@@ -1311,6 +1311,19 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
   directly, with the replica's own home badge, because it is invisible
   from the machine that owns it and it is what survives a local store
   being thrown away.
+- **2026-08-23 — One unnamed failure, and the conductor made the exact
+  mistake phase 7.5 wrote down.** The first full suite run after rebasing onto
+  four commits from another session reported **1 failed / 950 passed**, and
+  that run's output was not captured to a file — so the failing test has no
+  name, which is precisely the operational lesson phase 7.5 recorded ("a
+  stress loop that does not capture failures by name is a stress loop that
+  buys nothing"). It did not recur: five full runs and five concentrated runs
+  over the daemon-heavy files, all captured per run, all green, plus three
+  green full runs before the rebase. Recorded rather than closed, exactly as
+  phase 7 recorded its own. The lesson has now cost two phases, which suggests
+  the fix is not a resolution to remember — it is that the default way to run
+  this suite should write per-run output somewhere, so remembering is not
+  required.
 - **2026-08-23 — The dev walk agreed with the local one, and the one thing
   that could only be seen there was the name.** Everything the local rehearsal
   showed, dev showed again on deployed code: the dialog under a real face at
