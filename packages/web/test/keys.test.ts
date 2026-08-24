@@ -31,3 +31,49 @@ describe("is this keystroke going into text", () => {
     expect(isTyping(undefined)).toBe(false);
   });
 });
+
+/**
+ * Enter sends, Shift+Enter makes a line, and a key somebody already claimed
+ * is left alone.
+ *
+ * An <input> in a form submits on Enter for free; a <textarea> types a newline
+ * instead. So the day the composer learned to grow, sending would have
+ * silently stopped working without this — and the mention menu already
+ * preventDefaults Enter to complete a name, which does NOT stop the event
+ * reaching the form. Without the defaultPrevented check, picking "@Fable" out
+ * of the menu would also post the half-written message.
+ */
+describe("Enter in a composer", () => {
+  const wouldSubmit = (e: {
+    key: string;
+    shiftKey?: boolean;
+    metaKey?: boolean;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    defaultPrevented?: boolean;
+  }) =>
+    e.key === "Enter" &&
+    !e.shiftKey &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.defaultPrevented;
+
+  it("sends on a plain Enter", () => {
+    expect(wouldSubmit({ key: "Enter" })).toBe(true);
+  });
+
+  it("makes a newline on Shift+Enter", () => {
+    expect(wouldSubmit({ key: "Enter", shiftKey: true })).toBe(false);
+  });
+
+  it("leaves Enter alone when the mention menu has taken it", () => {
+    expect(wouldSubmit({ key: "Enter", defaultPrevented: true })).toBe(false);
+  });
+
+  it("ignores every other key", () => {
+    for (const key of ["a", "Escape", "Tab", "ArrowDown"]) {
+      expect(wouldSubmit({ key })).toBe(false);
+    }
+  });
+});

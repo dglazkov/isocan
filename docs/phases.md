@@ -55,14 +55,13 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 8 is built and played on one machine, and is
-PART-DONE until it is played against dev — that walk is the next thing to
-do, and it needs the code deployed there.** The question phase 8 inherited
-is settled: a replica no longer enumerates its home, it mirrors the canvases
-it was let into, and the pass is what writes the admission that lets one in.
-After dev, Phase 9 — attesters and revocation — is next, and it inherits a
+**Where we are: Phase 8 is closed and dev.isocan.io is running phases 7
+through 8 — Phase 9, attesters and revocation, is next, and it inherits a
 pass-shaped debt: an admission rooted `{root: "pass", badgeId}` is a chain
-the sweep must walk a hop at a time, and nothing has ever walked it. This line moves as phases close; a clean
+the sweep must walk a hop at a time, and nothing has ever walked one.** The
+question phase 8 inherited is settled: a replica no longer enumerates its
+home, it mirrors the canvases it was let into, and the pass is what writes
+the admission that lets one in. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1203,14 +1202,13 @@ walk with the exports deleted.
 
 ## Phase 8 — Escalation (Scene 5)
 
-**Status: PART-DONE** — built and played whole on this machine
-(`3aa561b` and the commit beside it), and **not yet played against dev**,
-which is what the Proof names. The scene ran end to end on two `ISOCAN_HOME`
-directories and a real browser: the tab minted the pass, one pasted command
-escalated the second machine, its agent claimed its own actor, and an
-`@`-mention typed at the home woke that agent under the other roof. What is
-left is the same walk against `dev.isocan.io`, which needs this code deployed
-there.
+**Status: CLOSED** 2026-08-23 (`370abf6` … `bca4222`). The scene played
+against **dev.isocan.io** on deployed code, with a clean shell: the dialog
+under Dimitri's own face at dev minted the pass, one pasted command put a
+machine that did not exist ten minutes earlier onto the canvas as him, its
+agent was handed a name free at the home, and `@Sonia` typed in the browser
+at dev woke that agent **on the other machine** — her face in dev's facepile,
+her cursor on the canvas, her reply back in the thread.
 
 **Work:** Pass minting from an admitted session; the one-command setup
 consuming `address#pass`; the redeemed badge born knowing its person;
@@ -1313,6 +1311,40 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
   directly, with the replica's own home badge, because it is invisible
   from the machine that owns it and it is what survives a local store
   being thrown away.
+- **2026-08-23 — One unnamed failure, and the conductor made the exact
+  mistake phase 7.5 wrote down.** The first full suite run after rebasing onto
+  four commits from another session reported **1 failed / 950 passed**, and
+  that run's output was not captured to a file — so the failing test has no
+  name, which is precisely the operational lesson phase 7.5 recorded ("a
+  stress loop that does not capture failures by name is a stress loop that
+  buys nothing"). It did not recur: five full runs and five concentrated runs
+  over the daemon-heavy files, all captured per run, all green, plus three
+  green full runs before the rebase. Recorded rather than closed, exactly as
+  phase 7 recorded its own. The lesson has now cost two phases, which suggests
+  the fix is not a resolution to remember — it is that the default way to run
+  this suite should write per-run output somewhere, so remembering is not
+  required.
+- **2026-08-23 — The dev walk agreed with the local one, and the one thing
+  that could only be seen there was the name.** Everything the local rehearsal
+  showed, dev showed again on deployed code: the dialog under a real face at
+  `dev.isocan.io`, one pasted command onto a machine with a clean shell, the
+  canvas replicated, the agent's own actor, the mention waking it under the
+  other roof, the reply coming back. The measurement that could NOT have been
+  made locally is the allocated name: the agent on the escalated machine was
+  handed **Sonia**, not Isaac — because Isaac, Kenny and Nico are all worn at
+  dev, and only a home with a populated roster can prove that the question was
+  asked THERE. That is phase 7.5's fix, re-measured in the place where its
+  bug lived: a name allocated in a replica's own empty scope was the bug, and
+  a name allocated in the home's scope across the internet is the fix. Worth
+  keeping as a habit — a dev walk is worth most where the home holds state a
+  scratch daemon cannot fake.
+- **2026-08-23 — And the narrowing was proved where enumeration used to
+  hurt.** dev holds six canvases, five of them nothing to do with this walk.
+  The escalated machine mirrored **one**: the canvas its pass named. Before
+  this phase it would have pulled down all six, because every one of them
+  carries a live link grant — which is the concrete shape of "a replica of a
+  MULTI-TENANT home would mirror strangers' canvases onto its own disk", a
+  sentence that has been in the map since phase 6 and is now deleted from it.
 - **2026-08-23 — The design doc lost an argument to the browser, and the
   doc moved.** Mechanism 1's diagram had redemption minting a THIRD badge
   (`H-->>D: badge B₃`), and the code endows the badge the caller already

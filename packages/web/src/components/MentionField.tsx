@@ -41,6 +41,7 @@ export function MentionField({
   placeholder,
   autoFocus,
   multiline,
+  grow,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -51,6 +52,10 @@ export function MentionField({
   placeholder?: string;
   autoFocus?: boolean;
   multiline?: boolean;
+  /** Start at one line and grow with the text, up to a cap, then scroll.
+   *  For a composer: at rest it should cost a single line, and while you are
+   *  writing you should be able to read what you wrote. */
+  grow?: boolean;
 }) {
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -131,6 +136,20 @@ export function MentionField({
     backdrop.scrollLeft = e.currentTarget.scrollLeft;
   }
 
+  // Height written straight to the element rather than held in state. The
+  // measure→setState version of this is an infinite render in a layout effect
+  // — StrictMode double-invokes and the value never settles — and it is the
+  // same trap the mention menu's placement fell into. `height: auto` first, or
+  // scrollHeight only ever reports the height it already has and the field
+  // never shrinks back after sending.
+  useEffect(() => {
+    if (!grow) return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+  }, [grow, value]);
+
   const fieldProps = {
     value,
     placeholder,
@@ -149,14 +168,15 @@ export function MentionField({
   };
 
   return (
-    <div className={`mention-field${multiline ? " multiline" : ""}`}>
+    <div className={`mention-field${multiline ? " multiline" : ""}${grow ? " grow" : ""}`}>
       <div className="mention-backdrop" ref={backdropRef} aria-hidden="true">
         {paintText(value, candidates, itemCandidates, open ? trigger!.at : null, markerRef)}
         {"​" /* keeps a trailing newline's line box alive */}
       </div>
-      {multiline ? (
+      {multiline || grow ? (
         <textarea
           {...fieldProps}
+          rows={grow ? 1 : undefined}
           ref={(el) => {
             fieldRef.current = el;
           }}

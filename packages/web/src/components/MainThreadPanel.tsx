@@ -15,7 +15,7 @@ import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
-import { submitOnCmdEnter } from "../lib/submit.ts";
+import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
 import { OnIt } from "./OnIt.tsx";
@@ -297,7 +297,10 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
         </div>
       </div>
       <form
-        onKeyDown={submitOnCmdEnter}
+        onKeyDown={(e) => {
+          submitOnEnter(e);
+          submitOnCmdEnter(e);
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           const body = draft.trim();
@@ -322,6 +325,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
           // (No "@name to target" tail: it needs 285px in a 236px field, and
           // a hint that ellipsises is worse than no hint. ⌘K and ? carry it.)
           placeholder="Broadcast message to agents"
+          grow
           value={draft}
           onChange={setDraft}
           candidates={candidates}
