@@ -1,30 +1,26 @@
 #!/usr/bin/env node
 /**
- * A replica of a home, for working ON isocan.
+ * A scratch machine that has never been anywhere, for working ON isocan.
  *
- * Two kinds of work in this repo need opposite daemons and always will.
- * Working on the **web app** needs a local home: `npm run dev` binds :4441,
- * serves the pages, and holds the canvases. Working on the **home** — sharing,
- * the door, the replica seam — needs a daemon that is a replica of a real
- * home, and a replica serves no pages at all (the one-origin rule; see
- * docs/design/offline-birth.md, which already accepts the split). That is
- * inherent. What was NOT inherent, until phase 7.5, was that reaching one cost
- * three exported environment variables, a scratch directory and a hand-started
- * daemon in its own terminal.
+ * Two of the three reasons this script used to give dissolved in phase 10.3:
+ * pointing the real `~/.isocan` at a home no longer demotes the developer's
+ * own daemon (the home is a property of the canvas now, and `isocan home` only
+ * says where the NEXT one is born), and one daemon on :4441 can be the home of
+ * the web app's canvases and a replica of dev at the same time. What survives
+ * is the reason that was never about self-defence: **an isolated, disposable
+ * state directory that starts from a known-empty machine** — its own
+ * `ISOCAN_HOME` (`.dev-replica/` in the checkout, gitignored), a fresh badge
+ * with no admissions, and therefore the join-by-pass flow exercised from zero
+ * rather than from whatever your laptop happens to have accumulated. That is
+ * what the line below is saying, and it is why the script is still worth
+ * having.
  *
- * So: one command, and everything it needs is its own.
- *
- *   npm run dev:replica                 # a replica of dev, on :4442
+ *   npm run dev:replica                 # a scratch replica of dev, on :4442
  *   npm run dev:replica -- ls           # any CLI command, against that replica
  *   ISOCAN_DEV_HOME=http://127.0.0.1:4441 npm run dev:replica    # some other home
  *
- * **Its own `ISOCAN_HOME`** (`.dev-replica/` in the checkout, gitignored) is
- * the load-bearing part, not tidiness. Pointing the machine's real `~/.isocan`
- * at a home would demote the developer's own daemon: it would stop serving
- * pages, and every canvas on this laptop would start forwarding its writes
- * somewhere else. The scratch home is self-defence, and it is why this script
- * exists rather than a line in the README telling people to run
- * `isocan home`.
+ * Phase 10.5's docs/development.md owns the wider explanation of which daemon
+ * to use for which kind of work; this header stays one paragraph.
  *
  * **It starts EMPTY, and that is not a bug.** Since phase 8 a replica
  * mirrors the canvases it was let into, not everything its home would show
@@ -42,7 +38,7 @@
  * that shows an empty `list` has simply not been given anything yet.
  *
  * The address is deliberately not compiled into the CLI — a default of
- * `isocan.io` would turn `isocan serve` in this checkout into a replica of
+ * `isocan.io` would have every canvas made in this checkout born at
  * production, and that flip belongs to phase 14's promotion gesture. It is
  * compiled into THIS script instead, where it is only ever the repo's own
  * habit.
@@ -66,10 +62,12 @@ const env = {
   ...process.env,
   ISOCAN_HOME: isocanHome,
   ISOCAN_PORT: port,
-  // The daemon this script starts is a replica because of THIS, and nothing
-  // is written to any config file: a scratch daemon should not leave a
-  // setting behind it. `isocan home <url>` is the durable way to say the same
-  // thing, and it is what a person pointing their own machine at a home uses.
+  // The birth default for the scratch daemon, set here and written to no
+  // config file: a scratch daemon should not leave a setting behind it.
+  // Since phase 10.3 this says only "a canvas made here is made at dev" — it
+  // demotes nothing — so what makes this daemon a replica of anything is the
+  // `setup <address>#<pass>` below, which joins one canvas by name.
+  // `isocan home <url>` is the durable way to say the same narrow thing.
   ISOCAN_HOME_URL: homeUrl,
 };
 

@@ -193,6 +193,26 @@ export interface MintPassResponse {
 
 export interface RedeemPassRequest {
   token: string;
+  /**
+   * **Which home minted it** — phase 10.3, and it is the one home-scoped act
+   * that turns out to have an honest local answer.
+   *
+   * A pass token is opaque: nothing on the redeeming machine can read which
+   * desk holds its row. That is why `HomeLinks.homeScoped` exists, and why
+   * badges and attestations stay stuck there. Redemption is different, and
+   * the difference is the whole reason this field is here: **a pass is never
+   * handed over alone.** It arrives as `address#pass`, one pasted string, so
+   * the person who has the token also has the address — and a replica with
+   * two homes that guessed would present the credential at the wrong desk and
+   * report a valid pass as invalid, which is a cheerful wrong answer about
+   * the one thing that must never get one.
+   *
+   * Absent means "decide for me" (`homeScoped`), which is what a browser at a
+   * home sends and what every caller older than this field sends. A CLI sends
+   * it only when the address is NOT its own daemon's, because a daemon that
+   * dialled itself would be its own replica.
+   */
+  home?: string;
 }
 
 export interface RedeemPassResponse {

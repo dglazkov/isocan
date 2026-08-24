@@ -18,11 +18,22 @@ import { harnessVars } from "../src/harness.ts";
  * a clone know where the canvas is, and it is the fact `readMarker` has to
  * tolerate the absence of — every marker written before phase 6 lacks it.
  *
- * The other half is the refusal. A marker naming a home this daemon does not
- * answer to is **re-homing**, which is phase 13's and moves the work but not
- * the desk; nothing here migrates anything, and the refusal names both
- * addresses because the interesting question is always which one is the
- * surprise.
+ * The other half is what happens when the marker names a home this machine has
+ * not got. **Phase 10.3 split that into two different answers, and the split
+ * is the phase.**
+ *
+ * - A marker naming a home this machine has never recorded anything about is
+ *   the GOOD case: it is a clone, and it must be joined rather than refused.
+ *   The daemon opens a link to that address, is tested at its door, and writes
+ *   the row. When the address does not answer, the honest report is "nobody was
+ *   home" — and the one thing it must never be is a canvas quietly created
+ *   here under that id, which would be a twin.
+ * - A marker that disagrees with what this machine has already RECORDED about
+ *   that canvas is the refusal, and it is the only one left. Moving a canvas
+ *   between homes is **re-homing**, which is phase 13's and carries the work
+ *   but not the desk; nothing here migrates anything, and the refusal names
+ *   both addresses because the interesting question is always which one is the
+ *   surprise.
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -49,12 +60,12 @@ beforeEach(async () => {
     path.join(homeDir, "identity.json"),
     JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
   );
-  home = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  home = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   homeBase = baseOf(home);
   replica = await startDaemon({
     port: 0,
     home: homeDir,
-    homeUrl: homeBase,
+    birthHome: homeBase,
     homePollMs: 50,
   });
   port = Number(new URL(baseOf(replica)).port);
@@ -125,23 +136,95 @@ describe("a canvas born on a replica is stamped with its home", () => {
   }, 30_000);
 });
 
-describe("a marker naming another home", () => {
-  it("is refused, naming both addresses, and nothing is migrated", async () => {
+describe("a marker naming a home this machine has never been to", () => {
+  it("is attempted, and an unreachable home is named — nothing is created here", async () => {
+    /**
+     * This scenario used to be the refusal, and it is not one any more. A
+     * marker naming an address this daemon does not answer to was *"re-homing,
+     * and it is not something a command does by accident"* — a sentence that
+     * only made sense while a daemon had one home. Now it is a clone arriving,
+     * and the right answer is to go and ask.
+     *
+     * So what is asserted is the honest failure of the ask: this address does
+     * not resolve, it is NAMED, and — the half that matters — the canvas is
+     * not created here instead. That fall-through used to be unreachable
+     * because the refusal fired first; now it is reachable, and what stops it
+     * is a guard rather than an accident (`refuseOfflineBirth`). Minting a
+     * canvas locally under an id whose committed marker promises another home
+     * is offline birth of a twin, which is phase 13's.
+     */
     await writeMarker(work, {
       projectId: "prj_elsewhere",
       title: "Acme Sprint Board",
       home: "https://other.invalid",
     });
 
-    const run = await cli(work, claude("s-1"), "ls");
-    expect(run.code).not.toBe(0);
-    expect(run.stderr).toContain("https://other.invalid");
-    expect(run.stderr).toContain(homeBase);
-    expect(run.stderr).toMatch(/re-homing/i);
+    // `ls` reads; `comment add` is a command that CREATES, which is the one
+    // that would have materialized the twin.
+    for (const args of [["ls"], ["comment", "add", "hello", "--at", "0,0"]]) {
+      const run = await cli(work, claude("s-1"), ...args);
+      expect(run.code, args.join(" ")).not.toBe(0);
+      expect(run.stderr).toContain("https://other.invalid");
+      expect(run.stderr).toMatch(/did not answer|cannot reach/i);
+      expect(run.stderr).toMatch(/nothing was created/i);
+    }
 
-    // Refused means refused: no canvas was created anywhere, on either side.
+    // Nothing anywhere: not at the home this machine does have, and not here.
     expect(await atHome()).toEqual([]);
     expect(await replica.engine.listProjects()).toEqual([]);
+  }, 30_000);
+});
+
+describe("a marker that disagrees with what this machine recorded", () => {
+  it("is refused, naming both addresses, and nothing is migrated", async () => {
+    /**
+     * The refusal, in the form phase 10.3 leaves it: not marker-against-daemon
+     * but **marker-against-record**. This machine has been to H1 for this
+     * canvas and wrote that down; the marker in the working tree says H2. An
+     * edited marker, two clones that disagree, a canvas re-homed while this
+     * checkout slept — whichever it is, both cannot be true, and the one thing
+     * that must not happen is a command picking a side and migrating work.
+     *
+     * This is design §9's assertion (c) at the CLI level, and its load-bearing
+     * half is the last two lines: **neither home's project list changes**.
+     */
+    const second = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rehome-second-"));
+    const otherHome = await startDaemon({ port: 0, home: second, birthHome: null });
+    try {
+      const h2 = baseOf(otherHome);
+
+      // A canvas born here goes to H1 (this replica's birth default), and the
+      // daemon records it there — that is the row the marker will contradict.
+      const born = await cli(work, claude("s-1"), "identity", "--session");
+      expect(born.code, born.stderr).toBe(0);
+      const written = await marker(work);
+      expect(written.home).toBe(homeBase);
+      const projectId = written.projectId as string;
+      const atH1 = (await atHome()).map((p) => p.id);
+      expect(atH1).toEqual([projectId]);
+
+      // Somebody rewrites the address in the committed file. Same canvas id;
+      // a different home.
+      await writeMarker(work, {
+        projectId,
+        title: "Acme Sprint Board",
+        home: h2,
+      });
+
+      const run = await cli(work, claude("s-1"), "comment", "add", "no", "--at", "0,0");
+      expect(run.code).not.toBe(0);
+      expect(run.stderr).toContain(h2);
+      expect(run.stderr).toContain(homeBase);
+      expect(run.stderr).toMatch(/re-homing/i);
+
+      // Nothing moved. H1 still holds exactly what it held, and H2 — which the
+      // marker claims is the home — was never asked to make anything.
+      expect((await atHome()).map((p) => p.id)).toEqual(atH1);
+      expect(await otherHome.engine.listProjects()).toEqual([]);
+    } finally {
+      await otherHome.close();
+      await fs.rm(second, { recursive: true, force: true });
+    }
   }, 30_000);
 });
 

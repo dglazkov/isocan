@@ -44,7 +44,7 @@ async function boot(): Promise<void> {
   // than relying on the machine it runs on not having `ISOCAN_AUTH_PROJECT`
   // set. A developer with a dev home configured in their shell would otherwise
   // watch the no-attester assertions below fail for a reason that has nothing
-  // to do with the code — the same courtesy `homeUrl: null` extends.
+  // to do with the code — the same courtesy `birthHome: null` extends.
   daemon = await startDaemon({ port: 0, home, auth: null });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -597,7 +597,7 @@ describe("on a replica", () => {
    */
   it("forwards the grant routes to the home rather than editing its own ledger", async () => {
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-grants-replica-"));
-    const replica = await startDaemon({ port: 0, home: replicaDir, homeUrl: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {

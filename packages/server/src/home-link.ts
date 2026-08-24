@@ -32,6 +32,7 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
   projectsRoute,
@@ -44,12 +45,20 @@ import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } fr
 /**
  * The home connection: what turns a local daemon into a **syncing replica**.
  *
- * A daemon with a home configured is a replica OF THAT HOME for every canvas
- * it holds — one home per daemon, a whole-daemon property, because phase 6's
- * Work says "the local daemon grows its home connection" in the singular
- * throughout. A canvas that is local-only while a home exists is offline
- * birth, which is phase 13's, and half-building it here would be worse than
- * not building it.
+ * **One link per home, not one per daemon** (phase 10.3). Phase 6 built this
+ * in the singular — "the local daemon grows its home connection" — and phase
+ * 10.3 found that the singular was never a property of the daemon at all: the
+ * home is a property of the CANVAS, which the `.isocan/project.json` marker
+ * has asserted since Scene 0 by carrying an address. So a daemon is now the
+ * home of some canvases and a replica for others, holding one of these per
+ * distinct address, and `HomeLinks` (`home-links.ts`) is the registry that
+ * owns them. What each link does is unchanged; what changed is that it does it
+ * for **the canvases `homes.json` assigns to it**, and no others — see
+ * `sweep()`, which is the phase's central change and a data-loss fix.
+ *
+ * A canvas that is local-only while its own home exists is still offline birth,
+ * which is phase 13's, and half-building it here would still be worse than not
+ * building it.
  *
  * What the connection carries is the journey's two planes (Scene 4's wiring):
  *
@@ -97,10 +106,17 @@ const RELAY_COALESCE_MS = 40;
 export class HomeUnreachableError extends Error {
   readonly code = "home-unreachable";
   constructor(homeUrl: string, cause: string) {
+    // **Which home**, since phase 10.3, and the wording changed with it: it
+    // used to open "this daemon is a replica of X", which was true when a
+    // daemon had one home and is now a sentence about the wrong subject. This
+    // canvas lives at X; other canvases on this machine live elsewhere or
+    // right here, and they are still taking writes. On a machine with three
+    // homes, "the home is unreachable" is unanswerable.
     super(
-      `this daemon is a replica of ${homeUrl} and cannot reach it (${cause}) — ` +
-        "the write was NOT made. Offline writes are queued in the browser " +
-        "(phase 10) and at birth (phase 13); a replica's CLI writes are not.",
+      `that canvas lives at ${homeUrl}, and this daemon cannot reach it (${cause}) — ` +
+        "the write was NOT made. Canvases whose home is elsewhere (or here) are " +
+        "unaffected. Offline writes are queued in the browser (phase 10) and at " +
+        "birth (phase 13); a replica's CLI writes are not.",
     );
     this.name = "HomeUnreachableError";
   }
@@ -233,6 +249,79 @@ export interface HomeConnection {
   ): Promise<{ stream: Readable; mimeType: string; size: number } | null>;
 }
 
+/**
+ * **What the engine needs when there is more than one home** (phase 10.3).
+ *
+ * The engine used to hold a single `HomeConnection | null`, and that one field
+ * WAS the demotion: set it and the daemon stops assigning seqs. Under many
+ * homes the demotion is per canvas, so the field becomes a lookup — but not a
+ * bigger one than it has to be. Three questions, because there turn out to be
+ * exactly three kinds of act:
+ *
+ * - **canvas-scoped** (a write, a blob, an undo): `for(projectId)`.
+ * - **home-scoped** (a colour, an actor announcement): `all()`, because the
+ *   actors log lives at each home and never replicates down, so telling one
+ *   home leaves the other wrong forever.
+ * - **not yet about any canvas** (a nameless claim, a birth naming nothing):
+ *   `birth()`, the home this machine's NEXT canvas goes to.
+ *
+ * The engine is handed this rather than the registry itself so it still learns
+ * "there is somewhere else to send this" and never how a link is opened,
+ * closed, or written down — the same narrowness `HomeConnection` has always
+ * had.
+ */
+export interface HomeDirectory {
+  /** The connection this canvas's writes go to; null when this daemon is its
+   * home. */
+  for(projectId: string): HomeConnection | null;
+  /** Every open link — for the acts that are home-scoped rather than
+   * canvas-scoped. */
+  all(): readonly HomeConnection[];
+  /** Where a canvas born now, naming nothing, would live. */
+  birth(): HomeConnection | null;
+  /**
+   * **A canvas is being born here: record where it lives, and hand back the
+   * connection its writes go to.**
+   *
+   * Beyond the three questions above because a birth is the one moment a row
+   * is CREATED rather than consulted, and `submit` is where a `project.create`
+   * passes through. `homeUrl` is the address stated in the request (the
+   * marker's assertion, ridden up beside the op), or null to let the birth
+   * default decide.
+   *
+   * **It always writes a row, `null` included.** An explicit null is not
+   * cosmetic: it is what stops a link's sweep later claiming a locally-born
+   * canvas under the "this id has no row, so it must be mine" rule.
+   */
+  bind(projectId: string, homeUrl: string | null): Promise<HomeConnection | null>;
+  /** That canvas is gone; drop its row, or a re-created id inherits a dead
+   * routing. */
+  release(projectId: string): Promise<void>;
+}
+
+/**
+ * What one link needs to know from the registry that owns it — the sweep's
+ * half of `homes.json`.
+ *
+ * An interface rather than a direct reference to `HomeLinks` so the dependency
+ * runs one way: the registry knows about its links, and a link knows only that
+ * something can answer two questions about assignments. It is also what lets a
+ * test drive `sweep()` with a hand-written record.
+ */
+export interface HomeRegistry {
+  /** The canvas ids this record assigns to this address, and nothing else.
+   * The local half of the sweep. */
+  idsFor(homeUrl: string): string[];
+  /**
+   * The home offered this canvas: may this link dial it?
+   *
+   * The arbitration rule, in the one place it can be applied consistently —
+   * see `HomeLinks.mayDial` for the three branches and why the third one logs
+   * rather than throws.
+   */
+  mayDial(projectId: string, homeUrl: string): Promise<boolean>;
+}
+
 /** What a canvas socket was told when it connected — the observable half of
  * the lid-close beat, so a test can assert a RESUME happened and not a
  * re-snapshot, which is the thing this phase is about. */
@@ -262,13 +351,18 @@ export interface HomeHandshakes {
 }
 
 export interface HomeLinkOptions {
-  /** The address of the home — `https://isocan.io`. */
+  /** The address of the home — `https://isocan.io`. Normalized on the way in
+   * (`normalizeHomeUrl`), because this string is simultaneously the registry's
+   * key, the badge's key in `identity.json`, and the presence mirror's key,
+   * and two spellings of one address would be two of each. */
   homeUrl: string;
   /** This machine's isocan home directory: where the badge is kept, beside
    * the CLI's own, in `identity.json`'s `auth` block. */
   home: string;
   engine: Engine;
   presence: PresenceHub;
+  /** Which canvases are this link's, per `homes.json`. See `sweep()`. */
+  registry: HomeRegistry;
   /** How often to re-read the home's canvas list. Tests turn it down. */
   pollMs?: number;
 }
@@ -292,7 +386,22 @@ export class HomeLink implements HomeConnection {
   private readonly home: string;
   private readonly engine: Engine;
   private readonly presence: PresenceHub;
+  private readonly registry: HomeRegistry;
   private readonly pollMs: number;
+
+  /**
+   * Did the last poll of this home get an answer? Null until one has been
+   * tried.
+   *
+   * Kept as a by-product of the sweep rather than probed on demand, because
+   * the caller that wants it is `GET /api/homes`, which feeds `isocan status`'s
+   * role line — a command an agent runs dozens of times. A reachability probe
+   * per home per status call would put a network round trip behind `isocan
+   * status` on a machine with three homes. `reachable()` below is still there
+   * for the caller that genuinely wants to ask NOW (`isocan home <url>`, once,
+   * before it changes anything).
+   */
+  answering: boolean | null = null;
 
   private badge: StoredBadge | null = null;
   private links = new Map<string, CanvasLink>();
@@ -320,10 +429,11 @@ export class HomeLink implements HomeConnection {
   private claiming = new Map<string, Promise<void>>();
 
   constructor(options: HomeLinkOptions) {
-    this.homeUrl = options.homeUrl.replace(/\/+$/, "");
+    this.homeUrl = normalizeHomeUrl(options.homeUrl);
     this.home = options.home;
     this.engine = options.engine;
     this.presence = options.presence;
+    this.registry = options.registry;
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS;
     // Local faces going up. Coalesced per canvas; see `scheduleRelay`.
     this.presence.onChange((projectId) => this.scheduleRelay(projectId));
@@ -339,10 +449,19 @@ export class HomeLink implements HomeConnection {
      * the canvas exists locally by definition when this fires, so the dial can
      * present a real cursor instead of asking for a snapshot of the thing it
      * just wrote.
+     *
+     * **The row is consulted here too** (phase 10.3), and it has to be: this
+     * event is the ENGINE's, so it fires for every canvas on this machine on
+     * every link. Without the check, an op applied to a canvas that lives at
+     * dev would open a socket for it at prod, and prod would answer 4404 at
+     * best — or, in the clone-and-twin case, with a snapshot. The row exists by
+     * the time a birth's answer lands, because `bind()` writes it before the
+     * forward goes out.
      */
     this.engine.onEvent((projectId, message) => {
       if (message.type !== "op-applied") return;
       if (this.stopped || this.links.has(projectId)) return;
+      if (!this.registry.idsFor(this.homeUrl).includes(projectId)) return;
       this.openCanvas(projectId);
     });
   }
@@ -423,22 +542,33 @@ export class HomeLink implements HomeConnection {
   private async sweep(): Promise<void> {
     const wanted = new Set<string>();
     /**
-     * **What this machine already holds**, first and unconditionally.
+     * **The canvases this machine has RECORDED as this home's**, first and
+     * unconditionally — `homes.json`, and nothing else on this disk.
      *
-     * Two things ride on this line and both are load-bearing:
+     * **This one line is the phase's central change, and it is a data-loss
+     * fix rather than a tidy-up.** It used to be every project the local store
+     * held, which was correct exactly as long as a daemon had one home: with
+     * one home, "on this disk" and "this home's" were the same set. With two
+     * they are not, and the old line has a dev link dialling a prod canvas. A
+     * 404 is the good outcome. The bad one is the clone-and-twin shape — one
+     * canvas id present at both homes — where the wrong home answers with a
+     * **snapshot** and `adoptRemoteSnapshot` overwrites the local copy with a
+     * stranger's canvas of the same name.
      *
-     * - A home that is down must not make a replica forget what it holds —
-     *   the local list is a fact about this disk, and the home's answer below
-     *   is best-effort on top of it.
-     * - It is why a canvas BORN here keeps replicating after the narrowing. A
-     *   forwarded `project.create` lands locally, so it is in this list from
-     *   the moment it exists — and independently the home admitted this badge
-     *   when it created the canvas (`{root: "created"}`, see `http.ts`), so
-     *   the narrow listing names it too. Two independent reasons, which is
-     *   why the birth-on-a-replica case survives a change that removed the
-     *   only reason a *stranger's* canvas had.
+     * What the line still buys is unchanged and still load-bearing: **a home
+     * that is down must not make a replica forget what it holds.** The record
+     * is on this disk, so the guarantee got STRONGER — it used to be derived
+     * from a listing, and it is now a durable row.
+     *
+     * **It also still keeps a canvas born HERE**, and the reason changed. It
+     * used to survive on two independent legs — "it is in the local store" and
+     * "the home admitted the badge that created it" (`{root: "created"}`). The
+     * first of those is gone; a locally-born canvas is in the local store too,
+     * and that is precisely what must no longer be enough. What replaced it is
+     * better: `bind()` wrote the row at birth, naming this home, so the canvas
+     * is here BY THE RECORD. The admission leg is untouched.
      */
-    for (const project of await this.engine.listProjects()) wanted.add(project.id);
+    for (const projectId of this.registry.idsFor(this.homeUrl)) wanted.add(projectId);
     /**
      * **And what the home says this badge was let into** — admissions alone,
      * not what a door would open. That is the whole of phase 8 stage 4: a
@@ -448,9 +578,20 @@ export class HomeLink implements HomeConnection {
      * costs and does not: a badge that had to go back to the door holds no
      * admissions, so this half comes back empty until the replica is let in
      * again — and the local half above means nothing already here is dropped.
+     *
+     * **Each one is arbitrated before it is dialled** (phase 10.3). A home
+     * offering a canvas is not the same as a canvas being this home's: two
+     * homes can offer one id, and `mayDial` is where that is decided once,
+     * with the record, instead of by whichever poll ran first.
      */
     const theirs = await this.api<Project[]>("GET", projectsRoute("admitted")).catch(() => null);
-    if (theirs) for (const project of theirs) wanted.add(project.id);
+    this.answering = theirs !== null;
+    if (theirs) {
+      for (const project of theirs) {
+        if (this.stopped) return;
+        if (await this.registry.mayDial(project.id, this.homeUrl)) wanted.add(project.id);
+      }
+    }
     for (const projectId of wanted) {
       if (this.stopped) return;
       if (!this.links.has(projectId)) this.openCanvas(projectId);
@@ -700,14 +841,40 @@ export class HomeLink implements HomeConnection {
 
   // ---- the badge, and the claims that ride on it ----
 
-  private async ensureBadge(): Promise<StoredBadge | null> {
-    if (this.badge) return this.badge;
-    const stored = await readBadge(this.home, this.homeUrl);
-    if (stored) {
-      this.badge = stored;
-      return stored;
-    }
-    return this.reBadge();
+  /**
+   * The badge this link presents, fetched at most once even when several
+   * callers want it at the same instant.
+   *
+   * **Measured, phase 10.3.** This used to be two awaits with no gate, and it
+   * was safe by accident: a link's `start()` was awaited at boot, before the
+   * port was bound, so the first `ensureBadge` always ran alone. Under many
+   * homes a link is created LAZILY, by the very write that needs it, and its
+   * sweep starts in the background at the same moment — so two callers reached
+   * the two awaits together, both saw no badge, and both knocked. The door
+   * mints a badge per knock, so the daemon ended up holding two: `ensureClaim`
+   * put the actor on one, the forwarded op presented the other, and the home
+   * answered `not-your-actor` about an actor this machine had just claimed.
+   *
+   * It reproduced roughly one run in three and it is exactly the shape a
+   * comment would have argued was impossible. The gate is the same one
+   * `ensureClaim` next door already uses, for the same reason.
+   */
+  private badging: Promise<StoredBadge | null> | null = null;
+
+  private ensureBadge(): Promise<StoredBadge | null> {
+    if (this.badge) return Promise.resolve(this.badge);
+    if (this.badging) return this.badging;
+    this.badging = (async () => {
+      const stored = await readBadge(this.home, this.homeUrl);
+      if (stored) {
+        this.badge = stored;
+        return stored;
+      }
+      return this.reBadge();
+    })().finally(() => {
+      this.badging = null;
+    });
+    return this.badging;
   }
 
   private async reBadge(): Promise<StoredBadge | null> {

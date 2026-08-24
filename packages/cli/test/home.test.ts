@@ -9,21 +9,26 @@ import { paths, startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 
 /**
- * **`isocan home` — the verb phase 7.5 exists for.**
+ * **`isocan home` — the verb phase 7.5 exists for, re-scoped by phase 10.3.**
  *
  * `config.json` has had a `home` key since phase 6 and `resolveHomeUrl` has
- * always read it; nothing could write it, so becoming a replica meant an
- * environment variable and a text editor. What has to be true of the verb that
- * replaces them:
+ * always read it; nothing could write it, so reaching it meant an environment
+ * variable and a text editor. What that key MEANS narrowed in phase 10.3: it
+ * is the **birth default** — where a canvas born here is born — and not "the
+ * home this daemon answers to", which is a per-canvas question now. What has
+ * to be true of the verb:
  *
- * - setting a home really makes the daemon a replica (it stops serving pages
- *   and starts forwarding), and the setting SURVIVES the restart — the daemon
- *   reads its home once, at boot, so a write that is not followed by a
- *   restart is a write that did nothing;
- * - clearing it makes the daemon a home again;
+ * - setting it really sends the next canvas to that home, and the setting
+ *   SURVIVES the restart — the daemon reads it once, at boot, so a write that
+ *   is not followed by a restart is a write that did nothing;
+ * - clearing it sends the next canvas here — and **leaves every canvas already
+ *   at a home answering to that home**, which is the property that makes phase
+ *   14's flip of a shipped default address safe;
+ * - it reports, per canvas, who lives where;
  * - a nonsense address is refused, with the shape shown;
- * - a home that does not answer is REPORTED, not silently accepted — a replica
- *   that cannot reach its home refuses every write, and nothing is queued.
+ * - a home that does not answer is REPORTED, not silently accepted — a canvas
+ *   that lives at an unreachable home refuses every write, and nothing is
+ *   queued.
  *
  * These drive the real binary and let the CLI spawn its own daemon, the way
  * `restart.test.ts` does, because the restart is half of what is under test.
@@ -59,7 +64,7 @@ beforeEach(async () => {
   upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-up-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-work-"));
   port = await freePort();
-  upstream = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  upstream = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   const address = upstream.app.server.address();
   homeBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 });
@@ -124,7 +129,7 @@ async function configuredHome(): Promise<unknown> {
 }
 
 describe("isocan home, the reading", () => {
-  it("says a daemon is a home when nothing is configured", async () => {
+  it("says canvases born here stay here when nothing is configured", async () => {
     await isocan("serve");
     const shown = await json("home");
     expect(shown.role).toBe("home");
@@ -142,7 +147,7 @@ describe("isocan home, the reading", () => {
 });
 
 describe("isocan home <url>", () => {
-  it("makes the daemon a replica, and the setting outlives the restart", async () => {
+  it("sets the birth default, and the setting outlives the restart", async () => {
     await isocan("serve");
     const set = await json("home", homeBase);
     expect(set.role).toBe("replica");
@@ -156,14 +161,14 @@ describe("isocan home <url>", () => {
     expect((await json("status")).home).toBe(homeBase);
     expect((await json("home")).reachable).toBe(true);
 
-    // A replica really is one: it forwards. The canvas this directory gets
-    // is born AT THE HOME, which is the phase 6 behaviour the setting turns on.
+    // The birth default really is one: the canvas this directory gets is born
+    // AT THE HOME rather than here, which is the whole of what this key does.
     const named = await isocanWith({ ISOCAN_SESSION_ID: "s-home-verb" }, "identity", "--session");
     expect(named.code, named.stderr).toBe(0);
     expect((await upstream.engine.listProjects()).length).toBe(1);
   }, 30_000);
 
-  it("does not bounce a daemon that already answers to that home", async () => {
+  it("does not bounce a daemon whose birth default is already that home", async () => {
     await isocan("home", homeBase);
     const before = (await json("status")).pid;
     const again = await json("home", homeBase);
@@ -202,18 +207,43 @@ describe("isocan home <url>", () => {
 });
 
 describe("isocan home --clear", () => {
-  it("makes the daemon a home again", async () => {
+  it("births canvases here again — and the ones already at a home still answer to it", async () => {
+    /**
+     * The strictly stronger assertion phase 10.3 makes available, and the one
+     * that matters most: clearing the birth default used to promote a whole
+     * daemon back to being a home, which meant every canvas on it started
+     * being written locally. It does not any more — it only says where the
+     * NEXT canvas goes — and the canvas born at the home a moment ago still
+     * lives there afterwards.
+     *
+     * This is the same property phase 14's default-address flip rides on: a
+     * shipped default cannot re-point existing work, because setting or
+     * clearing one moves nothing.
+     */
     await isocan("home", homeBase);
     expect((await json("status")).home).toBe(homeBase);
+    const session = { ISOCAN_SESSION_ID: "s-clear" };
+    const named = await isocanWith(session, "identity", "--session");
+    expect(named.code, named.stderr).toBe(0);
+    const [born] = await upstream.engine.listProjects();
+    expect(born).toBeTruthy();
 
     const cleared = await json("home", "--clear");
     expect(cleared.role).toBe("home");
     expect(cleared.home).toBeNull();
     expect(await configuredHome()).toBeUndefined();
     expect((await json("status")).home).toBeUndefined();
+
+    // The canvas did not come home with the setting. This machine still
+    // records it as living at that address, and still says so.
+    const shown = (await json("home")) as { canvases: Record<string, string | null> };
+    expect(shown.canvases[born!.id]).toBe(homeBase);
+    const text = await isocan("home");
+    expect(text.stdout).toContain(born!.id);
+    expect(text.stdout).toContain(homeBase);
   }, 30_000);
 
-  it("is a no-op on a daemon that was never a replica", async () => {
+  it("is a no-op on a daemon that never had a birth default", async () => {
     await isocan("serve");
     const cleared = await json("home", "--clear");
     expect(cleared.restarted).toBe(false);
@@ -223,6 +253,80 @@ describe("isocan home --clear", () => {
     const run = await isocan("home", homeBase, "--clear");
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("not both");
+  }, 30_000);
+});
+
+describe("one daemon, both roles at once", () => {
+  it("reports per canvas, and the role line says all three things", async () => {
+    /**
+     * **The rig phase 10.3 exists to make possible**, described by the verb
+     * that used to have only two things it could say.
+     *
+     * One daemon, two canvases: one born at a home, one born here after the
+     * birth default was cleared. Before this phase that state was
+     * unreachable — a daemon was a home or a replica, and becoming one made
+     * every canvas on the machine follow. The role line had two sentences and
+     * neither of them is true of this machine, so it grew a third; and the
+     * only honest answer to "where does my work live" is now a list.
+     */
+    const away = { ISOCAN_SESSION_ID: "s-mixed-away" };
+    await isocan("home", homeBase);
+    expect((await isocanWith(away, "identity", "--session")).code).toBe(0);
+    const [there] = await upstream.engine.listProjects();
+    expect(there).toBeTruthy();
+
+    // Cleared, so the next canvas is born right here — beside the one that
+    // is not.
+    await isocan("home", "--clear");
+    const localDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-local-"));
+    try {
+      const here = { ISOCAN_SESSION_ID: "s-mixed-here" };
+      const made = await isocanIn(localDir, here, "identity", "--session");
+      expect(made.code, made.stderr).toBe(0);
+      const marker = JSON.parse(
+        await fs.readFile(path.join(localDir, ".isocan", "project.json"), "utf8"),
+      ) as { projectId: string; home?: string };
+      // Born here means born here: no address in the marker at all, which is
+      // the same file Dion's rig has always written.
+      expect(marker.home).toBeUndefined();
+
+      const shown = (await json("home")) as { canvases: Record<string, string | null> };
+      expect(shown.canvases[there!.id]).toBe(homeBase);
+      expect(shown.canvases[marker.projectId]).toBeNull();
+
+      // And the sentence, in both places that say it. "Home of 1 canvas" and
+      // "replica of <home> (1)" in one line is the thing that could not be
+      // said before.
+      const role = ((await json("status")) as { role: string }).role;
+      expect(role).toContain("home of 1 canvas");
+      expect(role).toContain(`replica of ${homeBase} (1)`);
+      const text = await isocan("home");
+      expect(text.stdout).toContain("here — this daemon is its home");
+      expect(text.stdout).toContain(homeBase);
+
+      /**
+       * **The address, per canvas — the assertion the phase's worst bug would
+       * fail.**
+       *
+       * `isocan share` prints the string a person pastes to another person.
+       * On this machine two canvases have two different doors, and a
+       * daemon-wide value would put one of them on the wrong one: a stranger
+       * sent to a home that has never heard of that canvas, or — worse — to
+       * `127.0.0.1` on a laptop that is not theirs. Both directions are
+       * checked, because getting it right in one and wrong in the other is
+       * exactly what a single shared value does.
+       */
+      const remote = JSON.parse(
+        (await isocanWith(away, "share", "--json")).stdout,
+      ) as { address: string };
+      expect(remote.address).toBe(`${homeBase}/p/${there!.id}`);
+      const local = JSON.parse(
+        (await isocanIn(localDir, here, "share", "--json")).stdout,
+      ) as { address: string };
+      expect(local.address).toBe(`http://127.0.0.1:${port}/p/${marker.projectId}`);
+    } finally {
+      await fs.rm(localDir, { recursive: true, force: true });
+    }
   }, 30_000);
 });
 

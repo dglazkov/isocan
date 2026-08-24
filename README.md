@@ -271,8 +271,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   already on, `isocan pass` mints a short-lived, single-use **pass** and prints
   the whole line to paste on the other machine —
   `npx github:dglazkov/isocan#release setup <address>#<pass>` — and that one
-  line points the daemon at the home, redeems the pass so the machine is
-  admitted and knows whose it is, writes the marker, and replicates the canvas.
+  line joins **that canvas**: the daemon opens a link to that home, redeems the
+  pass so the machine is admitted and knows whose it is, writes the marker and
+  the canvas's row, and replicates it. Nothing else on the machine moves —
+  canvases already here stay where they are, and the birth default is set only
+  if none was, which setup says out loud.
   Your own second machine arrives **as you**: an identity is handed over by a
   session that already is you, never claimed at a door. `--admit-only` mints
   the other honest shape, for an agent that will name itself. A pass is a
@@ -292,8 +295,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   one you are reading this on marked. Ending one stops it speaking as you
   anywhere, immediately, and takes with it anything that machine had passed
   onto a canvas. `isocan badges` and `isocan badges --kill <id>` are the same
-  two gestures from a terminal, and on a laptop they act on the **home's**
-  ledger, because that is the one that stops a machine you no longer have.
+  two gestures from a terminal, and on a laptop they act on the ledger of the
+  **home your canvases are born at**, because that is the one that stops a
+  machine you no longer have.
   Ending a surface is not the same as un-inviting it: it comes back as a
   stranger with none of your personas, and whether a stranger gets in is what
   the link grant decides. The two gestures compose, and neither pretends to be
@@ -367,8 +371,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   itself (`identity --session` creates the project if needed, named after
   the directory), or by hand with `isocan use <project>`. Resolution walks
   up like `.git`; a committed marker means a clone knows which project it
-  is, and a marker this home has never seen is materialized under its own
-  id on the first addition. In a bound directory `project list` narrows to
+  is. A marker this machine has never seen that names **no** home is
+  materialized under its own id on the first addition; one that names a home
+  this machine has never dialled is **fetched from there** — the daemon opens
+  a link, that home's door decides, and the row is written, with nothing else
+  on the machine moving. In a bound directory `project list` narrows to
   that canvas (`--all` widens) and `wait` listens to it alone — there is no
   home-wide listening; the old "on call" presence was retired with this
   change. `~/.isocan/dirs.json` is the dir→project roster, a lazily healed
@@ -381,7 +388,8 @@ isocan --agent-help                # the collaboration protocol, for agents
 isocan setup [dir | <address>#<pass>]  # ready a directory — or join that canvas
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
-isocan home [<url>|--clear]        # which home this daemon answers to
+isocan home [<url>|--clear]        # where each canvas here lives; set where
+                                   # NEW ones are born (nothing already here moves)
 isocan share [<email>] [--link on|off] [--revoke <email>]
                                    # the address, and who may enter this canvas
 isocan pass [--admit-only]         # a one-use pass: the command another
@@ -448,32 +456,64 @@ covering the gap between upload and `item.add`.
 
 ## Answering to a home
 
-A daemon is one of two things. On its own it is a **home**: it holds the
-canvases, serves the app, and is the single writer of everything on them.
-Given an address it becomes a **replica** of the home at that address — it
-still answers your CLI instantly from a local copy, but every write it makes
-travels to the home and comes back, and the pages are served there, not here.
-That is the one-origin rule: people always enter through the home.
+**The home is a property of the canvas, not of the machine.** One daemon is
+the **home** of some canvases — it holds them, serves their pages, and is the
+single writer of everything on them — and a **replica** for others: it still
+answers your CLI instantly from a local copy, but their writes travel to the
+home that holds them and come back, and their pages are served there. Which is
+which is decided per canvas, by two things that must agree: the
+`.isocan/project.json` marker, which carries the address a canvas was born at
+and travels with a clone, and `~/.isocan/homes.json`, this machine's own row
+per canvas written when it is born or joined and never guessed. A canvas with
+no row is one this daemon is the home of. When the two disagree, the command is
+refused with both addresses named — moving a canvas between homes is a
+deliberate act, never something a stray command does on your behalf.
 
-A replica carries **the canvases it was let into**, not everything at its
-home: one you joined with a pass (`isocan setup <address>#<pass>`), one born
-in a directory here, one named by a `.isocan/project.json` that came with a
-clone. So a fresh replica starts empty on purpose, and a canvas at the home
+That is the one-origin rule, and it was always per canvas: every canvas has
+exactly one door, so its cookie, its service worker and its browser replica
+live in one origin's storage. So a daemon serves the app for the canvases it is
+the home of and, for the rest, answers a page request by naming the home that
+does. A laptop can hold local work and a team's work at once without either
+canvas getting two doors.
+
+As a replica it carries **the canvases it was let into**, not everything at
+that home: one you joined with a pass (`isocan setup <address>#<pass>`), one
+born in a directory here, one named by a `.isocan/project.json` that came with
+a clone. So a fresh replica starts empty on purpose, and a canvas at the home
 that is not on this machine is not missing — nobody has handed it over.
 
 ```sh
-isocan home                       # which of the two this daemon is, and
-                                  # whether its home is answering
-isocan home https://isocan.io     # answer to that home from now on
-isocan home --clear               # answer to nobody — be a home again
+isocan home                       # where each canvas here lives, and whether
+                                  # each of those homes is answering
+isocan home https://isocan.io     # canvases born here are born there
+isocan home --clear               # canvases born here stay here
 ```
 
-Setting a home writes `~/.isocan/config.json` and restarts the daemon, because
-a daemon reads its home once, at boot. It checks the address answers first: a
-replica that cannot reach its home refuses every write and queues nothing, so
-being pointed at nothing is a state worth being warned about (`--force` sets
-it anyway). There is **no default address** — `isocan serve` with nothing
-configured is a home, which is what every daemon in this repo is.
+`isocan home` with no argument reports per canvas, because that is where the
+answer lives:
+
+```
+role             home of 2 canvases; replica of https://isocan.io (1); new canvases → https://isocan.io
+birth default    https://isocan.io — a canvas born here is born there; nothing already here moved
+answering        yes — https://isocan.io is up
+
+canvases
+CANVAS           ID        HOME
+Acme Sprint      prj_7f3a  here — this daemon is its home
+Test Fixture     prj_91b2  here — this daemon is its home
+Widget Redesign  prj_c40d  https://isocan.io
+```
+
+`isocan home <url>` sets the **birth default** — where a canvas born here from
+now on is born — and **nothing already here moves**: canvases already at a home
+still answer to it, canvases already local stay local, and `--clear` says the
+same in the mirror. It writes `~/.isocan/config.json` and restarts the daemon,
+because a daemon reads that file once, at boot; it checks the address answers
+first, since a canvas whose home cannot be reached refuses every write and
+queues nothing (`--force` sets it anyway). `ISOCAN_HOME_URL` overrides the file
+and means the same narrow thing. There is **no default address** — `isocan
+serve` with nothing configured births locally, which is what every daemon in
+this repo does.
 
 `isocan serve` on a rented VM is a complete home: the same daemon, the same
 code, reachable by anyone you point at it.
@@ -503,10 +543,11 @@ earlier run left behind; `isocan restart` does. From a checkout,
 
 ```sh
 npm run dev         # daemon + Vite with hot reload
-npm run dev:replica # a replica of dev, on :4442, with its OWN isocan home —
+npm run dev:replica # a scratch machine on :4442 with its OWN isocan home —
                     # `-- <command>` runs any CLI command against it. It starts
-                    # holding nothing: a replica carries the canvases it was let
-                    # into, so join one with `-- setup <address>#<pass>`
+                    # from empty on purpose, badge included, so join a canvas
+                    # with `-- setup <address>#<pass>` and exercise that path
+                    # from zero
 npm test            # vitest: reducer round-trips, random-walk undo property
                     # tests, storage crash recovery, daemon HTTP/WS integration
 npm run typecheck   # strict tsc across all packages

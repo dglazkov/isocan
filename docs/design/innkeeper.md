@@ -23,6 +23,15 @@ because either alone would be dishonest:
    but the marker's address binds a canvas to a home: a team can run its
    own, and the setup command's address argument already carries the
    choice. The default home earns its keep; it cannot hold hostages.
+   **Physically true since phase 10.3, not merely permitted.** This
+   commitment always implied a person working for two teams, and two
+   teams is two homes on one machine — which the configuration model
+   could not express while a daemon answered to exactly one address and
+   pointing it at a second demoted every canvas on the disk. The home is
+   now a property of the canvas (a row per canvas in
+   `~/.isocan/homes.json`, written at binding), so one laptop holds work
+   at two innkeepers and work of its own at the same time, and choosing a
+   different innkeeper for one canvas conscripts none of the others.
 
 What keeps commitment 2 true is **sovereignty by replica**: a thick
 daemon's `~/.isocan` holds the full store — oplog and blobs — so any

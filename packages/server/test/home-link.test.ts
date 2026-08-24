@@ -72,7 +72,7 @@ function baseOf(daemon: Daemon): string {
 /** A replica: its own home directory, pointed at H, polling fast enough that
  * a test does not spend seconds waiting for a canvas list to be re-read. */
 async function replica(dir: string, homeUrl: string): Promise<Daemon> {
-  return startDaemon({ port: 0, home: dir, homeUrl, homePollMs: 50 });
+  return startDaemon({ port: 0, home: dir, birthHome: homeUrl, homePollMs: 50 });
 }
 
 async function node(daemon: Daemon, dir: string, actor: { id: string; name: string }): Promise<Node> {
@@ -416,32 +416,44 @@ describe("what a replica carries", () => {
     expect(back.canvas.items["itm_1"]).toMatchObject({ x: 77, y: 77 });
   }, 30_000);
 
-  it("keeps a canvas born HERE, for two independent reasons — and both are asserted", async () => {
+  it("keeps a canvas born HERE, because the birth WROTE DOWN where it lives", async () => {
     /**
-     * The case the narrowing could plausibly have broken and did not, checked
-     * rather than argued, because "it should still work" is how phase 7's
-     * measured surprise happened.
+     * **This test's name changed in phase 10.3, and the change is the honest
+     * signal that something load-bearing moved.**
      *
-     * A canvas born on a replica survives on TWO legs, either of which would
-     * be enough:
+     * It used to assert TWO independent legs, either of which was enough:
      *
-     * 1. **It is local.** `project.create` forwards to the home and the answer
-     *    lands in this machine's store, so the sweep's first line — what this
-     *    machine already holds — names it from the moment it exists. This is
-     *    also what makes "a replica whose home is down does not forget"
-     *    true, and the two are one line.
-     * 2. **The home admitted the badge that made it.** Creating a canvas is
-     *    the one provenance that is not "somebody let me in" (`{root:
-     *    "created"}`, `http.ts`'s bootstrap), and it is written onto the
-     *    daemon's badge AT THE HOME — the same badge the sweep asks with. So
-     *    the narrow listing names it too.
+     * 1. *It is local.* The sweep's first line was "every project in this
+     *    machine's store", so a forwarded `project.create` landing here put the
+     *    canvas in the wanted set from the moment it existed.
+     * 2. *The home admitted the badge that made it.* Creating a canvas is the
+     *    one provenance that is not "somebody let me in" (`{root: "created"}`,
+     *    `http.ts`'s bootstrap), written onto this daemon's badge AT THE HOME
+     *    — the same badge the sweep asks with.
      *
-     * Leg 2 is asserted directly, with the replica's own home badge, because
-     * it is the one a reader would doubt: it is invisible from this machine
-     * and it is what makes the canvas survive a store this daemon has thrown
-     * away.
+     * **Phase 10.3 deleted leg 1**, deliberately: "everything on this disk"
+     * was only ever the right set while a daemon had one home, and with two it
+     * has a dev link dialling a prod canvas. What replaced it is better and is
+     * what this test now asserts — **the birth wrote a ROW**, so the canvas is
+     * this home's by the record rather than by being nearby. The old leg 1's
+     * other job, "a home that is down cannot make a laptop forget", is
+     * unchanged and got stronger: the row is a durable file rather than a
+     * derived listing. (`does not forget what it holds when the home is
+     * unreachable`, below, is where that half is measured.)
+     *
+     * Leg 2 is still asserted directly, with the replica's own home badge,
+     * because it is the one a reader would doubt: it is invisible from this
+     * machine, and it is what makes the canvas survive a store this daemon has
+     * thrown away.
      */
     await birthAtA();
+
+    // The row, on A's disk, naming H — written by the birth itself, before the
+    // op was ever forwarded.
+    expect(A.daemon.homes.assignments()).toEqual({ [CANVAS]: H.base });
+    expect(JSON.parse(await fs.readFile(p.homesFile(aDir), "utf8"))).toEqual({
+      [CANVAS]: H.base,
+    });
 
     const badge = await readBadge(aDir, H.base);
     expect(badge, "A's daemon should hold a badge at the home").not.toBeNull();
@@ -452,11 +464,13 @@ describe("what a replica carries", () => {
     const admissions = (await H.daemon.desk.badge(badge!.badgeId))!.admissions;
     expect(admissions.map((a) => a.provenance.root)).toContain("created");
 
-    // And leg 1: restarted on the same store, A holds it before any sweep has
-    // had a chance to run.
+    // And the row outlives the process: restarted on the same directory, A
+    // holds the canvas AND still knows whose it is, before any sweep has had a
+    // chance to run.
     await A.daemon.close();
     A = await node(await replica(aDir, H.base), aDir, priya);
     expect((await A.daemon.engine.listProjects()).map((project) => project.id)).toEqual([CANVAS]);
+    expect(A.daemon.homes.homeOf(CANVAS)).toBe(H.base);
   }, 30_000);
 
   it("does not forget what it holds when the home is unreachable", async () => {
@@ -575,7 +589,7 @@ describe("the lid close", () => {
     // passes just as well against a replica that threw its canvas away and
     // took a full snapshot every time it reconnected — converging on the right
     // state while the seq cursor did nothing at all.
-    const handshake = A.daemon.home!.handshakes(CANVAS);
+    const handshake = A.daemon.homes.link(H.base)!.handshakes(CANVAS);
     expect(handshake.snapshots).toBe(0);
     expect(handshake.resumed).toBeGreaterThanOrEqual(1);
     expect(handshake.last).toMatchObject({ type: "resumed", since: 2, lastSeq: 5 });
@@ -593,7 +607,7 @@ describe("the lid close", () => {
     await birthAtA();
     await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
-    expect(B.daemon.home!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
+    expect(B.daemon.homes.link(H.base)!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
     // Adopted whole: state, title, and the home's lastSeq.
     const snap = await canvas(B);
     expect(snap.project.title).toBe("Acme Sprint Board");

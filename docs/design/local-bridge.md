@@ -86,12 +86,18 @@ packages/server/src` returns nothing), which is fine while nothing frames it
 and becomes load-bearing the moment something does. Two locks, both cheap:
 
 - serve the bridge document with `Content-Security-Policy: frame-ancestors
-  <the configured home>` — so only this daemon's own home can frame it at all;
+  <the home of the canvas being framed>` — so only the origin that legitimately
+  serves that canvas can frame it at all;
 - check `event.origin` against that same value on every `postMessage`, and
   never trust a `source` without it.
 
-Both derive from one value the daemon already holds — the home it answers to
-(`isocan home`, phase 7.5). A daemon that is its own home frames nobody.
+Both derive from one value, and **phase 10.3 changed which one**: not "the home
+this daemon answers to", which stopped existing when the home became a property
+of the canvas rather than of the machine, but **the home of the canvas the
+framing page is showing** — `GET /api/homes` answers it per canvas, and a daemon
+that is the home of the canvas in the frame is being framed by its own origin
+and locks to that. Same daemon, two tabs, two locks, and no whole-machine value
+that could have stood in for either.
 
 ## What it costs
 

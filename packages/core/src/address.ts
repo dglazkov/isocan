@@ -151,6 +151,55 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
 }
 
 /**
+ * **One address, one spelling** — the home half of what this file does for a
+ * canvas.
+ *
+ * Phase 10.3 forced this out of the CLI, where it grew up, and the forcing is
+ * worth reading because it is a good example of a cost that was invisible
+ * while a number was one. Four spellings of a home address existed side by
+ * side: `HomeLink`'s constructor stripped trailing slashes, `resolveHomeUrl`
+ * trimmed whitespace, `badge-store` keyed by whatever string it was handed,
+ * and the CLI's own normalizer returned `new URL(raw).origin`. With ONE home
+ * per daemon a divergence between them was undetectable — every caller was
+ * handed the same string from the same config key, so any two spellings agreed
+ * by never meeting.
+ *
+ * With MANY homes per daemon they meet constantly, and **two spellings of one
+ * address are two links, two badges, two presence mirror keys, and the same
+ * person's face twice in one roster.** So the computation lives in core, house
+ * rule 4's ordinary case: the daemon keys its links and its badges by this,
+ * the CLI parses what a person typed with this, and neither owns it.
+ *
+ * **Normalization is `URL.origin`**: scheme, lowercased host, port only when
+ * it is not the scheme's default — no path, no query, no fragment, no trailing
+ * slash. That is exactly the granularity a browser gives a page's storage, and
+ * a home IS an origin (the one-origin rule is the whole reason).
+ *
+ * **Total, never throwing**, which is the difference between this and the
+ * CLI's `normalizeHomeUrl` wrapper. This one is called on values already
+ * committed to disk — `config.json`'s `home`, a marker's `home`,
+ * `identity.json`'s `auth` keys — where the only alternatives to "hand it back
+ * as it came" are a crash at boot and a daemon that silently forgets a home.
+ * Judging what a PERSON typed is a different job with different answers (a
+ * bare hostname is a typo; a canvas link pasted from a browser bar deserves to
+ * be named as one), and it stays where the person is, in the CLI.
+ */
+export function normalizeHomeUrl(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return trimmed.replace(/\/+$/, "");
+    return url.origin;
+  } catch {
+    // Not parseable as an address at all. Stripping the trailing slash is the
+    // one normalization that can still be applied without inventing anything,
+    // and it is the one that actually bit (`{ home: "http://127.0.0.1:9/" }`
+    // sits in this repo's own fixtures).
+    return trimmed.replace(/\/+$/, "");
+  }
+}
+
+/**
  * **How to get this CLI without a registry**, in the one place that spells it.
  *
  * The repo is the package and the `release` branch is the installable face of

@@ -35,6 +35,8 @@ import { HelpPanel } from "../components/HelpPanel.tsx";
 import { isTyping } from "../lib/keys.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
+import { useCanvasHome } from "../lib/homes.ts";
+import { ElsewherePage } from "./ElsewherePage.tsx";
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -56,7 +58,41 @@ function moveOp(moves: Array<{ itemId: string; x: number; y: number }>) {
     : ({ type: "items.move", moves } as const);
 }
 
-export function CanvasPage({
+/**
+ * **The per-canvas door, checked before anything is opened** (phase 10.3).
+ *
+ * A daemon serves the app for the canvases whose home it is and signposts the
+ * rest, but that guard lives on `GET /p/<id>` and a react-router `<Link>`
+ * never asks the server anything. So the route asks: is this canvas ours to
+ * render? Only when the answer is yes does `CanvasSurface` mount — and mount
+ * is the moment that matters, because it is where the socket is opened, the
+ * IndexedDB replica is written and the tab starts behaving like a copy of a
+ * canvas whose real copy is somewhere else.
+ *
+ * A gate rather than a branch inside the page for exactly that reason: React
+ * runs a mounted component's effects before any conditional render can undo
+ * them, so a check made after mounting would be a check made after the damage.
+ * `lib/homes.ts` holds what "yes" means, including why a daemon that does not
+ * answer at all is a yes.
+ */
+export function CanvasPage(props: {
+  actor: Actor;
+  onIdentity: (actor: Actor | null) => void;
+}) {
+  const { projectId } = useParams<{ projectId: string }>();
+  const where = useCanvasHome(projectId ?? null);
+  if (!projectId) return null;
+  // A sentence, in the same voice the door uses while a pass is redeemed —
+  // not a spinner and not a blank page, for the fraction of a second a
+  // same-origin read of `/api/homes` takes.
+  if (where.state === "asking") return <div className="page-note">Finding this canvas…</div>;
+  if (where.state === "elsewhere") {
+    return <ElsewherePage projectId={projectId} home={where.home} />;
+  }
+  return <CanvasSurface {...props} />;
+}
+
+function CanvasSurface({
   actor,
   onIdentity,
 }: {

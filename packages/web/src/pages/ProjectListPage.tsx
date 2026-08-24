@@ -25,11 +25,38 @@ export function ProjectListPage({
   const [identityOpen, setIdentityOpen] = useState(false);
   const whoRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () => setIdentityOpen(false));
 
+  /**
+   * The canvases **this origin is the home of** — not every canvas the daemon
+   * holds (phase 10.3; `listProjects` in `lib/api.ts` carries the argument).
+   *
+   * Every title below is a `<Link>`, and a `<Link>` is a client-side
+   * navigation that never touches the server. The daemon's per-canvas page
+   * guard therefore cannot see it, and a wide list here would be a working
+   * button that opens a local, stale second copy of a canvas that lives at
+   * dev.isocan.io. The narrowing is what makes the list's links true: what you
+   * can see here is what this door opens.
+   *
+   * A replica's canvases are not lost — `isocan status` lists every one of
+   * them with its home, and each opens in a browser at the address that IS its
+   * home. This page is one origin talking about itself.
+   */
   const refresh = useCallback(() => {
     listProjects().then(setProjects, () => setProjects([]));
   }, []);
   useEffect(refresh, [refresh]);
 
+  /**
+   * A named seam, so the next person meets it as a known cost rather than as a
+   * bug: **on a daemon with a birth default set, a canvas created here is born
+   * at that home and will not appear in this list** — the list is "canvases
+   * this origin is the home of", and the newborn's home is somewhere else. The
+   * only rig where that is reachable is a mixed one (a birth default AND at
+   * least one local canvas, since a pure replica serves no pages at all), and
+   * the honest fix is a sentence saying where it went, with a link to it. That
+   * needs `/api/homes` read at this page and a notice this page does not have;
+   * phase 10.3's scope was the two changes that close the stale-replica hole,
+   * and this is a follow-up rather than a silent omission.
+   */
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();

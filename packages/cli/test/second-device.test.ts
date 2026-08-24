@@ -60,7 +60,7 @@ async function machine(dir: string): Promise<Daemon> {
     path.join(dir, "identity.json"),
     JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
   );
-  return startDaemon({ port: 0, home: dir, homeUrl: homeBase, homePollMs: 50 });
+  return startDaemon({ port: 0, home: dir, birthHome: homeBase, homePollMs: 50 });
 }
 
 beforeEach(async () => {
@@ -69,7 +69,7 @@ beforeEach(async () => {
   secondDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-b-"));
   firstWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-a-"));
   secondWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-b-"));
-  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   homeBase = baseOf(homeDaemon);
   first = await machine(firstDir);
   second = null;

@@ -10,14 +10,20 @@ import * as p from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
- * The one-origin rule, in the code that enforces it: **a local daemon serves
- * ops to CLIs, never pages to persons** (offline-birth.md). `registerStaticWebApp`
- * is exactly the code a home needs and exactly what a replica must stop doing,
- * and which of the two a daemon is comes from configuration — never a flag,
- * and never a compiled-in default.
+ * The one-origin rule, in the code that enforces it — **and it is a per-canvas
+ * rule, not a per-daemon one** (phase 10.3).
  *
- * Stage 1 does not dial the home. It stops serving pages and records the
- * address; the connection hangs off the same answer in stage 2.
+ * A daemon serves the app for the canvases whose home it is, and for no
+ * others: a canvas with two doors would have two badge cookies, two service
+ * worker registrations and two browser replicas, the local one stale by
+ * construction. A canvas whose home IS this daemon has exactly one door
+ * already, so serving it is not a violation of the rule — it is the rule.
+ *
+ * The two degenerate shapes are what most of this file exercises and they are
+ * byte-for-byte what they always were: a **pure replica** (a birth default,
+ * not one canvas of its own) serves no pages at all, and a **pure home** (no
+ * birth default) serves everything. The mixed rig — Dion's, phase 10.5's — is
+ * the new shape, and it is the last block below.
  */
 
 /**
@@ -48,15 +54,15 @@ let daemon: Daemon | null;
 let upstream: Daemon | null;
 let upstreamHome: string | null;
 
-async function boot(homeUrl: string | null): Promise<string> {
-  daemon = await startDaemon({ port: 0, home, homeUrl });
+async function boot(birthHome: string | null): Promise<string> {
+  daemon = await startDaemon({ port: 0, home, birthHome });
   const address = daemon.app.server.address();
   return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
 
 async function realHome(): Promise<string> {
   upstreamHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-upstream-"));
-  upstream = await startDaemon({ port: 0, home: upstreamHome, homeUrl: null });
+  upstream = await startDaemon({ port: 0, home: upstreamHome, birthHome: null });
   const address = upstream.app.server.address();
   return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
@@ -76,15 +82,17 @@ afterEach(async () => {
   delete process.env.ISOCAN_HOME_URL;
 });
 
-describe("where a daemon learns it is a replica", () => {
-  it("is a home when nothing says otherwise — there is no baked-in address", async () => {
+describe("where a daemon learns where a canvas born here goes", () => {
+  it("births locally when nothing says otherwise — there is no baked-in address", async () => {
     // The load-bearing assertion of the whole mechanism: every daemon in this
-    // repo today has no home configured, and must go on being a home. Baking
-    // `isocan.io` in as a fallback would silently demote all of them; that
-    // default belongs to phase 14, where setup writes the address on purpose.
+    // repo today has no home configured, and a canvas born on one must go on
+    // being born right there. Baking `isocan.io` in as a fallback would change
+    // that for all of them; that default belongs to phase 14, where setup
+    // writes the address on purpose — and phase 10.3 is what makes flipping it
+    // safe, because a birth default cannot re-point work that already exists.
     expect(await resolveHomeUrl(home)).toBeNull();
     daemon = await startDaemon({ port: 0, home });
-    expect(daemon.homeUrl).toBeNull();
+    expect(daemon.birthHome).toBeNull();
   });
 
   it("reads ISOCAN_HOME_URL from the environment", async () => {
@@ -116,8 +124,96 @@ describe("where a daemon learns it is a replica", () => {
   });
 });
 
-describe("a replica does not serve pages", () => {
+/**
+ * **Upgrade day** — what phase 10.3's one migration writes, and (mostly) does
+ * not.
+ *
+ * From 10.3 on, a canvas with no row in `homes.json` is one this daemon is the
+ * home of. That reading is right for Dion, whose canvases were born local. It
+ * is catastrophically wrong for the other upgraded machine: one whose
+ * `config.json` already carried a `home`, holding canvases born on it as a
+ * replica in the phase 6→7.5 window, whose markers say nothing and which
+ * genuinely live at that home. Re-reading "absent" as "local" would silently
+ * FORK every one of them.
+ */
+describe("what the upgrade writes down about canvases that already exist", () => {
+  /** A pre-10.3 machine: canvases in the store, and no `homes.json` at all —
+   * which is exactly what a machine that has never run this code has. */
+  async function preUpgradeMachine(): Promise<void> {
+    const base = await boot(null);
+    const badge = await mintTestBadge(base);
+    await badge.speakAs({ id: "usr_dion", name: "Dion" });
+    for (const [id, title] of [
+      ["prj_acme", "Acme Sprint Board"],
+      ["prj_widget", "Widget Redesign"],
+    ]) {
+      const made = await fetch(`${base}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({
+          projectId: null,
+          actor: { id: "usr_dion", name: "Dion" },
+          op: { type: "project.create", projectId: id, title },
+        }),
+      });
+      expect(made.status).toBe(200);
+    }
+    await daemon!.close();
+    daemon = null;
+    await fs.rm(p.homesFile(home), { force: true });
+  }
+
+  it("freezes the canvases a configured machine already holds at that home", async () => {
+    // The wrinkle the upgrade must not fall into, asserted. This machine has a
+    // home configured, so what it holds today genuinely lives there — and it
+    // is written down explicitly rather than left to a rule that now says the
+    // opposite.
+    await preUpgradeMachine();
+    await boot(HOME);
+    expect(daemon!.homes.assignments()).toEqual({ prj_acme: HOME, prj_widget: HOME });
+    expect(JSON.parse(await fs.readFile(p.homesFile(home), "utf8"))).toEqual({
+      prj_acme: HOME,
+      prj_widget: HOME,
+    });
+  });
+
+  it("writes NOTHING on a machine with no home configured — Dion's, and every hosted home's", async () => {
+    // Two machines behind one assertion. Dion's: absent-means-local is already
+    // the truth about it, so there is nothing to record and his canvases keep
+    // working with his daemon as their home, unchanged.
+    //
+    // And the hosted home's, which is the half that would actually hurt: a
+    // container starts from a fresh filesystem and re-runs its migrations at
+    // EVERY cold start, so a per-canvas write here would be paid over and over
+    // for canvases that are all local by definition. This writes zero bytes.
+    await preUpgradeMachine();
+    await boot(null);
+    expect(daemon!.homes.assignments()).toEqual({});
+    expect(existsSync(p.homesFile(home))).toBe(false);
+  });
+
+  it("runs once — a row written afterwards is not re-frozen by the next boot", async () => {
+    await preUpgradeMachine();
+    await boot(HOME);
+    await daemon!.close();
+    daemon = null;
+    // Somebody re-homes a canvas by hand, or a later join writes a different
+    // row. The migration is marked done by the file's existence, so the next
+    // boot leaves it alone rather than stamping the configured home over
+    // everything again.
+    await fs.writeFile(
+      p.homesFile(home),
+      JSON.stringify({ prj_acme: null, prj_widget: HOME }),
+    );
+    await boot(HOME);
+    expect(daemon!.homes.assignments()).toEqual({ prj_acme: null, prj_widget: HOME });
+  });
+});
+
+describe("a pure replica does not serve pages", () => {
   it("answers an unmatched GET with a 404 that names the home", async () => {
+    // A birth default and not one canvas of its own: a PURE replica, which is
+    // the shape this whole block is about and the one that is unchanged.
     const base = await boot(HOME);
     for (const url of ["/", "/c/prj_1", "/index.html"]) {
       const res = await fetch(`${base}${url}`, { headers: { Accept: "text/html" } });
@@ -149,9 +245,9 @@ describe("a replica does not serve pages", () => {
 
   it("mints no cookie badge, because the page that minted it is gone", async () => {
     // The SPA fallback is where a browser gets badged (`if (!req.badge)
-    // mintBadge("cookie")`). A daemon that no longer serves pages must not go
-    // on badging people it is not serving — leaving that half behind would
-    // mint a badge per stray asset request to a page that does not exist.
+    // mintBadge("cookie")`). A daemon mints them only where it is somebody's
+    // home — leaving that half reachable on a pure replica would mint a badge
+    // per stray asset request to a page that does not exist.
     const base = await boot(HOME);
     const res = await fetch(`${base}/`);
     expect(res.headers.get("set-cookie")).toBeNull();
@@ -186,15 +282,18 @@ describe("a replica does not serve pages", () => {
     expect(((await projects.json()) as { id: string }[]).map((p) => p.id)).toEqual(["prj_1"]);
   });
 
-  it("records the address it is a replica of", async () => {
-    // Stage 2's home connection dials exactly this. A daemon that could not
-    // say which of the two things it is would be a daemon nothing could ask.
+  it("records the birth default, and it is the whole-daemon answer that survives", async () => {
+    // A daemon that could not say where its next canvas would go would be a
+    // daemon nothing could ask. What it can no longer say — and deliberately
+    // does not pretend to — is "the home I answer to": that is a per-canvas
+    // question now, and `GET /api/homes` is where it is asked.
     await boot(HOME);
-    expect(daemon!.homeUrl).toBe(HOME);
+    expect(daemon!.birthHome).toBe(HOME);
+    expect(daemon!.homes.assignments()).toEqual({});
   });
 });
 
-describe("a home is unchanged", () => {
+describe("a pure home is unchanged", () => {
   it("serves the web app and badges the page load", async () => {
     if (!distBuilt) return; // no build here; the daemon correctly serves nothing
     const base = await boot(null);
@@ -203,6 +302,64 @@ describe("a home is unchanged", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(res.headers.get("set-cookie")).toContain(BADGE_COOKIE);
     expect(res.headers.get("x-isocan-home")).toBeNull();
+  });
+});
+
+/**
+ * **The mixed rig** — a daemon that is the home of one canvas and a replica
+ * for another, which is Dion's machine (phase 10.5) and every developer's the
+ * moment prod and dev both exist.
+ *
+ * Before phase 10.3 this shape could not be expressed: a configured home
+ * demoted the whole daemon, so a locally-born canvas on a machine with a home
+ * had nowhere to be opened. These two tests are the pair that says the branch
+ * has an input now — one for what it serves, one for what it refuses — and the
+ * refusal is the sharper of them, because it names THAT CANVAS's home rather
+ * than the daemon's.
+ */
+describe("a daemon that is the home of some canvases and a replica for others", () => {
+  /** A canvas born locally on a daemon that also has a birth default. Written
+   * straight to the record rather than through a birth, because what is under
+   * test is the page server reading the record, and a birth would drag a
+   * reachable second daemon into a test about HTTP status codes. */
+  async function withLocalCanvas(birthHome: string, local: string): Promise<string> {
+    await fs.writeFile(p.homesFile(home), JSON.stringify({ [local]: null }));
+    return boot(birthHome);
+  }
+
+  it("serves the app again, because it is somebody's home now", async () => {
+    if (!distBuilt) return; // no build here; the daemon correctly serves nothing
+    const base = await withLocalCanvas(HOME, "prj_acme");
+    // The canvas it hosts opens in a browser, badge and all — which is exactly
+    // what phase 10.5 promises Dion does not lose.
+    const canvas = await fetch(`${base}/p/prj_acme`, { headers: { Accept: "text/html" } });
+    expect(canvas.status).toBe(200);
+    expect(canvas.headers.get("content-type")).toContain("text/html");
+    expect(canvas.headers.get("set-cookie")).toContain(BADGE_COOKIE);
+    // And so does the front page: this daemon is not a pure replica any more,
+    // so `/` and the assets are its to serve.
+    const front = await fetch(`${base}/`, { headers: { Accept: "text/html" } });
+    expect(front.status).toBe(200);
+  });
+
+  it("refuses a canvas that lives elsewhere, naming THAT canvas's home", async () => {
+    // Two canvases: one this daemon is the home of, one recorded as living at
+    // a THIRD address — neither local nor the birth default. That third
+    // address is the whole assertion: a signpost that still named the daemon's
+    // one configured home would pass every other check in this test and print
+    // the wrong address to the person reading it.
+    const elsewhere = "https://widgets.invalid";
+    await fs.writeFile(
+      p.homesFile(home),
+      JSON.stringify({ prj_acme: null, prj_widget: elsewhere }),
+    );
+    const base = await boot(HOME);
+
+    const res = await fetch(`${base}/p/prj_widget`, { headers: { Accept: "text/html" } });
+    expect(res.status).toBe(404);
+    expect(res.headers.get("x-isocan-home")).toBe(elsewhere);
+    expect(await res.text()).toContain(elsewhere);
+    expect(res.headers.get("x-isocan-home")).not.toBe(HOME);
   });
 });
 
