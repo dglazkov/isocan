@@ -93,3 +93,66 @@ describe("drawing a design system", () => {
     }
   });
 });
+
+/**
+ * Every `var(--x)` names a token something defines.
+ *
+ * `var()` on an undefined property with no fallback does not warn, does not
+ * throw, and does not fall back to anything — the declaration is simply
+ * DROPPED. So a one-character typo in a token name is invisible: the rule
+ * still parses, the build is clean, the tests pass, and the element renders
+ * with whatever it would have had anyway.
+ *
+ * Caught the day full screen was built. `.fullscreen` asked for `var(--bg)`,
+ * which this stylesheet has never had — the palette calls it `--ground` — so
+ * an element whose entire job was to COVER the canvas was transparent, and the
+ * canvas showed through the thing hiding it. Same shape as lessons.md #16: a
+ * bad value that never threw.
+ */
+describe("every token used is a token defined", () => {
+  /**
+   * The stylesheet with its prose blanked out — what the browser actually
+   * parses. Comments are replaced by their own newlines rather than removed,
+   * so the line number in a failure still points at the real line.
+   *
+   * Needed because the rule has to be explainable: the comment on `.fullscreen`
+   * names `var(--nope)` to say what an undefined token does, and a check that
+   * reads its own rationale as a violation is a check nobody can document.
+   */
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+
+  /** Names defined anywhere — `:root`, a theme block, or on an element. */
+  function defined(text: string): Set<string> {
+    return new Set([...text.matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]!));
+  }
+
+  /** Names USED, with the fallback arm of `var(--a, var(--b))` counted too. */
+  function used(text: string): Array<{ name: string; line: number }> {
+    const out: Array<{ name: string; line: number }> = [];
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
+      for (const m of line.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)) {
+        out.push({ name: m[1]!, line: i + 1 });
+      }
+    });
+    return out;
+  }
+
+  it("finds tokens at all — the parser has to work for this to mean anything", () => {
+    expect(defined(rules).size).toBeGreaterThan(20);
+    expect(used(rules).length).toBeGreaterThan(50);
+  });
+
+  it("defines every token the stylesheet reads", () => {
+    // `--scale` and `--work-color` are set inline by React (ItemView, the
+    // viewport), never in this file, so they are named here as the two
+    // deliberate exceptions rather than being silently tolerated by the regex.
+    const setInJs = new Set(["--scale", "--work-color", "--who", "--mention-color"]);
+    const known = defined(rules);
+    const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));
+    expect(
+      missing.map((m) => `${m.name} (line ${m.line})`),
+      "these tokens are read but never defined — var() drops the declaration silently",
+    ).toEqual([]);
+  });
+});

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { CANVAS_ROUTE } from "@isocan/core";
+import { CANVAS_ROUTE, ITEM_ROUTE } from "@isocan/core";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";
@@ -94,6 +94,12 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
         {/* The canvas's address, built from core's one spelling of it — see
             `address.ts` for why that is worth a module. */}
         <Route path={CANVAS_ROUTE} element={<CanvasPage actor={actor} onIdentity={setActor} />} />
+        {/* One item, full screen. The SAME element as the canvas, deliberately:
+            the canvas stays mounted underneath, so its socket, its presence
+            session and its viewport all survive, and coming back lands where
+            you left rather than at the top. A sibling route element would tear
+            all of that down and rebuild it. */}
+        <Route path={ITEM_ROUTE} element={<CanvasPage actor={actor} onIdentity={setActor} />} />
         {/* The catch-all, and it is required rather than tidy. The daemon's
             SPA fallback answers every path with the app shell and a 200, so
             without a route here a mistyped or doc-shaped share link renders a

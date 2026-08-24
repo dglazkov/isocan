@@ -443,6 +443,20 @@ that woke you, with no `session start` needed.
   server the human could look at, `isocan browse http://localhost:<port>`
   projects the live site onto the canvas as a mini-browser item — vite
   HMR keeps it current on its own; the item's ⟳ reloads anything else.
+- **Point at one screen, not at the canvas it is on.** `isocan open <item>`
+  prints — and opens — the address of that ONE item, filling the window:
+
+  ```sh
+  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>
+  ```
+
+  Full screen is a route rather than an operation, which is why you can hand
+  it over at all: what somebody is looking at is not a mutation, so there is
+  no op to send, but there IS an address. Nothing is written and nobody else's
+  view moves — it is a link, and the person opening it can leave with Esc or
+  Back. Prefer `#Title` in a comment when you are already writing one (the
+  chip flies them there in place); reach for this when the whole point is to
+  look at one thing with the canvas out of the way.
 - **Versions are the medium for iteration.** "Change X on this item" means
   `edit` → new version. Mention "vN on the stack — fan out (F) to compare"
   in your reply so the human knows the history is there.

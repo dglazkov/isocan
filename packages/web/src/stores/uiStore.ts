@@ -150,10 +150,79 @@ interface UiStore {
   setFilesPanelOpen: (open: boolean) => void;
   setFavouritesOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
+  /** How wide the docked left panel is, in screen pixels. */
+  panelWidth: number;
+  setPanelWidth: (width: number) => void;
+  /** True only while the edge is being dragged — see `setPanelResizing`. */
+  panelResizing: boolean;
+  setPanelResizing: (resizing: boolean) => void;
 }
 
 const INK_KEY = "isocan.ink";
 const MINIMAP_KEY = "isocan.minimap";
+const PANEL_WIDTH_KEY = "isocan.panelWidth";
+
+/**
+ * How wide the docked left panel is, and how wide it may be.
+ *
+ * **The old fixed width is the FLOOR, not the default-and-only.** 320 was
+ * chosen for a composer and a list of filenames; a thread of real messages
+ * with item cards in it wants more, and nothing about the panel needed it to
+ * be the same number forever. Narrower than 320 and the composer's chips wrap
+ * to one per line, so the floor is a real constraint rather than nostalgia.
+ *
+ * The ceiling is measured against the WINDOW, not fixed: the canvas has to
+ * survive. `CANVAS_MIN` is what is left for it — enough to see an item and
+ * the space around it, which is the least that makes the thing behind the
+ * panel still a canvas.
+ */
+export const PANEL_MIN_WIDTH = 320;
+const CANVAS_MIN = 360;
+
+export function maxPanelWidth(windowWidth: number): number {
+  // **A window that measures zero has not been measured.** A hidden or
+  // backgrounded tab reports `innerWidth: 0`, and so does a frame before
+  // layout — and taking that at face value would clamp the panel to its floor
+  // AND write the floor over whatever width the person had chosen, because
+  // this feeds the setter that persists. A preference destroyed by a tab
+  // being in the background is a bug you would only ever see afterwards.
+  //
+  // So an implausible measurement means "no ceiling known", not "no room".
+  if (!Number.isFinite(windowWidth) || windowWidth < PANEL_MIN_WIDTH + CANVAS_MIN) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(PANEL_MIN_WIDTH, windowWidth - CANVAS_MIN);
+}
+
+export function clampPanelWidth(width: number, windowWidth: number): number {
+  // The floor is absolute; the ceiling may be unknown (see `maxPanelWidth`).
+  // A NaN width — a drag whose arithmetic went wrong — lands on the floor
+  // rather than on `NaN`, which would render as no width at all.
+  const wanted = Math.round(width);
+  if (!Number.isFinite(wanted)) return PANEL_MIN_WIDTH;
+  return Math.min(Math.max(wanted, PANEL_MIN_WIDTH), maxPanelWidth(windowWidth));
+}
+
+/** The width you last dragged it to. A number in range, or the floor —
+ * a stored value from a wider monitor must not strand the panel off-screen,
+ * so it is clamped on the way in as well as on the way out. */
+function readPanelWidth(): number {
+  try {
+    const raw = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    if (!Number.isFinite(raw) || raw <= 0) return PANEL_MIN_WIDTH;
+    return clampPanelWidth(raw, typeof window === "undefined" ? 1280 : window.innerWidth);
+  } catch {
+    return PANEL_MIN_WIDTH;
+  }
+}
+
+function writePanelWidth(width: number): void {
+  try {
+    localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+  } catch {
+    // Storage denied: the width holds for this session and no longer.
+  }
+}
 
 function readFlag(key: string, fallback: boolean): boolean {
   try {
@@ -226,6 +295,8 @@ export const useUiStore = create<UiStore>((set) => {
     commandBarOpen: false,
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
+    panelWidth: readPanelWidth(),
+    panelResizing: false,
     filesPanelOpen: false,
     favouritesOpen: false,
     peekedItemId: null,
@@ -291,6 +362,23 @@ export const useUiStore = create<UiStore>((set) => {
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
     setFavouritesOpen: (favouritesOpen) => set({ favouritesOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
+    /**
+     * Chrome that steps aside for the panel EASES to its new place, which is
+     * right when the panel opens or closes — one step, and a thing that
+     * teleports reads as a glitch. It is wrong while the edge is being
+     * dragged: the width changes every frame, so a 0.22s ease means the
+     * minimap trails your hand the whole way and settles a fifth of a second
+     * after you stop. This flag is how the stylesheet tells those two apart.
+     */
+    setPanelResizing: (panelResizing) => set({ panelResizing }),
+    setPanelWidth: (width) => {
+      // Clamped HERE rather than at the drag, so every caller gets the same
+      // answer: the keyboard resize, a restored value, and a pointer that
+      // travelled past the window edge all land in range.
+      const panelWidth = clampPanelWidth(width, window.innerWidth);
+      writePanelWidth(panelWidth);
+      set({ panelWidth });
+    },
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);
       set({ minimapOpen });

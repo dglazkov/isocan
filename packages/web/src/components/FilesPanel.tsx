@@ -3,11 +3,12 @@ import { createPortal } from "react-dom";
 import type { CanvasState, Item } from "@isocan/core";
 import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
 import { KIND_LABEL, iconKindFor } from "../lib/kinds.ts";
+import { PanelResizer } from "./PanelResizer.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
-import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
+
 import { ItemThumb } from "./ItemThumb.tsx";
 import { openPanel } from "../lib/panels.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
@@ -71,6 +72,7 @@ function rowsOf(canvas: CanvasState, filter: string): Array<[ItemKind, Row[]]> {
 
 export function FilesPanel({ projectId }: { projectId: string }) {
   const open = useUiStore((s) => s.filesPanelOpen);
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const canvas = useCanvasStore((s) => s.canvas);
   const selected = useUiStore((s) => s.selectedItemIds);
   const [filter, setFilter] = useState("");
@@ -92,7 +94,8 @@ export function FilesPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <aside className="files-panel" aria-label="Files on this canvas">
+    <aside className="files-panel" style={{ width: panelWidth }} aria-label="Files on this canvas">
+      <PanelResizer />
       <header>
         <span className="files-glyph">▤</span>
         <b>Files</b>
@@ -169,6 +172,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
  */
 function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: number }) {
   const names = useActorNames();
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const versions = row.item.versions.length;
   // Never off the top or bottom of the window it is meant to be read on.
   const clamped = Math.min(Math.max(top, 96), window.innerHeight - 96);
@@ -176,7 +180,7 @@ function FileCard({ projectId, row, top }: { projectId: string; row: Row; top: n
   // panel, and inside a panel's stacking context no z-index can lift it over
   // chrome that outranks the panel.
   return createPortal(
-    <div className="hover-card file-card" style={{ left: PANEL_WIDTH + 10, top: clamped }}>
+    <div className="hover-card file-card" style={{ left: panelWidth + 10, top: clamped }}>
       <ItemThumb projectId={projectId} itemId={row.item.id} />
       <div className="file-card-text">
         <b>{row.item.title}</b>
