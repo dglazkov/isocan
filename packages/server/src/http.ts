@@ -31,6 +31,8 @@ import type {
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
+  AUTH_ACTION_PATH,
+  authActionOutcome,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -1722,6 +1724,67 @@ export function registerRoutes(
     const stream = await store.openBlob(id, hash);
     if (!stream) return reply.status(404).send({ error: "blob not found" });
     return reply.header("Content-Length", String(meta.size)).send(stream);
+  });
+
+  /**
+   * **`GET /__/auth/action` — a Firebase-shaped path, answered by isocan.**
+   *
+   * Registered HERE, immediately above `registerPages`, so that the SPA
+   * fallback cannot swallow it. That is what it was doing:
+   * `https://dev.isocan.io/__/auth/action` answered **200 and the app shell**
+   * on 2026-08-24, which is this codebase's oldest recurring failure — the
+   * default answer to a wrong address is a cheerful one. (Fastify's router
+   * prefers a static route to `/*` whatever the order, so the guard against a
+   * later reordering is the test, not this line. The line is still where a
+   * reader looks.)
+   *
+   * **Why isocan serves a path the provider named.** Sign-in mail was going to
+   * spam: Identity Platform sends from `noreply@<project>.firebaseapp.com`,
+   * with no SPF or DKIM alignment to `isocan.io`. Fixing that means a custom
+   * sender domain, and the provider moves the From: address and the
+   * action-link domain **together** — so the domain the mail claims has to
+   * answer `/__/auth/action`. The alternative, `auth.isocan.io` on Firebase
+   * Hosting, is the one-origin rule broken for the one link that most needs to
+   * look like the product: a stranger's first sight of isocan would be a
+   * hostname isocan does not use. Serving it here keeps one origin and removes
+   * Firebase Hosting from the dependency chain.
+   *
+   * **This is a provider contract observed from outside, and it was measured
+   * rather than read.** A real link was generated on 2026-08-24 through
+   * `accounts:sendOobCode` with `returnOobLink: true`; the five parameters and
+   * the unencoded `continueUrl` in `authaction.ts` are what came back. If
+   * Firebase changes them, this breaks, and nothing warns us first — the
+   * fixture in `packages/server/test/authaction.test.ts` is the record of what
+   * was true on the day.
+   *
+   * The decision itself is `authActionOutcome` in core, not inline here: the
+   * web app strips the same parameter list on landing, and a rule with two
+   * homes has none (house rule 4, lessons.md #5).
+   */
+  app.get(AUTH_ACTION_PATH, async (req, reply) => {
+    const outcome = authActionOutcome(req.query as Record<string, unknown>);
+    /**
+     * A legible 400, not a redirect and never a 200.
+     *
+     * `text/plain` because the only caller is a PERSON who clicked a link in a
+     * mail client — nothing parses this, so the codebase's `{error}` envelope
+     * would be a JSON blob rendered as a page. `nosniff` because the body
+     * repeats a fragment of a query string and a browser that guessed `text/html`
+     * would be a way in. `no-store` on both answers: a URL carrying a
+     * single-use credential has nothing anybody should keep.
+     */
+    if ("refusal" in outcome) {
+      return reply
+        .status(400)
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Cache-Control", "no-store")
+        .send(outcome.refusal);
+    }
+    // 302 and a same-origin PATH. `authActionOutcome` discards the host it was
+    // given rather than checking it, so there is no absolute URL here to get
+    // wrong — see the argument in `authaction.ts`.
+    return reply.header("Cache-Control", "no-store").redirect(outcome.redirect, 302);
   });
 
   // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
