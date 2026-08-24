@@ -101,8 +101,74 @@ export interface NameHolder {
   live: boolean;
 }
 
-/** Names hiding in the letters of "isocan" — the allocation roster a claim
- * with no name draws from, in order. */
+/**
+ * **A name that starts the way your harness does.**
+ *
+ * Three agents called Isaac, Kenny and Nico tell a person nothing about which
+ * is which, and the person is the one who has to @-mention the right one. A
+ * Claude that comes up as Charlie is legible at a glance.
+ *
+ * **The initial only, and never the vendor's own name.** `--agent-help` is
+ * emphatic that an agent needs a name of its own — "Claude", "GPT" and
+ * "Gemini" are all wrong, and any harness must be able to run that guide. A
+ * shared first letter is a hint; the name is still the agent's. The cost is
+ * real and worth naming: after a week "Charlie" does read as "the Claude one",
+ * which is a little of the coupling that rule exists to prevent. Taken
+ * deliberately, because the legibility is worth more at three agents on a
+ * canvas than the purity is.
+ *
+ * **Two harnesses can share a letter, and one letter can hold two agents.**
+ * `claude-code` and `codex` both start with C, and two Claudes are ordinary.
+ * Both fall out of the same rule rather than needing one of their own: the
+ * roster is drawn in order and skips what is taken, so the second C agent is
+ * Cass, not "Charlie 2". When a letter's three are gone, allocation falls
+ * through to the isocan roster below, which is also where an unknown harness —
+ * or no harness at all — starts.
+ */
+const INITIAL_NAMES: Readonly<Record<string, readonly string[]>> = {
+  a: ["Ada", "Arlo", "Anya"],
+  b: ["Bo", "Bram", "Bea"],
+  c: ["Charlie", "Cass", "Cleo"],
+  d: ["Dara", "Dov", "Della"],
+  e: ["Esme", "Ewan", "Elu"],
+  f: ["Fen", "Faye", "Flor"],
+  g: ["Gina", "Gus", "Gale"],
+  h: ["Hana", "Hugo", "Hale"],
+  i: ["Ines", "Ivo", "Isla"],
+  j: ["Juno", "Jai", "Jess"],
+  k: ["Kit", "Kai", "Kira"],
+  l: ["Lore", "Luca", "Liv"],
+  m: ["Mira", "Milo", "Mae"],
+  n: ["Noor", "Nils", "Nell"],
+  o: ["Orin", "Ola", "Odie"],
+  p: ["Pip", "Pax", "Posy"],
+  q: ["Quinn", "Quill", "Qi"],
+  r: ["Remy", "Rue", "Ro"],
+  s: ["Sage", "Soren", "Sol"],
+  t: ["Tess", "Thea", "Toma"],
+  u: ["Uma", "Uri", "Udo"],
+  v: ["Vera", "Vik", "Vale"],
+  w: ["Wren", "Wes", "Willa"],
+  x: ["Xan", "Xia", "Xola"],
+  y: ["Yuki", "Yael", "Yann"],
+  z: ["Zia", "Zed", "Zoe"],
+};
+
+/**
+ * The harness that named this session, out of the session key.
+ *
+ * Keys are `<harness>:<session id>` (`ops.ts`), so this needs no new field on
+ * the op and no round trip — every replica replaying the same claim sees the
+ * same key and derives the same letter, which is what keeps allocation
+ * deterministic on both surfaces.
+ */
+export function harnessOf(sessionKey: string | undefined): string | null {
+  const harness = sessionKey?.split(":")[0]?.trim();
+  return harness ? harness : null;
+}
+
+/** Names hiding in the letters of "isocan" — where allocation starts when the
+ * harness is unknown, and where it lands when a letter's names run out. */
 export const ISOCAN_NAMES = [
   "Isaac",
   "Kenny",
@@ -282,13 +348,13 @@ export function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimResult {
 
   if (op.fresh) {
     // A second Kenny on purpose: no collision checks, a brand-new actor.
-    return settle({ id: mint(), name: op.name ?? allocateName(ctx) });
+    return settle({ id: mint(), name: op.name ?? allocateName(ctx, harnessOf(op.sessionKey)) });
   }
 
   if (!op.name) {
     // "Who am I?" / "hand me a name": resume this key, or allocate.
     if (mine) return settle({ id: mine.actorId, name: nameOf(ctx, mine.actorId) });
-    return settle({ id: mint(), name: allocateName(ctx) });
+    return settle({ id: mint(), name: allocateName(ctx, harnessOf(op.sessionKey)) });
   }
 
   if (mine) {
@@ -667,15 +733,28 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
  * would allocate here. Building a second, similar allocator for that route is
  * exactly the shape of the bug it exists to fix.
  */
-export function allocateName(ctx: ClaimContext): string {
+export function allocateName(ctx: ClaimContext, harness?: string | null): string {
   const taken = new Set<string>();
   for (const holder of ctx.held) taken.add(holder.actor.name.trim().toLowerCase());
   for (const row of ctx.scoped) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
   // The authority's pick goes first, and is still checked here — so allocation
   // keeps its one promise even when the home's answer has gone stale between
   // the asking and the claiming, or when there was no home to ask.
+  //
+  // It outranks the harness pick deliberately, and only replicas ever have
+  // one: `preferred` is the home's answer about a namespace this machine
+  // cannot see, and a legible initial is not worth handing out a name that is
+  // taken where it counts. On a home — which is every machine that has not
+  // been pointed at one — it is absent and the initial leads.
   const preferred = ctx.preferred?.trim();
   if (preferred && !taken.has(preferred.toLowerCase())) return preferred;
+  // A name starting the way the harness does, when the harness is one we can
+  // take a letter from. Skipping what is taken is what makes a second Claude
+  // "Cass" rather than "Charlie 2".
+  const initial = harness?.trim().toLowerCase()[0];
+  for (const name of (initial && INITIAL_NAMES[initial]) || []) {
+    if (!taken.has(name.toLowerCase())) return name;
+  }
   for (let round = 1; ; round++) {
     for (const base of ISOCAN_NAMES) {
       const name = round === 1 ? base : `${base} ${round}`;

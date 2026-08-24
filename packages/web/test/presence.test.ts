@@ -8,6 +8,7 @@ function session(overrides: Partial<PresenceSession>): PresenceSession {
     sessionId: "s1",
     actor: { id: "a1", name: "Ada" },
     kind: "cli",
+    harness: null,
     label: null,
     cursor: null,
     selection: [],

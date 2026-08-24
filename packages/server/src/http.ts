@@ -1598,6 +1598,7 @@ export function registerRoutes(
     await engine.requireActor(req.badge!.badgeId, body.actor.id);
     const session = presence.createSession(id, body.actor, "cli", {
       ...(body.label !== undefined ? { label: body.label } : {}),
+      ...(body.harness !== undefined ? { harness: body.harness } : {}),
     });
     return { sessionId: session.sessionId, ttlMs: SESSION_TTL_MS };
   });

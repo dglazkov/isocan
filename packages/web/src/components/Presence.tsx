@@ -234,7 +234,10 @@ function goToActivity(entry: ActivityEntry): void {
 function tooltip(face: Face): string {
   if (face.self) return `${face.label} (you) · click to rename or switch`;
   const parts = [face.label];
-  if (face.kind === "cli") parts.push("terminal");
+  // Which agent, when we know — "terminal" is true of every one of them and
+  // therefore the least useful thing this card could say about a row of three.
+  if (face.harness) parts.push(face.harness);
+  else if (face.kind === "cli") parts.push("terminal");
   if (face.status) parts.push(face.status);
   if (face.unread > 0) parts.push(`${face.unread} new — click to read`);
   else if (face.cursor) parts.push("click to jump to them");

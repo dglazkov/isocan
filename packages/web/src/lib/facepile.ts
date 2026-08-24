@@ -27,6 +27,8 @@ export interface Face {
   label: string;
   live: boolean;
   kind: PresenceSession["kind"] | null;
+  /** Which agent this is — `claude-code`, `codex` — or null for a person. */
+  harness: string | null;
   /** What they are up to, for the tooltip. */
   status: string | null;
   cursor: { x: number; y: number } | null;
@@ -94,6 +96,7 @@ export function facesFor(
       label: session.label ?? session.actor.name,
       live: true,
       kind: session.kind,
+      harness: session.harness,
       status: describe(session),
       cursor: session.cursor,
       unread: unreadBy.get(session.actor.id)?.count ?? 0,
@@ -107,6 +110,7 @@ export function facesFor(
       label: author.name,
       live: false,
       kind: null,
+      harness: null,
       status: "not here — left a comment",
       cursor: null,
       unread: count,
@@ -125,6 +129,7 @@ export function facesFor(
       label: self.name,
       live: true,
       kind: "web",
+      harness: null,
       status: null,
       cursor: null,
       unread: 0,

@@ -101,6 +101,22 @@ export interface PresenceSession {
   sessionId: string;
   actor: Actor;
   kind: "web" | "cli";
+  /**
+   * Which harness this agent is — `claude-code`, `codex`, `gemini`.
+   *
+   * The daemon has always KNOWN this (session keys are `<harness>:<id>`) and
+   * never showed it, so the one question a person actually has about a row of
+   * agents — which of these is which — had no answer anywhere. Names carry a
+   * hint of it now (a Claude comes up as Charlie), but a hint is not a label,
+   * and an agent that asked for its own name has none.
+   *
+   * Client-asserted like the rest of presence, and null for a person: a
+   * browser tab is a person at a browser, and saying "web" twice is not a
+   * fact. It lives on the SESSION rather than the actor because it is a
+   * property of this run — the same agent resumed under another harness is
+   * still that agent.
+   */
+  harness: string | null;
   /** Display override; fall back to actor.name. */
   label: string | null;
   cursor: { x: number; y: number } | null;
@@ -142,6 +158,8 @@ export type PresenceActivity =
 export interface CreateSessionRequest {
   actor: Actor;
   label?: string;
+  /** See `PresenceSession.harness`. */
+  harness?: string;
 }
 
 export interface CreateSessionResponse {

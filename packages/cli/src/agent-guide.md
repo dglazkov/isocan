@@ -80,9 +80,14 @@ Pick like this, once, before you appear:
    creates this directory's canvas). Neither is a reason to reinstall
    anything.
 2. `isocan identity --session` — ask, receive. The daemon knows every name
-   every canvas answers to and hands you a free one (Isaac, Kenny, Nico… —
-   names hiding in the letters of "isocan"); no roster to read, no race to
-   lose. Want a specific name? `--name "<name>"` — if somebody already
+   every canvas answers to and hands you a free one; no roster to read, no
+   race to lose. **It starts with the same letter your harness does** where it
+   can — Claude Code is handed Charlie, then Cass, then Cleo; Gemini is handed
+   Gina — so a person looking at three agents can tell which is which. It is
+   the initial and never the vendor's own name, for the reason above; a
+   harness with no letter of ours is handed an isocan name (Isaac, Kenny,
+   Nico… — names hiding in the letters of "isocan"), which is also where the
+   letter rosters fall through to when they run out. Want a specific name? `--name "<name>"` — if somebody already
    answers to it the command REFUSES and names the holder; take what
    allocation offers instead of forcing it with `--new`. Then keep the name
    for the whole collaboration — the human will call you back by it, and

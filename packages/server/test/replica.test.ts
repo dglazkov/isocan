@@ -530,6 +530,8 @@ describe("a name allocated on a replica is a name the home will accept", () => {
     const mine = await mintTestBadge(base);
     const claimed = await claimNameless(base, mine, "claude-code:s-1");
     expect(claimed.status).toBe(200);
-    expect(claimed.actor!.name).toBe(ISOCAN_NAMES[0]);
+    // Its own scope, and its own harness: no home answered, so nothing
+    // outranks the C roster this `claude-code` claim reaches for.
+    expect(claimed.actor!.name).toBe("Charlie");
   });
 });

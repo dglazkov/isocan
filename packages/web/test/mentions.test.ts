@@ -14,6 +14,7 @@ function session(
     sessionId: `ses_${actor.id}`,
     actor,
     kind: "cli",
+    harness: null,
     label,
     cursor: null,
     selection: [],

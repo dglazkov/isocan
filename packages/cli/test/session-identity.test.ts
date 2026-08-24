@@ -217,31 +217,37 @@ describe("a session is a key, not a person", () => {
 });
 
 describe("ask, receive", () => {
-  it("a claim with no name is handed the next free isocan name", async () => {
+  it("a claim with no name is handed a name that starts like its harness", async () => {
+    // These claim as `claude-code`, so they draw from the C roster before the
+    // isocan one — a person looking at three agents can tell which is which.
     const first = await asAgent(claude("s-1"), "identity", "--session");
     expect(first.code).toBe(0);
-    expect(first.stdout).toContain("Isaac"); // the roster, in order
+    expect(first.stdout).toContain("Charlie"); // the C roster, in order
 
     const second = await asAgent(claude("s-2"), "identity", "--session");
-    expect(second.stdout).toContain("Kenny"); // Isaac is taken — no race, no retry
+    expect(second.stdout).toContain("Cass"); // Charlie is taken — no race, no retry
 
     // And asking again is being told who you already are, not a third name.
     const again = await asAgent(claude("s-1"), "identity", "--session");
-    expect(again.stdout).toContain("Isaac");
+    expect(again.stdout).toContain("Charlie");
     expect(idOf(again.stdout)).toBe(idOf(first.stdout));
   });
 
   it("allocation skips names the canvases answer to, not just claimed ones", async () => {
-    await asAgent({}, "canvas", "create", "Isaac's Own"); // Nico's canvas...
-    await asAgent({}, "session", "start", "--canvas", "Isaac's Own");
-    // ...but rename the human to Isaac so the name is on the canvas's record.
-    await asAgent({}, "identity", "--name", "Isaac", "--home");
-    await asAgent({}, "ls", "--canvas", "Isaac's Own"); // put the new name on a live face
+    // The taken name has to be one this agent would otherwise WANT, or the
+    // case passes for the wrong reason: a `claude-code` claim draws from the C
+    // roster, so parking the human on Isaac would prove nothing now. Charlie
+    // is the name it is actually reaching for.
+    await asAgent({}, "canvas", "create", "Charlie's Own");
+    await asAgent({}, "session", "start", "--canvas", "Charlie's Own");
+    // Rename the human to Charlie so the name is on the canvas's record.
+    await asAgent({}, "identity", "--name", "Charlie", "--home");
+    await asAgent({}, "ls", "--canvas", "Charlie's Own"); // put it on a live face
 
     const claimed = await asAgent(claude("s-1"), "identity", "--session");
     expect(claimed.code).toBe(0);
-    expect(claimed.stdout).not.toContain("Isaac ("); // not handed the human's name
-    expect(claimed.stdout).toContain("Kenny");
+    expect(claimed.stdout).not.toContain("Charlie ("); // not handed the human's name
+    expect(claimed.stdout).toContain("Cass"); // the next one in its own roster
   });
 });
 
