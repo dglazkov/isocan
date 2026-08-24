@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { ItemPeek } from "./ItemThumb.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -19,6 +21,17 @@ const PAD = 8;
  */
 export function Minimap() {
   const colors = useActorColors();
+  const projectId = useCanvasStore((s) => s.projectId);
+  /**
+   * Which node the pointer is on, and where to hang its card.
+   *
+   * `ItemPeek`'s own note says it is "the same card the edge radar opens off a
+   * beacon and the files panel opens off a row — one question ('what is this?')
+   * deserves one answer, in one voice, wherever it is asked." The map was the
+   * one surface asking the question and not answering it: a grid of grey
+   * rectangles that gives no way to tell which is the checkout screen.
+   */
+  const [peek, setPeek] = useState<{ itemId: string; x: number; top: number } | null>(null);
   const open = useUiStore((s) => s.minimapOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -119,12 +132,32 @@ export function Minimap() {
           {Object.values(canvas.items).map((item) => (
         <rect
           key={item.id}
+          className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}`}
           x={mapX(item.x)}
           y={mapY(item.y)}
           width={Math.max(item.width * scale, 2)}
           height={Math.max(item.height * scale, 2)}
-          fill="#c6c9c0"
           rx={1}
+          onPointerEnter={(e) => {
+            // Measured off the MAP, not the node: a card that shifted a few
+            // pixels as you slid along a row of screens would flicker, and the
+            // map's own top edge is the one line it must clear. The node only
+            // decides left-right.
+            const box = (e.currentTarget.ownerSVGElement ?? e.currentTarget).getBoundingClientRect();
+            const node = e.currentTarget.getBoundingClientRect();
+            setPeek({
+              itemId: item.id,
+              x: node.left + node.width / 2,
+              top: box.top,
+            });
+            // The same gesture the files panel makes: pointing at a row points
+            // at the thing itself, which outlines on the canvas behind.
+            useUiStore.getState().setPeeked(item.id);
+          }}
+          onPointerLeave={() => {
+            setPeek(null);
+            useUiStore.getState().setPeeked(null);
+          }}
         />
       ))}
           {standing.map(({ session, locus }) => (
@@ -155,6 +188,21 @@ export function Minimap() {
           />
         </svg>
       </div>
+      {peek && projectId && (
+        <ItemPeek
+          projectId={projectId}
+          itemId={peek.itemId}
+          // ABOVE the map, because the map lives in a bottom corner and a card
+          // hanging below it would be off the window. Centred on the node and
+          // then clamped, so a screen at the far edge of the map still shows
+          // its card on screen rather than half of one.
+          style={{
+            left: Math.min(Math.max(peek.x, 130), window.innerWidth - 130),
+            top: peek.top - 12,
+            transform: "translate(-50%, -100%)",
+          }}
+        />
+      )}
     </div>
   );
 }

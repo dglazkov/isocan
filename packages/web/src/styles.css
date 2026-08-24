@@ -1383,6 +1383,19 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The minimap folds into its corner. The dock is the anchor both states share:
    the map slides down and out of it, the handle fades up in its place, so the
    two read as one thing changing shape rather than two things swapping. */
+/* The items on the map.
+   
+   The fill was a literal `#c6c9c0` in the component — inline SVG in a .tsx is
+   the one place `tokens.test.ts` cannot see, so the map had been drawing the
+   same grey in dark mode since it was written. It is a token now.
+   
+   Pointing at one turns it the accent: the same answer the files panel gives a
+   hovered row, and the same accent the item itself wears while peeked — one
+   colour for "this one", wherever you happen to be pointing at it from. */
+.minimap-item { fill: var(--chip-line); transition: fill 0.1s ease; }
+.minimap-item.peeked { fill: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .minimap-item { transition: none; } }
+
 .minimap-dock {
   position: absolute; bottom: 16px; z-index: var(--z-float);
   /* left comes from the component: it steps aside for a docked panel. */
