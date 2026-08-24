@@ -868,7 +868,7 @@ button, select { color: inherit; }
 }
 .main-empty { color: var(--ink-muted); padding-bottom: 6px; }
 .main-panel form {
-  display: flex; flex-wrap: wrap; gap: 6px; flex: none; padding: 10px 12px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; flex: none; padding: 10px 12px;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -993,6 +993,17 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow: auto; resize: none;
 }
 .mention-field.multiline .mention-input { min-height: 54px; resize: vertical; }
+/* A composer costs one line at rest and grows into what you are writing, up to
+   a share of the panel — past that it scrolls, and the backdrop rides along.
+   The cap is there because a field that grows without limit eventually eats
+   the conversation it is a reply to. */
+.mention-field.grow .mention-input,
+.mention-field.grow .mention-backdrop {
+  white-space: pre-wrap; overflow-wrap: break-word;
+}
+.mention-field.grow .mention-input {
+  min-height: 0; resize: none; max-height: 40vh; overflow-y: auto;
+}
 .mention-field .mention-backdrop {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none;
   color: transparent; user-select: none;

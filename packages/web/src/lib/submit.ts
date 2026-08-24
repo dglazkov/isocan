@@ -14,3 +14,24 @@ export function submitOnCmdEnter(e: KeyboardEvent<HTMLElement>): void {
   e.preventDefault();
   form.requestSubmit();
 }
+
+/**
+ * Enter sends; Shift+Enter makes a newline.
+ *
+ * An <input> in a form submits on Enter for free. A <textarea> does not — it
+ * types a newline — so a field that grows has to say this out loud or sending
+ * a message quietly stops working the day it learns to wrap.
+ *
+ * Skips a key somebody already claimed: the mention menu preventDefaults Enter
+ * to complete a name, and preventDefault does not stop the event bubbling to
+ * the form. Without this check, picking "@Fable" from the menu would also post
+ * the half-written message.
+ */
+export function submitOnEnter(e: KeyboardEvent<HTMLElement>): void {
+  if (e.key !== "Enter" || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.defaultPrevented) return;
+  const form = e.currentTarget.closest("form");
+  if (!form) return;
+  e.preventDefault();
+  form.requestSubmit();
+}
