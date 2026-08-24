@@ -25,6 +25,16 @@ many doorways — please keep it that way rather than copying it into a new
 harness's directory, and keep it short: a skill sits in a directory for
 months, so anything it says about the CLI is a copy that ages.
 
+## Starting a project from scratch
+
+[`docs/new-project.md`](docs/new-project.md) is the bootstrap walk: empty
+directory → git repo → a canvas bound to the directory by a committed
+`.isocan/project.json` → several agents, each named by its own harness session,
+parked on `isocan wait`. Read it when someone asks how to *start* something on a
+canvas rather than how to work on one that exists.
+[`scripts/new-project.sh`](scripts/new-project.sh) is that walk in one
+idempotent command; the doc stays the explanation of what each step was for.
+
 ## The multiuser build
 
 The hosted/multiuser work has its own docs, read in this order:
