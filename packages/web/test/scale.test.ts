@@ -47,9 +47,9 @@ const outside = bare.replace(/:root[^{]*\{[^}]*\}/gs, "");
  * the hairline it sits inside, and counting it as a 15th radius step is how the
  * first draft of this test failed.
  */
-function lengths(property: RegExp): number[] {
+function lengths(property: RegExp, text: string = outside): number[] {
   const out: number[] = [];
-  for (const declaration of outside.matchAll(property)) {
+  for (const declaration of text.matchAll(property)) {
     const value = declaration[declaration.length - 1] ?? "";
     if (/var\(--/.test(value)) continue;
     for (const px of value.matchAll(/(\d*\.?\d+)px/g)) out.push(parseFloat(px[1]!));
@@ -61,9 +61,56 @@ const SPACING = /(?:^|[;{\s])(?:margin|padding|gap|row-gap|column-gap)(?:-(?:top
 const RADIUS = /(?:^|[;{\s])border(?:-[a-z]+)?-radius\s*:\s*([^;{}]+)/g;
 const FONT_SIZE = /(?:^|[;{\s])font-size\s*:\s*([^;{}]+)/g;
 
-const spacing = lengths(SPACING);
-const radii = lengths(RADIUS);
-const sizes = [...outside.matchAll(FONT_SIZE)].map((m) => (m[1] ?? "").trim());
+/**
+ * **Two surfaces, two scales, two measurements.**
+ *
+ * This file was measured against the app — the canvas, its panels, its chrome
+ * — and every number in it was right for that. Then the front page arrived and
+ * pushed all three counts over at once, and the first instinct (tokenize the
+ * page's steps) was wrong twice over: the page was redesigned again within the
+ * hour, so the tokens were obsolete before they were pushed, and a landing
+ * page squeezed into 12/14/16 would read like a settings dialog anyway.
+ *
+ * Measured rather than argued: partitioning the stylesheet gives the APP
+ * spacing 25, radii 14, type 17 — exactly this file's original numbers. The
+ * front page was the whole of the excess. So the split costs the app's guard
+ * nothing and keeps it at full strength on the surface it was written for.
+ *
+ * The front page gets its own counts rather than an exemption. It is younger
+ * and still being designed, so its numbers are expected to move — but
+ * deliberately, in a diff, which is the entire point of counting.
+ */
+function partition(): { app: string; front: string } {
+  const app: string[] = [];
+  const front: string[] = [];
+  for (const rule of outside.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    (/\.front[-\b]/.test(rule[1] ?? "") ? front : app).push(rule[0]);
+  }
+  return { app: app.join("\n"), front: front.join("\n") };
+}
+const { app: APP_CSS, front: FRONT_CSS } = partition();
+
+const spacing = lengths(SPACING, APP_CSS);
+const radii = lengths(RADIUS, APP_CSS);
+const frontSpacing = lengths(SPACING, FRONT_CSS);
+const frontRadii = lengths(RADIUS, FRONT_CSS);
+/**
+ * Font sizes, skipping any value that names a token — for the same reason
+ * `lengths` skips them, which this originally did not.
+ *
+ * A size behind a custom property is not a step being invented; it is one
+ * being DECLARED, which is the second half of this file's own instruction
+ * ("reuse one of these, or add a token"). Counting `var(--front-title)` as a
+ * distinct size made that instruction impossible to follow: taking the token
+ * route failed the test that asked for it, and the only way to green was to
+ * inline the literal the test was written to discourage.
+ */
+const typeIn = (text: string) =>
+  [...text.matchAll(FONT_SIZE)]
+    .map((m) => (m[1] ?? "").trim())
+    .filter((value) => !/var\(--/.test(value));
+const sizes = typeIn(APP_CSS);
+const frontSizes = typeIn(FRONT_CSS);
 
 const distinct = (values: number[]) => [...new Set(values)].sort((a, b) => a - b);
 
@@ -203,5 +250,59 @@ describe("type sizes", () => {
       sizes.flatMap((v) => [...v.matchAll(/(\d*\.?\d+)px/g)].map((m) => parseFloat(m[1]!))),
     ).filter((v) => !Number.isInteger(v));
     expect(halves, "a half-pixel size does not land on a device pixel at 1x").toEqual(HALF_PIXEL);
+  });
+});
+
+/**
+ * The front page's own scale.
+ *
+ * Counted apart from the app for the reason argued at `partition`: it is a
+ * marketing column read at arm's length, not a panel read at working distance,
+ * and holding it to the app's steps would be this file imposing a taste it
+ * explicitly disclaims. What it is held to is the same weak, useful claim —
+ * do not invent a 18th step by eyeball — measured on 2026-08-24 against the
+ * page as redesigned that afternoon.
+ *
+ * These numbers are expected to move while the page is being designed. Moving
+ * them in a diff, with a reason, is the whole point; discovering afterwards
+ * that a page grew four type sizes nobody chose is what this prevents.
+ */
+describe("the front page's scale", () => {
+  it("is actually being measured — the parser has to find it", () => {
+    // Same reason as every other counter here: a parser that stopped matching
+    // reports zero and passes (lessons.md #8, #14).
+    expect(FRONT_CSS.length, "no front-page rules found — renamed?").toBeGreaterThan(500);
+    expect(distinct(frontSpacing).length).toBeGreaterThan(5);
+  });
+
+  it("invents no new spacing step", () => {
+    expect(
+      distinct(frontSpacing).length,
+      `front-page spacing: ${distinct(frontSpacing).join(", ")}. Reuse one, or add a token.`,
+    ).toBe(17);
+  });
+
+  it("keeps to one corner radius that is not the token", () => {
+    // 12 — a card corner larger than `--radius`, which the page uses for the
+    // wide panels the app has no equivalent of.
+    expect(
+      distinct(frontRadii),
+      `front-page radii: ${distinct(frontRadii).join(", ")}`,
+    ).toEqual([12]);
+  });
+
+  it("invents no new type size", () => {
+    const distinctSizes = [...new Set(frontSizes)];
+    expect(
+      distinctSizes.length,
+      `front-page type: ${distinctSizes.sort().join(", ")}. Reuse one.`,
+    ).toBe(9);
+  });
+
+  it("uses fluid type only for the two display lines", () => {
+    // `clamp()` is right for a headline that has to hold from a phone to a
+    // desktop and wrong for body copy, where it makes a size nobody can name.
+    const fluid = frontSizes.filter((one) => one.startsWith("clamp("));
+    expect(fluid.length, `fluid sizes: ${fluid.join(" | ")}`).toBe(2);
   });
 });
