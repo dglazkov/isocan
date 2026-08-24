@@ -388,3 +388,46 @@ describe("what a card says as it shrinks", () => {
     expect(row.nameRoom).toBeCloseTo(MIN_NAME_ROOM, 6);
   });
 });
+
+/**
+ * A control inside an inert strip has to take its events back.
+ *
+ * `.item-hint` is `pointer-events: none` on purpose: it hangs under an item,
+ * over the canvas, and a hint must never eat a click meant for the thing
+ * behind it. The Full screen button lives in that strip and is the one part of
+ * it that IS a control, so it has to opt back in.
+ *
+ * It shipped without doing so. The button rendered, looked pressable, and was
+ * not: `elementFromPoint` over its middle returned the canvas viewport. It got
+ * through because the check that was supposed to catch it called
+ * `button.click()` — which invokes the handler directly and never consults hit
+ * testing, so it passes on an element buried under a wall. lessons.md #20.
+ */
+describe("the strip under an item lets its one control be clicked", () => {
+  const css = readFileSync(
+    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+    "utf8",
+  );
+
+  function block(selector: string): string {
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const rule of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selectors = (rule[1] ?? "").split(",").map((one) => one.trim());
+      if (selectors.includes(selector)) return rule[2] ?? "";
+    }
+    return "";
+  }
+
+  it("keeps the strip itself inert — the half that is deliberate", () => {
+    // Stated so the pair is held together: if this ever stops being none, the
+    // opt-out below is dead weight and somebody should know.
+    expect(block(".item-hint")).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("gives the button its events back", () => {
+    expect(
+      block(".fullscreen-btn"),
+      "inside a pointer-events:none strip a button is decoration — it needs pointer-events: auto",
+    ).toMatch(/pointer-events:\s*auto/);
+  });
+});
