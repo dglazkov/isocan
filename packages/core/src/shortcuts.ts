@@ -58,6 +58,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Shift F"], does: "Fit the item to its content", group: "Items", note: "Grows the selection to the size its content wants and settles it so nothing overlaps. F fits the VIEW to an item; Shift F fits the ITEM to what is in it" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
+  { keys: ["Select it, then scroll"], does: "Scroll an item's content without stepping inside", group: "Items", note: "A drag still moves it — only the wheel is handed over. A page in a frame still has to be entered" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },
   { keys: ["⌥-click"], does: "Reach the item underneath", group: "Items" },
   { keys: ["Drag a box"], does: "Select several", group: "Items" },

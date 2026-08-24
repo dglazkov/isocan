@@ -72,6 +72,34 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
   // top of the canvas as siblings, so a pinch whose cursor is over one of them
   // would never reach a canvas-scoped listener and the page would zoom anyway.
   useEffect(() => {
+    /** The first thing under here that can actually scroll, or null. */
+    function scrollerIn(root: Element): Element | null {
+      const candidates = [root, ...root.querySelectorAll("*")];
+      for (const el of candidates) {
+        if (el.scrollHeight <= el.clientHeight + 1) continue;
+        const overflow = getComputedStyle(el).overflowY;
+        if (overflow === "auto" || overflow === "scroll") return el;
+      }
+      return null;
+    }
+
+    /** Scroll a selected item's content. True when it took the gesture. */
+    function scrollSelectedContent(target: HTMLElement, dx: number, dy: number): boolean {
+      const frame = target.closest?.("[data-item-id]");
+      const id = frame?.getAttribute("data-item-id");
+      if (!id || !useUiStore.getState().selectedItemIds.includes(id)) return false;
+      const content = frame!.querySelector(".item-content");
+      if (!content) return false;
+      const scroller = scrollerIn(content);
+      if (!scroller) return false;
+      const before = scroller.scrollTop;
+      scroller.scrollTop += dy;
+      scroller.scrollLeft += dx;
+      // At the end of its own scroll the canvas takes the gesture back, the
+      // way a nested scroll area hands off anywhere else.
+      return scroller.scrollTop !== before;
+    }
+
     function onWheel(e: WheelEvent) {
       const target = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey) {
@@ -89,6 +117,22 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       // handed over yet). Elsewhere (toolbar, panels) let the scroll be.
       if (!target.closest?.(".canvas-viewport")) return;
       if (target.closest?.(".thread-popover, .item-content:not(.inert)")) return;
+      // A SELECTED item scrolls its own content, without being entered.
+      //
+      // Scrolling is a wheel gesture and moving is a pointer gesture, so they
+      // do not collide: the content stays `pointer-events: none`, a drag still
+      // moves the item, and only the wheel is handed over. Making selection
+      // hand over the POINTER instead would have cost drag-to-move, which is
+      // the whole reason to select something.
+      //
+      // Nothing here reaches an iframe: a page in a sandboxed frame is
+      // cross-origin and cannot be scrolled from outside, so an HTML item
+      // still has to be entered. That is the sandbox doing its job, not an
+      // oversight.
+      if (scrollSelectedContent(target, e.deltaX, e.deltaY)) {
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
       const ui = useUiStore.getState();
       ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
