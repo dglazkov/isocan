@@ -1905,3 +1905,15 @@ button.mt-card:hover { border-color: var(--accent); }
 .ds-problems ul { margin: 0; padding-left: 16px; color: var(--warn); font-size: 12px; }
 .ds-prose { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .ds-prose h3 { margin-top: 14px; }
+
+/* What the system gets wrong about itself, by its own declared pairs — as
+   opposed to the swatches, which show what ink a colour can carry. */
+.ds-findings { margin-top: 18px; }
+.ds-findings ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.ds-finding {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 7px 10px; border-radius: 7px; background: var(--chip); font-size: 12px;
+}
+.ds-finding b { flex: none; min-width: 84px; font-size: 11px; color: var(--ink-muted); }
+.ds-finding.error { color: var(--danger); }
+.ds-finding.warning { color: var(--warn); }
