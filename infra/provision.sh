@@ -20,6 +20,7 @@ case "${STAGE}" in
   b|B) SCRIPTS=(80-load-balancer.sh 81-cert-status.sh) ;;
   c|C) SCRIPTS=(90-backup-export.sh 92-uptime-check.sh) ;;
   d|D) SCRIPTS=(95-build-trigger.sh) ;;
+  e|E) SCRIPTS=(100-identity-platform.sh) ;;
   *)
     cat <<USAGE
 usage: $0 <stage>
@@ -39,6 +40,11 @@ usage: $0 <stage>
 
   d   CONTINUOUS DEPLOY   Cloud Build trigger on push to main.
                           Needs a browser step first. Costs: \$0 until you push.
+
+  e   THE ATTESTERS       Identity Platform: email-link sign-in as the floor,
+                          so a badge can prove an attribute a grant names.
+                          Google and GitHub need OAuth apps you create.
+                          Costs at rest: \$0 (49,999 free monthly users).
 
 Read infra/README.md before stage a. It is the decision, this is the button.
 USAGE

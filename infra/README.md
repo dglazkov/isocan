@@ -22,6 +22,7 @@ and three of them cost different amounts of money.
 | **B · the front door** | `dev.isocan.io`, HTTPS, Cloud CDN | **~$18/month** | a DNS A record |
 | **C · the keeping** | nightly Firestore export, uptime check | ~$0.05/month | an email address (optional) |
 | **D · continuous deploy** | push to `main` → dev is running it | $0 | a browser OAuth step |
+| **E · the attesters** | Identity Platform: a badge can prove an email, so `email:` grants mean something | **$0** | OAuth apps, only for Google/GitHub |
 
 Stage A is the interesting one and the cheap one. **You can stop after it,
 look at a real home, and decide about the domain separately.** That is why it
@@ -45,6 +46,7 @@ Those are two different lists.
 | Artifact Registry | ~$0.05 | first 0.5 GiB free; the cleanup policy keeps the last 10 images. |
 | Cloud Scheduler, uptime check, Cloud Logging, managed cert | $0.00 | all inside free tiers at this size. |
 | **Stage A + C floor** | **≈ $0.15–0.30 / month** | |
+| Identity Platform (Stage E) | $0.00 | billed per monthly active user, first 49,999 free for email-link, Google and GitHub. A dev home never leaves that. |
 | **Global load balancer (Stage B)** | **≈ $18.25 / month** | ~$0.025/hour for the forwarding rules, charged by the hour, forever, with zero traffic. |
 | **Stage A + B + C floor** | **≈ $18.50 / month** | |
 
