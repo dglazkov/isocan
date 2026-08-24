@@ -76,23 +76,23 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 10.3 is closed — the home turned out to be a property of
-the canvas, and one daemon now serves canvases at two homes and at itself,
-concurrently, with a shipped default address that can never re-point existing
-work.** That last clause is what phase 14's flip was waiting for. The
-launch-first order set 2026-08-24 by Dimitri still runs 10.3 → 10.5 → 13.5 →
-13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as features
-added to a live isocan.io. The cut line is the journey's own built/unbuilt
-boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt
-remainder, so launching first ships exactly the journey that exists.
-**Phase 10.5, two doors into the repo, is next** — and 10.3 changed what its
-Dion door has to say: his pre-multiuser canvases keep working with nothing
-done, because a marker naming no home means this daemon is that canvas's home,
-and the one-daemon-one-home dance he would have had to learn no longer exists.
-The two-surfaces problem phase 10 surfaced still has its address — the
-airplane arc, phases 12.5 and 12.7 — and its entry below stands until that
-design is chosen. This line moves as phases close; a clean session starts by
-believing it.
+**Where we are: Phase 10.5 is PART-DONE — `docs/development.md` exists and the
+dev deploy gates on CI green, but the two walks it is written for have not been
+walked by the two people it names.** Writing it is what found phase 10.3's worst
+bug: on a rig that predates `homes.json`, the first `isocan home <address>`
+froze every local canvas at that home, under a verb that prints *"nothing
+already here moved"*. That is fixed, with tests that were checked to fail
+without the fix. The launch-first order set 2026-08-24 by Dimitri still runs
+10.3 → 10.5 → 13.5 → 13.7 → 14 — the launch train — and then 11, 12, 12.5, 12.7,
+13 as features added to a live isocan.io. The cut line is the journey's own
+built/unbuilt boundary: Scenes 0–5 are shipped and proven, Scenes 6–7 are the
+entire unbuilt remainder, so launching first ships exactly the journey that
+exists. **Phase 13.5, the front door, is next** — with two debts trailing 10.5
+that belong to people rather than to code: Paul's and Dion's own first walks,
+and the ⚑ that repoints the Cloud Build trigger at `green`. The two-surfaces
+problem phase 10 surfaced still has its address — the airplane arc, phases 12.5
+and 12.7. This line moves as phases close; a clean session starts by believing
+it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -928,7 +928,21 @@ of the walk waits for phase 14, by necessity.)
 
 ## Phase 10.5 — Two doors into the repo
 
-**Status: NOT STARTED.**
+**Status: PART-DONE** 2026-08-24. `docs/development.md` is written, both doors
+and the common matter, and every command in it was run rather than remembered —
+a scratch clone and a scratch `ISOCAN_HOME` for Paul's door, a reconstructed
+pre-multiuser rig for Dion's. The dev deploy now gates on CI green: `release.yml`
+fast-forwards a `green` ref once `npm test` and `npm run typecheck` pass with the
+emulator required, and `infra/95-build-trigger.sh` watches `^green$`.
+
+**Two things are missing and neither is the doc.** First, **the two walks
+themselves** — the Proof names Paul and Dion by name, and a proof is what was
+measured and by whom: the conductor verified that the commands work, and cannot
+verify that the doc is legible to somebody who has not read the codebase. That
+half is their first run, and every out-of-band question either asks is a
+finding. Second, **the trigger is not repointed yet** — the gate exists in the
+repo and the live Cloud Build trigger still watches `main` until
+`infra/provision.sh d` is run, which is a ⚑ and is Dimitri's to authorize.
 
 **Work:** `docs/development.md`, written for the two developers who
 actually exist rather than an abstract one. **Dion is not new** — he has
@@ -969,7 +983,41 @@ question either of them asks is a finding. Both instruments are consumed
 on first use — after one walk each is an insider — which is why this
 phase runs now rather than letting the knowledge trickle in over Slack.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24 — Phase 10.3 shipped a bug and this phase's walk is what found
+  it.** On a rig that predates `homes.json`, the first `isocan home <address>`
+  froze every locally-born canvas at that home: pages 404, `isocan add` →
+  `project not found` — under a verb whose own output reads *"nothing already
+  here moved"*. No test caught it because every test built its fixture with
+  today's code, and **birth writes a row**, which silently disarms the
+  migration. A machine that predates a file cannot be reconstructed by a
+  process that always creates it.
+- **2026-08-24** — One rule, disagreed with in three places. `homes.json` says
+  absent and `null` mean the same thing; the migration armed on the absent
+  FILE, `pureReplica` counted only explicit nulls (so a daemon 404'd pages for
+  canvases it was the home of), and `GET /api/homes` reported only rows (so
+  `isocan home` listed nothing and `isocan status` called it a replica). Each
+  was defensible alone; together they are one invariant nobody enforced.
+- **2026-08-24 — Decided:** a configured home is **not** evidence a machine was
+  ever a replica, because `isocan home` writes `config.json` and only then
+  restarts — so the first boot on new code can already see a home nobody has
+  ever dialled. The evidence is a **badge at that address**. It fails toward
+  "this is mine", which loses nothing; the other direction hands local work to
+  a stranger's home.
+- **2026-08-24** — A regression test written after the fix passed against the
+  bug. Verifying that a guard FAILS without its fix is not ceremony: three of
+  these were decorative until the fixture was made to predate the code.
+- **2026-08-24** — Phase 6's `/healthz` hazard has narrowed: measured today,
+  `https://dev.isocan.io/healthz` returns 200 with the daemon's own body
+  through the load balancer. The rule stands (a bare `*.run.app` address is a
+  valid home address and Google swallows it there), but the doc states the
+  measurement rather than repeating a claim no longer visible at that address.
+- **2026-08-24 — Open, Dion's:** `scripts/new-project.sh` is referenced by
+  `docs/new-project.md`, `README.md` and `AGENTS.md`, and is in neither the tree
+  nor the history. Everything it automates works by hand.
+- **2026-08-24** — Both instruments are consumed on first use, which is why the
+  Status above is PART-DONE rather than closed on the doc's existence.
 
 ## Phase 13.5 — The front door ⚑ provision
 

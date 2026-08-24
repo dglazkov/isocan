@@ -7,6 +7,7 @@ import { BADGE_COOKIE, DOOR_ROUTE, ISOCAN_NAMES } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { resolveHomeUrl } from "../src/config.ts";
 import * as p from "../src/paths.ts";
+import { writeBadge } from "../src/badge-store.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
@@ -163,12 +164,20 @@ describe("what the upgrade writes down about canvases that already exist", () =>
     await fs.rm(p.homesFile(home), { force: true });
   }
 
-  it("freezes the canvases a configured machine already holds at that home", async () => {
-    // The wrinkle the upgrade must not fall into, asserted. This machine has a
-    // home configured, so what it holds today genuinely lives there — and it
-    // is written down explicitly rather than left to a rule that now says the
-    // opposite.
+  it("freezes the canvases of a machine that really was a replica — it holds that home's badge", async () => {
+    // The wrinkle the upgrade must not fall into, asserted. This machine was a
+    // phase 6→7.5 replica, so what it holds today genuinely lives at that home
+    // — and it is written down explicitly rather than left to a rule that now
+    // says the opposite.
+    //
+    // **What makes it a replica is the BADGE, not the config key** (phase
+    // 10.5). `isocan home <address>` writes `config.json` and then restarts,
+    // so a configured home also describes a machine that has merely been TOLD
+    // an address a moment ago — and freezing that one hands its owner's local
+    // canvases to a home they have never been to. A replica knocked on the
+    // door and was recognised; this is that recognition, on disk.
     await preUpgradeMachine();
+    await writeBadge(home, HOME, { badgeId: "bdg_replica", secret: "s3cret", at: HOME });
     await boot(HOME);
     expect(daemon!.homes.assignments()).toEqual({ prj_acme: HOME, prj_widget: HOME });
     expect(JSON.parse(await fs.readFile(p.homesFile(home), "utf8"))).toEqual({
@@ -177,7 +186,7 @@ describe("what the upgrade writes down about canvases that already exist", () =>
     });
   });
 
-  it("writes NOTHING on a machine with no home configured — Dion's, and every hosted home's", async () => {
+  it("writes no rows on a machine with no home configured — Dion's, and every hosted home's", async () => {
     // Two machines behind one assertion. Dion's: absent-means-local is already
     // the truth about it, so there is nothing to record and his canvases keep
     // working with his daemon as their home, unchanged.
@@ -189,7 +198,14 @@ describe("what the upgrade writes down about canvases that already exist", () =>
     await preUpgradeMachine();
     await boot(null);
     expect(daemon!.homes.assignments()).toEqual({});
-    expect(existsSync(p.homesFile(home))).toBe(false);
+    // An EMPTY record is still written, and that is the guard rather than an
+    // exception to it (phase 10.5). Returning before the write left this
+    // migration armed on exactly the machine it was least meant for: the next
+    // `isocan home <address>` gave it a configured home and no record, and it
+    // froze Dion's locally-born canvases at a home they had never been to.
+    // The cost is one tiny write per cold start, not one per canvas — the
+    // thing the hosted home actually could not afford.
+    expect(JSON.parse(await fs.readFile(p.homesFile(home), "utf8"))).toEqual({});
   });
 
   it("runs once — a row written afterwards is not re-frozen by the next boot", async () => {
@@ -318,12 +334,34 @@ describe("a pure home is unchanged", () => {
  * than the daemon's.
  */
 describe("a daemon that is the home of some canvases and a replica for others", () => {
-  /** A canvas born locally on a daemon that also has a birth default. Written
-   * straight to the record rather than through a birth, because what is under
-   * test is the page server reading the record, and a birth would drag a
-   * reachable second daemon into a test about HTTP status codes. */
+  /**
+   * A canvas this daemon really is the home of, on a daemon that also has a
+   * birth default.
+   *
+   * **Born for real rather than written straight into the record**, which this
+   * fixture used to do. "Is this daemon somebody's home" is a question about
+   * what it HOLDS, and a row naming a canvas the store has never heard of is a
+   * record about nothing — so the shortcut described a machine that cannot
+   * exist. Birth with no birth default needs no second daemon: the canvas
+   * lands locally and writes its own `null` row, which is precisely the state
+   * under test.
+   */
   async function withLocalCanvas(birthHome: string, local: string): Promise<string> {
-    await fs.writeFile(p.homesFile(home), JSON.stringify({ [local]: null }));
+    const first = await boot(null);
+    const badge = await mintTestBadge(first);
+    await badge.speakAs({ id: "usr_dion", name: "Dion" });
+    const made = await fetch(`${first}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        projectId: null,
+        actor: { id: "usr_dion", name: "Dion" },
+        op: { type: "project.create", projectId: local, title: "Acme Sprint Board" },
+      }),
+    });
+    expect(made.status).toBe(200);
+    await daemon!.close();
+    daemon = null;
     return boot(birthHome);
   }
 

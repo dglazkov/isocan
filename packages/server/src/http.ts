@@ -826,9 +826,31 @@ export function registerRoutes(
    * home per invocation is a cost nobody asked for.
    */
   app.get(HOMES_ROUTE, async () => {
+    /**
+     * **Every canvas this daemon HOLDS, not every row it has written down.**
+     *
+     * The two differ exactly where absent-means-local does its work, and
+     * reading only the rows made this route the third place phase 10.3 quietly
+     * disagreed with its own rule (phase 10.5 found all three). A machine that
+     * predates `homes.json` holds canvases with no rows at all, so `isocan
+     * home` listed nothing and `isocan status` called a daemon that is the
+     * home of three canvases a replica of somewhere else — while it was
+     * serving those canvases' pages perfectly well.
+     *
+     * So the answer is built from the project list, with each canvas's row
+     * read through the same `?? null` rule the page server and the engine use.
+     * A row naming a canvas this daemon does not hold is dropped rather than
+     * reported: it is a record about nothing, and the question this route
+     * answers is "who answers for the canvases here".
+     */
+    const rows = options.homes?.assignments() ?? {};
+    const canvases: Record<string, string | null> = {};
+    for (const project of await store.listProjects()) {
+      canvases[project.id] = rows[project.id] ?? null;
+    }
     return {
       birth: options.birthHome ?? null,
-      canvases: options.homes?.assignments() ?? {},
+      canvases,
       links: (options.homes?.links() ?? []).map((link) => ({
         url: link.homeUrl,
         reachable: link.answering,
@@ -1703,7 +1725,7 @@ export function registerRoutes(
   });
 
   // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
-  registerPages(app, desk, options);
+  registerPages(app, desk, store, options);
 }
 
 /**
@@ -1940,7 +1962,12 @@ function loopbackBound(app: FastifyInstance): boolean {
  * rather than left standing false: a daemon mints them only where it is
  * somebody's home.
  */
-function registerPages(app: FastifyInstance, desk: Desk, options: RouteOptions): void {
+function registerPages(
+  app: FastifyInstance,
+  desk: Desk,
+  store: Store,
+  options: RouteOptions,
+): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(here, "../../web/dist");
   const built = existsSync(path.join(dist, "index.html"));
@@ -1956,10 +1983,34 @@ function registerPages(app: FastifyInstance, desk: Desk, options: RouteOptions):
    * somebody restarted, which is the shape of bug this codebase calls
    * cheerful.
    */
-  const pureReplica = (): boolean => {
+  const pureReplica = async (): Promise<boolean> => {
+    // No birth default: this daemon is somebody's home by definition, and the
+    // question is over before it costs anything. **This is also what keeps the
+    // listing below off the hosted home's page path** — a hosted home has no
+    // birth default, so it returns here and never reads its project list to
+    // serve a page.
     if (!options.birthHome) return false;
     const rows = options.homes?.assignments() ?? {};
-    return !Object.values(rows).some((home) => home === null);
+    /**
+     * **Absent and `null` are the same answer, and this line used to disagree
+     * with the rest of the codebase about that.**
+     *
+     * `homes.json`'s own doc says absent means "this daemon is that canvas's
+     * home" — it is what makes phase 10.3 a no-op for a machine that predates
+     * it. This predicate asked only about EXPLICIT nulls, so a daemon holding
+     * canvases with no rows (Dion's, exactly) plus a birth default judged
+     * itself a pure replica and answered a signpost for pages it was the home
+     * of. Routing was right and serving was wrong, which is the confusing half
+     * of a bug to meet.
+     *
+     * So the question is asked of what this daemon actually HOLDS, with the
+     * rows read through the same absent-means-local rule everything else uses.
+     * Zero canvases is still a pure replica: a clean machine pointed at a home
+     * has nothing of its own to open, and sending that person to the home is
+     * the honest answer.
+     */
+    const held = await store.listProjects();
+    return !held.some((project) => (rows[project.id] ?? null) === null);
   };
 
   /**
@@ -1973,15 +2024,15 @@ function registerPages(app: FastifyInstance, desk: Desk, options: RouteOptions):
    * including an id with no row at all, which means local, which is the same
    * sentence the marker has always carried.
    */
-  const elsewhere = (pathname: string): string | null => {
+  const elsewhere = async (pathname: string): Promise<string | null> => {
     const canvasId = canvasIdIn(pathname);
-    if (canvasId === null) return pureReplica() ? (options.birthHome ?? null) : null;
+    if (canvasId === null) return (await pureReplica()) ? (options.birthHome ?? null) : null;
     const home = options.homes?.homeOf(canvasId) ?? null;
     if (home !== null) return home;
     // No row: this canvas is this daemon's — unless this daemon serves no
     // pages at all, in which case there is nothing here to open and the birth
     // default is the honest place to send a person.
-    return pureReplica() ? (options.birthHome ?? null) : null;
+    return (await pureReplica()) ? (options.birthHome ?? null) : null;
   };
 
   const send = (reply: { header: Function; send: Function; type: Function }, file: string) => {
@@ -2009,7 +2060,7 @@ function registerPages(app: FastifyInstance, desk: Desk, options: RouteOptions):
     // be the cheerful wrong address again, in HTML this time.
     if (`/${url}`.startsWith("/api/")) return apiNotFound(reply, req.method, `/${url}`);
 
-    const home = elsewhere(pathname);
+    const home = await elsewhere(pathname);
     if (home !== null) return signpost(reply, req.headers.accept, home);
 
     // Nothing built to serve. A daemon with no `packages/web/dist` has always
