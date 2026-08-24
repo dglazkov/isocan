@@ -38,7 +38,8 @@ usage: $0 <stage>
                           Costs at rest: cents.
                           (GC is NOT scheduled — infra/91-scheduler-gc.sh says why.)
 
-  d   CONTINUOUS DEPLOY   Cloud Build trigger on push to main.
+  d   CONTINUOUS DEPLOY   Cloud Build trigger on push to \`green\` — the ref
+                          CI advances when the suite passes.
                           Needs a browser step first. Costs: \$0 until you push.
 
   e   THE ATTESTERS       Identity Platform: email-link sign-in as the floor,

@@ -12,7 +12,7 @@ import type {
 } from "@isocan/core";
 import { BADGES_ROUTE, HOMES_ROUTE } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { readBadge } from "../src/badge-store.ts";
+import { readBadge, writeBadge } from "../src/badge-store.ts";
 import * as p from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -460,6 +460,194 @@ describe("one daemon, many homes", () => {
  * one is a thing that would work by accident in a single run and stop working
  * the moment somebody kept the state in the wrong place.
  */
+/**
+ * **Dion's rig, and the two bugs phase 10.5's walk found in phase 10.3.**
+ *
+ * The machine that predates all of this: canvases born local, markers naming no
+ * home, no `homes.json`, no configured home. Phase 10.3's whole promise to it
+ * is that it keeps working with nothing done — and that the day its owner
+ * points it at a home, **nothing already there moves**, which is what `isocan
+ * home` prints in those words.
+ *
+ * Both halves of that were false, and neither was caught by a test that
+ * exercised only fresh machines.
+ */
+describe("a machine that predates all of this", () => {
+  /** The pre-10.3 shape: canvases in the store, no rows, no configured home. */
+  async function dionsRig(dir: string, birthHome: string | null): Promise<Node> {
+    const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50 });
+    return node(daemon, dir, dion);
+  }
+
+  it("disarms the migration by writing the record even when it is empty", async () => {
+    // First boot on new code with nothing configured. The migration has
+    // nothing to freeze — and must still leave the file behind, or it stays
+    // armed for the first `isocan home` that ever runs here.
+    const rig = await dionsRig(dDir, null);
+    await rig.daemon.close();
+    // Nothing to freeze and nothing held — and the file exists anyway, which
+    // is the entire guard: the next boot finds a record and leaves it alone.
+    expect(JSON.parse(await fs.readFile(p.homesFile(dDir), "utf8"))).toEqual({});
+  }, 30_000);
+
+  it("does not move a locally-born canvas when a birth default is set later", async () => {
+    /**
+     * **The bug, in the order that produces it.** Boot with nothing
+     * configured; make a canvas; stop. Then set a birth default and boot
+     * again — which is exactly what `isocan home <address>` does, because it
+     * writes `config.json` and restarts. The migration used to `return` before
+     * writing anything on the first boot, so the second one found no record,
+     * saw a configured home, and froze the canvas at a home it had never been
+     * to. Measured on a real rig: 404 on its page, `project not found` on a
+     * write.
+     */
+    // A store that genuinely predates `homes.json`. Creating the canvas with
+    // today's code WRITES a row — birth always does — and that row is itself
+    // enough to disarm the migration, which is why a test that skipped this
+    // line passed against the bug it was written to catch.
+    const zeroth = await dionsRig(dDir, null);
+    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await zeroth.daemon.close();
+    await fs.rm(p.homesFile(dDir), { force: true });
+
+    // Step one: the first boot on 10.3 code, nothing configured. This is the
+    // boot that has to leave the record behind.
+    const first = await dionsRig(dDir, null);
+    await first.daemon.close();
+
+    // Step two: `isocan home <address>` — config written, daemon restarted.
+    const second = await dionsRig(dDir, H1.base);
+    try {
+      // Still this daemon's. The birth default says where the NEXT canvas
+      // goes and nothing else.
+      expect(second.daemon.homes.homeOf("prj_dion")).toBeNull();
+      // And the write still lands here rather than being forwarded to a home
+      // that has never heard of this canvas.
+      await op(second, "prj_dion", item("itm_dion", 5));
+      expect((await canvas(second, "prj_dion")).canvas.items["itm_dion"]).toMatchObject({ x: 5 });
+      expect((await get<{ id: string }[]>(H1, "/api/projects")).some((r) => r.id === "prj_dion")).toBe(false);
+    } finally {
+      await second.daemon.close();
+    }
+  }, 30_000);
+
+  it("does not move them when `isocan home` is the FIRST command run on new code", async () => {
+    /**
+     * **The path that defeats "write the empty file on the boot before": there
+     * is no boot before.**
+     *
+     * `pointDaemonAtHome` writes `config.json` and THEN restarts, so a machine
+     * whose owner upgrades and immediately points it at a home has its very
+     * first 10.3 boot already looking at a configured home. Freezing on that
+     * key alone hands his locally-born canvases to a home they have never been
+     * to. The evidence that separates a real phase 6→7.5 replica from a
+     * machine that was merely TOLD an address is a **badge at that address**,
+     * and this rig has never knocked on anybody's door.
+     */
+    const zeroth = await dionsRig(dDir, null);
+    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await zeroth.daemon.close();
+    await fs.rm(p.homesFile(dDir), { force: true });
+
+    // No intervening boot: straight from a pre-10.3 store to a configured home.
+    const pointed = await dionsRig(dDir, H1.base);
+    try {
+      expect(pointed.daemon.homes.homeOf("prj_dion")).toBeNull();
+      await op(pointed, "prj_dion", item("itm_dion", 9));
+      expect((await canvas(pointed, "prj_dion")).canvas.items["itm_dion"]).toMatchObject({ x: 9 });
+    } finally {
+      await pointed.daemon.close();
+    }
+  }, 30_000);
+
+  it("DOES freeze a machine that really was a replica — it holds that home's badge", async () => {
+    /**
+     * The other side of the same discriminator, and the reason it cannot
+     * simply be deleted. A phase 6→7.5 replica's canvases genuinely live at
+     * its home, their markers say nothing (markers only learned addresses
+     * later), and reading "absent" as local would fork every one of them.
+     * What makes it a replica rather than a machine holding an address is that
+     * the home recognised it: a badge in `identity.json`'s `auth` block.
+     */
+    const zeroth = await dionsRig(dDir, null);
+    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_old", title: "Acme Sprint Board" } });
+    await zeroth.daemon.close();
+    await fs.rm(p.homesFile(dDir), { force: true });
+    // What a replica has and a merely-configured machine does not.
+    await writeBadge(dDir, H1.base, { badgeId: "bdg_old", secret: "s3cret", at: H1.base });
+
+    const upgraded = await dionsRig(dDir, H1.base);
+    try {
+      expect(upgraded.daemon.homes.homeOf("prj_old")).toBe(H1.base);
+    } finally {
+      await upgraded.daemon.close();
+    }
+  }, 30_000);
+
+  it("reports the canvases it holds, not the rows it has written down", async () => {
+    /**
+     * The third place the same disagreement surfaced, and the one Dion's door
+     * actually depends on: `GET /api/homes` read only the rows, so a machine
+     * that predates `homes.json` listed **nothing** under `isocan home` and
+     * `isocan status` called it a replica of somewhere else — while it was
+     * serving those canvases' pages perfectly well. Measured on a real rig
+     * before the fix: three canvases held, an empty table, and the role line
+     * saying "replica".
+     */
+    const zeroth = await dionsRig(dDir, null);
+    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await zeroth.daemon.close();
+    await fs.rm(p.homesFile(dDir), { force: true });
+
+    const pointed = await dionsRig(dDir, H1.base);
+    try {
+      const answer = await get<{ birth: string | null; canvases: Record<string, string | null> }>(
+        pointed,
+        HOMES_ROUTE,
+      );
+      expect(answer.birth).toBe(H1.base);
+      expect(answer.canvases).toEqual({ prj_dion: null });
+    } finally {
+      await pointed.daemon.close();
+    }
+  }, 30_000);
+
+  it("counts a canvas with NO row as its own when deciding whether to serve pages", async () => {
+    /**
+     * The serving half, and the confusing one to meet: routing can be right
+     * while `/p/<id>` 404s. `pureReplica` counted only EXPLICIT null rows, so a
+     * daemon whose held canvas had no row at all — absent, which
+     * `homes.json`'s own doc defines as "this daemon is its home" — judged
+     * itself a pure replica and signposted its own page away.
+     *
+     * Isolating that needs a record that EXISTS (so the migration leaves it
+     * alone) but says nothing about this canvas. Deleting the file instead
+     * would be the old-replica signal, and the migration would correctly
+     * freeze — a different case, tested above.
+     */
+    const first = await dionsRig(dDir, null);
+    await post(first, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await first.daemon.close();
+    // A record that knows about somebody else's canvas and not this one.
+    await fs.writeFile(p.homesFile(dDir), JSON.stringify({ prj_someone_else: H1.base }));
+
+    const second = await dionsRig(dDir, H1.base);
+    try {
+      expect(second.daemon.homes.homeOf("prj_dion")).toBeNull();
+      const page = await fetch(`${second.base}/p/prj_dion`, { headers: { Accept: "text/html" } });
+      // Never the signpost: that header is this daemon disowning a canvas it
+      // is the home of.
+      expect(page.headers.get("x-isocan-home")).toBeNull();
+      // And the front page is still this machine's, not a redirect to the
+      // birth default, because it has a canvas of its own to show.
+      const front = await fetch(`${second.base}/`, { headers: { Accept: "text/html" } });
+      expect(front.headers.get("x-isocan-home")).toBeNull();
+    } finally {
+      await second.daemon.close();
+    }
+  }, 30_000);
+});
+
 describe("what makes many homes durable rather than incidental", () => {
   it("keeps presence on the right side of the line", async () => {
     await birthAll();

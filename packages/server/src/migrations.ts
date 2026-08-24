@@ -4,6 +4,7 @@ import { bindName, GRANTED_BY_MIGRATION, newOpId, normalizeHomeUrl } from "@isoc
 import * as p from "./paths.ts";
 import type { Desk } from "./desk.ts";
 import { ensureLinkGrant } from "./grants.ts";
+import { readBadge } from "./badge-store.ts";
 import { homesRecorded, writeHomes, type HomeAssignments } from "./homes.ts";
 import type { Store } from "./store.ts";
 
@@ -97,11 +98,60 @@ async function recordWhereTheCanvasesAlreadyLive(
   store: Store,
   configuredHome: string | null,
 ): Promise<void> {
-  if (configuredHome === null) return;
   if (await homesRecorded(home)) return;
   const rows: HomeAssignments = {};
-  for (const project of await store.listProjects()) {
-    rows[project.id] = normalizeHomeUrl(configuredHome);
+  /**
+   * **The file is written even when it is empty, and that is the whole guard.**
+   *
+   * This used to `return` before writing when no home was configured, which
+   * left the migration ARMED on exactly the machine it was least meant for.
+   * Dion's rig has no configured home and no rows, so nothing was written; then
+   * the first `isocan home <address>` wrote `config.json` and restarted, the
+   * restart walked back into this function, and the branch below froze every
+   * locally-born canvas at a home it had never been to — under a verb whose own
+   * output says *"nothing already here moved"*. Measured on a reconstructed
+   * rig: both canvases 404'd and `isocan add` answered `project not found`.
+   *
+   * Writing `{}` disarms it. The comment above this function has said so since
+   * the day it was written ("an empty `{}` is a real answer and must be
+   * written, or the migration re-runs at the next boot") — the reasoning was
+   * right and the code returned before reaching it, which is the most ordinary
+   * way for a guard to be missing.
+   *
+   * The hosted home pays one tiny write per cold start rather than one per
+   * canvas, because with no configured home there are no rows to build.
+   */
+  /**
+   * **A configured home is not evidence that this machine was ever a replica**,
+   * and that is the second half of the same bug.
+   *
+   * `isocan home <address>` writes `config.json` and THEN restarts the daemon,
+   * so if it is the first thing run on upgraded code the daemon's very first
+   * boot already sees a configured home — and "write the empty file on the
+   * boot before" never happens, because there was no boot before. Freezing on
+   * the config key alone would repoint Dion's canvases on the one path most
+   * likely to be his actual first command.
+   *
+   * The evidence that this machine really was a phase 6→7.5 replica is a
+   * **badge at that address**. A replica dialled its home and was recognised
+   * by it, and `identity.json`'s `auth` block has held one badge per address
+   * since phase 6 — durable, local, and already there before the upgrade. A
+   * machine that has merely been TOLD an address has never knocked on its
+   * door.
+   *
+   * The narrow way this is wrong is a replica whose badge was deleted between
+   * its last run and this upgrade; its canvases then read as local. That is
+   * the lost-badge recovery path, it is rare, and it fails toward "this is
+   * mine" — which loses nothing and is repaired by pointing the machine at the
+   * home again. The other direction silently hands somebody's local work to a
+   * stranger's home, so this is the side to be wrong on.
+   */
+  const everDialled =
+    configuredHome !== null && (await readBadge(home, normalizeHomeUrl(configuredHome))) !== null;
+  if (configuredHome !== null && everDialled) {
+    for (const project of await store.listProjects()) {
+      rows[project.id] = normalizeHomeUrl(configuredHome);
+    }
   }
   await writeHomes(home, rows);
 }

@@ -109,12 +109,17 @@ opinion about anything.
 ## House rules
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done.
-- Work on `main`; `release` is generated — CI releases every commit you push
-  there — and it is the only branch anyone installs from
-  (`github:dglazkov/isocan#release`). Never edit it by hand, and never
-  advertise an install spec without the branch: from `main` npm installs an
-  empty directory (#47). `npm run release` does it locally when you need one
-  before CI gets there.
+- Work on `main`. Two other refs are GENERATED and neither is ever edited by
+  hand: `release` is what people install from
+  (`github:dglazkov/isocan#release`) — CI rebuilds it from every commit you
+  push to main, and you must never advertise an install spec without the
+  branch, because from `main` npm installs an empty directory (#47);
+  `npm run release` does it locally when you need one before CI gets there.
+  `green` is main's own commit moved forward once `npm test` and
+  `npm run typecheck` have passed on CI, and **it is what dev.isocan.io
+  deploys** — so a commit that is green on your laptop and red on CI never
+  reaches the dogfood home (phase 10.5). Three refs, three jobs: main is the
+  source, `green` is the tested source, `release` is the shipped CLI.
 - Mutations are `Operation` values applied by one reducer — if a change makes
   the CLI and the web app able to disagree, it is the wrong change.
 - Presence is honest: never claim work you did not do.

@@ -5,17 +5,21 @@
 #   infra/60-build-image.sh   uploads THIS working tree, builds, pushes,
 #                             and stops (_DEPLOY=no). No GitHub connection
 #                             needed — that is the whole point of it.
-#   infra/95-build-trigger.sh installs a trigger on push to `main` that runs
-#                             the same file with _DEPLOY=yes.
+#   infra/95-build-trigger.sh installs a trigger on push to `green` that runs
+#                             the same file with _DEPLOY=yes. `green` is the
+#                             ref CI fast-forwards once the suite passes, so a
+#                             red commit never reaches this file (phase 10.5).
 #
 # The architecture's deploy row, made literal: "build -> Artifact Registry ->
 # gcloud run deploy, all inside GCP on a build service account, so no
 # cross-cloud credentials exist at all." Nothing here holds a key; the build
 # service account is the identity, and it never leaves Google.
 #
-# NOT the `release` branch. CI regenerates that from every main commit as the
-# CLI distribution branch (scripts/release.mjs, AGENTS.md). It is not a gate
-# and must never become one.
+# NOT the `release` branch, and `green` is not a second one. CI regenerates
+# `release` from every main commit as the CLI distribution branch
+# (scripts/release.mjs, AGENTS.md); it is not a gate and must never become one.
+# `green` is not content — it is main's own commit, moved forward once the
+# suite passes, and being a gate is its whole job.
 
 substitutions:
   _IMAGE: ""      # e.g. us-west1-docker.pkg.dev/isocan-io-dev/isocan/isocan

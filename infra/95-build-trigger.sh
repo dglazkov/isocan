@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# STAGE D · continuous deploy — push to main, and dev is running it.
+# STAGE D · continuous deploy — a commit goes green, and dev is running it.
 #
 # CREATES   one Cloud Build trigger on the GitHub repository, firing on push
-#           to `main`, running cloudbuild.yaml with _DEPLOY=yes.
+#           to `green`, running cloudbuild.yaml with _DEPLOY=yes.
 # COSTS     Cloud Build's default pool includes 2,500 free build-minutes a
 #           month. A build here is a few minutes, so a busy day of pushes is
 #           still free; beyond the free tier, ~$0.006/build-minute. The images
@@ -32,13 +32,32 @@
 # have a running home before deciding whether you want Google reading your
 # repository.
 #
+# ═══ WHY `green` AND NOT `main` (phase 10.5) ═══
+#
+# This used to fire on push to `main`, which meant the deploy pipeline and the
+# test pipeline raced: a commit that was green on somebody's laptop but red on
+# CI reached dev.isocan.io anyway. With more than one developer pushing, that
+# is one person taking down the other's dogfood home — and CI is precisely the
+# machine that catches what local timing hides.
+#
+# `green` is a ref that means one thing: **the suite passed on this commit,
+# with the Firestore emulator required.** `.github/workflows/release.yml`
+# fast-forwards it after `npm test` and `npm run typecheck` pass, and nothing
+# else ever writes it. A red commit never reaches this trigger at all.
+#
 # ═══ WHAT THIS TRIGGER IS NOT ═══
 #
-# It is not the `release` branch. CI regenerates that from every commit on main
-# as the CLI's distribution branch — `github:dglazkov/isocan#release` is what
-# people install from — and AGENTS.md is explicit that it is not a gate.
-# Two different pipelines from the same commits: one ships a CLI, one deploys a
-# home. Neither waits for the other.
+# It is not the `release` branch, and `green` is not a second one. `release` is
+# REGENERATED CONTENT — scripts/release.mjs builds it, and
+# `github:dglazkov/isocan#release` is what people install from — and both
+# AGENTS.md and cloudbuild.yaml are explicit that it is not a gate and must
+# never become one. `green` is not content at all: it is main's own commit,
+# moved forward, and being a gate is its entire job.
+#
+# Three refs, three jobs: **main is the source, `green` is the tested source,
+# `release` is the shipped CLI.** Two pipelines still run from the same
+# commits — one ships a CLI, one deploys a home — and neither waits for the
+# other; what changed is that both now start from a commit that passed.
 #
 # PROD, when it exists, is the same file with a tag pattern instead of a branch
 # pattern: `--tag-pattern='^prod$'`, a tag somebody moves deliberately. The
@@ -52,7 +71,10 @@ require_billing
 TRIGGER="${ISOCAN_TRIGGER_NAME:-isocan-dev-deploy}"
 REPO_OWNER="${ISOCAN_REPO_OWNER:-dglazkov}"
 REPO_NAME="${ISOCAN_REPO_NAME:-isocan}"
-BRANCH="${ISOCAN_TRIGGER_BRANCH:-^main$}"
+# `green`, not `main` — see the note above. Overridable, because a project
+# that wants the old racy behaviour (or a fork with no CI) can still say so out
+# loud rather than editing this file.
+BRANCH="${ISOCAN_TRIGGER_BRANCH:-^green$}"
 
 step "is the repository connected?"
 # There are TWO connection generations and they do not see each other. The
@@ -76,7 +98,7 @@ if exists gcloud builds triggers describe "${TRIGGER}" --project="${PROJECT_ID}"
   exit 0
 fi
 
-confirm "create a trigger that deploys ${PROJECT_ID} on every push to main?"
+confirm "create a trigger that deploys ${PROJECT_ID} on every push to green?"
 
 # --name=, not a positional: `triggers create github` names the trigger with a
 # flag, unlike most `create` verbs in gcloud. Measured, after it rejected the
@@ -91,11 +113,11 @@ gcloud builds triggers create github \
   --build-config=cloudbuild.yaml \
   --service-account="projects/${PROJECT_ID}/serviceAccounts/${BUILD_SA}" \
   --substitutions="_IMAGE=${IMAGE_REPO},_SERVICE=${SERVICE},_REGION=${REGION},_DEPLOY=yes,_TAG=\$SHORT_SHA" \
-  --description="isocan: build and deploy ${SERVICE} on push to main" >/dev/null
-made "${TRIGGER} — push to main deploys ${SERVICE}"
+  --description="isocan: build and deploy ${SERVICE} on push to green (CI-tested)" >/dev/null
+made "${TRIGGER} — push to green deploys ${SERVICE}"
 
 step "done"
-note "the next push to main will build, run the container's own boot check, and deploy."
+note "the next commit CI marks green will build, run the container's own boot check, and deploy."
 note "watch:  gcloud builds list --project=${PROJECT_ID} --region=${REGION} --limit=5"
 note ""
 note "Remember what a deploy IS here: the old revision drains while the new one starts,"

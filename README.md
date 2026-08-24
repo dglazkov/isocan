@@ -550,6 +550,13 @@ earlier run left behind; `isocan restart` does. From a checkout,
 
 ## Development
 
+[`docs/development.md`](docs/development.md) is the whole of it, written for the
+two people who actually work here: an **upgrade** door for a rig built before
+the home work landed, and a **first entry** door — `git clone` to a running dev
+setup to a canvas of your own at dev.isocan.io — plus the shared matter, the
+clean-shell discipline and the hazards. What follows is the command list it
+expands on.
+
 ```sh
 npm run dev         # daemon + Vite with hot reload
 npm run dev:replica # a scratch machine on :4442 with its OWN isocan home —
