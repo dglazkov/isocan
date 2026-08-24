@@ -325,32 +325,6 @@ supported: `scripts/dev-replica.mjs` and the test suite.
 If you're about to type `export ISOCAN_`, use `isocan home`, the `--port` flag,
 or `npm run dev:replica` instead.
 
-### Follow the phase process
-
-[`phases.md`](phases.md) tracks the work. Its "where we are" line states which
-phase is next.
-
-Each working session acts as a conductor:
-
-1. Read the status line in `phases.md`.
-2. Delegate the phase's implementation, providing the phase section, the
-   documents it cites, and `AGENTS.md`.
-3. Verify the phase's stated proof yourself: run the test suite, replay the
-   scenario, or drive the browser. Don't accept a report as evidence.
-4. If verification fails, revise the instructions and repeat.
-5. When the proof holds, record the findings, update the status line, update
-   [`architecture.md`](architecture.md) if the finding changes it, and commit
-   the phase as one change.
-
-Two constraints:
-
-* Phases run in order. Parallel work belongs inside a phase, not across phases.
-* Steps marked **⚑ provision** require explicit approval before they run. See
-  [Provisioning access](#provisioning-access).
-
-Record anything that surprised you in `phases.md` as a single dated line, and
-put the supporting detail in the commit message.
-
 ### Understand the deploy pipeline
 
 The repository uses three branches:
@@ -403,8 +377,9 @@ deploys nothing. Verify with `--format=json`, because the YAML output prints
 ## Provisioning access
 
 Dimitri administers the `isocan-io-dev` Google Cloud project, which belongs to
-the `glazkov.com` organization. Any step marked **⚑ provision** requires his
-approval before it runs.
+the `glazkov.com` organization. Steps in `infra/` and in planning documents are
+marked **⚑ provision** when they create or modify cloud resources. Those steps
+require his approval before they run.
 
 There's no second operator, which is why `infra/` contains idempotent shell
 scripts rather than Terraform. See [`infra/README.md`](../infra/README.md) for
@@ -497,7 +472,7 @@ one local canvas for web UI development.
 | --- | --- |
 | [`AGENTS.md`](../AGENTS.md) | House rules, and the checklist that keeps the CLI and web app in sync. |
 | [`README.md`](../README.md) | What the product is and does. |
-| [`phases.md`](phases.md) | The implementation plan, status roster, and open findings. |
+| [`phases.md`](phases.md) | The plan for the hosted, multi-user build: phases, status, and findings. One of several tracks. |
 | [`architecture.md`](architecture.md) | What runs where. |
 | [`multiuser-journey.md`](multiuser-journey.md) | The target experience, written as scenarios. |
 | [`design/`](design/) | One mechanism per file. |
