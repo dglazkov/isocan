@@ -78,7 +78,7 @@ each item's fate is tagged.
    the *connection* is, instead of trusting the asserted `actor` field.
    Turns `comment.update`'s "only the author," actor-scoped undo, and
    honest presence from conventions into enforcement.
-6. **Person resumption across browsers.** *(collapsed: email attestation)* A way for Jordan's phone to *be*
+6. **Person resumption across browsers.** *(collapsed: email attestation; built phase 9 stage 2)* A way for Jordan's phone to *be*
    Jordan. Today the honest path is refused (name taken) and the dishonest
    one (`as:`) is open to anyone — exactly backwards.
 7. **Pass → durable credential exchange.** *(collapsed: the pass mints a badge)* The Scene 5 pass is single-use
@@ -341,6 +341,38 @@ from the committed marker (her cloud agent enters by pass, as the journey
 plays it). Verifying never *creates* anything; it decorates the badge the
 holder already carries.
 
+Built in phase 9 stage 2 as `server/attest.ts` plus one route, and three
+things the paragraph above does not say turned out to decide the shape:
+
+- **Which attesters a home has is CONFIGURATION, not a property of the
+  build.** Stage 1 shipped the roster as a constant, arguing that "a home
+  that could be told it has an email attester by setting a variable is a
+  home that can be made to lie". The instinct was right and the conclusion
+  was backwards: the verification ships in every build, identically, so
+  what a home *can do* is not what varies. What varies is whether it has a
+  project to check tokens against — and that same value is what `iss` and
+  `aud` are bound to, so the configuration is not a claim that could be
+  false, it is the thing verification is performed with. `ISOCAN_AUTH_PROJECT`
+  and `ISOCAN_AUTH_API_KEY`; a daemon with neither has borrowed nothing,
+  which is every daemon in this repo and is not a defect. One image, many
+  homes — the deployment-detail thesis reaching a home's *capabilities* for
+  the first time rather than its storage.
+- **The browser key is served from the home at run time**, on the same
+  route that answers "what can you verify" — never compiled into the
+  bundle. Otherwise the bundle is a per-home artifact, and the page a local
+  daemon serves carries a dangling reference to somebody else's project.
+- **Nothing beside the token is believed.** The address is read out of the
+  verified token, so the attest request carries a token and nothing else: a
+  body naming the mailbox to attest would be the caller attesting for
+  itself with a signature stapled on.
+
+`repo:` is **not** attested yet, deliberately: checking repository access
+means holding a GitHub OAuth *access* token (not the ID token this
+verifies) and asking GitHub on a request path, which is Scene 6's work and
+lands with the thin agent that needs it. What matters is that the refusal
+stays honest — a `repo:` grant that could be written and admitted nobody
+would be a dialog that lies, which is worse than a refusal.
+
 **The door, then, is one test.** A badge asking after a canvas is admitted
 if any of three things holds — and everything the desk has built so far is
 one of them:
@@ -440,7 +472,37 @@ surfaces do instead is say so before the click.
   what the actor has: a person's actor resumes on a matching attestation
   (a person has an inbox); an agent's on a pass — minted by a holder, or
   by the badge that **sponsored** the holder into existence, the
-  provenance parent whose pass vouched it in. A sponsor already
+  provenance parent whose pass vouched it in.
+
+  Built in phase 9 stage 2, as **one predicate with two satisfiers rather
+  than two special cases**: `vouched` in `core/claims.ts` is a keyless
+  handoff row (phase 8's pass) OR an attribute this badge and a badge
+  claiming that actor have both proved. Everything downstream reads
+  `vouched` and never asks which. Two things the sentence above hides:
+
+  - **The tightening is what makes the vouch worth having, and it stops
+    short of where it could go.** `as` used to be refused only while the
+    actor was *visibly* somebody — live on a canvas, or claimed within the
+    half hour — so half an hour after Jordan closed her laptop anybody who
+    knew her actor id could be her, which is this document's own complaint
+    about mechanism 6, verbatim. It is now refused whenever another badge
+    holds that claim **under a different session key**. The same-key case
+    is deliberately left open: it is the shipped lost-badge recovery
+    (`/api/actors/orphaned` names the actor behind a key you already hold,
+    and `--as` brings it back), and a replacement badge holds no claims, so
+    it cannot even see the badge holding its actor, let alone kill it.
+    Honestly stated: **a session key is a weak vouch and an attestation is
+    a strong one.** What closes is every caller who knows the actor id and
+    not the conversation — which is every stranger on a shared canvas,
+    because actor ids ride in the oplog and session keys do not.
+  - **What a surface is offered and what the reducer accepts are one
+    computation.** The resumable listing and the vouch are the same query,
+    the way kill-a-badge's listing and its authorization are, so a person
+    cannot be shown a button that is then refused.
+  - **It composes with kill-a-badge in a fixed order.** A badge that has
+    only proved an address holds no claim, so it is not yet one of your
+    surfaces and cannot end the laptop. Prove, resume, then end it — which
+    is the gesture the person wanted anyway. A sponsor already
   authored that agent's whole existence, so re-vouching it grants
   nothing new — and it is what survives a thin agent's death: Sonia's
   claim sits on a badge whose bearer secret died with the sandbox, and

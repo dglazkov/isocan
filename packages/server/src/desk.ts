@@ -362,6 +362,36 @@ export interface Desk {
    */
   attest(badgeId: string, attestation: Attestation): Promise<void>;
 
+  /**
+   * **Every live badge that has proved this attribute** — the query person
+   * resumption is made of (mechanism 6).
+   *
+   * A badge attesting `email:jordan@…` and a badge that CLAIMED an actor are
+   * the same person when they share that attribute, which is the design's
+   * whole sentence about a phone being Jordan. Answering it needs the reverse
+   * of `attest`: not "what has this badge proved" (a document read) but "who
+   * else has proved this" — one indexed query over the denormalized
+   * `attested` array, exactly the shape `badgesIn` takes over `admittedTo`.
+   *
+   * **Not derived from `claimants` instead**, though it looks like it could
+   * be. Going the other way — take the actor, find its claimants, read their
+   * attestations — answers the `as` check and nothing else. The surface a
+   * person actually needs is the LISTING ("you may be Jordan here"), and that
+   * question starts from the attribute, not from an actor id the phone has
+   * never seen. One query serves both directions; two would drift.
+   *
+   * The attribute is compared as stored, so callers pass a normalized one —
+   * `upsertAttestation` normalizes on the way in, so the rows are already
+   * folded and a raw `Jordan@Acme.Test` would match nothing.
+   *
+   * No fallback, per this file's rule. A desk whose `attested` index was never
+   * written vouches for nobody, loudly, rather than being rescued by a scan —
+   * and the failure of THIS index is somebody being told to sign in again,
+   * which is a far better failure than a badge resuming an actor it should
+   * not.
+   */
+  badgesAttesting(attribute: string): Promise<BadgeRecord[]>;
+
   // ---- grants: who may enter one canvas (mechanisms 3 + 2) ----
 
   /**

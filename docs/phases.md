@@ -55,15 +55,14 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 9 is PART-DONE. Its machinery is built and its
-provisioning is finished — revocation now expels down a pass chain,
-kill-a-badge exists, and Identity Platform is live on dev with all three
-attesters. What is left is stage 2: the code that BORROWS them, and person
-resumption, which stands on it.** The pass-shaped debt phase 8 left is
-paid — the sweep walks the chain, deciding each badge once so that list
-order cannot decide who stays. Note the one thing stage 1 could not prove:
-re-rooting has no reachable surface until an attester exists, so half of
-the sweep's outcome is tested and not yet demonstrated. This line moves as phases close; a clean
+**Where we are: Phase 9 is closed — the desk is hardened, and identity is
+now something a person can PROVE rather than only assert. Phase 10, offline
+in the browser, is next.** Note what phase 9 did not do, so a clean session
+does not assume it: `repo:` grants are still refused (deferred to phase 11
+with Scene 6), `{root: "link"}` admissions written before phase 7 are
+unreachable by any revocation, and **the code that borrows the attesters has
+not been deployed to dev** — the environment variables are set there, sitting
+ahead of it. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1389,20 +1388,24 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
 
-**Status: PART-DONE.** Stage 1 (the machinery revocation needs) is built,
-green, and verified by the conductor by hand. **The ⚑ provisioning is
-DONE** — Identity Platform is live on `isocan-io-dev` with all three
-attesters confirmed (`211e893`, `infra/100-identity-platform.sh`, stage
-`e`): magic-link email as the floor, plus Google and GitHub, whose OAuth
-apps Dimitri created. What remains is stage 2 — the CODE that borrows
-them: reading an ID token, writing the attestation, the Share dialog's
-"who" field, and person resumption across browsers.
+**Status: CLOSED** 2026-08-24 (`211e893` … the commits below). Both halves
+played, by the conductor, against the real dev Identity Platform project.
+The sweep expels down a pass chain and **re-roots** what a surviving grant
+still covers — measured `{expelled: 1, rerooted: 1}`: the stranger goes, the
+person invited by name stays. The magic-link arrival and resumption were
+driven in Chrome — a browser that had never been Jordan proved an address
+and became her. The ⚑ provisioning is done: Identity Platform is live on
+`isocan-io-dev` with all three attesters confirmed, magic-link as the floor
+plus Google and GitHub, whose OAuth apps Dimitri created. `repo:` is
+deliberately deferred to phase 11 with its refusal left honest.
 
 **Work:** Firebase Auth wired as the borrowed bench (magic-link email
 as the floor, Google, GitHub); attestations written onto badges;
 `email:` and `repo:` grants; the provenance sweep with re-rooting;
 kill-a-badge; person resumption across browsers. Provisioning: Identity
-Platform enabled in the dev project. **What revocation does not
+Platform enabled in the dev project. **`repo:` is deferred with a reason
+and its refusal left honest** — see the finding; Google and GitHub are
+enabled and verify identically, and what they lack is a button. **What revocation does not
 reach, decided in phase 3:** the blob route is deliberately open — a
 sandboxed HTML blob has an opaque origin and physically cannot carry a
 badge, so the 256-bit content hash is the capability. That is sound
@@ -1424,6 +1427,139 @@ expelling the invited; a phone resumes its person by attestation.
 resumption driven in Chrome.
 
 **Findings:**
+
+- **2026-08-24 — The Outcome, measured end to end, including the half stage
+  1 could not reach.** Against a daemon configured to the real dev Identity
+  Platform project, with a real ID token minted for a synthetic address:
+  the owner invited `acme-tester@example.test` by name, a stranger walked in
+  on the link, the invited badge proved the address and walked in too — and
+  turning the link off answered **`{expelled: 1, rerooted: 1}`**. The
+  stranger got 403; the person invited by name was **re-rooted onto the email
+  grant and stayed**. Then revoking her email grant expelled her. The
+  creator's `{root: "created"}` admission was untouched throughout. That is
+  the design's sentence — "it stops strangers without expelling the invited" —
+  as a measurement rather than a promise, and it is the sentence stage 1 had
+  to leave as eleven tests and no reachable surface.
+- **2026-08-24 — Resumption, driven in Chrome, and it is the gesture the
+  phase exists for.** A browser that had never been Jordan: refused when it
+  tried to self-claim the name ("Jordan is taken here … @Jordan would reach
+  both of you"), entered as somebody else, proved the address through the real
+  provider, and was then offered **"Another surface that proved the same
+  address answers to: Be Jordan"**. One click and the tab was Jordan — avatar
+  and cursor label both. The `oobCode` was stripped from the URL on arrival.
+  A person who never proves anything is untouched by all of it: a home with no
+  attester refuses an `email:` grant with its reasons and shares by link
+  exactly as before, which was the trap this stage was told not to walk into
+  and did not.
+- **2026-08-24 — A refusal written for a terminal, shown in a browser.** The
+  name-taken message a browser gets still ends in `--as usr_…` and `--new` —
+  CLI flags offered to somebody who has no command line. It is one shared
+  message from `core/claims.ts`, which is exactly why it is right that both
+  surfaces use it and exactly why it now reads oddly on one of them: the
+  refusal is correct, the remedy is addressed to the wrong reader. Recorded
+  rather than fixed, because the fix is a shape — a refusal that carries its
+  reason as data and lets each surface word the remedy — and that is a change
+  worth making deliberately rather than at the end of a phase.
+- **2026-08-24 — A documentation edit ran the provisioning script.** The
+  conductor inserted these Findings with an UNQUOTED shell heredoc, so the
+  backticks around `` `infra/100-identity-platform.sh` `` were command
+  substitution: writing the document executed the script and pasted its entire
+  output — a browser API key among it — into the middle of the finding. **No
+  harm was done, and only because that script is idempotent**: every step
+  checks before it creates, so the second run changed nothing. Had it been a
+  script that created unconditionally, editing a doc would have provisioned
+  cloud resources. That is a better argument for the idempotence rule than the
+  one in `infra/README.md`, and it is now the one that is written down. The
+  key was scrubbed before anything was pushed; the reason it had to be is not
+  that it is secret (a browser key ships in the page) but that GitHub's
+  scanner flags every `AIza…` string, and a scanner people learn to ignore is
+  worse than no scanner.
+
+- **2026-08-24 — Attesters are configuration, and stage 1's argument for a
+  constant was the same mistake pointing the other way.** `server/attest.ts`
+  shipped its roster as a compile-time constant with the reason written down:
+  *"a home that could be told it has an email attester by setting a variable is
+  a home that can be made to lie to the Share dialog."* The instinct was right
+  and the conclusion was backwards. **The verification ships in every build**,
+  identically — a laptop's daemon contains it byte for byte — so "what the code
+  can DO" cannot be the discriminator. What a local daemon lacks is an Identity
+  Platform *project*, which is exactly what the configuration names; and the
+  same value is what `iss` and `aud` are bound to when a token arrives, so it
+  is not a boolean claim that could be false, it is the thing verification is
+  performed WITH. A home configured with a project it does not own verifies
+  nobody and says so at the first sign-in. `ISOCAN_AUTH_PROJECT` +
+  `ISOCAN_AUTH_API_KEY`, and no compiled-in default, so the mechanism is
+  invisible until an innkeeper configures it. **This is the deployment-detail
+  thesis reaching a home's capabilities rather than its storage for the first
+  time** — one image, many homes, and the generalisable form is: *when a
+  capability looks like it must be compiled in, check whether what actually
+  varies is an input the code already needs.*
+- **2026-08-24 — Re-rooting has a surface now, and it says "0 expelled, 1 kept
+  by another grant".** Stage 1's finding named this as the half it could not
+  prove: *"the only subject a badge can satisfy today is `link`… so the half of
+  the sweep that stops a revocation being a purge is real code with eleven
+  tests and no reachable surface."* Measured against a real daemon with a real
+  Identity Platform token: a browser tab proved an address, an `email:` grant
+  was written from the CLI, and `isocan share --link off` printed exactly that
+  line while the tab stayed live on the canvas and a badge-less stranger got
+  403. Nothing in the sweep changed to make this work — the surface arrived
+  underneath it, which is what "no reachable surface" meant.
+- **2026-08-24 — `as:` stops being open assertion, and the tightening stops
+  exactly where a shipped recovery begins.** Resuming an actor another badge
+  holds now needs a VOUCH, and there are two satisfiers written as one
+  predicate: phase 8's keyless handoff row (a pass), and phase 9's shared
+  attestation (an inbox). Before this, `as` was refused only while the actor
+  was *visibly* somebody — live, or claimed within the half hour — so half an
+  hour after Jordan closed her laptop, anybody who knew her actor id could be
+  her. Actor ids ride in the oplog, so that is every stranger on a shared
+  canvas.
+  **What the tightening does NOT close is deliberate and was measured before it
+  was chosen.** A claim under the SAME session key is still resumable without a
+  vouch, because that is `/api/actors/orphaned` → `--as`, the lost-badge
+  recovery phase 3 shipped, and nothing replaces it: a replacement badge holds
+  no claims, so it cannot see the badge holding its actor, let alone kill it.
+  Closing it fully was implemented first and run against the suite — eight
+  failures, six of them that recovery path in different clothes. So the honest
+  statement is **a session key is a weak vouch and an attestation is a strong
+  one**, and the weak one is left standing where the strong one is not
+  available. Narrowing it to "a different session key" cost one line and broke
+  nothing: 1001 tests green.
+- **2026-08-24 — Two bugs only a browser could find, both in the Share
+  dialog's new half, and both of the shape this codebase keeps meeting.**
+  Driving the un-invite in real Chrome: (1) the sweep's count rendered under
+  the LINK toggle's note, so un-inviting one person read as *"anyone with the
+  link — 2 surfaces lost this canvas"*. That is stage 1's own "the verb
+  contradicted itself in one screen" finding arriving in the dialog rather than
+  the CLI: a count with no subject attaches itself to whatever sentence is
+  nearest. The report now carries WHICH revocation it was. (2) Un-inviting
+  somebody can expel the person doing it — the ordinary case for anyone who was
+  themselves invited by name — and the follow-up `listGrants` then 403s, so the
+  dialog kept showing the revoked invitation with a live-looking "Un-invite"
+  beside it. The row is dropped locally before the re-read now. Neither is
+  reachable from a unit test, because both are about what is on the screen
+  AFTER a request that succeeded.
+- **2026-08-24 — `repo:` is deferred, with the reason, and the refusal is the
+  part that had to stay true.** Verifying "can read this repository" is not
+  another token check: it needs the GitHub OAuth *access* token (Identity
+  Platform returns that only at sign-in, and holding one is a credential-custody
+  decision nobody has made), an outbound call to GitHub on a request path, and
+  a scope on the OAuth app that private repos require. It belongs with Scene 6
+  and the thin agent that needs it — phase 11. What matters is what the brief
+  named as unacceptable: **a `repo:` grant that can be written and admits
+  nobody.** It cannot be written; `attesterRefusal` says which attester is
+  missing and what to do instead, and the sentence is different from the email
+  one because they are different things to go and fix.
+- **2026-08-24 — What an AGENT can and cannot do here, decided rather than
+  inherited.** Signing in is a person-only gesture and stays one: an agent has
+  no inbox and no browser, and the only way to give it one would be to let it
+  present somebody else's token, which is the impersonation this whole
+  mechanism exists to prevent. But *inviting by name* and *seeing what a badge
+  has proved* are ordinary collaboration work, so both are CLI verbs:
+  `isocan share <email>`, `isocan share --revoke <email>` (which takes the
+  address, not a grant id — a person who wants somebody out knows their
+  address), and a `proved` column on `isocan badges`. An agent that could only
+  hand out the link would be handing out more access than it was asked for,
+  which is the asymmetry that decided it.
 
 - **2026-08-24 — The floor works, and it landed in spam.** The first
   `EMAIL_SIGNIN` from the freshly provisioned dev project reached

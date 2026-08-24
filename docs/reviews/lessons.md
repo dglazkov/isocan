@@ -84,6 +84,33 @@ recurred.
   waited, what the last probe saw, and whether the process is still alive; fail
   immediately once it has exited.
 
+- **A number with no subject attaches itself to the nearest sentence.** The
+  Share dialog held one `swept` count for two different revocations, so
+  un-inviting one person by email rendered *"anyone with the link — 2 surfaces
+  lost this canvas"* under the link toggle. Every word of it was true and the
+  sentence was a lie. Report WHICH gesture a count belongs to, or put it beside
+  the control that produced it — and note that the same file had already
+  learned this once, in the CLI, one stage earlier.
+- **A destructive gesture can remove the person performing it, and then the
+  re-read lies.** Un-inviting somebody expels the caller when the caller was
+  admitted by the row they just revoked — the ordinary case for anyone tidying
+  up an invitation they were themselves on. The follow-up list request then
+  403s, and a dialog that only trusts the re-read leaves the revoked row on
+  screen with a live-looking button. Drop what you know is gone locally BEFORE
+  re-reading, and translate the refusal into what actually happened. Neither
+  half is reachable from a unit test: both are about the screen after a request
+  that succeeded.
+- **When a capability looks like it must be compiled in, check whether what
+  really varies is an input the code already needs.** `attest.ts` shipped its
+  roster of attesters as a constant, on the reasonable-sounding ground that
+  configuration could make a home claim an attester it does not have. But the
+  verification ships in every build identically; what varies is whether there
+  is a project to check tokens against — and that project id is what `iss` and
+  `aud` are bound to anyway. So the configuration is not a claim that could be
+  false, it is the thing the work is done with, and a wrong one fails loudly at
+  the first use. The constant would have made "one image, many homes"
+  impossible for the sake of a lie that cannot be told.
+
 ## Working alongside agents
 
 - **`git add -A` commits whatever the other agents have on disk right now.**

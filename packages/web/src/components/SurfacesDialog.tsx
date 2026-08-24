@@ -124,6 +124,15 @@ export function SurfacesDialog({ onClose }: { onClose: () => void }) {
                 {badge.actors.map((a) => a.name || a.id).join(", ") || "speaks as nobody"} ·{" "}
                 {badge.canvases === 1 ? "1 canvas" : `${badge.canvases} canvases`} ·{" "}
                 {badge.self ? "here now" : `seen ${elapsedLabel(badge.lastSeen, now)} ago`}
+                {/* What this surface has PROVED (phase 9 stage 2). It is the
+                    answer to "why does that machine get into the canvas I only
+                    invited Jordan to", which a list of names and counts cannot
+                    give — and every badge here shares an identity with you, so
+                    these are your own proofs on your own surfaces. */}
+                {(badge.attested ?? []).length > 0 &&
+                  ` · proved ${(badge.attested ?? [])
+                    .map((attribute) => attribute.replace(/^email:/, ""))
+                    .join(", ")}`}
               </span>
             </span>
             {arming === badge.badgeId ? (

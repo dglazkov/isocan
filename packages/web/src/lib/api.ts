@@ -1,6 +1,9 @@
 import type {
   Actor,
   ActorClaimOp,
+  AttestOffer,
+  AttestRequest,
+  AttestResponse,
   ActorColors,
   BadgesResponse,
   BlobUploadResponse,
@@ -21,6 +24,7 @@ import type {
   SlashCommand,
 } from "@isocan/core";
 import {
+  ATTEST_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
   DOOR_ROUTE,
@@ -229,6 +233,37 @@ export function createGrant(projectId: string, subject: GrantSubject): Promise<G
  */
 export function revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
   return request("DELETE", grantRoute(projectId, grantId));
+}
+
+// ---- what this holder has proved (phase 9 stage 2) ----
+//
+// One route, two verbs, and not project-scoped: an attestation is a fact about
+// the HOLDER rather than about a room, and a badge that is not admitted
+// anywhere must still be able to prove its address — because proving it is how
+// it comes to be admitted.
+
+/**
+ * What this home can verify, what this badge has proved, and who that lets it
+ * be.
+ *
+ * The `auth` half is why this is a fetch and not a build-time constant: the
+ * key and project reach the page from the home at run time, so one image runs
+ * at dev.isocan.io, at isocan.io, and on a laptop that has borrowed nothing.
+ * A page that baked them in would be a per-home bundle.
+ */
+export function attestOffer(): Promise<AttestOffer> {
+  return request("GET", ATTEST_ROUTE);
+}
+
+/**
+ * Hand the home a token from the attester it named, and have it write the row.
+ *
+ * The address is read out of the verified token at the daemon, never sent
+ * beside it: a body naming the mailbox to attest would be this page attesting
+ * for itself with a signature stapled on.
+ */
+export function attest(idToken: string): Promise<AttestResponse> {
+  return request("POST", ATTEST_ROUTE, { idToken } satisfies AttestRequest);
 }
 
 // ---- your own surfaces: kill-a-badge (phase 9) ----

@@ -270,8 +270,14 @@ in the web app drives:
 - `isocan share --link on` — grant it again. (That writes a NEW grant row; the
   old one stays as a record of when it was switched off. It does not bring
   anybody back: they are re-admitted the next time they ask.)
-- `isocan share <email>` — a real subject, satisfied by a verified email. A
-  home that cannot verify one yet refuses and says so; share the link instead.
+- `isocan share <email>` — **invite one person by name.** They get in by
+  proving they read that address, whether or not the link is on. Nothing is
+  emailed from here: the invitation is still the address, and the grant is
+  what lets them through the door when they arrive. A home that has borrowed
+  nowhere to verify an address refuses and says so; share the link instead.
+- `isocan share --revoke <email>` — un-invite them, which **expels them**
+  unless another grant still covers them. It takes the address, not the grant
+  id.
 
 Three things to know before you use it:
 
@@ -291,9 +297,15 @@ Three things to know before you use it:
 the person's browser tabs, other machines enrolled by a pass — and can end one:
 
 ```sh
-isocan badges                    # what carries this identity, and when each was last seen
+isocan badges                    # what carries this identity, what it has proved, when it was last seen
 isocan badges --kill <badgeId>   # end that surface's recognition
 ```
+
+The `proved` column is what that surface has **attested**: an address somebody
+signed in with, which is how an `email:` grant admits them. You cannot prove
+one — an agent has no inbox and no browser, so signing in is a person's
+gesture — but reading which of these surfaces has proved what is often the
+answer to "why does that machine get into this canvas".
 
 The row marked `(this one)` is the surface you are typing at; ending it signs
 this machine out of the home. On a machine with a home configured the list is

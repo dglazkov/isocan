@@ -43,18 +43,18 @@ const DISJUNCTION_LIMIT = 30;
  * phase 7 one per grant at `grants/{id}`, and from phase 8 one per pass at
  * `passes/{id}` — exactly the shapes the architecture draws.
  *
- * ## The three arrays, and why there is exactly one writer
+ * ## The denormalized arrays, and why there is exactly one writer
  *
- * `claimIds`, `claimKeys` and `admittedTo` are the same data denormalized,
- * one array per question the desk is actually asked, because each is an
- * `array-contains` here and a whole-table scan everywhere else. Phase 3's
- * warning is exact: a CloudDesk that does not write them on every claim and
- * every admission passes the suite on a FileDesk and answers nothing in the
- * cloud.
+ * `claimIds`, `claimKeys`, `admittedTo` and — from phase 9 stage 2 —
+ * `attested` are the same data denormalized, one array per question the desk
+ * is actually asked, because each is an `array-contains` here and a
+ * whole-table scan everywhere else. Phase 3's warning is exact: a CloudDesk
+ * that does not write them on every claim and every admission passes the suite
+ * on a FileDesk and answers nothing in the cloud.
  *
  * So they cannot be forgotten, structurally: **nothing writes a badge except
- * `writeBadge`**, and `writeBadge` derives all three from `claims` and
- * `admissions` on every call. There is no code path that writes a claim and a
+ * `writeBadge`**, and `writeBadge` derives every one of them from `claims`,
+ * `admissions` and `attestations` on every call. There is no code path that writes a claim and a
  * separate code path that writes an array — they are the same statement. A
  * reviewer's whole job on this file is to confirm there is one writer.
  *
@@ -270,6 +270,24 @@ export class CloudDesk implements Desk {
     }));
   }
 
+  /**
+   * `where("attested", "array-contains", attribute)` — the reverse of
+   * `attest`, and the query person resumption is made of.
+   *
+   * Single-field, so Firestore's automatic index serves it and
+   * `firestore.indexes.json` needs nothing. A killed badge derives an empty
+   * `attested` in `denormalize`, so it is not in the index at all: a holder
+   * the home no longer recognises cannot vouch for anybody, by construction
+   * rather than by a filter here.
+   */
+  async badgesAttesting(attribute: string): Promise<BadgeRecord[]> {
+    const found = await this.db
+      .collection(BADGES)
+      .where("attested", "array-contains", attribute)
+      .get();
+    return found.docs.map((doc) => toRecord(doc.data()));
+  }
+
   // ---- grants ----
 
   /**
@@ -434,12 +452,12 @@ export class CloudDesk implements Desk {
 }
 
 /**
- * A badge document: the record, plus the three arrays derived from it.
+ * A badge document: the record, plus the arrays derived from it.
  *
  * **A killed badge derives EMPTY arrays**, and that one line is how "a killed
  * badge drops out of every query" becomes structural rather than a filter
- * repeated in `claimants`, `holdersOf`, `claimsIn` and `badgesIn`. The three
- * arrays ARE the index; a document that is not in the index cannot come back
+ * repeated in `claimants`, `holdersOf`, `claimsIn`, `badgesIn` and
+ * `badgesAttesting`. The arrays ARE the index; a document that is not in the index cannot come back
  * from a query, whatever a read-side branch does or forgets to do. Its
  * `claims` and `admissions` stay on the document, because the tombstone is
  * the audit record of what that surface could do and where it had been.
@@ -460,6 +478,9 @@ function denormalize(badge: BadgeRecord): DocumentData {
             .filter((key): key is string => typeof key === "string"),
         ),
     admittedTo: dead ? [] : unique(badge.admissions.map((admission) => admission.canvasId)),
+    // The fourth array, phase 9 stage 2's: what this holder has PROVED, so
+    // "who else is this person" is one indexed query instead of a scan.
+    attested: dead ? [] : unique((badge.attestations ?? []).map((row) => row.attribute)),
   };
 }
 

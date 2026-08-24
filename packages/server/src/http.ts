@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   Actor,
+  AttestOffer,
+  AttestRequest,
+  AttestResponse,
   BadgeSummary,
   BadgesResponse,
   CreateGrantRequest,
@@ -26,6 +29,7 @@ import type {
   UndoRedoRequest,
 } from "@isocan/core";
 import {
+  ATTEST_ROUTE,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -39,6 +43,7 @@ import {
   isLive,
   newId,
   normalizeSubject,
+  NO_ATTESTER,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -49,7 +54,15 @@ import {
   UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
-import { attesterRefusal } from "./attest.ts";
+import {
+  attestersOf,
+  attesterRefusal,
+  BadIdTokenError,
+  googleSigningKeys,
+  verifyIdToken,
+  type AuthConfig,
+  type SigningKeys,
+} from "./attest.ts";
 import { admittingGrant, NotAdmittedError } from "./grants.ts";
 import { killAndSweep, sweepCanvas } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
@@ -209,6 +222,25 @@ export interface RouteOptions {
    * bytes this replica has never held (see the blob GET). Writes reach it
    * through the engine, never from here. */
   home?: HomeConnection | null;
+  /**
+   * **The attester this home has borrowed**, or null when it has borrowed
+   * none — which is every local daemon and is not a defect.
+   *
+   * Configuration reaching the routes the way `homeUrl` does, and for the same
+   * reason: what a home can VERIFY is innkeeper configuration, not a
+   * per-invocation choice, and it must be answerable without a rebuild. It
+   * decides three things: whether `email:` may be granted here, what the
+   * browser is handed to sign in with, and which project a presented token is
+   * checked against. See `attest.ts` for why that is one value and not a
+   * boolean somebody could set wrongly.
+   */
+  auth?: AuthConfig | null;
+  /**
+   * Where the public keys a presented token is checked against come from.
+   * Defaults to Google's published endpoint; see `SigningKeys` in `attest.ts`
+   * for why this is configuration and what it buys.
+   */
+  signingKeys?: SigningKeys;
 }
 
 export function registerRoutes(
@@ -221,6 +253,14 @@ export function registerRoutes(
 ): void {
   // Raw bodies for blob uploads; JSON stays JSON.
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+
+  // What this home can verify, derived once from its configuration rather than
+  // per request: it cannot change while the process is up, and a home that
+  // recomputed it per call would invite somebody to make it a lookup that can
+  // fail halfway through a request.
+  const auth = options.auth ?? null;
+  const attesters = attestersOf(auth);
+  const signingKeys = options.signingKeys ?? googleSigningKeys;
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof OpValidationError) {
@@ -247,6 +287,14 @@ export function registerRoutes(
     // help. `not-admitted` is a different recovery: ask for the link.
     if (err instanceof NotAdmittedError) {
       return reply.status(403).send({ error: err.message, code: err.code });
+    }
+    // 400 and its own code, for `not-admitted`'s reason pointed the other way:
+    // the caller's BADGE is fine and a 401 would send it to the door to throw
+    // away a perfectly good credential. What is wrong is the token it
+    // presented ON TOP of the badge, and the message says which of the three
+    // assumptions failed, because they are three different things to fix.
+    if (err instanceof BadIdTokenError) {
+      return reply.status(400).send({ error: err.message, code: err.code });
     }
     // The pass said no, and each reason is its own status and its own code —
     // 404 unknown, 409 spent, 410 expired (see `PassRefusedError`). A single
@@ -765,9 +813,9 @@ export function registerRoutes(
     // have accepted, on the strength of its own configuration. Same reason
     // `isocan share <email>` has no client-side "not yet".
     if (options.home) return options.home.createGrant(id, subject);
-    const unverifiable = attesterRefusal(subject);
+    const unverifiable = attesterRefusal(subject, attesters);
     if (unverifiable) {
-      return reply.status(400).send({ error: unverifiable, code: "no-attester" });
+      return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
     await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
@@ -896,6 +944,80 @@ export function registerRoutes(
         .send({ error: `${badgeId} is already ended`, code: "unknown-badge" });
     }
     return { killed: target, swept: outcome.swept } satisfies KillBadgeResponse;
+  });
+
+  // ---- attestations: what this holder has PROVED (identity desk, mech 3+6) ----
+  //
+  // **Borrow, never mint, as two verbs on one path.** `GET` says what this
+  // home can verify, hands the browser what it needs to start a sign-in, and
+  // reports what this badge has already proved and who that lets it be; `POST`
+  // takes a token from the attester the `GET` named and writes the row.
+  //
+  // NOT project-scoped, and that is load-bearing rather than tidy: a badge
+  // that is not admitted anywhere must still be able to prove its address,
+  // because proving it is HOW it comes to be admitted. A project-scoped path
+  // would be refused by the door hook before the handler could look at the
+  // token — the same trap `POST /api/passes/redeem` had to step around, for
+  // the same reason.
+  //
+  // **On a REPLICA both forward.** An attestation rides the badge, a badge at
+  // the home is a different badge from the one at the laptop, and the door
+  // that reads attestations is the home's. A laptop that wrote the row into
+  // its own desk would have proved something to the only party that was
+  // already trusting it, while the home went on refusing.
+
+  app.get(ATTEST_ROUTE, async (req) => {
+    if (options.home) return options.home.attestOffer();
+    return {
+      attesters,
+      auth,
+      attestations: req.badge!.attestations ?? [],
+      resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
+    } satisfies AttestOffer;
+  });
+
+  /**
+   * **Verify a token, decorate the badge.** The whole of "borrowing an
+   * attester", and the four lines it takes are worth reading in order.
+   *
+   * Nothing here creates an account, because isocan does not have any. The
+   * badge the caller already carries gains one row. A holder that never signs
+   * in is unaffected in every particular.
+   *
+   * The address is read out of the VERIFIED token and never out of the
+   * request, which is why `AttestRequest` has no email field: a body that said
+   * which mailbox to attest would be the caller attesting for itself with a
+   * signature stapled on.
+   *
+   * The refusal when this home has borrowed nothing is deliberately the same
+   * fact the Share dialog is told, from the other side. A home with no
+   * attester answering "sure" to a token would be the cheerful wrong address
+   * this codebase keeps meeting: the row would be written, the door would
+   * never read it, and nobody could say why.
+   */
+  app.post(ATTEST_ROUTE, async (req, reply) => {
+    if (options.home) return options.home.attest((req.body ?? {}) as AttestRequest);
+    if (!auth) {
+      return reply.status(400).send({
+        error:
+          "this home has borrowed no attester, so there is nothing here to verify a sign-in " +
+          "against. Sharing works by link; see docs/design/identity-desk.md.",
+        code: NO_ATTESTER,
+      });
+    }
+    const body = (req.body ?? {}) as Partial<AttestRequest>;
+    const idToken = typeof body.idToken === "string" ? body.idToken : "";
+    // No special case for an empty token: `verifyIdToken` refuses it as "not a
+    // JWT", which is what it is, in the same voice as every other refusal.
+    const attestation = await verifyIdToken(idToken, auth, await signingKeys());
+    await desk.attest(req.badge!.badgeId, attestation);
+    // Read back through the desk rather than assumed: the answer a surface
+    // renders is what was WRITTEN, which is the discipline the sweep report
+    // and the grant response both take.
+    return {
+      attestation,
+      resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
+    } satisfies AttestResponse;
   });
 
   // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
@@ -1466,6 +1588,12 @@ function summarize(
       name: names[claim.actorId] ?? "",
     })),
     canvases: record.admissions.length,
+    // Absent rather than empty when nothing has been proved, so the field a
+    // client renders is the field the desk actually holds — an empty array and
+    // "this home is older than attestations" would look the same otherwise.
+    ...(record.attestations?.length
+      ? { attested: record.attestations.map((row) => row.attribute) }
+      : {}),
   };
 }
 

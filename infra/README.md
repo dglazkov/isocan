@@ -137,6 +137,16 @@ ISOCAN_IMAGE_TAG=<sha> ./infra/70-cloud-run.sh
 
 **Then stop.** You have a home. Open the `*.run.app` URL it prints.
 
+One thing `70-cloud-run.sh` does that is worth knowing before you read it:
+if `100-identity-platform.sh` has run, the deploy adds `ISOCAN_AUTH_PROJECT`
+and `ISOCAN_AUTH_API_KEY` to the service, **looking the key up rather than
+storing it anywhere**. Whether a home can verify an email address is
+configuration, not a property of the image — the same container runs on a
+laptop with neither set and simply has no attester, which is a working home.
+Re-running the deploy is how the values get onto the service; setting them on
+an existing service without a redeploy is `gcloud run services update
+--update-env-vars`, which is a new revision of the same image.
+
 And run the proof phase 4 could not:
 
 ```bash

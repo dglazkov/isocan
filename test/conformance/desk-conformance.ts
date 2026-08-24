@@ -357,6 +357,36 @@ export function deskConformance(
     );
 
     test(
+      "badgesAttesting: who else has proved this — the query resumption is made of",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.put(mint("bdg_2"));
+        await desk.put(mint("bdg_3"));
+        const at = "2026-01-02T00:00:00.000Z";
+        await desk.attest("bdg_1", { attribute: "email:ada@example.test", verifiedVia: "magic-link", at });
+        await desk.attest("bdg_2", { attribute: "email:ada@example.test", verifiedVia: "google", at });
+        await desk.attest("bdg_3", { attribute: "email:eve@example.test", verifiedVia: "magic-link", at });
+
+        expect((await desk.badgesAttesting("email:ada@example.test")).map((b) => b.badgeId).sort())
+          .toEqual(["bdg_1", "bdg_2"]);
+        // Nobody has proved this, and nobody is the honest answer — a query
+        // that fell back to a scan would answer with everyone.
+        expect(await desk.badgesAttesting("email:nobody@example.test")).toEqual([]);
+        // The attribute is compared AS STORED. `upsertAttestation` normalizes
+        // on the way in, so a caller that spells it differently matches
+        // nothing — which is why `normalizeAttribute` is on both ends and not
+        // in here.
+        expect(await desk.badgesAttesting("email:Ada@Example.Test")).toEqual([]);
+
+        // A holder the home no longer recognises vouches for nobody.
+        await desk.killBadge("bdg_2", "2026-03-01T00:00:00.000Z", "bdg_1");
+        expect((await desk.badgesAttesting("email:ada@example.test")).map((b) => b.badgeId)).toEqual([
+          "bdg_1",
+        ]);
+      }),
+    );
+
+    test(
       "badgesIn: every live badge admitted to one canvas — the sweep's population",
       withDesk(async ({ desk }) => {
         await desk.put(mint("bdg_1"));
@@ -443,6 +473,7 @@ export function deskConformance(
         });
         expect(await desk.badgesIn("prj_b")).toEqual([]);
         expect(await desk.claimants("usr_eve")).toEqual([]);
+        expect(await desk.badgesAttesting("email:eve@example.test")).toEqual([]);
 
         expect(await desk.killBadge("bdg_nope", "2026-03-01T00:00:00.000Z", "bdg_2")).toBeNull();
       }),

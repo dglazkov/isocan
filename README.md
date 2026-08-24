@@ -246,7 +246,23 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   rather than on what is on the canvas, so it never appears in the oplog and
   `undo` will not take it back. A canvas that will not have you says so:
   `403 not-admitted`, which means ask whoever shared it — not "get a new
-  credential".
+  credential". Beside the toggle is **one field for one person**: invite an
+  email address, and whoever proves that address is let in whether or not the
+  link is on. `isocan share <email>` and `isocan share --revoke <email>` are the
+  same two gestures from a terminal.
+- **Proving an address, which is not a login**: isocan has no accounts and does
+  not want any. What a person can do is **borrow an attester they already
+  have** — click your own face, pick **"Prove your address…"**, and a link
+  arrives in the inbox; opening it writes one line onto the badge this browser
+  already carries. Nothing is created: no user record, no password, nothing to
+  reset, and a person who never does it keeps using isocan exactly as before.
+  What it buys is two things. Somebody can invite **you** by name instead of
+  handing out the link — that is what an `email:` grant is satisfied by — and a
+  second surface that proves the same address may **resume the person your
+  first one already is**, which is how a phone becomes you without anybody
+  asserting anything. A home that has borrowed no attester says so and offers
+  no control, because the link is how sharing works there; whether a home has
+  one is configuration, so the same build runs on a laptop and at isocan.io.
 - **Escalation**: a thin guest goes thick in one command, and the canvas hands
   it to you — click your own face and pick **"Work from your terminal…"**: one
   sentence of concept, one command, a copy button, and a clock, because the
@@ -353,10 +369,12 @@ isocan setup [dir | <address>#<pass>]  # ready a directory — or join that canv
 isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan home [<url>|--clear]        # which home this daemon answers to
-isocan share [--link on|off]     # the canvas's address, and who may enter it
+isocan share [<email>] [--link on|off] [--revoke <email>]
+                                   # the address, and who may enter this canvas
 isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
-isocan badges [--kill <badgeId>] # the surfaces carrying your identity; end one
+isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
+                                   # what each has proved; end one
 isocan project create|list [--all]|show|edit|delete
 isocan use <project> [--home]      # bind this dir to a project (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

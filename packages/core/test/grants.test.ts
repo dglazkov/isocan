@@ -3,6 +3,7 @@ import type { Attestation, GrantSubject } from "../src/index.ts";
 import {
   attestationSatisfying,
   attestedKindOf,
+  grantSubjectOf,
   grantSubjectRefusal,
   LINK,
   normalizeAttribute,
@@ -63,6 +64,35 @@ describe("what is a grant subject at all", () => {
     expect(attestedKindOf(LINK)).toBeNull();
     expect(attestedKindOf("email:jordan@acme.test")).toBe("email");
     expect(attestedKindOf("repo:github.com/acme/widgets")).toBe("repo");
+  });
+});
+
+describe("what somebody typed, as a subject", () => {
+  /**
+   * `grantSubjectOf` lived in the CLI through phase 9 stage 1 with a note
+   * saying it would move here "when the field lands — it is the same question
+   * asked twice at that point". The Share dialog's "who" field landed in stage
+   * 2, so it moved: two surfaces asking one question is exactly AGENTS.md's
+   * rule about shared computation, at the smallest possible scale.
+   */
+  it("reads an address as an email and a three-part path as a repo", () => {
+    expect(grantSubjectOf("jordan@acme.test")).toBe("email:jordan@acme.test");
+    expect(grantSubjectOf("github.com/acme/widgets")).toBe("repo:github.com/acme/widgets");
+    // Already spelled: left exactly as it was, so a caller that knows the
+    // vocabulary is not second-guessed.
+    expect(grantSubjectOf("email:jordan@acme.test")).toBe("email:jordan@acme.test");
+    expect(grantSubjectOf("repo:github.com/acme/widgets")).toBe("repo:github.com/acme/widgets");
+    expect(grantSubjectOf("  jordan@acme.test  ")).toBe("email:jordan@acme.test");
+  });
+
+  it("passes anything else through untouched, so the refusal is about what was typed", () => {
+    // Guessing here would make the home's refusal about something the person
+    // did not write. `grantSubjectRefusal` is the judge of shape.
+    expect(grantSubjectOf("everyone")).toBe("everyone");
+    expect(grantSubjectRefusal(grantSubjectOf("everyone"))).toMatch(/not a grant subject/);
+    // And it does NOT normalize: that is `normalizeSubject`, applied at the
+    // daemon, once, where the row is written.
+    expect(grantSubjectOf("Jordan@Acme.Test")).toBe("email:Jordan@Acme.Test");
   });
 });
 

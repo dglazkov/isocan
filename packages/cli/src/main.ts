@@ -35,6 +35,8 @@ import {
   IDENTITY_COLORS,
   INSTALL_SPEC,
   LINK,
+  grantSubjectOf,
+  normalizeSubject,
   PASS_TTL_MS,
   actorNameIn,
   canvasUrl,
@@ -1316,15 +1318,26 @@ async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> 
  * op would make the oplog lie"). Button and verb drive exactly the same three
  * routes, and neither of them spells a URL: `@isocan/core` does.
  *
- * Three shapes, one endpoint:
+ Four shapes, one endpoint:
  *
- * - `isocan share` — the address to send, and whether the link is on.
+ * - `isocan share` — the address to send, whether the link is on, and who has
+ *   been invited by name.
  * - `isocan share --link off` / `--link on` — revoke, or grant again.
- * - `isocan share <email>` — phase 9's slot. It is not stubbed out here and it
- *   is not silently refused either: the request goes to the home, and the
- *   home's own 400 explains that a badge cannot prove an email until the
- *   attesters land. A client-side "not yet" would be a second copy of a policy
- *   that is about to change.
+ * - `isocan share <email>` — **phase 9 stage 2's slot, filled.** The home
+ *   writes the row, and whoever proves that address is admitted whether or not
+ *   the link is on. On a home that has borrowed no attester the request is
+ *   still sent and the home's own `no-attester` explains why it cannot: a
+ *   client-side "not yet" would be a second copy of a policy that varies by
+ *   which home this daemon answers to.
+ * - `isocan share --revoke <email>` — un-invite, which EXPELS them unless a
+ *   surviving grant still covers them. It takes the sentence, not the row id:
+ *   a person who wants somebody out knows their address.
+ *
+ * **An agent can do all four, and that is deliberate.** Signing in is a
+ * person's gesture — an agent has no inbox and no browser — but *inviting
+ * somebody by name* is ordinary collaboration work, and an agent that could
+ * only hand out the link would be handing out more access than it was asked
+ * to. Seeing what a badge has proved is `isocan badges`.
  *
  * **There is no owner**, deliberately, and this verb does not imply one: any
  * admitted badge may share or un-share, which is what the door actually does.
@@ -1336,21 +1349,42 @@ async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> 
  */
 program
   .command("share")
-  .description("Who may enter this canvas: the address to send, and the \"anyone with the link\" grant")
-  .argument("[who]", "an email or repo to grant access to — the home answers why it cannot yet")
+  .description("Who may enter this canvas: the address to send, the \"anyone with the link\" grant, and who was invited by name")
+  .argument("[who]", "an email to invite by name — they get in by proving that address")
   .option(
     "--link <on|off>",
     "turn the link grant on (anyone with the address) or off — OFF EXPELS the badges that came in on it",
   )
+  .option(
+    "--revoke <who>",
+    "un-invite somebody granted by name — EXPELS them unless another grant still covers them",
+  )
   .action(
-    run(async (who: string | undefined, opts: { link?: string }, cmd: Command) => {
+    run(async (who: string | undefined, opts: { link?: string; revoke?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const project = await resolveProject(ctx);
       // The one origin: people always enter through the home, so a replica
       // hands out the home's address and never its own 127.0.0.1 — the same
       // rule `isocan open` follows, from the same function.
       const address = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
+      /**
+       * What the sweeps this invocation ran did, added up.
+       *
+       * Added up rather than overwritten because `--link off --revoke <who>`
+       * is one gesture with two revocations, and reporting only the second
+       * would say "1 expelled" about a command that expelled four. Absent from
+       * a home that predates the sweep, which reads as nothing swept.
+       */
       let swept: SweepReport | undefined;
+      const sweepAlso = (report: SweepReport | undefined): void => {
+        if (!report) return;
+        swept = swept
+          ? {
+              expelled: swept.expelled + report.expelled,
+              rerooted: swept.rerooted + report.rerooted,
+            }
+          : report;
+      };
 
       if (opts.link !== undefined) {
         const want = opts.link.toLowerCase();
@@ -1369,16 +1403,49 @@ program
           // BELOW the status lines, not above them, or the command opens with
           // a number nobody has been given a subject for yet. Absent from a
           // home that predates the sweep, which reads as nothing swept.
-          ({ swept } = await ctx.client.revokeGrant(project.id, live.id));
+          sweepAlso((await ctx.client.revokeGrant(project.id, live.id)).swept);
         }
       }
 
+      /**
+       * **Un-invite, by the sentence rather than by the row id.**
+       *
+       * `--revoke jordan@acme.test` and not `--revoke gnt_7f3a`: a person who
+       * wants somebody out knows their address, and knowing a grant id means
+       * having first read a table to find it. The subject is spelled by the
+       * same `grantSubjectOf` the invitation used, so the two halves of one
+       * gesture cannot disagree about what was written.
+       *
+       * Refused loudly when no live row matches, rather than reported as a
+       * success that did nothing — "Jordan is out" when Jordan is not out is
+       * the worst possible answer here, and a mistyped address is the ordinary
+       * way to get it.
+       */
+      if (opts.revoke !== undefined) {
+        const subject = normalizeSubject(grantSubjectOf(opts.revoke));
+        const live = (await ctx.client.grants(project.id)).grants.find(
+          (g) => g.subject === subject,
+        );
+        if (!live) {
+          throw new Error(
+            `nothing on ${project.title} is granted to ${subject} — \`isocan share\` lists what is`,
+          );
+        }
+        sweepAlso((await ctx.client.revokeGrant(project.id, live.id)).swept);
+        console.log(`revoked ${subject} on ${project.title}`);
+      }
+
       if (who !== undefined) {
-        // Straight to the home. It refuses, in its own words, naming phase 9 —
-        // and if some later build can satisfy the subject, this line grants it
-        // without being touched.
+        // Straight to the home: it owns whether it can verify this subject, and
+        // a client-side "not yet" would be a second copy of a policy that
+        // changes with a home's configuration. A home that has borrowed an
+        // attester grants it; one that has not refuses with `no-attester` and
+        // says what to do instead.
         const { grant } = await ctx.client.createGrant(project.id, grantSubjectOf(who));
-        console.log(`granted ${grant.subject} on ${project.title} (${grant.id})`);
+        console.log(
+          `granted ${grant.subject} on ${project.title} (${grant.id}) — they get in by ` +
+            "proving that address; nothing was emailed from here",
+        );
       }
 
       const { grants } = await ctx.client.grants(project.id);
@@ -1565,6 +1632,12 @@ program
           badge: badge.badgeId,
           what: surfaceKind(badge),
           identity: badge.actors.map((a) => a.name || a.id).join(", ") || "—",
+          // What this surface has PROVED (phase 9 stage 2). An agent has no
+          // inbox and cannot sign in — but "which of my surfaces has proved
+          // what" is exactly the kind of fact it must not need a person to
+          // read out to it, and it is the answer to why a machine gets into a
+          // canvas that was shared with one address by name.
+          proved: badge.attested?.map((a) => a.replace(/^email:/, "")).join(", ") || "—",
           canvases: String(badge.canvases),
           seen: badge.self ? "now (this one)" : `${elapsedLabel(badge.lastSeen, now)} ago`,
         })),
@@ -1592,25 +1665,6 @@ function sweptLine(swept: SweepReport): string {
   // them, which is the design's whole point about not expelling the invited.
   if (swept.rerooted > 0) parts.push(`${swept.rerooted} kept by another grant`);
   return parts.join(", ");
-}
-
-/**
- * What a person typed, as a grant subject.
- *
- * It lives here rather than in core because only one surface computes it: the
- * Share dialog has no "who" field to type into (phase 9 owns that control),
- * so there is nothing for a shared helper to keep in step yet. When the field
- * lands, this moves — it is the same question asked twice at that point.
- *
- * Anything unrecognised is passed through untouched so that the home's refusal
- * is about what the person actually wrote, rather than about something this
- * function guessed.
- */
-function grantSubjectOf(who: string): GrantSubject {
-  if (who.startsWith("email:") || who.startsWith("repo:")) return who as GrantSubject;
-  if (who.includes("@")) return `email:${who}`;
-  if (who.split("/").length === 3) return `repo:${who}`;
-  return who as GrantSubject;
 }
 
 // ---------- setup: one command, from any directory ----------

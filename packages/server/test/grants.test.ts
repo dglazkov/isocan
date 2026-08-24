@@ -40,7 +40,12 @@ let base: string;
 let owner: TestBadge;
 
 async function boot(): Promise<void> {
-  daemon = await startDaemon({ port: 0, home });
+  // `auth: null` is this suite SAYING this home has borrowed nothing, rather
+  // than relying on the machine it runs on not having `ISOCAN_AUTH_PROJECT`
+  // set. A developer with a dev home configured in their shell would otherwise
+  // watch the no-attester assertions below fail for a reason that has nothing
+  // to do with the code — the same courtesy `homeUrl: null` extends.
+  daemon = await startDaemon({ port: 0, home, auth: null });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
@@ -266,7 +271,10 @@ describe("the grant API", () => {
       // is not there.
       expect(body.code).toBe("no-attester");
       expect(body.error).toMatch(/borrowed|cannot/);
-      expect(body.error).toContain("Share the link instead");
+      // Each kind says what it would take, because they are different things
+      // to go and do: an email needs a borrowed sign-in, a repo needs a token
+      // check nobody has built. Both end at the same remedy — the link.
+      expect(body.error).toMatch(/Share the link/);
     }
     // And the rows are not there: a grant nothing can satisfy is a dialog
     // claiming somebody was invited when nobody was.

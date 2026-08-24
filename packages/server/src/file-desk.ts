@@ -285,6 +285,17 @@ export class FileDesk implements Desk {
     });
   }
 
+  async badgesAttesting(attribute: string): Promise<BadgeRecord[]> {
+    // A walk is the honest implementation of a query on a file backing; the
+    // SEAM is the query, so `CloudDesk` serves it from `attested` with an
+    // index. Killed badges are skipped for `badgesIn`'s reason: a holder the
+    // home no longer recognises vouches for nobody.
+    return Object.values(this.state.badges)
+      .filter((badge) => badge.killedAt === undefined)
+      .filter((badge) => (badge.attestations ?? []).some((row) => row.attribute === attribute))
+      .map((badge) => ({ ...badge }));
+  }
+
   // ---- grants ----
 
   async grantsFor(canvasId: string): Promise<Grant[]> {

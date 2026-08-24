@@ -1215,6 +1215,11 @@ export class Engine {
     if (from !== undefined && !canvasIds.includes(from) && badge) {
       if (await admittingGrant(this.desk, from, badge)) canvasIds.push(from);
     }
+    // One query, two readers: the reducer judges whether the actor is visibly
+    // somebody (`claimants`), and `vouch` below asks whether any of those
+    // holders is a DIFFERENT badge. Asking the desk twice for one answer is
+    // how the two come to disagree.
+    const holders = request.op.as ? await this.desk.claimants(request.op.as) : [];
     const own = await this.desk.claimsOf(request.badgeId);
     // Own rows first, then the neighbours: a badge with no admissions yet is
     // still in its own scope, which is what keeps two agents on one machine
@@ -1235,12 +1240,100 @@ export class Engine {
       // claims and never about who is holding them (mechanism 5's "the
       // reducer judges actors, never badges", one layer up). They are on that
       // answer for kill-a-badge's sake — see `Desk.claimants`.
-      claimants: request.op.as
-        ? (await this.desk.claimants(request.op.as)).map((row) => row.claim)
-        : [],
+      claimants: holders.map((row) => row.claim),
+      ...(request.op.as
+        ? await this.vouch(request.badgeId, request.op.as, request.op.sessionKey, holders)
+        : {}),
       held: await this.heldNames(canvasIds),
       now,
     };
+  }
+
+  /**
+   * **Is this claimant allowed to be that actor, and by what?** — the
+   * gathering half of mechanism 6, and the tightening that comes with it.
+   *
+   * Two facts, both about badges, both computed HERE because `claims.ts` has
+   * never heard of a badge record and must not start:
+   *
+   * - `heldElsewhere` — some other badge already speaks as this actor, under a
+   *   key that is not the one being presented. That is what turns `as` from an
+   *   open assertion into a request that needs a vouch.
+   *
+   *   **Two exclusions, and both are load-bearing.** The migration SHELF is
+   *   not "elsewhere": a shelved pre-badge row belongs to no holder at all,
+   *   and treating it as one would lock a legacy session out of its own actor
+   *   on the one hop it has to adopt it. And a row under THE SAME SESSION KEY
+   *   is not "elsewhere" either, which is the shipped lost-badge recovery and
+   *   the reason this tightening stops where it does — see the note on
+   *   `heldElsewhere` in `claims.ts`.
+   * - `vouchedBy` — the attribute this badge and a badge claiming that actor
+   *   have BOTH proved. Jordan's phone and Jordan's laptop, one inbox.
+   *
+   * **The vouch is a membership test against the listing**, not a second
+   * spelling of the rule — the same discipline kill-a-badge takes ("what you
+   * may kill and what you are shown cannot drift apart"). What a surface is
+   * OFFERED on `GET /api/attest` and what the reducer will ACCEPT are one
+   * computation, so a person cannot be shown a button that is refused.
+   */
+  private async vouch(
+    badgeId: string,
+    as: string,
+    sessionKey: string,
+    holders: readonly { badgeId: string; claim: ActorClaim }[],
+  ): Promise<{ heldElsewhere?: boolean; vouchedBy?: string }> {
+    const elsewhere = holders.some(
+      (row) =>
+        row.badgeId !== badgeId &&
+        row.badgeId !== SHELF &&
+        row.claim.sessionKey !== sessionKey,
+    );
+    if (!elsewhere) return {};
+    const vouch = (await this.resumable(badgeId)).find((row) => row.actor.id === as);
+    return { heldElsewhere: true, ...(vouch ? { vouchedBy: vouch.via } : {}) };
+  }
+
+  /**
+   * **Who this badge may resume, and on the strength of what** — mechanism 6's
+   * "a badge attesting the same email as the badge that claimed an actor may
+   * resume that actor".
+   *
+   * Every actor claimed by some OTHER live badge that has proved an attribute
+   * this badge has also proved, minus the ones this badge already claims
+   * (those need no resuming — `claimsActor` already says yes).
+   *
+   * **A badge with no attestations resumes nobody, in one line and with no
+   * query.** That is the whole of "attestation adds a way and removes none":
+   * the overwhelming majority of holders have proved nothing, and for them
+   * this function is a document read and an empty array.
+   *
+   * The name comes from the registry as of NOW rather than from the claim row,
+   * for `redeemPass`'s reason: a person who renamed herself is offered the name
+   * she goes by, which is also the name her work already carries.
+   */
+  async resumable(badgeId: string): Promise<{ actor: Actor; via: string }[]> {
+    const me = await this.desk.badge(badgeId);
+    const mine = me?.attestations ?? [];
+    if (mine.length === 0) return [];
+    const names = await this.actorNames();
+    // Already one of mine, so not something to resume. Includes the actor this
+    // badge is wearing right now, which would otherwise be offered back to it.
+    const seen = new Set<string>(me!.claims.map((claim) => claim.actorId));
+    const rows: { actor: Actor; via: string }[] = [];
+    for (const attestation of mine) {
+      for (const badge of await this.desk.badgesAttesting(attestation.attribute)) {
+        if (badge.badgeId === badgeId) continue;
+        for (const claim of badge.claims) {
+          if (seen.has(claim.actorId)) continue;
+          seen.add(claim.actorId);
+          rows.push({
+            actor: { id: claim.actorId, name: names[claim.actorId] ?? "" },
+            via: attestation.attribute,
+          });
+        }
+      }
+    }
+    return rows;
   }
 
   /**

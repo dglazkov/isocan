@@ -273,6 +273,27 @@ export interface BadgeSummary {
   /** How many canvases it has been let into. A count and not a list: the
    * gesture needs "this thing is still in nine rooms", not the nine rooms. */
   canvases: number;
+  /**
+   * What this surface has PROVED — the attributes, in the grant-subject
+   * namespace (`email:jordan@acme.test`).
+   *
+   * Phase 9 stage 2's addition to a summary that is otherwise deliberately
+   * thin, and it earns the room for two reasons. It is the answer to "why does
+   * that machine get into the canvas I only invited Jordan to", which is
+   * unanswerable from a list of names and canvas counts. And it is an AGENT's
+   * half of attestation: an agent has no inbox and cannot sign in, but seeing
+   * what the badge it holds has proved is exactly the kind of thing it must
+   * not need a person to read out to it.
+   *
+   * It discloses nothing new. Every badge in this listing shares an identity
+   * with the caller by construction, so these are the caller's own proofs on
+   * the caller's own surfaces.
+   *
+   * Absent (rather than empty) on a home from before stage 2, so a client
+   * reading `attested ?? []` gets the truth from an old home rather than a
+   * crash — the same courtesy `swept?` extends on a revoke.
+   */
+  attested?: string[];
 }
 
 export interface BadgesResponse {
