@@ -83,7 +83,10 @@ describe("the list is readable", () => {
  */
 describe("the printed list", () => {
   /** Every row: two spaces, the keys, a gap, then what it does. */
-  const rows = () => shortcutsAsText().split("\n").filter((line) => line.startsWith("  "));
+  const rows = () =>
+    shortcutsAsText()
+      .split("\n")
+      .filter((line) => line.startsWith("  ") && line[2] !== " ");
 
   it("never runs a key into its description", () => {
     for (const line of rows()) {

@@ -81,3 +81,48 @@ describe("nearestToPoint", () => {
     expect(nearestToPoint([], 0, 0)).toBeNull();
   });
 });
+
+/**
+ * The one that shipped: Up walked sideways.
+ *
+ * Two screens side by side, 434px and 433px tall. The rule for "above" used to
+ * compare far edges — `node.bottom < current.bottom` — so the neighbour
+ * qualified as above by ONE PIXEL, purely for being a pixel shorter. And
+ * because it overlapped vertically it scored no distance at all, only its
+ * sideways gap, so it beat the screen genuinely above them both.
+ *
+ * The numbers here are the real ones off the canvas where it was found.
+ */
+describe("leaving in a direction means clearing the edge you left", () => {
+  const above = { id: "above", x: 751, y: 1583, width: 560, height: 720 };
+  const here = { id: "here", x: 1311, y: 2651, width: 480, height: 434 };
+  const beside = { id: "beside", x: 1871, y: 2651, width: 480, height: 433 };
+  const all = [above, here, beside];
+
+  it("goes up to what is actually above, not to a shorter neighbour", () => {
+    expect(findNextItem(here, all, "ArrowUp")?.id).toBe("above");
+  });
+
+  it("still finds the neighbour when you ask for it sideways", () => {
+    expect(findNextItem(here, all, "ArrowRight")?.id).toBe("beside");
+  });
+
+  it("treats a same-row neighbour as beside you however its edges fall", () => {
+    // Taller as well as shorter: neither is a way out upward.
+    const taller = { id: "taller", x: 1871, y: 2651, width: 480, height: 900 };
+    expect(findNextItem(here, [here, taller], "ArrowUp")).toBeNull();
+    expect(findNextItem(here, [here, taller], "ArrowDown")).toBeNull();
+  });
+
+  it("will not leave into something it overlaps", () => {
+    // A big item sitting partly over this one is not up, down, left or right.
+    const straddling = { id: "straddling", x: 1200, y: 2400, width: 700, height: 500 };
+    for (const dir of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] as const) {
+      expect(findNextItem(here, [here, straddling], dir), dir).toBeNull();
+    }
+  });
+
+  it("has nowhere up to go when everything is level with it", () => {
+    expect(findNextItem(here, [here, beside], "ArrowUp")).toBeNull();
+  });
+});

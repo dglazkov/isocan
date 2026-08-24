@@ -9,6 +9,19 @@
  * apart. Weighting sideways drift ~2.5× keeps a walk inside its own lane, and
  * items that overlap on the other axis — the ones a person would call "in the
  * same row" — pay no penalty at all.
+ *
+ * "IN THE DIRECTION" MEANS CLEAR OF THE EDGE YOU LEFT, not merely further
+ * along than the edge you arrived at. The first version compared far edges —
+ * for Up, `node.bottom < current.bottom` — so a neighbour in the SAME ROW
+ * counted as above whenever it was a pixel shorter. That was not
+ * hypothetical: two screens side by side, 434px and 433px tall, and Up walked
+ * sideways to the shorter one, because a candidate overlapping you
+ * vertically scores no distance at all and pays only its sideways gap.
+ *
+ * Anything overlapping the box you are standing in is BESIDE you, whatever
+ * its far edge does, so it is not somewhere you can go by leaving in that
+ * direction. With the test on the near edge, `projected` is never negative
+ * either, and the `Math.max(0, …)` that used to hide the problem is gone.
  */
 
 export interface Rect {
@@ -54,23 +67,23 @@ export function findNextItem(
 
     switch (direction) {
       case "ArrowRight":
-        inDirection = node.x > current.x;
-        projected = Math.max(0, node.x - (current.x + current.width));
+        inDirection = node.x >= current.x + current.width;
+        projected = node.x - (current.x + current.width);
         orthogonal = orthogonalDistance(current.y, current.height, node.y, node.height);
         break;
       case "ArrowLeft":
-        inDirection = node.x + node.width < current.x + current.width;
-        projected = Math.max(0, current.x - (node.x + node.width));
+        inDirection = node.x + node.width <= current.x;
+        projected = current.x - (node.x + node.width);
         orthogonal = orthogonalDistance(current.y, current.height, node.y, node.height);
         break;
       case "ArrowDown":
-        inDirection = node.y > current.y;
-        projected = Math.max(0, node.y - (current.y + current.height));
+        inDirection = node.y >= current.y + current.height;
+        projected = node.y - (current.y + current.height);
         orthogonal = orthogonalDistance(current.x, current.width, node.x, node.width);
         break;
       case "ArrowUp":
-        inDirection = node.y + node.height < current.y + current.height;
-        projected = Math.max(0, current.y - (node.y + node.height));
+        inDirection = node.y + node.height <= current.y;
+        projected = current.y - (node.y + node.height);
         orthogonal = orthogonalDistance(current.x, current.width, node.x, node.width);
         break;
     }

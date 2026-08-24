@@ -42,38 +42,36 @@ export const SHORTCUTS: Shortcut[] = [
 
   // ---- Moving around ----
   { keys: ["⌘+", "⌘−"], does: "Zoom in and out", group: "Moving around", note: "The canvas, never the browser" },
-  { keys: ["F"], does: "Focus — fill the screen with the selection", group: "Moving around", note: "With nothing selected, fits everything" },
-  { keys: ["⌘0", "0"], does: "Fit everything on screen", group: "Moving around" },
-  { keys: ["Shift 0"], does: "Actual size (100%)", group: "Moving around" },
-  { keys: ["Shift 1"], does: "Fit everything", group: "Moving around" },
-  { keys: ["Shift 2"], does: "Fit the selection", group: "Moving around" },
-  { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around" },
+  { keys: ["F", "⇧2"], does: "Fit the selection", group: "Moving around", note: "With nothing selected, fits everything" },
+  { keys: ["⌘0", "0", "⇧1"], does: "Fit everything", group: "Moving around" },
+  { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
+  { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
 
   // ---- Items ----
   { keys: ["←", "→", "↑", "↓"], does: "Nudge the selection", group: "Items" },
-  { keys: ["Shift-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
-  { keys: ["F2", "Double-click the name"], does: "Rename — the file follows the title", group: "Items" },
+  { keys: ["⇧-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
+  { keys: ["F2", "Double-click the name"], does: "Rename", note: "The file follows the title", group: "Items" },
   { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
-  { keys: ["Shift F"], does: "Fit the item to its content", group: "Items", note: "Grows the selection to the size its content wants and settles it so nothing overlaps. F fits the VIEW to an item; Shift F fits the ITEM to what is in it" },
+  { keys: ["⇧F"], does: "Fit the item to its content", group: "Items", note: "F fits the view to an item; ⇧F fits the item to what is in it. Several at once are settled so nothing overlaps" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
-  { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
-  { keys: ["Select it, then scroll"], does: "Scroll an item's content without stepping inside", group: "Items", note: "A drag still moves it — only the wheel is handed over, and it stays with the item at either end rather than flinging the canvas. A page in a frame still has to be entered" },
+  { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo", note: "Yours, not everyone's", group: "Items" },
+  { keys: ["Scroll a selected item"], does: "Its content moves, not the canvas", group: "Items", note: "Only the wheel is handed over, so a drag still moves it. A page in a frame has to be entered first" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },
   { keys: ["⌥-click"], does: "Reach the item underneath", group: "Items" },
   { keys: ["Drag a box"], does: "Select several", group: "Items" },
 
   // ---- Ink ----
-  { keys: ["⌘Z"], does: "Take back the last stroke, while the ink is still wet", group: "Ink" },
-  { keys: ["Enter"], does: "Settle the ink into an item now, without waiting", group: "Ink" },
-  { keys: ["Draw over an item"], does: "Annotate it — the mark travels with what it marks", group: "Ink" },
+  { keys: ["⌘Z"], does: "Take back the last stroke", note: "While the ink is still wet", group: "Ink" },
+  { keys: ["⏎"], does: "Settle the ink into an item now", note: "Rather than waiting out the pause", group: "Ink" },
+  { keys: ["Draw over an item"], does: "Annotate it", note: "The mark travels with what it marks", group: "Ink" },
 
   // ---- Talking ----
   { keys: ["⌘K"], does: "Message your emissary from anywhere", group: "Talking" },
-  { keys: ["⏎"], does: "Send it", group: "Talking", note: "Shift ⏎ makes a new line instead — the composer grows to hold it and drops back to one line once sent" },
+  { keys: ["⏎"], does: "Send it", group: "Talking", note: "⇧⏎ makes a new line instead; the composer grows to hold it and drops back to one line once sent" },
   { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking", note: "Works from a reply box too, where ⏎ is a new line" },
-  { keys: ["@"], does: "Address someone — they wake for it", group: "Talking" },
-  { keys: ["#"], does: "Point at an item; it rides along as a card", group: "Talking" },
+  { keys: ["@"], does: "Address someone", note: "They wake for it", group: "Talking" },
+  { keys: ["#"], does: "Point at an item", note: "It rides along as a card", group: "Talking" },
   { keys: ["/"], does: "Ask for a known piece of work", group: "Talking", note: "At the start of a message only — that is the only place it counts" },
   { keys: ["?"], does: "This list", group: "Talking" },
 ];
@@ -94,7 +92,8 @@ export function shortcutsAsText(): string {
   const column = Math.max(...SHORTCUTS.map((s) => keysOf(s).length)) + 2;
   return SHORTCUT_GROUPS.map((group) => {
     const rows = shortcutsIn(group).map((s) => {
-      return `  ${keysOf(s).padEnd(column)}${s.does}${s.note ? ` — ${s.note}` : ""}`;
+      const head = `  ${keysOf(s).padEnd(column)}${s.does}`;
+      return s.note ? `${head}\n  ${"".padEnd(column)}${s.note}` : head;
     });
     return `${group}\n${rows.join("\n")}`;
   }).join("\n\n");
