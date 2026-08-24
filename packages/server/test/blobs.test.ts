@@ -167,6 +167,112 @@ describe("the blob route honors Range", () => {
     expect(beyond.contentRange).toBe(`bytes */${CONTENT.length}`);
   });
 
+  /**
+   * **The exact edges, which are the only places a range parser is ever
+   * wrong.**
+   *
+   * Every case above asks for a range comfortably inside the blob or
+   * comfortably outside it, and four separate boundary tests in `parseRange`
+   * survived being deleted with this file green:
+   *
+   * - `if (start >= size)` weakened to `>` — a range starting on the byte just
+   *   past the last one is "satisfiable", and answers 206 with
+   *   `Content-Range: bytes 20-19/20` and a Content-Length of 0. A resumed
+   *   download that has already finished asks exactly this
+   *   (`curl -C -` sends `bytes=<size>-`), and a client that gets a 206 for it
+   *   believes there is more file coming.
+   * - `if (end < start)` deleted — an inverted range gets a negative
+   *   Content-Length.
+   * - the suffix clamp `Math.max(0, size - wanted)` — a trailer request bigger
+   *   than the file seeks to a negative offset.
+   * - `bytes=-0` — RFC 9110 says a zero-length suffix is unsatisfiable.
+   *
+   * None of them is exotic; three of the four are what a media element and a
+   * resumed download send on their own.
+   */
+  it("refuses a range that starts on the byte just past the end", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    // Not 99 — twenty, the first offset that does not exist. `>=` and `>`
+    // differ here and nowhere else.
+    const atTheEdge = await range(hash, `bytes=${CONTENT.length}-`);
+    expect(atTheEdge.status, "bytes=20- on a 20-byte blob is unsatisfiable").toBe(416);
+    expect(atTheEdge.contentRange).toBe(`bytes */${CONTENT.length}`);
+    // And the last byte that DOES exist is still served, so this is a boundary
+    // and not a blanket refusal.
+    expect(await range(hash, `bytes=${CONTENT.length - 1}-`)).toEqual({
+      status: 206,
+      contentRange: `bytes 19-19/${CONTENT.length}`,
+      body: "j",
+    });
+  });
+
+  it("refuses an inverted range instead of serving a negative length", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    const backwards = await range(hash, "bytes=9-5");
+    expect(backwards.status).toBe(416);
+    expect(backwards.contentRange).toBe(`bytes */${CONTENT.length}`);
+    // The one-byte range at the same place is fine: 9-9 is not inverted.
+    expect((await range(hash, "bytes=9-9")).status).toBe(206);
+  });
+
+  it("clamps a suffix range longer than the blob to the whole blob", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    // A player asking for a 1 KB trailer off a 20-byte file. Without the clamp
+    // the read starts at a negative offset.
+    expect(await range(hash, "bytes=-1024")).toEqual({
+      status: 206,
+      contentRange: `bytes 0-19/${CONTENT.length}`,
+      body: CONTENT,
+    });
+    // And the suffix that fits exactly still says so.
+    expect((await range(hash, `bytes=-${CONTENT.length}`)).contentRange).toBe(
+      `bytes 0-19/${CONTENT.length}`,
+    );
+  });
+
+  it("refuses a zero-length suffix, which asks for nothing at all", async () => {
+    const hash = await upload(CONTENT, "digits.txt");
+    const nothing = await range(hash, "bytes=-0");
+    expect(nothing.status).toBe(416);
+    expect(nothing.contentRange).toBe(`bytes */${CONTENT.length}`);
+  });
+
+  /**
+   * **Why `size === 0` never reaches the parser, held as a test rather than as
+   * an assumption.**
+   *
+   * A suffix range on a zero-byte blob computes `end = size - 1`, which is
+   * **-1**: `Content-Range: bytes 0--1/0` and a `Content-Length` of 0 on a 206.
+   * The parser has no branch for it, and it does not need one — but only
+   * because all THREE ways bytes can be named refuse a zero length, in three
+   * separate places, none of which mentions the other. That is a rule with
+   * three copies (lessons.md #10), and the day one of them relaxes — an empty
+   * file is a perfectly ordinary thing to drag onto a canvas — the parser
+   * starts answering nonsense with no test between the change and the bug.
+   *
+   * So: assert the reachability argument itself. If this goes red, the range
+   * parser needs a `size === 0` branch before the door is opened.
+   */
+  it("cannot make a zero-byte blob by any of the three doors", async () => {
+    const direct = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": "empty.md", ...badge.headers },
+      body: "",
+    });
+    expect(direct.status, "POST /blobs with no bytes").toBe(400);
+
+    const named = { blobHash: "b".repeat(64), mimeType: "text/markdown", filename: "empty.md" };
+    for (const route of ["blobs/upload-url", "blobs/register"]) {
+      const res = await fetch(`${base}/api/projects/prj_1/${route}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({ ...named, size: 0 }),
+      });
+      expect(res.status, `${route} with size 0`).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toMatch(/positive integer/);
+    }
+  });
+
   it("ignores a header it cannot parse, rather than 416-ing a whole download", async () => {
     // RFC 9110 is explicit: a Range that cannot be understood must be treated
     // as absent. Answering 416 to a garbled header would break a client that

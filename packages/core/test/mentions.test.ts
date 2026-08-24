@@ -72,6 +72,106 @@ describe("findMentionSpans", () => {
   });
 });
 
+/**
+ * **Two people with one name**, which this product produces on its own: agents
+ * are named by their tool ("Claude", twice), and `actorsAnswerTo` deliberately
+ * keeps old names alive, so a rename onto a name somebody else already has is
+ * one keystroke away.
+ *
+ * The summons goes to exactly ONE of them and there is no sign that anybody
+ * else was meant. That is a real loss and it is not fixed here — deciding
+ * whether `@Claude` should reach both, or be disambiguated in the menu before
+ * it is ever written, is a design question and not a test's to answer.
+ *
+ * What IS a test's to answer is that the answer is stable. Which one gets the
+ * ping currently falls out of `Array.prototype.find` over a length sort, which
+ * means it depends on sort stability and on the order the caller happened to
+ * collect actors in. Pinned here so it cannot drift silently, and so the loss
+ * is visible to whoever comes to fix it.
+ */
+describe("when two people answer to the same name", () => {
+  const first = { id: "usr_a", name: "Claude" };
+  const second = { id: "usr_b", name: "Claude" };
+
+  it("summons exactly one of them, the first offered — the other is never told", () => {
+    expect(extractMentions("@Claude look at this", [first, second])).toEqual(["usr_a"]);
+    // KNOWN LOSS: usr_b is not in that list, and nothing in the body says so.
+    expect(extractMentions("@Claude look at this", [second, first])).toEqual(["usr_b"]);
+  });
+
+  it("marks one span, not two overlapping ones", () => {
+    const spans = findMentionSpans("@Claude", [first, second]);
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.actorId).toBe("usr_a");
+  });
+
+  it("does the same when the collision comes from a RENAME rather than a birth", () => {
+    // usr_b was "Sam" and is now "Claude" too. Both names stay resolvable —
+    // old text still points at the right person — and the older claim wins.
+    const sam = { id: "usr_b", name: "Sam" };
+    const answers = actorsAnswerTo([first, sam], { usr_b: "Claude" });
+    expect(answers).toContainEqual({ id: "usr_b", name: "Claude" });
+    expect(extractMentions("@Claude look", answers)).toEqual(["usr_a"]);
+    // …and Sam is still reachable under the name the canvas remembers.
+    expect(extractMentions("@Sam look", answers)).toEqual(["usr_b"]);
+  });
+});
+
+/**
+ * Names are free-form, and the docstring says so out loud: "spaces, emoji".
+ * Emoji are covered above (`Kenny 🤖`). These are the two neighbours of that
+ * claim that had no case — a right-to-left name, and a name carrying an
+ * invisible mark.
+ */
+describe("names that are not Latin text", () => {
+  const dana = { id: "usr_fa", name: "دیون" };
+
+  it("resolves a right-to-left name written as itself", () => {
+    expect(extractMentions("سلام @دیون", [dana])).toEqual(["usr_fa"]);
+    expect(findMentionSpans("@دیون", [dana])).toEqual([
+      { start: 0, end: 1 + dana.name.length, actorId: "usr_fa", name: dana.name },
+    ]);
+  });
+
+  /**
+   * The two negative controls that keep `@` honest — "the @ must start a word"
+   * and "the name must END on a word boundary" — existed only in ASCII
+   * (`dimitri@example.com`, `@Nicolas is someone else`). `isWordChar` is
+   * written `/[\p{L}\p{N}_]/u` on purpose, and replacing it with `/[A-Za-z0-9_]/`
+   * left this file green: an ASCII-only boundary makes every non-Latin letter
+   * a separator, so a Persian word ending in `@` becomes a mention and a name
+   * with one more letter after it still resolves. Same rule, the other script.
+   */
+  it("does not mention anybody from mid-word, in any script", () => {
+    // No space: the "@" is inside a word, exactly as in an email address.
+    expect(extractMentions("سلام@دیون", [dana])).toEqual([]);
+  });
+
+  it("requires the name to END on a boundary, in any script", () => {
+    // "دیونم" is a longer word that merely starts with the name — the
+    // non-Latin twin of "@Nicolas is someone else".
+    expect(extractMentions("@دیونم", [dana])).toEqual([]);
+    expect(extractMentions("@دیون م", [dana])).toEqual(["usr_fa"]);
+  });
+
+  it("treats an invisible mark as part of the name, both ways", () => {
+    // U+200F RIGHT-TO-LEFT MARK. A paste from a chat window carries these, and
+    // the person typing the mention does not. It is a CHARACTER, so a name
+    // carrying one is a different name — which is a defensible answer, but
+    // only if it is the same answer every time.
+    const marked = { id: "usr_m", name: "\u200fدیون" };
+    expect(extractMentions("@\u200fدیون", [marked])).toEqual(["usr_m"]);
+    expect(
+      extractMentions("@دیون", [marked]),
+      "an unmarked mention does not reach a marked name",
+    ).toEqual([]);
+    expect(
+      extractMentions("@\u200fدیون", [dana]),
+      "and a marked mention does not reach an unmarked name",
+    ).toEqual([]);
+  });
+});
+
 describe("collectCanvasActors", () => {
   it("collects item creators/editors, trashed items' actors, and comment authors", () => {
     const actors = collectCanvasActors(seedState().canvas);

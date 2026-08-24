@@ -60,6 +60,7 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
  * workers down with it. `stalenessOf` owns that comparison in a unit test.)
  */
 async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<void> }> {
+  const started = Date.now();
   const repo = fileURLToPath(new URL("../../..", import.meta.url));
   // realpath: on macOS os.tmpdir() is /var/… while a module resolves its own
   // location through /private/var/…, and the daemon reports the latter.
@@ -72,18 +73,70 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
   }
   await fs.symlink(path.join(repo, "node_modules"), path.join(root, "node_modules"));
 
+  const copied = Date.now() - started;
+
   const daemon = spawn(
     process.execPath,
     [path.join(root, "packages/cli/bin/isocan.js"), "serve", "--foreground"],
-    { env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) }, stdio: "ignore" },
+    {
+      env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+      // NOT `stdio: "ignore"`. That threw away the one thing that could tell a
+      // slow machine from a daemon that crashed on startup, and this test has
+      // failed both ways.
+      stdio: ["ignore", "ignore", "pipe"],
+    },
   );
-  const deadline = Date.now() + 15_000;
+  let complaint = "";
+  daemon.stderr?.on("data", (chunk) => (complaint += chunk));
+
+  /**
+   * **Wait, and fail with the evidence.**
+   *
+   * This said `the other copy never came up` and nothing else — the same
+   * sentence for a loaded machine, a port somebody else took, and a daemon
+   * that died before it bound. It failed one full run of the suite on
+   * 2026-08-24 and the only available response was to run it again, which is
+   * the habit lessons.md exists to stop. `daemon-takeover.test.ts` had already
+   * learned this and written it down; this file was the copy that never got
+   * the fix.
+   *
+   * The budget is 25s rather than 15s, and it is chosen from the same
+   * measurement `vitest.config.ts` records: under load this suite runs 90
+   * tests over 2500ms and the slowest over 14s, and this helper does a
+   * recursive copy of three packages before it even spawns. 25s stays inside
+   * vitest's 30s so the failure carries this message rather than the runner's.
+   * And a copy that has already exited fails NOW, because waiting out the
+   * budget for a dead process only delays the same news.
+   */
+  const deadline = Date.now() + 25_000;
+  let lastProbe = "nothing probed yet";
   for (;;) {
     const answering = await fetch(`http://127.0.0.1:${port}/healthz`)
-      .then((r) => r.json() as Promise<{ root?: string }>)
-      .catch(() => null);
+      .then(async (r) => {
+        const body = (await r.json()) as { root?: string };
+        lastProbe = `port ${port} answered ${r.status} from root ${body.root ?? "(none)"}`;
+        return body;
+      })
+      .catch((err: Error) => {
+        lastProbe = `nothing answered on ${port} (${err.name}: ${err.message})`;
+        return null;
+      });
     if (answering?.root === root) break;
-    if (Date.now() > deadline) throw new Error("the other copy never came up");
+    const dead = daemon.exitCode !== null || daemon.signalCode !== null;
+    if (dead || Date.now() > deadline) {
+      throw new Error(
+        `${dead ? "gave up" : "timed out"} after ${Date.now() - started}ms waiting for the ` +
+          `other copy of isocan to answer (${copied}ms of that was copying it)\n` +
+          `  wanted root: ${root}\n` +
+          `  last probe:  ${lastProbe}\n` +
+          `  other copy:  ${
+            dead
+              ? `pid ${daemon.pid} exited (code ${daemon.exitCode}, signal ${daemon.signalCode})`
+              : `pid ${daemon.pid} still running`
+          }\n` +
+          `  its stderr:  ${complaint.trim().slice(-800) || "(silent)"}`,
+      );
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
   return {
@@ -101,7 +154,15 @@ describe("restart", () => {
   it("replaces the running daemon with this build, and says which it is", async () => {
     await isocan("serve");
     const before = await status();
-    expect(before.root).toMatch(/isocan$/); // it can name its own copy now
+    // It can name its own copy now — and the assertion is THIS copy rather
+    // than `/isocan$/`, which was a claim about the checkout's directory name.
+    // That passes here and fails in a `git worktree`, in a clone called
+    // `isocan-fork`, and in the tarball CI unpacks — a red suite about
+    // nothing, in the one place a red suite is most expensive to read.
+    // Comparing against the resolved repo root is stronger AND portable: it
+    // says the daemon is running from the tree the test is running from, which
+    // is the thing this file is about.
+    expect(before.root).toBe(await fs.realpath(fileURLToPath(new URL("../../..", import.meta.url))));
     expect(before.pid).toBeGreaterThan(0);
 
     const restarted = await isocan("restart", "--json");

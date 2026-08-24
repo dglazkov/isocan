@@ -138,3 +138,75 @@ describe("nothing new is painted in the fill accent", () => {
     expect(stale, "these were fixed or renamed — delete them from the list").toEqual([]);
   });
 });
+
+/**
+ * The same arithmetic one floor down: a focus ring is not text.
+ *
+ * `--accent-text` fixed the accent as INK. The ring is the accent's other
+ * unreadable job — SC 1.4.11 asks a non-text indicator for 3:1 against what it
+ * is drawn on, and on dark `--accent` measures 3.32 on `--ground`, 3.05 on
+ * `--panel`, 2.90 on `--card` and 2.50 on `--chip`. Three of the four beds a
+ * ring actually lands on fail; the fourth scrapes. Every one of the 26 tab
+ * stops in the app drew that same colour.
+ *
+ * `--panel` is not asserted below because it is `rgba(…, 0.9)` and `ratio`
+ * takes hexes — it resolves between `--ground` and `--card`, both of which are
+ * here, so the bracket is covered even though the value is not.
+ *
+ * Like the cases above, the second one is written to EXPIRE: re-value
+ * `--accent` to something that clears 3:1 and it fails, which is the signal
+ * that `--focus` has stopped earning its keep.
+ */
+describe("the focus ring is an indicator, not a fill", () => {
+  it("clears 3:1 on every dark surface", () => {
+    const focus = token(DARK, "focus");
+    for (const surface of SURFACES) {
+      const r = +ratio(focus, token(DARK, surface)).toFixed(2);
+      expect(r, `--focus (${focus}) on --${surface} is ${r}:1, under the 3:1 floor`)
+        .toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("exists because --accent does not clear it", () => {
+    const accent = token(DARK, "accent");
+    const worst = Math.min(...SURFACES.map((s) => ratio(accent, token(DARK, s))));
+    expect(
+      +worst.toFixed(2),
+      `--accent (${accent}) now clears 3:1 everywhere. If that is deliberate, delete ` +
+        "--focus and this block — the token exists only because it did not.",
+    ).toBeLessThan(3);
+  });
+
+  it("is the same value as the accent in light, so the token costs nothing there", () => {
+    expect(token(LIGHT, "focus")).toBe(token(LIGHT, "accent"));
+  });
+
+  it("is what the ring is actually painted with", () => {
+    const ring = /:focus-visible[^{]*\{([^}]*outline:[^};]*)/.exec(rules);
+    expect(ring, "no :focus-visible rule draws an outline").toBeTruthy();
+    expect(
+      ring![1],
+      "the ring is painted with --accent again — the token is only a comment until the rule uses it",
+    ).toMatch(/outline:[^;]*var\(--focus\)/);
+  });
+});
+
+/**
+ * The theme is told to the browser, not only to the page.
+ *
+ * `color-scheme` measured `normal` in all four theme states, which is the
+ * browser saying nobody told it: native form controls, scrollbars, and
+ * spellcheck underlines are drawn from the OS default rather than from the
+ * canvas they sit on. Two declarations, and the resolved theme is already
+ * stamped on <html> before first paint, so there are only ever two states.
+ */
+describe("color-scheme", () => {
+  it("is declared in both theme blocks", () => {
+    expect(LIGHT.exec(css)![1], "light :root does not declare color-scheme").toMatch(
+      /color-scheme:\s*light/,
+    );
+    expect(DARK.exec(css)![1], "dark :root does not declare color-scheme").toMatch(
+      /color-scheme:\s*dark/,
+    );
+  });
+});
