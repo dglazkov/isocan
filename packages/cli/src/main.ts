@@ -3071,7 +3071,7 @@ style
   .command("set")
   .description("Write the design system (a new version when one already exists)")
   .argument("<file>", "markdown or CSS describing the system")
-  .option("--title <title>", "name for the item", "Design system")
+  .option("--title <title>", "name for the item", "DESIGN.md")
   .action(
     run(async (file: string, opts: { title: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);

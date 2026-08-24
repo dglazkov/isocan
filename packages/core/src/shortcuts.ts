@@ -58,7 +58,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Shift F"], does: "Fit the item to its content", group: "Items", note: "Grows the selection to the size its content wants and settles it so nothing overlaps. F fits the VIEW to an item; Shift F fits the ITEM to what is in it" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo — yours, not everyone's", group: "Items" },
-  { keys: ["Select it, then scroll"], does: "Scroll an item's content without stepping inside", group: "Items", note: "A drag still moves it — only the wheel is handed over. A page in a frame still has to be entered" },
+  { keys: ["Select it, then scroll"], does: "Scroll an item's content without stepping inside", group: "Items", note: "A drag still moves it — only the wheel is handed over, and it stays with the item at either end rather than flinging the canvas. A page in a frame still has to be entered" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items" },
   { keys: ["⌥-click"], does: "Reach the item underneath", group: "Items" },
   { keys: ["Drag a box"], does: "Select several", group: "Items" },
@@ -70,7 +70,8 @@ export const SHORTCUTS: Shortcut[] = [
 
   // ---- Talking ----
   { keys: ["⌘K"], does: "Message your emissary from anywhere", group: "Talking" },
-  { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking" },
+  { keys: ["⏎"], does: "Send it", group: "Talking", note: "Shift ⏎ makes a new line instead — the composer grows to hold it and drops back to one line once sent" },
+  { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking", note: "Works from a reply box too, where ⏎ is a new line" },
   { keys: ["@"], does: "Address someone — they wake for it", group: "Talking" },
   { keys: ["#"], does: "Point at an item; it rides along as a card", group: "Talking" },
   { keys: ["/"], does: "Ask for a known piece of work", group: "Talking", note: "At the start of a message only — that is the only place it counts" },
@@ -86,10 +87,14 @@ export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
 /** The whole list as text, for a terminal or a comment: the same answer the
  * overlay gives, in the medium an agent can pass on. */
 export function shortcutsAsText(): string {
+  // The column is measured, not guessed: a fixed 24 ran "Double-click the
+  // name" straight into its description, and the next long key would have done
+  // it again. One width for the whole list so the descriptions line up.
+  const keysOf = (s: Shortcut) => s.keys.join(" / ");
+  const column = Math.max(...SHORTCUTS.map((s) => keysOf(s).length)) + 2;
   return SHORTCUT_GROUPS.map((group) => {
     const rows = shortcutsIn(group).map((s) => {
-      const keys = s.keys.join(" / ");
-      return `  ${keys.padEnd(24)}${s.does}${s.note ? ` — ${s.note}` : ""}`;
+      return `  ${keysOf(s).padEnd(column)}${s.does}${s.note ? ` — ${s.note}` : ""}`;
     });
     return `${group}\n${rows.join("\n")}`;
   }).join("\n\n");

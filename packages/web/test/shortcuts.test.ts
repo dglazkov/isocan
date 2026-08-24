@@ -74,3 +74,38 @@ describe("the list is readable", () => {
     expect(text).toContain("⌘K");
   });
 });
+
+/**
+ * The key column is measured from the longest key in the list, not guessed.
+ * A fixed 24 ran "F2 / Double-click the name" straight into its description,
+ * and the next long key would have done it again — a help screen that is hard
+ * to read is a help screen nobody reads twice.
+ */
+describe("the printed list", () => {
+  /** Every row: two spaces, the keys, a gap, then what it does. */
+  const rows = () => shortcutsAsText().split("\n").filter((line) => line.startsWith("  "));
+
+  it("never runs a key into its description", () => {
+    for (const line of rows()) {
+      // Keys, then at least two spaces, then the description. A single space
+      // would be ambiguous — several key strings contain one.
+      expect(line, `keys run into the description: ${line}`).toMatch(/^ {2}\S.*? {2,}\S/);
+    }
+  });
+
+  it("lines every description up in one column", () => {
+    const starts = new Set(rows().map((line) => line.search(/(?<= {2})\S(?!.*? {2,}\S)/) >= 0
+      ? line.length - line.replace(/^ {2}\S.*? {2,}/, "").length
+      : -1));
+    expect(starts.size, `descriptions start at ${[...starts].join(", ")}`).toBe(1);
+  });
+
+  it("stays aligned when a longer key is added", () => {
+    // The column is derived, so the guarantee is about the longest key rather
+    // than a number somebody picked.
+    const longest = Math.max(...SHORTCUTS.map((s) => s.keys.join(" / ").length));
+    for (const line of rows()) {
+      expect(line.length).toBeGreaterThan(longest);
+    }
+  });
+});
