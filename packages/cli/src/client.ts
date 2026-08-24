@@ -302,10 +302,16 @@ export class DaemonClient {
 
   // ---- presence sessions ----
 
-  createSession(canvasId: string, actor: Actor, label?: string): Promise<CreateSessionResponse> {
+  createSession(
+    canvasId: string,
+    actor: Actor,
+    label?: string,
+    harness?: string,
+  ): Promise<CreateSessionResponse> {
     return this.request("POST", `/api/projects/${canvasId}/sessions`, {
       actor,
       ...(label !== undefined ? { label } : {}),
+      ...(harness !== undefined ? { harness } : {}),
     });
   }
 

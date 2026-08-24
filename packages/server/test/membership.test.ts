@@ -365,16 +365,16 @@ describe("two tenants, one home", () => {
   });
 
   it("does not allocate around a name it cannot see", async () => {
-    // Allocation walks the same scope: Jordan's nameless claim is handed
-    // "Isaac" — the first name on the roster — even though a stranger on
-    // another canvas wears it.
+    // Allocation walks the same scope: Jordan's nameless claim is handed the
+    // first name its harness reaches for — `codex` starts with C, so
+    // "Charlie" — even though a stranger on another canvas wears it.
     const { jordan } = await tenants();
     const allocated = await post(jordan, "/api/ops", {
       canvasId: null,
       op: { type: "actor.claim", sessionKey: "codex:t-2", canvasId: "prj_jordan" },
     });
     const { envelope } = (await allocated.json()) as { envelope: { actor: { name: string } } };
-    expect(envelope.actor.name).toBe("Isaac");
+    expect(envelope.actor.name).toBe("Charlie");
   });
 
   it("still refuses a name that is taken in a room the badge IS in", async () => {

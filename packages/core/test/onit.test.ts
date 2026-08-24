@@ -9,7 +9,7 @@ import {
 } from "../src/index.ts";
 
 const session = (over: Partial<PresenceSession>): PresenceSession => ({
-  sessionId: "ses_1", actor: { id: "usr_1", name: "Fable" }, kind: "cli", label: null,
+  sessionId: "ses_1", actor: { id: "usr_1", name: "Fable" }, kind: "cli", harness: null, label: null,
   cursor: null, selection: [], status: null, activity: null, onThread: null,
   lastSeen: "2026-08-21T12:00:00.000Z", ...over,
 });

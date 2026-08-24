@@ -19,6 +19,19 @@ import {
 export interface Ctx {
   client: DaemonClient;
   actor: Actor;
+  /**
+   * Which harness this CLI is — `claude-code`, `codex`, `gemini` — or null
+   * for the machine's person, who is not one.
+   *
+   * Resolved once, here, because it is already known here:
+   * `resolveIdentity` has to work out which harness session this process
+   * belongs to in order to find the actor at all. Everything downstream
+   * (presence, so `who` and the facepile can say which agent is which) was
+   * otherwise going to re-derive it from the environment and get it wrong in
+   * the one case that matters — an agent launched by another agent sees both
+   * sets of variables.
+   */
+  harness: string | null;
   json: boolean;
   home: string;
   canvasRef?: string;
@@ -128,6 +141,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   await retireStrandedIdentities(process.cwd(), home);
   const known = await resolveIdentity(client, home);
   const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
+  const harness = known?.harness ?? null;
   await client.ensureDaemon();
   // One health call, two answers. It was already being made for the staleness
   // warning; asking it again for the home address would be a second round trip
@@ -156,6 +170,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
       return actor;
     },
     json: opts.json ?? false,
+    harness,
     home,
     binding,
     birthHome,

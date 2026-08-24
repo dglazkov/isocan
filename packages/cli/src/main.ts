@@ -335,7 +335,7 @@ async function touchSession(
     announceCancel(await ctx.client.updateSession(canvasId, active.sessionId, beat));
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
-    const created = await ctx.client.createSession(canvasId, ctx.actor, active.label);
+    const created = await ctx.client.createSession(canvasId, ctx.actor, active.label, ctx.harness ?? undefined);
     await writeSessionFile(ctx.home, ctx.actor.id, { ...active, sessionId: created.sessionId });
     announceCancel(await ctx.client.updateSession(canvasId, created.sessionId, beat));
   }
@@ -515,6 +515,9 @@ async function nameCollision(
       client,
       actor,
       json: false,
+      // This path builds a context for a named actor rather than for this
+      // process's own session, so there is no harness to speak of.
+      harness: null,
       home,
       binding: await findBinding(process.cwd(), home),
       birthHome,
@@ -4164,7 +4167,7 @@ session
       if (existing) {
         await ctx.client.endSession(existing.canvasId, existing.sessionId).catch(() => {});
       }
-      const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
+      const created = await ctx.client.createSession(p.id, ctx.actor, opts.label, ctx.harness ?? undefined);
       await writeSessionFile(ctx.home, ctx.actor.id, {
         canvasId: p.id,
         sessionId: created.sessionId,
@@ -4318,7 +4321,10 @@ program
       printTable(
         sessions.map((s) => ({
           who: s.label ?? s.actor.name,
-          kind: s.kind,
+          // `kind` says cli-or-web; `harness` says WHICH agent. Two agents in
+          // one terminal are two `cli` rows, and telling them apart is the
+          // reason a person opens this table at all.
+          kind: s.harness ?? s.kind,
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: describeActivity(s.activity),
@@ -4498,7 +4504,7 @@ async function landPresence(
   // Summoned to a canvas the session isn't on: move over, keeping the label
   // the human knows this agent by.
   if (active) await ctx.client.endSession(active.canvasId, active.sessionId).catch(() => {});
-  const created = await ctx.client.createSession(entry.canvasId, ctx.actor, active?.label);
+  const created = await ctx.client.createSession(entry.canvasId, ctx.actor, active?.label, ctx.harness ?? undefined);
   await writeSessionFile(ctx.home, ctx.actor.id, {
     canvasId: entry.canvasId,
     sessionId: created.sessionId,

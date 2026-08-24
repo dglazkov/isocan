@@ -81,7 +81,7 @@ export class PresenceHub {
     canvasId: string,
     actor: Actor,
     kind: "web" | "cli",
-    options: { label?: string; sessionId?: string } = {},
+    options: { label?: string; sessionId?: string; harness?: string } = {},
   ): PresenceSession {
     const session = blankSession(actor, kind, options);
     this.room(canvasId).set(session.sessionId, session);
@@ -298,13 +298,14 @@ function stripped(session: SessionState): PresenceSession {
 function blankSession(
   actor: Actor,
   kind: "web" | "cli",
-  options: { label?: string; sessionId?: string },
+  options: { label?: string; sessionId?: string; harness?: string },
 ): SessionState {
   return {
     origin: null,
     sessionId: options.sessionId ?? newId("ses"),
     actor,
     kind,
+    harness: options.harness ?? null,
     label: options.label ?? null,
     cursor: null,
     selection: [],
