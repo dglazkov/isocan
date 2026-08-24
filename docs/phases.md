@@ -71,6 +71,25 @@ otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
 
+- **The local bridge, opened 2026-08-24 (phase 10).** Phase 10 gave the
+  browser its own replica and queue, and in doing so made visible that a
+  machine now has **two** replicas that cannot see each other: the tab's,
+  and the daemon's. Offline they queue separately toward a home neither
+  can reach. The design — the tab reaching its local daemon through a
+  same-origin bridge frame, so the agent and the browser share one
+  replica — is written up in
+  [design/local-bridge.md](design/local-bridge.md) and is **deliberately
+  not chosen**. It is open because it trades against three things this
+  project holds on purpose: the one-origin rule, "the daemon never serves
+  pages to persons", and `home-link.ts`'s refusal to half-build an offline
+  queue. Choosing it means the daemon learns to queue (which phase 13
+  wants anyway), a browser-policy dependency on Private Network Access,
+  and a framing policy the daemon does not have today. Whoever takes it up
+  should read the failure modes section first: this makes the local daemon
+  a dependency of the browser experience, and a tab silently falling back
+  to a *stale* daemon would be the cheerful-wrong-address bug in its worst
+  form yet.
+
 - **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
   **canvas** in every doc — 160 mentions against 15 of "project" — and a
   **project** in every line of code: 712 `projectId`, plus

@@ -457,6 +457,16 @@ comes from the object store rather than from the client.
   … hello, badge, offer, replay", and the store it would offer is
   missing exactly the two things a replay needs.
 
+**A road drawn but not taken.** A machine now holds two replicas that
+cannot see each other — the tab's and the daemon's — which only matters
+when there is no network, and matters a lot then.
+[design/local-bridge.md](design/local-bridge.md) draws the alternative: the
+tab reaching its local daemon through a same-origin bridge frame, so that a
+person and their agent share one replica and one queue. It is designed and
+deliberately unchosen; if it is ever taken up, the browser replica above
+becomes the fallback for machines with no daemon rather than the only
+answer.
+
 ## Distance to the map
 
 What the code does not have yet — an inventory, not a sequence (the
