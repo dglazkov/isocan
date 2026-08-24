@@ -60,9 +60,9 @@ now something a person can PROVE rather than only assert. Phase 10, offline
 in the browser, is next.** Note what phase 9 did not do, so a clean session
 does not assume it: `repo:` grants are still refused (deferred to phase 11
 with Scene 6), `{root: "link"}` admissions written before phase 7 are
-unreachable by any revocation, and **the code that borrows the attesters has
-not been deployed to dev** — the environment variables are set there, sitting
-ahead of it. This line moves as phases close; a clean
+unreachable by any revocation. **dev.isocan.io is running phases 7 through 9**
+as of 2026-08-24: `GET /api/attest` answers `{"attesters":["email"]}` there and
+a real magic-link token was verified against the deployed home. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
