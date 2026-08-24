@@ -491,6 +491,21 @@ button, select { color: inherit; }
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
+/* Selected, the corner handles move into the strip this row sits in: 12 screen
+   px square and centred on the corner, so each reaches 6px inside the item and
+   6px above it. Measured at 13% zoom, the title's bottom-left corner sat under
+   the NW handle by 6x5 and the star's under the NE by 5x5.
+   
+   So the row steps in and up — in SCREEN units, because that is what the
+   handles are, so one nudge holds at every zoom. Only while selected: the
+   handles are not there otherwise, and the title is short of width already
+   without paying for a control that is absent. */
+.item.selected .item-titlebar {
+  top: calc(-20px - 7px / var(--scale, 1));
+  padding-left: calc(10px / var(--scale, 1));
+  padding-right: calc(10px / var(--scale, 1));
+}
+
 /* Each side holds its size about its OWN edge. Counter-scaling the whole row
    instead makes the row wider than the item — five times wider at 20% zoom —
    and anything pushed to its right end lands out in the grid. */
@@ -501,7 +516,7 @@ button, select { color: inherit; }
 .chrome-left .name {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chrome-right { display: flex; align-items: center; flex: none; }
+.chrome-right { display: flex; align-items: center; flex: none; margin-left: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
