@@ -1,79 +1,250 @@
-# Working on isocan
+# Develop isocan
 
-How to get a checkout of this repo into a state where you can change it, run
-it, and see the change — on a machine that has never had isocan, or on one that
-has had it since before any of the multi-user work landed.
+This guide explains how to set up a development environment for the isocan
+repository, run the app locally, and make changes to it.
 
-This is **how to work ON isocan**. [`new-project.md`](new-project.md) is the
-other thing: how to start a project **on a canvas**, with agents parked on it.
-Neither repeats the other, and the two are easy to confuse because both begin
-with an empty directory. The test is what you are editing: this repo, or your
-own.
+It covers two starting points, one for each developer currently working on the
+project:
 
-There are two doors below because there are two developers. **Dion** has been
-landing changes here for weeks from a rig built before any of the home work
-existed, so his door is an upgrade — what current `main` does to what he
-already has. **Paul** has a clean machine, so his door is a first entry. Take
-one, then read *What both doors share*, which is where the discipline and the
-hazards live.
+* **A new machine**, with nothing installed. This is Paul's setup. See
+  [Set up a new machine](#set-up-a-new-machine).
+* **An existing setup from before the multi-user work**: a local daemon that
+  serves pages, and canvases created before homes existed. This is Dion's
+  setup. See [Upgrade an existing setup](#upgrade-an-existing-setup).
 
-Throughout, `isocan` means **the CLI in this checkout**:
+Read the section that matches your machine, then read
+[Development practices](#development-practices) and
+[Troubleshooting](#troubleshooting), which apply to both.
+
+This guide is about working *on* isocan. To start a project *on a canvas*, see
+[Starting a project on a canvas](new-project.md).
+
+## Before you begin
+
+Install:
+
+* Node.js 24
+* Git
+
+In this guide, `isocan` refers to the CLI in your checkout:
 
 ```sh
-node packages/cli/bin/isocan.js …
+node packages/cli/bin/isocan.js
 ```
 
-Not a globally installed `isocan`, which may be a different build than the tree
-you are editing — and when they differ the symptom is that your change appears
-not to have taken. `alias isocan="node $PWD/packages/cli/bin/isocan.js"` for a
-session is fine; an alias in your shell profile is a way to be lied to in six
-weeks.
+To shorten the commands, create an alias for your current shell session:
 
----
+```sh
+alias isocan="node $PWD/packages/cli/bin/isocan.js"
+```
 
-## Dion's door — the upgrade
+**Caution:** Don't add this alias to your shell profile, and don't rely on a
+globally installed `isocan`. A global install can be a different build than the
+code you're editing. When the two differ, your changes appear to have no
+effect.
 
-You are not new here. What follows is only what changed under you.
+## Key concepts
 
-### Your canvases keep working, and nothing is asked of you
+| Term | Meaning |
+| --- | --- |
+| Canvas | The unit of work. Each canvas has exactly one home. |
+| Home | The daemon or server that owns a canvas and orders its writes. |
+| Marker | `.isocan/project.json` in a working directory. Records the canvas ID and, optionally, its home address. |
+| Birth default | The home where *new* canvases created on this machine are born. Set with `isocan home <url>`. |
+| Replica | A daemon that holds a copy of a canvas whose home is elsewhere. |
 
-The rig you have is: a daemon on `:4441` with `~/.isocan` behind it, canvases
-that were born on that machine, and `.isocan/project.json` markers that carry a
-canvas id and a title and **no address**. Under phase 10.3's model that shape
-is not legacy — it is a first-class state with a name. **A marker naming no
-home means "this daemon is that canvas's home."** There is no row for those
-canvases in `~/.isocan/homes.json` and there does not need to be; absent means
-local.
+A single daemon can be the home of some canvases and a replica for others at
+the same time.
 
-So on upgrade day, with nothing done:
+A marker with no home address means the local daemon is that canvas's home.
+The daemon records each canvas's home in `~/.isocan/homes.json`. A canvas with
+no entry in that file is local.
+
+## Set up a new machine
+
+### 1. Clone and install
+
+```sh
+git clone https://github.com/dglazkov/isocan.git
+cd isocan
+npm install
+npm run build
+```
+
+`npm run build` builds the web app into `packages/web/dist`, which the daemon
+serves.
+
+**Note:** `npm install` might modify `package-lock.json`. To discard those
+changes, run `git checkout package-lock.json`.
+
+### 2. Create your identity
+
+```sh
+isocan identity --home --name "Paul"
+```
+
+The `--home` flag identifies you as the owner of the machine.
+
+**Note:** Without `--home`, the command tries to identify the *agent* running
+it and fails if no agent is configured. Inside a Claude Code or Codex session,
+`--session` is implied. In that case, running `isocan identity` in an unbound
+directory also creates a canvas named after that directory.
+
+### 3. Create a local canvas
+
+```sh
+isocan project create "Acme Scratch"
+```
+
+This canvas is local, because you haven't set a birth default yet. Use it to
+develop the web UI.
+
+**Important:** Create this canvas before you set a birth default in step 5. A
+daemon that has a birth default and no local canvases serves no pages. If you
+set the birth default first, `http://localhost:4441/` and all `/p/<id>` paths
+return 404, and you have nowhere to run the web UI.
+
+### 4. Start the development servers
+
+```sh
+npm run dev
+```
+
+This starts the daemon on port 4441 and Vite on port 5173 with hot reload.
+
+Open `http://localhost:5173`.
+
+**Caution:** Use `localhost`, not `127.0.0.1`. Vite binds the hostname, which
+resolves to `::1`, so `http://127.0.0.1:5173` doesn't respond. The daemon
+answers on both addresses, so the numeric form works everywhere except here.
+
+To open a specific canvas, run `isocan open`. It prints and opens the correct
+address for that canvas.
+
+### 5. Create a canvas at dev.isocan.io
+
+`dev.isocan.io` is the shared development home. Set it as your birth default,
+then create a canvas there:
+
+```sh
+isocan home https://dev.isocan.io
+isocan project create "Widget Redesign"
+isocan --project "Widget Redesign" share
+```
+
+The `share` command prints the canvas address:
+
+```
+address  https://dev.isocan.io/p/prj_mj246fKBrV
+link     on — anyone with the address can enter (granted 2026-08-24)
+```
+
+Open that address in a browser. Writes from your terminal go through your local
+daemon to dev:
+
+```sh
+isocan --project "Widget Redesign" add notes.md --title "Acme spec"
+```
+
+### 6. Verify your setup
+
+```sh
+isocan home
+```
+
+The output lists every canvas and its home:
+
+```
+role           home of 1 canvas; replica of https://dev.isocan.io (1); new canvases → https://dev.isocan.io
+birth default  https://dev.isocan.io — a canvas born here is born there; nothing already here moved
+answering      yes — https://dev.isocan.io is up
+
+canvases
+CANVAS           ID              HOME
+Acme Scratch     prj_lGBWI…      here — this daemon is its home
+Widget Redesign  prj_mj246…      https://dev.isocan.io
+```
+
+You now have one daemon serving two canvases with different homes. Use the
+local canvas to develop the web UI. Use the dev canvas to test changes against
+a real home, which exercises Firestore, a load balancer, and network latency
+that loopback connections don't reproduce.
+
+Requesting the dev-homed canvas from your local daemon returns a signpost
+instead of the canvas:
+
+```
+$ curl -i http://127.0.0.1:4441/p/prj_mj246fKBrV
+HTTP/1.1 404 Not Found
+x-isocan-home: https://dev.isocan.io
+
+this canvas lives at https://dev.isocan.io — open it there
+```
+
+This is expected. Each canvas has exactly one address. The web app performs the
+same check before mounting, so a link to a canvas that lives elsewhere renders
+a signpost page instead of opening a connection.
+
+### 7. Verify the round trip
+
+To confirm that writes reach the home, read them back from a separate machine
+that has only ever contacted the home:
+
+```sh
+isocan --project "Widget Redesign" pass
+cd /some/empty/dir
+npm --prefix ~/src/isocan run dev:replica -- setup 'https://dev.isocan.io/p/<id>#<pass>'
+npm --prefix ~/src/isocan run dev:replica -- --project "Widget" ls
+```
+
+The item you added appears on a scratch machine with its own state directory,
+its own credentials, and no access to your disk.
+
+## Upgrade an existing setup
+
+This section is for a machine that ran isocan before the multi-user work
+landed: a daemon on port 4441, canvases created on that machine, and markers
+that contain a canvas ID and title but no address.
+
+### You don't need to do anything
+
+Your existing canvases continue to work:
+
+* They open in a browser at `http://127.0.0.1:4441/p/<id>`.
+* `isocan add` still writes to them.
+* `isocan open` still opens them.
+
+A marker with no address means the local daemon is that canvas's home, so those
+canvases need no entry in `~/.isocan/homes.json`.
+
+Running `isocan home` on an unchanged setup lists every canvas as local:
 
 ```
 $ isocan home
 role           home — this daemon holds the canvases and serves the app at http://127.0.0.1:4441
 birth default  here — a canvas born here stays here
+
+canvases
+CANVAS             ID              HOME
+Acme Sprint Board  prj_J6Zl-7hUYu  here — this daemon is its home
+Widget Redesign    prj_LhBFoZ_0Dq  here — this daemon is its home
 ```
 
-No canvases table, because nothing is recorded, and nothing recorded is the
-same sentence as "everything here is mine". Your canvases open in a browser at
-`http://127.0.0.1:4441/p/<id>`, `isocan add` still writes to them, `isocan
-open` still opens them.
+The report lists the canvases the daemon holds, not the entries in
+`homes.json`. On this setup that file is empty (`{}`), because a canvas with no
+entry is local.
 
-**That last part is worth saying explicitly, because phase 6 took it away.**
-Phase 6 closed the localhost web door: a daemon with a home configured served
-ops to CLIs and never pages to persons, which was correct then and would have
-broken every locally-born canvas now. Phase 10.3 reopened exactly the part you
-need and no more: **a daemon serves the app for the canvases whose home it is,
-and signposts the rest.** A canvas that lives at `dev.isocan.io` requested from
-your daemon gets a 404 with an `X-Isocan-Home` header and one sentence saying
-where to go — because a canvas has exactly one door, and two doors means two
-cookies, two service workers and two browser replicas, the local one stale by
-construction.
+**Note:** Phase 6 stopped local daemons from serving pages. Phase 10.3 restored
+this for the canvases a daemon is the home of. A daemon serves the app for its
+own canvases and returns a signpost for canvases hosted elsewhere.
 
-### `isocan home` is a different verb than the one you learned
+### What changed in `isocan home`
 
-It no longer re-points your machine. It sets the **birth default** — where the
-*next* canvas born here is born — and it reports, per canvas, who answers
-where:
+`isocan home <url>` no longer re-points your machine. It sets the birth default,
+which affects only canvases created from that point on. Canvases you already
+have stay where they are.
+
+Without arguments, `isocan home` reports the home of each canvas:
 
 ```
 $ isocan home
@@ -87,450 +258,249 @@ Acme Sprint      prj_Le8Xz…      here — this daemon is its home
 Widget Redesign  prj_mj246…      https://dev.isocan.io
 ```
 
-One note on reading it: `isocan home` does not start a daemon. Run it against a
-stopped one and it says `role unknown — no daemon is running`, which is
-deliberate, because it is the verb you reach for when nothing works.
+**Note:** If your `config.json` already contained a `home` value from an
+earlier version, the first upgraded daemon records your existing canvases as
+living at that home. This preserves the behavior you had before the upgrade.
 
-If your `config.json` already carried a `home` from the phase 6–7.5 window,
-upgrade day pinned those canvases there: a boot migration writes one row per
-canvas naming that home, once, and then `homes.json` exists and is never
-rewritten wholesale again. That is the promise in the other direction — what
-`config.json`'s `home` means for *new* canvases changed, and what it meant for
-*existing* ones is frozen so it does not.
+### Limitation: you can't move a canvas to a home
 
-### Pointing this rig at a home moves nothing, and that was a bug first
+You can create new canvases at a home, and you can share a home-hosted canvas
+with another of your machines using `isocan pass`.
 
-`isocan home https://dev.isocan.io` sets the **birth default** — where the
-*next* canvas is born — and leaves every canvas already here exactly where it
-is. The command says so in those words, and as of phase 10.5 the words are
-true.
+You can't move an existing local canvas to a home. That operation is adoption,
+it's planned for phase 13, and it doesn't exist yet. There's no command, flag,
+or supported manual edit.
 
-They were not, briefly, and the shape is worth knowing because it is the shape
-this codebase keeps producing. The boot migration has one branch: *if there is
-no `homes.json` and a home is configured, record every canvas as living at that
-home* — written for a phase 6–7.5 replica, whose canvases really did live
-there. Your rig has no `homes.json`, and `isocan home` writes `config.json` and
-then restarts the daemon. The restart walked straight into that branch and
-froze every locally-born canvas at a home it had never been to. The pages
-404'd, `isocan add` answered `project not found`, and the verb that did it
-printed *nothing already here moved*.
+To get local work onto a hosted home today, create a new canvas at that home
+and copy the content across.
 
-Two things fixed it, and both are worth knowing because they describe what your
-rig relies on:
+## Use the scratch replica
 
-- **The migration writes its record even when it is empty.** An absent file is
-  what left it armed; `{}` disarms it. Its own comment had said so since it was
-  written.
-- **A configured home is not evidence that a machine was ever a replica.** The
-  evidence is a **badge** at that address, in `identity.json`'s `auth` block —
-  a replica knocked on that door and was recognised; a machine that was merely
-  *told* an address a moment ago has not. That is what separates your rig from
-  the one the migration is for, and it holds even when `isocan home` is the
-  very first command you run on new code, which is the case no ordering could
-  have saved.
+`npm run dev:replica` starts a daemon with an isolated state directory
+(`.dev-replica/`, git-ignored) and no stored credentials.
 
-If you are reading this on a rig that already walked into the old bug, the
-symptom is unmistakable — `isocan home` shows your local canvases living at an
-address you just typed — and no data was lost, only the routing record was
-wrong. Ask for the repair rather than hand-editing: the rows are the daemon's
-to write.
-
-### What is not free: moving a canvas to a home
-
-Everything above is about canvases **staying** where they are. Taking a canvas
-that lives on your laptop and making it live at `dev.isocan.io` is **adoption**,
-it is phase 13's, and **it does not exist**. There is no verb, no flag and no
-supported hand-edit: changing a canvas's row to an address where that id has
-never been seen is how you get a 404 for every page and a refusal for every
-write, which is what the section above measures.
-
-What you can do today is birth new work at a home (`isocan home <url>`, then
-`isocan project create`), and hand an existing home-borne canvas to another
-machine of yours with `isocan pass`. Old local work stays local until phase 13.
-Stated plainly rather than cheerfully: if you have a canvas on your laptop that
-you want at dev, copy the *content* over onto a new canvas born there, or wait.
-
-### `npm run dev:replica` is a scratch machine now, not self-defence
-
-Two of the three reasons that script used to give are gone. Pointing your real
-`~/.isocan` at a home no longer demotes your daemon, and one daemon can serve a
-local-home canvas and a dev replica side by side — phase 7.5 called the
-replica/home duality inherent, and 10.3 softened it to "not usually your
-problem". Read the script's own header; it is one paragraph and it agrees with
-this one.
-
-What survives is the reason that was never about self-defence: **an isolated,
-disposable state directory that starts from a known-empty machine.** Its own
-`ISOCAN_HOME` (`.dev-replica/`, gitignored), a fresh badge with no admissions,
-and therefore the join-by-pass flow exercised from zero instead of from
-whatever your laptop has accumulated. That is the thing worth having when you
-are working on the home, on grants, or on anything a badge's history could make
-look like it works.
+Use it when you're working on the home, on grants, or on anything where
+credentials accumulated on your main machine could mask a bug.
 
 ```sh
-npm run dev:replica                                 # a scratch replica of dev, on :4442
-npm run dev:replica -- ls                           # any CLI command against it
-npm run dev:replica -- setup <home>/p/<id>#<pass>   # give it a canvas, by name
+npm run dev:replica                                 # scratch replica of dev, on port 4442
+npm run dev:replica -- ls                           # run any CLI command against it
+npm run dev:replica -- setup <home>/p/<id>#<pass>   # add a canvas to it
 ```
 
-It starts empty and that is not a bug — since phase 8 a replica carries the
-canvases it was let into. Two traps, both measured: the `setup` line **must not
-be run from a directory already bound to a canvas** (the repo root is, the
-moment anybody runs `isocan identity` there) — and the refusal comes *after*
-the pass has been redeemed, so the pass is burned and you need a fresh one. Run
-it from an empty directory with `npm --prefix <checkout> run dev:replica -- setup …`.
+The replica starts with no canvases. It receives only the canvases it's granted
+access to.
 
----
-
-## Paul's door — from `git clone` to a canvas at dev
-
-Clean machine, nothing installed. Node 24 and git are the only prerequisites.
-Every command below was run, in this order, on a fresh clone.
-
-### 1. The checkout
+**Caution:** Don't run the `setup` command from a directory that's already
+bound to a canvas, such as the repository root. The command redeems the pass
+*before* it detects the conflict, so the pass is consumed and you need a new
+one. Run it from an empty directory:
 
 ```sh
-git clone https://github.com/dglazkov/isocan.git
-cd isocan
-npm install
-npm run build          # build the web app once; the daemon serves it from packages/web/dist
+npm --prefix <checkout> run dev:replica -- setup <home>/p/<id>#<pass>
 ```
 
-`npm install` will leave `package-lock.json` a few lines dirty. That is npm, not
-you; `git checkout package-lock.json` if it bothers you.
+## Development practices
 
-### 2. Be somebody
+### Don't export ISOCAN_* variables
 
-```sh
-node packages/cli/bin/isocan.js identity --home --name "Paul"
-```
+Use `isocan home` to configure the daemon. Don't export `ISOCAN_*` variables in
+your shell.
 
-`--home` names **the person who owns this machine**. Without it, `identity`
-tries to name *the agent running the command* and refuses when nothing in the
-environment says which agent that is — which is the right refusal and a
-confusing first impression. (Inside a Claude Code or Codex session the harness
-variable is there, `--session` is implied, and `isocan identity` in an unbound
-directory will also **create and bind a canvas named after the directory** — in
-this checkout, one called `isocan`. Useful; just know it happened.)
+`ISOCAN_HOME_URL` takes precedence over `config.json` and is inherited by any
+daemon the CLI starts. A shell with this variable set disagrees with the
+configuration file for as long as that shell exists.
 
-### 3. A canvas of your own, here
-
-```sh
-node packages/cli/bin/isocan.js project create "Acme Scratch"
-```
-
-Born locally, because nothing has told this machine otherwise. This is the
-canvas you develop the **web UI** against, and you want it before you want
-anything at dev — see step 5 for why.
-
-### 4. Run it
-
-```sh
-npm run dev            # daemon on :4441, Vite on :5173 with hot reload
-```
-
-Open **`http://localhost:5173`**. Not `http://127.0.0.1:5173` — Vite binds the
-name, which resolves to `::1`, and the numeric address does not answer.
-(The daemon answers on both, which is exactly why the mistake is easy.) The
-canvas is at `http://localhost:5173/p/<id>`; `node packages/cli/bin/isocan.js
-open` prints and opens the right address for whichever canvas you mean.
-
-`npm run dev` takes the port from any daemon already there, so you are never
-quietly served by a stale one. Its Vite half proxies `/api` to a hardcoded
-`127.0.0.1:4441`, so a second checkout cannot simply be given another port —
-that is an edit to `packages/web/vite.config.ts`, and usually the wrong move
-next to just having one checkout.
-
-### 5. A canvas of your own, at dev
-
-`dev.isocan.io` is the dogfood home. Point the **birth default** at it and make
-a canvas there:
-
-```sh
-node packages/cli/bin/isocan.js home https://dev.isocan.io
-node packages/cli/bin/isocan.js project create "Widget Redesign"
-node packages/cli/bin/isocan.js --project "Widget Redesign" share
-```
-
-```
-address  https://dev.isocan.io/p/prj_mj246fKBrV
-link     on — anyone with the address can enter (granted 2026-08-24)
-```
-
-Open that address in a browser and it is yours. Write to it from the terminal
-and the write goes through your daemon to dev:
-
-```sh
-node packages/cli/bin/isocan.js --project "Widget Redesign" add notes.md --title "Acme spec"
-```
-
-**Order matters, for one non-obvious reason.** A daemon with a birth default set
-and not one canvas of its own is a *pure replica* — it serves no pages at all,
-so `http://localhost:4441/` and every `/p/<id>` under it go dark, and the web UI
-you are trying to develop has nowhere to live. Make the local canvas first and
-the question never comes up.
-
-### 6. What you now have, and why it is two things
-
-```
-$ node packages/cli/bin/isocan.js home
-role           home of 1 canvas; replica of https://dev.isocan.io (1); new canvases → https://dev.isocan.io
-birth default  https://dev.isocan.io — a canvas born here is born there; nothing already here moved
-answering      yes — https://dev.isocan.io is up
-
-canvases
-CANVAS           ID              HOME
-Acme Scratch     prj_lGBWI…      here — this daemon is its home
-Widget Redesign  prj_mj246…      https://dev.isocan.io
-```
-
-One machine, one daemon, two homes. The local canvas is what you point a
-browser at while you change the app. The dev canvas is what proves the change
-survives a real home — Firestore, a load balancer, a WebSocket that has to
-cross the internet, and the class of race that only shows up when the round
-trip is longer than a loopback (*"local timing wins races the internet
-loses"*).
-
-Asking your own daemon for the dev-homed canvas gets you the signpost rather
-than a second door:
-
-```
-$ curl -i http://127.0.0.1:4441/p/prj_mj246fKBrV
-HTTP/1.1 404 Not Found
-x-isocan-home: https://dev.isocan.io
-
-this canvas lives at https://dev.isocan.io — open it there
-```
-
-That is correct, and it is the shape to expect: the web app's route makes the
-same check client-side before it mounts anything, so a `<Link>` to a canvas
-that lives elsewhere renders a signpost page rather than opening a socket and
-an IndexedDB replica for a canvas whose real copy is somewhere else.
-
-### 7. Prove it round-tripped
-
-The strongest single check that a home is really involved is a second machine
-that has only ever talked to the home:
-
-```sh
-node packages/cli/bin/isocan.js --project "Widget Redesign" pass    # mint a single-use pass
-cd /some/empty/dir
-npm --prefix ~/src/isocan run dev:replica -- setup 'https://dev.isocan.io/p/<id>#<pass>'
-npm --prefix ~/src/isocan run dev:replica -- --project "Widget" ls
-```
-
-The item you added from your own terminal comes back on a scratch machine with
-its own `ISOCAN_HOME`, its own badge, and no knowledge of your disk. That is
-the round trip.
-
----
-
-## What both doors share
-
-### Clean-shell discipline
-
-**Use `isocan home`. Never export an `ISOCAN_*` variable into your shell.**
-
-The dance phase 7.5's proof had to perform — three exported variables, a
-scratch `ISOCAN_HOME`, a hand-started daemon — was **self-defence against a
-configuration model that no longer exists**. Back then `config.json` had one
-`home` key, a daemon had one connection, and setting that key demoted the whole
-machine and stopped it serving pages, so a temp directory was the only way to
-look at a home without losing your own. Phase 10.3 deleted the premise: the
-home is a property of the canvas, one daemon holds several, and the birth
-default moves nothing that already exists. There is nothing left to defend
-against, and an exported variable now buys you only the ways it can lie.
-
-Specifically, `ISOCAN_HOME_URL` in your environment **wins over `config.json`**
-and is inherited by any daemon the CLI starts — so a shell that has it set will
-disagree with the file, silently, for as long as that shell lives. `isocan home
-<url>` refuses to write the file while it is set rather than pretending to
-work:
+`isocan home <url>` refuses to write the configuration file while the variable
+is set:
 
 ```
 error: ISOCAN_HOME_URL=… is set in this shell and wins over the config file —
 unset it first (`unset ISOCAN_HOME_URL`), then run this again
 ```
 
-The two legitimate exceptions are both scoped to one process and neither is an
-export: `scripts/dev-replica.mjs` sets `ISOCAN_HOME`, `ISOCAN_PORT` and
-`ISOCAN_HOME_URL` for the child it spawns and writes them to no file, and the
-test suite points `ISOCAN_HOME` at scratch directories. If you catch yourself
-typing `export ISOCAN_`, the verb you want is `isocan home`, `--port`, or
-`npm run dev:replica`.
+Two components set these variables for a single child process, which is
+supported: `scripts/dev-replica.mjs` and the test suite.
 
-### How the work runs — the conductor model, as a human runs it
+If you're about to type `export ISOCAN_`, use `isocan home`, the `--port` flag,
+or `npm run dev:replica` instead.
 
-[`phases.md`](phases.md) is the walk. Its **"where we are"** line says which
-phase is next, and a clean session starts by believing it.
+### Follow the phase process
 
-A working session is a **conductor**: it does not write the phase's code
-itself. It reads the status line, spawns a subagent on the next phase — handing
-it that phase's section, the docs the section cites, and `AGENTS.md` — and then
-**verifies the named proof itself**: runs the suite, replays the scene, drives
-the browser. Never taking the subagent's word for it is the whole point; the
-proofs are named up front precisely so review is mechanical. Work that fails
-review goes back down — adjust the instructions, respawn, re-review. When the
-proof holds, the conductor writes the Findings, moves the status line, edits
-[`architecture.md`](architecture.md) if a finding redrew the map, and commits
-the phase whole.
+[`phases.md`](phases.md) tracks the work. Its "where we are" line states which
+phase is next.
 
-Two rules that are easy to break by accident. **Phases run in order** — each
-stands on the last; parallel subagents belong *inside* a phase, never across
-phases. And every step marked **⚑ provision** is **asked of Dimitri out loud
-before it runs** (see below): a conductor spawns workers freely and never a
-cloud resource without permission.
+Each working session acts as a conductor:
 
-For you as a human this means the same thing it means for a session: read the
-status line, do the next phase, prove the named proof yourself, write down what
-surprised you. A finding is worth more than the code that produced it, and
-`phases.md` is where it goes — one dated line, the claim and nothing else, with
-the argument in the commit message.
+1. Read the status line in `phases.md`.
+2. Delegate the phase's implementation, providing the phase section, the
+   documents it cites, and `AGENTS.md`.
+3. Verify the phase's stated proof yourself: run the test suite, replay the
+   scenario, or drive the browser. Don't accept a report as evidence.
+4. If verification fails, revise the instructions and repeat.
+5. When the proof holds, record the findings, update the status line, update
+   [`architecture.md`](architecture.md) if the finding changes it, and commit
+   the phase as one change.
 
-### The deploy gate — dev deploys from `green`, not from `main`
+Two constraints:
 
-Since phase 10.5 there are **three refs and three jobs**: `main` is the source,
-`green` is the *tested* source, and `release` is the shipped CLI. You work on
-`main`; the other two are generated and neither is ever edited by hand.
+* Phases run in order. Parallel work belongs inside a phase, not across phases.
+* Steps marked **⚑ provision** require explicit approval before they run. See
+  [Provisioning access](#provisioning-access).
 
-CI ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) runs on
-every push to `main`. It runs `npm test` with **`ISOCAN_REQUIRE_EMULATOR=1`** —
-locally the Firestore-backed suites skip loudly and say what they did not
-check; on CI a skip is a failure, because a green run that did not test
-Firestore launders an unknown into a checkmark — and then `npm run typecheck`.
-Only after both pass does it fast-forward `green` to that commit, and Cloud
-Build's trigger watches `green`. So a commit that compiles on your laptop and
-does not boot never reaches the dogfood home, and neither developer can take
-down the other's dev environment with a red commit.
+Record anything that surprised you in `phases.md` as a single dated line, and
+put the supporting detail in the commit message.
 
-The fast-forward is a plain `git push` with no force: a refusal means `green`
-already points at something your commit is not an ancestor of (an out-of-order
-or re-run build), and the deployed home stays where it is rather than moving
-backwards. It logs a warning and the release still publishes, because the two
-pipelines are independent by design.
+### Understand the deploy pipeline
 
-**Status: live since 2026-08-24.** The `isocan-dev-deploy` trigger in
-`isocan-io-dev` watches `^green$`, verified by reading it back. So a push to
-`main` no longer deploys by itself — **"I pushed and dev did not change" is now
-an expected state**, for about the length of a CI run, and a permanent one if
-CI is red. `gh run list --workflow=release.yml` is where to look first, not the
-build history.
+The repository uses three branches:
 
-Two things about how it got there, because the next person to touch a trigger
-will meet both. `infra/provision.sh d` **cannot repoint an existing trigger** —
-`95-build-trigger.sh` exits early when one exists, saying to delete and re-run,
-and deleting is what forces the browser step that rebuilds the GitHub App
-connection. And `gcloud builds triggers update github` refuses this trigger with
-`INVALID_ARGUMENT`: it was created through the GitHub App (first generation), so
-its repo is `github.owner/name` rather than a second-generation `repository`
-resource, and the `update github` verb does not handle that shape. What works is
-`gcloud builds triggers import` with the full resource, keeping `id` so it
-updates in place instead of creating a second trigger.
+| Branch | Contents | Written by |
+| --- | --- | --- |
+| `main` | Source. | You |
+| `green` | The most recent commit that passed CI. | CI |
+| `release` | The published CLI. | CI |
 
-One trap in that file, worth more than it looks: **quote `_DEPLOY: "yes"`.**
-Unquoted, `yes` is a YAML boolean, and `cloudbuild.yaml`'s deploy step tests
-`[ "${_DEPLOY}" != "yes" ]` — so a round-trip through an unquoted import gives a
-pipeline that builds, pushes, reports success, and deploys nothing. `--format=json`
-is how you check what was actually stored; the YAML rendering prints `yes` either
-way and cannot tell you which one you have.
+Edit `main` only. CI generates `green` and `release`.
 
-### Who holds provisioning, and whom a ⚑ asks
+On every push to `main`,
+[`release.yml`](../.github/workflows/release.yml) runs `npm test` with
+`ISOCAN_REQUIRE_EMULATOR=1`, then `npm run typecheck`. If both pass, it
+fast-forwards `green` to that commit. Cloud Build deploys `dev.isocan.io` from
+`green`.
 
-**Dimitri holds GCP on `isocan-io-dev`** — the project lives under the
-`glazkov.com` org and bills to his account — and **a conductor's ⚑ step asks
-Dimitri out loud before it runs.** That is the whole answer; there is no second
-operator, which is also why `infra/` is small idempotent shell scripts rather
-than Terraform. [`infra/README.md`](../infra/README.md) is the decision,
-`infra/provision.sh` is the button, and its "what needs a human" table is the
-list of things no script can do at all (billing, DNS, the GitHub OAuth consent,
-waiting for a managed certificate).
+`ISOCAN_REQUIRE_EMULATOR=1` turns a skipped Firestore suite into a failure. The
+same suites skip locally and report what they didn't check.
 
-### The hazard list
+The fast-forward uses `git push` without `--force`. If `green` already points
+at a commit that yours doesn't descend from, the push fails, CI logs a warning,
+and the deployed home stays where it is.
 
-Things that have actually gone wrong, or are one keystroke from going wrong.
+**Note:** Since 2026-08-24, pushing to `main` doesn't deploy on its own. Expect
+a delay of roughly one CI run, and no deployment at all if CI fails. Check
+`gh run list --workflow=release.yml` before the build history.
 
-- **A working daemon pointed at dev by accident.** The way in is an exported
-  `ISOCAN_HOME_URL`, which outranks the config file and is inherited by the
-  daemon — which is the whole reason for the clean-shell discipline above.
-  `isocan home` with no argument is the check; the row that should say
-  `here — this daemon is its home` is the thing to look at.
+### Repoint the deploy trigger
 
-  The *second* way in was fixed in phase 10.5 and is described above: the first
-  `isocan home <url>` on a machine with no `homes.json` used to record every
-  canvas as living at that address. It no longer does, and there is a test
-  named for the rig it broke. It is listed here because "the verb that says
-  nothing moved, moving everything" is the kind of thing worth recognising the
-  second time.
+If you need to change which branch Cloud Build watches, note the following:
 
-- **`/api/healthz`, never `/healthz`.** A hosted home is behind Google's
-  frontend, which swallows the exact path `/healthz` on a `*.run.app` host and
-  answers its own 404 — so a probe that has only ever run against `127.0.0.1`
-  reads a live home as dead, and the container never sees the request.
-  `/api/healthz` is the same handler and the same body on a prefix Google
-  forwards, and it is what the uptime check and the Cloud Run smoke test use.
-  *Measured 2026-08-24 and worth stating precisely:* through the load balancer
-  at `https://dev.isocan.io`, `/healthz` **does** answer 200 from our daemon
-  today, so the swallow is not visible at that address. The rule stands anyway,
-  because a home's address is configuration — a bare Cloud Run URL is a valid
-  one — and a health path that is only correct for some addresses is not a
-  health path.
+* `infra/provision.sh d` can't modify an existing trigger. The script exits
+  when a trigger is already present.
+* `gcloud builds triggers update github` returns `INVALID_ARGUMENT` for this
+  trigger, because it was created through the GitHub App and identifies its
+  repository as `github.owner/name` rather than as a `repository` resource.
 
-- **`scripts/new-project.sh` is missing from the repo.**
-  [`new-project.md`](new-project.md) opens by pointing at it, and `README.md`
-  and `AGENTS.md` both link to it, and it is not in the tree and not in the
-  history. Everything the doc describes still works by hand — the doc is the
-  step-by-step and it is correct — but the one-command form does not exist yet.
-  **It is Dion's to push; do not write it here and do not edit his doc.**
+Use `gcloud builds triggers import` with the full resource definition, and keep
+the `id` field so the trigger updates in place instead of creating a second
+one.
 
-- **Vite answers on `localhost:5173`, not `127.0.0.1:5173`.** It binds the name,
-  which resolves to `::1`. The daemon answers on both, so the habit of typing
-  the numeric address works everywhere except the one place you need it.
+**Caution:** Quote the `_DEPLOY` value as `"yes"` in the import file. Unquoted,
+`yes` is a YAML boolean. `cloudbuild.yaml` tests `[ "${_DEPLOY}" != "yes" ]`, so
+an unquoted value produces a pipeline that builds, pushes, reports success, and
+deploys nothing. Verify with `--format=json`, because the YAML output prints
+`yes` for both the string and the boolean.
 
-- **`npm run dev`'s proxy target is hardcoded** to `127.0.0.1:4441` in
-  `packages/web/vite.config.ts`. `--port` moves the CLI and the daemon; it does
-  not move the proxy. Two checkouts serving two dev UIs at once is a config edit,
-  not a flag.
+## Provisioning access
 
-- **`npm run dev:replica -- setup <address>#<pass>` refuses inside a bound
-  directory — after redeeming the pass.** The repo root is bound the moment
-  anyone runs `isocan identity` there, so the natural place to type it is the
-  one place it fails, and the pass is single-use and already spent. Run it from
-  an empty directory via `npm --prefix <checkout> run dev:replica -- setup …`.
+Dimitri administers the `isocan-io-dev` Google Cloud project, which belongs to
+the `glazkov.com` organization. Any step marked **⚑ provision** requires his
+approval before it runs.
 
-- **`isocan identity --name` without a harness session is an error**, not a
-  fallback. A person names themselves with `--home`; an agent names itself with
-  `--session` and a session id its harness exports.
+There's no second operator, which is why `infra/` contains idempotent shell
+scripts rather than Terraform. See [`infra/README.md`](../infra/README.md) for
+the reasoning and `infra/provision.sh` to run a stage. The "what needs a human"
+table in that README lists the steps no script can perform, including billing,
+DNS, GitHub OAuth consent, and certificate provisioning.
 
-- **`isocan home` does not start a daemon.** Against a stopped one it reports
-  `role unknown — no daemon is running on …` and what `config.json` says. That
-  is deliberate — it is the verb for when nothing works — but it means "I ran
-  `isocan home` and it said unknown" is not evidence of a broken install.
+## Troubleshooting
 
-- **A canvas made from the web front page on a mixed rig is born at the birth
-  default**, so it does not appear in the list it was made from, and the button
-  looks like it silently failed. Known, filed as an open finding in phase 10.3.
+### A daemon points at dev unexpectedly
 
-- **The web UI needs a canvas whose home is your own daemon.** A dev-homed
-  canvas opened at `localhost:5173` renders the signpost page, by design and
-  before anything mounts. Keep one local canvas for UI work; that is the whole
-  of what remains of phase 7.5's replica/home duality.
+**Cause:** `ISOCAN_HOME_URL` is exported in your shell. It overrides
+`config.json` and is inherited by the daemon.
 
-### The rest of the map
+**Fix:** Run `unset ISOCAN_HOME_URL`, then verify with `isocan home`. Each local
+canvas should show `here — this daemon is its home`.
 
-- [`AGENTS.md`](../AGENTS.md) — house rules, and "done means done on both
-  surfaces": the checklist that keeps the CLI and the web app from diverging.
-- [`README.md`](../README.md) — what the product is and what it does.
-- [`phases.md`](phases.md) — the walk, the status roster
-  (`grep '^\*\*Status' docs/phases.md`), the standing lessons, and the open
-  debts (`grep -n '— Open' docs/phases.md`).
-- [`architecture.md`](architecture.md) — the physical map: what runs where.
-- [`multiuser-journey.md`](multiuser-journey.md) — the ideal, held as scenes;
-  the acceptance suite every phase is graded against.
-- [`design/`](design/) — one bounded mechanism per file, each opening by naming
-  the debt it discharges.
-- [`reviews/lessons.md`](reviews/lessons.md) — the failure modes this codebase
-  has actually produced, each with the guard that now catches it.
-- [`new-project.md`](new-project.md) — the other doc: starting a project on a
-  canvas, which is not this.
-- `isocan --agent-help` — the collaboration protocol, shipped inside the CLI so
-  an upgrade upgrades the instructions.
+### A health check reports a live home as down
+
+**Cause:** The check requests `/healthz`. Google's frontend intercepts that
+exact path on `*.run.app` hosts and returns its own 404, so the request never
+reaches the container.
+
+**Fix:** Use `/api/healthz`, which returns the same response on a path that
+Google forwards. The uptime check and the Cloud Run smoke test use it.
+
+**Note:** Measured on 2026-08-24, `https://dev.isocan.io/healthz` returns 200
+through the load balancer, so the interception isn't visible at that address.
+Use `/api/healthz` anyway: a home's address is configurable, a bare Cloud Run
+URL is valid, and a health path must work for every address.
+
+### `scripts/new-project.sh` doesn't exist
+
+**Cause:** [`new-project.md`](new-project.md), `README.md`, and `AGENTS.md`
+reference this script, but it isn't in the repository or its history.
+
+**Fix:** Follow the manual steps in [`new-project.md`](new-project.md), which
+are correct and complete. Dion owns this script; don't recreate it.
+
+### The web UI doesn't load at `127.0.0.1:5173`
+
+**Cause:** Vite binds `localhost`, which resolves to `::1`. The daemon answers
+on both addresses, so only Vite is affected.
+
+**Fix:** Use `http://localhost:5173`.
+
+### A second checkout can't serve its own web UI
+
+**Cause:** Vite proxies `/api` to a hardcoded `127.0.0.1:4441` in
+`packages/web/vite.config.ts`. The `--port` flag moves the CLI and daemon but
+not the proxy.
+
+**Fix:** Edit `vite.config.ts`, or work in a single checkout.
+
+### `isocan identity --name` returns an error
+
+**Cause:** Without `--home` or a harness session, the command can't determine
+which agent is running it.
+
+**Fix:** Use `--home` to identify yourself as a person, or `--session` with a
+session ID for an agent.
+
+### `isocan home` reports `role unknown`
+
+**Cause:** No daemon is running. `isocan home` doesn't start one.
+
+**Fix:** This is expected behavior, not a broken installation. Start a daemon
+with `npm run dev` or any other `isocan` command.
+
+### A canvas created from the web UI doesn't appear in the list
+
+**Cause:** On a machine with a birth default and local canvases, the web UI
+creates the canvas at the birth default. The list shows only canvases the local
+daemon hosts.
+
+**Fix:** Open the canvas at its home address. This is a known issue, recorded
+as an open finding in phase 10.3.
+
+### A dev-homed canvas shows a signpost instead of the canvas
+
+**Cause:** The local daemon isn't that canvas's home, so it doesn't serve its
+pages.
+
+**Fix:** This is expected. Open the canvas at its home address. Keep at least
+one local canvas for web UI development.
+
+## Related documentation
+
+| Document | Contents |
+| --- | --- |
+| [`AGENTS.md`](../AGENTS.md) | House rules, and the checklist that keeps the CLI and web app in sync. |
+| [`README.md`](../README.md) | What the product is and does. |
+| [`phases.md`](phases.md) | The implementation plan, status roster, and open findings. |
+| [`architecture.md`](architecture.md) | What runs where. |
+| [`multiuser-journey.md`](multiuser-journey.md) | The target experience, written as scenarios. |
+| [`design/`](design/) | One mechanism per file. |
+| [`reviews/lessons.md`](reviews/lessons.md) | Failure modes this codebase has produced, with the guard for each. |
+| [`new-project.md`](new-project.md) | How to start a project on a canvas. |
+| `isocan --agent-help` | The collaboration protocol, shipped with the CLI. |
