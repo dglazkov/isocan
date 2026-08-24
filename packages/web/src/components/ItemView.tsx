@@ -5,7 +5,6 @@ import type { Actor, Item, Operation } from "@isocan/core";
 import {
   isDesignSystem,
   BROWSER_MIME,
-  itemKind,
   annotationsOf,
   isAnnotation,
   isStarred,
@@ -22,7 +21,8 @@ import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { badgeCorner, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
-import { KIND_GLYPH, KIND_NOUN } from "../lib/kinds.ts";
+import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
+import { KindIcon } from "./KindIcon.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
@@ -88,7 +88,7 @@ export function ItemView({
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
   // name row rather than another corner.
-  const kind = itemKind(item);
+  const kind = iconKindFor(item);
   const isBrowser = current.mimeType === BROWSER_MIME;
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
@@ -409,11 +409,11 @@ export function ItemView({
             // argued and tested. Below the width where a name says anything
             // the name is dropped instead, and the star stays.
             maxWidth: row.nameRoom,
-            // The row is here if anything in it is. Which of the glyph and the
+            // The row is here if anything in it is. Which of the icon and the
             // name survive at this size is `titleRow`'s call, and they do NOT
             // fall together: hiding the pair is what left a bare star between
             // 12% and 19% zoom on a 480-unit item.
-            ...(row.glyph || row.name || renaming ? null : { display: "none" }),
+            ...(row.icon || row.name || renaming ? null : { display: "none" }),
           }}
         >
         {/* What this item IS, before its name — so a canvas of cards reads as
@@ -422,17 +422,13 @@ export function ItemView({
             mark that means one thing in a list and another on the thing itself
             is worse than no mark. It is not a button: the kind is derived from
             the file and there is nothing to set. */}
-        {row.glyph && (
-          <span className="kind-glyph" aria-hidden="true" title={KIND_NOUN[kind]}>
-            {KIND_GLYPH[kind]}
-          </span>
-        )}
+        {row.icon && <KindIcon className="kind-icon" kind={kind} />}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : row.name ? (
           <span
             className="name"
-            title={`${item.title} (${current.filename}) — ${KIND_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
+            title={`${item.title} (${current.filename}) — ${ICON_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
           >
             {item.title}
           </span>

@@ -55,15 +55,18 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
 /** Screen pixels the star keeps at the far end of the name row. */
 export const STAR_ROOM = 26;
 /**
- * Screen pixels the kind glyph keeps at the near end — the mark itself plus
- * the row's gap after it. Measured on the rendered row (8.66 + 6), not guessed.
+ * Screen pixels the kind icon keeps at the near end — the mark itself plus the
+ * row's gap after it. **Measured on the rendered row (13 + 6), not guessed**,
+ * and re-measured when the mark changed: it was a text glyph at 16, and an
+ * icon drawn to be legible is a different width. A budget copied forward from
+ * the thing it used to describe is a budget that is wrong.
  *
  * It is budgeted for the same reason the star is, and the reason is in
  * `titleRow` below: anything sharing the row that is NOT subtracted gets drawn
  * through once the item is small enough on screen. That already happened once
  * with the star.
  */
-export const GLYPH_ROOM = 16;
+export const ICON_ROOM = 19;
 /** Under this many screen pixels a name says nothing, so it is not shown. */
 export const MIN_NAME_ROOM = 48;
 /**
@@ -86,7 +89,7 @@ export const CHROME_INSET = 0;
 
 /** What the title row shows at this size, and how much of it the name gets. */
 export interface TitleRow {
-  glyph: boolean;
+  icon: boolean;
   name: boolean;
   /** Screen pixels the name may claim. Meaningless when `name` is false. */
   nameRoom: number;
@@ -103,26 +106,26 @@ export interface TitleRow {
  * width where a name says anything the name is DROPPED rather than squeezed:
  * "H…" is a smudge.
  *
- * **The glyph yields to the name, and then outlives it.** Three sizes, and the
+ * **The icon yields to the name, and then outlives it.** Three sizes, and the
  * order is the point:
  *
- * 1. Room for everything — glyph, name, star.
- * 2. Not enough for all three: the GLYPH goes first. Of the two, the name is
+ * 1. Room for everything — icon, name, star.
+ * 2. Not enough for all three: the ICON goes first. Of the two, the name is
  *    the more specific answer — "which one is this" beats "what kind is this"
  *    — so the kind mark must never be the reason a name disappeared. This is
  *    also what keeps the name's threshold exactly where it was before the
  *    glyph existed, rather than 3 points of zoom worse.
- * 3. Not enough for a name either: the name goes, and the glyph comes BACK.
+ * 3. Not enough for a name either: the name goes, and the icon comes BACK.
  *    A shape still reads at a size where text does not, which is the same
  *    argument that keeps the star down here — and a bare star, which is what
  *    this band showed at first, says the least of any of these states.
  */
 export function titleRow(width: number, scale: number): TitleRow {
   const available = width * scale - STAR_ROOM - CHROME_INSET * 2;
-  const withGlyph = available - GLYPH_ROOM;
-  if (withGlyph >= MIN_NAME_ROOM) return { glyph: true, name: true, nameRoom: withGlyph };
-  if (available >= MIN_NAME_ROOM) return { glyph: false, name: true, nameRoom: available };
-  return { glyph: available >= GLYPH_ROOM, name: false, nameRoom: available };
+  const withIcon = available - ICON_ROOM;
+  if (withIcon >= MIN_NAME_ROOM) return { icon: true, name: true, nameRoom: withIcon };
+  if (available >= MIN_NAME_ROOM) return { icon: false, name: true, nameRoom: available };
+  return { icon: available >= ICON_ROOM, name: false, nameRoom: available };
 }
 
 /** Screen pixels available to an item's name — see `titleRow`. */
