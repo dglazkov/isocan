@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DesignDoc, DesignTypography } from "@isocan/core";
-import { parseDesign, parseHex, resolveToken } from "@isocan/core";
+import { bySeverity, checkDesign, parseDesign, parseHex, resolveToken } from "@isocan/core";
 import { lengthPx, readableInk } from "../lib/designview.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 
@@ -50,6 +50,7 @@ export function DesignSystemView({ url }: { url: string }) {
   return (
     <div className="ds-view">
       <Masthead doc={doc} />
+      <Findings doc={doc} />
       {doc.problems.length > 0 && (
         <section className="ds-problems">
           <h3>Could not be read</h3>
@@ -79,6 +80,35 @@ export function DesignSystemView({ url }: { url: string }) {
   );
 }
 
+/**
+ * What the system gets wrong about itself, by its own declared pairs.
+ *
+ * The swatch badges are not this: they say what ink a colour can carry, which
+ * every colour can. `checkDesign` compares the pairs the document actually
+ * declares — ink against ground, an accent against the surface it sits on —
+ * and it is the same function `isocan design check` runs, so the canvas and
+ * the terminal cannot disagree about whether a design system is sound.
+ */
+function Findings({ doc }: { doc: DesignDoc }) {
+  const findings = bySeverity(checkDesign(doc));
+  if (findings.length === 0) return null;
+  return (
+    <section className="ds-findings">
+      <h3>
+        Checks <span>{findings.length}</span>
+      </h3>
+      <ul>
+        {findings.map((f, i) => (
+          <li key={i} className={`ds-finding ${f.severity}`}>
+            <b>{f.where}</b>
+            {f.what}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Masthead({ doc }: { doc: DesignDoc }) {
   const { name, version, description } = doc.tokens;
   if (!name && !version && !description) return null;
@@ -105,7 +135,16 @@ function Colors({ doc }: { doc: DesignDoc }) {
           return (
             <div className="ds-swatch" key={name}>
               <div className="ds-chip" style={{ background: value, color: on?.color ?? "inherit" }}>
-                {on && <span className="ds-ratio">{on.ratio.toFixed(1)}</span>}
+                {/* What ink this colour can carry — NOT a pass mark. Every
+                    colour scores well here; the grading is in Checks above. */}
+                {on && (
+                  <span
+                    className="ds-ratio"
+                    title={`${on.color === "#ffffff" ? "White" : "Black"} text reads at ${on.ratio.toFixed(1)}:1 on this`}
+                  >
+                    Aa
+                  </span>
+                )}
               </div>
               <b>{name}</b>
               <code>{value}</code>
