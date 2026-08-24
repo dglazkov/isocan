@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { CanvasState, MentionCandidate, PresenceSession, ActorNames } from "@isocan/core";
 import { actorsAnswerTo, collectCanvasActors } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sessionName } from "./names.ts";
 
 /** One mentionable person, as offered by the "@" menu. */
 export interface MentionPeer {
@@ -47,9 +48,20 @@ export function mentionRoster(
     }
   }
   for (const session of sessions) {
-    const name = session.label ?? session.actor.name;
+    // `sessionName`, not `session.label ?? session.actor.name`: the stamped
+    // name on a session is what the actor was called when it started, and
+    // "a stamped name is a log entry, not an identity" applies to the @-menu
+    // more than anywhere else. Rename yourself to Di and the menu kept
+    // offering Dion 2 — a name that reaches nobody, on the one surface whose
+    // whole job is to name people correctly.
+    const name = sessionName(names ?? {}, session);
     candidates.push(session.actor);
     if (session.label) candidates.push({ id: session.actor.id, name: session.label });
+    // The registry name is mentionable too, so a comment written from the
+    // menu resolves — `actorsAnswerTo` only covers actors the CANVAS
+    // remembers, and a live session on a canvas nobody has commented on yet
+    // is not one of those.
+    if (name !== session.actor.name) candidates.push({ id: session.actor.id, name });
     // A live session speaks for the actor: its label wins over a stale name.
     peers.set(session.actor.id, { id: session.actor.id, name, online: true });
   }

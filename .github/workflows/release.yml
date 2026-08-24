@@ -71,6 +71,20 @@ jobs:
           ISOCAN_REQUIRE_EMULATOR: "1"
       - run: npm run typecheck
 
+      # The graders grade themselves. `--selftest` runs every check in
+      # scripts/grade.mjs against a page built to break all of them and fails
+      # if any stays silent — which is exactly how that file shipped its first
+      # version, scoring a page with a stretched image 8/8 because a syntax
+      # error made every reading undefined. The guard existed and nothing
+      # invoked it, which is the same hole one level up.
+      #
+      # Chrome is on the GitHub runner already; `continue-on-error` because a
+      # browser that will not start on CI is not a reason to block a release,
+      # and the run still shows red in the log where somebody will see it.
+      - name: The graders still measure something
+        run: node scripts/grade.mjs --selftest
+        continue-on-error: true
+
       - name: Build and publish the release branch
         run: |
           git config user.name "github-actions[bot]"
