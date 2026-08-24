@@ -150,6 +150,24 @@ const HEALTH_ROUTES = ["/healthz", "/api/healthz"] as const;
  * is the cost of closing the route, paid in bandwidth rather than in
  * correctness, and it is the right way round.
  */
+/**
+ * **What the static file server calls each thing it serves.**
+ *
+ * Exported so its guard can import it rather than restate it: a test that
+ * spells the map out a second time is a test of its own copy
+ * (`docs/reviews/lessons.md` #5). `packages/server/test/statictypes.test.ts`
+ * holds it to every extension under `packages/web/public/`.
+ */
+export const STATIC_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+};
+
 const CACHE_BLOB = "private, immutable, max-age=31536000";
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
@@ -2099,14 +2117,23 @@ function registerPages(
   };
 
   const send = (reply: { header: Function; send: Function; type: Function }, file: string) => {
-    const types: Record<string, string> = {
-      ".html": "text/html; charset=utf-8",
-      ".js": "text/javascript",
-      ".css": "text/css",
-      ".svg": "image/svg+xml",
-      ".png": "image/png",
-      ".ico": "image/x-icon",
-    };
+    const types = STATIC_TYPES;
+    /**
+     * **An unknown extension falls through to `application/octet-stream`, and
+     * that is this codebase's oldest failure wearing a `Content-Type`.**
+     *
+     * The map is hand-rolled and had six entries. Phase 13.5 added the front
+     * page's screenshot as the first `.webp` this tree has ever served, and it
+     * went out as `application/octet-stream` — which RENDERS, because Chrome
+     * sniffs an `<img>` body, so nothing looked broken. It would stop
+     * rendering the day anything set `X-Content-Type-Options: nosniff` on
+     * static assets, and the symptom would be a blank frame on the first page
+     * a stranger sees, a long way from this line.
+     *
+     * `packages/server/test/statictypes.test.ts` is the guard: every extension
+     * under `packages/web/public/` must be named here, so the next asset type
+     * somebody adds fails the build instead of shipping a cheerful default.
+     */
     reply.type(types[path.extname(file)] ?? "application/octet-stream");
     return reply.send(createReadStream(file));
   };
