@@ -749,7 +749,8 @@ anyone runs `isocan format`, instead of landing in a folder nobody opens.
 ## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply|anchor|main|rm`, `session start|on|work|say|point|end`,
+`comment list|add|reply|anchor|main|rm`,
+`session start|on|work|say|point|end|move`,
 `project create|list|show|edit|delete` (delete needs `--force` and is NOT
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
@@ -757,8 +758,10 @@ make),
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
-`set`, `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
-`rm`/`restore`/`trash`, `undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
+`set`, `fit <items...> [--size WxH]` (grow items to their content and settle
+the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
+`rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
+`undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),

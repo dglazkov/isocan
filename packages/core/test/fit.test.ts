@@ -87,4 +87,47 @@ describe("fitting items to their content", () => {
       moves: [],
     });
   });
+
+  /**
+   * Both dimensions, separately.
+   *
+   * `if (item.width !== t.width || item.height !== t.height)` reads as
+   * obviously right and was never exercised on one axis at a time: every case
+   * above changes BOTH, so dropping either half of the condition left the
+   * suite green. A screen that is the right width and too short is the
+   * ordinary case for a page that grew a paragraph, and dropping its resize
+   * would be silent — `fitMoves` returning nothing is indistinguishable from
+   * nothing needing to change.
+   */
+  it("resizes an item that is only the wrong height", () => {
+    const canvas = canvasOf(item("a", 0, 0, 420, 320));
+    const r = fitMoves(canvas, [{ itemId: "a", width: 420, height: 900 }]);
+    expect(r.resizes).toEqual([{ itemId: "a", width: 420, height: 900 }]);
+  });
+
+  it("resizes an item that is only the wrong width", () => {
+    const canvas = canvasOf(item("a", 0, 0, 420, 320));
+    const r = fitMoves(canvas, [{ itemId: "a", width: 1280, height: 320 }]);
+    expect(r.resizes).toEqual([{ itemId: "a", width: 1280, height: 320 }]);
+  });
+
+  /**
+   * ORDER IS THE DESIGN, and the design is READING order — down the page
+   * first, then across. The existing case ("anchors on the first in reading
+   * order") uses a corner-to-corner pair where both sorts agree, so swapping
+   * the comparators to x-then-y survived it. These two items disagree: `top`
+   * is higher, `left` is further left, and only one of them may keep its
+   * position.
+   */
+  it("settles the topmost first, not the leftmost", () => {
+    const canvas = canvasOf(item("top", 300, 0), item("left", 0, 500));
+    const r = fitMoves(canvas, [
+      { itemId: "top", width: 1280, height: 800 },
+      { itemId: "left", width: 1280, height: 800 },
+    ]);
+    expect(overlapping(rects(canvas, r))).toBe(0);
+    // `top` picks first because it is higher up the page, so it stays put and
+    // `left` is the one that gives way.
+    expect(r.moves.map((m) => m.itemId)).toEqual(["left"]);
+  });
 });

@@ -671,3 +671,69 @@ describe("daemon WS", () => {
     await until(() => ws.readyState === WebSocket.CLOSED);
   });
 });
+
+/**
+ * The log records where an item WENT, not where it was asked to go.
+ *
+ * Collision-avoiding placement shipped with the search running in the reducer
+ * at apply time and nowhere else. The daemon logged `{x: 0, y: 0}` while the
+ * item sat at 440,0, so the position was decided on every apply and never
+ * written down — meaning a replay re-derived it with whatever the search does
+ * that day. Change the step size next year and every historical canvas
+ * re-lays-out. An oplog that has to be re-cooked is not a record.
+ *
+ * Resolving it fully before logging also makes the logged position already
+ * clear, which is what lets the reducer's own call be a no-op on the way back:
+ * any correct search hands a free spot back unchanged.
+ */
+describe("placement is decided once, before it is logged", () => {
+  it("logs where the item went, not where it was asked to go", async () => {
+    await op({ type: "project.create", projectId: "prj_p", title: "P" }, null);
+    const add = (id: string) =>
+      op({
+        type: "item.add",
+        itemId: id,
+        version: nv(`ver_${id}`),
+        width: 400,
+        height: 300,
+        placement: { x: 0, y: 0 },
+      }, "prj_p");
+    await add("itm_first");
+    await add("itm_second");
+
+    const canvas = await get("/api/projects/prj_p/canvas");
+    const second = canvas.canvas.items.itm_second;
+    expect(second.x, "the second item should have been moved clear").not.toBe(0);
+
+    const log: LogEntry[] = await get("/api/projects/prj_p/oplog?since=0");
+    const adds = log.filter((e) => e.envelope.op.type === "item.add");
+    const last = adds.at(-1)!.envelope.op as Extract<Operation, { type: "item.add" }>;
+    const logged = last.placement;
+    expect(logged, "the log must carry the resolved position").toEqual({ x: second.x, y: second.y });
+  });
+
+  it("puts the same canvas back when the log is replayed", async () => {
+    await op({ type: "project.create", projectId: "prj_r", title: "R" }, null);
+    for (const id of ["itm_a", "itm_b", "itm_c"]) {
+      await op({
+        type: "item.add",
+        itemId: id,
+        version: nv(`ver_${id}`),
+        width: 400,
+        height: 300,
+        placement: { x: 0, y: 0 },
+      }, "prj_r");
+    }
+    const before = await get("/api/projects/prj_r/canvas");
+    const positions = (canvas: any) =>
+      Object.fromEntries(Object.values(canvas.items).map((i: any) => [i.id, { x: i.x, y: i.y }]));
+
+    await daemon.close();
+    daemon = await startDaemon({ port: 0, home });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+
+    const after = await get("/api/projects/prj_r/canvas");
+    expect(positions(after.canvas), "replay moved things").toEqual(positions(before.canvas));
+  });
+});
