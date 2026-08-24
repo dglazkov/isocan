@@ -457,7 +457,7 @@ button, select { color: inherit; }
      badge, plies, resize handle) can never paint over sibling items. */
   z-index: 0;
 }
-.item.selected { outline: 2px solid var(--accent); z-index: 1; }
+.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
 .item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
 /* A mark sits over what it marks. */
 .item.annotation { z-index: 3; }
@@ -476,9 +476,9 @@ button, select { color: inherit; }
 .canvas-viewport:not(.pen) .item:hover {
   outline: 1px dashed var(--accent); outline-offset: 2px;
 }
-.canvas-viewport:not(.pen) .item.selected:hover { outline: 2px solid var(--accent); }
+.canvas-viewport:not(.pen) .item.selected:hover { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
 /* Pointing at a row in the files panel points at the thing itself. */
-.item.peeked { outline: 2px dashed var(--accent); outline-offset: 3px; }
+.item.peeked { outline: calc(2px / var(--scale, 1)) dashed var(--accent); outline-offset: calc(3px / var(--scale, 1)); }
 .item.peeked .item-titlebar { opacity: 1; }
 /* The name floats ABOVE the card rather than inside it: the item is the
    content, and a label that sits on top of it is a label, not a chrome bar.
@@ -662,15 +662,22 @@ button, select { color: inherit; }
 @keyframes work-sweep { 0% { left: -60%; } 60%, 100% { left: 110%; } }
 
 /* resize handles — one per corner */
+/* Everything from here is drawn INSIDE the zoomed world, so a plain `12px` is
+   twelve WORLD pixels — twelve at 100%, two at 16%, and a grab handle you
+   cannot hit. Dividing by --scale makes the rendered size constant, which is
+   the same thing the titlebar gets from its counter-scale transform. */
 .resize-handle {
-  position: absolute; width: 12px; height: 12px;
-  background: var(--card); border: 1.5px solid var(--accent); border-radius: 2px;
+  position: absolute;
+  width: calc(12px / var(--scale, 1)); height: calc(12px / var(--scale, 1));
+  background: var(--card);
+  border: calc(1.5px / var(--scale, 1)) solid var(--accent);
+  border-radius: calc(2px / var(--scale, 1));
   z-index: 4;
 }
-.resize-handle-nw { left: -6px;  top: -6px;    cursor: nwse-resize; }
-.resize-handle-ne { right: -6px; top: -6px;    cursor: nesw-resize; }
-.resize-handle-sw { left: -6px;  bottom: -6px; cursor: nesw-resize; }
-.resize-handle-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.resize-handle-nw { left: calc(-6px / var(--scale, 1));  top: calc(-6px / var(--scale, 1)); cursor: nwse-resize; }
+.resize-handle-ne { right: calc(-6px / var(--scale, 1)); top: calc(-6px / var(--scale, 1)); cursor: nesw-resize; }
+.resize-handle-sw { left: calc(-6px / var(--scale, 1));  bottom: calc(-6px / var(--scale, 1)); cursor: nesw-resize; }
+.resize-handle-se { right: calc(-6px / var(--scale, 1)); bottom: calc(-6px / var(--scale, 1)); cursor: nwse-resize; }
 
 /* ---------- version fan-out ---------- */
 .fan-card {

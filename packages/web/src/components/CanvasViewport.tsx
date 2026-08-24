@@ -550,9 +550,16 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       <CursorGlow />
       <div
         className="world"
-        style={{
-          transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
-        }}
+        style={
+          {
+            transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
+            // World-space chrome divides by this so a 2px outline is 2px on
+            // SCREEN at any zoom, the way the counter-scaled titlebar already
+            // is. Everything inside .world is measured in world units, so a
+            // literal `2px` here is 2 world px — 0.3 of a screen pixel at 16%.
+            "--scale": viewport.scale,
+          } as React.CSSProperties
+        }
       >
         {items.map((item) => (
           <ItemView key={item.id} item={item} projectId={projectId} actor={actor} />
