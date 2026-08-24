@@ -2659,7 +2659,23 @@ program
                 if (x === undefined || y === undefined) {
                   throw new Error("give x and y, or a delta with --by");
                 }
-                return { x: Number(x), y: Number(y) };
+                // `allowUnknownOption` is what lets `mv itm -80 420` through
+                // with a negative x — and the same permission hands us the
+                // FLAG as an operand when somebody writes `mv itm --to 300,200`
+                // (an invention: the coordinates are positional). Unchecked,
+                // `Number("--to")` is NaN, and NaN serializes to null, so the
+                // item's position was permanently `null,null`. Say what was
+                // wrong with what they typed.
+                const at = { x: Number(x), y: Number(y) };
+                if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) {
+                  const bad = [!Number.isFinite(at.x) ? x : null, !Number.isFinite(at.y) ? y : null]
+                    .filter((one) => one !== null)
+                    .join(" ");
+                  throw new Error(
+                    `x and y are positional numbers, e.g. \`isocan mv <item> 300 200\` — got: ${bad}`,
+                  );
+                }
+                return at;
               })();
         // What is drawn on a thing travels with it — the same rule the web app's
         // drag follows, so a move from either side keeps the marks in place.
