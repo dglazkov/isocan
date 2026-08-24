@@ -9,6 +9,8 @@ import {
   type CopyState,
 } from "../lib/copy.ts";
 import { IdentityDialog } from "../components/IdentityDialog.tsx";
+import { LEDGER } from "../lib/ledger.ts";
+import { CANVAS_SHOT } from "../lib/shot.ts";
 
 /**
  * **The origin, wearing a face** (Scene 0, phase 13.5).
@@ -21,23 +23,40 @@ import { IdentityDialog } from "../components/IdentityDialog.tsx";
  *
  * Three steps, and **nobody is ever sent away to documentation to learn how to
  * enter**. The steps ARE the entry: the reader can finish them without leaving
- * this page and without reading anything else. The repo link at the bottom is
- * a footnote for the curious, deliberately placed after the steps and worded
- * as an aside, because the moment it becomes the ask, the page has failed the
- * rule.
+ * this page and without reading anything else. Everything below them is the
+ * argument for having taken them, and the one link on the page is a footnote
+ * at the bottom worded as an aside, because the moment it becomes the ask, the
+ * page has failed the rule.
  *
- * Everything it draws comes from the app's own stylesheet and the system font
- * stack. No image, no webfont, no third-party anything — phase 10 made this
- * tab offline-capable out of a cached shell, and the FIRST page a stranger
- * sees is the worst possible place to add a network dependency the service
- * worker does not hold.
+ * **This absorbed `marketing/`**, which was a second front door: a static site
+ * for the same audience, at the same address, that nothing served. Its thesis
+ * came across (*every click has a command*, proved by the split ledger rather
+ * than asserted), its proof came across (a real canvas with four cursors on
+ * it), and the parts that only made sense standing alone did not — a sticky
+ * nav for a page with no scroll targets, a second copy of the install line in a
+ * closing band, a catalogue of six other people's skill repos, and a webfont
+ * from a third-party host. Where the two disagreed about the command, Scene 0
+ * won: the command is `SKILL_INSTALL_COMMAND`, imported from core, and there is
+ * exactly one of it on the page.
+ *
+ * **What it loads, and what it does not.** The register comes from size, weight
+ * and colour rather than from a display face, so first paint still needs
+ * nothing but the cached shell — phase 10 made this tab offline-capable and a
+ * webfont on the critical path of the first page a stranger sees would spend
+ * that. The one picture is below the steps, `loading="lazy"`, same-origin, and
+ * 49KB; a reader with no network gets its alt text and a reserved box, and
+ * everything they are actually asked to do is above it.
  */
 export function FrontPage({ onIdentity }: { onIdentity: (actor: Actor) => void }) {
   const [doorOpen, setDoorOpen] = useState(false);
   return (
     <div className="front-page">
       <header className="front-head">
-        <h1>isocan</h1>
+        {/* The register marketing/ had and this page did not. The accent takes
+            one word — the one the whole page is about — rather than a band. */}
+        <h1 className="front-title">
+          Every click has a <em>command</em>.
+        </h1>
         <p className="front-lede">
           One canvas, driven from a web app and a terminal. You move things with
           a mouse; your agent does the same work with a command, on the same
@@ -80,6 +99,61 @@ export function FrontPage({ onIdentity }: { onIdentity: (actor: Actor) => void }
           </div>
         </li>
       </ol>
+
+      {/* **A real canvas, not a mockup** — and it sits BELOW the steps, which is
+          the whole of what the fold is for here. The steps are the ask; the
+          picture is the reason to have taken them, and a hero image above the
+          ask would put 49KB and a scroll between a stranger and the one thing
+          this page wants from them.
+
+          `loading="lazy"` and `decoding="async"` for the same reason: nothing
+          about the first screen waits on it. `width`/`height` come from
+          `CANVAS_SHOT` so the box is reserved before the bytes land, and
+          `height: auto` in the stylesheet keeps those attributes a hint rather
+          than a squash (lessons.md #3 — this exact image shipped stretched
+          once). */}
+      <figure className="front-shot">
+        <img
+          src={CANVAS_SHOT.src}
+          width={CANVAS_SHOT.width}
+          height={CANVAS_SHOT.height}
+          alt={CANVAS_SHOT.alt}
+          loading="lazy"
+          decoding="async"
+        />
+        <figcaption className="front-shot-note">
+          <span>A real canvas, not a mockup.</span>
+          <span>One person and three agents on it at once, each cursor saying what it is doing.</span>
+          <span>The screens are a synthetic product; the canvas is the product.</span>
+        </figcaption>
+      </figure>
+
+      {/* **The split ledger**, and it is the page's argument rather than a
+          feature list: the gesture on the left, the command that performs the
+          identical operation on the right. Rows, not cards — a card grid would
+          say "here are nine features" where this says "here are nine pairs, and
+          they are the same nine acts". The commands come from `lib/ledger.ts`
+          so the build can check them against the CLI's own registry. */}
+      <section className="front-claim">
+        <h2 className="front-claim-head">The isomorphism is the whole idea</h2>
+        <p className="front-claim-lede">
+          Not “we also have an API.” Every mutation on this canvas is one
+          operation value, posted to one endpoint, applied by one pure reducer —
+          so the web app and the CLI cannot drift apart, because they speak the
+          same vocabulary to the same engine. Here is the same work, both ways.
+        </p>
+        <div className="front-ledger">
+          {LEDGER.map((row) => (
+            <div className="front-row" key={row.command}>
+              <div className="front-row-did">
+                {row.did}
+                <span className="front-row-note">{row.note}</span>
+              </div>
+              <code className="front-row-cmd">{row.command}</code>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* The second face's entrance. Somebody who already has a canvas does not
           need the steps — they need to say who they are, which is the same door

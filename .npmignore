@@ -12,8 +12,15 @@ coverage
 .env
 .env.*
 
-# The marketing site is a static page for isocan.io, not part of the CLI. It
-# carries a ~500KB screenshot, and nobody running `npx isocan setup` needs it.
-# When a daemon serves that page (phase 14), shipping it becomes a decision to
-# make on purpose rather than a default nobody chose.
-marketing
+# There used to be a `marketing/` exclusion here, and the decision it deferred
+# has now been made rather than deleted. That directory was a static page for
+# isocan.io carrying a ~500KB screenshot; it was kept out of the pack because
+# nobody running `npx isocan setup` needed it, and the note said that when a
+# daemon actually served the logged-out surface (phase 14) shipping it would
+# become a decision somebody made on purpose.
+#
+# The daemon serves it now: it IS the app, at `/`, for a browser that is nobody
+# yet. So the page ships inside `packages/web/dist` like every other route, and
+# what used to be 484KB of PNG is 49KB of WebP at `packages/web/public/front/`
+# — small enough that the exclusion is no longer the interesting question.
+# `packages/web/test/shot.test.ts` holds that ceiling.
