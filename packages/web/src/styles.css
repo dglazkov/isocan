@@ -9,6 +9,11 @@
 
 :root,
 :root[data-theme="light"] {
+  /* The theme, told to the BROWSER as well as to the page. Without it native
+     form controls, scrollbars and spellcheck underlines are drawn light under
+     a dark canvas — measured `normal` in all four theme states, which is the
+     browser saying nobody told it. */
+  color-scheme: light;
   /* Connection and liveness. Both themes get their own value: a green that
      reads on vellum is not the green that reads on graphite. */
   --good: #2e8540;
@@ -34,6 +39,13 @@
   --chip-hover: #e9eae4;
   --chip-line: #e0e1da;
   --accent: #1f3fd0;
+  /* The focus ring is its OWN token, not the accent, because the two answer to
+     different floors. The accent is a brand colour that mostly carries other
+     colour on top of it; a focus ring is a non-text indicator and SC 1.4.11
+     asks it for 3:1 against whatever it is drawn on. In light they are the
+     same value and this is a no-op — 7.56 on `--ground`, 7.84 on `--card`,
+     6.90 on `--chip`. Dark is where they part; see the dark block. */
+  --focus: #1f3fd0;
   --accent-hover: #1a36b4;
   --accent-ink: #ffffff;
   /* The accent as TEXT (links, #refs). On a light ground the fill colour is
@@ -57,6 +69,7 @@
    cobalt so selection still reads against the dark. Shadows go to near-black
    since a soft gray one is invisible on a dark surface. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --good: #56b06a;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
@@ -77,6 +90,13 @@
   --chip-hover: #2f343d;
   --chip-line: #343a44;
   --accent: #4059d8;
+  /* Where the ring parts from the accent. `--accent` on dark measures 3.32 on
+     `--ground`, 3.05 on `--panel`, 2.90 on `--card` and 2.50 on `--chip` — so
+     three of the four beds a ring actually lands on fail 3:1, and the fourth
+     scrapes. All 26 tab stops drew the same failing colour. This value is the
+     one `--accent-text` already uses for accent ink here, for the same reason,
+     and it measures 8.41 / 7.73 / 7.33 / 6.32 on those four. */
+  --focus: #8fa8ff;
   --accent-hover: #5670ea;
   --accent-ink: #ffffff;
   --accent-text: #8fa8ff;
@@ -139,7 +159,7 @@ input, textarea { font: inherit; color: var(--ink); }
    everything you can only press keeps the ring, because a button has no
    cursor to show you where you are. */
 button:focus-visible, select:focus-visible, a:focus-visible, [role="button"]:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 1px;
+  outline: 2px solid var(--focus); outline-offset: 1px;
 }
 /* Not text fields. A ring exists to say "you are here" to somebody who has no
    other sign of it — and a text field has one: the caret is blinking in it.
@@ -485,9 +505,30 @@ button, select { color: inherit; }
    It stays out of the way until you point at the item — a canvas of sketches
    should read as the sketches, not as a column of the word "Sketch". */
 .item-titlebar {
-  position: absolute; left: 1px; right: 1px; top: -20px;
+  position: absolute; left: 0; right: 0;
+  /* The row's SIZE is screen-measured — ItemView counter-scales both ends — so
+     its OFFSET is measured the same way. It used to be world units, and the
+     mismatch is what made selecting an item hop: the gap above the card was
+     3.6 screen px at 100% and half a pixel at 13%, while the nudge that
+     cleared the corner handles was a flat 7 screen px, so the row jumped 7 up
+     and 7 in the moment you clicked it.
+
+     One position, held in both states, and as tight to the corner as the
+     selection chrome allows. The handles are 12 screen px centred on each
+     corner, so they reach exactly 6px above the top edge and 6px outside each
+     side: a row whose BOTTOM sits 6px above the edge sits directly on top of
+     them, touching nothing. That clearance is why there is no step-in — being
+     above the handle means the row can start flush with the item's left edge
+     the way the name of a thing normally does, rather than stepping inward
+     around a control that is only sometimes there.
+
+     `bottom` rather than `top` so the offset pins the edge that has to do the
+     clearing, without depending on the row's own height. The `+ 1px` is the
+     item's border: percentages resolve against the padding box, and without it
+     the gap would drift by a border width across the zoom range. */
+  bottom: calc(100% + 1px + 6px / var(--scale, 1));
   display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
-  padding: 0 3px; font-size: 11px; color: var(--ink-muted);
+  padding: 0; font-size: 11px; color: var(--ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
@@ -501,7 +542,7 @@ button, select { color: inherit; }
 .chrome-left .name {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chrome-right { display: flex; align-items: center; flex: none; }
+.chrome-right { display: flex; align-items: center; flex: none; margin-left: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
@@ -545,6 +586,26 @@ button, select { color: inherit; }
   position: absolute; visibility: hidden; pointer-events: none;
   white-space: pre; font: inherit; padding: 0 3px;
 }
+/* The kind mark, ahead of the name. Quieter than the name on purpose: it
+   answers a question you did not ask ("what is this?") and must not compete
+   with the one you did ("which one is this?"). Quieter via a TOKEN and not
+   via opacity — dimmed text is a contrast decision no colour test can see,
+   which `dimmed.test.ts` refuses on sight, and it caught this rule's first
+   draft. It keeps `--ink-soft` when the row turns accent, exactly as the
+   unstarred star at the other end of the row does: selecting an item should
+   light up its name, not everything standing near it. No pointer events — it
+   is a statement about the file, not a control. */
+.kind-icon {
+  flex: none; width: 13px; height: 13px; display: block;
+  color: var(--ink-soft); pointer-events: none;
+  /* The strokes are drawn on a 24 grid and shown at 13 — measured against 12,
+     which lost the stand under the monitor and the sun inside the frame. `vector-effect` keeps it there: this icon sits
+     inside counter-scaled chrome, and without it a stroke would be scaled by
+     the zoom in one direction and unscaled in the other. */
+  overflow: visible;
+}
+.kind-icon * { vector-effect: non-scaling-stroke; }
+
 /* The name hugs its own text rather than stretching the row, so the cursor can
    tell the truth about each part: over the words, a double-press edits them;
    over the bare strip, a press drags the item. */
@@ -577,9 +638,24 @@ button, select { color: inherit; }
   transition: top 0.14s ease, bottom 0.14s ease;
 }
 /* Both sit along the right EDGE rather than on a corner: every corner belongs
-   to a resize handle once the item is selected. */
-.version-badge-se { bottom: -9px; right: 14px; }
-.version-badge-ne { top: -9px; right: 14px; }
+   to a resize handle once the item is selected.
+
+   And both offsets are SCREEN-measured, for the reason `.item-titlebar` is:
+   ItemView counter-scales this badge, so its SIZE is already constant on
+   screen — 27.7x16 at every zoom — while these offsets were world lengths.
+   The gap below the card ran 11.93 screen px at 149% down to 1.60 at 20%, and
+   `right: 14px` reached only 14*scale screen px in, so below 43% (6 > 14*s)
+   the badge slid UNDER `.resize-handle-se` and a press near it resized the
+   item instead: the handle is z-index 4 to the badge's 3, and `onPointerDown`
+   returns early on `.resize-handle`.
+
+   The handles offset from the same padding box these do, so the item's border
+   cancels between them and the clearance is one subtraction: the handle
+   reaches 6 screen px inside the edge, the badge's right edge sits 14 screen
+   px in, and the 8px between them no longer depends on the zoom. At 100% this
+   changes nothing, which is the point — it is the same position, held. */
+.version-badge-se { bottom: calc(-9px / var(--scale, 1)); right: calc(14px / var(--scale, 1)); }
+.version-badge-ne { top: calc(-9px / var(--scale, 1)); right: calc(14px / var(--scale, 1)); }
 .version-badge:hover { background: var(--accent-hover); }
 
 /* renderers */
@@ -620,6 +696,20 @@ button, select { color: inherit; }
   opacity: 0; transition: opacity 0.12s ease;
 }
 .item:hover .item-hint { opacity: 1; }
+/* The size is not a tip you might want — it is the readout for the gesture you
+   are making, so it does not wait to be hovered. It is only ever RENDERED
+   while the item is the sole selection or mid-resize (ItemView decides), which
+   is why this can be unconditional. */
+.item-hint.size { opacity: 1; }
+/* And it wears the selection's colour rather than the chip's, because that is
+   what it belongs to: the same accent as the outline and the handles it is
+   reporting on. Tabular figures so the number does not jitter its own width
+   while you drag a corner. */
+.item-hint.size span {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .item-hint span {
   padding: 1px 9px; border-radius: 999px;
   background: var(--chip); border: 1px solid var(--line-soft);
@@ -1306,7 +1396,10 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .files-row:hover { background: var(--chip); }
 .files-row.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.files-kind { flex: none; width: 16px; color: var(--ink-soft); text-align: center; }
+.files-kind {
+  flex: none; width: 16px; height: 16px; display: block; color: var(--ink-soft);
+}
+.files-kind * { vector-effect: non-scaling-stroke; }
 .files-row.active .files-kind { color: var(--accent); }
 .files-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .files-name b { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

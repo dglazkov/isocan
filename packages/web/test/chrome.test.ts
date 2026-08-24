@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasState, CommentThread, Item } from "@isocan/core";
-import { PIN_REACH, badgeCorner, hasRoomForChrome } from "../src/lib/chrome.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import {
+  CHROME_INSET,
+  ICON_ROOM,
+  MIN_NAME_ROOM,
+  PIN_REACH,
+  STAR_ROOM,
+  badgeCorner,
+  hasRoomForChrome,
+  nameFits,
+  nameRoom,
+  titleRow,
+  underSlotFor,
+} from "../src/lib/chrome.ts";
 
 const actor = { id: "usr_a", name: "A" };
 const stamp = { createdAt: "", createdBy: actor, updatedAt: "", updatedBy: actor };
@@ -102,5 +116,275 @@ describe("badgeCorner", () => {
 
   it("holds its home with no canvas to look at", () => {
     expect(badgeCorner(box, null, 1)).toBe("se");
+  });
+});
+
+/**
+ * **A minimum that exceeds what exists is not a minimum, it is an overlap.**
+ *
+ * The name's width was `Math.max(MIN_NAME_ROOM, width * scale - STAR_ROOM)`.
+ * At 13% a 480-unit item is 62 screen pixels; the star wants 26 and the row is
+ * inset 5 a side, so 26 is what is left — and the floor handed the name 48, so
+ * it was drawn straight through the star. It shipped, and it shipped with the
+ * whole suite green, because the rule lived inline in a component that no test
+ * could reach (lessons.md #5).
+ *
+ * These cases are stated without the constants wherever they can be, so
+ * retuning the star's room or the row's inset does not make them lie.
+ */
+describe("the room a name is given", () => {
+  const SCALES = [0.02, 0.05, 0.13, 0.5, 1, 3];
+  const WIDTHS = [40, 80, 200, 480, 1200, 4000];
+
+  it("is linear in what the item is worth on screen, within one row layout", () => {
+    // A floor is a BEND in this line, and the bend is where the name went
+    // through the star. Stated with no constant in it: doubling the item's
+    // width adds exactly the item's screen width to the room. `Math.max(48, …)`
+    // flattens it to zero below the knee.
+    //
+    // Compared only WITHIN one layout, because there is now one honest step in
+    // this function: the icon appears, and its room stops being the name's.
+    // The step is the next case's business.
+    for (const scale of SCALES) {
+      for (const width of WIDTHS) {
+        const here = titleRow(width, scale);
+        const twice = titleRow(2 * width, scale);
+        // Same layout means the same pair showing. `nameRoom` is documented as
+        // meaningless where the name is hidden, so a case that compares a
+        // hidden name to a shown one compares one real number to one that was
+        // never a promise.
+        if (!here.name || !twice.name || here.icon !== twice.icon) continue;
+        expect(
+          nameRoom(2 * width, scale) - nameRoom(width, scale),
+          `a bend at ${width} world units @ ${scale}`,
+        ).toBeCloseTo(width * scale, 6);
+      }
+    }
+  });
+
+  it("never claims more of the item than is left after whatever else the row shows", () => {
+    // Only where the name is actually SHOWN: below that it is hidden, and what
+    // a hidden element was offered is not a thing anybody can see. The budget
+    // is conditional on the glyph now — subtracting for an icon that is not
+    // there would be the mirror of the original bug, a name given LESS than
+    // exists rather than more.
+    for (const scale of SCALES) {
+      for (const width of WIDTHS) {
+        const row = titleRow(width, scale);
+        if (!row.name) continue;
+        expect(
+          row.nameRoom,
+          `${width} world units @ ${scale} overflows the star or the kind icon`,
+        ).toBeLessThanOrEqual(
+          width * scale - STAR_ROOM - (row.icon ? ICON_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
+        );
+      }
+    }
+  });
+
+  it("costs the name at most the icon's room when the icon arrives", () => {
+    // Zooming IN can shorten the visible name by one step, once, as the glyph
+    // appears and takes its room back. That is a real cost and it is bounded:
+    // never more than the glyph occupies, and never below the width where a
+    // name says something. Anything worse is the row re-laying itself out.
+    for (const scale of [0.05, 0.13, 0.2, 0.5, 1]) {
+      for (let width = 40; width < 2000; width += 1) {
+        const before = titleRow(width, scale);
+        const after = titleRow(width + 1, scale);
+        if (before.icon || !after.icon || !after.name) continue;
+        expect(after.nameRoom).toBeGreaterThanOrEqual(MIN_NAME_ROOM);
+        expect(
+          before.nameRoom - after.nameRoom,
+          `the icon cost the name more than it occupies at ${width} @ ${scale}`,
+        ).toBeLessThanOrEqual(ICON_ROOM + 1e-9);
+      }
+    }
+  });
+
+  it("hides the name rather than squeezing it — the 13% item this was found on", () => {
+    // 480 world units at 13% is 62.4 screen px. Measured on the real canvas.
+    expect(nameRoom(480, 0.13)).toBeLessThan(MIN_NAME_ROOM);
+    expect(nameRoom(480, 0.13)).toBeGreaterThan(0); // there IS room, just not enough
+    expect(nameFits(480, 0.13)).toBe(false);
+    // …and the same item at 100% is fine, so this is about the zoom and not
+    // about the item.
+    expect(nameFits(480, 1)).toBe(true);
+  });
+
+  it("depends only on what the item is worth on SCREEN, not on how it got there", () => {
+    // A big item zoomed out and a small item at 1:1 are the same problem.
+    expect(nameRoom(480, 0.13)).toBeCloseTo(nameRoom(62.4, 1), 6);
+    expect(nameFits(480, 0.13)).toBe(nameFits(62.4, 1));
+  });
+
+  it("brackets the width where a name starts to say something", () => {
+    // Room to tune, none to delete. Under ~12 screen px a name is a smudge;
+    // over ~120 the threshold would start hiding names on items that plainly
+    // have space for one.
+    expect(MIN_NAME_ROOM).toBeGreaterThan(12);
+    expect(MIN_NAME_ROOM).toBeLessThan(120);
+    // And the star's room is real: an item with nothing left over must not be
+    // told it can show a name.
+    expect(nameFits(STAR_ROOM + ICON_ROOM + CHROME_INSET * 2, 1)).toBe(false);
+  });
+});
+
+/**
+ * One number, two homes. `CHROME_INSET` is what ItemView subtracts from the
+ * name's width; `.item-titlebar`'s horizontal padding is what actually insets
+ * the row. Nothing but this test connects them, and the day they disagree the
+ * name is measured against a width it was not given — which is the same
+ * arithmetic that drew it through the star.
+ */
+describe("the row's inset is one number", () => {
+  const css = readFileSync(
+    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+    "utf8",
+  );
+
+  /** `.item-titlebar`'s own rule, comments stripped. */
+  function titlebarRule(): string | null {
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const rule of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selectors = (rule[1] ?? "").split(",").map((one) => one.trim());
+      if (selectors.includes(".item-titlebar")) return rule[2] ?? "";
+    }
+    return null;
+  }
+
+  it("matches the stylesheet's padding, in screen pixels", () => {
+    const rule = titlebarRule();
+    expect(rule, "no .item-titlebar rule — renamed, or the parser is wrong").not.toBeNull();
+    // Two legal spellings, and only two. A screen-measured inset must divide by
+    // --scale; a zero inset has no unit to measure, so it is written `0`.
+    // Anything else — `padding: 0 3px` — is WORLD pixels: a different number at
+    // every zoom, while ItemView subtracts a screen one.
+    const scaled = /padding:\s*0\s+calc\(\s*([\d.]+)px\s*\/\s*var\(--scale/.exec(rule!);
+    const zero = /(^|[;{\s])padding:\s*0\s*(;|$)/.test(rule!);
+    expect(
+      scaled !== null || zero,
+      ".item-titlebar must inset by calc(<n>px / var(--scale)), or by `0` when " +
+        "there is no inset at all — a bare `<n>px` is world pixels",
+    ).toBe(true);
+    expect(Number(scaled?.[1] ?? 0), "styles.css and CHROME_INSET disagree").toBe(CHROME_INSET);
+  });
+
+  it("does not change when the item is selected", () => {
+    // ItemView computes ONE number for both states, so a selected-only inset
+    // in CSS is a width the name was never told about. This is the shape that
+    // made the row hop 7px in the moment you clicked it.
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const rule of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = (rule[1] ?? "").trim();
+      if (!/\.item\.selected\b/.test(selector) || !/\.item-titlebar\b/.test(selector)) continue;
+      expect(
+        rule[2] ?? "",
+        `${selector} moves or insets the row only while selected — ItemView cannot see that`,
+      ).not.toMatch(/(^|[;{\s])(padding|padding-left|padding-right|top|bottom|left|right)\s*:/);
+    }
+  });
+});
+
+/**
+ * One slot under the item, two things that want it.
+ *
+ * The size chip and "double-click to interact" occupy the same strip. They can
+ * share it because their triggers differ, but "differ" is only true if
+ * something enforces the precedence — otherwise the day both apply you get two
+ * pills stacked under the card, in the space comment pins land in.
+ */
+describe("the strip under an item", () => {
+  const idle = { entered: false, resizing: false, soleSelection: false, interactive: false };
+
+  it("says nothing under a plain unselected image", () => {
+    expect(underSlotFor(idle)).toBeNull();
+  });
+
+  it("offers the hint on something you could open", () => {
+    expect(underSlotFor({ ...idle, interactive: true })).toBe("hint");
+  });
+
+  it("shows the size once the item is the sole selection", () => {
+    expect(underSlotFor({ ...idle, soleSelection: true })).toBe("size");
+  });
+
+  it("prefers the size when both apply — the collision this rule exists for", () => {
+    expect(underSlotFor({ ...idle, soleSelection: true, interactive: true })).toBe("size");
+    expect(underSlotFor({ ...idle, resizing: true, interactive: true })).toBe("size");
+  });
+
+  it("shows the size mid-resize even when the item is not the sole selection", () => {
+    // Resizing IS the gesture the number reports on; nothing outranks it.
+    expect(underSlotFor({ ...idle, resizing: true })).toBe("size");
+  });
+
+  it("says nothing at all once you are inside the item", () => {
+    // Entered, your clicks belong to the page — chrome stops talking over it.
+    for (const on of [{ soleSelection: true }, { resizing: true }, { interactive: true }]) {
+      expect(underSlotFor({ ...idle, ...on, entered: true })).toBeNull();
+    }
+  });
+});
+
+/**
+ * There is no size at which a card says nothing about itself.
+ *
+ * Reported from a real canvas: between roughly 12% and 19% zoom on a 480-unit
+ * item, the title row showed a bare star. The name had been dropped (correctly
+ * — text is a smudge down there) and the kind icon went with it, because both
+ * lived in one element that was hidden as a pair. Adding the glyph had also
+ * pushed the name's own vanish threshold up by three points of zoom, since its
+ * room came out of the name's.
+ *
+ * The rule that fixes both: the glyph yields to the name, and then outlives it.
+ */
+describe("what a card says as it shrinks", () => {
+  const WIDTH = 480; // the item this was reported on
+
+  it("always says something while the chrome is shown at all", () => {
+    for (let pct = 1; pct <= 300; pct += 1) {
+      const scale = pct / 100;
+      if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue; // no chrome at all: fine
+      const row = titleRow(WIDTH, scale);
+      expect(
+        row.icon || row.name,
+        `a bare star at ${pct}% — the card says nothing about itself`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the kind mark exactly where the name gives up", () => {
+    // The handover is the whole design: the glyph is what is left when the
+    // name goes, so the band that used to be empty is the band it covers.
+    for (let pct = 1; pct <= 300; pct += 1) {
+      const scale = pct / 100;
+      if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue;
+      const row = titleRow(WIDTH, scale);
+      if (!row.name) expect(row.icon, `nothing at all at ${pct}%`).toBe(true);
+    }
+  });
+
+  it("does not make the name disappear earlier than it did before the icon", () => {
+    // The regression the glyph introduced, stated as the property rather than
+    // as the number: the kind mark must never be the reason a name is gone.
+    // Room for a name is decided against the star and the inset alone.
+    for (const scale of [0.05, 0.1, 0.13, 0.154, 0.16, 0.2, 0.5, 1]) {
+      for (const width of [80, 200, 480, 1200]) {
+        const withoutGlyph = width * scale - STAR_ROOM - CHROME_INSET * 2;
+        if (withoutGlyph >= MIN_NAME_ROOM) {
+          expect(
+            titleRow(width, scale).name,
+            `${width} @ ${scale}: room for a name, but the icon took it`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("shows all three the moment there is room for all three", () => {
+    const scale = (MIN_NAME_ROOM + STAR_ROOM + ICON_ROOM + CHROME_INSET * 2) / WIDTH;
+    const row = titleRow(WIDTH, scale);
+    expect(row).toMatchObject({ icon: true, name: true });
+    expect(row.nameRoom).toBeCloseTo(MIN_NAME_ROOM, 6);
   });
 });

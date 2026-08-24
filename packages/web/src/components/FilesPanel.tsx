@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CanvasState, Item } from "@isocan/core";
 import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
+import { KIND_LABEL, iconKindFor } from "../lib/kinds.ts";
+import { KindIcon } from "./KindIcon.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
@@ -28,24 +30,6 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 export function openFilesPanel(projectId: string, open: boolean): void {
   openPanel(projectId, open ? "files" : null);
 }
-
-const KIND_LABEL: Record<ItemKind, string> = {
-  drawing: "Drawings",
-  image: "Images",
-  video: "Video",
-  document: "Documents",
-  site: "Sites",
-  other: "Files",
-};
-
-const KIND_GLYPH: Record<ItemKind, string> = {
-  drawing: "✎",
-  image: "▣",
-  video: "▶",
-  document: "▤",
-  site: "◍",
-  other: "◇",
-};
 
 /** Bytes as a person reads them. */
 function formatSize(bytes: number): string {
@@ -159,7 +143,7 @@ export function FilesPanel({ projectId }: { projectId: string }) {
                   setPeek((current) => (current?.row.item.id === row.item.id ? null : current));
                 }}
               >
-                <span className="files-kind">{KIND_GLYPH[kind]}</span>
+                <KindIcon className="files-kind" kind={iconKindFor(row.item)} />
                 <span className="files-name">
                   <b>{row.item.title}</b>
                   <i>{row.filename}</i>

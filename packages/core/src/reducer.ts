@@ -90,6 +90,10 @@ export function applyOperation(
       if (canvas.items[op.itemId] || canvas.trash.some((t) => t.item.id === op.itemId)) {
         throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
       }
+      requireFinite({ width: op.width, height: op.height }, "item.add");
+      if ("x" in op.placement) {
+        requireFinite({ x: op.placement.x, y: op.placement.y }, "item.add placement");
+      }
       // The daemon has already resolved this to a concrete, clear position and
       // logged it, so on the live path and on replay alike this finds the spot
       // free and hands it back unchanged. It stays here because an op can also
@@ -121,9 +125,11 @@ export function applyOperation(
     }
 
     case "item.move":
+      requireFinite({ x: op.x, y: op.y }, "item.move");
       return putItem({ ...getItem(op.itemId), x: op.x, y: op.y, ...stamp });
 
     case "item.resize":
+      requireFinite({ width: op.width, height: op.height }, "item.resize");
       return putItem({ ...getItem(op.itemId), width: op.width, height: op.height, ...stamp });
 
     case "item.update": {
@@ -213,7 +219,12 @@ export function applyOperation(
 
     case "items.move": {
       requireUniqueIds(op.moves.map((m) => m.itemId));
-      for (const move of op.moves) getItem(move.itemId); // validate all before applying any
+      // Validate all before applying any — a batch is one undo step, so a
+      // batch that half-applies is a batch undo cannot take back.
+      for (const move of op.moves) {
+        getItem(move.itemId);
+        requireFinite({ x: move.x, y: move.y }, `items.move ${move.itemId}`);
+      }
       const items = { ...canvas.items };
       for (const move of op.moves) {
         items[move.itemId] = { ...items[move.itemId]!, x: move.x, y: move.y, ...stamp };
@@ -262,6 +273,7 @@ export function applyOperation(
         throw new OpValidationError("duplicate-id", `thread id already exists: ${op.threadId}`);
       }
       requireBody(op.comment.body);
+      requireFinite({ x: op.x, y: op.y }, "thread.create");
       if (op.anchorItemId !== null) getItem(op.anchorItemId);
       // Strict, not takeover: a race between two clients birthing a main
       // thread must not leave one silently demoted — the loser errors and
@@ -308,6 +320,7 @@ export function applyOperation(
 
     case "thread.setAnchor": {
       const thread = getThread(op.threadId);
+      requireFinite({ x: op.x, y: op.y }, "thread.setAnchor");
       // A trashed item is a valid anchor (rendered dangling, like after
       // item.delete) — undoing a re-anchor must restore a dangling anchor.
       if (
@@ -421,6 +434,36 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
   if (c.items && c.items.length > 0) comment.items = [...c.items];
   return comment;
+}
+
+/**
+ * Every coordinate and every size that reaches the canvas is a real number.
+ *
+ * It is here rather than at either surface's edge because a geometry field is
+ * the one kind of bad input that does not announce itself: `NaN` compares
+ * false against everything, so nothing downstream throws — it lays out, it
+ * renders as a blank, and it serializes to `null`, which is what actually
+ * lands in the oplog. `JSON.stringify(NaN)` is `null`, so a moment's bad
+ * arithmetic anywhere becomes a PERMANENT `"x": null` in the log, and the
+ * item is unreachable on both surfaces from then on.
+ *
+ * Found by running `isocan mv <item> --to 300,200`: `mv` allows unknown
+ * options so that negative coordinates survive, which made `--to` an operand,
+ * so `Number("--to")` was the x. The CLI now refuses that itself with a better
+ * message — but the CLI is not the only writer, and this is the layer both
+ * writers share.
+ */
+function requireFinite(values: Record<string, number>, what: string): void {
+  for (const [field, value] of Object.entries(values)) {
+    if (!Number.isFinite(value)) {
+      throw new OpValidationError(
+        "bad-op",
+        `${what}: ${field} must be a finite number, got ${
+          typeof value === "number" ? String(value) : JSON.stringify(value)
+        }`,
+      );
+    }
+  }
 }
 
 function requireUniqueIds(ids: string[]): void {

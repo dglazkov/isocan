@@ -20,7 +20,9 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
+import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
+import { KindIcon } from "./KindIcon.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
@@ -34,9 +36,6 @@ const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
 const MIN_H = 60;
-
-const STAR_ROOM = 26;
-const MIN_NAME_ROOM = 48;
 
 export function ItemView({
   item,
@@ -78,15 +77,27 @@ export function ItemView({
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
-  // The room the star keeps at the other end of the row, and the least the
-  // name is ever given, both in screen pixels.
   const chrome = { transform: `scale(${1 / scale})` };
   const roomy = hasRoomForChrome(width, height, scale);
+  // Screen pixels available to the name, once the star at the other end and
+  // the row's own inset are taken off the top. Constant across selection.
+  // The rule lives in lib/chrome.ts so a test can reach it without a browser —
+  // there is no floor, and chrome.test.ts is where that is held.
+  const row = titleRow(width, scale);
   const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
   // name row rather than another corner.
+  const kind = iconKindFor(item);
   const isBrowser = current.mimeType === BROWSER_MIME;
+  // What the strip under the item says right now. The rule lives in
+  // lib/chrome.ts, where it is argued and tested.
+  const underSlot = underSlotFor({
+    entered,
+    resizing: resize !== null,
+    soleSelection,
+    interactive: current.mimeType === "text/html" || isBrowser,
+  });
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
   const isInk = isDrawingItem(item);
@@ -391,20 +402,37 @@ export function ItemView({
             transformOrigin: "left bottom",
             // The item's width in the label's own units — screen pixels, since
             // the label is counter-scaled — less the room the star needs at the
-            // other end. The name stretches to here and stops.
-            maxWidth: Math.max(MIN_NAME_ROOM, item.width * scale - STAR_ROOM),
+            // other end and the row's inset. The name stretches to here and
+            // stops.
+            //
+            // NO FLOOR, and `nameRoom` in lib/chrome.ts is where that is
+            // argued and tested. Below the width where a name says anything
+            // the name is dropped instead, and the star stays.
+            maxWidth: row.nameRoom,
+            // The row is here if anything in it is. Which of the icon and the
+            // name survive at this size is `titleRow`'s call, and they do NOT
+            // fall together: hiding the pair is what left a bare star between
+            // 12% and 19% zoom on a 480-unit item.
+            ...(row.icon || row.name || renaming ? null : { display: "none" }),
           }}
         >
+        {/* What this item IS, before its name — so a canvas of cards reads as
+            screens, images and notes at a glance, without opening the Files
+            panel. Same glyph the panel groups under (lib/kinds.ts), because a
+            mark that means one thing in a list and another on the thing itself
+            is worse than no mark. It is not a button: the kind is derived from
+            the file and there is nothing to set. */}
+        {row.icon && <KindIcon className="kind-icon" kind={kind} />}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
-        ) : (
+        ) : row.name ? (
           <span
             className="name"
-            title={`${item.title} (${current.filename}) — double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
+            title={`${item.title} (${current.filename}) — ${ICON_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
           >
             {item.title}
           </span>
-        )}
+        ) : null}
         {isBrowser && (
           <button
             className="browser-reload"
@@ -472,7 +500,24 @@ export function ItemView({
 
         {worker && <div className="work-sheen" />}
       </div>
-      {(current.mimeType === "text/html" || isBrowser) && !entered && roomy && (
+      {/* One slot under the item, and two things that want it.
+          
+          They are different KINDS of message and they have different triggers,
+          which is what lets them share: the size is a fact about the thing you
+          are currently manipulating (selected, or mid-resize), and the hint is
+          an evergreen tip shown while you point at it. When both apply the size
+          wins — if you are dragging a corner, the live number is the whole
+          point, and "double-click to interact" is something you have already
+          read. Sharing the slot rather than stacking two pills also keeps the
+          space under an item quiet, which is where comment pins land. */}
+      {underSlot === "size" && roomy && (
+        <div className="item-hint size" style={chrome}>
+          <span>
+            {Math.round(width)} × {Math.round(height)}
+          </span>
+        </div>
+      )}
+      {underSlot === "hint" && roomy && (
         <div className="item-hint" style={chrome}>
           <span>double-click to interact</span>
         </div>

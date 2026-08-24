@@ -47,6 +47,15 @@ and leaves an EMPTY directory with a dangling `isocan` on your PATH (#47).
 `npm run release` publishes the branch; `scripts/release.mjs` tells the whole
 story.
 
+Starting a *new* project this way — an empty directory, a GitHub repo, a canvas
+bound to it, and agents parked on that canvas waiting to be told what to build —
+is walked end to end in [`docs/new-project.md`](docs/new-project.md), and runs
+in one command as [`scripts/new-project.sh`](scripts/new-project.sh):
+
+```sh
+scripts/new-project.sh acme-widgets --agents claude,codex --launch
+```
+
 Want only the skill, for an agent that will install the rest itself?
 
 ```sh

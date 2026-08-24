@@ -465,7 +465,7 @@ isocan fit <items...>                  # grow items to the size their content wa
   made in passes into a single item, so do not assume one drawing means one
   gesture, or that separate marks were made at separate times.
 - **Find things the way the files panel does.** `isocan ls --kind
-  drawing|image|video|document|site|other` and `isocan ls --filter <text>`
+  drawing|screen|image|video|document|site|other` and `isocan ls --filter <text>`
   are the same two questions the human's Files panel answers.
 - **Say you have it, before you have anything to show.** The moment you pick
   up a thread, claim it: `isocan session on <thread> --say "reading your

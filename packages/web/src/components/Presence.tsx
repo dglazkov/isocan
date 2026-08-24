@@ -6,7 +6,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { quietFor, statusLine } from "../lib/presence.ts";
+import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 
 /**
@@ -30,21 +30,6 @@ import { centerOn, threadWorldPos } from "../lib/viewport.ts";
  * hunting the canvas for their cursor.
  */
 
-interface Face {
-  actor: Actor;
-  /** Their live session, when they have one — the handle follow mode needs. */
-  sessionId: string | null;
-  /** Presence label if they have a session, else their plain name. */
-  label: string;
-  live: boolean;
-  kind: PresenceSession["kind"] | null;
-  /** What they are up to, for the tooltip. */
-  status: string | null;
-  cursor: { x: number; y: number } | null;
-  unread: number;
-  self: boolean;
-}
-
 const MAX_FACES = 5;
 
 export function Presence({ actor }: { actor: Actor }) {
@@ -59,60 +44,10 @@ export function Presence({ actor }: { actor: Actor }) {
   if (!canvas) return null;
 
   const pending = unreadThreads(canvas, seen, actor.id);
-  const unreadBy = new Map<string, { actor: Actor; count: number }>();
-  for (const thread of pending) {
-    for (const comment of thread.comments) {
-      if (comment.author.id === actor.id) continue;
-      const since = seen[thread.id];
-      if (since && comment.createdAt <= since) continue;
-      const entry = unreadBy.get(comment.author.id);
-      if (entry) entry.count += 1;
-      else unreadBy.set(comment.author.id, { actor: comment.author, count: 1 });
-    }
-  }
-
-  // People on the canvas first, then whoever only left a comment behind,
-  // then you. (The daemon never lists an actor twice.)
-  const faces: Face[] = [];
-  for (const session of sessions) {
-    if (faces.some((face) => face.actor.id === session.actor.id)) continue;
-    faces.push({
-      actor: session.actor,
-      sessionId: session.sessionId,
-      label: session.label ?? session.actor.name,
-      live: true,
-      kind: session.kind,
-      status: describe(session),
-      cursor: session.cursor,
-      unread: unreadBy.get(session.actor.id)?.count ?? 0,
-      self: false,
-    });
-  }
-  for (const [id, { actor: author, count }] of unreadBy) {
-    if (faces.some((face) => face.actor.id === id)) continue;
-    faces.push({
-      actor: author,
-      sessionId: null,
-      label: author.name,
-      live: false,
-      kind: null,
-      status: "not here — left a comment",
-      cursor: null,
-      unread: count,
-      self: false,
-    });
-  }
-  faces.push({
-    actor,
-    sessionId: null,
-    label: actor.name,
-    live: true,
-    kind: "web",
-    status: null,
-    cursor: null,
-    unread: 0,
-    self: true,
-  });
+  const unreadBy = unreadByAuthor(pending, seen, actor.id);
+  // One entry per PERSON, you included — see lib/facepile.ts for why that is
+  // a rule and not a preference.
+  const faces = facesFor(sessions, unreadBy, actor);
 
   const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
   const overflow = faces.length - shown.length;
@@ -294,14 +229,6 @@ function goToActivity(entry: ActivityEntry): void {
   ui.setViewport(centerOn(ui.viewport, target.x, target.y, window.innerWidth, window.innerHeight));
   if (entry.threadId) ui.setOpenThread(entry.threadId);
   else if (entry.itemId) ui.select(entry.itemId);
-}
-
-function describe(session: PresenceSession): string | null {
-  // A quiet agent is still here — say so, and say for how long — but never
-  // invent an activity it didn't claim.
-  const quiet = quietFor(session);
-  const parts = [statusLine(session), quiet && `quiet ${quiet}`].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function tooltip(face: Face): string {

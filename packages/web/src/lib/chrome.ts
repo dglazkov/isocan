@@ -52,6 +52,92 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
 }
 
+/** Screen pixels the star keeps at the far end of the name row. */
+export const STAR_ROOM = 26;
+/**
+ * Screen pixels the kind icon keeps at the near end — the mark itself plus the
+ * row's gap after it. **Measured on the rendered row (13 + 6), not guessed**,
+ * and re-measured when the mark changed: it was a text glyph at 16, and an
+ * icon drawn to be legible is a different width. A budget copied forward from
+ * the thing it used to describe is a budget that is wrong.
+ *
+ * It is budgeted for the same reason the star is, and the reason is in
+ * `titleRow` below: anything sharing the row that is NOT subtracted gets drawn
+ * through once the item is small enough on screen. That already happened once
+ * with the star.
+ */
+export const ICON_ROOM = 19;
+/** Under this many screen pixels a name says nothing, so it is not shown. */
+export const MIN_NAME_ROOM = 48;
+/**
+ * What the title row is inset from each of the item's vertical edges, in
+ * SCREEN pixels. Must equal `.item-titlebar`'s horizontal padding in
+ * styles.css, and `chrome.test.ts` checks that it does — the two are one
+ * number with two homes, and the day they disagree the name is measured
+ * against a width it was not given.
+ *
+ * It does not change with selection. The row sits ABOVE the corner handles
+ * rather than stepping around them, so the name gets the same width either
+ * way and never re-ellipsizes on a click.
+ *
+ * And it is ZERO. Being above the handles means there is nothing to step
+ * around, so the name starts where the item starts and the star ends where it
+ * ends — the way the name of a thing normally sits over the thing. An inset
+ * here buys nothing and reads as the label drifting inward from its own item.
+ */
+export const CHROME_INSET = 0;
+
+/** What the title row shows at this size, and how much of it the name gets. */
+export interface TitleRow {
+  icon: boolean;
+  name: boolean;
+  /** Screen pixels the name may claim. Meaningless when `name` is false. */
+  nameRoom: number;
+}
+
+/**
+ * What fits on the title row, in the order things yield.
+ *
+ * **NO FLOOR ON THE ROOM ITSELF**, which is the older half of this function.
+ * It used to be `Math.max(MIN_NAME_ROOM, width * scale - STAR_ROOM)`. At 13% a
+ * 480-unit item is 62 screen px and the star wants 26, so the floor handed the
+ * name 48 and it was drawn straight through the star. *A minimum that exceeds
+ * what exists is not a minimum, it is an overlap with a reason.* Below the
+ * width where a name says anything the name is DROPPED rather than squeezed:
+ * "H…" is a smudge.
+ *
+ * **The icon yields to the name, and then outlives it.** Three sizes, and the
+ * order is the point:
+ *
+ * 1. Room for everything — icon, name, star.
+ * 2. Not enough for all three: the ICON goes first. Of the two, the name is
+ *    the more specific answer — "which one is this" beats "what kind is this"
+ *    — so the kind mark must never be the reason a name disappeared. This is
+ *    also what keeps the name's threshold exactly where it was before the
+ *    glyph existed, rather than 3 points of zoom worse.
+ * 3. Not enough for a name either: the name goes, and the icon comes BACK.
+ *    A shape still reads at a size where text does not, which is the same
+ *    argument that keeps the star down here — and a bare star, which is what
+ *    this band showed at first, says the least of any of these states.
+ */
+export function titleRow(width: number, scale: number): TitleRow {
+  const available = width * scale - STAR_ROOM - CHROME_INSET * 2;
+  const withIcon = available - ICON_ROOM;
+  if (withIcon >= MIN_NAME_ROOM) return { icon: true, name: true, nameRoom: withIcon };
+  if (available >= MIN_NAME_ROOM) return { icon: false, name: true, nameRoom: available };
+  return { icon: available >= ICON_ROOM, name: false, nameRoom: available };
+}
+
+/** Screen pixels available to an item's name — see `titleRow`. */
+export function nameRoom(width: number, scale: number): number {
+  return titleRow(width, scale).nameRoom;
+}
+
+/** Is there enough room to say the name at all? */
+export function nameFits(width: number, scale: number): boolean {
+  return titleRow(width, scale).name;
+}
+
 /** Every pin's world position — anchored pins ride their item, and the main
  * thread has no pin at all. */
 function pinPositions(canvas: CanvasState): Array<{ x: number; y: number }> {
@@ -80,4 +166,32 @@ export function badgeCorner(item: Item, canvas: CanvasState | null, scale: numbe
     if (Math.abs(pin.x - right) < reach && Math.abs(pin.y - bottom) < reach) return "ne";
   }
   return "se";
+}
+
+/**
+ * What the strip UNDER an item says, when anything does.
+ *
+ * There is one slot there and two things that want it, and they can share
+ * because they are different kinds of message with different triggers: the
+ * size is a fact about the thing you are manipulating right now, and the hint
+ * is an evergreen tip shown while you point at something you could open.
+ *
+ * When both apply the SIZE wins. If you are dragging a corner the live number
+ * is the entire point, and "double-click to interact" is a sentence you have
+ * already read. Stacking both would also fill the space under an item, which
+ * is where comment pins land.
+ *
+ * Entering an item silences both: inside, your clicks belong to the page.
+ */
+export type UnderSlot = "size" | "hint" | null;
+
+export function underSlotFor(state: {
+  entered: boolean;
+  resizing: boolean;
+  soleSelection: boolean;
+  interactive: boolean;
+}): UnderSlot {
+  if (state.entered) return null;
+  if (state.resizing || state.soleSelection) return "size";
+  return state.interactive ? "hint" : null;
 }
