@@ -1,0 +1,266 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import { SKILL_INSTALL_COMMAND } from "@isocan/core";
+import { faceFor } from "../src/lib/faces.ts";
+import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
+import { CopyCommandView, FrontPage } from "../src/pages/FrontPage.tsx";
+
+/**
+ * **One address, two faces** (Scene 0, phase 13.5).
+ *
+ * The change under test is a subtraction as much as an addition: the identity
+ * dialog used to be rendered INSTEAD OF the router for any browser that was
+ * nobody yet, so a stranger arriving at the home origin met "pick your name"
+ * before they had learned what isocan is. Now `/` wears a front page for that
+ * browser — and **every other address still meets the door**, which phases 7-9
+ * proved and this phase must not spend.
+ *
+ * There is no DOM in this suite (`vitest.config.ts` sets no environment, and
+ * every web test here is a pure module test) so the rule itself lives in
+ * `lib/faces.ts` and is tested as a function. The pages are rendered with
+ * `react-dom/server`, which needs no environment and no dependency this repo
+ * does not already ship — enough to read what a face actually PUTS on the page,
+ * not enough to press anything. The one thing pressing does — the copy
+ * button's state — is split so that both halves are reachable without a
+ * browser: `copyToClipboard` decides, `CopyCommandView` draws. The two lines
+ * that join them are proven by driving Chrome, per AGENTS.md, and the report
+ * says so.
+ */
+
+const priya = { id: "usr_priya", name: "Priya" };
+
+/**
+ * The two browser globals `App`'s module graph reads AT IMPORT TIME —
+ * `lib/theme.ts` asks `window.matchMedia` for the OS preference and
+ * `localStorage` for the stored one, both while the module is still
+ * evaluating. Stubbed here, and `App.tsx` imported after, because a static
+ * import is hoisted above every statement in this file.
+ */
+function stubBrowserGlobals(): void {
+  const map = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => void map.set(key, value),
+    removeItem: (key: string) => void map.delete(key),
+    clear: () => map.clear(),
+    key: (i: number) => [...map.keys()][i] ?? null,
+    get length() {
+      return map.size;
+    },
+  };
+  (globalThis as { window?: unknown }).window = {
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+  };
+}
+
+stubBrowserGlobals();
+const { Doorway } = await import("../src/App.tsx");
+/** Every test starts on an empty roster — the door offers no old names. */
+beforeEach(stubBrowserGlobals);
+
+describe("which face the origin wears", () => {
+  it("gives a browser that is nobody yet the front page, at the origin only", () => {
+    expect(faceFor("/", null)).toBe("front-page");
+    // A trailing slash names the same door.
+    expect(faceFor("//", null)).toBe("front-page");
+  });
+
+  it("still shows the door at every other address — the share link is unchanged", () => {
+    // The regression this phase could most easily cause. `/p/<id>` is what
+    // strangers paste to each other, and a canvas whose link grant is open
+    // still needs to know who is writing on it.
+    expect(faceFor("/p/prj_acme", null)).toBe("door");
+    expect(faceFor("/p/prj_acme/i/itm_1", null)).toBe("door");
+    // Including addresses nothing serves: a mistyped share link asks who you
+    // are and then says nothing is there, exactly as it did before.
+    expect(faceFor("/c/prj_acme", null)).toBe("door");
+    expect(faceFor("/nothing/at/all", null)).toBe("door");
+  });
+
+  it("gives somebody the app, wherever they are standing", () => {
+    for (const at of ["/", "/p/prj_acme", "/p/prj_acme/i/itm_1", "/nothing"]) {
+      expect(faceFor(at, priya)).toBe("here");
+    }
+  });
+});
+
+/** What `Doorway` actually renders — the rule wired to the pages. */
+function meet(at: string, actor: { id: string; name: string } | null): string {
+  return renderToStaticMarkup(
+    h(
+      MemoryRouter,
+      { initialEntries: [at] },
+      h(Doorway, {
+        actor,
+        onIdentity: () => {},
+        children: (who) => h("div", null, `the app, for ${who.name}`),
+      }),
+    ),
+  );
+}
+
+describe("the front door", () => {
+  it("meets a stranger at the origin with the front page, not with the door", () => {
+    const html = meet("/", null);
+    expect(html).toContain(SKILL_INSTALL_COMMAND);
+    expect(html).not.toContain("Pick a name"); // the identity dialog's line
+    expect(html).not.toContain("the app, for");
+  });
+
+  it("meets a stranger on a canvas with the door, as it always has", () => {
+    const html = meet("/p/prj_acme", null);
+    expect(html).toContain("Pick a name");
+    expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+  });
+
+  it("hands the origin to somebody who is already here", () => {
+    const html = meet("/", priya);
+    expect(html).toContain("the app, for Priya");
+    expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+  });
+});
+
+describe("the front page", () => {
+  const page = () => renderToStaticMarkup(h(FrontPage, { onIdentity: () => {} }));
+
+  it("says the idea and then hands over Scene 0's three steps", () => {
+    const html = page();
+    const words = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+    // The idea, in the journey's own terms.
+    expect(words).toContain("One canvas, driven from a web app and a terminal");
+    // The three moves, in Scene 0's order.
+    const steps = [SKILL_INSTALL_COMMAND, "Launch an agent.", "use isocan."];
+    let from = -1;
+    for (const step of steps) {
+      const at = words.indexOf(step);
+      expect(at, `the front page never says “${step}”`).toBeGreaterThan(from);
+      from = at;
+    }
+  });
+
+  it("sends nobody away to documentation to learn how to enter", () => {
+    // Scene 0's rule. A link to the repo is a footnote and is allowed; it must
+    // not be an instruction, and there must be no OTHER outbound link on the
+    // page competing with the steps.
+    const hrefs = [...page().matchAll(/href="([^"]*)"/g)].map((m) => m[1]!);
+    expect(hrefs).toEqual(["https://github.com/dglazkov/isocan"]);
+  });
+
+  it("loads nothing over the network to draw its first paint", () => {
+    // Phase 10 made this tab offline-capable out of a cached shell, and this
+    // is the first page a stranger sees. An <img>, a webfont or a third-party
+    // stylesheet here is a first paint the service worker does not hold.
+    const html = page();
+    expect(html).not.toMatch(/<img|<link|<script|url\(/);
+  });
+
+  it("offers the second face's entrance to somebody who already has a canvas", () => {
+    expect(page().replace(/<[^>]*>/g, " ")).toContain("Been here before?");
+  });
+});
+
+describe("copying the one step that is a command", () => {
+  it("reports success when the clipboard takes it", async () => {
+    const wrote: string[] = [];
+    const state = await copyToClipboard("npx thing", {
+      writeText: async (text: string) => void wrote.push(text),
+    });
+    expect(state).toBe("copied");
+    expect(wrote).toEqual(["npx thing"]);
+  });
+
+  it("falls back to a hand copy when the browser refuses", async () => {
+    // The shape of a refusal: a rejected promise. `docs/phases.md`'s standing
+    // lessons record the measured case — Chrome blocks the clipboard while
+    // `visibilityState` is `hidden`.
+    const refused = {
+      writeText: () => Promise.reject(new Error("NotAllowedError")),
+    };
+    await expect(copyToClipboard("npx thing", refused)).resolves.toBe("select-it");
+  });
+
+  it("falls back the same way when there is no clipboard at all", async () => {
+    // An insecure origin has no `navigator.clipboard`, and neither does a tab
+    // rendering this anywhere that is not a browser.
+    await expect(copyToClipboard("npx thing", null)).resolves.toBe("select-it");
+    await expect(copyToClipboard("npx thing", {} as never)).resolves.toBe("select-it");
+    expect(browserClipboard()).toBeNull(); // no navigator in this suite
+  });
+
+  it("reaches its success state in the DOM, with no clipboard involved", () => {
+    const drawn = (state: "idle" | "copied" | "select-it") =>
+      renderToStaticMarkup(
+        h(CopyCommandView, { command: SKILL_INSTALL_COMMAND, state, onCopy: () => {} }),
+      );
+
+    const copied = drawn("copied");
+    expect(copied).toContain('data-copy-state="copied"');
+    expect(copied).toContain(copyLabel("copied"));
+    expect(copied).toContain(copySaid("copied"));
+
+    // And the fallback is a real path, not a sentence: the command itself is
+    // on the page in every state, selectable, whatever the clipboard said.
+    for (const state of ["idle", "copied", "select-it"] as const) {
+      expect(drawn(state)).toContain(`<code class="front-command-line">${SKILL_INSTALL_COMMAND}`);
+    }
+    expect(drawn("select-it")).toContain('data-copy-state="select-it"');
+    // Nothing announced before anything is pressed.
+    expect(copySaid("idle")).toBe("");
+  });
+});
+
+/**
+ * **The command on the page is checked against the one the repo advertises.**
+ *
+ * `packages/cli/test/surface.test.ts`'s move, applied to a string instead of a
+ * verb: a command written into a page is a copy that ages, and this one is the
+ * first thing a stranger will type. So the page imports it from core — where
+ * `INSTALL_SPEC` already lives for the same reason — and the build checks that
+ * core's spelling is the spelling `README.md` and the skill's own `SKILL.md`
+ * hand out. Change any one of the three and this fails naming the other two.
+ */
+describe("the install command", () => {
+  const repo = fileURLToPath(new URL("../../..", import.meta.url));
+  const ADVERTISED = ["README.md", ".agents/skills/isocan-collab/SKILL.md"];
+
+  it("is spelled the same on the front page and everywhere the repo advertises it", async () => {
+    for (const doc of ADVERTISED) {
+      const text = await fs.readFile(path.join(repo, doc), "utf8");
+      expect(text, `${doc} no longer advertises “${SKILL_INSTALL_COMMAND}”`).toContain(
+        SKILL_INSTALL_COMMAND,
+      );
+    }
+    expect(renderToStaticMarkup(h(FrontPage, { onIdentity: () => {} }))).toContain(
+      SKILL_INSTALL_COMMAND,
+    );
+  });
+
+  it("is written down once in the source, and imported everywhere else", async () => {
+    const strays: string[] = [];
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === "node_modules" || entry.name === "dist") continue;
+          await walk(full);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name)) continue;
+        if (full.endsWith(path.join("core", "src", "address.ts"))) continue; // the definition
+        if (full.endsWith(path.join("test", "frontdoor.test.ts"))) continue; // this file
+        const text = await fs.readFile(full, "utf8");
+        for (const [i, line] of text.split("\n").entries()) {
+          if (line.includes("skills add")) strays.push(`${path.relative(repo, full)}:${i + 1}`);
+        }
+      }
+    };
+    await walk(path.join(repo, "packages"));
+    expect(strays, `import SKILL_INSTALL_COMMAND from @isocan/core instead:\n${strays.join("\n")}`)
+      .toEqual([]);
+  });
+});

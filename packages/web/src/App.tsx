@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { CANVAS_ROUTE, ITEM_ROUTE } from "@isocan/core";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";
 import { adoptIdentity } from "./lib/identity.ts";
+import { faceFor } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
+import { FrontPage } from "./pages/FrontPage.tsx";
 import { ProjectListPage } from "./pages/ProjectListPage.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { NotHerePage } from "./pages/NotHerePage.tsx";
@@ -60,54 +62,83 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
   // language, for the fraction of a second a redemption takes.
   if (redeeming) return <div className="page-note">Letting you in…</div>;
 
-  if (!actor) {
-    return (
-      <>
-        <IdentityDialog onDone={setActor} />
-        {/* After the door in the DOM, so it wins the tie at the same layer:
-            "the pass did not work" is the reason the door is being shown at
-            all, and a person must not have to guess that. */}
-        {refused && <ArrivalNotice refusal={refused} onDismiss={() => setRefused(null)} />}
-        {proved && (
-          <SignInNotice
-            landing={proved}
-            onIdentity={setActor}
-            onDismiss={() => setProved(null)}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
     <BrowserRouter>
-      {/* Above the routes, because a refused pass is about how you got here
-          rather than about where you landed — and because the tab that meets
-          one may end up anywhere: on the canvas (its link grant let you in
-          anyway), at the door, or on the "will not have you" page. */}
+      <Doorway actor={actor} onIdentity={setActor}>
+        {(who) => (
+          <Routes>
+            <Route path="/" element={<ProjectListPage actor={who} onIdentity={setActor} />} />
+            {/* The canvas's address, built from core's one spelling of it — see
+                `address.ts` for why that is worth a module. */}
+            <Route path={CANVAS_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            {/* One item, full screen. The SAME element as the canvas,
+                deliberately: the canvas stays mounted underneath, so its
+                socket, its presence session and its viewport all survive, and
+                coming back lands where you left rather than at the top. A
+                sibling route element would tear all of that down and rebuild
+                it. */}
+            <Route path={ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            {/* The catch-all, and it is required rather than tidy. The daemon's
+                SPA fallback answers every path with the app shell and a 200, so
+                without a route here a mistyped or doc-shaped share link renders
+                a blank page: no error, no 404, no redirect, nothing to read. */}
+            <Route path="*" element={<NotHerePage />} />
+          </Routes>
+        )}
+      </Doorway>
+      {/* Over whatever face you landed on, because a refused pass is about how
+          you got here rather than about where you landed — and the tab that
+          meets one may end up anywhere: on the canvas (its link grant let you
+          in anyway), at the door, on the front page, or on the "will not have
+          you" page.
+          LAST in the DOM, and that is load-bearing rather than tidy: this and
+          `.identity-backdrop` both sit at `--z-dialog`, the layer nothing else
+          outranks, so between those two the tie is broken by document order.
+          "The pass did not work" is the reason the door is being shown at all,
+          and a person must not have to guess that — which is why the old
+          no-actor branch repeated these BELOW the dialog, and why one copy
+          after `Doorway` is now the same guarantee for all three faces. */}
       {refused && <ArrivalNotice refusal={refused} onDismiss={() => setRefused(null)} />}
       {proved && (
         <SignInNotice landing={proved} onIdentity={setActor} onDismiss={() => setProved(null)} />
       )}
-      <Routes>
-        <Route path="/" element={<ProjectListPage actor={actor} onIdentity={setActor} />} />
-        {/* The canvas's address, built from core's one spelling of it — see
-            `address.ts` for why that is worth a module. */}
-        <Route path={CANVAS_ROUTE} element={<CanvasPage actor={actor} onIdentity={setActor} />} />
-        {/* One item, full screen. The SAME element as the canvas, deliberately:
-            the canvas stays mounted underneath, so its socket, its presence
-            session and its viewport all survive, and coming back lands where
-            you left rather than at the top. A sibling route element would tear
-            all of that down and rebuild it. */}
-        <Route path={ITEM_ROUTE} element={<CanvasPage actor={actor} onIdentity={setActor} />} />
-        {/* The catch-all, and it is required rather than tidy. The daemon's
-            SPA fallback answers every path with the app shell and a 200, so
-            without a route here a mistyped or doc-shaped share link renders a
-            blank page: no error, no 404, no redirect, nothing to read. */}
-        <Route path="*" element={<NotHerePage />} />
-      </Routes>
     </BrowserRouter>
   );
+}
+
+/**
+ * **One address, two faces** (phase 13.5) — the switch, and nothing else.
+ *
+ * This used to be an early return above the router: no actor meant the
+ * identity dialog INSTEAD OF the routes, whatever address the tab was at. That
+ * was right for a share link and wrong for the origin, where it met a stranger
+ * with "pick your name" before they had learned what isocan is. Now the router
+ * always mounts and the rule lives in `lib/faces.ts`, where a test can hold it
+ * still; everything this component does is switch on the answer.
+ *
+ * The rule is applied INSIDE the router on purpose. Reading
+ * `location.pathname` above it would answer once, at mount, and a client-side
+ * navigation would never re-ask — a page whose face was decided by whichever
+ * address the tab happened to open at.
+ *
+ * `children` is a function rather than an element because "here" is the only
+ * face that has somebody: the routes need an `Actor`, not an `Actor | null`,
+ * and this hands them the one the rule just proved exists.
+ */
+export function Doorway({
+  actor,
+  onIdentity,
+  children,
+}: {
+  actor: Actor | null;
+  onIdentity: (actor: Actor) => void;
+  children: (actor: Actor) => ReactNode;
+}) {
+  const { pathname } = useLocation();
+  const face = faceFor(pathname, actor);
+  if (face === "here" && actor) return <>{children(actor)}</>;
+  if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
+  return <IdentityDialog onDone={onIdentity} />;
 }
 
 /**

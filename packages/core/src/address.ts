@@ -272,6 +272,25 @@ export function normalizeHomeUrl(raw: string): string {
 export const INSTALL_SPEC = "github:dglazkov/isocan#release";
 
 /**
+ * **Scene 0's first step**, in the one place that spells it.
+ *
+ * A different command from `INSTALL_SPEC`'s and deliberately so: that one
+ * installs the CLI, this one installs only the *skill* — the doorway file that
+ * tells an agent what isocan is and that `npx github:dglazkov/isocan#release
+ * setup` is how it gets hands. A stranger who has never run isocan has no
+ * reason to install a CLI yet; they have an agent, and the agent installs the
+ * rest itself. So this is the line the front page hands over, and the line
+ * `README.md` and the skill's own `SKILL.md` already advertise.
+ *
+ * It is here rather than in the web app for `INSTALL_SPEC`'s reason: three
+ * copies of an install line already exist in prose, and the fourth — the one
+ * a stranger actually pastes — must not be a fourth INDEPENDENT copy. It
+ * carries no `#release` because it names a *repo* to `npx skills`, not a
+ * package to npm, so the branchless-spec hazard (#47) does not apply.
+ */
+export const SKILL_INSTALL_COMMAND = "npx skills add dglazkov/isocan";
+
+/**
  * **Scene 5's one command, built rather than written.**
  *
  *     npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
