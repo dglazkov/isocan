@@ -1928,6 +1928,67 @@ button.mt-card:hover { border-color: var(--accent); }
 .page-note-stack { flex-direction: column; gap: 8px; text-align: center; padding: 0 24px; }
 .page-note-hint { font-size: 12.5px; color: var(--ink-soft); max-width: 46ch; line-height: 1.45; }
 
+/* ---------- the front page: the origin wearing a face (phase 13.5) ----------
+   Scene 0's three steps, at the same address every canvas lives at. It is the
+   app's own world and not a second one: the same tokens, the same 8px radius,
+   the same system stack, the same `.btn`. Nothing loads — no image, no
+   webfont, no third party — because this is the first paint a stranger gets
+   and phase 10's service worker only holds the shell.
+   The ledger shape rather than a hero: a number, the move, and — on the one
+   step that is a command — the command itself, sitting in the same monospace
+   chip the "Work from your terminal…" line already uses. */
+.front-page {
+  max-width: 620px; margin: 0 auto; padding: 88px 24px 64px;
+  display: flex; flex-direction: column; gap: 36px;
+}
+.front-head { display: flex; flex-direction: column; gap: 12px; }
+.front-head h1 { margin: 0; font-size: 30px; letter-spacing: -0.01em; }
+.front-lede { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-muted); }
+/* The numbers are drawn by `.front-step-n`, so the marker is off: a list
+   marker and a chip would be two numbers for one step. */
+.front-steps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.front-step { display: flex; align-items: flex-start; gap: 14px; }
+.front-step-n {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 600;
+  background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink-muted);
+}
+.front-step-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+.front-step-say { font-size: 15px; line-height: 1.4; }
+.front-step-note { font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+/* The command and its button on one line until the line runs out. */
+.front-command { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* `user-select: all` is the fallback the copy button needs and cannot provide:
+   one click selects the whole command, whatever the clipboard API answered. */
+.front-command-line {
+  flex: 1 1 auto; min-width: 0;
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  line-height: 1.45; white-space: pre-wrap; word-break: break-all; user-select: all;
+}
+.front-command-copy { flex: 0 0 auto; }
+/* What the button did, in words. It only ever holds a sentence after a press,
+   so an empty one takes no room. */
+.front-command-said { flex: 1 0 100%; font-size: 11.5px; line-height: 1.4; color: var(--ink-soft); }
+.front-command[data-copy-state="copied"] .front-command-said { color: var(--good); }
+.front-command[data-copy-state="copied"] .front-command-line { border-color: var(--good); }
+/* The second face's entrance: somebody who already has a canvas. Quieter than
+   the steps, because it is the smaller of the two audiences at this address. */
+.front-onward {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-top: 8px; border-top: 1px solid var(--line-soft);
+}
+.front-onward-note { font-size: 12.5px; color: var(--ink-soft); }
+/* A footnote, and it stays one: the steps above are the entry, and this is
+   for somebody who wants the code. */
+.front-foot { font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+.front-foot a { color: var(--accent-text); }
+
 /* ---------- nothing here ---------- */
 .notfound-page {
   max-width: 560px; margin: 0 auto; padding: 96px 24px;
