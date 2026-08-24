@@ -1,4 +1,4 @@
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 import { nearestFreeSpot } from "./placement.ts";
 
 /** An item and the size its content actually wants. */
@@ -31,7 +31,7 @@ export interface FitResult {
  * the group rather than scattering it, and the arrangement somebody made by
  * hand survives.
  */
-export function fitMoves(canvas: CanvasState, targets: FitTarget[]): FitResult {
+export function fitMoves(canvas: CanvasContents, targets: FitTarget[]): FitResult {
   const growing = targets
     .map((t) => ({ t, item: canvas.items[t.itemId] }))
     .filter((p): p is { t: FitTarget; item: NonNullable<typeof p.item> } => Boolean(p.item))

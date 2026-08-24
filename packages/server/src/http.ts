@@ -24,7 +24,7 @@ import type {
   MintPassResponse,
   Pass,
   PostOpRequest,
-  Project,
+  Canvas,
   RedeemPassRequest,
   RedeemPassResponse,
   UndoRedoRequest,
@@ -57,11 +57,13 @@ import {
   AMBIGUOUS_HOME,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
-  PROJECTS_REACH_PARAM,
+  staleClientRefusal,
+  STALE_CLIENT_STATUS,
+  CANVASES_REACH_PARAM,
   SHELF,
   UNKNOWN_ROUTE,
 } from "@isocan/core";
-import { Engine, NothingToUndoError, ProjectNotFoundError } from "./engine.ts";
+import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import {
   attestersOf,
   attesterRefusal,
@@ -171,10 +173,12 @@ export const STATIC_TYPES: Record<string, string> = {
 const CACHE_BLOB = "private, immutable, max-age=31536000";
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
- * so `projectId ∈ admissions` is re-asked on all of them, including the ones
+ * so `canvasId ∈ admissions` is re-asked on all of them, including the ones
  * a later phase adds. `/api/ops` is deliberately not here: its canvas is in
  * the body, and it says so itself. */
-const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
+/** The canvas-scoped API prefix. `/api/projects/` is a deliberate holdout
+ * (phase 13.5's rename): it is the wire between an installed CLI and a home. */
+const CANVAS_API_ROUTE = /^\/api\/projects\/([^/?]+)/;
 
 /**
  * **The blob route is closed, and the argument that kept it open was wrong —
@@ -214,8 +218,8 @@ const PROJECT_ROUTE = /^\/api\/projects\/([^/?]+)/;
  *
  * **So the decision `phases.md` demanded is made: closed.** Expulsion now
  * reaches the bytes. A badge that is swept out of a canvas cannot fetch that
- * canvas's blobs, because the route is project-scoped and the `onRequest` hook
- * re-asks `projectId ∈ admissions` on everything under `/api/projects/:id/`
+ * canvas's blobs, because the route is canvas-scoped and the `onRequest` hook
+ * re-asks `canvasId ∈ admissions` on everything under `/api/projects/:id/`
  * — the hash stops being a capability the moment the holder stops being
  * admitted. The alternative on the table was a per-blob short-lived token in
  * the URL, and it buys nothing here: the cookie already rides, and a token in
@@ -264,7 +268,7 @@ export interface RouteOptions {
    * reason: what a home can VERIFY is innkeeper configuration, not a
    * per-invocation choice, and it must be answerable without a rebuild. It
    * decides three things: whether `email:` may be granted here, what the
-   * browser is handed to sign in with, and which project a presented token is
+   * browser is handed to sign in with, and which canvas a presented token is
    * checked against. See `attest.ts` for why that is one value and not a
    * boolean somebody could set wrongly.
    */
@@ -300,8 +304,8 @@ export function registerRoutes(
     if (err instanceof OpValidationError) {
       return reply.status(400).send({ error: err.message, code: err.code });
     }
-    if (err instanceof ProjectNotFoundError) {
-      return reply.status(404).send({ error: err.message, code: "unknown-project" });
+    if (err instanceof CanvasNotFoundError) {
+      return reply.status(404).send({ error: err.message, code: "unknown-canvas" });
     }
     // 409, and its own code, because a client must NOT retry this: the op was
     // refused by another writer's claim on the seq, and the daemon has
@@ -471,9 +475,9 @@ export function registerRoutes(
       await desk.touch(req.badge.badgeId, new Date().toISOString());
       // The door's test, re-asked. One hook rather than a call in each
       // handler, for the same reason the badge check is one hook: a
-      // project-scoped route added later is covered by DEFAULT instead of by
+      // canvas-scoped route added later is covered by DEFAULT instead of by
       // somebody remembering.
-      const scoped = PROJECT_ROUTE.exec(pathname)?.[1];
+      const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1];
       if (scoped) await admit(req, decodeSegment(scoped));
       return;
     }
@@ -485,6 +489,42 @@ export function registerRoutes(
       : reply
           .status(401)
           .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+  });
+
+  /**
+   * **A client older than this home, told so** (phase 13.5 — see
+   * `staleClientRefusal`, which is the whole test and the whole message).
+   *
+   * One hook rather than a line per route, for the door hook's reason: the
+   * routes that carry a canvas in their body are `/api/ops`, `HOME_JOIN_ROUTE`
+   * and whatever gets written next month, and a break that explains itself on
+   * two of the three is a break that surprises somebody on the third.
+   *
+   * `/api/ops` was the one that actually bit — a pre-rename CLI READS fine
+   * (a canvas travels in the path on a GET, and paths did not change) and dies
+   * on its first write — but `HOME_JOIN_ROUTE` is the worse one: there the
+   * caller is a pre-rename REPLICA rather than a person, so the refusal is
+   * read by nobody and the canvas simply never arrives.
+   *
+   * `preValidation` because that is the first point the parsed body exists;
+   * the badge hook still goes first, so a caller with no badge is told about
+   * the badge, which is the thing it must fix before this answer would even
+   * be reachable.
+   */
+  app.addHook("preValidation", async (req, reply) => {
+    const body = req.body as { op?: unknown } | undefined;
+    // The nested `op` too: `project.create` is the one op that carries the
+    // canvas's id INSIDE the operation, so a pre-rename create is stale in two
+    // places and would otherwise be caught only by the outer one's `null`.
+    const stale = staleClientRefusal(
+      body as Record<string, unknown> | undefined,
+      body?.op as Record<string, unknown> | undefined,
+    );
+    // `{error, code}`, this file's shape for every refusal — the socket's
+    // shorter sentence stays on the socket.
+    if (stale) {
+      return reply.status(STALE_CLIENT_STATUS).send({ error: stale.error, code: stale.code });
+    }
   });
 
   /**
@@ -513,8 +553,8 @@ export function registerRoutes(
   });
 
   /**
-   * **The door, and the point of phase 7.** `projectId ∈ badge.admissions`,
-   * re-asked on every project-scoped route (mechanism 5) — and, when the
+   * **The door, and the point of phase 7.** `canvasId ∈ badge.admissions`,
+   * re-asked on every canvas-scoped route (mechanism 5) — and, when the
    * answer is no, the design's flowchart run in order:
    *
    *   already admitted → creating the canvas (bootstrap) → a grant is
@@ -526,7 +566,7 @@ export function registerRoutes(
    *
    * Phase 2 left this line saying "the address admits" and merely writing the
    * admission down; phase 3 marked it as the place the grant lookup goes. The
-   * lookup is `admittingGrant`, and because every project-scoped route passes
+   * lookup is `admittingGrant`, and because every canvas-scoped route passes
    * through the one `onRequest` hook, replacing it here turns the check into
    * a refusal without a single route having to be found and edited.
    *
@@ -584,7 +624,7 @@ export function registerRoutes(
     if (!provenance) {
       // No canvas here at all — let the route answer 404 for itself. On a
       // replica this is also the ordinary shape of "not replicated yet".
-      if (!(await store.projectExists(canvasId))) return;
+      if (!(await store.canvasExists(canvasId))) return;
       throw new NotAdmittedError(canvasId);
     }
 
@@ -661,14 +701,14 @@ export function registerRoutes(
      * The door, BEFORE the write, and the order is the whole point.
      *
      * `/api/ops` is the one route that is about a canvas without saying so in
-     * its path (`PROJECT_ROUTE` deliberately does not match it — "its canvas
+     * its path (`CANVAS_API_ROUTE` deliberately does not match it — "its canvas
      * is in the body, and it says so itself"), so the hook cannot cover it and
      * this call is the door for every op ever written. Under phase 2's policy
      * the admission was recorded AFTER the submit, which was harmless when it
      * could not refuse; a refusal that arrives after the op has landed is not
      * a refusal at all.
      */
-    if (body.projectId) await admit(req, body.projectId);
+    if (body.canvasId) await admit(req, body.canvasId);
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
       badgeId: req.badge!.badgeId,
@@ -678,7 +718,7 @@ export function registerRoutes(
       // the fact: the canvas did not exist to be admitted to a moment ago. It
       // earned this one by making the canvas, which is the only provenance
       // that is not "somebody let me in".
-      await admit(req, body.op.projectId, true);
+      await admit(req, body.op.canvasId, true);
     }
     return { seq: entry.seq, envelope: entry.envelope };
   });
@@ -727,11 +767,11 @@ export function registerRoutes(
   });
 
   /** Chosen identity colors, for clients painting faces before a canvas is
-   * open (the projects page) — everything absent is derived from the id. */
+   * open (the canvases page) — everything absent is derived from the id. */
   app.get("/api/colors", async () => engine.actorColors());
 
   /** Current names, for clients rendering words somebody wrote under a name
-   * they no longer use — the projects page paints them too. */
+   * they no longer use — the canvases page paints them too. */
   app.get("/api/names", async () => engine.actorNames());
 
   // ---- slash commands: the work a message can ask for ----
@@ -784,7 +824,7 @@ export function registerRoutes(
    * phase 7 is the right answer for a replica in phase 8.
    *
    * **But it is still the wrong answer for a browser**, which is why this
-   * route did not simply narrow. See {@link ProjectsReach}: two callers ask
+   * route did not simply narrow. See {@link CanvasesReach}: two callers ask
    * two questions here, the caller states which, and the wide answer stays
    * the default so that a person opening `/` on their own home still sees the
    * canvas their CLI just made under a different badge. A route that guessed
@@ -808,12 +848,12 @@ export function registerRoutes(
     // Anything other than the one narrowing word means the default. A typo
     // must not silently hand a replica the wide list under a name that reads
     // like the narrow one — it is spelled in exactly one place
-    // (`projectsRoute`) so that a caller cannot arrive here with a near-miss.
-    const reach = query[PROJECTS_REACH_PARAM];
+    // (`canvasesRoute`) so that a caller cannot arrive here with a near-miss.
+    const reach = query[CANVASES_REACH_PARAM];
     const narrow = reach === "admitted";
     /**
      * `?reach=here` — of the ones this badge may see, the canvases **this
-     * daemon is the home of** (phase 10.3). What the web app's project list
+     * daemon is the home of** (phase 10.3). What the web app's canvas list
      * asks, because its links are client-side navigations that never reach the
      * per-canvas page guard: without this the local origin would render a replica of
      * a canvas that lives at dev, giving that canvas two doors, two cookies,
@@ -826,11 +866,11 @@ export function registerRoutes(
      */
     const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
-    const visible: Project[] = [];
-    for (const project of await engine.listProjects()) {
-      if (hereOnly && (options.homes?.homeOf(project.id) ?? null) !== null) continue;
-      if (admitted.has(project.id)) visible.push(project);
-      else if (!narrow && (await admittingGrant(desk, project.id, badge))) visible.push(project);
+    const visible: Canvas[] = [];
+    for (const canvas of await engine.listCanvases()) {
+      if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
+      if (admitted.has(canvas.id)) visible.push(canvas);
+      else if (!narrow && (await admittingGrant(desk, canvas.id, badge))) visible.push(canvas);
     }
     return visible;
   });
@@ -857,7 +897,7 @@ export function registerRoutes(
      * home of three canvases a replica of somewhere else — while it was
      * serving those canvases' pages perfectly well.
      *
-     * So the answer is built from the project list, with each canvas's row
+     * So the answer is built from the canvas list, with each canvas's row
      * read through the same `?? null` rule the page server and the engine use.
      * A row naming a canvas this daemon does not hold is dropped rather than
      * reported: it is a record about nothing, and the question this route
@@ -865,8 +905,8 @@ export function registerRoutes(
      */
     const rows = options.homes?.assignments() ?? {};
     const canvases: Record<string, string | null> = {};
-    for (const project of await store.listProjects()) {
-      canvases[project.id] = rows[project.id] ?? null;
+    for (const canvas of await store.listCanvases()) {
+      canvases[canvas.id] = rows[canvas.id] ?? null;
     }
     return {
       birth: options.birthHome ?? null,
@@ -886,7 +926,7 @@ export function registerRoutes(
 
   // ---- grants: who may enter this canvas (identity desk, mechanisms 3 + 2) ----
   //
-  // Three routes, project-scoped, so the `onRequest` hook has already asked
+  // Three routes, canvas-scoped, so the `onRequest` hook has already asked
   // the door about the caller before any of them runs: **only an admitted
   // badge can read or change a canvas's grants**, with nothing per-route to
   // remember. One endpoint for both surfaces — stage 2's Share dialog and the
@@ -1103,9 +1143,9 @@ export function registerRoutes(
   // reports what this badge has already proved and who that lets it be; `POST`
   // takes a token from the attester the `GET` named and writes the row.
   //
-  // NOT project-scoped, and that is load-bearing rather than tidy: a badge
+  // NOT canvas-scoped, and that is load-bearing rather than tidy: a badge
   // that is not admitted anywhere must still be able to prove its address,
-  // because proving it is HOW it comes to be admitted. A project-scoped path
+  // because proving it is HOW it comes to be admitted. A canvas-scoped path
   // would be refused by the door hook before the handler could look at the
   // token — the same trap `POST /api/passes/redeem` had to step around, for
   // the same reason.
@@ -1187,7 +1227,7 @@ export function registerRoutes(
   // Two routes with deliberately different shapes, and the asymmetry is the
   // design rather than an accident of naming.
   //
-  // **Minting is project-scoped** (`/api/projects/:id/passes`), the same
+  // **Minting is canvas-scoped** (`/api/projects/:id/passes`), the same
   // argument the three grant routes are written on: the `onRequest` hook has
   // already asked the door about this caller for anything under
   // `/api/projects/:id/`, so "only an admitted badge may mint a pass for this
@@ -1197,7 +1237,7 @@ export function registerRoutes(
   //
   // **Redeeming is not** (`/api/passes/redeem`), and it cannot be: the whole
   // point of the redeemer is that it is NOT admitted to that canvas yet, so a
-  // project-scoped path would be refused by the door hook before the handler
+  // canvas-scoped path would be refused by the door hook before the handler
   // could look at the pass — the door answering `not-admitted` to the one
   // request whose purpose is to become admitted.
   //
@@ -1390,9 +1430,9 @@ export function registerRoutes(
    */
   app.post(HOME_JOIN_ROUTE, async (req, reply) => {
     const body = (req.body ?? {}) as Partial<JoinCanvasRequest>;
-    const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
-    if (!projectId) {
-      return reply.status(400).send({ error: "projectId is required", code: "bad-request" });
+    const canvasId = typeof body.canvasId === "string" ? body.canvasId.trim() : "";
+    if (!canvasId) {
+      return reply.status(400).send({ error: "canvasId is required", code: "bad-request" });
     }
     const named = typeof body.home === "string" && body.home.trim() ? body.home.trim() : null;
     const address = named ?? options.birthHome ?? null;
@@ -1406,9 +1446,9 @@ export function registerRoutes(
       });
     }
     const home = options.homes.linkFor(address);
-    let project: Project;
+    let canvas: Canvas;
     try {
-      project = await home.join(projectId);
+      canvas = await home.join(canvasId);
     } catch (err) {
       // A link opened for a join that failed has nothing to do and nobody to
       // answer; leaving it polling would be a socket and a timer per typo'd
@@ -1421,8 +1461,8 @@ export function registerRoutes(
     // this machine would send every later write to a 403, and the CLI would
     // have to un-write it — which is the CLI writing `homes.json`, which is
     // exactly what ruling 1 forbids.
-    await options.homes.bind(projectId, address);
-    return { project } satisfies JoinCanvasResponse;
+    await options.homes.bind(canvasId, address);
+    return { canvas } satisfies JoinCanvasResponse;
   });
 
   app.get("/api/projects/:id/canvas", async (req) => {
@@ -1451,8 +1491,8 @@ export function registerRoutes(
           resolve();
         };
         const timer = setTimeout(done, holdMs);
-        const unsubscribe = engine.onEvent((projectId, message) => {
-          if (projectId === id && message.type === "op-applied") done();
+        const unsubscribe = engine.onEvent((canvasId, message) => {
+          if (canvasId === id && message.type === "op-applied") done();
         });
         req.raw.on("close", done);
       });
@@ -1462,9 +1502,9 @@ export function registerRoutes(
   });
 
   /**
-   * The whole home's oplog, one cursor per project — what `isocan wait`
+   * The whole home's oplog, one cursor per canvas — what `isocan wait`
    * listens on. An on-call agent hears canvases it has never opened, so the
-   * long poll must be woken by ANY project's op, and a project born while it
+   * long poll must be woken by ANY canvas's op, and a canvas born while it
    * waits is streamed from its first entry.
    *
    * **Still home-wide, and it is the sibling of the leak `GET /api/projects`
@@ -1485,31 +1525,31 @@ export function registerRoutes(
     const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
       const entries: import("@isocan/core").WatchedLogEntry[] = [];
       const next: Record<string, number> = {};
-      for (const project of await engine.listProjects()) {
-        if (only && !only.has(project.id)) continue;
-        const since = cursors?.[project.id] ?? 0;
+      for (const canvas of await engine.listCanvases()) {
+        if (only && !only.has(canvas.id)) continue;
+        const since = cursors?.[canvas.id] ?? 0;
         // Seeding (no cursors at all) means "from now on" — tips, no entries.
-        const log = cursors ? await engine.getLog(project.id, since) : [];
+        const log = cursors ? await engine.getLog(canvas.id, since) : [];
         const lastSeq = cursors
           ? (log[log.length - 1]?.seq ?? since)
-          : (await engine.getSnapshot(project.id)).lastSeq;
+          : (await engine.getSnapshot(canvas.id)).lastSeq;
         for (const entry of log) {
-          entries.push({ ...entry, projectId: project.id, projectTitle: project.title });
+          entries.push({ ...entry, canvasId: canvas.id, canvasTitle: canvas.title });
         }
-        next[project.id] = lastSeq;
+        next[canvas.id] = lastSeq;
       }
       entries.sort((a, b) => a.envelope.ts.localeCompare(b.envelope.ts) || a.seq - b.seq);
       return { entries, cursors: next };
     };
 
-    // Subscribe BEFORE the first sweep: scanning every project takes long
+    // Subscribe BEFORE the first sweep: scanning every canvas takes long
     // enough that an op could land behind the reader and be missed until the
-    // window closed. Sweeping many projects is not atomic; this is.
+    // window closed. Sweeping many canvases is not atomic; this is.
     let landed = false;
     let wake: (() => void) | null = null;
-    const unsubscribe = engine.onEvent((projectId, message) => {
+    const unsubscribe = engine.onEvent((canvasId, message) => {
       if (message.type !== "op-applied") return;
-      if (only && !only.has(projectId)) return; // another canvas is not our business
+      if (only && !only.has(canvasId)) return; // another canvas is not our business
       landed = true;
       wake?.();
     });
@@ -1552,7 +1592,7 @@ export function registerRoutes(
 
   app.post("/api/projects/:id/sessions", async (req) => {
     const { id } = req.params as { id: string };
-    await engine.getSnapshot(id); // 404 unknown projects
+    await engine.getSnapshot(id); // 404 unknown canvases
     const body = req.body as import("@isocan/core").CreateSessionRequest;
     // A face is an assertion about who is here, so it is checked like an op.
     await engine.requireActor(req.badge!.badgeId, body.actor.id);
@@ -1629,7 +1669,7 @@ export function registerRoutes(
 
   app.post("/api/projects/:id/blobs", async (req, reply) => {
     const { id } = req.params as { id: string };
-    await engine.getSnapshot(id); // 404 for unknown projects
+    await engine.getSnapshot(id); // 404 for unknown canvases
     const data = req.body as Buffer;
     if (!Buffer.isBuffer(data) || data.length === 0) {
       return reply.status(400).send({ error: "empty blob body", code: "bad-op" });
@@ -1642,12 +1682,12 @@ export function registerRoutes(
   /**
    * Ask for somewhere to put bytes too big to post (see
    * `MAX_DIRECT_UPLOAD_BYTES`). Under `/api/projects/:id/…`, so the door
-   * re-asks `projectId ∈ admissions` before a single byte is signed for —
+   * re-asks `canvasId ∈ admissions` before a single byte is signed for —
    * which since phase 9 is true of the blob GET beside it as well.
    */
   app.post("/api/projects/:id/blobs/upload-url", async (req, reply) => {
     const { id } = req.params as { id: string };
-    await engine.getSnapshot(id); // 404 for unknown projects
+    await engine.getSnapshot(id); // 404 for unknown canvases
     const request = req.body as Partial<BlobUploadRequest> | undefined;
     const problem = badUploadRequest(request);
     if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
@@ -2068,7 +2108,7 @@ function registerPages(
     // No birth default: this daemon is somebody's home by definition, and the
     // question is over before it costs anything. **This is also what keeps the
     // listing below off the hosted home's page path** — a hosted home has no
-    // birth default, so it returns here and never reads its project list to
+    // birth default, so it returns here and never reads its canvas list to
     // serve a page.
     if (!options.birthHome) return false;
     const rows = options.homes?.assignments() ?? {};
@@ -2090,8 +2130,8 @@ function registerPages(
      * has nothing of its own to open, and sending that person to the home is
      * the honest answer.
      */
-    const held = await store.listProjects();
-    return !held.some((project) => (rows[project.id] ?? null) === null);
+    const held = await store.listCanvases();
+    return !held.some((canvas) => (rows[canvas.id] ?? null) === null);
   };
 
   /**

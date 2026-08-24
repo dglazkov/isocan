@@ -14,11 +14,11 @@ const FAN_GAP = 18;
  */
 export function VersionFanOut({
   item,
-  projectId,
+  canvasId,
   actor,
 }: {
   item: Item;
-  projectId: string;
+  canvasId: string;
   actor: Actor;
 }) {
   const setFanned = useUiStore((s) => s.setFanned);
@@ -52,7 +52,7 @@ export function VersionFanOut({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={async () => {
               if (version.id !== item.currentVersionId) {
-                await sendOp(projectId, actor, {
+                await sendOp(canvasId, actor, {
                   type: "item.setCurrentVersion",
                   itemId: item.id,
                   versionId: version.id,
@@ -68,7 +68,7 @@ export function VersionFanOut({
             </div>
             <div className="fan-body">
               <VersionContent
-                projectId={projectId}
+                canvasId={canvasId}
                 blobHash={version.blobHash}
                 mimeType={version.mimeType}
                 filename={version.filename}

@@ -77,8 +77,8 @@ describe("FileStore — what only a disk can be asked", () => {
 
   it("soft-deletes by moving the directory aside, which frees the id again", async () => {
     await seed(store);
-    await store.softDeleteProject("prj_1");
-    const parked = await fs.readdir(p.deletedProjectsDir(home));
+    await store.softDeleteCanvas("prj_1");
+    const parked = await fs.readdir(p.deletedCanvasesDir(home));
     expect(parked).toHaveLength(1);
     expect(parked[0]!.startsWith("prj_1-")).toBe(true);
     // The directory is gone, so the id is available again. The cloud backing
@@ -86,7 +86,7 @@ describe("FileStore — what only a disk can be asked", () => {
     // what it must never produce — and that is the one place the two backings
     // differ in what they ALLOW. Canvas ids are minted, never chosen, so
     // nothing reaches it; it is pinned on both sides so nobody discovers it.
-    expect(await store.projectExists("prj_1")).toBe(false);
+    expect(await store.canvasExists("prj_1")).toBe(false);
   });
 
   it("compaction rewrites the live log and appends to the archive file", async () => {

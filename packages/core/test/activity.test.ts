@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recentActivity, type CanvasState } from "../src/index.ts";
+import { recentActivity, type CanvasContents } from "../src/index.ts";
 
 const DI = { id: "usr_di", name: "Di" };
 const FABLE = { id: "usr_fable", name: "Fable" };
@@ -18,7 +18,7 @@ function item(id: string, title: string, opts: { at: string; by?: typeof DI; ver
   };
 }
 
-const canvas = (over: Partial<CanvasState> = {}): CanvasState => ({ items: {}, threads: {}, trash: [], ...over });
+const canvas = (over: Partial<CanvasContents> = {}): CanvasContents => ({ items: {}, threads: {}, trash: [], ...over });
 
 describe("what somebody has been up to", () => {
   it("reports making an item, editing it, and saying something — newest first", () => {
@@ -33,7 +33,7 @@ describe("what somebody has been up to", () => {
         t1: {
           id: "t1", x: 0, y: 0, anchorItemId: "a", main: false,
           comments: [{ id: "c1", body: "moved the table up", author: DI, createdAt: "2026-08-21T09:00:00.000Z" }],
-        } as CanvasState["threads"][string],
+        } as CanvasContents["threads"][string],
       },
     });
     const out = recentActivity(state, DI.id);
@@ -71,18 +71,18 @@ describe("what somebody has been up to", () => {
       id, x: 0, y: 0, anchorItemId: null, main: false,
       comments: [{ id: `c_${id}`, body: "hi", author: DI, createdAt: "2026-08-21T09:00:00.000Z" }],
       ...over,
-    }) as CanvasState["threads"][string];
+    }) as CanvasContents["threads"][string];
     const state = canvas({ threads: { t1: thread("t1", {}), t2: thread("t2", { main: true }) } });
     expect(recentActivity(state, DI.id).map((e) => e.subject).sort()).toEqual(["the canvas", "the main thread"]);
   });
 
   it("keeps the newest few and drops the rest", () => {
-    const threads: CanvasState["threads"] = {};
+    const threads: CanvasContents["threads"] = {};
     for (let i = 0; i < 10; i++) {
       threads[`t${i}`] = {
         id: `t${i}`, x: 0, y: 0, anchorItemId: null, main: false,
         comments: [{ id: `c${i}`, body: `note ${i}`, author: DI, createdAt: `2026-08-2${i % 10}T09:00:00.000Z` }],
-      } as CanvasState["threads"][string];
+      } as CanvasContents["threads"][string];
     }
     const out = recentActivity(canvas({ threads }), DI.id, 3);
     expect(out).toHaveLength(3);
@@ -96,7 +96,7 @@ describe("what somebody has been up to", () => {
         t1: {
           id: "t1", x: 0, y: 0, anchorItemId: "gone", main: false,
           comments: [{ id: "c1", body: "about that", author: DI, createdAt: "2026-08-21T09:00:00.000Z" }],
-        } as CanvasState["threads"][string],
+        } as CanvasContents["threads"][string],
       },
     });
     expect(recentActivity(state, DI.id)).toEqual([]);

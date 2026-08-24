@@ -99,7 +99,7 @@ isocan clone dglazkov/isocan          # or any URL git accepts
 ```
 
 That clones, readies the directory exactly as `setup` does, and reports the
-canvas the committed marker names. Because project ids are what let two homes
+canvas the committed marker names. Because canvas ids are what let two homes
 agree they are working on the same canvas, the clone **adopts the id** rather
 than minting one — the first thing anybody adds materializes it under that id,
 and you are on the same canvas as the person who committed the marker, not a
@@ -244,8 +244,8 @@ changes nothing.
   `isocan use --home`. So `isocan add` run from `/tmp/whatever` silently lands
   on whatever canvas you last used. Only `identity --session` creates one. If a
   command's output names a canvas you did not expect, stop and check
-  `isocan project list` before writing anything else.
-- **`isocan project delete` is not undoable** and needs `--force`. Never delete
+  `isocan canvas list` before writing anything else.
+- **`isocan canvas delete` is not undoable** and needs `--force`. Never delete
   a canvas you did not make.
 - **A pass is a credential, not an invitation.** `isocan share` prints an
   address you hand to a *person*; `isocan pass` prints a command carrying a

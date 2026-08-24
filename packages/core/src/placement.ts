@@ -1,4 +1,4 @@
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { DRAWING_MIME } from "./drawing.ts";
 import { ANNOTATES_PROP } from "./annotation.ts";
@@ -100,7 +100,7 @@ export function nearestFreeSpot(want: Box, occupied: Placed[]): { x: number; y: 
  * neither may be tidied away from the thing that gives it its meaning.
  */
 export function resolvePlacement(
-  canvas: CanvasState,
+  canvas: CanvasContents,
   placement: Placement,
   width: number,
   height = 0,

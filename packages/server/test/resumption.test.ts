@@ -137,9 +137,9 @@ async function prove(badge: TestBadge, email: string): Promise<AttestResponse> {
 
 async function makeCanvas(): Promise<void> {
   const res = await api(owner, "POST", "/api/ops", {
-    projectId: null,
+    canvasId: null,
     actor: { id: "usr_priya", name: "Priya" },
-    op: { type: "project.create", projectId: CANVAS, title: "Acme board" },
+    op: { type: "project.create", canvasId: CANVAS, title: "Acme board" },
   });
   if (!res.ok) throw new Error(`could not make the canvas: ${await res.text()}`);
 }
@@ -341,7 +341,7 @@ describe("a phone resumes its person by attestation", () => {
    */
   const beJordan = (badge: TestBadge, sessionKey: string): Promise<Response> =>
     api(badge, "POST", "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey, as: jordan.id },
     });
 

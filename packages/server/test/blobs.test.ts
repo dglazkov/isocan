@@ -25,9 +25,9 @@ beforeEach(async () => {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
-      projectId: null,
+      canvasId: null,
       actor: alice,
-      op: { type: "project.create", projectId: "prj_1", title: "P" },
+      op: { type: "project.create", canvasId: "prj_1", title: "P" },
     }),
   });
   expect(res.status).toBe(200);

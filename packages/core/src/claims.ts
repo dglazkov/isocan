@@ -86,8 +86,8 @@ export interface ActorBindingRecord {
   key: string;
   actor: Actor;
   boundAt: string;
-  /** See ActorClaim.projectId. */
-  projectId?: string;
+  /** See ActorClaim.canvasId. */
+  canvasId?: string;
 }
 
 /** Somebody a canvas answers to. Not only the faces on it right now: an
@@ -96,7 +96,7 @@ export interface ActorBindingRecord {
 export interface NameHolder {
   actor: Actor;
   /** Canvas title, for saying where. */
-  project: string;
+  canvas: string;
   /** Wearing it at this moment, rather than remembered from the history. */
   live: boolean;
 }
@@ -347,7 +347,7 @@ export function bindClaim(
     actorId: actor.id,
     boundAt: ts,
     sessionKey: op.sessionKey,
-    ...(op.projectId !== undefined ? { projectId: op.projectId } : {}),
+    ...(op.canvasId !== undefined ? { canvasId: op.canvasId } : {}),
   });
   return kept;
 }
@@ -379,12 +379,12 @@ export function bindClaim(
  */
 export function bindHandoff(
   claims: readonly ActorClaim[],
-  envelope: { actor: Actor; ts: string; projectId?: string },
+  envelope: { actor: Actor; ts: string; canvasId?: string },
 ): ActorClaim[] {
-  const { actor, ts, projectId } = envelope;
+  const { actor, ts, canvasId } = envelope;
   return [
     ...claims.filter((row) => row.actorId !== actor.id),
-    { actorId: actor.id, boundAt: ts, ...(projectId !== undefined ? { projectId } : {}) },
+    { actorId: actor.id, boundAt: ts, ...(canvasId !== undefined ? { canvasId } : {}) },
   ];
 }
 
@@ -649,7 +649,7 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
   if (!holder && !bound) return;
   const takenBy = holder?.actor.id ?? bound!.actorId;
   const where = holder
-    ? `${holder.actor.id}, ${holder.live ? "on" : "known to"} "${holder.project}"`
+    ? `${holder.actor.id}, ${holder.live ? "on" : "known to"} "${holder.canvas}"`
     : `${bound!.actorId}, claimed by another session`;
   throw new OpValidationError(
     "name-taken",

@@ -1,4 +1,4 @@
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 
 /**
  * #item-references — comments pointing at items on the canvas. Like
@@ -67,7 +67,7 @@ export function extractItemRefs(body: string, candidates: ItemRefCandidate[]): s
 }
 
 /** One candidate per live item, under its title and its id. */
-export function collectItemRefCandidates(canvas: CanvasState): ItemRefCandidate[] {
+export function collectItemRefCandidates(canvas: CanvasContents): ItemRefCandidate[] {
   const candidates: ItemRefCandidate[] = [];
   for (const item of Object.values(canvas.items)) {
     const title = item.title.trim();

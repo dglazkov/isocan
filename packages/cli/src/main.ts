@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import type {
   Actor,
   BadgeSummary,
@@ -18,7 +18,7 @@ import type {
   Operation,
   Placement,
   PresenceSession,
-  Project,
+  Canvas,
   SweepReport,
   WatchedLogEntry,
 } from "@isocan/core";
@@ -90,7 +90,7 @@ import {
   mainThread,
   newCommentId,
   newItemId,
-  newProjectId,
+  newCanvasId,
   newThreadId,
   newVersionId,
   // Core's is the pure, total computation; this file's `normalizeHomeUrl`
@@ -106,13 +106,14 @@ import {
   type Ctx,
   type HomeRecord,
   type ResolveOptions,
+  canvasRefOf,
   ensureDirBinding,
   homeAddressOf,
   makeCtx,
   metaPatch,
   readConfig,
   readHomeRecord,
-  resolveProject,
+  resolveCanvas,
   writeConfig,
 } from "./ctx.ts";
 import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
@@ -153,9 +154,28 @@ program
   .option("--port <port>", "daemon port (default 4441)")
   .option("--agent-help", "how to collaborate on a canvas as an agent: the whole protocol")
   .option(
-    "--project <ref>",
-    "project id or title prefix (default: this directory's binding, then `isocan use --home`)",
+    "--canvas <ref>",
+    "canvas id or title prefix (default: this directory's binding, then `isocan use --home`)",
   )
+  // The old spelling, kept working and kept out of help — same reason the
+  // `project` verb keeps its alias.
+  .addOption(new Option("--project <ref>").hideHelp())
+  // Commander renders an aliased subcommand as `canvas|project`, in the
+  // command list and in its own usage line; help advertises the new word only.
+  // Inherited by every subcommand.
+  .configureHelp({
+    commandUsage: (cmd) => {
+      let ancestors = "";
+      for (let up = cmd.parent; up; up = up.parent) ancestors = `${up.name()} ${ancestors}`;
+      return `${ancestors}${cmd.name()} ${cmd.usage()}`;
+    },
+    subcommandTerm: (cmd) =>
+      cmd.name() +
+      (cmd.options.length > 0 ? " [options]" : "") +
+      cmd.registeredArguments
+        .map((arg) => (arg.required ? ` <${arg.name()}>` : ` [${arg.name()}]`))
+        .join(""),
+  })
   .addHelpText(
     "after",
     `
@@ -169,7 +189,7 @@ The system:
   Every command here sends the same operation the web app would, so changes
   appear live in any open browser — and vice versa.
 
-  project    a canvas; list with \`isocan project list\`
+  canvas    a canvas; list with \`isocan canvas list\`
   item       a file rendered on the canvas (markdown, image, video, HTML) at
              x,y world coordinates (+x right, +y down)
   browser    \`isocan browse <url>\` projects a live site onto the canvas —
@@ -187,11 +207,11 @@ The system:
 
 Conventions:
   <item> and <thread> arguments accept an id, an id prefix, or a title prefix.
-  A directory is bound to its project by <dir>/.isocan/project.json — written
+  A directory is bound to its canvas by <dir>/.isocan/project.json — written
   automatically when an agent names itself here (\`identity --session\`), or
-  by hand with \`isocan use <project>\`. Commands run anywhere under it
+  by hand with \`isocan use <canvas>\`. Commands run anywhere under it
   resolve there (nearest marker wins, like .git); the marker is meant to be
-  committed, so a clone knows which project it is. --project overrides per
+  committed, so a clone knows which canvas it is. --canvas overrides per
   command; \`isocan use <ref> --home\` sets a fallback for unbound dirs.
   Identity stamps every change you make. A person: \`isocan identity --name
   "You" --home\`. An agent: \`isocan identity --session\` — the daemon hands
@@ -252,7 +272,7 @@ function ctxOf(cmd: Command): Promise<Ctx> {
 // agents never read-modify-write each other's pointer.
 
 interface SessionFile {
-  projectId: string;
+  canvasId: string;
   sessionId: string;
   label?: string;
   /** The thread this session picked up, and when. Kept HERE as well as in the
@@ -290,11 +310,11 @@ async function writeSessionFile(
   }
 }
 
-/** The active session for this project, or an error telling how to start one. */
-async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile> {
+/** The active session for this canvas, or an error telling how to start one. */
+async function requireSession(ctx: Ctx, canvasId: string): Promise<SessionFile> {
   const session = await readSessionFile(ctx.home, ctx.actor.id);
-  if (!session || session.projectId !== projectId) {
-    throw new Error("no active session on this project — run `isocan session start` first");
+  if (!session || session.canvasId !== canvasId) {
+    throw new Error("no active session on this canvas — run `isocan session start` first");
   }
   return session;
 }
@@ -303,21 +323,21 @@ async function requireSession(ctx: Ctx, projectId: string): Promise<SessionFile>
  * fresh one (same label) and retry — working makes you visible again. */
 async function touchSession(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   patch: import("@isocan/core").UpdateSessionRequest,
 ): Promise<void> {
-  const active = await requireSession(ctx, projectId);
+  const active = await requireSession(ctx, canvasId);
   // Every update re-states who is holding the session, so `identity --name`
   // re-labels the live cursor on the next command instead of leaving the old
   // name standing until the session expires.
   const beat = { actor: ctx.actor, ...patch };
   try {
-    announceCancel(await ctx.client.updateSession(projectId, active.sessionId, beat));
+    announceCancel(await ctx.client.updateSession(canvasId, active.sessionId, beat));
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 404) throw err;
-    const created = await ctx.client.createSession(projectId, ctx.actor, active.label);
+    const created = await ctx.client.createSession(canvasId, ctx.actor, active.label);
     await writeSessionFile(ctx.home, ctx.actor.id, { ...active, sessionId: created.sessionId });
-    announceCancel(await ctx.client.updateSession(projectId, created.sessionId, beat));
+    announceCancel(await ctx.client.updateSession(canvasId, created.sessionId, beat));
   }
 }
 
@@ -349,16 +369,16 @@ function announceCancel(res: { cancelled?: { threadId: string; by: string; at: s
  * what they are doing ("looking at …", "editing …"); the daemon treats it as
  * INFERRED, so it never displaces a status the agent set with `say`/`--say`,
  * and any applied op sweeps it away. Best-effort on purpose: no session on
- * this project means no narration, and no failure here may break a command.
+ * this canvas means no narration, and no failure here may break a command.
  */
 async function narrate(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   patch: import("@isocan/core").UpdateSessionRequest,
 ): Promise<void> {
   const session = await readSessionFile(ctx.home, ctx.actor.id);
-  if (!session || session.projectId !== projectId) return;
-  await touchSession(ctx, projectId, { ...patch, statusSource: "inferred" }).catch(() => {});
+  if (!session || session.canvasId !== canvasId) return;
+  await touchSession(ctx, canvasId, { ...patch, statusSource: "inferred" }).catch(() => {});
 }
 
 /** World center of an item — where narration points the cursor. */
@@ -366,15 +386,15 @@ function itemCenter(item: Item): { x: number; y: number } {
   return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 }
 
-async function sendOp(ctx: Ctx, projectId: string | null, op: Operation) {
+async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation) {
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
   const session = await readSessionFile(ctx.home, ctx.actor.id);
   const clientId =
-    session && projectId !== null && session.projectId === projectId
+    session && canvasId !== null && session.canvasId === canvasId
       ? session.sessionId
       : undefined;
-  return ctx.client.sendOp(projectId, ctx.actor, op, clientId);
+  return ctx.client.sendOp(canvasId, ctx.actor, op, clientId);
 }
 
 /** Resolve an item by exact id, id prefix, or title prefix. */
@@ -420,26 +440,26 @@ function resolveTrashed(snapshot: CanvasSnapshotResponse, ref: string) {
   return entry;
 }
 
-async function projectAndSnapshot(
+async function canvasAndSnapshot(
   ctx: Ctx,
   opts?: ResolveOptions,
-): Promise<{ project: Project; snapshot: CanvasSnapshotResponse }> {
-  const project = await resolveProject(ctx, opts);
-  const snapshot = await ctx.client.snapshot(project.id);
+): Promise<{ canvas: Canvas; snapshot: CanvasSnapshotResponse }> {
+  const canvas = await resolveCanvas(ctx, opts);
+  const snapshot = await ctx.client.snapshot(canvas.id);
   // A cancellation has to reach an agent MID-TURN, and an agent mid-turn is
   // not watching the canvas — it is running commands. Nearly all of them come
   // through here with the whole canvas in hand, so the check costs nothing:
   // no extra request, and it works for `ls` and `get` as well as for the
   // commands that happen to touch presence.
-  await noticeCancel(ctx, project.id, snapshot);
-  return { project, snapshot };
+  await noticeCancel(ctx, canvas.id, snapshot);
+  return { canvas, snapshot };
 }
 
 /** Note locally which thread we are answering, so a later command can date a
  * cancellation without asking the daemon what it already told us. */
-async function rememberThread(ctx: Ctx, projectId: string, threadId: string | null): Promise<void> {
+async function rememberThread(ctx: Ctx, canvasId: string, threadId: string | null): Promise<void> {
   const active = await readSessionFile(ctx.home, ctx.actor.id);
-  if (!active || active.projectId !== projectId) return;
+  if (!active || active.canvasId !== canvasId) return;
   const { onThread: _was, onThreadAt: _when, ...rest } = active;
   await writeSessionFile(ctx.home, ctx.actor.id, {
     ...rest,
@@ -450,11 +470,11 @@ async function rememberThread(ctx: Ctx, projectId: string, threadId: string | nu
 /** Say it once, loudly, on the output of whatever they just ran. */
 async function noticeCancel(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   snapshot: CanvasSnapshotResponse,
 ): Promise<void> {
   const active = await readSessionFile(ctx.home, ctx.actor.id);
-  if (!active?.onThread || active.projectId !== projectId) return;
+  if (!active?.onThread || active.canvasId !== canvasId) return;
   const thread = snapshot.canvas.threads[active.onThread];
   if (!thread) return;
   const cancel = cancelledSince(thread, active.onThreadAt ?? null);
@@ -473,9 +493,13 @@ async function noticeCancel(
 async function nameCollision(
   cmd: Command,
   actor: Actor,
-): Promise<{ name: string; id: string; project: string } | null> {
+): Promise<{ name: string; id: string; canvas: string } | null> {
   try {
-    const globals = cmd.optsWithGlobals() as { port?: string; project?: string };
+    const globals = cmd.optsWithGlobals() as {
+      port?: string;
+      canvas?: string;
+      project?: string;
+    };
     const home = paths.isocanHome();
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
@@ -495,20 +519,20 @@ async function nameCollision(
       binding: await findBinding(process.cwd(), home),
       birthHome,
       homes,
-      async homeOf(projectId: string) {
-        return homeAddressOf(await homes(), projectId);
+      async homeOf(canvasId: string) {
+        return homeAddressOf(await homes(), canvasId);
       },
-      ...(globals.project !== undefined ? { projectRef: globals.project } : {}),
+      ...(canvasRefOf(globals) !== undefined ? { canvasRef: canvasRefOf(globals)! } : {}),
     };
-    const project = await resolveProject(ctx);
-    const sessions = await client.listSessions(project.id);
+    const canvas = await resolveCanvas(ctx);
+    const sessions = await client.listSessions(canvas.id);
     const wanted = actor.name.toLowerCase();
-    const clash = (await knownNames(ctx, project, sessions)).find(
+    const clash = (await knownNames(ctx, canvas, sessions)).find(
       (known) => known.id !== actor.id && known.name.toLowerCase() === wanted,
     );
-    return clash ? { name: clash.name, id: clash.id, project: project.title } : null;
+    return clash ? { name: clash.name, id: clash.id, canvas: canvas.title } : null;
   } catch {
-    return null; // no daemon, no project, nothing to collide with
+    return null; // no daemon, no canvas, nothing to collide with
   }
 }
 
@@ -526,7 +550,7 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (!(await client.health())) return;
-    await client.updateSession(session.projectId, session.sessionId, { actor });
+    await client.updateSession(session.canvasId, session.sessionId, { actor });
   } catch {
     // No daemon, no session, or it expired while we were being renamed —
     // either way there is no face left wearing the old name.
@@ -622,7 +646,7 @@ program
               ...(opts.name !== undefined ? { name: opts.name } : {}),
               ...(opts.new ? { fresh: true } : {}),
               ...(opts.as !== undefined ? { as: opts.as } : {}),
-              ...(bound ? { projectId: bound.projectId } : {}),
+              ...(bound ? { canvasId: bound.canvasId } : {}),
             });
             console.log(
               `identity saved: ${actor.name} (${actor.id}) → ${paths.actorsFile(home)} (${harness} session)`,
@@ -646,7 +670,7 @@ program
               );
               if (landed) {
                 console.log(
-                  `this directory's canvas: "${landed.project.title}" (${landed.project.id})` +
+                  `this directory's canvas: "${landed.canvas.title}" (${landed.canvas.id})` +
                     (landed.created ? ` — created; bound via ${markerFile(landed.root)}` : ""),
                 );
               }
@@ -678,7 +702,7 @@ program
           const taken = await nameCollision(cmd, actor);
           if (taken) {
             console.error(
-              `warning: "${taken.name}" is already used on "${taken.project}" by ${taken.id} — ` +
+              `warning: "${taken.name}" is already used on "${taken.canvas}" by ${taken.id} — ` +
                 "@-mentions can't tell you apart; pick another name",
             );
           }
@@ -1042,8 +1066,8 @@ program
          * debugging.
          */
         const titles = new Map<string, string>();
-        for (const project of health ? await client.listProjects().catch(() => []) : []) {
-          titles.set(project.id, project.title);
+        for (const canvas of health ? await client.listCanvases().catch(() => []) : []) {
+          titles.set(canvas.id, canvas.title);
         }
         const answering = new Map(record?.links.map((link) => [link.url, link.reachable]) ?? []);
         const canvases = Object.entries(record?.rows ?? {})
@@ -1455,10 +1479,10 @@ program
       // at is not a mutation — but there IS an address, and handing over an
       // address is something a terminal is good at. `isocan open <item>` and
       // a person pressing Enter on that item land on the same page.
-      const { project, snapshot } =
+      const { canvas, snapshot } =
         ref === undefined
-          ? { project: await resolveProject(ctx), snapshot: null }
-          : await projectAndSnapshot(ctx);
+          ? { canvas: await resolveCanvas(ctx), snapshot: null }
+          : await canvasAndSnapshot(ctx);
       const item = snapshot === null ? null : resolveItem(snapshot, ref!);
       // **THIS canvas's home, never the daemon's** (phase 10.3). The
       // one-origin rule is per canvas: a canvas has exactly one door, and it is
@@ -1471,9 +1495,9 @@ program
       // own base is the right origin. (The pass is minted at that same home, by
       // the daemon forwarding: that is where the badge lives that the browser's
       // redemption will be judged against.)
-      const origin = (await ctx.homeOf(project.id)) ?? ctx.client.base;
-      const url = item ? itemUrl(origin, project.id, item.id) : canvasUrl(origin, project.id);
-      const token = await browserPass(ctx, project.id);
+      const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
+      const url = item ? itemUrl(origin, canvas.id, item.id) : canvasUrl(origin, canvas.id);
+      const token = await browserPass(ctx, canvas.id);
       // The pass goes on the END of whichever address was built — canvas or
       // item — because a fragment is only a fragment if nothing follows it.
       // `urlWithPass` is the one spelling of that; `canvasUrlWithPass` is now
@@ -1511,12 +1535,12 @@ program
  * on the plain address, which is exactly what this verb printed for its whole
  * life before phase 8.
  */
-async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> {
+async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
   const person = await readIdentity(ctx.home);
   try {
-    if (!person) return (await ctx.client.mintPass(projectId)).token;
+    if (!person) return (await ctx.client.mintPass(canvasId)).token;
     try {
-      return (await ctx.client.mintPass(projectId, person.id)).token;
+      return (await ctx.client.mintPass(canvasId, person.id)).token;
     } catch (err) {
       // `not-your-actor` means this machine's badge has never claimed its own
       // human — the home identity is a local file that nothing ever claimed
@@ -1526,7 +1550,7 @@ async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> 
       // key explicitly and ask once more.
       if (!(err instanceof ApiError) || err.code !== "not-your-actor") throw err;
       await reclaimIdentity(ctx.client, { actor: person, key: HOME_CLAIM_KEY });
-      return (await ctx.client.mintPass(projectId, person.id)).token;
+      return (await ctx.client.mintPass(canvasId, person.id)).token;
     }
   } catch {
     return null;
@@ -1589,7 +1613,7 @@ program
   .action(
     run(async (who: string | undefined, opts: { link?: string; revoke?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const project = await resolveProject(ctx);
+      const canvas = await resolveCanvas(ctx);
       // The one origin, per canvas: people always enter through the home that
       // holds THIS canvas, so the address handed out is that home's and never
       // this machine's 127.0.0.1 — the same rule `isocan open` follows, from
@@ -1597,7 +1621,7 @@ program
       // person, which makes it the worst place in the CLI to be approximately
       // right: a daemon-wide value here would send a stranger to a home that
       // has never heard of this canvas.
-      const address = canvasUrl((await ctx.homeOf(project.id)) ?? ctx.client.base, project.id);
+      const address = canvasUrl((await ctx.homeOf(canvas.id)) ?? ctx.client.base, canvas.id);
       /**
        * What the sweeps this invocation ran did, added up.
        *
@@ -1622,8 +1646,8 @@ program
         if (want !== "on" && want !== "off") {
           throw new Error(`--link wants on or off, got: ${opts.link}`);
         }
-        const live = (await ctx.client.grants(project.id)).grants.find((g) => g.subject === LINK);
-        if (want === "on" && !live) await ctx.client.createGrant(project.id, LINK);
+        const live = (await ctx.client.grants(canvas.id)).grants.find((g) => g.subject === LINK);
+        if (want === "on" && !live) await ctx.client.createGrant(canvas.id, LINK);
         // Off with no live row is not an error: the gesture is "the link is
         // off", and it already is. Two people flipping the same toggle at once
         // must not turn one of them into a failure.
@@ -1634,7 +1658,7 @@ program
           // BELOW the status lines, not above them, or the command opens with
           // a number nobody has been given a subject for yet. Absent from a
           // home that predates the sweep, which reads as nothing swept.
-          sweepAlso((await ctx.client.revokeGrant(project.id, live.id)).swept);
+          sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id)).swept);
         }
       }
 
@@ -1654,16 +1678,16 @@ program
        */
       if (opts.revoke !== undefined) {
         const subject = normalizeSubject(grantSubjectOf(opts.revoke));
-        const live = (await ctx.client.grants(project.id)).grants.find(
+        const live = (await ctx.client.grants(canvas.id)).grants.find(
           (g) => g.subject === subject,
         );
         if (!live) {
           throw new Error(
-            `nothing on ${project.title} is granted to ${subject} — \`isocan share\` lists what is`,
+            `nothing on ${canvas.title} is granted to ${subject} — \`isocan share\` lists what is`,
           );
         }
-        sweepAlso((await ctx.client.revokeGrant(project.id, live.id)).swept);
-        console.log(`revoked ${subject} on ${project.title}`);
+        sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id)).swept);
+        console.log(`revoked ${subject} on ${canvas.title}`);
       }
 
       if (who !== undefined) {
@@ -1672,14 +1696,14 @@ program
         // changes with a home's configuration. A home that has borrowed an
         // attester grants it; one that has not refuses with `no-attester` and
         // says what to do instead.
-        const { grant } = await ctx.client.createGrant(project.id, grantSubjectOf(who));
+        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who));
         console.log(
-          `granted ${grant.subject} on ${project.title} (${grant.id}) — they get in by ` +
+          `granted ${grant.subject} on ${canvas.title} (${grant.id}) — they get in by ` +
             "proving that address; nothing was emailed from here",
         );
       }
 
-      const { grants } = await ctx.client.grants(project.id);
+      const { grants } = await ctx.client.grants(canvas.id);
       const link = grants.find((g) => g.subject === LINK) ?? null;
       if (ctx.json) return printJson({ address, grants, ...(swept ? { swept } : {}) });
       printKeyValues({
@@ -1746,12 +1770,12 @@ program
   .action(
     run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const project = await resolveProject(ctx);
+      const canvas = await resolveCanvas(ctx);
       // The one origin again, and per canvas: a pass is minted at the home
       // that holds this canvas and redeemed there, so the address it rides on
       // is that home's — not this machine's next one, which is all a birth
       // default ever knows.
-      const origin = (await ctx.homeOf(project.id)) ?? ctx.client.base;
+      const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
       /**
        * **Two real shapes, and the default endows.**
        *
@@ -1773,8 +1797,8 @@ program
        * "endow somebody else" is not reachable from here by construction.
        */
       const actor = opts.admitOnly ? null : ctx.actor;
-      const { pass, token } = await ctx.client.mintPass(project.id, actor?.id);
-      const command = setupCommand(origin, project.id, token);
+      const { pass, token } = await ctx.client.mintPass(canvas.id, actor?.id);
+      const command = setupCommand(origin, canvas.id, token);
       const minutes = Math.round(PASS_TTL_MS / 60_000);
 
       if (ctx.json) {
@@ -1783,14 +1807,14 @@ program
           // The pass-bearing address, for a caller building its own line. The
           // clean address is `isocan share`'s, and that is the one to hand a
           // person — this one is a credential.
-          address: canvasUrlWithPass(origin, project.id, token),
-          canvas: canvasUrl(origin, project.id),
+          address: canvasUrlWithPass(origin, canvas.id, token),
+          canvas: canvasUrl(origin, canvas.id),
           expiresAt: pass.expiresAt,
           ...(actor ? { actor } : {}),
         });
       }
       printKeyValues({
-        canvas: `${project.title} (${canvasUrl(origin, project.id)})`,
+        canvas: `${canvas.title} (${canvasUrl(origin, canvas.id)})`,
         identity: actor
           ? `${actor.name} (${actor.id}) — the machine that redeems this arrives as them`
           : "none — the machine that redeems this is admitted and names itself",
@@ -1916,7 +1940,7 @@ function sweptLine(swept: SweepReport): string {
  * **Clone a repo and land on the canvas it was committed with.**
  *
  * `.isocan/project.json` has been committable since #60 precisely so that "a
- * clone arrives already knowing WHICH project this directory is". This is the
+ * clone arrives already knowing WHICH canvas this directory is". This is the
  * verb that spends that: one command instead of clone, cd, setup.
  *
  * **It clones and readies. It does not install dependencies and does not run
@@ -1932,7 +1956,7 @@ function sweptLine(swept: SweepReport): string {
  * `project.create` is stamped with whoever typed the command, which at this
  * moment is quite possibly an agent acting for a person who has not said their
  * name yet. The marker names the canvas; the first thing anybody ADDS
- * materializes it under that id (`resolveProject`'s `create` path). So this
+ * materializes it under that id (`resolveCanvas`'s `create` path). So this
  * reports what the clone is bound to and gets out of the way.
  */
 program
@@ -1999,11 +2023,11 @@ program
             "none committed in this repo — `isocan use <canvas>` binds it to one, " +
             "or your agent's `isocan identity --session` makes one named after the directory";
         } else {
-          const projects = await client.listProjects().catch(() => []);
-          const here = projects.find((p) => p.id === binding.projectId);
+          const canvases = await client.listCanvases().catch(() => []);
+          const here = canvases.find((p) => p.id === binding.canvasId);
           report.canvas = here
-            ? `${here.title} (${binding.projectId}) — already on this machine`
-            : `${binding.title ?? "untitled"} (${binding.projectId}) — not on this machine yet;` +
+            ? `${here.title} (${binding.canvasId}) — already on this machine`
+            : `${binding.title ?? "untitled"} (${binding.canvasId}) — not on this machine yet;` +
               " the first thing anyone adds materializes it under that id";
           if (binding.home) report.home = binding.home;
         }
@@ -2397,7 +2421,7 @@ program
          */
         if (arrival && daemonUp) {
           const standing = await findBinding(work, home);
-          if (standing && standing.projectId !== arrival.projectId) {
+          if (standing && standing.canvasId !== arrival.canvasId) {
             // Not a merge and not a re-home: two canvases cannot share one
             // directory, and quietly rewriting the marker would orphan the
             // work the first one holds. `ctx.ts`'s `refuseHomeDisagreement`
@@ -2407,8 +2431,8 @@ program
             // makes sensible, and it never had anything to do with which home
             // this machine answers to.
             throw new Error(
-              `this directory is already this canvas: ${standing.projectId} ` +
-                `(${markerFile(standing.root)}). Joining ${arrival.projectId} here would ` +
+              `this directory is already this canvas: ${standing.canvasId} ` +
+                `(${markerFile(standing.root)}). Joining ${arrival.canvasId} here would ` +
                 "replace that binding — run this in an empty directory instead.",
             );
           }
@@ -2438,16 +2462,16 @@ program
             // which home it came from, the daemon opens a link, and a machine
             // with a birth default somewhere else joins this canvas without
             // anything else moving.
-            await client.joinFromHome(arrival.projectId, arrival.origin).catch(() => null);
+            await client.joinFromHome(arrival.canvasId, arrival.origin).catch(() => null);
           }
-          const landed = await canvasArrives(client, arrival.projectId, 15_000);
+          const landed = await canvasArrives(client, arrival.canvasId, 15_000);
           if (root) {
             report.marker = await writeMarker(root, {
-              projectId: arrival.projectId,
+              canvasId: arrival.canvasId,
               ...(landed?.title !== undefined ? { title: landed.title } : {}),
               home: arrival.origin,
             });
-            await recordDir(home, root, arrival.projectId);
+            await recordDir(home, root, arrival.canvasId);
           } else {
             report.marker =
               "not written — this directory cannot hold one (your home directory, or the " +
@@ -2505,8 +2529,8 @@ program
           report.app = `${client.base} — ${roleLine({ birth: record.birth, rows: record.rows }, client.base)}`;
         }
         const origin =
-          (bound && record ? homeAddressOf(record, bound.projectId) : birthHome) ?? client.base;
-        const where = bound ? canvasUrl(origin, bound.projectId) : origin;
+          (bound && record ? homeAddressOf(record, bound.canvasId) : birthHome) ?? client.base;
+        const where = bound ? canvasUrl(origin, bound.canvasId) : origin;
         if (bound) report.canvas = where;
         else if (birthHome) {
           report.canvas = `${birthHome} — none in this directory yet: make one there, or \`isocan identity --session\` here`;
@@ -2550,14 +2574,14 @@ program
  */
 async function canvasArrives(
   client: DaemonClient,
-  projectId: string,
+  canvasId: string,
   withinMs: number,
-): Promise<Project | null> {
+): Promise<Canvas | null> {
   const deadline = Date.now() + withinMs;
   for (;;) {
     const found = await client
-      .listProjects()
-      .then((projects) => projects.find((project) => project.id === projectId) ?? null)
+      .listCanvases()
+      .then((canvases) => canvases.find((canvas) => canvas.id === canvasId) ?? null)
       .catch(() => null);
     if (found) return found;
     if (Date.now() >= deadline) return null;
@@ -2565,61 +2589,67 @@ async function canvasArrives(
   }
 }
 
-// ---------- projects ----------
+// ---------- canvases ----------
 
-const project = program.command("project").description("Create, list, edit, and delete projects — each project is a canvas");
+const canvas = program
+  .command("canvas")
+  .description("Create, list, edit, and delete canvases")
+  // The verb agents and people typed for a year, kept working and kept out of
+  // help (phase 13.5's rename): `isocan project list` still runs, nothing
+  // scripted breaks, and the help and the agent guide advertise `canvas` only.
+  .alias("project");
 
-project
+canvas
   .command("create <title>")
-  .description("Create a project")
+  .description("Create a canvas")
   .option("-d, --description <text>")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .action(
     run(async (title: string, opts: { description?: string; prop: Record<string, string> }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const projectId = newProjectId();
+      const canvasId = newCanvasId();
       await sendOp(ctx, null, {
         type: "project.create",
-        projectId,
+        canvasId,
         title,
         ...(opts.description !== undefined ? { description: opts.description } : {}),
         ...(Object.keys(opts.prop).length > 0 ? { properties: opts.prop } : {}),
       });
-      if (ctx.json) return printJson({ projectId });
-      console.log(`created project ${projectId} — "${title}"`);
+      if (ctx.json) return printJson({ canvasId });
+      console.log(`created canvas ${canvasId} — "${title}"`);
       const config = await readConfig(ctx.home);
       if (!config.defaultProjectId) {
-        await writeConfig(ctx.home, { ...config, defaultProjectId: projectId });
-        console.log(`(set as default project)`);
+        await writeConfig(ctx.home, { ...config, defaultProjectId: canvasId });
+        console.log(`(set as default canvas)`);
       }
     }),
   );
 
-project
+canvas
   .command("list")
-  .description("List projects — in a bound directory, that directory's project (--all for every one)")
-  .option("--all", "every project in the home, not just this directory's")
+  .description("List canvases — in a bound directory, that directory's canvas (--all for every one)")
+  .option("--all", "every canvas in the home, not just this directory's")
   .action(
     run(async (opts: { all?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const all = await ctx.client.listProjects();
+      const all = await ctx.client.listCanvases();
       // A bound directory shows its own canvas: an agent that landed here
-      // should not go wandering through every other project in the home.
+      // should not go wandering through every other canvas in the home.
       // Ergonomics, not a wall — same user, same home, --all opens it.
-      const projects =
-        !opts.all && ctx.binding ? all.filter((p) => p.id === ctx.binding!.projectId) : all;
-      if (projects.length < all.length) {
+      const canvases =
+        !opts.all && ctx.binding ? all.filter((p) => p.id === ctx.binding!.canvasId) : all;
+      if (canvases.length < all.length) {
         console.error(
-          `(this directory's project only — --all for the other ${all.length - projects.length})`,
+          `(this directory's canvas only — --all for the other ${all.length - canvases.length})`,
         );
       }
-      if (ctx.json) return printJson(projects);
+      if (ctx.json) return printJson(canvases);
       const config = await readConfig(ctx.home);
-      // Who touched it last, by the name they go by NOW — a project row has no
+      // Who touched it last, by the name they go by NOW — a canvas row has no
       // snapshot to carry the registry, so ask for it.
       const names = await ctx.client.actorNames();
       printTable(
-        projects.map((p) => ({
+        canvases.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
           description: truncate(p.description, 40),
@@ -2630,14 +2660,14 @@ project
     }),
   );
 
-project
+canvas
   .command("show [ref]")
-  .description("Show project details")
+  .description("Show canvas details")
   .action(
     run(async (ref: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      if (ref !== undefined) ctx.projectRef = ref;
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      if (ref !== undefined) ctx.canvasRef = ref;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const dirs = await dirsOf(ctx.home, p.id);
       if (ctx.json) {
         return printJson({
@@ -2661,9 +2691,9 @@ project
     }),
   );
 
-project
+canvas
   .command("edit [ref]")
-  .description("Edit project details")
+  .description("Edit canvas details")
   .option("--title <title>")
   .option("-d, --description <text>")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
@@ -2676,25 +2706,25 @@ project
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        if (ref !== undefined) ctx.projectRef = ref;
-        const p = await resolveProject(ctx);
+        if (ref !== undefined) ctx.canvasRef = ref;
+        const p = await resolveCanvas(ctx);
         const patch = metaPatch(opts);
         if (Object.keys(patch).length === 0) throw new Error("nothing to change");
         await sendOp(ctx, p.id, { type: "project.update", patch });
-        console.log(`updated project ${p.id}`);
+        console.log(`updated canvas ${p.id}`);
       },
     ),
   );
 
-project
+canvas
   .command("delete [ref]")
-  .description("Delete a project (requires --force; not undoable)")
+  .description("Delete a canvas (requires --force; not undoable)")
   .option("--force", "confirm deletion")
   .action(
     run(async (ref: string | undefined, opts: { force?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      if (ref !== undefined) ctx.projectRef = ref;
-      const p = await resolveProject(ctx);
+      if (ref !== undefined) ctx.canvasRef = ref;
+      const p = await resolveCanvas(ctx);
       if (!opts.force) {
         throw new Error(`deleting "${p.title}" is not undoable — re-run with --force`);
       }
@@ -2703,31 +2733,31 @@ project
       if (config.defaultProjectId === p.id) {
         await writeConfig(ctx.home, {});
       }
-      // A marker left standing would quietly re-materialize the project on
+      // A marker left standing would quietly re-materialize the canvas on
       // the next mutating command — deleting the canvas unbinds the dir too.
-      if (ctx.binding?.projectId === p.id) {
+      if (ctx.binding?.canvasId === p.id) {
         await fs.rm(markerFile(ctx.binding.root), { force: true }).catch(() => {});
         console.log(`(unbound ${ctx.binding.root} — removed ${markerFile(ctx.binding.root)})`);
       }
-      console.log(`deleted project ${p.id} (recoverable by hand in deleted-projects/)`);
+      console.log(`deleted canvas ${p.id} (recoverable by hand in deleted-projects/)`);
     }),
   );
 
 program
   .command("use <ref>")
-  .description("Bind this directory to a project (--home: set the home-wide fallback instead)")
+  .description("Bind this directory to a canvas (--home: set the home-wide fallback instead)")
   .option(
     "--home",
-    "set the home-wide default, consulted only in directories not bound to a project",
+    "set the home-wide default, consulted only in directories not bound to a canvas",
   )
   .action(
     run(async (ref: string, opts: { home?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      ctx.projectRef = ref;
-      const p = await resolveProject(ctx);
+      ctx.canvasRef = ref;
+      const p = await resolveCanvas(ctx);
       if (opts.home) {
         await writeConfig(ctx.home, { ...(await readConfig(ctx.home)), defaultProjectId: p.id });
-        console.log(`home default project: ${p.id} — "${p.title}"`);
+        console.log(`home default canvas: ${p.id} — "${p.title}"`);
         return;
       }
       const root = await bindableRoot(process.cwd(), ctx.home);
@@ -2753,7 +2783,7 @@ program
       // would clone it.
       const livesAt = await ctx.homeOf(p.id);
       const file = await writeMarker(root, {
-        projectId: p.id,
+        canvasId: p.id,
         title: p.title,
         ...(livesAt ? { home: livesAt } : {}),
       });
@@ -2820,8 +2850,8 @@ program
       ) => {
         const ctx = await ctxOf(cmd);
         // `add` can start an empty canvas, so it may bind this directory to
-        // a fresh project when nothing else answers (#60).
-        const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
+        // a fresh canvas when nothing else answers (#60).
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
         const data = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
@@ -2896,7 +2926,7 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
         const site = normalizeSiteUrl(url);
         const filename = siteFilename(site);
         await narrate(ctx, p.id, { status: `projecting ${truncate(siteLabel(site), 32)}…` });
@@ -2941,7 +2971,7 @@ program
   .action(
     run(async (opts: { kind?: string; filter?: string; starred?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
       if (opts.kind && !ITEM_KINDS.includes(opts.kind as never)) {
         throw new Error(`--kind expects one of ${ITEM_KINDS.join(", ")}, got: ${opts.kind}`);
@@ -2984,7 +3014,7 @@ program
   .action(
     run(async (ref: string, out: string | undefined, opts: { rev?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       const version =
         opts.rev === undefined
@@ -3008,7 +3038,7 @@ program
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       await narrate(ctx, p.id, {
         cursor: itemCenter(item),
@@ -3047,7 +3077,7 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
         // Relative is what an agent usually means: nudging a thing clear of a
         // neighbour, the same gesture the arrow keys make in the web app.
@@ -3104,7 +3134,7 @@ program
 /** Send a tidy as ONE op, so undo takes the whole gesture back. */
 async function applyMoves(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   moves: Array<{ itemId: string; x: number; y: number }>,
   done: string,
 ): Promise<void> {
@@ -3114,7 +3144,7 @@ async function applyMoves(
   }
   await sendOp(
     ctx,
-    projectId,
+    canvasId,
     moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
   );
   console.log(done);
@@ -3127,7 +3157,7 @@ program
   .action(
     run(async (refs: string[], opts: { off?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       for (const item of items) {
         await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: starPatch(!opts.off) });
@@ -3146,7 +3176,7 @@ program
   .action(
     run(async (refs: string[], opts: { to: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const edge = opts.to.toLowerCase();
       if (!ALIGN_EDGES.includes(edge as never)) {
         throw new Error(`--to expects one of ${ALIGN_EDGES.join(", ")}, got: ${opts.to}`);
@@ -3164,7 +3194,7 @@ program
   .action(
     run(async (refs: string[], opts: { size?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const asked = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : null;
 
@@ -3208,7 +3238,7 @@ program
   .action(
     run(async (refs: string[], opts: { axis: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const axis = opts.axis.toLowerCase();
       if (axis !== "h" && axis !== "v") throw new Error(`--axis expects h or v, got: ${opts.axis}`);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
@@ -3225,7 +3255,7 @@ program
   .action(
     run(async (refs: string[], opts: { title?: string; keep?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       if (refs.length < 2) throw new Error("merge wants at least two drawings");
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const notInk = items.filter((item) => !isDrawingItem(item));
@@ -3310,7 +3340,7 @@ program
   .action(
     run(async (opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
       if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
         throw new Error(`--per-row wants a number: ${opts.perRow}`);
@@ -3361,7 +3391,7 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
         const patch = metaPatch(opts);
         let did = false;
@@ -3408,7 +3438,7 @@ program
   .action(
     run(async (ref: string, file: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       const current = item.versions.find((v) => v.id === item.currentVersionId)!;
       // Announce the edit BEFORE the slow part (upload, or a human in
@@ -3460,7 +3490,7 @@ program
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       await narrate(ctx, p.id, {
         cursor: itemCenter(item),
@@ -3487,7 +3517,7 @@ version
   .action(
     run(async (ref: string, versionId: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       const match =
         item.versions.find((v) => v.id === versionId) ??
@@ -3508,7 +3538,7 @@ program
   .action(
     run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const ids = [...new Set(refs.map((ref) => resolveItem(snapshot, ref).id))];
       if (ids.length === 1) {
         await sendOp(ctx, p.id, { type: "item.delete", itemId: ids[0]! });
@@ -3525,7 +3555,7 @@ program
   .action(
     run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const ids = [...new Set(refs.map((ref) => resolveTrashed(snapshot, ref).item.id))];
       if (ids.length === 1) {
         await sendOp(ctx, p.id, { type: "item.restore", itemId: ids[0]! });
@@ -3581,7 +3611,7 @@ style
   .action(
     run(async (opts: { css?: boolean; tokens?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = designSystem(snapshot.canvas);
       if (!item) {
         throw new Error(
@@ -3621,7 +3651,7 @@ style
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = designSystem(snapshot.canvas);
       if (!item) {
         throw new Error(
@@ -3656,7 +3686,7 @@ style
   .action(
     run(async (file: string, opts: { title: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       const data = await fs.readFile(file);
       const filename = path.basename(file);
       const mimeType = mimeFor(filename);
@@ -3868,7 +3898,7 @@ web app the chip flies the reader to the item.`,
  * and #Title references against the live items. */
 async function newComment(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   snapshot: CanvasSnapshotResponse,
   body: string,
 ): Promise<NewComment> {
@@ -3879,7 +3909,7 @@ async function newComment(
     collectCanvasActors(snapshot.canvas),
     snapshot.names,
   );
-  const sessions = await ctx.client.listSessions(projectId).catch(() => []);
+  const sessions = await ctx.client.listSessions(canvasId).catch(() => []);
   for (const s of sessions) {
     candidates.push(s.actor);
     if (s.label) candidates.push({ id: s.actor.id, name: s.label });
@@ -3902,7 +3932,7 @@ comment
   .action(
     run(async (text: string, opts: { item?: string; at?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx, { create: true });
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
       let x: number, y: number, anchorItemId: string | null;
       if (opts.item) {
@@ -3939,7 +3969,7 @@ comment
   .action(
     run(async (threadRef: string, text: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
       const comment = await newComment(ctx, p.id, snapshot, text);
       await sendOp(ctx, p.id, {
@@ -3976,7 +4006,7 @@ follows the item from now on.`,
     run(
       async (threadRef: string, itemRef: string | undefined, opts: { at?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
-        const { project: p, snapshot } = await projectAndSnapshot(ctx);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const thread = resolveThread(snapshot, threadRef);
         let x: number, y: number, anchorItemId: string | null;
         if (itemRef) {
@@ -4008,7 +4038,7 @@ comment
   .action(
     run(async (opts: { item?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "reading the comments…" });
       let threads = Object.values(snapshot.canvas.threads);
       if (opts.item) {
@@ -4047,7 +4077,7 @@ main. With no argument, prints the current main thread.`,
   .action(
     run(async (threadRef: string | undefined, opts: { clear?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const current = mainThread(snapshot.canvas);
       if (opts.clear) {
         if (!current) throw new Error("no main thread to clear");
@@ -4070,7 +4100,7 @@ comment
   .action(
     run(async (threadRef: string, commentId: string, text: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
       const existing = thread.comments.find((c) => c.id === commentId);
       if (!existing) throw new Error(`no comment ${commentId} on ${thread.id}`);
@@ -4097,7 +4127,7 @@ comment
   .action(
     run(async (threadRef: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
       await sendOp(ctx, p.id, { type: "thread.delete", threadId: thread.id });
       console.log(`deleted thread ${thread.id}`);
@@ -4129,14 +4159,14 @@ session
       const ctx = await ctxOf(cmd);
       // Appearing is the start of work: an unbound directory gets its canvas
       // here if the handshake didn't already make one (#60).
-      const p = await resolveProject(ctx, { create: true });
+      const p = await resolveCanvas(ctx, { create: true });
       const existing = await readSessionFile(ctx.home, ctx.actor.id);
       if (existing) {
-        await ctx.client.endSession(existing.projectId, existing.sessionId).catch(() => {});
+        await ctx.client.endSession(existing.canvasId, existing.sessionId).catch(() => {});
       }
       const created = await ctx.client.createSession(p.id, ctx.actor, opts.label);
       await writeSessionFile(ctx.home, ctx.actor.id, {
-        projectId: p.id,
+        canvasId: p.id,
         sessionId: created.sessionId,
         ...(opts.label !== undefined ? { label: opts.label } : {}),
       });
@@ -4153,7 +4183,7 @@ session
   .action(
     run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       await touchSession(ctx, p.id, {
         cursor: { x: Number(x), y: Number(y) },
         activity: null,
@@ -4168,7 +4198,7 @@ session
   .action(
     run(async (ref: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       await touchSession(ctx, p.id, {
         cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
@@ -4185,7 +4215,7 @@ session
   .action(
     run(async (ref: string, opts: { say?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, ref);
       await rememberThread(ctx, p.id, thread.id);
       await touchSession(ctx, p.id, {
@@ -4210,7 +4240,7 @@ session
   .action(
     run(async (ref: string | undefined, opts: { at?: string; say?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       if (!ref && !opts.at) throw new Error("pass an item or --at x,y");
       let activity: import("@isocan/core").PresenceActivity;
       let cursor: { x: number; y: number };
@@ -4241,7 +4271,7 @@ session
   .action(
     run(async (status: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       await touchSession(ctx, p.id, { status: status ?? null });
       console.log(status ? `status: ${status}` : "status cleared");
     }),
@@ -4255,7 +4285,7 @@ session
       const ctx = await ctxOf(cmd);
       const active = await readSessionFile(ctx.home, ctx.actor.id);
       if (active) {
-        await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
+        await ctx.client.endSession(active.canvasId, active.sessionId).catch(() => {});
         await writeSessionFile(ctx.home, ctx.actor.id, null);
       }
       // The pointer is a cache; the daemon is the truth. Sweep every CLI
@@ -4275,7 +4305,7 @@ program
   .action(
     run(async (opts: { all?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       const sessions = await ctx.client.listSessions(p.id);
       if (opts.all) {
         const known = await knownNames(ctx, p, sessions);
@@ -4307,7 +4337,7 @@ program
   .action(
     run(async (who: string | undefined, opts: { limit: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const limit = Number(opts.limit);
       if (!Number.isFinite(limit) || limit < 1) throw new Error(`--limit wants a number: ${opts.limit}`);
 
@@ -4372,7 +4402,7 @@ interface KnownName {
 
 async function knownNames(
   ctx: Ctx,
-  project: Project,
+  record: Canvas,
   sessions: PresenceSession[],
 ): Promise<KnownName[]> {
   const known = new Map<string, KnownName>();
@@ -4382,9 +4412,9 @@ async function knownNames(
     if (!prior) known.set(key, { name, id, live });
     else if (live) known.set(key, { ...prior, live: true });
   };
-  const { canvas } = await ctx.client.snapshot(project.id);
-  // The project's own author counts: they named the canvas before touching it.
-  for (const actor of [project.createdBy, project.updatedBy]) add(actor.name, actor.id, false);
+  const { canvas } = await ctx.client.snapshot(record.id);
+  // The canvas's own author counts: they named the canvas before touching it.
+  for (const actor of [record.createdBy, record.updatedBy]) add(actor.name, actor.id, false);
   for (const candidate of collectCanvasNames(canvas)) add(candidate.name, candidate.id, false);
   for (const session of sessions) {
     add(session.actor.name, session.actor.id, true);
@@ -4462,19 +4492,19 @@ async function landPresence(
     ...(cursor ? { cursor } : {}),
   };
   const active = await readSessionFile(ctx.home, ctx.actor.id);
-  if (active && active.projectId === entry.projectId) {
-    return touchSession(ctx, entry.projectId, patch);
+  if (active && active.canvasId === entry.canvasId) {
+    return touchSession(ctx, entry.canvasId, patch);
   }
   // Summoned to a canvas the session isn't on: move over, keeping the label
   // the human knows this agent by.
-  if (active) await ctx.client.endSession(active.projectId, active.sessionId).catch(() => {});
-  const created = await ctx.client.createSession(entry.projectId, ctx.actor, active?.label);
+  if (active) await ctx.client.endSession(active.canvasId, active.sessionId).catch(() => {});
+  const created = await ctx.client.createSession(entry.canvasId, ctx.actor, active?.label);
   await writeSessionFile(ctx.home, ctx.actor.id, {
-    projectId: entry.projectId,
+    canvasId: entry.canvasId,
     sessionId: created.sessionId,
     ...(active?.label !== undefined ? { label: active.label } : {}),
   });
-  await ctx.client.updateSession(entry.projectId, created.sessionId, patch);
+  await ctx.client.updateSession(entry.canvasId, created.sessionId, patch);
 }
 
 program
@@ -4500,7 +4530,7 @@ program
   .addHelpText(
     "after",
     `
-The wait is on ONE canvas — this directory's (#60), or the one --project or
+The wait is on ONE canvas — this directory's (#60), or the one --canvas or
 --since names. An agent belongs to the canvas of the directory it works in,
 and that canvas is where the human reaches it.
 
@@ -4537,11 +4567,11 @@ command or reply. No \`session start\` needed after a wake.`,
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
-      // ONE canvas, always (#60): the --project/--since one, or whatever
+      // ONE canvas, always (#60): the --canvas/--since one, or whatever
       // this directory resolves to. There is no home-wide mode — an agent
       // belongs to the canvas of the directory it works in, and its canvas
       // is where the human reaches it.
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       // Seed from the watch route itself — the very call the loop will live
       // on — even when --since already names the position. Proving it works
       // HERE is what keeps a wait that cannot poll from ever advertising
@@ -4580,7 +4610,7 @@ command or reply. No \`session start\` needed after a wake.`,
           const active = await readSessionFile(ctx.home, ctx.actor.id);
           if (active) {
             await ctx.client
-              .updateSession(active.projectId, active.sessionId, { status: null })
+              .updateSession(active.canvasId, active.sessionId, { status: null })
               .catch(() => {});
           }
         }
@@ -4596,7 +4626,7 @@ command or reply. No \`session start\` needed after a wake.`,
         // this narration exists to prevent. touchSession also keeps that
         // session alive for the whole park instead of letting it expire.
         if (session) {
-          await touchSession(ctx, session.projectId, { status, statusSource: "lifecycle" }).catch(
+          await touchSession(ctx, session.canvasId, { status, statusSource: "lifecycle" }).catch(
             () => {},
           );
         }
@@ -4653,9 +4683,9 @@ command or reply. No \`session start\` needed after a wake.`,
           const batch = await ctx.client.watchLog({ cursors, waitMs: window, only: [p.id] });
           cursors = batch.cursors;
           const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
-          const snapOf = (projectId: string) => () => {
-            let pending = snaps.get(projectId);
-            if (!pending) snaps.set(projectId, (pending = ctx.client.snapshot(projectId)));
+          const snapOf = (canvasId: string) => () => {
+            let pending = snaps.get(canvasId);
+            if (!pending) snaps.set(canvasId, (pending = ctx.client.snapshot(canvasId)));
             return pending;
           };
           const matches: WatchedLogEntry[] = [];
@@ -4667,13 +4697,13 @@ command or reply. No \`session start\` needed after a wake.`,
             const op = entry.envelope.op;
             // A summons comes through any filter: the human reaching you is
             // never the noise you asked to be spared.
-            if (await isForMe(op, snapOf(entry.projectId))) {
+            if (await isForMe(op, snapOf(entry.canvasId))) {
               summoned = true;
               matches.push(entry);
               continue;
             }
             if (filtered) {
-              const canvas = (await snapOf(entry.projectId)()).canvas;
+              const canvas = (await snapOf(entry.canvasId)()).canvas;
               if (opMatchesFilters(op, { items: wantedItems, types: wantedTypes }, canvas)) {
                 matches.push(entry);
               }
@@ -4691,7 +4721,7 @@ command or reply. No \`session start\` needed after a wake.`,
                 m.envelope.op.type === "thread.reply",
             );
             if (summons) {
-              woken = await landPresence(ctx, summons, snapOf(summons.projectId)).then(
+              woken = await landPresence(ctx, summons, snapOf(summons.canvasId)).then(
                 () => true,
                 () => false,
               );
@@ -4743,7 +4773,7 @@ program
   .action(
     run(async (opts: { follow?: boolean; lines?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       const printEntry = (entry: import("@isocan/core").LogEntry) => {
         if (ctx.json) return console.log(JSON.stringify(entry));
         const cause = entry.cause ? ` [${entry.cause.kind} of #${entry.cause.targetSeq}]` : "";
@@ -4769,7 +4799,7 @@ program
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       const entry = await ctx.client.undo(p.id, ctx.actor);
       console.log(`undid: applied ${entry.envelope.op.type}`);
     }),
@@ -4781,7 +4811,7 @@ program
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       const entry = await ctx.client.redo(p.id, ctx.actor);
       console.log(`redid: applied ${entry.envelope.op.type}`);
     }),
@@ -4795,7 +4825,7 @@ program
   .action(
     run(async (opts: { dryRun?: boolean; keepOps?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveProject(ctx);
+      const p = await resolveCanvas(ctx);
       const report = await ctx.client.gc(p.id, {
         ...(opts.dryRun ? { dryRun: true } : {}),
         ...(opts.keepOps !== undefined ? { keepOps: Number(opts.keepOps) } : {}),
@@ -4821,7 +4851,7 @@ trash
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { snapshot } = await projectAndSnapshot(ctx);
+      const { snapshot } = await canvasAndSnapshot(ctx);
       if (ctx.json) return printJson(snapshot.canvas.trash);
       printTable(
         snapshot.canvas.trash.map((t) => ({
@@ -4839,7 +4869,7 @@ trash
   .action(
     run(async (refs: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const ids = [...new Set(refs.map((ref) => resolveTrashed(snapshot, ref).item.id))];
       if (ids.length === 1) {
         await sendOp(ctx, p.id, { type: "item.restore", itemId: ids[0]! });
@@ -4857,7 +4887,7 @@ trash
   .action(
     run(async (opts: { force?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const { project: p, snapshot } = await projectAndSnapshot(ctx);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       if (!opts.force) {
         throw new Error(
           `emptying the trash (${snapshot.canvas.trash.length} items) is not undoable — re-run with --force`,
@@ -4891,7 +4921,7 @@ if (process.argv.slice(2).includes("--agent-help")) {
  */
 async function intrinsicSize(
   ctx: Ctx,
-  projectId: string,
+  canvasId: string,
   item: Item,
 ): Promise<{ width: number; height: number } | null> {
   const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
@@ -4901,12 +4931,12 @@ async function intrinsicSize(
     height: Math.max(80, Math.min(2400, Math.round(h))),
   });
   if (version.mimeType === "image/svg+xml") {
-    const bytes = await ctx.client.downloadBlob(projectId, version.blobHash);
+    const bytes = await ctx.client.downloadBlob(canvasId, version.blobHash);
     const box = drawingViewBox(bytes.toString("utf8"));
     return box ? cap(box.maxX - box.minX, box.maxY - box.minY) : null;
   }
   if (version.mimeType === "image/png" || version.mimeType === "image/jpeg") {
-    const bytes = await ctx.client.downloadBlob(projectId, version.blobHash);
+    const bytes = await ctx.client.downloadBlob(canvasId, version.blobHash);
     const size = version.mimeType === "image/png" ? pngSize(bytes) : jpegSize(bytes);
     return size ? cap(size.width, size.height) : null;
   }

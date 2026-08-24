@@ -196,8 +196,8 @@ export interface ActorClaim {
    */
   sessionKey?: string;
   /** The canvas of the directory the claim was made from, when it was bound
-   * at claim time (#60). Informational — which project this agent is of. */
-  projectId?: string;
+   * at claim time (#60). Informational — which canvas this agent is of. */
+  canvasId?: string;
 }
 
 /** badgeId → that badge's claims. */
@@ -303,7 +303,7 @@ export interface BadgesResponse {
 /**
  * Your own surfaces — `GET` lists, `DELETE /:badgeId` kills one.
  *
- * NOT project-scoped, and that is the difference from the grant routes: a
+ * NOT canvas-scoped, and that is the difference from the grant routes: a
  * badge is not about one canvas. Killing one ends that holder's recognition
  * everywhere at once, which is exactly the stolen-laptop gesture — the
  * laptop is not in one room, it is in all of them.

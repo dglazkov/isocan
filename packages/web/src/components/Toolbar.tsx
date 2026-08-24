@@ -6,7 +6,7 @@ import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
-import { ProjectEditor } from "./ProjectEditor.tsx";
+import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
 import { CreateActions, PanelSwitch } from "./CreateActions.tsx";
@@ -24,7 +24,7 @@ export function Toolbar({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const project = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.project);
   const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
@@ -41,29 +41,29 @@ export function Toolbar({
 
   return (
     <div className="toolbar">
-      <Link className="home" to="/" title="All projects">
+      <Link className="home" to="/" title="All canvases">
         ⌂
       </Link>
-      <div className="project-name" ref={nameRef}>
+      <div className="canvas-name" ref={nameRef}>
         <button
           className="title"
-          disabled={!project}
+          disabled={!canvas}
           title={
-            project
-              ? `${project.description ? `${project.description}\n\n` : ""}Rename this canvas`
+            canvas
+              ? `${canvas.description ? `${canvas.description}\n\n` : ""}Rename this canvas`
               : undefined
           }
           onClick={() => setEditing(!editing)}
         >
-          {project?.title ?? "…"}
+          {canvas?.title ?? "…"}
         </button>
-        {editing && project && (
-          <div className="project-popover">
-            <ProjectEditor
-              title={project.title}
-              description={project.description}
+        {editing && canvas && (
+          <div className="canvas-popover">
+            <CanvasEditor
+              title={canvas.title}
+              description={canvas.description}
               onSave={async (patch) => {
-                await sendOp(project.id, actor, { type: "project.update", patch });
+                await sendOp(canvas.id, actor, { type: "project.update", patch });
                 setEditing(false);
               }}
               onCancel={() => setEditing(false)}
@@ -73,13 +73,13 @@ export function Toolbar({
       </div>
       {/* LEFT: what you are looking at. Both toggles drive the same dock and
           only one can win, so they read as one control with two settings. */}
-      {project && <PanelSwitch projectId={project.id} actor={actor} />}
+      {canvas && <PanelSwitch canvasId={canvas.id} actor={actor} />}
       <span className="spacer" />
       <span className={`conn ${connection}`}>{connection}</span>
       {/* RIGHT: things you DO, and things you look up. An action makes
           something and is over; it does not belong beside a toggle that stays
           where you put it. */}
-      {project && <CreateActions projectId={project.id} actor={actor} />}
+      {canvas && <CreateActions canvasId={canvas.id} actor={actor} />}
       <button
         className={`btn${trashOpen ? " active" : ""}`}
         onClick={() => useUiStore.getState().setTrashOpen(!trashOpen)}
@@ -105,12 +105,12 @@ export function Toolbar({
         <button
           className={`btn${shareOpen ? " active" : ""}`}
           title="Who may enter this canvas"
-          disabled={!project}
+          disabled={!canvas}
           onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
         >
           Share
         </button>
-        {shareOpen && project && (
+        {shareOpen && canvas && (
           <div className="identity-popover share-popover">
             <ShareDialog
               actor={actor}
@@ -127,7 +127,7 @@ export function Toolbar({
           <div className="identity-popover">
             <IdentityMenu
               actor={actor}
-              projectId={project?.id ?? null}
+              canvasId={canvas?.id ?? null}
               onIdentity={onIdentity}
               onClose={() => useUiStore.getState().setIdentityOpen(false)}
             />

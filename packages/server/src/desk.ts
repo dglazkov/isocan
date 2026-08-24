@@ -120,7 +120,7 @@ export interface Admission {
 /**
  * One badge, as the desk holds it.
  *
- * Never crosses the wire: this type belongs here the way `LoadedProject`
+ * Never crosses the wire: this type belongs here the way `LoadedCanvas`
  * belongs in `store.ts`. What a client sees of a badge is its id and, once,
  * its secret — and, from phase 9, a `BadgeSummary` of its own surfaces.
  */
@@ -139,7 +139,7 @@ export interface BadgeRecord {
   createdAt: string;
   lastSeen: string;
   /** The canvases this badge has been in. Written, never enforced, in phase
-   * 2 — phase 3 re-asks `projectId ∈ admissions` per route, and a phase 3
+   * 2 — phase 3 re-asks `canvasId ∈ admissions` per route, and a phase 3
    * that inherited empty lists would have to backfill them under a check
    * that was already live. */
   admissions: Admission[];

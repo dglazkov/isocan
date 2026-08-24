@@ -137,9 +137,9 @@ describe("web identity", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...cli.headers },
       body: JSON.stringify({
-        projectId: null,
+        canvasId: null,
         actor: { id: "usr_cli_kenny", name: "Kenny" },
-        op: { type: "project.create", projectId: "prj_1", title: "Kenny's" },
+        op: { type: "project.create", canvasId: "prj_1", title: "Kenny's" },
       }),
     });
     // And this browser is in that room. A real one is there by its URL —

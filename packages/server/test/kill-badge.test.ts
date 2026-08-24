@@ -100,9 +100,9 @@ beforeEach(async () => {
   phone = await mintTestBadge(base);
   await phone.speakAs(priya);
   const made = await op(phone, {
-    projectId: null,
+    canvasId: null,
     actor: priya,
-    op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
   });
   if (!made.ok) throw new Error(await made.text());
 });
@@ -147,7 +147,7 @@ describe("your surfaces: what a badge is shown", () => {
 describe("ending one", () => {
   it("ends recognition: the killed holder is a stranger at its very next request", async () => {
     const laptop = await surfaceOf(phone, priya);
-    // It works before, on an ordinary project-scoped read.
+    // It works before, on an ordinary canvas-scoped read.
     expect((await get(laptop, `/api/projects/${CANVAS}`)).status).toBe(200);
 
     const res = await fetch(`${base}${badgeRoute(laptop.badgeId)}`, {
@@ -168,7 +168,7 @@ describe("ending one", () => {
     // stolen machine. (`/api/ops` is the one route whose canvas is in its
     // body, so this is the check that would still be reached.)
     const spoke = await op(laptop, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: priya,
       op: { type: "item.add", itemId: "itm_x", kind: "note", x: 0, y: 0 },
     });

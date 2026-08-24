@@ -1,4 +1,4 @@
-import type { CanvasState, CommentThread, Item } from "@isocan/core";
+import type { CanvasContents, CommentThread, Item } from "@isocan/core";
 
 /**
  * Where an item's own chrome goes, and whether there is room for it at all.
@@ -37,7 +37,7 @@ export type BadgeCorner = "se" | "ne";
  * same reason the badge moves: a pin is where somebody pointed, and the chrome
  * is ours.
  */
-export function pinTakesTopRight(item: Item, canvas: CanvasState | null, scale: number): boolean {
+export function pinTakesTopRight(item: Item, canvas: CanvasContents | null, scale: number): boolean {
   if (!canvas) return false;
   const reach = PIN_REACH / scale;
   const right = item.x + item.width;
@@ -140,7 +140,7 @@ export function nameFits(width: number, scale: number): boolean {
 
 /** Every pin's world position — anchored pins ride their item, and the main
  * thread has no pin at all. */
-function pinPositions(canvas: CanvasState): Array<{ x: number; y: number }> {
+function pinPositions(canvas: CanvasContents): Array<{ x: number; y: number }> {
   return Object.values(canvas.threads)
     .filter((thread: CommentThread) => !thread.main)
     .map((thread) => {
@@ -157,7 +157,7 @@ function pinPositions(canvas: CanvasState): Array<{ x: number; y: number }> {
  * The comparison happens in world units, so the pin's screen-space footprint is
  * converted by the zoom: the same pin claims more world the further out you are.
  */
-export function badgeCorner(item: Item, canvas: CanvasState | null, scale: number): BadgeCorner {
+export function badgeCorner(item: Item, canvas: CanvasContents | null, scale: number): BadgeCorner {
   if (!canvas) return "se";
   const reach = PIN_REACH / scale;
   const right = item.x + item.width;

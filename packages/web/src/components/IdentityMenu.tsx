@@ -45,7 +45,7 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   connected here*, and escalation is another way to be connected — a second
  *   surface of the same person. Share is *who may be here*, which is about
  *   somebody else. It appears only on a canvas, because a pass names exactly
- *   one canvas and there is nothing to name on the project list.
+ *   one canvas and there is nothing to name on the canvas list.
  *
  * All of it is `actor.claim` under the hood (#58): the daemon applies one
  * continuity rule for every client, and a refusal — a name somebody on a
@@ -60,14 +60,14 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  */
 export function IdentityMenu({
   actor,
-  projectId,
+  canvasId,
   onIdentity,
   onClose,
 }: {
   actor: Actor;
-  /** The canvas this menu was opened on, or null on the project list. A pass
+  /** The canvas this menu was opened on, or null on the canvas list. A pass
    * names one canvas, so with none there is nothing to escalate onto. */
-  projectId: string | null;
+  canvasId: string | null;
   /** null = signed out; App swaps in the door. */
   onIdentity: (actor: Actor | null) => void;
   onClose: () => void;
@@ -96,8 +96,8 @@ export function IdentityMenu({
   // The dialog takes the popover over rather than opening a second one beside
   // it: it was reached from this menu, it is about the same subject, and two
   // stacked panels hanging off one face is a worse thing to look at than one.
-  if (terminal && projectId) {
-    return <TerminalDialog actor={actor} projectId={projectId} onClose={onClose} />;
+  if (terminal && canvasId) {
+    return <TerminalDialog actor={actor} canvasId={canvasId} onClose={onClose} />;
   }
   if (surfaces) return <SurfacesDialog onClose={onClose} />;
   if (verify) {
@@ -186,7 +186,7 @@ export function IdentityMenu({
       {/* Escalation, one click from your own face — "the canvas teaches its
           own escalation", so nobody is ever sent to documentation to find out
           how to bring their own machine in. */}
-      {projectId && (
+      {canvasId && (
         <button
           className="btn identity-terminal"
           title="Bring your own machine onto this canvas"

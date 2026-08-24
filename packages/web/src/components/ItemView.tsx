@@ -41,11 +41,11 @@ const MIN_H = 60;
 
 export function ItemView({
   item,
-  projectId,
+  canvasId,
   actor,
 }: {
   item: Item;
-  projectId: string;
+  canvasId: string;
   actor: Actor;
 }) {
   const navigate = useNavigate();
@@ -257,7 +257,7 @@ export function ItemView({
         // override — otherwise the item flashes at its old position until the
         // WS echo lands.
         applyLocalEcho(op, actor);
-        void sendOp(projectId, actor, op);
+        void sendOp(canvasId, actor, op);
       }
       state.setDrag(null);
     }
@@ -304,7 +304,7 @@ export function ItemView({
           height: final.height,
         } as const;
         applyLocalEcho(resizeOp, actor);
-        void sendOp(projectId, actor, resizeOp);
+        void sendOp(canvasId, actor, resizeOp);
         // Corners other than SE shift the origin.
         if (final.dx !== 0 || final.dy !== 0) {
           const moveOp = {
@@ -314,7 +314,7 @@ export function ItemView({
             y: Math.round(item.y + final.dy),
           } as const;
           applyLocalEcho(moveOp, actor);
-          void sendOp(projectId, actor, moveOp);
+          void sendOp(canvasId, actor, moveOp);
         }
       }
       state.setResize(null);
@@ -358,7 +358,7 @@ export function ItemView({
       ...(filename && filename !== current.filename ? { filename } : {}),
     } as const;
     applyLocalEcho(op, actor);
-    void sendOp(projectId, actor, op);
+    void sendOp(canvasId, actor, op);
   }
 
   return (
@@ -471,7 +471,7 @@ export function ItemView({
               patch: starPatch(!isStarred(item)),
             } as const;
             applyLocalEcho(op, actor);
-            void sendOp(projectId, actor, op);
+            void sendOp(canvasId, actor, op);
           }}
         >
           {isStarred(item) ? "★" : "☆"}
@@ -492,7 +492,7 @@ export function ItemView({
       </div>
       <div className={`item-content${entered ? "" : " inert"}`}>
         <VersionContent
-          projectId={projectId}
+          canvasId={canvasId}
           blobHash={current.blobHash}
           mimeType={current.mimeType}
           filename={current.filename}
@@ -539,7 +539,7 @@ export function ItemView({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              navigate(itemPath(projectId, item.id));
+              navigate(itemPath(canvasId, item.id));
             }}
           >
             Full screen
@@ -698,7 +698,7 @@ function BlobError({ reason }: { reason: string }) {
 }
 
 export function VersionContent({
-  projectId,
+  canvasId,
   blobHash,
   mimeType,
   filename,
@@ -706,7 +706,7 @@ export function VersionContent({
   reloadToken = 0,
   designSystem,
 }: {
-  projectId: string;
+  canvasId: string;
   blobHash: string;
   mimeType: string;
   filename: string;
@@ -717,7 +717,7 @@ export function VersionContent({
    *  than as the text that declares them. */
   designSystem?: boolean;
 }) {
-  const url = blobUrl(projectId, blobHash);
+  const url = blobUrl(canvasId, blobHash);
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
     return <DesignSystemView url={url} />;
   }

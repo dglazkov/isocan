@@ -4,19 +4,19 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PresenceSession, Project } from "@isocan/core";
+import type { PresenceSession, Canvas } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
- * A directory IS its project (#60).
+ * A directory IS its canvas (#60).
  *
  * The binding is `<dir>/.isocan/project.json` — identity, not state: it names
  * the canvas, while the oplog and blobs stay in the isocan home. These tests
  * cover the whole lifecycle: the handshake creating a canvas for a fresh
  * directory, resolution walking up like `.git` discovery, a cloned marker
- * being materialized under ITS OWN id, and the narrowed defaults (`project
+ * being materialized under ITS OWN id, and the narrowed defaults (`canvas
  * list`, `wait`) that keep an agent's attention on the directory it landed in.
  */
 
@@ -79,11 +79,11 @@ function cli(cwd: string, session: Record<string, string>, ...args: string[]): P
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
 
-const projects = (): Promise<Project[]> =>
-  fetch(`${base}/api/projects`, { headers: badge.headers }).then((res) => res.json() as Promise<Project[]>);
+const canvases = (): Promise<Canvas[]> =>
+  fetch(`${base}/api/projects`, { headers: badge.headers }).then((res) => res.json() as Promise<Canvas[]>);
 
-const sessionsOf = (projectId: string): Promise<PresenceSession[]> =>
-  fetch(`${base}/api/projects/${projectId}/sessions`, { headers: badge.headers }).then(
+const sessionsOf = (canvasId: string): Promise<PresenceSession[]> =>
+  fetch(`${base}/api/projects/${canvasId}/sessions`, { headers: badge.headers }).then(
     (res) => res.json() as Promise<PresenceSession[]>,
   );
 
@@ -93,13 +93,13 @@ const marker = (dir: string): Promise<{ projectId: string; title?: string }> =>
     .then((raw) => JSON.parse(raw) as { projectId: string; title?: string });
 
 describe("the handshake binds a directory to its canvas", () => {
-  it("identity --session in a fresh directory creates the project, the marker, and the roster row", async () => {
+  it("identity --session in a fresh directory creates the canvas, the marker, and the roster row", async () => {
     const run = await cli(work, claude("s-1"), "identity", "--session");
 
     expect(run.code).toBe(0);
     expect(run.stdout).toContain("this directory's canvas");
     const bound = await marker(work);
-    const listed = await projects();
+    const listed = await canvases();
     expect(listed).toHaveLength(1);
     expect(listed[0]!.id).toBe(bound.projectId);
     expect(listed[0]!.title).toBe(path.basename(work));
@@ -118,10 +118,10 @@ describe("the handshake binds a directory to its canvas", () => {
     expect(again.code).toBe(0);
     expect(again.stdout).toContain("this directory's canvas");
     expect(again.stdout).not.toContain("created");
-    expect(await projects()).toHaveLength(1);
+    expect(await canvases()).toHaveLength(1);
   }, 30_000);
 
-  it("commands in a subdirectory resolve to the bound project — nearest marker wins, like .git", async () => {
+  it("commands in a subdirectory resolve to the bound canvas — nearest marker wins, like .git", async () => {
     await cli(work, claude("s-1"), "identity", "--session");
     const sub = path.join(work, "packages", "deep");
     await fs.mkdir(sub, { recursive: true });
@@ -129,8 +129,8 @@ describe("the handshake binds a directory to its canvas", () => {
     const ls = await cli(sub, claude("s-1"), "ls");
     expect(ls.code).toBe(0);
 
-    const show = await cli(sub, claude("s-1"), "--json", "project", "show");
-    expect((JSON.parse(show.stdout) as Project).id).toBe((await marker(work)).projectId);
+    const show = await cli(sub, claude("s-1"), "--json", "canvas", "show");
+    expect((JSON.parse(show.stdout) as Canvas).id).toBe((await marker(work)).projectId);
   }, 30_000);
 
   it("a git checkout binds at the toplevel, wherever the agent stands", async () => {
@@ -142,7 +142,7 @@ describe("the handshake binds a directory to its canvas", () => {
 
     expect(run.code).toBe(0);
     const bound = await marker(work); // at the toplevel, not in src/lib
-    expect((await projects())[0]!.id).toBe(bound.projectId);
+    expect((await canvases())[0]!.id).toBe(bound.projectId);
     await expect(marker(sub)).rejects.toThrow();
   }, 30_000);
 
@@ -154,14 +154,14 @@ describe("the handshake binds a directory to its canvas", () => {
       expect(run.code).toBe(0); // the name was still saved
       expect(run.stdout).not.toContain("this directory's canvas");
       await expect(marker(fakeHome)).rejects.toThrow();
-      expect(await projects()).toHaveLength(0);
+      expect(await canvases()).toHaveLength(0);
     } finally {
       await fs.rm(fakeHome, { recursive: true, force: true });
     }
   }, 30_000);
 });
 
-describe("a marker whose project this home has never seen", () => {
+describe("a marker whose canvas this home has never seen", () => {
   beforeEach(async () => {
     await fs.mkdir(path.join(work, ".isocan"), { recursive: true });
     await fs.writeFile(
@@ -175,15 +175,15 @@ describe("a marker whose project this home has never seen", () => {
 
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("does not exist in this home yet");
-    expect(await projects()).toHaveLength(0);
+    expect(await canvases()).toHaveLength(0);
   }, 30_000);
 
-  it("a command that adds something ADOPTS the marker's id — two homes, one project", async () => {
+  it("a command that adds something ADOPTS the marker's id — two homes, one canvas", async () => {
     await fs.writeFile(path.join(work, "note.md"), "# hello\n");
     const run = await cli(work, {}, "add", "note.md");
 
     expect(run.code).toBe(0);
-    const listed = await projects();
+    const listed = await canvases();
     expect(listed).toHaveLength(1);
     expect(listed[0]!.id).toBe("prj_cloned"); // the id travels; nothing minted a new one
     expect(listed[0]!.title).toBe("Cloned Canvas");
@@ -192,41 +192,41 @@ describe("a marker whose project this home has never seen", () => {
 
 describe("isocan use and the narrowed defaults", () => {
   it("use binds the directory; use --home sets the fallback for unbound ones", async () => {
-    await cli(work, {}, "project", "create", "Roadmap");
-    await cli(work, {}, "project", "create", "Elsewhere");
+    await cli(work, {}, "canvas", "create", "Roadmap");
+    await cli(work, {}, "canvas", "create", "Elsewhere");
 
     const bind = await cli(work, {}, "use", "Roadmap");
     expect(bind.code).toBe(0);
     const bound = await marker(work);
-    expect((await projects()).find((p) => p.id === bound.projectId)!.title).toBe("Roadmap");
+    expect((await canvases()).find((p) => p.id === bound.projectId)!.title).toBe("Roadmap");
 
     // The home default only answers OUTSIDE bound directories.
     const other = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binding-unbound-"));
     try {
       const setDefault = await cli(other, {}, "use", "Elsewhere", "--home");
       expect(setDefault.code).toBe(0);
-      const showOther = await cli(other, {}, "--json", "project", "show");
-      expect((JSON.parse(showOther.stdout) as Project).title).toBe("Elsewhere");
+      const showOther = await cli(other, {}, "--json", "canvas", "show");
+      expect((JSON.parse(showOther.stdout) as Canvas).title).toBe("Elsewhere");
       // …while the bound directory still means its own canvas.
-      const showBound = await cli(work, {}, "--json", "project", "show");
-      expect((JSON.parse(showBound.stdout) as Project).title).toBe("Roadmap");
+      const showBound = await cli(work, {}, "--json", "canvas", "show");
+      expect((JSON.parse(showBound.stdout) as Canvas).title).toBe("Roadmap");
     } finally {
       await fs.rm(other, { recursive: true, force: true });
     }
   }, 30_000);
 
-  it("project list narrows to the directory's project; --all opens the home back up", async () => {
-    await cli(work, {}, "project", "create", "Roadmap");
-    await cli(work, {}, "project", "create", "Elsewhere");
+  it("canvas list narrows to the directory's canvas; --all opens the home back up", async () => {
+    await cli(work, {}, "canvas", "create", "Roadmap");
+    await cli(work, {}, "canvas", "create", "Elsewhere");
     await cli(work, {}, "use", "Roadmap");
 
-    const narrowed = await cli(work, {}, "--json", "project", "list");
-    const shown = JSON.parse(narrowed.stdout) as Project[];
+    const narrowed = await cli(work, {}, "--json", "canvas", "list");
+    const shown = JSON.parse(narrowed.stdout) as Canvas[];
     expect(shown.map((p) => p.title)).toEqual(["Roadmap"]);
     expect(narrowed.stderr).toContain("--all");
 
-    const everything = await cli(work, {}, "--json", "project", "list", "--all");
-    expect((JSON.parse(everything.stdout) as Project[]).map((p) => p.title).sort()).toEqual([
+    const everything = await cli(work, {}, "--json", "canvas", "list", "--all");
+    expect((JSON.parse(everything.stdout) as Canvas[]).map((p) => p.title).sort()).toEqual([
       "Elsewhere",
       "Roadmap",
     ]);
@@ -234,7 +234,7 @@ describe("isocan use and the narrowed defaults", () => {
 });
 
 describe("wait is on one canvas", () => {
-  it("bound directory: pinned to its canvas; unbound with several projects: refused", async () => {
+  it("bound directory: pinned to its canvas; unbound with several canvases: refused", async () => {
     // Two canvases, both born from handshakes (which set no home default) —
     // so nothing can answer for an unbound directory.
     await cli(work, claude("s-1"), "identity", "--session");
@@ -243,9 +243,9 @@ describe("wait is on one canvas", () => {
     try {
       await cli(other, claude("s-2"), "identity", "--session");
       const otherId = (await marker(other)).projectId;
-      const elsewhere = (await projects()).find((p) => p.id === otherId)!;
+      const elsewhere = (await canvases()).find((p) => p.id === otherId)!;
 
-      // Bound: the park is project-scoped, so the other canvas sees nobody.
+      // Bound: the park is canvas-scoped, so the other canvas sees nobody.
       const pinned = await cli(work, claude("s-1"), "wait", "--timeout", "1");
       expect(pinned.code).toBe(2);
       expect(await sessionsOf(elsewhere.id)).toEqual([]);
@@ -254,7 +254,7 @@ describe("wait is on one canvas", () => {
       // home-wide — there is no home-wide mode any more (on-call retired).
       const refused = await cli(unbound, claude("s-1"), "wait", "--timeout", "1");
       expect(refused.code).toBe(1);
-      expect(refused.stderr).toContain("--project");
+      expect(refused.stderr).toContain("--canvas");
     } finally {
       await fs.rm(other, { recursive: true, force: true });
       await fs.rm(unbound, { recursive: true, force: true });

@@ -9,16 +9,16 @@ import { useUiStore } from "../stores/uiStore.ts";
 
 export type Panel = "main" | "files";
 
-const KEY: Record<Panel, (projectId: string) => string> = {
-  main: (projectId) => `isocan.mainpanel.${projectId}`,
-  files: (projectId) => `isocan.filespanel.${projectId}`,
+const KEY: Record<Panel, (canvasId: string) => string> = {
+  main: (canvasId) => `isocan.mainpanel.${canvasId}`,
+  files: (canvasId) => `isocan.filespanel.${canvasId}`,
 };
 
 /** Which panel is showing, or null for none. */
-export function openPanel(projectId: string, panel: Panel | null): void {
+export function openPanel(canvasId: string, panel: Panel | null): void {
   for (const which of ["main", "files"] as const) {
     try {
-      localStorage.setItem(KEY[which](projectId), panel === which ? "open" : "closed");
+      localStorage.setItem(KEY[which](canvasId), panel === which ? "open" : "closed");
     } catch {
       // Private mode — the panels still work, they just forget.
     }
@@ -29,11 +29,11 @@ export function openPanel(projectId: string, panel: Panel | null): void {
 }
 
 /** What was showing last time, if anything was ever chosen here. */
-export function storedPanel(projectId: string): Panel | null | undefined {
+export function storedPanel(canvasId: string): Panel | null | undefined {
   try {
-    if (localStorage.getItem(KEY.main(projectId)) === "open") return "main";
-    if (localStorage.getItem(KEY.files(projectId)) === "open") return "files";
-    return localStorage.getItem(KEY.main(projectId)) === null ? undefined : null;
+    if (localStorage.getItem(KEY.main(canvasId)) === "open") return "main";
+    if (localStorage.getItem(KEY.files(canvasId)) === "open") return "files";
+    return localStorage.getItem(KEY.main(canvasId)) === null ? undefined : null;
   } catch {
     return undefined;
   }

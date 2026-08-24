@@ -1,4 +1,4 @@
-import type { CanvasState, PresenceSession } from "@isocan/core";
+import type { CanvasContents, PresenceSession } from "@isocan/core";
 import { threadWorldPos } from "./viewport.ts";
 
 /**
@@ -29,7 +29,7 @@ export function quietFor(
  * follow mode both aim here, so they always agree. */
 export function sessionLocus(
   session: PresenceSession,
-  canvas: CanvasState | null,
+  canvas: CanvasContents | null,
 ): { x: number; y: number } | null {
   if (session.activity?.kind === "working") {
     if ("itemId" in session.activity) {

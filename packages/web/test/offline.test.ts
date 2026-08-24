@@ -4,7 +4,7 @@ import type {
   LogEntry,
   OpEnvelope,
   Operation,
-  ProjectState,
+  CanvasState,
   ServerMessage,
 } from "@isocan/core";
 import { applyOperation } from "@isocan/core";
@@ -80,7 +80,7 @@ function envelope(op: Operation, actor: Actor = priya, id?: string): OpEnvelope 
   opSeq += 1;
   return {
     id: id ?? `op_seed${opSeq}`,
-    projectId: op.type === "project.create" ? null : "prj_1",
+    canvasId: op.type === "project.create" ? null : "prj_1",
     actor,
     ts: new Date(Date.UTC(2026, 7, 24) + opSeq * 1000).toISOString(),
     op,
@@ -92,10 +92,10 @@ function entry(op: Operation, at: number, actor: Actor = priya, id?: string): Lo
 }
 
 /** A synthetic canvas: one item, nothing else. */
-function seed(): ProjectState {
+function seed(): CanvasState {
   const created = applyOperation(
     null,
-    envelope({ type: "project.create", projectId: "prj_1", title: "Acme Sprint Board" }),
+    envelope({ type: "project.create", canvasId: "prj_1", title: "Acme Sprint Board" }),
   )!;
   return applyOperation(
     created,
@@ -183,12 +183,12 @@ async function settle(): Promise<void> {
 }
 
 /** Connect and land a snapshot at `lastSeq`: a tab that holds the canvas. */
-async function connected(lastSeq: number): Promise<ProjectState> {
-  const { connectToProject } = await store();
+async function connected(lastSeq: number): Promise<CanvasState> {
+  const { connectToCanvas } = await store();
   const { setReplicaStore } = await import("../src/lib/replica.ts");
   setReplicaStore(diskStore());
   const state = seed();
-  connectToProject("prj_1", priya);
+  connectToCanvas("prj_1", priya);
   await settle();
   FakeSocket.last.deliver({
     type: "snapshot",
@@ -287,7 +287,7 @@ describe("a tab with no network keeps working", () => {
     onOfflineWrite(fresh.queueOfflineWrite);
 
     online = false;
-    fresh.connectToProject("prj_1", priya);
+    fresh.connectToCanvas("prj_1", priya);
     await settle();
 
     const after = fresh.useCanvasStore.getState();
@@ -328,7 +328,7 @@ describe("a tab with no network keeps working", () => {
     // A canvas born with no network is offline birth — phase 13's, and a whole
     // design of its own. What must not happen is a button that does nothing.
     await expect(
-      sendOp(null, priya, { type: "project.create", projectId: "prj_9", title: "Acme" }),
+      sendOp(null, priya, { type: "project.create", canvasId: "prj_9", title: "Acme" }),
     ).rejects.toBeInstanceOf(OfflineError);
   });
 
@@ -368,9 +368,9 @@ describe("the crux", () => {
     // swapped — right up until somebody else's op is in the tail, which is the
     // next assertion.
     expect(events).toEqual([
-      "dial:projectId=prj_1&since=0",
+      "dial:canvasId=prj_1&since=0",
       "post:" + posted[0].opId,
-      "dial:projectId=prj_1&since=2",
+      "dial:canvasId=prj_1&since=2",
     ]);
 
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 4, colors: {}, names: {} });

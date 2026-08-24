@@ -102,7 +102,7 @@ const TOOLS: ToolDef[] = [
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 
-export function CanvasTools({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
@@ -131,7 +131,7 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
     // the one thing that was not deferred with it is saying so — the error
     // carries the sentence (see `uploadBlob`), this puts it where it can be
     // read. An unhandled rejection in a console is not a person being told.
-    const ids = await addFiles(projectId, actor, files, createPlacement()).catch((err: unknown) => {
+    const ids = await addFiles(canvasId, actor, files, createPlacement()).catch((err: unknown) => {
       setNotice(err instanceof Error ? err.message : "That file could not be added.");
       return [] as string[];
     });
@@ -185,7 +185,7 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
         title={hasFavourites ? "Favourites — the starred shortlist" : "Favourites — nothing starred yet"}
         aria-label="Favourites"
         aria-pressed={favouritesOpen}
-        onClick={() => openFavourites(projectId, !favouritesOpen)}
+        onClick={() => openFavourites(canvasId, !favouritesOpen)}
       >
         {star(hasFavourites)}
       </button>

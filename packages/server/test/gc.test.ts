@@ -41,8 +41,8 @@ async function post(url: string, body: unknown): Promise<{ status: number; json:
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 
-async function op(operation: Operation, projectId: string | null = "prj_1", actor = alice) {
-  return post("/api/ops", { projectId, actor, op: operation });
+async function op(operation: Operation, canvasId: string | null = "prj_1", actor = alice) {
+  return post("/api/ops", { canvasId, actor, op: operation });
 }
 
 async function uploadBlob(content: string, filename: string): Promise<string> {
@@ -67,9 +67,9 @@ async function gc(request: Record<string, unknown>): Promise<GcReport> {
   return res.json as GcReport;
 }
 
-/** Project with one live item whose content is a real uploaded blob. */
+/** Canvas with one live item whose content is a real uploaded blob. */
 async function seed(): Promise<{ liveHash: string }> {
-  await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+  await op({ type: "project.create", canvasId: "prj_1", title: "P" }, null);
   const liveHash = await uploadBlob("# live\n", "live.md");
   await op({
     type: "item.add",

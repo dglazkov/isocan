@@ -29,7 +29,7 @@ import { useCommands } from "../lib/commands.ts";
  * complete here too. They have to: this bar's placeholder has been promising
  * "@name to address · #Title to point" while offering no way to find either.
  */
-export function CommandBar({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function CommandBar({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const colors = useActorColors();
   const names = useActorNames();
   const open = useUiStore((s) => s.commandBarOpen);
@@ -72,7 +72,7 @@ export function CommandBar({ projectId, actor }: { projectId: string; actor: Act
     try {
       // The same rule as the docked panel: what you have selected is what the
       // message is about, and it travels as ids.
-      await postToMain(projectId, actor, body, useUiStore.getState().selectedItemIds);
+      await postToMain(canvasId, actor, body, useUiStore.getState().selectedItemIds);
       setDraft("");
     } finally {
       setSending(false);

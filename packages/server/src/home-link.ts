@@ -17,7 +17,7 @@ import type {
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
-  Project,
+  Canvas,
   RedeemPassResponse,
   ServerMessage,
   UndoRedoRequest,
@@ -35,7 +35,7 @@ import {
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
-  projectsRoute,
+  canvasesRoute,
   WS_NO_CANVAS,
 } from "@isocan/core";
 import type { Engine } from "./engine.ts";
@@ -150,8 +150,8 @@ export interface HomeConnection {
   readonly homeUrl: string;
   /** `POST /api/ops` at the home, with this daemon's badge. */
   submitOp(body: PostOpRequest): Promise<PostOpResponse>;
-  undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry>;
-  redo(projectId: string, body: UndoRedoRequest): Promise<LogEntry>;
+  undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
+  redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
   /** Make this daemon's badge at the home vouch for an actor (and, when the
    * name has changed, tell the home the new one). */
   announceActor(actor: Actor): Promise<void>;
@@ -173,9 +173,9 @@ export interface HomeConnection {
    * edited the laptop's ledger would report success while the link stayed on
    * for the world. These three go up for the same reason writes do.
    */
-  grants(projectId: string): Promise<GrantsResponse>;
-  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse>;
-  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse>;
+  grants(canvasId: string): Promise<GrantsResponse>;
+  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse>;
+  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse>;
   /**
    * Your surfaces at the HOME, and ending one there — forwarded for the grant
    * routes' reason, arriving at the machine it is most obviously about.
@@ -223,7 +223,7 @@ export interface HomeConnection {
    * verifies badge-level, which is all it can see), and bringing an actor in
    * from elsewhere needs its name.
    */
-  mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse>;
+  mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
   redeemPass(token: string): Promise<RedeemPassResponse>;
   /**
    * Ask the home for ONE canvas by name, so this replica starts carrying it.
@@ -233,17 +233,17 @@ export interface HomeConnection {
    * ADDRESS gets let in. See `HOME_JOIN_ROUTE` for which arrivals those are
    * and why they are not a new privilege.
    */
-  join(projectId: string): Promise<Project>;
+  join(canvasId: string): Promise<Canvas>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
-    projectId: string,
+    canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
   ): Promise<BlobUploadResponse>;
   /** Bytes this replica has never seen, read straight from the home. Null when
    * the home does not have them either. */
   openBlob(
-    projectId: string,
+    canvasId: string,
     blobHash: string,
     range?: { start: number; end: number },
   ): Promise<{ stream: Readable; mimeType: string; size: number } | null>;
@@ -258,7 +258,7 @@ export interface HomeConnection {
  * bigger one than it has to be. Three questions, because there turn out to be
  * exactly three kinds of act:
  *
- * - **canvas-scoped** (a write, a blob, an undo): `for(projectId)`.
+ * - **canvas-scoped** (a write, a blob, an undo): `for(canvasId)`.
  * - **home-scoped** (a colour, an actor announcement): `all()`, because the
  *   actors log lives at each home and never replicates down, so telling one
  *   home leaves the other wrong forever.
@@ -273,7 +273,7 @@ export interface HomeConnection {
 export interface HomeDirectory {
   /** The connection this canvas's writes go to; null when this daemon is its
    * home. */
-  for(projectId: string): HomeConnection | null;
+  for(canvasId: string): HomeConnection | null;
   /** Every open link — for the acts that are home-scoped rather than
    * canvas-scoped. */
   all(): readonly HomeConnection[];
@@ -293,10 +293,10 @@ export interface HomeDirectory {
    * cosmetic: it is what stops a link's sweep later claiming a locally-born
    * canvas under the "this id has no row, so it must be mine" rule.
    */
-  bind(projectId: string, homeUrl: string | null): Promise<HomeConnection | null>;
+  bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null>;
   /** That canvas is gone; drop its row, or a re-created id inherits a dead
    * routing. */
-  release(projectId: string): Promise<void>;
+  release(canvasId: string): Promise<void>;
 }
 
 /**
@@ -319,14 +319,14 @@ export interface HomeRegistry {
    * see `HomeLinks.mayDial` for the three branches and why the third one logs
    * rather than throws.
    */
-  mayDial(projectId: string, homeUrl: string): Promise<boolean>;
+  mayDial(canvasId: string, homeUrl: string): Promise<boolean>;
 }
 
 /** What a canvas socket was told when it connected — the observable half of
  * the lid-close beat, so a test can assert a RESUME happened and not a
  * re-snapshot, which is the thing this phase is about. */
 export interface HomeHello {
-  projectId: string;
+  canvasId: string;
   type: "resumed" | "snapshot";
   /** The cursor we presented. */
   since: number;
@@ -368,7 +368,7 @@ export interface HomeLinkOptions {
 }
 
 interface CanvasLink {
-  projectId: string;
+  canvasId: string;
   socket: WebSocket | null;
   /** Serializes message handling: applying an entry is async, and messages
    * arrive in an order that IS the contract (hello, then the tail, in order).
@@ -436,7 +436,7 @@ export class HomeLink implements HomeConnection {
     this.registry = options.registry;
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS;
     // Local faces going up. Coalesced per canvas; see `scheduleRelay`.
-    this.presence.onChange((projectId) => this.scheduleRelay(projectId));
+    this.presence.onChange((canvasId) => this.scheduleRelay(canvasId));
     /**
      * A canvas this daemon now holds and is not listening to gets a socket at
      * once, rather than at the next poll.
@@ -458,11 +458,11 @@ export class HomeLink implements HomeConnection {
      * the time a birth's answer lands, because `bind()` writes it before the
      * forward goes out.
      */
-    this.engine.onEvent((projectId, message) => {
+    this.engine.onEvent((canvasId, message) => {
       if (message.type !== "op-applied") return;
-      if (this.stopped || this.links.has(projectId)) return;
-      if (!this.registry.idsFor(this.homeUrl).includes(projectId)) return;
-      this.openCanvas(projectId);
+      if (this.stopped || this.links.has(canvasId)) return;
+      if (!this.registry.idsFor(this.homeUrl).includes(canvasId)) return;
+      this.openCanvas(canvasId);
     });
   }
 
@@ -523,7 +523,7 @@ export class HomeLink implements HomeConnection {
    * fresh replica's badge had no admissions and nothing ever gave it one.
    *
    * The pass gives it one. So this caller now states the narrow question —
-   * `?reach=admitted`, see `ProjectsReach` — and a replica mirrors **what it
+   * `?reach=admitted`, see `CanvasesReach` — and a replica mirrors **what it
    * was let into** rather than everything a home will show it. Enumeration
    * was never the design; it was the easiest thing that worked when a home
    * had one member.
@@ -546,7 +546,7 @@ export class HomeLink implements HomeConnection {
      * unconditionally — `homes.json`, and nothing else on this disk.
      *
      * **This one line is the phase's central change, and it is a data-loss
-     * fix rather than a tidy-up.** It used to be every project the local store
+     * fix rather than a tidy-up.** It used to be every canvas the local store
      * held, which was correct exactly as long as a daemon had one home: with
      * one home, "on this disk" and "this home's" were the same set. With two
      * they are not, and the old line has a dev link dialling a prod canvas. A
@@ -568,7 +568,7 @@ export class HomeLink implements HomeConnection {
      * better: `bind()` wrote the row at birth, naming this home, so the canvas
      * is here BY THE RECORD. The admission leg is untouched.
      */
-    for (const projectId of this.registry.idsFor(this.homeUrl)) wanted.add(projectId);
+    for (const canvasId of this.registry.idsFor(this.homeUrl)) wanted.add(canvasId);
     /**
      * **And what the home says this badge was let into** — admissions alone,
      * not what a door would open. That is the whole of phase 8 stage 4: a
@@ -584,25 +584,25 @@ export class HomeLink implements HomeConnection {
      * homes can offer one id, and `mayDial` is where that is decided once,
      * with the record, instead of by whichever poll ran first.
      */
-    const theirs = await this.api<Project[]>("GET", projectsRoute("admitted")).catch(() => null);
+    const theirs = await this.api<Canvas[]>("GET", canvasesRoute("admitted")).catch(() => null);
     this.answering = theirs !== null;
     if (theirs) {
-      for (const project of theirs) {
+      for (const canvas of theirs) {
         if (this.stopped) return;
-        if (await this.registry.mayDial(project.id, this.homeUrl)) wanted.add(project.id);
+        if (await this.registry.mayDial(canvas.id, this.homeUrl)) wanted.add(canvas.id);
       }
     }
-    for (const projectId of wanted) {
+    for (const canvasId of wanted) {
       if (this.stopped) return;
-      if (!this.links.has(projectId)) this.openCanvas(projectId);
+      if (!this.links.has(canvasId)) this.openCanvas(canvasId);
     }
   }
 
   // ---- one canvas, one socket ----
 
-  private openCanvas(projectId: string): void {
+  private openCanvas(canvasId: string): void {
     const link: CanvasLink = {
-      projectId,
+      canvasId,
       socket: null,
       work: Promise.resolve(),
       retry: null,
@@ -610,7 +610,7 @@ export class HomeLink implements HomeConnection {
       relay: null,
       closed: false,
     };
-    this.links.set(projectId, link);
+    this.links.set(canvasId, link);
     void this.dial(link);
   }
 
@@ -652,9 +652,9 @@ export class HomeLink implements HomeConnection {
     if (this.stopped || link.closed) return;
     const badge = await this.ensureBadge();
     if (!badge) return this.reconnect(link);
-    const since = await this.localSeq(link.projectId);
+    const since = await this.localSeq(link.canvasId);
     const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-    const url = `${wsBase}/ws?projectId=${encodeURIComponent(link.projectId)}&since=${since}`;
+    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}`;
     let socket: WebSocket;
     try {
       socket = new WebSocket(url, { headers: bearerHeader(badge) });
@@ -668,7 +668,7 @@ export class HomeLink implements HomeConnection {
     socket.on("error", () => {});
     socket.on("open", () => {
       link.backoffMs = RECONNECT_MIN_MS;
-      this.scheduleRelay(link.projectId);
+      this.scheduleRelay(link.canvasId);
     });
     socket.on("message", (data) => {
       let message: ServerMessage;
@@ -684,14 +684,14 @@ export class HomeLink implements HomeConnection {
     socket.on("close", (code) => {
       if (link.socket !== socket) return; // superseded
       link.socket = null;
-      this.presence.mirror(link.projectId, this.origin(), []);
+      this.presence.mirror(link.canvasId, this.origin(), []);
       // 4404: the home says this canvas is not there. Stop dialling it — a
       // replica holding a canvas the home has never heard of is offline birth
       // (phase 13), and retrying forever would be a socket storm about a
       // canvas nobody can serve.
       if (code === WS_NO_CANVAS) {
         link.closed = true;
-        this.links.delete(link.projectId);
+        this.links.delete(link.canvasId);
         return;
       }
       this.reconnect(link);
@@ -710,10 +710,10 @@ export class HomeLink implements HomeConnection {
    * the replica adopted it over the entry it was about to land, losing seq 1
    * from its own log. A cursor has to be a fact.
    */
-  private async localSeq(projectId: string): Promise<number> {
+  private async localSeq(canvasId: string): Promise<number> {
     try {
       await this.engine.settled();
-      return (await this.engine.getSnapshot(projectId)).lastSeq;
+      return (await this.engine.getSnapshot(canvasId)).lastSeq;
     } catch {
       return 0;
     }
@@ -729,19 +729,19 @@ export class HomeLink implements HomeConnection {
    * `protocol.ts` warns about.
    */
   private async receive(link: CanvasLink, since: number, message: ServerMessage): Promise<void> {
-    const { projectId } = link;
+    const { canvasId } = link;
     switch (message.type) {
       case "resumed":
-        this.hello({ projectId, type: "resumed", since, lastSeq: message.lastSeq });
+        this.hello({ canvasId, type: "resumed", since, lastSeq: message.lastSeq });
         await this.engine.mergeRemoteIdentity(message.colors, message.names);
         return;
       case "snapshot":
-        this.hello({ projectId, type: "snapshot", since, lastSeq: message.lastSeq });
-        await this.engine.adoptRemoteSnapshot(projectId, message);
+        this.hello({ canvasId, type: "snapshot", since, lastSeq: message.lastSeq });
+        await this.engine.adoptRemoteSnapshot(canvasId, message);
         await this.engine.mergeRemoteIdentity(message.colors, message.names);
         return;
       case "op-applied": {
-        const applied = await this.engine.applyRemote(projectId, message.entry);
+        const applied = await this.engine.applyRemote(canvasId, message.entry);
         // A gap means an entry landed at the home that we never saw — the
         // socket dropped mid-tail, or a message was lost. Re-dialling with the
         // cursor we DO hold lets the home decide between a tail and a
@@ -749,20 +749,20 @@ export class HomeLink implements HomeConnection {
         if (applied === "gap") this.resync(link);
         return;
       }
-      case "project-deleted":
-        await this.engine.applyRemoteDelete(projectId);
+      case "canvas-deleted":
+        await this.engine.applyRemoteDelete(canvasId);
         link.closed = true;
-        this.links.delete(projectId);
+        this.links.delete(canvasId);
         this.closeLink(link);
         return;
       case "presence-roster": {
         // Our own relayed faces come back in the merged roster; taking them
         // as mirrored copies would double every face this machine puts up.
         const ours = new Set(
-          this.presence.localRoster(projectId).map((session) => session.sessionId),
+          this.presence.localRoster(canvasId).map((session) => session.sessionId),
         );
         this.presence.mirror(
-          projectId,
+          canvasId,
           this.origin(),
           message.sessions.filter((session) => !ours.has(session.sessionId)),
         );
@@ -773,7 +773,7 @@ export class HomeLink implements HomeConnection {
   }
 
   private hello(hello: HomeHello): void {
-    const log = this.handshakeLog.get(hello.projectId) ?? {
+    const log = this.handshakeLog.get(hello.canvasId) ?? {
       resumed: 0,
       snapshots: 0,
       last: null,
@@ -781,14 +781,14 @@ export class HomeLink implements HomeConnection {
     if (hello.type === "resumed") log.resumed += 1;
     else log.snapshots += 1;
     log.last = hello;
-    this.handshakeLog.set(hello.projectId, log);
+    this.handshakeLog.set(hello.canvasId, log);
   }
 
   /** How this canvas's socket has been answered, every time it has connected.
    * Never absent for a canvas that has connected; zeroes for one that has
    * not. */
-  handshakes(projectId: string): HomeHandshakes {
-    return this.handshakeLog.get(projectId) ?? { resumed: 0, snapshots: 0, last: null };
+  handshakes(canvasId: string): HomeHandshakes {
+    return this.handshakeLog.get(canvasId) ?? { resumed: 0, snapshots: 0, last: null };
   }
 
   private resync(link: CanvasLink): void {
@@ -801,8 +801,8 @@ export class HomeLink implements HomeConnection {
 
   // ---- presence, going up ----
 
-  private scheduleRelay(projectId: string): void {
-    const link = this.links.get(projectId);
+  private scheduleRelay(canvasId: string): void {
+    const link = this.links.get(canvasId);
     if (!link || link.relay) return;
     link.relay = setTimeout(() => {
       link.relay = null;
@@ -824,7 +824,7 @@ export class HomeLink implements HomeConnection {
   private async relay(link: CanvasLink): Promise<void> {
     const socket = link.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    const sessions = this.presence.localRoster(link.projectId);
+    const sessions = this.presence.localRoster(link.canvasId);
     const vouched: PresenceSession[] = [];
     for (const session of sessions) {
       // Best effort per face: one actor the home will not vouch for must not
@@ -973,7 +973,7 @@ export class HomeLink implements HomeConnection {
     const inflight = this.claiming.get(key);
     if (inflight) return inflight;
     const work = this.api<PostOpResponse>("POST", "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: {
         type: "actor.claim",
         sessionKey: `replica:${actor.id}`,
@@ -1000,16 +1000,16 @@ export class HomeLink implements HomeConnection {
 
   /** Who may enter this canvas, as the HOME has it. No claim goes up first:
    * a grant is about badges, never about actors. */
-  grants(projectId: string): Promise<GrantsResponse> {
-    return this.api<GrantsResponse>("GET", grantsRoute(projectId));
+  grants(canvasId: string): Promise<GrantsResponse> {
+    return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
   }
 
-  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
-    return this.api<GrantResponse>("POST", grantsRoute(projectId), { subject });
+  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
+    return this.api<GrantResponse>("POST", grantsRoute(canvasId), { subject });
   }
 
-  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
-    return this.api<GrantResponse>("DELETE", grantRoute(projectId, grantId));
+  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
+    return this.api<GrantResponse>("DELETE", grantRoute(canvasId, grantId));
   }
 
   /** Your surfaces AT THE HOME. This daemon's own badge there is one of them
@@ -1043,11 +1043,11 @@ export class HomeLink implements HomeConnection {
    * as this actor, which the home could never know, and the home checks that
    * this machine may, which is all it can honestly see.
    */
-  async mintPass(projectId: string, actor?: Actor): Promise<MintPassResponse> {
+  async mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse> {
     if (actor) await this.ensureClaim(actor);
     return this.api<MintPassResponse>(
       "POST",
-      passesRoute(projectId),
+      passesRoute(canvasId),
       actor ? { actorId: actor.id } : {},
     );
   }
@@ -1090,8 +1090,8 @@ export class HomeLink implements HomeConnection {
    * admission (`HOME_JOIN_ROUTE` says which arrivals those are).
    *
    * **It is an ordinary read, and that is the point.** `GET
-   * /api/projects/:id` is a project-scoped route, so at the home it passes
-   * through the same `admit` hook every other project-scoped route does: if a
+   * /api/projects/:id` is a canvas-scoped route, so at the home it passes
+   * through the same `admit` hook every other canvas-scoped route does: if a
    * grant admits this badge, the hook writes the admission (`{root: "grant"}`,
    * the provenance phase 9's sweep walks) before the route answers, and if
    * nothing admits it the answer is the door's own 403 — passed back through
@@ -1111,23 +1111,23 @@ export class HomeLink implements HomeConnection {
    * below (for `redeemPass`'s reason: somebody just typed the command) opens
    * the socket.
    */
-  async join(projectId: string): Promise<Project> {
-    const project = await this.api<Project>(
+  async join(canvasId: string): Promise<Canvas> {
+    const canvas = await this.api<Canvas>(
       "GET",
-      `/api/projects/${encodeURIComponent(projectId)}`,
+      `/api/projects/${encodeURIComponent(canvasId)}`,
     );
     void this.sync().catch(() => {});
-    return project;
+    return canvas;
   }
 
-  async undo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {
+  async undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry> {
     await this.ensureClaim(body.actor);
-    return this.api<LogEntry>("POST", `/api/projects/${projectId}/undo`, body);
+    return this.api<LogEntry>("POST", `/api/projects/${canvasId}/undo`, body);
   }
 
-  async redo(projectId: string, body: UndoRedoRequest): Promise<LogEntry> {
+  async redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry> {
     await this.ensureClaim(body.actor);
-    return this.api<LogEntry>("POST", `/api/projects/${projectId}/redo`, body);
+    return this.api<LogEntry>("POST", `/api/projects/${canvasId}/redo`, body);
   }
 
   /**
@@ -1143,14 +1143,14 @@ export class HomeLink implements HomeConnection {
    * agent's hands are the filesystem.
    */
   async putBlob(
-    projectId: string,
+    canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
   ): Promise<BlobUploadResponse> {
     const badge = await this.ensureBadge();
     if (!badge) throw new HomeUnreachableError(this.homeUrl, "no badge");
     const send = async (held: StoredBadge) =>
-      this.fetchHome(`/api/projects/${projectId}/blobs`, {
+      this.fetchHome(`/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...bearerHeader(held),
@@ -1176,7 +1176,7 @@ export class HomeLink implements HomeConnection {
   /** Bytes this replica has never held, streamed from the home. What makes an
    * item somebody else added on another machine openable here. */
   async openBlob(
-    projectId: string,
+    canvasId: string,
     blobHash: string,
     range?: { start: number; end: number },
   ): Promise<{ stream: Readable; mimeType: string; size: number } | null> {
@@ -1186,7 +1186,7 @@ export class HomeLink implements HomeConnection {
     if (range) headers.Range = `bytes=${range.start}-${range.end}`;
     let res: Response;
     try {
-      res = await this.fetchHome(`/api/projects/${projectId}/blobs/${blobHash}`, { headers });
+      res = await this.fetchHome(`/api/projects/${canvasId}/blobs/${blobHash}`, { headers });
     } catch {
       return null;
     }

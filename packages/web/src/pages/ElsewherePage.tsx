@@ -8,7 +8,7 @@ import { canvasUrl } from "@isocan/core";
  * The daemon serving this page is the home of some canvases and a replica for
  * others, and it serves the app only for the ones it is the home of:
  * `GET /p/<id>` for a canvas that lives at dev.isocan.io answers a signpost
- * instead of the shell. But a `<Link>` from the project list is a client-side
+ * instead of the shell. But a `<Link>` from the canvas list is a client-side
  * navigation that never touches the server, and the phase-10 replica means the
  * app can also be woken from a cache with no daemon behind it at all. So the
  * same refusal has to exist here, in the app, where the router is the only
@@ -30,7 +30,7 @@ import { canvasUrl } from "@isocan/core";
  * go, on the strength of an address this machine holds in a config file, is
  * how a person ends up on a stranger's 404 wondering what they did.
  */
-export function ElsewherePage({ projectId, home }: { projectId: string; home: string }) {
+export function ElsewherePage({ canvasId, home }: { canvasId: string; home: string }) {
   return (
     <div className="notfound-page">
       <h1>
@@ -57,7 +57,7 @@ export function ElsewherePage({ projectId, home }: { projectId: string; home: st
             never assembled here: the `/c/` bug was a second spelling of this
             exact string, and this is a link a person clicks when they are
             already confused about where they are. */}
-        <a className="btn primary" href={canvasUrl(home, projectId)} rel="noreferrer">
+        <a className="btn primary" href={canvasUrl(home, canvasId)} rel="noreferrer">
           Open it at its home
         </a>
         <Link className="btn" to="/">

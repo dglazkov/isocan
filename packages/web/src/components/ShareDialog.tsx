@@ -49,7 +49,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
  * would imply a rule the door does not have.
  */
 export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => void }) {
-  const project = useCanvasStore((s) => s.project);
+  const record = useCanvasStore((s) => s.project);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const colors = useActorColors();
@@ -82,12 +82,12 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const [offer, setOffer] = useState<AttestOffer | null>(null);
   const [who, setWho] = useState("");
 
-  const projectId = project?.id ?? null;
+  const canvasId = record?.id ?? null;
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!canvasId) return;
     let cancelled = false;
-    listGrants(projectId)
+    listGrants(canvasId)
       .then((res) => !cancelled && setGrants(res.grants))
       .catch((err: Error) => !cancelled && setError(err.message));
     attesterOffer()
@@ -99,21 +99,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [canvasId]);
 
-  if (!project) return null;
+  if (!record) return null;
 
   // The one origin. People always enter through the home's web app, and this
   // tab IS the home's web app — so the address to hand somebody is the address
   // this page is already being served from. (In dev that is Vite's port, which
   // is correct: it is where the person reading this is standing.)
-  const address = canvasUrl(location.origin, project.id);
+  const address = canvasUrl(location.origin, record.id);
   const link = grants?.find((g) => g.subject === LINK) ?? null;
   const linkOn = link !== null;
   const invited = (grants ?? []).filter((g) => g.subject !== LINK);
 
   async function toggleLink(): Promise<void> {
-    if (!projectId || busy) return;
+    if (!canvasId || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -122,16 +122,16 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       // rather than patched, because the row that comes back is the desk's,
       // not one this dialog imagined.
       if (link) {
-        const answer = await revokeGrant(projectId, link.id);
+        const answer = await revokeGrant(canvasId, link.id);
         // A home from before the sweep answers without a count; zeroes are
         // the honest reading of that, and of a revocation that expelled
         // nobody.
         setSwept({ what: "link", report: answer.swept ?? { expelled: 0, rerooted: 0 } });
       } else {
-        await createGrant(projectId, LINK);
+        await createGrant(canvasId, LINK);
         setSwept(null);
       }
-      setGrants((await listGrants(projectId)).grants);
+      setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === "not-admitted"
@@ -156,13 +156,13 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * and a second copy of either here would be a policy that goes stale.
    */
   async function invite(): Promise<void> {
-    if (!projectId || busy || !who.trim()) return;
+    if (!canvasId || busy || !who.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await createGrant(projectId, grantSubjectOf(who));
+      await createGrant(canvasId, grantSubjectOf(who));
       setWho("");
-      setGrants((await listGrants(projectId)).grants);
+      setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -185,14 +185,14 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * exactly that.
    */
   async function uninvite(grant: Grant): Promise<void> {
-    if (!projectId || busy) return;
+    if (!canvasId || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const answer = await revokeGrant(projectId, grant.id);
+      const answer = await revokeGrant(canvasId, grant.id);
       setSwept({ what: grant.subject, report: answer.swept ?? { expelled: 0, rerooted: 0 } });
       setGrants((current) => (current ?? []).filter((row) => row.id !== grant.id));
-      setGrants((await listGrants(projectId)).grants);
+      setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === "not-admitted"

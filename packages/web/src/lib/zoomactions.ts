@@ -1,4 +1,4 @@
-import type { CanvasState } from "@isocan/core";
+import type { CanvasContents } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Box, type Viewport, centerOn, fitInto, itemsBounds, zoomAt } from "./viewport.ts";
@@ -91,7 +91,7 @@ export function zoomToBox(box: Box): void {
   fitBox(box);
 }
 
-function boundsOfItems(canvas: CanvasState | null, ids: string[]): Box | null {
+function boundsOfItems(canvas: CanvasContents | null, ids: string[]): Box | null {
   if (!canvas || ids.length === 0) return null;
   const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   let found = false;

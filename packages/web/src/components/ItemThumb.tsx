@@ -15,12 +15,12 @@ import { VersionContent } from "./ItemView.tsx";
  * favourites bar.
  */
 export function ItemThumb({
-  projectId,
+  canvasId,
   itemId,
   width = 34,
   height = 34,
 }: {
-  projectId: string;
+  canvasId: string;
   itemId: string;
   width?: number;
   height?: number;
@@ -34,7 +34,7 @@ export function ItemThumb({
       <img
         className="item-thumb"
         style={{ width, height }}
-        src={blobUrl(projectId, current.blobHash)}
+        src={blobUrl(canvasId, current.blobHash)}
         alt=""
       />
     );
@@ -54,7 +54,7 @@ export function ItemThumb({
         }}
       >
         <VersionContent
-          projectId={projectId}
+          canvasId={canvasId}
           blobHash={current.blobHash}
           mimeType={current.mimeType}
           filename={current.filename}
@@ -80,11 +80,11 @@ export function ItemThumb({
  * card is position: fixed, so its placement does not change.
  */
 export function ItemPeek({
-  projectId,
+  canvasId,
   itemId,
   style,
 }: {
-  projectId: string;
+  canvasId: string;
   itemId: string;
   style: React.CSSProperties;
 }) {
@@ -93,7 +93,7 @@ export function ItemPeek({
   const filename = item.versions.find((v) => v.id === item.currentVersionId)?.filename;
   return createPortal(
     <div className="hover-card item-peek" style={style}>
-      <ItemThumb projectId={projectId} itemId={itemId} width={240} height={150} />
+      <ItemThumb canvasId={canvasId} itemId={itemId} width={240} height={150} />
       <b>{item.title}</b>
       <i>
         {/* The filename says what it is more precisely than the kind word

@@ -3,7 +3,7 @@ import type {
   NewVersion,
   OpEnvelope,
   Operation,
-  ProjectState,
+  CanvasState,
 } from "../src/index.ts";
 import { applyOperation } from "../src/index.ts";
 
@@ -16,7 +16,7 @@ export function envelope(op: Operation, actor: Actor = alice): OpEnvelope {
   opCounter += 1;
   return {
     id: `op_${opCounter}`,
-    projectId: op.type === "project.create" ? null : "prj_test",
+    canvasId: op.type === "project.create" ? null : "prj_test",
     actor,
     ts: new Date(Date.UTC(2026, 0, 1) + opCounter * 1000).toISOString(),
     op,
@@ -24,10 +24,10 @@ export function envelope(op: Operation, actor: Actor = alice): OpEnvelope {
 }
 
 export function apply(
-  state: ProjectState | null,
+  state: CanvasState | null,
   op: Operation,
   actor: Actor = alice,
-): ProjectState | null {
+): CanvasState | null {
   return applyOperation(state, envelope(op, actor));
 }
 
@@ -42,15 +42,15 @@ export function nv(id: string): NewVersion {
 }
 
 /**
- * A representative state: a project, two live items (one with two versions),
+ * A representative state: a canvas, two live items (one with two versions),
  * an anchored thread with two comments, a freestanding thread, and one item
  * already in the trash.
  */
-export function seedState(): ProjectState {
+export function seedState(): CanvasState {
   let s = apply(null, {
     type: "project.create",
-    projectId: "prj_test",
-    title: "Test project",
+    canvasId: "prj_test",
+    title: "Test canvas",
     description: "seed",
     properties: { env: "dev" },
   });

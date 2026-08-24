@@ -49,7 +49,7 @@ export function makeComment(body: string): NewComment {
  * positioned from world coordinates via the viewport transform. Anchored
  * threads store an offset from their item's origin, so pins follow drags.
  */
-export function CommentLayer({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
   const drag = useUiStore((s) => s.drag);
@@ -97,12 +97,12 @@ export function CommentLayer({ projectId, actor }: { projectId: string; actor: A
           <ThreadPopover
             thread={openThread}
             screen={screenOf(openThread)}
-            projectId={projectId}
+            canvasId={canvasId}
             actor={actor}
           />
         )}
         {pendingComment && (
-          <ComposePopover projectId={projectId} actor={actor} pending={pendingComment} />
+          <ComposePopover canvasId={canvasId} actor={actor} pending={pendingComment} />
         )}
       </div>
     </>
@@ -218,12 +218,12 @@ function ThreadPin({
 function ThreadPopover({
   thread,
   screen,
-  projectId,
+  canvasId,
   actor,
 }: {
   thread: CommentThread;
   screen: { x: number; y: number };
-  projectId: string;
+  canvasId: string;
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
@@ -281,7 +281,7 @@ function ThreadPopover({
         <OnIt
                 thread={thread}
                 waiting={awaitingReply(thread, actor.id)}
-                projectId={projectId}
+                canvasId={canvasId}
                 actor={actor}
               />
       </div>
@@ -292,7 +292,7 @@ function ThreadPopover({
           const body = reply.trim();
           if (!body) return;
           setReply("");
-          await sendOp(projectId, actor, {
+          await sendOp(canvasId, actor, {
             type: "thread.reply",
             threadId: thread.id,
             comment: makeComment(body),
@@ -318,8 +318,8 @@ function ThreadPopover({
           title="Dock this thread as the canvas's main thread — agents always wake on it"
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
-            openMainPanel(projectId, true);
-            await sendOp(projectId, actor, { type: "thread.setMain", threadId: thread.id });
+            openMainPanel(canvasId, true);
+            await sendOp(canvasId, actor, { type: "thread.setMain", threadId: thread.id });
           }}
         >
           Make main
@@ -327,7 +327,7 @@ function ThreadPopover({
         <button
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
-            await sendOp(projectId, actor, { type: "thread.delete", threadId: thread.id });
+            await sendOp(canvasId, actor, { type: "thread.delete", threadId: thread.id });
           }}
         >
           Delete thread
@@ -346,11 +346,11 @@ function withAbout(comment: NewComment, aboutItemId?: string): NewComment {
 }
 
 function ComposePopover({
-  projectId,
+  canvasId,
   actor,
   pending,
 }: {
-  projectId: string;
+  canvasId: string;
   actor: Actor;
   pending: PendingComment;
 }) {
@@ -385,7 +385,7 @@ function ComposePopover({
           const trimmed = body.trim();
           if (!trimmed) return;
           useUiStore.getState().setPendingComment(null);
-          await sendOp(projectId, actor, {
+          await sendOp(canvasId, actor, {
             type: "thread.create",
             threadId: newThreadId(),
             x: pending.x,

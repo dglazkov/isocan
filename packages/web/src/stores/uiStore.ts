@@ -92,7 +92,7 @@ interface UiStore {
   shareOpen: boolean;
   /** The ⌘K command bar: the friction-free lane to your emissary. */
   commandBarOpen: boolean;
-  /** The docked main-thread panel (pill when closed). Persisted per project
+  /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
   /** The minimap, which folds away into its corner. Remembered per browser:

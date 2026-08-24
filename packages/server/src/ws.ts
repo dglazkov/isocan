@@ -1,15 +1,23 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
-import { newId, WS_BAD_ORIGIN, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
-import { Engine, ProjectNotFoundError } from "./engine.ts";
+import {
+  newId,
+  staleClientRefusal,
+  WS_BAD_ORIGIN,
+  WS_NO_BADGE,
+  WS_NO_CANVAS,
+  WS_NOT_ADMITTED,
+  WS_STALE_CLIENT,
+} from "@isocan/core";
+import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
 
 /**
- * Per-project rooms. Server→client: snapshot on connect, op-applied per
+ * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
  * mutation, presence rosters. Client→server (web only): presence updates —
  * the tab's clientId doubles as its presence session id.
  */
@@ -25,8 +33,8 @@ export function attachWebSockets(
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Set<WebSocket>>();
 
-  function broadcast(projectId: string, message: ServerMessage): void {
-    const room = rooms.get(projectId);
+  function broadcast(canvasId: string, message: ServerMessage): void {
+    const room = rooms.get(canvasId);
     if (!room) return;
     const payload = JSON.stringify(message);
     for (const socket of room) {
@@ -34,30 +42,30 @@ export function attachWebSockets(
     }
   }
 
-  engine.onEvent((projectId, message) => {
-    broadcast(projectId, message);
-    if (message.type === "project-deleted") {
-      const room = rooms.get(projectId);
+  engine.onEvent((canvasId, message) => {
+    broadcast(canvasId, message);
+    if (message.type === "canvas-deleted") {
+      const room = rooms.get(canvasId);
       if (room) {
         for (const socket of room) socket.close();
-        rooms.delete(projectId);
+        rooms.delete(canvasId);
       }
     }
   });
 
   // Coalesce roster broadcasts — cursor streams would otherwise flood.
   const pendingRoster = new Map<string, ReturnType<typeof setTimeout>>();
-  const scheduleRoster = (projectId: string) => {
-    if (pendingRoster.has(projectId)) return;
+  const scheduleRoster = (canvasId: string) => {
+    if (pendingRoster.has(canvasId)) return;
     pendingRoster.set(
-      projectId,
+      canvasId,
       setTimeout(() => {
-        pendingRoster.delete(projectId);
+        pendingRoster.delete(canvasId);
         void Promise.all([engine.actorColors(), engine.actorNames()]).then(
           ([colors, names]) => {
-            broadcast(projectId, {
+            broadcast(canvasId, {
               type: "presence-roster",
-              sessions: presence.roster(projectId),
+              sessions: presence.roster(canvasId),
               colors,
               names,
             });
@@ -78,12 +86,12 @@ export function attachWebSockets(
   engine.onColors((_colors, actorId) => {
     void engine
       .appearances(actorId, [...rooms.keys()])
-      .then((projectIds) => {
-        for (const projectId of projectIds) scheduleRoster(projectId);
+      .then((canvasIds) => {
+        for (const canvasId of canvasIds) scheduleRoster(canvasId);
       })
       .catch(() => {});
   });
-  presence.onChange((projectId) => scheduleRoster(projectId));
+  presence.onChange((canvasId) => scheduleRoster(canvasId));
 
   /**
    * The upgrade carries the badge like every other request. A browser CANNOT
@@ -103,24 +111,37 @@ export function attachWebSockets(
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") return; // let other handlers (e.g. Vite HMR proxy) pass
-    const projectId = url.searchParams.get("projectId");
+    const canvasId = url.searchParams.get("canvasId");
     const since = parseCursor(url.searchParams.get("since"));
+    /**
+     * **`?projectId=` is a client older than this home** (phase 13.5), and it
+     * is worth its own close code rather than the 4400 it would otherwise
+     * get: "canvasId query parameter required" is true and useless to somebody
+     * whose client believes it sent one.
+     *
+     * The socket carries the SHORT sentence — a close reason is capped at 123
+     * bytes by the protocol and a longer one throws — but it names the same
+     * cause and the same command as the HTTP body does, from the same place.
+     */
+    const stale = staleClientRefusal(url.searchParams);
     void (async () => {
-      const badge = await admitted(request, projectId);
+      const badge = stale
+        ? { code: WS_STALE_CLIENT, reason: stale.closeReason }
+        : await admitted(request, canvasId);
       wss.handleUpgrade(request, socket, head, (ws) => {
         if ("code" in badge) {
           ws.on("error", () => {});
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, projectId, badge.badgeId, since, badge.bearer);
+        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer);
       });
     })();
   });
 
   /**
-   * The upgrade's own door check, plus mechanism 5's `projectId ∈
-   * admissions`: a socket is a project-scoped route that happens to stay
+   * The upgrade's own door check, plus mechanism 5's `canvasId ∈
+   * admissions`: a socket is a canvas-scoped route that happens to stay
    * open, so it asks the door's test exactly like the HTTP routes do — the
    * same test, from `grants.ts`, because two copies of a policy is two
    * policies.
@@ -138,7 +159,7 @@ export function attachWebSockets(
    */
   async function admitted(
     request: IncomingMessage,
-    projectId: string | null,
+    canvasId: string | null,
   ): Promise<{ badgeId: string; bearer: boolean } | { code: number; reason: string }> {
     const presented = presentedBadge(request.headers);
     if (presented?.carrier !== "bearer") {
@@ -161,13 +182,13 @@ export function attachWebSockets(
     const badge = await resolveBadge(desk, presented);
     if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
     await desk.touch(badge.badgeId, new Date().toISOString());
-    if (projectId && !badge.admissions.some((a) => a.canvasId === projectId)) {
-      const grant = await admittingGrant(desk, projectId, badge);
+    if (canvasId && !badge.admissions.some((a) => a.canvasId === canvasId)) {
+      const grant = await admittingGrant(desk, canvasId, badge);
       if (grant) {
         // Provenance is revocation's grip: the grant that actually admitted
         // this socket, so phase 9's sweep can find it.
-        await desk.admit(badge.badgeId, projectId, { root: "grant", grantId: grant.id });
-      } else if (await engine.getSnapshot(projectId).then(() => true, () => false)) {
+        await desk.admit(badge.badgeId, canvasId, { root: "grant", grantId: grant.id });
+      } else if (await engine.getSnapshot(canvasId).then(() => true, () => false)) {
         return { code: WS_NOT_ADMITTED, reason: "not admitted" };
       }
       // No grant and no such canvas here: fall through to `handleConnection`,
@@ -179,7 +200,7 @@ export function attachWebSockets(
 
   async function handleConnection(
     ws: WebSocket,
-    projectId: string | null,
+    canvasId: string | null,
     badgeId: string,
     since: number,
     bearer: boolean,
@@ -188,12 +209,12 @@ export function attachWebSockets(
     // unhandled 'error' event on the EventEmitter and would crash the daemon.
     // 'close' always follows, which is where cleanup lives.
     ws.on("error", () => {});
-    if (!projectId) {
-      ws.close(4400, "projectId query parameter required");
+    if (!canvasId) {
+      ws.close(4400, "canvasId query parameter required");
       return;
     }
     try {
-      const snapshot = await engine.getSnapshot(projectId);
+      const snapshot = await engine.getSnapshot(canvasId);
       /**
        * "I have through N" — the lid-close beat, and the reason this is worth
        * a branch at all: a tab (and, from phase 6, a local daemon's home
@@ -208,7 +229,7 @@ export function attachWebSockets(
        * than falling into the gap between "what the snapshot knew" and "what
        * the room has broadcast since".
        */
-      const tail = since > 0 ? await engine.getLog(projectId, since) : [];
+      const tail = since > 0 ? await engine.getLog(canvasId, since) : [];
       /**
        * Four ways this is not servable, all of them ordinary rather than
        * exceptional:
@@ -265,19 +286,19 @@ export function attachWebSockets(
       }
       const roster: ServerMessage = {
         type: "presence-roster",
-        sessions: presence.roster(projectId),
+        sessions: presence.roster(canvasId),
         colors: snapshot.colors,
         names: snapshot.names,
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      ws.close(err instanceof ProjectNotFoundError ? WS_NO_CANVAS : 4500, String(err));
+      ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
-    let room = rooms.get(projectId);
+    let room = rooms.get(canvasId);
     if (!room) {
       room = new Set();
-      rooms.set(projectId, room);
+      rooms.set(canvasId, room);
     }
     room.add(ws);
 
@@ -348,7 +369,7 @@ export function attachWebSockets(
             }
             allowed.push(session);
           }
-          presence.mirror(projectId!, relayOrigin, allowed);
+          presence.mirror(canvasId!, relayOrigin, allowed);
         })();
         return;
       }
@@ -357,9 +378,9 @@ export function attachWebSockets(
       const beat = () => {
         if (sessionId === null) {
           sessionId = message.sessionId;
-          presence.createSession(projectId!, actor, "web", { sessionId });
+          presence.createSession(canvasId!, actor, "web", { sessionId });
         }
-        presence.touch(projectId!, sessionId, {
+        presence.touch(canvasId!, sessionId, {
           // Every beat re-asserts who is holding the tab, so renaming
           // yourself or switching identities re-labels the face live (#43).
           actor,
@@ -382,8 +403,8 @@ export function attachWebSockets(
 
     ws.on("close", () => {
       room.delete(ws);
-      if (room.size === 0) rooms.delete(projectId);
-      if (sessionId !== null) presence.endSession(projectId, sessionId);
+      if (room.size === 0) rooms.delete(canvasId);
+      if (sessionId !== null) presence.endSession(canvasId, sessionId);
       // A dropped connection takes the faces it was relaying with it. Scene
       // 4's beat 7 is exactly this: Priya shuts the lid, her daemon's
       // connection dies, and "one presence-TTL later her face — AND ISAAC'S

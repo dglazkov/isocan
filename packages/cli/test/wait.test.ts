@@ -82,9 +82,9 @@ beforeEach(async () => {
   proxyPort = typeof proxyAddress === "object" && proxyAddress ? proxyAddress.port : 0;
 
   await post("/api/ops", {
-    projectId: null,
+    canvasId: null,
     actor: dimitri,
-    op: { type: "project.create", projectId: "prj_1", title: "P" },
+    op: { type: "project.create", canvasId: "prj_1", title: "P" },
   });
 });
 
@@ -152,17 +152,17 @@ const waiting = (list: PresenceSession[]) => list.filter((s) => s.status?.includ
 
 describe("isocan wait presence", () => {
   it("never advertises when the daemon cannot watch (pinned)", async () => {
-    await isocan("session", "start", "--project", "prj_1");
+    await isocan("session", "start", "--canvas", "prj_1");
     blockWatch = true;
 
-    const run = await isocan("wait", "--project", "prj_1", "--timeout", "10");
+    const run = await isocan("wait", "--canvas", "prj_1", "--timeout", "10");
 
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("error:");
     expect(waiting(await sessions())).toEqual([]);
   }, 30_000);
 
-  it("never advertises when the daemon cannot watch (plain — resolved from the home's one project)", async () => {
+  it("never advertises when the daemon cannot watch (plain — resolved from the home's one canvas)", async () => {
     blockWatch = true;
 
     const run = await isocan("wait", "--timeout", "10");
@@ -172,9 +172,9 @@ describe("isocan wait presence", () => {
   }, 30_000);
 
   it("clears the status when it times out", async () => {
-    await isocan("session", "start", "--project", "prj_1");
+    await isocan("session", "start", "--canvas", "prj_1");
 
-    const run = await isocan("wait", "--project", "prj_1", "--timeout", "1");
+    const run = await isocan("wait", "--canvas", "prj_1", "--timeout", "1");
 
     expect(run.code).toBe(2);
     expect(run.stderr).toContain("timed out");
@@ -183,13 +183,13 @@ describe("isocan wait presence", () => {
   }, 30_000);
 
   it("clears the status when it wakes", async () => {
-    await isocan("session", "start", "--project", "prj_1");
-    const run = isocan("wait", "--project", "prj_1", "--timeout", "20", "--all-ops");
+    await isocan("session", "start", "--canvas", "prj_1");
+    const run = isocan("wait", "--canvas", "prj_1", "--timeout", "20", "--all-ops");
 
     // It really does show as parked while it is parked…
     await until(sessions, (list) => waiting(list).length === 1, "the parked status");
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: dimitri,
       op: { type: "project.update", patch: { title: "P2" } },
     });
@@ -205,7 +205,7 @@ describe("isocan wait presence", () => {
     // The failure this guards: agent works on a canvas, parks with a plain
     // `isocan wait` — the roster shows the canvas session (it has the
     // cursor), so the waiting status must live there.
-    await isocan("session", "start", "--project", "prj_1");
+    await isocan("session", "start", "--canvas", "prj_1");
     const run = isocan("wait", "--timeout", "20");
 
     await until(
@@ -215,7 +215,7 @@ describe("isocan wait presence", () => {
     );
 
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: dimitri,
       op: {
         type: "thread.create",
@@ -239,7 +239,7 @@ describe("isocan wait presence", () => {
     // deterministic even though no presence advertises the park (an agent
     // that never ran `session start` is honestly invisible while parked).
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: dimitri,
       op: {
         type: "thread.create",
@@ -281,7 +281,7 @@ describe("filters: what a watcher agreed to wake for", () => {
 
   /** Somebody else acts on the canvas. */
   const op = (body: unknown, actor: typeof dimitri) =>
-    post("/api/ops", { projectId: "prj_1", actor, op: body });
+    post("/api/ops", { canvasId: "prj_1", actor, op: body });
 
   /** Two items to tell apart: the watched one and the noise. */
   beforeEach(async () => {
@@ -302,12 +302,12 @@ describe("filters: what a watcher agreed to wake for", () => {
       );
     }
     // A session so the park is visible to `until` below.
-    await isocan("session", "start", "--project", "prj_1");
+    await isocan("session", "start", "--canvas", "prj_1");
   });
 
   /** Park a filtered wait, let it settle, then act as somebody else. */
   async function parked(args: string[], act: () => Promise<void>): Promise<Run> {
-    const run = isocan("wait", "--json", "--timeout", "6", "--project", "prj_1", ...args);
+    const run = isocan("wait", "--json", "--timeout", "6", "--canvas", "prj_1", ...args);
     await until(sessions, (list) => waiting(list).length === 1, "the wait to advertise");
     await act();
     return run;
@@ -358,7 +358,7 @@ describe("filters: what a watcher agreed to wake for", () => {
   }, 20_000);
 
   it("refuses a filter naming an item that is not there", async () => {
-    const run = await isocan("wait", "--json", "--timeout", "3", "--project", "prj_1", "--item", "itm_nope");
+    const run = await isocan("wait", "--json", "--timeout", "3", "--canvas", "prj_1", "--item", "itm_nope");
     expect(run.code).not.toBe(0);
     expect(run.stderr).toMatch(/itm_nope/);
   });
@@ -374,7 +374,7 @@ describe("the loop nudges where an agent decides it is finished", () => {
 
   it("replying hands back the next command — but only to an agent in session", async () => {
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: dimitri,
       op: {
         type: "thread.create",
@@ -387,18 +387,18 @@ describe("the loop nudges where an agent decides it is finished", () => {
     });
 
     // No session yet: this is a person replying, and a person is not parked.
-    const bare = await isocan("--project", "prj_1", "comment", "reply", "th_r", "on it");
+    const bare = await isocan("--canvas", "prj_1", "comment", "reply", "th_r", "on it");
     expect(bare.stdout).toContain("replied to th_r");
     expect(bare.stdout).not.toMatch(/isocan wait/);
 
-    await isocan("session", "start", "--project", "prj_1");
-    const parked = await isocan("--project", "prj_1", "comment", "reply", "th_r", "done");
+    await isocan("session", "start", "--canvas", "prj_1");
+    const parked = await isocan("--canvas", "prj_1", "comment", "reply", "th_r", "done");
     expect(parked.stdout).toMatch(/isocan wait/);
   }, 30_000);
 
   it("the --json wake carries the next move too", async () => {
     await post("/api/ops", {
-      projectId: "prj_1",
+      canvasId: "prj_1",
       actor: dimitri,
       op: {
         type: "thread.create",

@@ -26,12 +26,12 @@ import { quietFor } from "../lib/presence.ts";
 export function OnIt({
   thread,
   waiting,
-  projectId,
+  canvasId,
   actor,
 }: {
   thread: CommentThread;
   waiting: boolean;
-  projectId: string;
+  canvasId: string;
   actor: Actor;
 }) {
   const sessions = useCanvasStore((s) => s.sessions);
@@ -56,7 +56,7 @@ export function OnIt({
         })}
         {/* Already picked up: it cannot be unsaid, so the honest control is to
             ask them to stop — which is a message, like every other request. */}
-        <button className="onit-cancel" onClick={() => void askToStop(projectId, actor, thread)}>
+        <button className="onit-cancel" onClick={() => void askToStop(canvasId, actor, thread)}>
           Ask to stop
         </button>
       </div>
@@ -100,7 +100,7 @@ export function OnIt({
         </span>
         {/* Nothing has read it yet, so it can simply stop existing. Undoable
             like any other op — this is `comment.remove`, not a shred. */}
-        <button className="onit-cancel" onClick={() => void retract(projectId, actor, thread)}>
+        <button className="onit-cancel" onClick={() => void retract(canvasId, actor, thread)}>
           Cancel
         </button>
       </div>
@@ -123,21 +123,21 @@ export function OnIt({
  * button only appears while your comment is the last word in the thread, which
  * makes it right in every case anybody has hit.
  */
-async function retract(projectId: string, actor: Actor, thread: CommentThread): Promise<void> {
+async function retract(canvasId: string, actor: Actor, thread: CommentThread): Promise<void> {
   const last = thread.comments[thread.comments.length - 1];
   if (!last || last.author.id !== actor.id) return;
   if (thread.comments.length === 1 && !thread.main) {
-    await sendOp(projectId, actor, { type: "thread.delete", threadId: thread.id });
+    await sendOp(canvasId, actor, { type: "thread.delete", threadId: thread.id });
     return;
   }
-  await undo(projectId, actor);
+  await undo(canvasId, actor);
 }
 
 /** Ask whoever has it to stop. A comment, because it has to reach an agent
  * that is mid-turn and reading its own tools — and because "why did this stop
  * halfway" is a question somebody asks next week. */
-async function askToStop(projectId: string, actor: Actor, thread: CommentThread): Promise<void> {
-  await sendOp(projectId, actor, {
+async function askToStop(canvasId: string, actor: Actor, thread: CommentThread): Promise<void> {
+  await sendOp(canvasId, actor, {
     type: "thread.reply",
     threadId: thread.id,
     comment: makeComment("/cancel"),

@@ -32,7 +32,7 @@ function entry(
 ): LogEntry {
   return {
     seq,
-    envelope: { id: `op_${seq}`, projectId: "prj_1", actor, ts: "", op: noop },
+    envelope: { id: `op_${seq}`, canvasId: "prj_1", actor, ts: "", op: noop },
     inverse: noop,
     ...extra,
   };

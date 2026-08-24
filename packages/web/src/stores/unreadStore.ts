@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { Actor, CanvasState, CommentThread } from "@isocan/core";
+import type { Actor, CanvasContents, CommentThread } from "@isocan/core";
 import { useUiStore } from "./uiStore.ts";
 
 /**
  * "What arrived while I wasn't looking." Per-thread read watermarks live in
- * localStorage (per project, per browser — the same place identity lives), so
+ * localStorage (per canvas, per browser — the same place identity lives), so
  * reopening a canvas shows what happened since your last visit. A comment of
  * your own is never unread.
  *
@@ -26,7 +26,7 @@ export interface CommentNotice {
 type Watermarks = Record<string, string>;
 
 interface UnreadStore {
-  projectId: string | null;
+  canvasId: string | null;
   /** Whose watermarks are loaded — switching identities reloads them. */
   actorId: string | null;
   seen: Watermarks;
@@ -34,26 +34,26 @@ interface UnreadStore {
 }
 
 export const useUnreadStore = create<UnreadStore>(() => ({
-  projectId: null,
+  canvasId: null,
   actorId: null,
   seen: {},
   notices: [],
 }));
 
-/** Per project AND per person: "since MY last visit" is a claim about a
+/** Per canvas AND per person: "since MY last visit" is a claim about a
  * reader, and one browser can hold several (#43). */
-const keyFor = (projectId: string, actorId: string | null) =>
-  actorId ? `isocan.seen.${projectId}.${actorId}` : `isocan.seen.${projectId}`;
+const keyFor = (canvasId: string, actorId: string | null) =>
+  actorId ? `isocan.seen.${canvasId}.${actorId}` : `isocan.seen.${canvasId}`;
 
-function load(projectId: string, actorId: string | null): Watermarks | null {
-  const stored = readKey(keyFor(projectId, actorId));
+function load(canvasId: string, actorId: string | null): Watermarks | null {
+  const stored = readKey(keyFor(canvasId, actorId));
   if (stored || !actorId) return stored;
   // Watermarks written before read state was per-person belong to whoever is
   // holding the browser now — inherit them once, then keep them under the
   // new key. A second identity finds nothing here and starts fresh, which is
   // exactly right for a newcomer.
-  const legacy = readKey(keyFor(projectId, null));
-  if (legacy) persist(projectId, actorId, legacy);
+  const legacy = readKey(keyFor(canvasId, null));
+  if (legacy) persist(canvasId, actorId, legacy);
   return legacy;
 }
 
@@ -66,9 +66,9 @@ function readKey(key: string): Watermarks | null {
   }
 }
 
-function persist(projectId: string, actorId: string | null, seen: Watermarks): void {
+function persist(canvasId: string, actorId: string | null, seen: Watermarks): void {
   try {
-    localStorage.setItem(keyFor(projectId, actorId), JSON.stringify(seen));
+    localStorage.setItem(keyFor(canvasId, actorId), JSON.stringify(seen));
   } catch {
     // Private mode / quota — unread marks are a nicety, not worth failing over.
   }
@@ -80,37 +80,37 @@ function persist(projectId: string, actorId: string | null, seen: Watermarks): v
  * since YOUR last visit, not to greet a newcomer with every comment ever
  * written.
  */
-export function syncProject(
-  projectId: string,
-  canvas: CanvasState,
+export function syncCanvas(
+  canvasId: string,
+  canvas: CanvasContents,
   actorId: string | null = null,
 ): void {
-  const stored = load(projectId, actorId);
+  const stored = load(canvasId, actorId);
   const previous = useUnreadStore.getState();
   if (stored) {
-    if (previous.projectId === projectId && previous.actorId === actorId) return;
+    if (previous.canvasId === canvasId && previous.actorId === actorId) return;
     // Drop watermarks for threads that no longer exist, so deleting threads
     // over a long-lived canvas does not grow the record forever.
     const seen: Watermarks = {};
     for (const threadId of Object.keys(canvas.threads)) {
       if (stored[threadId]) seen[threadId] = stored[threadId]!;
     }
-    persist(projectId, actorId, seen);
-    useUnreadStore.setState({ projectId, actorId, seen, notices: [] });
+    persist(canvasId, actorId, seen);
+    useUnreadStore.setState({ canvasId, actorId, seen, notices: [] });
     return;
   }
   const now = new Date().toISOString();
   const seen: Watermarks = {};
   for (const threadId of Object.keys(canvas.threads)) seen[threadId] = now;
-  persist(projectId, actorId, seen);
-  useUnreadStore.setState({ projectId, actorId, seen, notices: [] });
+  persist(canvasId, actorId, seen);
+  useUnreadStore.setState({ canvasId, actorId, seen, notices: [] });
 }
 
 /** Mark a thread read as of now, and retire any toasts pointing at it. */
 export function markRead(threadId: string): void {
-  const { projectId, actorId, seen, notices } = useUnreadStore.getState();
+  const { canvasId, actorId, seen, notices } = useUnreadStore.getState();
   const next = { ...seen, [threadId]: new Date().toISOString() };
-  if (projectId) persist(projectId, actorId, next);
+  if (canvasId) persist(canvasId, actorId, next);
   useUnreadStore.setState({
     seen: next,
     notices: notices.filter((notice) => notice.threadId !== threadId),
@@ -147,7 +147,7 @@ export function unreadCount(thread: CommentThread, seen: Watermarks, selfId: str
 
 /** Threads with anything unread — what the tab title counts. */
 export function unreadThreads(
-  canvas: CanvasState,
+  canvas: CanvasContents,
   seen: Watermarks,
   selfId: string,
 ): CommentThread[] {

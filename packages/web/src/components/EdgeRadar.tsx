@@ -28,7 +28,7 @@ import { ItemThumb } from "./ItemThumb.tsx";
  * quite happily, and the alternative is a bar hovering in mid-canvas.
  */
 
-export function EdgeRadar({ projectId }: { projectId: string }) {
+export function EdgeRadar({ canvasId }: { canvasId: string }) {
   const items = useCanvasStore((s) => s.canvas?.items);
   const viewport = useUiStore((s) => s.viewport);
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -56,7 +56,7 @@ export function EdgeRadar({ projectId }: { projectId: string }) {
           key={beacon.primary.id}
           beacon={beacon}
           insets={insets}
-          projectId={projectId}
+          canvasId={canvasId}
           hovered={hovered === beacon.primary.id}
           onHover={setHovered}
         />
@@ -74,13 +74,13 @@ const BAR = 7;
 function EdgeBeacon({
   beacon,
   insets,
-  projectId,
+  canvasId,
   hovered,
   onHover,
 }: {
   beacon: Beacon;
   insets: Insets;
-  projectId: string;
+  canvasId: string;
   hovered: boolean;
   onHover: (id: string | null) => void;
 }) {
@@ -159,7 +159,7 @@ function EdgeBeacon({
               onClick={() => goTo(member.item)}
               title={`Go to ${member.item.title}`}
             >
-              <ItemThumb projectId={projectId} itemId={member.item.id} />
+              <ItemThumb canvasId={canvasId} itemId={member.item.id} />
               <span className="beacon-card-text">
                 <b>{member.item.title}</b>
                 <i>{formatDistance(member.distance)}</i>

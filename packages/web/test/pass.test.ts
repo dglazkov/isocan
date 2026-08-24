@@ -151,7 +151,7 @@ beforeEach(async () => {
   // admits it (bootstrap provenance), so it may mint.
   tab = await mintTestBadge(base);
   await tab.speakAs(jordan);
-  await asTab({ type: "project.create", projectId: "prj_acme", title: "Acme Sprint Board" }, null);
+  await asTab({ type: "project.create", canvasId: "prj_acme", title: "Acme Sprint Board" }, null);
   speakAsBrowser();
 });
 
@@ -162,11 +162,11 @@ afterEach(async () => {
 });
 
 /** An op written by the minting tab, as Jordan. */
-async function asTab(op: unknown, projectId: string | null = "prj_acme"): Promise<Response> {
+async function asTab(op: unknown, canvasId: string | null = "prj_acme"): Promise<Response> {
   return realFetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...tab.headers },
-    body: JSON.stringify({ projectId, actor: jordan, op }),
+    body: JSON.stringify({ canvasId, actor: jordan, op }),
   });
 }
 
@@ -242,7 +242,7 @@ describe("a tab that arrives carrying one", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        projectId: "prj_acme",
+        canvasId: "prj_acme",
         actor: jordan,
         op: { type: "project.update", patch: { description: "hers now" } },
       }),

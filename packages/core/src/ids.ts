@@ -4,7 +4,10 @@ export function newId(prefix: string): string {
   return `${prefix}_${nanoid(10)}`;
 }
 
-export const newProjectId = () => newId("prj");
+/** **`prj_` is a deliberate holdout** (phase 13.5's rename): every id ever
+ * minted carries it, and every share link ever pasted contains it. The
+ * function says canvas; the three letters are data. */
+export const newCanvasId = () => newId("prj");
 export const newItemId = () => newId("itm");
 export const newVersionId = () => newId("ver");
 export const newThreadId = () => newId("thr");

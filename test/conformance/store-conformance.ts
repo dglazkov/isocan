@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LogEntry, OpEnvelope, Operation, ProjectState } from "@isocan/core";
+import type { LogEntry, OpEnvelope, Operation, CanvasState } from "@isocan/core";
 import { applyOperation, invertOperation } from "@isocan/core";
 import type { Store } from "@isocan/server";
 
@@ -68,7 +68,7 @@ export function storeConformance(
     };
 
     test(
-      "persists and reloads a project — the state converges, whatever the snapshot did",
+      "persists and reloads a canvas — the state converges, whatever the snapshot did",
       withStore(async ({ store }) => {
         const state = await seed(store);
         const loaded = await store.load("prj_1");
@@ -91,16 +91,16 @@ export function storeConformance(
     );
 
     test(
-      "lists projects, projectExists agrees, and saveProject moves the metadata",
+      "lists canvases, canvasExists agrees, and saveCanvas moves the metadata",
       withStore(async ({ store }) => {
         await seed(store);
-        const projects = await store.listProjects();
-        expect(projects.map((project) => project.id)).toEqual(["prj_1"]);
-        expect(await store.projectExists("prj_1")).toBe(true);
-        expect(await store.projectExists("prj_nope")).toBe(false);
+        const canvases = await store.listCanvases();
+        expect(canvases.map((canvas) => canvas.id)).toEqual(["prj_1"]);
+        expect(await store.canvasExists("prj_1")).toBe(true);
+        expect(await store.canvasExists("prj_nope")).toBe(false);
 
-        await store.saveProject({ ...projects[0]!, title: "Renamed" });
-        expect((await store.listProjects())[0]!.title).toBe("Renamed");
+        await store.saveCanvas({ ...canvases[0]!, title: "Renamed" });
+        expect((await store.listCanvases())[0]!.title).toBe("Renamed");
         expect((await store.load("prj_1"))!.state.project.title).toBe("Renamed");
       }),
     );
@@ -124,10 +124,10 @@ export function storeConformance(
       withStore(async ({ store }) => {
         const state = await seed(store);
         // The crash, performed THROUGH the seam rather than behind it: roll the
-        // snapshot back to its true seq-1 state (project created, canvas empty)
+        // snapshot back to its true seq-1 state (canvas created, nothing on it)
         // and let the load replay 2..3. Same fiction as writing canvas.json by
         // hand, and it is a fiction either backing can be told.
-        const seq1: ProjectState = { project: state.project, canvas: { items: {}, threads: {}, trash: [] } };
+        const seq1: CanvasState = { project: state.project, canvas: { items: {}, threads: {}, trash: [] } };
         await store.saveSnapshot("prj_1", seq1, 1);
         const recovered = await store.load("prj_1");
         expect(recovered!.recoveredSeqs).toEqual([2, 3]);
@@ -187,9 +187,9 @@ export function storeConformance(
       "soft-deletes a project: gone from load and from the list, not from history",
       withStore(async ({ store }) => {
         await seed(store);
-        await store.softDeleteProject("prj_1");
+        await store.softDeleteCanvas("prj_1");
         expect(await store.load("prj_1")).toBeNull();
-        expect(await store.listProjects()).toEqual([]);
+        expect(await store.listCanvases()).toEqual([]);
         // Whether the ID becomes free again is NOT asserted here: a file home
         // moves the directory aside and frees it, and the cloud keeps it
         // claimed forever because its ops are still there and a freed seq is
@@ -199,7 +199,7 @@ export function storeConformance(
     );
 
     test(
-      "returns null for unknown projects",
+      "returns null for unknown canvases",
       withStore(async ({ store }) => {
         expect(await store.load("prj_nope")).toBeNull();
       }),
@@ -318,7 +318,7 @@ function envelope(op: Operation): OpEnvelope {
   opCounter += 1;
   return {
     id: `op_${opCounter}`,
-    projectId: op.type === "project.create" ? null : "prj_1",
+    canvasId: op.type === "project.create" ? null : "prj_1",
     actor,
     ts: new Date(Date.UTC(2026, 0, 1) + opCounter * 1000).toISOString(),
     op,
@@ -330,7 +330,7 @@ function claimEntry(seq: number, who: { id: string; name: string }): LogEntry {
     seq,
     envelope: {
       id: `op_claim_${seq}`,
-      projectId: null,
+      canvasId: null,
       actor: who,
       ts: new Date(Date.UTC(2026, 0, 2) + seq * 1000).toISOString(),
       op: { type: "actor.claim", sessionKey: `test:${who.id}`, name: who.name },
@@ -342,23 +342,23 @@ function claimEntry(seq: number, who: { id: string; name: string }): LogEntry {
 /** Apply + persist an op the way the engine does: log first, then snapshot. */
 async function commit(
   store: Store,
-  state: ProjectState | null,
+  state: CanvasState | null,
   op: Operation,
   seq: number,
-): Promise<ProjectState> {
+): Promise<CanvasState> {
   const env = envelope(op);
   const inverse = state === null && op.type === "project.create" ? null : invertOperation(state, op);
   const next = applyOperation(state, env)!;
   const entry: LogEntry = { seq, envelope: env, inverse };
-  if (op.type === "project.create") await store.createProjectDir("prj_1");
+  if (op.type === "project.create") await store.createCanvasDir("prj_1");
   await store.appendLog("prj_1", entry);
   await store.saveSnapshot("prj_1", next, seq);
   return next;
 }
 
 /** A canvas with three ops on it: create, add an item, move it. */
-export async function seed(store: Store): Promise<ProjectState> {
-  let state = await commit(store, null, { type: "project.create", projectId: "prj_1", title: "P" }, 1);
+export async function seed(store: Store): Promise<CanvasState> {
+  let state = await commit(store, null, { type: "project.create", canvasId: "prj_1", title: "P" }, 1);
   state = await commit(
     store,
     state,

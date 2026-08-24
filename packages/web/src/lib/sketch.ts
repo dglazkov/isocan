@@ -16,7 +16,7 @@ import { addDrawing } from "./upload.ts";
  */
 let inFlight = false;
 
-export async function commitSketch(projectId: string, actor: Actor): Promise<string | null> {
+export async function commitSketch(canvasId: string, actor: Actor): Promise<string | null> {
   const strokes = useUiStore.getState().sketch;
   // A commit already running owns these strokes — a second one would upload
   // the same ink again and land a duplicate item. (The idle timer, ⏎, and
@@ -24,13 +24,13 @@ export async function commitSketch(projectId: string, actor: Actor): Promise<str
   if (inFlight || strokes.length === 0) return null;
   inFlight = true;
   try {
-    return await place(projectId, actor, strokes);
+    return await place(canvasId, actor, strokes);
   } finally {
     inFlight = false;
   }
 }
 
-async function place(projectId: string, actor: Actor, strokes: InkStroke[]): Promise<string> {
+async function place(canvasId: string, actor: Actor, strokes: InkStroke[]): Promise<string> {
   // Ink drawn over something is ABOUT that something: an annotation, which can
   // be pointed at, acted on, and cleared. Ink on bare canvas is just a drawing.
   const canvas = useCanvasStore.getState().canvas;
@@ -42,7 +42,7 @@ async function place(projectId: string, actor: Actor, strokes: InkStroke[]): Pro
           Object.values(canvas.items),
         )
       : null;
-  const itemId = await addDrawing(projectId, actor, strokes, target);
+  const itemId = await addDrawing(canvasId, actor, strokes, target);
   // Only drop what we placed: a stroke drawn while the upload was in flight
   // stays wet and becomes the next drawing.
   const { sketch, clearSketch, beginStroke, select } = useUiStore.getState();
@@ -68,8 +68,8 @@ async function place(projectId: string, actor: Actor, strokes: InkStroke[]): Pro
 /** Place the ink from a caller with nowhere to await — the settle timer, ⏎,
  * leaving the canvas. A failure leaves the strokes on screen and says so, so
  * ink is never lost to a dropped daemon. */
-export function placeSketch(projectId: string, actor: Actor): void {
-  void commitSketch(projectId, actor)
+export function placeSketch(canvasId: string, actor: Actor): void {
+  void commitSketch(canvasId, actor)
     .then(() => useUiStore.getState().setSketchError(null))
     .catch((err: Error) => {
       console.error("could not place the drawing", err);

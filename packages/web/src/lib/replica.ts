@@ -1,4 +1,4 @@
-import type { Actor, CanvasState, Operation, Project } from "@isocan/core";
+import type { Actor, CanvasContents, Operation, Canvas } from "@isocan/core";
 
 /**
  * **The browser's replica, made durable** (phase 10).
@@ -39,10 +39,10 @@ import type { Actor, CanvasState, Operation, Project } from "@isocan/core";
 
 /** One canvas, as this browser holds it between visits. */
 export interface StoredReplica {
-  projectId: string;
+  canvasId: string;
   /** The home's truth at `lastSeq` — never the optimistic view. */
-  project: Project;
-  canvas: CanvasState;
+  project: Canvas;
+  canvas: CanvasContents;
   lastSeq: number;
   queue: StoredWrite[];
   /** ISO, for a human reading the database in devtools. */
@@ -164,12 +164,12 @@ function indexedDbStore(): ReplicaStore {
 
 /** What this browser last knew about a canvas, or null if it has never held
  * it (or cannot remember, which is the same answer to the caller). */
-export async function loadReplica(projectId: string): Promise<StoredReplica | null> {
+export async function loadReplica(canvasId: string): Promise<StoredReplica | null> {
   const backer = backing();
   if (!backer) return null;
   try {
-    const found = await backer.get(projectId);
-    return found && found.projectId === projectId ? found : null;
+    const found = await backer.get(canvasId);
+    return found && found.canvasId === canvasId ? found : null;
   } catch {
     return null;
   }
@@ -188,44 +188,44 @@ const latest = new Map<string, StoredReplica>();
 export function saveReplica(record: StoredReplica, immediate = false): void {
   const backer = backing();
   if (!backer) return;
-  latest.set(record.projectId, record);
+  latest.set(record.canvasId, record);
   const flush = () => {
-    pending.delete(record.projectId);
-    const value = latest.get(record.projectId);
-    if (value) void backer.put(value.projectId, value).catch(() => {});
+    pending.delete(record.canvasId);
+    const value = latest.get(record.canvasId);
+    if (value) void backer.put(value.canvasId, value).catch(() => {});
   };
-  const timer = pending.get(record.projectId);
+  const timer = pending.get(record.canvasId);
   if (immediate) {
     if (timer) clearTimeout(timer);
     flush();
     return;
   }
   if (timer) return;
-  pending.set(record.projectId, setTimeout(flush, SAVE_DEBOUNCE_MS));
+  pending.set(record.canvasId, setTimeout(flush, SAVE_DEBOUNCE_MS));
 }
 
 /** Forget a canvas — it was deleted, or the home says there is none here.
  * Keeping a replica of a canvas that no longer exists is how a tab shows a
  * person work nobody else can see. */
-export async function forgetReplica(projectId: string): Promise<void> {
+export async function forgetReplica(canvasId: string): Promise<void> {
   const backer = backing();
-  const timer = pending.get(projectId);
+  const timer = pending.get(canvasId);
   if (timer) clearTimeout(timer);
-  pending.delete(projectId);
-  latest.delete(projectId);
-  if (backer) await backer.delete(projectId).catch(() => {});
+  pending.delete(canvasId);
+  latest.delete(canvasId);
+  if (backer) await backer.delete(canvasId).catch(() => {});
 }
 
 /** Write everything that is waiting on a debounce, now. Called when the page
  * is being hidden: `visibilitychange` is the last reliable moment a tab gets,
  * and `unload` is not one. */
 export function flushReplicaWrites(): void {
-  for (const projectId of [...pending.keys()]) {
-    const timer = pending.get(projectId);
+  for (const canvasId of [...pending.keys()]) {
+    const timer = pending.get(canvasId);
     if (timer) clearTimeout(timer);
-    pending.delete(projectId);
-    const value = latest.get(projectId);
+    pending.delete(canvasId);
+    const value = latest.get(canvasId);
     const backer = backing();
-    if (value && backer) void backer.put(value.projectId, value).catch(() => {});
+    if (value && backer) void backer.put(value.canvasId, value).catch(() => {});
   }
 }

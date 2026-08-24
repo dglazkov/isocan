@@ -4,7 +4,7 @@
  * `chips.ts`, shared with #item-references.
  */
 import { useMemo } from "react";
-import type { CanvasState, MentionCandidate, PresenceSession, ActorNames } from "@isocan/core";
+import type { CanvasContents, MentionCandidate, PresenceSession, ActorNames } from "@isocan/core";
 import { actorsAnswerTo, collectCanvasActors } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { sessionName } from "./names.ts";
@@ -31,7 +31,7 @@ export interface MentionRoster {
  * that names you still resolves.
  */
 export function mentionRoster(
-  canvas: CanvasState | null,
+  canvas: CanvasContents | null,
   sessions: PresenceSession[],
   selfId?: string,
   names?: ActorNames,

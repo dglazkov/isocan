@@ -4,7 +4,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
  * Choose the color you wear. `actor.setColor` is home-scoped — it changes the
- * actor registry, not a canvas — so it is sent with a null projectId and lands
+ * actor registry, not a canvas — so it is sent with a null canvasId and lands
  * in the home's actors log beside your name.
  *
  * The daemon pushes the new map to every open canvas on the next roster; the

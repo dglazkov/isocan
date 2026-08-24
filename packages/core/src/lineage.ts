@@ -1,4 +1,4 @@
-import type { CanvasState, Item } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 
 /**
  * Where an item came from.
@@ -30,7 +30,7 @@ export function lineageProperties(parentId: string): Record<string, string> {
 
 /** What was made from this item, oldest first — the order they were made in
  * is the order they should be read in. */
-export function childrenOf(canvas: CanvasState, itemId: string): Item[] {
+export function childrenOf(canvas: CanvasContents, itemId: string): Item[] {
   return Object.values(canvas.items)
     .filter((item) => parentOf(item) === itemId)
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
@@ -41,7 +41,7 @@ export function childrenOf(canvas: CanvasState, itemId: string): Item[] {
  * on the canvas. A parent that has been deleted leaves its children as roots
  * rather than orphans pointing at nothing: the canvas shows what exists.
  */
-export function rootItems(canvas: CanvasState): Item[] {
+export function rootItems(canvas: CanvasContents): Item[] {
   const items = Object.values(canvas.items);
   return items
     .filter((item) => {
@@ -54,7 +54,7 @@ export function rootItems(canvas: CanvasState): Item[] {
 /** The whole line of descent under an item, depth first, parents before
  * children. Cycles are impossible to create honestly but trivial to write by
  * hand, so they are cut rather than trusted. */
-export function descendantsOf(canvas: CanvasState, itemId: string, seen = new Set<string>()): Item[] {
+export function descendantsOf(canvas: CanvasContents, itemId: string, seen = new Set<string>()): Item[] {
   if (seen.has(itemId)) return [];
   seen.add(itemId);
   const out: Item[] = [];

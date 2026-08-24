@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Operation, ProjectState } from "../src/index.ts";
+import type { Operation, CanvasState } from "../src/index.ts";
 import { applyOperation, invertOperation } from "../src/index.ts";
 import { alice, bob, envelope, nv, normalize, seedState } from "./helpers.ts";
 
@@ -12,7 +12,7 @@ import { alice, bob, envelope, nv, normalize, seedState } from "./helpers.ts";
  * holding pen so redo == restore). Those cases compare items/threads and
  * assert the expected trash delta explicitly.
  */
-function roundTrip(state: ProjectState, op: Operation): ProjectState {
+function roundTrip(state: CanvasState, op: Operation): CanvasState {
   const inverse = invertOperation(state, op);
   expect(inverse).not.toBeNull();
   const after = applyOperation(state, envelope(op, bob));
@@ -22,7 +22,7 @@ function roundTrip(state: ProjectState, op: Operation): ProjectState {
   return back!;
 }
 
-function expectIdentity(state: ProjectState, op: Operation) {
+function expectIdentity(state: CanvasState, op: Operation) {
   const back = roundTrip(state, op);
   expect(normalize(back)).toEqual(normalize(state));
 }
@@ -33,11 +33,11 @@ describe("apply ∘ invert round-trips", () => {
   it("project.create is not undoable; explicit project.delete still applies", () => {
     const op: Operation = {
       type: "project.create",
-      projectId: "prj_new",
+      canvasId: "prj_new",
       title: "New",
     };
     expect(invertOperation(null, op)).toBeNull();
-    const after = applyOperation(null, { ...envelope(op), projectId: null });
+    const after = applyOperation(null, { ...envelope(op), canvasId: null });
     expect(after?.project.title).toBe("New");
     expect(applyOperation(after, envelope({ type: "project.delete" }))).toBeNull();
   });

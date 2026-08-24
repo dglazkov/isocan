@@ -6,7 +6,7 @@ interface ActorStacks {
 }
 
 /**
- * Per-project, per-actor undo/redo stacks over the oplog — actor-scoped,
+ * Per-canvas, per-actor undo/redo stacks over the oplog — actor-scoped,
  * Figma-style: your undo walks YOUR ops backwards, another actor's ops are
  * invisible to it, and only your own fresh op truncates your redo branch.
  *

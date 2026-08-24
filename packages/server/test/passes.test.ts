@@ -71,9 +71,9 @@ const get = (badge: TestBadge, url: string) => fetch(`${base}${url}`, { headers:
 
 async function makeCanvas(): Promise<void> {
   const made = await post(owner, "/api/ops", {
-    projectId: null,
+    canvasId: null,
     actor: priya,
-    op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
   });
   if (!made.ok) throw new Error(`could not create the canvas: ${await made.text()}`);
 }
@@ -210,7 +210,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
      *
      * Jordan's tab came in on the link, so revoking it now SWEEPS her — she
      * cannot mint anything from a canvas she has just been expelled from, and
-     * minting is project-scoped precisely so that only an admitted badge can.
+     * minting is canvas-scoped precisely so that only an admitted badge can.
      * The order here is the honest one and it makes a sharper point than the
      * old order did: a pass is a desk ROW with a life of its own, so it
      * outlives the admission that produced it. That is what "admitted
@@ -224,7 +224,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     const shut = await get(laptop, `/api/projects/${CANVAS}/canvas`);
     expect(shut.status).toBe(403);
     const notHer = await post(laptop, "/api/ops", {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: jordan,
       op: item("itm_1"),
     });
@@ -240,7 +240,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     // And speaking as her. This is the half a recorded admission cannot fake:
     // the reducer stamps `usr_jordan` on the op, and mechanism 5 let it.
     const wrote = await post(laptop, "/api/ops", {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: jordan,
       op: item("itm_1"),
     });
@@ -273,7 +273,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     // replica's `ensureClaim` would be refused after every daemon restart —
     // the handed claim would be unusable by the only mechanism that uses it.
     const keyed = await post(laptop, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "claude-code:s-1", as: jordan.id },
     });
     expect(keyed.status, await keyed.clone().text()).toBe(200);
@@ -289,7 +289,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     // HANDED this actor, never about the actor being popular.
     const thief = await fresh();
     const stolen = await post(thief, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "claude-code:s-2", as: jordan.id },
     });
     expect(stolen.status).toBe(400);
@@ -331,7 +331,7 @@ describe("redeeming: the surface arrives knowing who it is", () => {
     // Nobody was handed over, so the surface names itself — and is handed a
     // free name, not Priya's.
     const claimed = await post(sandbox, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       op: { type: "actor.claim", sessionKey: "cloud:sonia", name: "Sonia" },
     });
     expect(claimed.status, await claimed.clone().text()).toBe(200);
@@ -473,7 +473,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
       const claimed = await fetch(`${replicaBase}/api/ops`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...cli.headers },
-        body: JSON.stringify({ projectId: null, op: { type: "actor.claim", sessionKey: "cli:new" } }),
+        body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", sessionKey: "cli:new" } }),
       });
       expect(claimed.status, await claimed.clone().text()).toBe(200);
       expect((await body<LogEntry>(claimed)).envelope.actor.name).toBeTruthy();
@@ -493,7 +493,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
     // route — different code, and a caller acts on them differently.
     const missing = await get(owner, "/api/projects/prj_nope/canvas");
     expect(missing.status).toBe(404);
-    expect((await body<{ code: string }>(missing)).code).toBe("unknown-project");
+    expect((await body<{ code: string }>(missing)).code).toBe("unknown-canvas");
   });
 });
 
@@ -583,7 +583,7 @@ describe("on a replica", () => {
       const wrote = await fetch(`${replicaBase}/api/ops`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...cli.headers },
-        body: JSON.stringify({ projectId: CANVAS, actor: jordan, op: item("itm_replica") }),
+        body: JSON.stringify({ canvasId: CANVAS, actor: jordan, op: item("itm_replica") }),
       });
       expect(wrote.status, await wrote.clone().text()).toBe(200);
       const atHome = await body<LogEntry[]>(await get(owner, `/api/projects/${CANVAS}/oplog?since=0`));

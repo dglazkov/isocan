@@ -20,7 +20,7 @@ function formatBytes(bytes: number): string {
 /** Must match .trash-panel's width in styles.css. */
 export const TRASH_WIDTH = 300;
 
-export function TrashPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function TrashPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.trashOpen);
   // Select the stable reference; deriving `?? []` in the selector would mint
   // a new array per call and loop useSyncExternalStore forever.
@@ -35,7 +35,7 @@ export function TrashPanel({ projectId, actor }: { projectId: string; actor: Act
   async function reclaim() {
     setGcBusy(true);
     try {
-      setGcResult(await runGc(projectId));
+      setGcResult(await runGc(canvasId));
     } finally {
       setGcBusy(false);
     }
@@ -64,7 +64,7 @@ export function TrashPanel({ projectId, actor }: { projectId: string; actor: Act
             <button
               className="btn"
               onClick={() =>
-                void sendOp(projectId, actor, { type: "item.restore", itemId: entry.item.id })
+                void sendOp(canvasId, actor, { type: "item.restore", itemId: entry.item.id })
               }
             >
               Restore
@@ -93,7 +93,7 @@ export function TrashPanel({ projectId, actor }: { projectId: string; actor: Act
                 className="btn danger"
                 onClick={() => {
                   setConfirming(false);
-                  void sendOp(projectId, actor, { type: "trash.empty" });
+                  void sendOp(canvasId, actor, { type: "trash.empty" });
                 }}
               >
                 Really empty {trash.length} item{trash.length === 1 ? "" : "s"} — can't be undone

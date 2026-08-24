@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
-import type { Actor, MetaPatch, Project } from "@isocan/core";
-import { DEFAULT_PORT, newProjectId } from "@isocan/core";
+import type { Actor, MetaPatch, Canvas } from "@isocan/core";
+import { DEFAULT_PORT, newCanvasId } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
@@ -21,7 +21,7 @@ export interface Ctx {
   actor: Actor;
   json: boolean;
   home: string;
-  projectRef?: string;
+  canvasRef?: string;
   /** The directory's canvas, when the cwd sits under a `.isocan/project.json`
    * marker (#60). Resolved once per command; null outside any bound tree. */
   binding: DirBinding | null;
@@ -52,7 +52,7 @@ export interface Ctx {
    * Off `GET /api/homes`, fetched at most once per command and only when
    * somebody asks: a read that prints no address needs no round trip.
    */
-  homeOf(projectId: string): Promise<string | null>;
+  homeOf(canvasId: string): Promise<string | null>;
   /** The whole record, for the two callers that need more than one canvas's
    * answer — `isocan status`'s role line and the refusal below. */
   homes(): Promise<HomeRecord>;
@@ -82,7 +82,7 @@ export interface HomeRecord {
   links: { url: string; reachable: boolean | null }[];
   /** This canvas's row: an address, `null` for "here", `undefined` for "no row
    * — this machine has never recorded anything about that canvas". */
-  rowFor(projectId: string): string | null | undefined;
+  rowFor(canvasId: string): string | null | undefined;
   /** Every row, for the summaries. */
   rows: Record<string, string | null>;
   /**
@@ -101,17 +101,27 @@ export interface HomeRecord {
   legacy: boolean;
 }
 
+/**
+ * Which canvas the flags name: `--canvas`, or `--project` — the hidden alias
+ * kept working through phase 13.5's rename so nothing anybody scripted broke.
+ */
+export function canvasRefOf(opts: { canvas?: string; project?: string }): string | undefined {
+  return opts.canvas ?? opts.project;
+}
+
 export async function makeCtx(cmd: Command): Promise<Ctx> {
   const opts = cmd.optsWithGlobals() as {
     json?: boolean;
     port?: string;
+    canvas?: string;
+    /** `--project`, the hidden alias kept from before phase 13.5's rename. */
     project?: string;
   };
   const home = paths.isocanHome();
   const port = opts.port ? Number(opts.port) : Number(process.env.ISOCAN_PORT ?? DEFAULT_PORT);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   // A person at a keyboard is asked once, up front. Everyone else is asked
-  // only if it turns out to matter: looking (`ls`, `project list`, `show`)
+  // only if it turns out to matter: looking (`ls`, `canvas list`, `show`)
   // stamps nothing, and an agent should be able to see where it has landed
   // before it decides what to call itself. The getter is what makes that
   // lazy — reads never touch `actor`, so they never demand one.
@@ -150,10 +160,10 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     binding,
     birthHome,
     homes,
-    async homeOf(projectId: string): Promise<string | null> {
-      return homeAddressOf(await homes(), projectId);
+    async homeOf(canvasId: string): Promise<string | null> {
+      return homeAddressOf(await homes(), canvasId);
     },
-    ...(opts.project !== undefined ? { projectRef: opts.project } : {}),
+    ...(canvasRefOf(opts) !== undefined ? { canvasRef: canvasRefOf(opts)! } : {}),
   };
 }
 
@@ -177,15 +187,15 @@ export async function readHomeRecord(
     links: answer?.links ?? [],
     rows,
     legacy: answer === null,
-    rowFor: (projectId: string) => rows[projectId],
+    rowFor: (canvasId: string) => rows[canvasId],
   };
 }
 
 /** Where this canvas's page is served from, or null for "this daemon". The one
  * computation behind every address the CLI prints. */
-export function homeAddressOf(record: HomeRecord, projectId: string): string | null {
+export function homeAddressOf(record: HomeRecord, canvasId: string): string | null {
   if (record.legacy) return record.birth;
-  return record.rowFor(projectId) ?? null;
+  return record.rowFor(canvasId) ?? null;
 }
 
 /**
@@ -238,7 +248,7 @@ function refuseHomeDisagreement(
   heldHere: boolean,
 ): void {
   if (binding.home === undefined) return; // an older marker; it names no home
-  const row = record.legacy ? record.birth : record.rowFor(binding.projectId);
+  const row = record.legacy ? record.birth : record.rowFor(binding.canvasId);
   // No row and not on this machine: nothing to disagree with. `fetchFromHome`
   // takes it from here, and the home the marker names is the one it asks.
   if (row === undefined && !heldHere) return;
@@ -279,6 +289,11 @@ async function warnIfStale(health: Health | null, home: string): Promise<void> {
 }
 
 interface ConfigFile extends HarnessVarConfig, HomeConfig {
+  /** **A deliberate holdout** (phase 13.5's rename): this is a KEY in
+   * `~/.isocan/config.json`, a hand-edited file that already exists on every
+   * machine. Renaming it would have an upgraded CLI read an old file, find no
+   * key, and quietly forget the home default — the same argument `HomeConfig.home`
+   * is written on. */
   defaultProjectId?: string;
 }
 
@@ -295,27 +310,27 @@ export async function writeConfig(home: string, config: ConfigFile): Promise<voi
 }
 
 export interface ResolveOptions {
-  /** May this resolution CREATE the directory's project: materialize a
+  /** May this resolution CREATE the directory's canvas: materialize a
    * marker whose store is missing here (a fresh clone), or bind an unbound
-   * directory to a brand-new project. Passed by the commands that can put
+   * directory to a brand-new canvas. Passed by the commands that can put
    * something onto an empty canvas — and the session handshake — never by
    * reads, so `ls` in a stray directory cannot mint canvases. */
   create?: boolean;
 }
 
 /**
- * Which project a command means (#60). In order: --project says so; the
+ * Which canvas a command means (#60). In order: --canvas says so; the
  * directory says so (the nearest `.isocan/project.json` marker, git-style
  * walk-up); the home default (`isocan use --home`), consulted only OUTSIDE
- * bound directories; the only project there is; and finally — for commands
- * allowed to create — binding this directory to a fresh project named after
+ * bound directories; the only canvas there is; and finally — for commands
+ * allowed to create — binding this directory to a fresh canvas named after
  * it.
  */
-export async function resolveProject(ctx: Ctx, opts: ResolveOptions = {}): Promise<Project> {
-  const projects = await ctx.client.listProjects();
-  if (ctx.projectRef !== undefined) return matchRef(projects, ctx.projectRef);
+export async function resolveCanvas(ctx: Ctx, opts: ResolveOptions = {}): Promise<Canvas> {
+  const canvases = await ctx.client.listCanvases();
+  if (ctx.canvasRef !== undefined) return matchRef(canvases, ctx.canvasRef);
   if (ctx.binding) {
-    const bound = projects.find((p) => p.id === ctx.binding!.projectId);
+    const bound = canvases.find((p) => p.id === ctx.binding!.canvasId);
     refuseHomeDisagreement(ctx.binding, await ctx.homes(), bound !== undefined);
     if (bound) {
       await recordDir(ctx.home, ctx.binding.root, bound.id);
@@ -329,45 +344,45 @@ export async function resolveProject(ctx: Ctx, opts: ResolveOptions = {}): Promi
     refuseOfflineBirth(ctx.binding);
     if (opts.create) return materializeBinding(ctx, ctx.binding);
     throw new Error(
-      `this directory is bound to project ${ctx.binding.projectId} ` +
+      `this directory is bound to canvas ${ctx.binding.canvasId} ` +
         `(${markerFile(ctx.binding.root)}), which does not exist in this home yet — ` +
         "`isocan session start`, or any command that adds something, materializes it",
     );
   }
   const fallback = (await readConfig(ctx.home)).defaultProjectId;
-  if (fallback !== undefined) return matchRef(projects, fallback);
-  if (projects.length === 1) return projects[0]!;
+  if (fallback !== undefined) return matchRef(canvases, fallback);
+  if (canvases.length === 1) return canvases[0]!;
   if (opts.create) {
     const made = await bindFresh(ctx);
     if (made) return made;
   }
   throw new Error(
-    projects.length === 0
-      ? "no projects yet — create one with `isocan project create <title>`"
-      : "multiple projects — pass --project <id|title>, or bind this directory to one with `isocan use <project>`",
+    canvases.length === 0
+      ? "no canvases yet — create one with `isocan canvas create <title>`"
+      : "multiple canvases — pass --canvas <id|title>, or bind this directory to one with `isocan use <canvas>`",
   );
 }
 
 /** Exact id, then case-insensitive title prefix. */
-function matchRef(projects: Project[], ref: string): Project {
-  const byId = projects.find((p) => p.id === ref);
+function matchRef(canvases: Canvas[], ref: string): Canvas {
+  const byId = canvases.find((p) => p.id === ref);
   if (byId) return byId;
-  const matches = projects.filter((p) => p.title.toLowerCase().startsWith(ref.toLowerCase()));
+  const matches = canvases.filter((p) => p.title.toLowerCase().startsWith(ref.toLowerCase()));
   if (matches.length === 1) return matches[0]!;
   if (matches.length > 1) {
     throw new Error(
-      `ambiguous project "${ref}": ${matches.map((p) => `${p.id} (${p.title})`).join(", ")}`,
+      `ambiguous canvas "${ref}": ${matches.map((p) => `${p.id} (${p.title})`).join(", ")}`,
     );
   }
-  throw new Error(`no project matches "${ref}"`);
+  throw new Error(`no canvas matches "${ref}"`);
 }
 
-/** The freshly created project, read back from the daemon — the store is the
- * truth about stamps and timestamps, so nothing here fabricates a Project. */
-async function projectById(client: DaemonClient, id: string): Promise<Project> {
-  const project = (await client.listProjects()).find((p) => p.id === id);
-  if (!project) throw new Error(`project ${id} was created but the daemon cannot list it`);
-  return project;
+/** The freshly created canvas, read back from the daemon — the store is the
+ * truth about stamps and timestamps, so nothing here fabricates a Canvas. */
+async function canvasById(client: DaemonClient, id: string): Promise<Canvas> {
+  const canvas = (await client.listCanvases()).find((p) => p.id === id);
+  if (!canvas) throw new Error(`canvas ${id} was created but the daemon cannot list it`);
+  return canvas;
 }
 
 /**
@@ -416,16 +431,16 @@ async function fetchFromHome(
   client: DaemonClient,
   birthHome: string | null,
   binding: DirBinding,
-): Promise<Project | null> {
+): Promise<Canvas | null> {
   const target = binding.home ?? birthHome;
   if (!target) return null;
   try {
-    await client.joinFromHome(binding.projectId, binding.home);
+    await client.joinFromHome(binding.canvasId, binding.home);
   } catch (err) {
     if (err instanceof ApiError && err.code === "not-a-replica") return null;
     if (err instanceof ApiError && err.code === "home-unreachable") {
       throw new Error(
-        `${target} did not answer, so ${binding.projectId} (${markerFile(binding.root)}) ` +
+        `${target} did not answer, so ${binding.canvasId} (${markerFile(binding.root)}) ` +
           `cannot be fetched: ${(err as Error).message}\n` +
           "Nothing was created here. That canvas lives at that address and this machine " +
           "will not make a second one under its id — try again when the home is up.",
@@ -433,7 +448,7 @@ async function fetchFromHome(
     }
     if (err instanceof ApiError && err.status === 404) return null;
     throw new Error(
-      `${target} would not hand this machine ${binding.projectId} ` +
+      `${target} would not hand this machine ${binding.canvasId} ` +
         `(${markerFile(binding.root)}): ${(err as Error).message}\n` +
         "If that canvas is yours, mint a pass from a session that is already on it " +
         "(`isocan pass`) and run the command it prints here.",
@@ -449,11 +464,11 @@ async function fetchFromHome(
    */
   const deadline = Date.now() + 15_000;
   for (;;) {
-    const here = (await client.listProjects()).find((p) => p.id === binding.projectId);
+    const here = (await client.listCanvases()).find((p) => p.id === binding.canvasId);
     if (here) return here;
     if (Date.now() > deadline) {
       throw new Error(
-        `${target} let this machine onto ${binding.projectId}, but the canvas has not ` +
+        `${target} let this machine onto ${binding.canvasId}, but the canvas has not ` +
           "arrived yet. It replicates in the background — try again in a moment.",
       );
     }
@@ -483,7 +498,7 @@ async function fetchFromHome(
 function refuseOfflineBirth(binding: DirBinding): void {
   if (binding.home === undefined) return;
   throw new Error(
-    `${binding.projectId} lives at ${binding.home} (${markerFile(binding.root)}) and this ` +
+    `${binding.canvasId} lives at ${binding.home} (${markerFile(binding.root)}) and this ` +
       "machine could not get it from there. Creating it here instead would make a SECOND " +
       "canvas with that id — a twin, which is what offline birth means and which is not " +
       "built yet. Nothing was created. Fix the reach to that home, or mint a pass there " +
@@ -492,8 +507,8 @@ function refuseOfflineBirth(binding: DirBinding): void {
 }
 
 /**
- * A marker whose project this home has never seen — a fresh clone, or a
- * teammate's directory. ADOPT the id rather than minting one: project ids
+ * A marker whose canvas this home has never seen — a fresh clone, or a
+ * teammate's directory. ADOPT the id rather than minting one: canvas ids
  * are what let two homes agree they are working on the same canvas, so the
  * store is created under the id the marker carries.
  *
@@ -503,27 +518,27 @@ function refuseOfflineBirth(binding: DirBinding): void {
  * at all (see {@link refuseOfflineBirth}). What is left is the case this was
  * always for: a marker that names an id and nothing else.
  */
-async function materializeBinding(ctx: Ctx, binding: DirBinding): Promise<Project> {
+async function materializeBinding(ctx: Ctx, binding: DirBinding): Promise<Canvas> {
   const title = binding.title ?? path.basename(binding.root);
   await ctx.client.sendOp(null, ctx.actor, {
     type: "project.create",
-    projectId: binding.projectId,
+    canvasId: binding.canvasId,
     title,
   });
-  await recordDir(ctx.home, binding.root, binding.projectId);
+  await recordDir(ctx.home, binding.root, binding.canvasId);
   console.error(
-    `note: materialized "${title}" (${binding.projectId}) from ${markerFile(binding.root)}`,
+    `note: materialized "${title}" (${binding.canvasId}) from ${markerFile(binding.root)}`,
   );
-  return projectById(ctx.client, binding.projectId);
+  return canvasById(ctx.client, binding.canvasId);
 }
 
-/** Bind an unbound directory: a new project named after it, a marker beside
+/** Bind an unbound directory: a new canvas named after it, a marker beside
  * it, a roster row in the home. Null when the directory refuses a marker
  * (the user's home directory, the filesystem root). */
-async function bindFresh(ctx: Ctx): Promise<Project | null> {
+async function bindFresh(ctx: Ctx): Promise<Canvas | null> {
   const root = await bindableRoot(process.cwd(), ctx.home);
   if (!root) return null;
-  const projectId = newProjectId();
+  const canvasId = newCanvasId();
   const title = path.basename(root);
   // The write is the birth, and a birth that names an address FORWARDS — so
   // this one call is what makes the canvas exist at that home rather than here,
@@ -542,23 +557,23 @@ async function bindFresh(ctx: Ctx): Promise<Project | null> {
   await ctx.client.sendOp(
     null,
     ctx.actor,
-    { type: "project.create", projectId, title },
+    { type: "project.create", canvasId, title },
     undefined,
     birth ?? undefined,
   );
-  const marker = { projectId, title, ...(birth ? { home: birth } : {}) };
+  const marker = { canvasId, title, ...(birth ? { home: birth } : {}) };
   const file = await writeMarker(root, marker);
-  await recordDir(ctx.home, root, projectId);
-  console.error(`note: created "${title}" (${projectId}) for this directory — bound via ${file}`);
+  await recordDir(ctx.home, root, canvasId);
+  console.error(`note: created "${title}" (${canvasId}) for this directory — bound via ${file}`);
   ctx.binding = { root, ...marker };
-  return projectById(ctx.client, projectId);
+  return canvasById(ctx.client, canvasId);
 }
 
 /**
  * The handshake's half of #60: after an agent names itself, make sure the
  * directory it landed in has a canvas. An existing binding is confirmed (and
  * its store materialized if this home has never seen it); an unbound,
- * bindable directory gets a fresh project named after it. Null when the
+ * bindable directory gets a fresh canvas named after it. Null when the
  * directory refuses a marker — the handshake still succeeded, there is just
  * no canvas to imply.
  */
@@ -570,19 +585,19 @@ export async function ensureDirBinding(
    * goes. The per-canvas answers are read from the record below; this one
    * cannot be, because a canvas that does not exist yet has no row. */
   birthHome: string | null = null,
-): Promise<{ project: Project; root: string; created: boolean } | null> {
+): Promise<{ canvas: Canvas; root: string; created: boolean } | null> {
   const binding = await findBinding(process.cwd(), home);
   if (binding) {
-    const existing = (await client.listProjects()).find((p) => p.id === binding.projectId);
-    // The same question `resolveProject` asks, asked the same way and against
+    const existing = (await client.listCanvases()).find((p) => p.id === binding.canvasId);
+    // The same question `resolveCanvas` asks, asked the same way and against
     // the same record — the handshake lands in a directory nobody vetted, so it
     // is exactly as likely to meet a marker that disagrees.
     refuseHomeDisagreement(binding, await readHomeRecord(client, birthHome), existing !== undefined);
     if (existing) {
       await recordDir(home, binding.root, existing.id);
-      return { project: existing, root: binding.root, created: false };
+      return { canvas: existing, root: binding.root, created: false };
     }
-    // Same order as `resolveProject`: a marker whose canvas lives at a home
+    // Same order as `resolveCanvas`: a marker whose canvas lives at a home
     // this machine can reach is FETCHED, not re-created. `created: false`
     // because nothing was — the canvas has existed at the home all along, and
     // an agent told it created a canvas it merely joined would say so on the
@@ -590,7 +605,7 @@ export async function ensureDirBinding(
     const fromHome = await fetchFromHome(client, birthHome, binding);
     if (fromHome) {
       await recordDir(home, binding.root, fromHome.id);
-      return { project: fromHome, root: binding.root, created: false };
+      return { canvas: fromHome, root: binding.root, created: false };
     }
     // And the same guard, for the same reason: this is the other place a
     // marker's id could be minted a second time locally.
@@ -599,31 +614,31 @@ export async function ensureDirBinding(
     await client.sendOp(
       null,
       actor,
-      { type: "project.create", projectId: binding.projectId, title },
+      { type: "project.create", canvasId: binding.canvasId, title },
       undefined,
       birthHome ?? undefined,
     );
-    await recordDir(home, binding.root, binding.projectId);
+    await recordDir(home, binding.root, binding.canvasId);
     return {
-      project: await projectById(client, binding.projectId),
+      canvas: await canvasById(client, binding.canvasId),
       root: binding.root,
       created: true,
     };
   }
   const root = await bindableRoot(process.cwd(), home);
   if (!root) return null;
-  const projectId = newProjectId();
+  const canvasId = newCanvasId();
   const title = path.basename(root);
   await client.sendOp(
     null,
     actor,
-    { type: "project.create", projectId, title },
+    { type: "project.create", canvasId, title },
     undefined,
     birthHome ?? undefined,
   );
-  await writeMarker(root, { projectId, title, ...(birthHome ? { home: birthHome } : {}) });
-  await recordDir(home, root, projectId);
-  return { project: await projectById(client, projectId), root, created: true };
+  await writeMarker(root, { canvasId, title, ...(birthHome ? { home: birthHome } : {}) });
+  await recordDir(home, root, canvasId);
+  return { canvas: await canvasById(client, canvasId), root, created: true };
 }
 
 /** Build a MetaPatch from --title/--description/--prop/--rm-prop flags. */

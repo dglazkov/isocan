@@ -15,7 +15,7 @@ isocan status                  # daemon auto-starts on any command if down
 isocan whoami                  # identity must be YOURS, not the user's
 isocan identity --session      # be handed a name, as THIS agent — and bind
                                # this directory to its canvas (see below)
-isocan project list            # the directory's canvas; --all for the home
+isocan canvas list            # the directory's canvas; --all for the home
 ```
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
@@ -33,9 +33,9 @@ if the marker names one this machine has never seen (a fresh clone), your
 first addition materializes it under the same id; if there is no marker, a
 canvas named after the directory is created and bound. So there is always a
 canvas to work on — this directory's. Every command resolves to it on its
-own; pass `--project <ref>` only when deliberately reaching for another
+own; pass `--canvas <ref>` only when deliberately reaching for another
 canvas, and treat the human's other canvases as their business
-(`project list --all` shows them).
+(`canvas list --all` shows them).
 
 Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
@@ -75,7 +75,7 @@ Pick like this, once, before you appear:
    under it is this machine's credential with the daemon, handed out
    automatically; there is nothing for you to do with it.) On a machine where
    nobody has been named yet it errors with "no identity configured" — that
-   is the answer "nobody, yet", not a broken install; same for a `project
+   is the answer "nobody, yet", not a broken install; same for a `canvas
    list` that is empty before you have named yourself (the handshake is what
    creates this directory's canvas). Neither is a reason to reinstall
    anything.
@@ -146,7 +146,7 @@ think is the last.
    for you…" automatically. On wake, or on a timeout: start the next lap.
    The wait is on THIS directory's canvas — the one your work is on. There
    is no home-wide listening; if the human wants you on a different canvas,
-   they will say so, and `--project <ref>` is how you reach it.
+   they will say so, and `--canvas <ref>` is how you reach it.
 
 **Going home** is not a step, it is an interruption: run `isocan session end`
 when the human has told you the collaboration is over, and only then. Nothing
@@ -422,9 +422,9 @@ that id here at all — a typo, or a canvas that lives at another home.
 
 ## Working a canvas that is not this directory's
 
-Only when the human asks for it. Pass `--project <ref>` to each command — do
+Only when the human asks for it. Pass `--canvas <ref>` to each command — do
 NOT `isocan use` there, which would re-bind the directory you are standing
-in — and check `isocan --project <ref> who --all` so your name is free on
+in — and check `isocan --canvas <ref> who --all` so your name is free on
 that canvas too. Waking from a `wait` still lands your cursor on the thread
 that woke you, with no `session start` needed.
 
@@ -789,7 +789,7 @@ anyone runs `isocan format`, instead of landing in a folder nobody opens.
 `isocan --help` covers everything; the commands you'll live in:
 `comment list|add|reply|anchor|main|rm`,
 `session start|on|work|say|point|end|move`,
-`project create|list|show|edit|delete` (delete needs `--force` and is NOT
+`canvas create|list|show|edit|delete` (delete needs `--force` and is NOT
 undoable — confirm on the thread first, and never delete a canvas you did not
 make),
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
@@ -799,7 +799,7 @@ make),
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
-`undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `project`,
+`undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `canvas`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),

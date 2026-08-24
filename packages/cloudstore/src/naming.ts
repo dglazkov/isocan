@@ -3,7 +3,7 @@
  * reading the backing.
  *
  * ```
- * canvases/{id}                    the Project document + compactedThrough + deleted
+ * canvases/{id}                    the Canvas document + compactedThrough + deleted
  * canvases/{id}/ops/{paddedSeq}    one CREATE-ONLY document per LogEntry
  * canvases/{id}/blobmeta/{hash}    one document per blob — no shared index
  * actors/{paddedSeq}               the registry's PUBLIC face, op docs

@@ -49,9 +49,9 @@ beforeEach(async () => {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
     body: JSON.stringify({
-      projectId: null,
+      canvasId: null,
       actor: seeder,
-      op: { type: "project.create", projectId: "prj_1", title: "P" },
+      op: { type: "project.create", canvasId: "prj_1", title: "P" },
     }),
   });
 });
@@ -85,8 +85,8 @@ function snapshot(): Promise<CanvasSnapshotResponse> {
 }
 
 describe("isocan browse", () => {
-  it("projects a bare host:port as an ordinary item.add with a uri-list blob", async () => {
-    const run = await isocan("browse", "localhost:9999", "--project", "prj_1", "--at", "100,50", "--json");
+  it("canvases a bare host:port as an ordinary item.add with a uri-list blob", async () => {
+    const run = await isocan("browse", "localhost:9999", "--canvas", "prj_1", "--at", "100,50", "--json");
     expect(run.stderr).toBe("");
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as { itemId: string; url: string };
@@ -111,7 +111,7 @@ describe("isocan browse", () => {
   });
 
   it("refuses anything that isn't http(s), leaving the canvas untouched", async () => {
-    const run = await isocan("browse", "file:///etc/passwd", "--project", "prj_1");
+    const run = await isocan("browse", "file:///etc/passwd", "--canvas", "prj_1");
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("only http");
     const snap = await snapshot();

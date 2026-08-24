@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasState, CommentThread, Item } from "@isocan/core";
+import type { CanvasContents, CommentThread, Item } from "@isocan/core";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -44,7 +44,7 @@ const thread = (x: number, y: number, anchorItemId: string | null = null, main =
   createdBy: actor,
 });
 
-const canvasWith = (threads: CommentThread[], items: Item[] = []): CanvasState => ({
+const canvasWith = (threads: CommentThread[], items: Item[] = []): CanvasContents => ({
   items: Object.fromEntries(items.map((one) => [one.id, one])),
   threads: Object.fromEntries(threads.map((one) => [one.id, one])),
   trash: [],

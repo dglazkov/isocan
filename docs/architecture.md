@@ -208,7 +208,7 @@ from here", which on a solo home includes the canvas a CLI just made
 under a badge the tab has never carried — and the caller states which,
 never the route sniffing who called. Phase 10.3 added a third question to
 the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's project list asks,
+daemon is the home of, which is what the web app's canvas list asks,
 because its links are client-side navigations that never reach the
 per-canvas page guard and the local origin would otherwise render a
 replica of a canvas that lives at dev. Enumerate-and-mirror was the
@@ -353,7 +353,7 @@ two-ledger rule:
 
 - `badges/{badgeId}` — `{secretHash, kind, createdAt, lastSeen,
   admissions: [{canvasId, provenance, at}],
-  claims: [{actorId, boundAt, sessionKey?, projectId?}],
+  claims: [{actorId, boundAt, sessionKey?, canvasId?}],
   claimIds: [actorId], claimKeys: [sessionKey], admittedTo: [canvasId],
   attestations: [{attribute, verifiedVia, at}]}`. The badge secret is
   256-bit random and stored **hashed** — the desk keeps no secret it

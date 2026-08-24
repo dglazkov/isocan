@@ -189,9 +189,9 @@ describe("a daemon that outlived its build", () => {
       expect((await isocan("status")).stdout).toContain("stale");
 
       // The first command says so; the second stays quiet about the same daemon.
-      const first = await isocan("project", "list");
+      const first = await isocan("canvas", "list");
       expect(first.stderr).toContain("isocan restart");
-      const second = await isocan("project", "list");
+      const second = await isocan("canvas", "list");
       expect(second.stderr).not.toContain("isocan restart");
 
       // …until it is actually restarted, which clears the note.

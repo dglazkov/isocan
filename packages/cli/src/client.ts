@@ -25,7 +25,7 @@ import type {
   Operation,
   PostOpResponse,
   PresenceSession,
-  Project,
+  Canvas,
   RedeemPassResponse,
   UpdateSessionRequest,
   WatchLogRequest,
@@ -68,7 +68,7 @@ export interface Health extends Partial<BuildStamp> {
    * the one whole-daemon answer that still exists.
    *
    * **Never use it to build a canvas's address.** That is now
-   * `Ctx.homeOf(projectId)`, off `GET /api/homes`: on a machine with two
+   * `Ctx.homeOf(canvasId)`, off `GET /api/homes`: on a machine with two
    * homes this value is where the NEXT canvas goes, and printing it for a
    * canvas that lives somewhere else is the cheerful wrong address in the one
    * string a person pastes to another person.
@@ -254,7 +254,7 @@ export class DaemonClient {
   /** Name (or resume) the actor behind a session key — the one op sent
    * without an actor: the response envelope says who you are. */
   claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
-    return this.request("POST", "/api/ops", { projectId: null, op });
+    return this.request("POST", "/api/ops", { canvasId: null, op });
   }
 
   /** Who the given session keys speak as (everyone, when omitted). */
@@ -285,14 +285,14 @@ export class DaemonClient {
    * and can never say "send this command somewhere else".
    */
   sendOp(
-    projectId: string | null,
+    canvasId: string | null,
     actor: Actor,
     op: Operation,
     clientId?: string,
     home?: string,
   ): Promise<PostOpResponse> {
     return this.request("POST", "/api/ops", {
-      projectId,
+      canvasId,
       actor,
       op,
       ...(clientId !== undefined ? { clientId } : {}),
@@ -302,27 +302,27 @@ export class DaemonClient {
 
   // ---- presence sessions ----
 
-  createSession(projectId: string, actor: Actor, label?: string): Promise<CreateSessionResponse> {
-    return this.request("POST", `/api/projects/${projectId}/sessions`, {
+  createSession(canvasId: string, actor: Actor, label?: string): Promise<CreateSessionResponse> {
+    return this.request("POST", `/api/projects/${canvasId}/sessions`, {
       actor,
       ...(label !== undefined ? { label } : {}),
     });
   }
 
   updateSession(
-    projectId: string,
+    canvasId: string,
     sessionId: string,
     patch: UpdateSessionRequest,
   ): Promise<{ ok: true; cancelled?: { threadId: string; by: string; at: string } }> {
-    return this.request("PUT", `/api/projects/${projectId}/sessions/${sessionId}`, patch);
+    return this.request("PUT", `/api/projects/${canvasId}/sessions/${sessionId}`, patch);
   }
 
-  endSession(projectId: string, sessionId: string): Promise<{ ok: true }> {
-    return this.request("DELETE", `/api/projects/${projectId}/sessions/${sessionId}`);
+  endSession(canvasId: string, sessionId: string): Promise<{ ok: true }> {
+    return this.request("DELETE", `/api/projects/${canvasId}/sessions/${sessionId}`);
   }
 
-  listSessions(projectId: string): Promise<PresenceSession[]> {
-    return this.request("GET", `/api/projects/${projectId}/sessions`);
+  listSessions(canvasId: string): Promise<PresenceSession[]> {
+    return this.request("GET", `/api/projects/${canvasId}/sessions`);
   }
 
   /** End every session an actor holds — the daemon-side truth, for when the
@@ -332,7 +332,7 @@ export class DaemonClient {
     return this.request("DELETE", `/api/presence/actors/${actorId}${query}`);
   }
 
-  listProjects(): Promise<Project[]> {
+  listCanvases(): Promise<Canvas[]> {
     return this.request("GET", "/api/projects");
   }
 
@@ -344,24 +344,24 @@ export class DaemonClient {
   // all three to the home, because the row that decides who may enter lives
   // there; nothing here has to know that.
 
-  grants(projectId: string): Promise<GrantsResponse> {
-    return this.request("GET", grantsRoute(projectId));
+  grants(canvasId: string): Promise<GrantsResponse> {
+    return this.request("GET", grantsRoute(canvasId));
   }
 
-  createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
-    return this.request("POST", grantsRoute(projectId), { subject });
+  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
+    return this.request("POST", grantsRoute(canvasId), { subject });
   }
 
   /** No body, deliberately: a DELETE that declares `application/json` and
    * sends nothing is a Fastify parse error, and a request with nothing to say
    * should not announce a content type. */
-  revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
-    return this.request("DELETE", grantRoute(projectId, grantId));
+  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
+    return this.request("DELETE", grantRoute(canvasId, grantId));
   }
 
   // ---- your own surfaces: kill-a-badge (phase 9) ----
   //
-  // Not project-scoped, unlike the grant routes above, because a badge is not
+  // Not canvas-scoped, unlike the grant routes above, because a badge is not
   // about one canvas: ending one ends that holder's recognition everywhere at
   // once. On a replica the daemon forwards both to the home, which is where
   // the badge that matters lives — see `HomeConnection.badges`.
@@ -378,7 +378,7 @@ export class DaemonClient {
   // ---- passes: the escalation credential (Scene 5) ----
   //
   // Two routes, deliberately different shapes, and the CLI does not get to
-  // decide which: `passesRoute` is project-scoped so the door has already
+  // decide which: `passesRoute` is canvas-scoped so the door has already
   // asked whether this badge may mint for this canvas, and `PASS_REDEEM_ROUTE`
   // is flat because the redeemer is BY DEFINITION not admitted yet. Both
   // spellings come from `@isocan/core`, like the grant routes above and for
@@ -391,8 +391,8 @@ export class DaemonClient {
 
   /** Mint one for this canvas. `actorId` endows the claim; omitting it mints
    * the admission-only shape. The token comes back exactly once. */
-  mintPass(projectId: string, actorId?: string): Promise<MintPassResponse> {
-    return this.request("POST", passesRoute(projectId), actorId ? { actorId } : {});
+  mintPass(canvasId: string, actorId?: string): Promise<MintPassResponse> {
+    return this.request("POST", passesRoute(canvasId), actorId ? { actorId } : {});
   }
 
   /**
@@ -440,12 +440,12 @@ export class DaemonClient {
    * row — and nothing else on this machine moves. Omitting it falls back to
    * the birth default, which is what a marker naming no home deserves.
    */
-  async joinFromHome(projectId: string, home?: string): Promise<Project> {
-    const { project } = await this.request<JoinCanvasResponse>("POST", HOME_JOIN_ROUTE, {
-      projectId,
+  async joinFromHome(canvasId: string, home?: string): Promise<Canvas> {
+    const { canvas } = await this.request<JoinCanvasResponse>("POST", HOME_JOIN_ROUTE, {
+      canvasId,
       ...(home !== undefined ? { home } : {}),
     } satisfies JoinCanvasRequest);
-    return project;
+    return canvas;
   }
 
   /**
@@ -460,8 +460,8 @@ export class DaemonClient {
     return this.request("GET", HOMES_ROUTE);
   }
 
-  snapshot(projectId: string): Promise<CanvasSnapshotResponse> {
-    return this.request("GET", `/api/projects/${projectId}/canvas`);
+  snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
+    return this.request("GET", `/api/projects/${canvasId}/canvas`);
   }
 
   /** The name each actor goes by now. A snapshot already carries this; it is
@@ -487,31 +487,31 @@ export class DaemonClient {
 
   /** With waitMs, the daemon long-polls: holds until an entry lands past
    * `since` or the window closes (empty array). */
-  getLog(projectId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
+  getLog(canvasId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
     const wait = waitMs !== undefined ? `&waitMs=${waitMs}` : "";
-    return this.request("GET", `/api/projects/${projectId}/oplog?since=${since}${wait}`);
+    return this.request("GET", `/api/projects/${canvasId}/oplog?since=${since}${wait}`);
   }
 
-  /** Every project at once. Omit `cursors` to seed at "now"; otherwise the
+  /** Every canvas at once. Omit `cursors` to seed at "now"; otherwise the
    * daemon long-polls until an op lands on any canvas. */
   watchLog(request: WatchLogRequest): Promise<WatchLogResponse> {
     return this.request("POST", "/api/oplog/watch", request);
   }
 
-  undo(projectId: string, actor: Actor): Promise<LogEntry> {
-    return this.request("POST", `/api/projects/${projectId}/undo`, { actor });
+  undo(canvasId: string, actor: Actor): Promise<LogEntry> {
+    return this.request("POST", `/api/projects/${canvasId}/undo`, { actor });
   }
 
-  redo(projectId: string, actor: Actor): Promise<LogEntry> {
-    return this.request("POST", `/api/projects/${projectId}/redo`, { actor });
+  redo(canvasId: string, actor: Actor): Promise<LogEntry> {
+    return this.request("POST", `/api/projects/${canvasId}/redo`, { actor });
   }
 
-  gc(projectId: string, request: GcRequest): Promise<GcReport> {
-    return this.request("POST", `/api/projects/${projectId}/gc`, request);
+  gc(canvasId: string, request: GcRequest): Promise<GcReport> {
+    return this.request("POST", `/api/projects/${canvasId}/gc`, request);
   }
 
   async uploadBlob(
-    projectId: string,
+    canvasId: string,
     data: Buffer,
     mimeType: string,
     filename: string,
@@ -520,7 +520,7 @@ export class DaemonClient {
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
     const send = async () =>
-      fetch(`${this.base}/api/projects/${projectId}/blobs`, {
+      fetch(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...(await this.authHeader()),
@@ -536,9 +536,9 @@ export class DaemonClient {
     return json as BlobUploadResponse;
   }
 
-  async downloadBlob(projectId: string, blobHash: string): Promise<Buffer> {
+  async downloadBlob(canvasId: string, blobHash: string): Promise<Buffer> {
     const send = async () =>
-      fetch(`${this.base}/api/projects/${projectId}/blobs/${blobHash}`, {
+      fetch(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers: await this.authHeader(),
       });
     let res = await send();

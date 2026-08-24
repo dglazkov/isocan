@@ -15,26 +15,26 @@ import { ItemThumb } from "./ItemThumb.tsx";
 
 export const FAVOURITES_WIDTH = 232;
 
-const openKey = (projectId: string) => `isocan.favourites.${projectId}`;
+const openKey = (canvasId: string) => `isocan.favourites.${canvasId}`;
 
-export function openFavourites(projectId: string, open: boolean): void {
+export function openFavourites(canvasId: string, open: boolean): void {
   try {
-    localStorage.setItem(openKey(projectId), open ? "open" : "closed");
+    localStorage.setItem(openKey(canvasId), open ? "open" : "closed");
   } catch {
     // Private mode: it still opens, it just forgets.
   }
   useUiStore.getState().setFavouritesOpen(open);
 }
 
-export function restoreFavourites(projectId: string): void {
+export function restoreFavourites(canvasId: string): void {
   try {
-    useUiStore.getState().setFavouritesOpen(localStorage.getItem(openKey(projectId)) === "open");
+    useUiStore.getState().setFavouritesOpen(localStorage.getItem(openKey(canvasId)) === "open");
   } catch {
     useUiStore.getState().setFavouritesOpen(false);
   }
 }
 
-export function FavouritesBar({ projectId }: { projectId: string }) {
+export function FavouritesBar({ canvasId }: { canvasId: string }) {
   const open = useUiStore((s) => s.favouritesOpen);
   const canvas = useCanvasStore((s) => s.canvas);
   const selected = useUiStore((s) => s.selectedItemIds);
@@ -58,7 +58,7 @@ export function FavouritesBar({ projectId }: { projectId: string }) {
           className="main-close"
           title="Close"
           aria-label="Close the favourites bar"
-          onClick={() => openFavourites(projectId, false)}
+          onClick={() => openFavourites(canvasId, false)}
         >
           ✕
         </button>
@@ -80,7 +80,7 @@ export function FavouritesBar({ projectId }: { projectId: string }) {
               title={`Go to ${item.title}`}
             >
               <span className="favourite-shot">
-                <ItemThumb projectId={projectId} itemId={item.id} width={200} height={92} />
+                <ItemThumb canvasId={canvasId} itemId={item.id} width={200} height={92} />
               </span>
               <span className="favourite-name">
                 <b>★</b>

@@ -14,8 +14,8 @@ import type {
   OpEnvelope,
   Operation,
   PresenceSession,
-  Project,
-  ProjectState,
+  Canvas,
+  CanvasState,
   ServerMessage,
   SlashCommand,
   UploadTicket,
@@ -79,8 +79,8 @@ const FREE_NAME_PROBE = " free-name probe";
  */
 type NameReach = "admitted" | "admissible";
 
-interface ProjectRuntime {
-  state: ProjectState;
+interface CanvasRuntime {
+  state: CanvasState;
   lastSeq: number;
   entries: LogEntry[];
   undo: UndoStacks;
@@ -94,13 +94,13 @@ interface ActorsRuntime {
 export interface EngineOptions {
   /** Who is visibly on a canvas right now — presence, which lives outside
    * the engine. Claims consult it so a live face holds its name. */
-  liveness?: (projectId: string) => PresenceSession[];
+  liveness?: (canvasId: string) => PresenceSession[];
 }
 
-export class ProjectNotFoundError extends Error {
+export class CanvasNotFoundError extends Error {
   constructor(id: string) {
-    super(`project not found: ${id}`);
-    this.name = "ProjectNotFoundError";
+    super(`canvas not found: ${id}`);
+    this.name = "CanvasNotFoundError";
   }
 }
 
@@ -112,7 +112,7 @@ export class NothingToUndoError extends Error {
 }
 
 export interface SubmitRequest {
-  projectId: string | null;
+  canvasId: string | null;
   actor: Actor;
   clientId?: string;
   /** The client's own name for this op — the idempotency key. See
@@ -153,7 +153,7 @@ export interface ClaimRequest {
   badgeId: string;
 }
 
-type EventListener = (projectId: string, message: ServerMessage) => void;
+type EventListener = (canvasId: string, message: ServerMessage) => void;
 
 /**
  * An entry as it arrives from a home — a `LogEntry` whose `inverse` may not be
@@ -185,7 +185,7 @@ export type RemoteApply = "applied" | "skipped" | "gap";
  * oplog → atomically rewrite snapshots → broadcast.
  */
 export class Engine {
-  private projects = new Map<string, ProjectRuntime>();
+  private canvases = new Map<string, CanvasRuntime>();
   private actorsRuntime: ActorsRuntime | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
@@ -240,14 +240,14 @@ export class Engine {
     this.homes = directory;
   }
 
-  /** Subscribe to project events; returns an unsubscribe function. */
+  /** Subscribe to canvas events; returns an unsubscribe function. */
   onEvent(listener: EventListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private emit(projectId: string, message: ServerMessage): void {
-    for (const listener of this.listeners) listener(projectId, message);
+  private emit(canvasId: string, message: ServerMessage): void {
+    for (const listener of this.listeners) listener(canvasId, message);
   }
 
   /**
@@ -275,12 +275,12 @@ export class Engine {
     return result;
   }
 
-  async listProjects(): Promise<Project[]> {
-    return this.store.listProjects();
+  async listCanvases(): Promise<Canvas[]> {
+    return this.store.listCanvases();
   }
 
-  async getSnapshot(projectId: string): Promise<CanvasSnapshotResponse> {
-    const runtime = await this.runtime(projectId);
+  async getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
+    const runtime = await this.runtime(canvasId);
     return {
       project: runtime.state.project,
       canvas: runtime.state.canvas,
@@ -370,7 +370,7 @@ export class Engine {
         await Promise.allSettled(
           homes.map((home) =>
             home.submitOp({
-              projectId: null,
+              canvasId: null,
               actor: request.actor,
               op: request.op,
               ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
@@ -383,7 +383,7 @@ export class Engine {
       const registry = applyActorColor(runtime.registry, request.op);
       const envelope: OpEnvelope = {
         id: newOpId(),
-        projectId: null,
+        canvasId: null,
         actor: request.actor,
         ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
         ts,
@@ -430,12 +430,12 @@ export class Engine {
    * name is currently connected — so history counts: the canvas's authors,
    * every name the canvas remembers, and the live roster.
    */
-  async appearances(actorId: string, projectIds: Iterable<string>): Promise<string[]> {
+  async appearances(actorId: string, canvasIds: Iterable<string>): Promise<string[]> {
     const found: string[] = [];
-    for (const projectId of projectIds) {
-      let state: ProjectState;
+    for (const canvasId of canvasIds) {
+      let state: CanvasState;
       try {
-        state = (await this.runtime(projectId)).state;
+        state = (await this.runtime(canvasId)).state;
       } catch {
         continue; // a canvas mid-delete has nobody on it
       }
@@ -443,8 +443,8 @@ export class Engine {
         state.project.createdBy.id === actorId ||
         state.project.updatedBy.id === actorId ||
         collectCanvasNames(state.canvas).some((known) => known.id === actorId) ||
-        (this.options.liveness?.(projectId) ?? []).some((s) => s.actor.id === actorId);
-      if (here) found.push(projectId);
+        (this.options.liveness?.(canvasId) ?? []).some((s) => s.actor.id === actorId);
+      if (here) found.push(canvasId);
     }
     return found;
   }
@@ -460,8 +460,8 @@ export class Engine {
     throw notYourActor(actorId);
   }
 
-  async getLog(projectId: string, sinceSeq = 0): Promise<LogEntry[]> {
-    const runtime = await this.runtime(projectId);
+  async getLog(canvasId: string, sinceSeq = 0): Promise<LogEntry[]> {
+    const runtime = await this.runtime(canvasId);
     return runtime.entries.filter((entry) => entry.seq > sinceSeq);
   }
 
@@ -518,9 +518,9 @@ export class Engine {
   private async homeFor(request: SubmitRequest): Promise<HomeConnection | null> {
     if (!this.homes) return null;
     if (request.op.type === "project.create") {
-      return this.homes.bind(request.op.projectId, request.home ?? null);
+      return this.homes.bind(request.op.canvasId, request.home ?? null);
     }
-    return request.projectId === null ? null : this.homes.for(request.projectId);
+    return request.canvasId === null ? null : this.homes.for(request.canvasId);
   }
 
   /**
@@ -553,7 +553,7 @@ export class Engine {
    */
   private async alreadyWritten(request: SubmitRequest): Promise<LogEntry | null> {
     const canvasId =
-      request.op.type === "project.create" ? request.op.projectId : request.projectId;
+      request.op.type === "project.create" ? request.op.canvasId : request.canvasId;
     if (canvasId === null) return null;
     const runtime = await this.runtime(canvasId).catch(() => null);
     if (!runtime) return null;
@@ -644,7 +644,7 @@ export class Engine {
    * pass is the name as of REDEMPTION and a roster arriving a second later is
    * the authority.
    */
-  endowClaim(badgeId: string, actor: Actor, projectId?: string): Promise<void> {
+  endowClaim(badgeId: string, actor: Actor, canvasId?: string): Promise<void> {
     return this.enqueue(async () => {
       const ts = new Date().toISOString();
       await this.desk.setClaims(
@@ -652,7 +652,7 @@ export class Engine {
         bindHandoff(await this.desk.claimsOf(badgeId), {
           actor,
           ts,
-          ...(projectId !== undefined ? { projectId } : {}),
+          ...(canvasId !== undefined ? { canvasId } : {}),
         }),
       );
       if (!actor.name) return;
@@ -743,7 +743,7 @@ export class Engine {
         key: row.sessionKey,
         actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
         boundAt: row.boundAt,
-        ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+        ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
       });
     }
     return records;
@@ -774,7 +774,7 @@ export class Engine {
           key: row.sessionKey,
           actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
           boundAt: row.boundAt,
-          ...(row.projectId !== undefined ? { projectId: row.projectId } : {}),
+          ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
         });
       }
     }
@@ -790,7 +790,7 @@ export class Engine {
    * permanent 404 for the item pointing at them.
    */
   putBlob(
-    projectId: string,
+    canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
@@ -805,9 +805,9 @@ export class Engine {
       //
       // THIS canvas's home, since phase 10.3: bytes follow the ops that name
       // them, and the ops go where the canvas's row says.
-      const home = this.homes?.for(projectId) ?? null;
-      if (home) await home.putBlob(projectId, data, meta);
-      return this.store.putBlob(projectId, data, meta);
+      const home = this.homes?.for(canvasId) ?? null;
+      if (home) await home.putBlob(canvasId, data, meta);
+      return this.store.putBlob(canvasId, data, meta);
     });
   }
 
@@ -818,8 +818,8 @@ export class Engine {
    * nothing, and minting can involve a round trip to a signing API — putting
    * it on the chain would stall every op behind somebody's video.
    */
-  beginUpload(projectId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
-    return this.store.beginUpload(projectId, request);
+  beginUpload(canvasId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
+    return this.store.beginUpload(canvasId, request);
   }
 
   /**
@@ -829,10 +829,10 @@ export class Engine {
    * forever.
    */
   registerBlob(
-    projectId: string,
+    canvasId: string,
     request: BlobUploadRequest,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    return this.enqueue(() => this.store.registerBlob(projectId, request));
+    return this.enqueue(() => this.store.registerBlob(canvasId, request));
   }
 
   /**
@@ -841,7 +841,7 @@ export class Engine {
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       // Checked here as well as on `submit`, and for a reason of its own:
       // undo is actor-scoped, so naming somebody else is not a slip, it is
@@ -853,17 +853,17 @@ export class Engine {
       // what to undo here and forwarding the resulting op would be a second
       // opinion about a stack that has one owner. That reasoning was always
       // per canvas; phase 10.3 is only where the lookup caught up with it.
-      const home = this.homes?.for(projectId) ?? null;
+      const home = this.homes?.for(canvasId) ?? null;
       if (home) {
         return this.landRemote(
-          projectId,
-          await home.undo(projectId, {
+          canvasId,
+          await home.undo(canvasId, {
             actor,
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
-      const runtime = await this.runtime(projectId);
+      const runtime = await this.runtime(canvasId);
       for (;;) {
         const targetSeq = runtime.undo.nextUndoTarget(actor.id);
         if (targetSeq === null) throw new NothingToUndoError("undo", actor.name);
@@ -872,7 +872,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
+              { canvasId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "undo", targetSeq },
             );
           } catch (err) {
@@ -886,21 +886,21 @@ export class Engine {
     });
   }
 
-  redo(projectId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       await this.requireActor(badgeId, actor.id);
       // This canvas's home; see `undo` above.
-      const home = this.homes?.for(projectId) ?? null;
+      const home = this.homes?.for(canvasId) ?? null;
       if (home) {
         return this.landRemote(
-          projectId,
-          await home.redo(projectId, {
+          canvasId,
+          await home.redo(canvasId, {
             actor,
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
-      const runtime = await this.runtime(projectId);
+      const runtime = await this.runtime(canvasId);
       for (;;) {
         const next = runtime.undo.nextRedoTarget(actor.id);
         if (next === null) throw new NothingToUndoError("redo", actor.name);
@@ -910,7 +910,7 @@ export class Engine {
         if (op !== null) {
           try {
             return await this.applyAndPersist(
-              { projectId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
+              { canvasId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "redo", targetSeq: next.targetSeq },
             );
           } catch (err) {
@@ -929,9 +929,9 @@ export class Engine {
    * cannot race a mutation; the mtime grace period covers uploads that have
    * not become items yet. Maintenance, not an Operation — never undoable.
    */
-  gc(projectId: string, options: GcOptions = {}): Promise<GcReport> {
+  gc(canvasId: string, options: GcOptions = {}): Promise<GcReport> {
     return this.enqueue(async () => {
-      const runtime = await this.runtime(projectId);
+      const runtime = await this.runtime(canvasId);
       const keepOps = options.keepOps ?? DEFAULT_KEEP_OPS;
       const graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
       const dryRun = options.dryRun ?? false;
@@ -941,7 +941,7 @@ export class Engine {
       const dropped = runtime.entries.filter((entry) => !retainedSeqs.has(entry.seq));
 
       const marked = reachableHashes(runtime.state, retained);
-      const listing = await this.store.listBlobs(projectId);
+      const listing = await this.store.listBlobs(canvasId);
 
       const report: GcReport = {
         dryRun,
@@ -978,11 +978,11 @@ export class Engine {
       // re-collectable. What compaction MEANS is the backing's: a rewrite on a
       // disk, an advanced horizon in the cloud, and never a deleted seq.
       if (dropped.length > 0) {
-        await this.store.compactOplog(projectId, retained, dropped);
+        await this.store.compactOplog(canvasId, retained, dropped);
         runtime.entries = retained;
         runtime.undo = UndoStacks.rebuild(retained);
       }
-      if (sweep.length > 0) await this.store.deleteBlobs(projectId, sweep);
+      if (sweep.length > 0) await this.store.deleteBlobs(canvasId, sweep);
       return report;
     });
   }
@@ -1022,8 +1022,8 @@ export class Engine {
    * caller re-dials with the cursor it does hold. Guessing would be the only
    * way to be wrong silently.
    */
-  applyRemote(projectId: string, entry: IncomingEntry): Promise<RemoteApply> {
-    return this.enqueue(() => this.applyRemoteEntry(projectId, entry));
+  applyRemote(canvasId: string, entry: IncomingEntry): Promise<RemoteApply> {
+    return this.enqueue(() => this.applyRemoteEntry(canvasId, entry));
   }
 
   /**
@@ -1039,12 +1039,12 @@ export class Engine {
    * backing where a seq must stay claimed forever (the cloud one) is not asked
    * to free anything.
    */
-  adoptRemoteSnapshot(projectId: string, snapshot: CanvasSnapshotResponse): Promise<void> {
+  adoptRemoteSnapshot(canvasId: string, snapshot: CanvasSnapshotResponse): Promise<void> {
     return this.enqueue(async () => {
-      const state: ProjectState = { project: snapshot.project, canvas: snapshot.canvas };
+      const state: CanvasState = { project: snapshot.project, canvas: snapshot.canvas };
       let held: LogEntry[] = [];
-      if (await this.store.projectExists(projectId)) {
-        const runtime = await this.runtime(projectId).catch(() => null);
+      if (await this.store.canvasExists(canvasId)) {
+        const runtime = await this.runtime(canvasId).catch(() => null);
         // Already exactly here. Adopting anyway would EMPTY a live log for
         // nothing — the entries would be archived and `getLog` would answer
         // every cursor with silence — and a snapshot that arrives while the
@@ -1054,11 +1054,11 @@ export class Engine {
         if (runtime && runtime.lastSeq === snapshot.lastSeq) return;
         held = runtime?.entries ?? [];
       } else {
-        await this.store.createProjectDir(projectId);
+        await this.store.createCanvasDir(canvasId);
       }
-      if (held.length > 0) await this.store.compactOplog(projectId, [], held);
-      await this.store.saveSnapshot(projectId, state, snapshot.lastSeq);
-      this.projects.set(projectId, {
+      if (held.length > 0) await this.store.compactOplog(canvasId, [], held);
+      await this.store.saveSnapshot(canvasId, state, snapshot.lastSeq);
+      this.canvases.set(canvasId, {
         state,
         lastSeq: snapshot.lastSeq,
         entries: [],
@@ -1069,19 +1069,19 @@ export class Engine {
       // cursor 0 and can only be answered with state. Same local row, same
       // reason: no row, and this machine's own CLIs are refused a canvas
       // sitting in their store.
-      await ensureHomeLinkGrant(this.desk, projectId);
+      await ensureHomeLinkGrant(this.desk, canvasId);
     });
   }
 
   /** The home says this canvas is gone. Soft, like every delete here: the
    * directory is moved aside rather than removed, so a replica that was told
    * to forget a canvas can still be asked what it used to hold. */
-  applyRemoteDelete(projectId: string): Promise<void> {
+  applyRemoteDelete(canvasId: string): Promise<void> {
     return this.enqueue(async () => {
-      if (!(await this.store.projectExists(projectId))) return;
-      await this.store.softDeleteProject(projectId);
-      this.projects.delete(projectId);
-      this.emit(projectId, { type: "project-deleted" });
+      if (!(await this.store.canvasExists(canvasId))) return;
+      await this.store.softDeleteCanvas(canvasId);
+      this.canvases.delete(canvasId);
+      this.emit(canvasId, { type: "canvas-deleted" });
     });
   }
 
@@ -1183,7 +1183,7 @@ export class Engine {
    * on. */
   private async forwardSubmit(home: HomeConnection, request: SubmitRequest): Promise<LogEntry> {
     const answer = await home.submitOp({
-      projectId: request.projectId,
+      canvasId: request.canvasId,
       actor: request.actor,
       op: request.op,
       ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
@@ -1193,9 +1193,9 @@ export class Engine {
       // thing at the home as a tab's does.
       ...(request.opId !== undefined ? { opId: request.opId } : {}),
     });
-    const projectId =
-      request.op.type === "project.create" ? request.op.projectId : request.projectId;
-    return this.landRemote(projectId, answer);
+    const canvasId =
+      request.op.type === "project.create" ? request.op.canvasId : request.canvasId;
+    return this.landRemote(canvasId, answer);
   }
 
   /**
@@ -1208,7 +1208,7 @@ export class Engine {
    * bug report. Applying twice is free — see `applyRemoteEntry`'s seq guard.
    */
   private async landRemote(
-    projectId: string | null,
+    canvasId: string | null,
     answer: { seq: number; envelope: OpEnvelope; inverse?: Operation | null },
   ): Promise<LogEntry> {
     const entry: IncomingEntry = {
@@ -1216,20 +1216,20 @@ export class Engine {
       envelope: answer.envelope,
       ...(answer.inverse !== undefined ? { inverse: answer.inverse } : {}),
     };
-    if (projectId !== null) await this.applyRemoteEntry(projectId, entry);
+    if (canvasId !== null) await this.applyRemoteEntry(canvasId, entry);
     return { inverse: null, ...entry } as LogEntry;
   }
 
   /** The unqueued core. Every caller is already on the chain. */
   private async applyRemoteEntry(
-    projectId: string,
+    canvasId: string,
     incoming: IncomingEntry,
   ): Promise<RemoteApply> {
     const { envelope, seq } = incoming;
     const op = envelope.op;
 
     if (op.type === "project.create") {
-      if (await this.store.projectExists(op.projectId)) return "skipped";
+      if (await this.store.canvasExists(op.canvasId)) return "skipped";
       const state = applyOperation(null, envelope)!;
       const entry: LogEntry = {
         seq,
@@ -1237,10 +1237,10 @@ export class Engine {
         inverse: incoming.inverse !== undefined ? incoming.inverse : invertOperation(null, op),
         ...(incoming.cause !== undefined ? { cause: incoming.cause } : {}),
       };
-      await this.store.createProjectDir(op.projectId);
-      await this.appendOrFence(op.projectId, entry);
-      await this.store.saveSnapshot(op.projectId, state, seq);
-      this.projects.set(op.projectId, {
+      await this.store.createCanvasDir(op.canvasId);
+      await this.appendOrFence(op.canvasId, entry);
+      await this.store.saveSnapshot(op.canvasId, state, seq);
+      this.canvases.set(op.canvasId, {
         state,
         lastSeq: seq,
         entries: [entry],
@@ -1250,19 +1250,19 @@ export class Engine {
       // row for it (phase 7). The home wrote its own; this one governs who
       // HERE may reach the local copy, and without it every CLI on this
       // laptop would be refused a canvas it is replicating.
-      await ensureHomeLinkGrant(this.desk, op.projectId);
-      this.emit(op.projectId, { type: "op-applied", entry });
+      await ensureHomeLinkGrant(this.desk, op.canvasId);
+      this.emit(op.canvasId, { type: "op-applied", entry });
       return "applied";
     }
 
-    const runtime = await this.runtime(projectId).catch(() => null);
+    const runtime = await this.runtime(canvasId).catch(() => null);
     // A canvas this replica has never seen, arriving mid-history: only a
     // snapshot can start it, so say `gap` and let the dial ask for one.
     if (!runtime) return "gap";
     if (seq <= runtime.lastSeq) return "skipped";
     if (seq !== runtime.lastSeq + 1) return "gap";
 
-    let nextState: ProjectState | null;
+    let nextState: CanvasState | null;
     let inverse: Operation | null;
     try {
       inverse = incoming.inverse !== undefined
@@ -1281,19 +1281,19 @@ export class Engine {
       inverse,
       ...(incoming.cause !== undefined ? { cause: incoming.cause } : {}),
     };
-    await this.appendOrFence(projectId, entry);
+    await this.appendOrFence(canvasId, entry);
     if (nextState === null) {
-      await this.store.softDeleteProject(projectId);
-      this.projects.delete(projectId);
-      this.emit(projectId, { type: "project-deleted" });
+      await this.store.softDeleteCanvas(canvasId);
+      this.canvases.delete(canvasId);
+      this.emit(canvasId, { type: "canvas-deleted" });
       return "applied";
     }
     runtime.state = nextState;
     runtime.lastSeq = seq;
     runtime.entries.push(entry);
     runtime.undo.record(entry);
-    await this.store.saveSnapshot(projectId, nextState, seq);
-    this.emit(projectId, { type: "op-applied", entry });
+    await this.store.saveSnapshot(canvasId, nextState, seq);
+    this.emit(canvasId, { type: "op-applied", entry });
     return "applied";
   }
 
@@ -1306,7 +1306,7 @@ export class Engine {
     );
     const envelope: OpEnvelope = {
       id: newOpId(),
-      projectId: null,
+      canvasId: null,
       actor,
       ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
       ts,
@@ -1351,7 +1351,7 @@ export class Engine {
      * /api/projects` plays, for the same reason — not a coincidence, a
      * pattern.
      *
-     * Phase 7 hit this exact shape once already: scoping the projects listing
+     * Phase 7 hit this exact shape once already: scoping the canvases listing
      * strictly to admissions broke replicas, because a fresh replica's badge
      * has no admissions and would discover nothing at all. The answer there
      * was to scope to what the badge is admitted to PLUS what a grant would
@@ -1390,15 +1390,15 @@ export class Engine {
      * in, on a route asked once per nameless claim.
      */
     if (reach === "admissible" && badge) {
-      for (const project of await this.listProjects()) {
-        if (canvasIds.includes(project.id)) continue;
-        if (await admittingGrant(this.desk, project.id, badge)) canvasIds.push(project.id);
+      for (const canvas of await this.listCanvases()) {
+        if (canvasIds.includes(canvas.id)) continue;
+        if (await admittingGrant(this.desk, canvas.id, badge)) canvasIds.push(canvas.id);
       }
     }
     /**
      * The room this name is being taken in counts even before the badge has
      * been let into it — a browser names itself at the identity dialog,
-     * before it has fetched anything. See `ActorClaimOp.projectId`.
+     * before it has fetched anything. See `ActorClaimOp.canvasId`.
      *
      * **Phase 3 left this as a hole and phase 7 closes it.** A claim widens
      * its own name-check scope by naming the canvas it was made from, which
@@ -1416,7 +1416,7 @@ export class Engine {
      * admission with no request behind it (and, in phase 9, a badge the sweep
      * would have to expel from a canvas it never opened).
      */
-    const from = request.op.projectId;
+    const from = request.op.canvasId;
     if (from !== undefined && !canvasIds.includes(from) && badge) {
       if (await admittingGrant(this.desk, from, badge)) canvasIds.push(from);
     }
@@ -1571,14 +1571,14 @@ export class Engine {
    *
    * **WHICH home is asked, under many of them** (phase 10.3), and this is the
    * one site in the table that did not simply fall out. A nameless claim is
-   * not about a canvas, so `for(projectId)` has nothing to look up; and asking
+   * not about a canvas, so `for(canvasId)` has nothing to look up; and asking
    * every home and intersecting the answers is **not available**, because
    * `freeName` returns one name out and never the taken set, on purpose (see
    * `heldNames` — a route that could return the taken set would be the home
    * listing its rosters to anyone who knocked).
    *
    * Two things make it tractable. `actor.claim` carries an optional
-   * `projectId` — phase 7's marked hole, exactly the shape needed here — so a
+   * `canvasId` — phase 7's marked hole, exactly the shape needed here — so a
    * claim that names a canvas asks THAT canvas's home. A claim that names none
    * asks `birth()`: the home this machine's next canvas goes to, which is the
    * best available proxy for where this identity is heading.
@@ -1605,7 +1605,7 @@ export class Engine {
     // being a second Kenny on purpose means — so it asks even when resuming
     // would not.
     if (!op.fresh && (own.some((row) => row.sessionKey === op.sessionKey) || shelved)) return {};
-    const home = op.projectId !== undefined ? this.homes.for(op.projectId) : this.homes.birth();
+    const home = op.canvasId !== undefined ? this.homes.for(op.canvasId) : this.homes.birth();
     if (!home) return {};
     try {
       return { preferred: await home.freeName() };
@@ -1630,22 +1630,22 @@ export class Engine {
   private async heldNames(canvasIds: readonly string[]): Promise<NameHolder[]> {
     const inScope = new Set(canvasIds);
     const holders: NameHolder[] = [];
-    for (const project of await this.listProjects()) {
-      if (!inScope.has(project.id)) continue;
-      let state: ProjectState;
+    for (const canvas of await this.listCanvases()) {
+      if (!inScope.has(canvas.id)) continue;
+      let state: CanvasState;
       try {
-        state = (await this.runtime(project.id)).state;
+        state = (await this.runtime(canvas.id)).state;
       } catch {
-        continue; // a project directory mid-delete answers for nobody
+        continue; // a canvas directory mid-delete answers for nobody
       }
       const add = (actor: Actor, live: boolean) =>
-        holders.push({ actor, project: project.title, live });
-      add(project.createdBy, false);
-      add(project.updatedBy, false);
+        holders.push({ actor, canvas: canvas.title, live });
+      add(canvas.createdBy, false);
+      add(canvas.updatedBy, false);
       for (const known of collectCanvasNames(state.canvas)) {
         add({ id: known.id, name: known.name }, false);
       }
-      for (const session of this.options.liveness?.(project.id) ?? []) {
+      for (const session of this.options.liveness?.(canvas.id) ?? []) {
         add(session.actor, true);
         if (session.label) add({ id: session.actor.id, name: session.label }, true);
       }
@@ -1679,11 +1679,11 @@ export class Engine {
       return this.createProject(request, op);
     }
 
-    const projectId = request.projectId;
-    if (projectId === null) {
-      throw new OpValidationError("bad-op", "projectId is required");
+    const canvasId = request.canvasId;
+    if (canvasId === null) {
+      throw new OpValidationError("bad-op", "canvasId is required");
     }
-    const runtime = await this.runtime(projectId);
+    const runtime = await this.runtime(canvasId);
 
     // Normalize placement so the logged op never references ephemeral client
     // state — and so it records where the item ACTUALLY went.
@@ -1724,14 +1724,14 @@ export class Engine {
       ...(cause !== undefined ? { cause } : {}),
     };
 
-    await this.appendOrFence(projectId, entry);
+    await this.appendOrFence(canvasId, entry);
 
     if (nextState === null) {
       // project.delete: the entry lands in the oplog inside the dir, then the
       // whole dir is parked under deleted-projects/.
-      await this.store.softDeleteProject(projectId);
-      this.projects.delete(projectId);
-      this.emit(projectId, { type: "project-deleted" });
+      await this.store.softDeleteCanvas(canvasId);
+      this.canvases.delete(canvasId);
+      this.emit(canvasId, { type: "canvas-deleted" });
       return entry;
     }
 
@@ -1739,8 +1739,8 @@ export class Engine {
     runtime.lastSeq = seq;
     runtime.entries.push(entry);
     runtime.undo.record(entry);
-    await this.store.saveSnapshot(projectId, nextState, seq);
-    this.emit(projectId, { type: "op-applied", entry });
+    await this.store.saveSnapshot(canvasId, nextState, seq);
+    this.emit(canvasId, { type: "op-applied", entry });
     return entry;
   }
 
@@ -1770,22 +1770,22 @@ export class Engine {
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
   ): Promise<LogEntry> {
-    if (await this.store.projectExists(op.projectId)) {
-      throw new OpValidationError("duplicate-id", `project id already exists: ${op.projectId}`);
+    if (await this.store.canvasExists(op.canvasId)) {
+      throw new OpValidationError("duplicate-id", `canvas id already exists: ${op.canvasId}`);
     }
-    const envelope = this.envelope({ ...request, projectId: null }, op);
+    const envelope = this.envelope({ ...request, canvasId: null }, op);
     const state = applyOperation(null, envelope)!;
     const entry: LogEntry = { seq: 1, envelope, inverse: invertOperation(null, op) };
-    await this.store.createProjectDir(op.projectId);
-    await this.appendOrFence(op.projectId, entry);
-    await this.store.saveSnapshot(op.projectId, state, 1);
-    this.projects.set(op.projectId, {
+    await this.store.createCanvasDir(op.canvasId);
+    await this.appendOrFence(op.canvasId, entry);
+    await this.store.saveSnapshot(op.canvasId, state, 1);
+    this.canvases.set(op.canvasId, {
       state,
       lastSeq: 1,
       entries: [entry],
       undo: UndoStacks.rebuild([entry]),
     });
-    await ensureLinkGrant(this.desk, op.projectId, request.badgeId);
+    await ensureLinkGrant(this.desk, op.canvasId, request.badgeId);
     return entry;
   }
 
@@ -1796,7 +1796,7 @@ export class Engine {
       // log remembers, or the next retry has nothing to find. Shape-checked
       // at the route; absent for everything the daemon writes for itself.
       id: request.opId ?? newOpId(),
-      projectId: request.projectId,
+      canvasId: request.canvasId,
       actor: request.actor,
       ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
       ts: new Date().toISOString(),
@@ -1821,16 +1821,16 @@ export class Engine {
    * be observed against a real rollout, and phase 5 is where a rollout
    * exists. The lever is named so nobody has to rediscover it.
    */
-  private async appendOrFence(projectId: string, entry: LogEntry): Promise<void> {
+  private async appendOrFence(canvasId: string, entry: LogEntry): Promise<void> {
     try {
-      await this.store.appendLog(projectId, entry);
+      await this.store.appendLog(canvasId, entry);
     } catch (err) {
       if (err instanceof OplogFencedError) {
         console.error(
-          `[isocan] FENCED on ${projectId}: another writer already holds seq ${entry.seq}. ` +
+          `[isocan] FENCED on ${canvasId}: another writer already holds seq ${entry.seq}. ` +
             `Dropping this canvas's runtime and re-syncing from the store.`,
         );
-        this.projects.delete(projectId);
+        this.canvases.delete(canvasId);
       }
       throw err;
     }
@@ -1852,18 +1852,18 @@ export class Engine {
     }
   }
 
-  private async runtime(projectId: string): Promise<ProjectRuntime> {
-    const cached = this.projects.get(projectId);
+  private async runtime(canvasId: string): Promise<CanvasRuntime> {
+    const cached = this.canvases.get(canvasId);
     if (cached) return cached;
-    const loaded = await this.store.load(projectId);
-    if (!loaded) throw new ProjectNotFoundError(projectId);
-    const runtime: ProjectRuntime = {
+    const loaded = await this.store.load(canvasId);
+    if (!loaded) throw new CanvasNotFoundError(canvasId);
+    const runtime: CanvasRuntime = {
       state: loaded.state,
       lastSeq: loaded.lastSeq,
       entries: loaded.entries,
       undo: UndoStacks.rebuild(loaded.entries),
     };
-    this.projects.set(projectId, runtime);
+    this.canvases.set(canvasId, runtime);
     return runtime;
   }
 }
@@ -1896,7 +1896,7 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
  * that still apply instead. Returns null when nothing survives; non-batch ops
  * pass through untouched (the apply-time validation decides their fate).
  */
-function repairInverse(state: ProjectState, op: Operation): Operation | null {
+function repairInverse(state: CanvasState, op: Operation): Operation | null {
   switch (op.type) {
     case "items.move": {
       const moves = op.moves.filter((move) => state.canvas.items[move.itemId] !== undefined);

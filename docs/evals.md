@@ -37,7 +37,7 @@ human-labelled comparison data — the expensive kind — generated as a byprodu
 of ordinary use.
 
 **Measured, 23 Aug 2026, and this document overstated it.** Across every
-project in one home: 20 threads, 63 replies, **16 ops reversed by an undo**, 39
+canvas in one home: 20 threads, 63 replies, **16 ops reversed by an undo**, 39
 versions across 14 items — and **2** deliberate version choices and **1** parent
 with more than one child. The plumbing is real and the mine is empty. The
 preference-pair harvest is not a standing asset we are ignoring; it is an asset

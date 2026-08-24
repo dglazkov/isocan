@@ -19,7 +19,7 @@ import type {
   MintPassResponse,
   Operation,
   PostOpResponse,
-  Project,
+  Canvas,
   ActorNames,
   RedeemPassResponse,
   SlashCommand,
@@ -38,7 +38,7 @@ import {
   newOpId,
   PASS_REDEEM_ROUTE,
   passesRoute,
-  projectsRoute,
+  canvasesRoute,
 } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
@@ -175,7 +175,7 @@ async function reclaimNow(): Promise<boolean> {
  * actor: the claim resolves who is speaking, and the response envelope
  * carries the answer. */
 export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { projectId: null, clientId: CLIENT_ID, op });
+  return request("POST", "/api/ops", { canvasId: null, clientId: CLIENT_ID, op });
 }
 
 /**
@@ -186,12 +186,12 @@ export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
  * flush is a RE-send and has to say the same thing twice.
  */
 export function postOp(
-  projectId: string | null,
+  canvasId: string | null,
   actor: Actor,
   op: Operation,
   opId: string,
 ): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { projectId, actor, clientId: CLIENT_ID, opId, op });
+  return request("POST", "/api/ops", { canvasId, actor, clientId: CLIENT_ID, opId, op });
 }
 
 /**
@@ -208,7 +208,7 @@ export function postOp(
  * have open — and then `sendOp` throws, because a gesture that quietly
  * evaporates is the failure this phase exists to remove.
  */
-let queueWrite: ((projectId: string | null, actor: Actor, op: Operation, opId: string) => boolean) | null =
+let queueWrite: ((canvasId: string | null, actor: Actor, op: Operation, opId: string) => boolean) | null =
   null;
 
 export function onOfflineWrite(fn: typeof queueWrite): void {
@@ -247,16 +247,16 @@ function offlineNote(op: Operation): string {
  * would be exactly the sort of comfortable lie phase 7 spent a finding on.
  */
 export async function sendOp(
-  projectId: string | null,
+  canvasId: string | null,
   actor: Actor,
   op: Operation,
 ): Promise<PostOpResponse | null> {
   const opId = newOpId();
   try {
-    return await postOp(projectId, actor, op, opId);
+    return await postOp(canvasId, actor, op, opId);
   } catch (err) {
     if (homeAnswered(err)) throw err;
-    if (queueWrite?.(projectId, actor, op, opId)) return null;
+    if (queueWrite?.(canvasId, actor, op, opId)) return null;
     throw new OfflineError(offlineNote(op));
   }
 }
@@ -283,7 +283,7 @@ export function fetchCommands(): Promise<SlashCommand[]> {
  * A daemon is no longer one of two things. It is the home of some canvases and
  * a replica for others, and it serves pages only for the ones it is the home
  * of: `GET /p/<id>` for a canvas that lives at dev.isocan.io answers a
- * signpost, not the app shell. But the project list links to canvases with a
+ * signpost, not the app shell. But the canvas list links to canvases with a
  * react-router `<Link>`, which is a client-side navigation that **never
  * touches the server** — so a wide list here would walk straight past that
  * guard and render a local replica of a dev canvas. Two doors onto one canvas,
@@ -301,8 +301,8 @@ export function fetchCommands(): Promise<SlashCommand[]> {
  * home of a canvas does not admit anybody to it. A tab still sees only what
  * its badge may see.
  */
-export function listProjects(): Promise<Project[]> {
-  return request("GET", projectsRoute("here"));
+export function listCanvases(): Promise<Canvas[]> {
+  return request("GET", canvasesRoute("here"));
 }
 
 /**
@@ -321,8 +321,8 @@ export function fetchHomes(): Promise<HomesResponse> {
   return request("GET", HOMES_ROUTE);
 }
 
-export function getSnapshot(projectId: string): Promise<CanvasSnapshotResponse> {
-  return request("GET", `/api/projects/${projectId}/canvas`);
+export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
+  return request("GET", `/api/projects/${canvasId}/canvas`);
 }
 
 /**
@@ -352,20 +352,20 @@ export function getSnapshot(projectId: string): Promise<CanvasSnapshotResponse> 
  * The refusal is an `OfflineError`, so it reaches a person as a sentence
  * rather than as a caught-and-dropped promise (see `ZoomControls`).
  */
-export async function undo(projectId: string, actor: Actor): Promise<LogEntry> {
-  return history("undo", projectId, actor);
+export async function undo(canvasId: string, actor: Actor): Promise<LogEntry> {
+  return history("undo", canvasId, actor);
 }
 
-export async function redo(projectId: string, actor: Actor): Promise<LogEntry> {
-  return history("redo", projectId, actor);
+export async function redo(canvasId: string, actor: Actor): Promise<LogEntry> {
+  return history("redo", canvasId, actor);
 }
 
 const HISTORY_OFFLINE =
   "Undo lives at the canvas's home — it walks your own history over the whole canvas, which this browser cannot see from here. Your changes are being kept and will go up when you reconnect.";
 
-async function history(kind: "undo" | "redo", projectId: string, actor: Actor): Promise<LogEntry> {
+async function history(kind: "undo" | "redo", canvasId: string, actor: Actor): Promise<LogEntry> {
   try {
-    return await request<LogEntry>("POST", `/api/projects/${projectId}/${kind}`, {
+    return await request<LogEntry>("POST", `/api/projects/${canvasId}/${kind}`, {
       actor,
       clientId: CLIENT_ID,
     });
@@ -396,14 +396,14 @@ async function history(kind: "undo" | "redo", projectId: string, actor: Actor): 
  * still on your disk) is stated.
  */
 export async function uploadBlob(
-  projectId: string,
+  canvasId: string,
   file: File | Blob,
   filename: string,
 ): Promise<BlobUploadResponse> {
   // Bypasses `request` (raw bytes), so the recovery retry is spelled out —
   // a 401 here would read as a drop that silently failed.
   const send = () =>
-    fetch(`/api/projects/${projectId}/blobs`, {
+    fetch(`/api/projects/${canvasId}/blobs`, {
       method: "POST",
       headers: {
         "Content-Type": file.type || "application/octet-stream",
@@ -437,16 +437,16 @@ export async function uploadBlob(
 /** The rows still admitting, oldest first. Tombstones stay on the desk; the
  * route does not hand them over, because "who can get in" is a question about
  * the present. */
-export function listGrants(projectId: string): Promise<GrantsResponse> {
-  return request("GET", grantsRoute(projectId));
+export function listGrants(canvasId: string): Promise<GrantsResponse> {
+  return request("GET", grantsRoute(canvasId));
 }
 
 /** Share it. `link` needs no attester; `email:` and `repo:` need one this home
  * has borrowed, and a home that has borrowed none refuses with `no-attester`
  * — the dialog shows that refusal rather than hiding it behind a disabled
  * control. */
-export function createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
-  return request("POST", grantsRoute(projectId), { subject });
+export function createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
+  return request("POST", grantsRoute(canvasId), { subject });
 }
 
 /**
@@ -455,13 +455,13 @@ export function createGrant(projectId: string, subject: GrantSubject): Promise<G
  * and while `http.ts` now answers that with the 400 it always was, the
  * request that never needed a body should not send headers about one.
  */
-export function revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
-  return request("DELETE", grantRoute(projectId, grantId));
+export function revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
+  return request("DELETE", grantRoute(canvasId, grantId));
 }
 
 // ---- what this holder has proved (phase 9 stage 2) ----
 //
-// One route, two verbs, and not project-scoped: an attestation is a fact about
+// One route, two verbs, and not canvas-scoped: an attestation is a fact about
 // the HOLDER rather than about a room, and a badge that is not admitted
 // anywhere must still be able to prove its address — because proving it is how
 // it comes to be admitted.
@@ -492,7 +492,7 @@ export function attest(idToken: string): Promise<AttestResponse> {
 
 // ---- your own surfaces: kill-a-badge (phase 9) ----
 //
-// Not project-scoped, unlike the grant routes above: a badge is not about one
+// Not canvas-scoped, unlike the grant routes above: a badge is not about one
 // canvas, and ending one ends that holder's recognition everywhere at once.
 // The routes come from core for `grantsRoute`'s reason — this browser, the
 // CLI and a replica's home connection speak to the same daemon, and a URL
@@ -516,9 +516,9 @@ export function killBadge(badgeId: string): Promise<KillBadgeResponse> {
 // the CLI and a replica's home connection all speak to the same daemon and a
 // URL that drifts shows up at runtime as a refusal with nothing to read.
 //
-// Minting is project-scoped, so the door has already asked whether this badge
+// Minting is canvas-scoped, so the door has already asked whether this badge
 // may be in this room before the handler runs. Redeeming is NOT, and cannot
-// be: the redeemer is by definition not admitted yet, and a project-scoped
+// be: the redeemer is by definition not admitted yet, and a canvas-scoped
 // path would have the door refuse the one request whose purpose is to become
 // admitted. `passes.ts` in core argues both at length.
 
@@ -533,8 +533,8 @@ export function killBadge(badgeId: string): Promise<KillBadgeResponse> {
  * that needs it (an agent that will name itself) is not one a person makes in
  * a browser.
  */
-export function mintPass(projectId: string, actorId: string): Promise<MintPassResponse> {
-  return request("POST", passesRoute(projectId), { actorId });
+export function mintPass(canvasId: string, actorId: string): Promise<MintPassResponse> {
+  return request("POST", passesRoute(canvasId), { actorId });
 }
 
 /**
@@ -551,10 +551,10 @@ export function redeemPass(token: string): Promise<RedeemPassResponse> {
   return request("POST", PASS_REDEEM_ROUTE, { token });
 }
 
-export function runGc(projectId: string, options: GcRequest = {}): Promise<GcReport> {
-  return request("POST", `/api/projects/${projectId}/gc`, options);
+export function runGc(canvasId: string, options: GcRequest = {}): Promise<GcReport> {
+  return request("POST", `/api/projects/${canvasId}/gc`, options);
 }
 
-export function blobUrl(projectId: string, blobHash: string): string {
-  return `/api/projects/${projectId}/blobs/${blobHash}`;
+export function blobUrl(canvasId: string, blobHash: string): string {
+  return `/api/projects/${canvasId}/blobs/${blobHash}`;
 }

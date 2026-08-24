@@ -1,5 +1,5 @@
 import type { ActorNames } from "./identity.ts";
-import type { Actor, CanvasState } from "./model.ts";
+import type { Actor, CanvasContents } from "./model.ts";
 
 /**
  * @-mentions. A mention is resolved at AUTHORING time against the actors the
@@ -126,7 +126,7 @@ function isWordChar(ch: string): boolean {
 /** Everyone stamped anywhere in a canvas, in the order they turn up: item
  * creators/editors and version authors (live and trashed), thread starters
  * and comment authors. */
-function* canvasActors(canvas: CanvasState): Generator<Actor> {
+function* canvasActors(canvas: CanvasContents): Generator<Actor> {
   const items = [
     ...Object.values(canvas.items),
     ...canvas.trash.map((entry) => entry.item),
@@ -144,7 +144,7 @@ function* canvasActors(canvas: CanvasState): Generator<Actor> {
 
 /** One entry per actor visible in a canvas, under the first name they used.
  * Combine with the live presence roster for mention candidates. */
-export function collectCanvasActors(canvas: CanvasState): Actor[] {
+export function collectCanvasActors(canvas: CanvasContents): Actor[] {
   const seen = new Map<string, Actor>();
   for (const actor of canvasActors(canvas)) {
     if (!seen.has(actor.id)) seen.set(actor.id, actor);
@@ -155,7 +155,7 @@ export function collectCanvasActors(canvas: CanvasState): Actor[] {
 /** One entry per (actor, name) pair the canvas has recorded — the same person
  * can have worked under more than one name, and it is NAMES that `@mentions`
  * and "is this name taken?" key on. */
-export function collectCanvasNames(canvas: CanvasState): MentionCandidate[] {
+export function collectCanvasNames(canvas: CanvasContents): MentionCandidate[] {
   const seen = new Map<string, MentionCandidate>();
   for (const actor of canvasActors(canvas)) {
     const key = `${actor.id} ${actor.name}`;

@@ -1,4 +1,4 @@
-import type { CanvasState } from "./model.ts";
+import type { CanvasContents } from "./model.ts";
 
 /**
  * What somebody has been doing here.
@@ -33,7 +33,7 @@ export interface ActivityEntry {
 /** Most recent first. `limit` is a display budget, not a time window: a canvas
  * nobody has touched in a week should still say what happened last. */
 export function recentActivity(
-  canvas: CanvasState,
+  canvas: CanvasContents,
   actorId: string,
   limit = 6,
 ): ActivityEntry[] {

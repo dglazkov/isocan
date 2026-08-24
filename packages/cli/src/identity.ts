@@ -137,7 +137,7 @@ export interface ClaimOptions {
   as?: string;
   /** The canvas of the directory the claim is made from, when it is already
    * bound (#60) — recorded on the binding as informational scope. */
-  projectId?: string;
+  canvasId?: string;
 }
 
 /**
@@ -181,7 +181,7 @@ export async function claimSessionIdentity(
     ...(options.name !== undefined ? { name: options.name } : {}),
     ...(options.fresh ? { fresh: true } : {}),
     ...(options.as !== undefined ? { as: options.as } : {}),
-    ...(options.projectId !== undefined ? { projectId: options.projectId } : {}),
+    ...(options.canvasId !== undefined ? { canvasId: options.canvasId } : {}),
   };
   const { envelope } = await client.claimActor(op);
   return { actor: envelope.actor, harness: session.harness };

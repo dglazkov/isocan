@@ -131,8 +131,8 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
   /** Where this canvas lives, as this machine has recorded it: a normalized
    * address, or null for "this daemon is its home". Absent and null are the
    * same answer — see `homes.ts` for why both spellings exist. */
-  homeOf(projectId: string): string | null {
-    return this.rows[projectId] ?? null;
+  homeOf(canvasId: string): string | null {
+    return this.rows[canvasId] ?? null;
   }
 
   /** Every row, for `GET /api/homes`. A copy: the caller is a route handler
@@ -146,7 +146,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     const key = normalizeHomeUrl(homeUrl);
     return Object.entries(this.rows)
       .filter(([, value]) => value === key)
-      .map(([projectId]) => projectId);
+      .map(([canvasId]) => canvasId);
   }
 
   /**
@@ -171,11 +171,11 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * canvases at this home are innocent, and a link that stopped sweeping would
    * turn one contested id into a whole home going quiet.
    */
-  async mayDial(projectId: string, homeUrl: string): Promise<boolean> {
+  async mayDial(canvasId: string, homeUrl: string): Promise<boolean> {
     const key = normalizeHomeUrl(homeUrl);
-    const row = this.rows[projectId];
+    const row = this.rows[canvasId];
     if (row === undefined) {
-      await this.record(projectId, key);
+      await this.record(canvasId, key);
       return true;
     }
     if (row === key) return true;
@@ -183,11 +183,11 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     // byte: a canvas id cannot contain one, so the key is unambiguous, and a
     // literal NUL in a source file makes it non-text — `grep` skips it in
     // silence, and this repo greps its own sources in anger.
-    const said = `${projectId}\u0000${key}`;
+    const said = `${canvasId}\u0000${key}`;
     if (!this.complained.has(said)) {
       this.complained.add(said);
       console.error(
-        `[isocan] ${key} offers ${projectId}, but this machine has recorded that canvas as ` +
+        `[isocan] ${key} offers ${canvasId}, but this machine has recorded that canvas as ` +
           `${row === null ? "local (this daemon is its home)" : `living at ${row}`} — not ` +
           "dialling it. Two homes holding one canvas id is a twin, and moving a canvas " +
           "between homes is a deliberate act (re-homing), never something a poll does.",
@@ -197,10 +197,10 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
   }
 
   /** One row, written through the serialized chain. */
-  private record(projectId: string, homeUrl: string | null): Promise<void> {
+  private record(canvasId: string, homeUrl: string | null): Promise<void> {
     return this.enqueue(async () => {
-      if (this.rows[projectId] === homeUrl && projectId in this.rows) return;
-      this.rows = { ...this.rows, [projectId]: homeUrl };
+      if (this.rows[canvasId] === homeUrl && canvasId in this.rows) return;
+      this.rows = { ...this.rows, [canvasId]: homeUrl };
       await writeHomes(this.options.home, this.rows);
     });
   }
@@ -213,8 +213,8 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
 
   // ---- HomeDirectory ----
 
-  for(projectId: string): HomeConnection | null {
-    const address = this.homeOf(projectId);
+  for(canvasId: string): HomeConnection | null {
+    const address = this.homeOf(canvasId);
     return address === null ? null : this.linkFor(address);
   }
 
@@ -226,13 +226,13 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     return this.birthHome === null ? null : this.linkFor(this.birthHome);
   }
 
-  async bind(projectId: string, homeUrl: string | null): Promise<HomeConnection | null> {
+  async bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null> {
     const target = homeUrl !== null ? normalizeHomeUrl(homeUrl) : this.birthHome;
     // Written BEFORE the write is forwarded, not after: the answer landing
     // locally fires the engine's op-applied event, and a link deciding whether
     // to open a socket for this canvas reads exactly this row. A row written
     // after the round trip would be read a moment too late.
-    await this.record(projectId, target);
+    await this.record(canvasId, target);
     return target === null ? null : this.linkFor(target);
   }
 
@@ -246,11 +246,11 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * home being quiet, not a home being gone**, and closing a link because its
    * home had a slow afternoon is how a replica forgets.
    */
-  async release(projectId: string): Promise<void> {
-    const address = this.rows[projectId];
+  async release(canvasId: string): Promise<void> {
+    const address = this.rows[canvasId];
     if (address === undefined) return;
     await this.enqueue(async () => {
-      const { [projectId]: _gone, ...rest } = this.rows;
+      const { [canvasId]: _gone, ...rest } = this.rows;
       this.rows = rest;
       await writeHomes(this.options.home, this.rows);
     });

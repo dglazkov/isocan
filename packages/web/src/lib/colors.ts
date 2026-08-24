@@ -41,7 +41,7 @@ export function actorColorIn(colors: ActorColors, actorId: string): string {
   return derive(actorId, colors);
 }
 
-/** Seed the colors before any canvas is open — the projects page paints faces
+/** Seed the colors before any canvas is open — the canvases page paints faces
  * too, and the first paint should not be a color somebody replaced. */
 export async function loadActorColors(): Promise<void> {
   try {

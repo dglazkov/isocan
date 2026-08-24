@@ -45,11 +45,11 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true });
 });
 
-async function op(operation: Operation, projectId: string | null = "prj_1"): Promise<void> {
+async function op(operation: Operation, canvasId: string | null = "prj_1"): Promise<void> {
   const res = await fetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...badge.headers },
-    body: JSON.stringify({ projectId, actor: priya, op: operation }),
+    body: JSON.stringify({ canvasId, actor: priya, op: operation }),
   });
   if (!res.ok) throw new Error(`op ${operation.type} refused: ${await res.text()}`);
 }
@@ -60,7 +60,7 @@ function nv(id: string) {
 
 /** A canvas with one item on it: seq 1 creates, seq 2 adds. */
 async function seedCanvas(): Promise<void> {
-  await op({ type: "project.create", projectId: "prj_1", title: "Acme Sprint Board" }, null);
+  await op({ type: "project.create", canvasId: "prj_1", title: "Acme Sprint Board" }, null);
   await op({
     type: "item.add",
     itemId: "itm_1",
@@ -103,7 +103,7 @@ describe("the seq cursor on connect", () => {
     await seedCanvas();
     await anEvening();
 
-    const { ws, messages } = await connect("projectId=prj_1&since=2");
+    const { ws, messages } = await connect("canvasId=prj_1&since=2");
     await until(() => messages.some((m) => m.type === "presence-roster"));
 
     const hello = messages[0]!;
@@ -137,7 +137,7 @@ describe("the seq cursor on connect", () => {
     await op({ type: "actor.setColor", actorId: priya.id, color: "#ff8800" }, null);
     await op({ type: "item.move", itemId: "itm_1", x: 11, y: 11 });
 
-    const { ws, messages } = await connect("projectId=prj_1&since=2");
+    const { ws, messages } = await connect("canvasId=prj_1&since=2");
     await until(() => messages.length >= 1);
     expect(messages[0]).toMatchObject({
       type: "resumed",
@@ -149,7 +149,7 @@ describe("the seq cursor on connect", () => {
 
   it("resumes with an empty tail when the client is exactly current", async () => {
     await seedCanvas();
-    const { ws, messages } = await connect("projectId=prj_1&since=2");
+    const { ws, messages } = await connect("canvasId=prj_1&since=2");
     await until(() => messages.some((m) => m.type === "presence-roster"));
     expect(messages[0]).toMatchObject({ type: "resumed", from: 2, lastSeq: 2 });
     expect(messages.some((m) => m.type === "op-applied")).toBe(false);
@@ -158,7 +158,7 @@ describe("the seq cursor on connect", () => {
 
   it("is not asked for at all without a cursor — today's snapshot, unchanged", async () => {
     await seedCanvas();
-    for (const query of ["projectId=prj_1", "projectId=prj_1&since=0"]) {
+    for (const query of ["canvasId=prj_1", "canvasId=prj_1&since=0"]) {
       const { ws, messages } = await connect(query);
       await until(() => messages.length >= 1);
       expect(messages[0]!.type).toBe("snapshot");
@@ -171,7 +171,7 @@ describe("the seq cursor on connect", () => {
     // this, and it is the client that has to be corrected. A snapshot is the
     // correction; an error would leave a tab that can never reconnect.
     await seedCanvas();
-    const { ws, messages } = await connect("projectId=prj_1&since=99");
+    const { ws, messages } = await connect("canvasId=prj_1&since=99");
     await until(() => messages.some((m) => m.type === "presence-roster"));
     expect(messages[0]!.type).toBe("snapshot");
     expect(messages[0]).toMatchObject({ lastSeq: 2 });
@@ -187,7 +187,7 @@ describe("the seq cursor on connect", () => {
     // honest test is not "is seq 3 gone" but "can 3…5 be handed over whole".
     await daemon.engine.gc("prj_1", { keepOps: 1, graceMs: 0 });
 
-    const { ws, messages } = await connect("projectId=prj_1&since=2");
+    const { ws, messages } = await connect("canvasId=prj_1&since=2");
     await until(() => messages.some((m) => m.type === "presence-roster"));
     expect(messages[0]!.type).toBe("snapshot");
     // And the snapshot is not a consolation prize: it carries the state those
@@ -213,7 +213,7 @@ describe("the seq cursor on connect", () => {
     await anEvening();
     await daemon.engine.gc("prj_1", { keepOps: 0, graceMs: 0 });
 
-    const { ws, messages } = await connect("projectId=prj_1&since=2");
+    const { ws, messages } = await connect("canvasId=prj_1&since=2");
     await until(() => messages.some((m) => m.type === "presence-roster"));
     expect(messages[0]!.type).toBe("snapshot");
     // Specifically NOT the shape that hides the gap.
@@ -226,7 +226,7 @@ describe("the seq cursor on connect", () => {
   it("ignores a cursor that is not a seq", async () => {
     await seedCanvas();
     for (const raw of ["banana", "-3", "2.5", ""]) {
-      const { ws, messages } = await connect(`projectId=prj_1&since=${raw}`);
+      const { ws, messages } = await connect(`canvasId=prj_1&since=${raw}`);
       await until(() => messages.length >= 1);
       expect(messages[0]!.type, `since=${raw}`).toBe("snapshot");
       ws.close();
@@ -237,7 +237,7 @@ describe("the seq cursor on connect", () => {
     // The resume is a handshake, not a mode: once caught up, the socket is an
     // ordinary member of the room.
     await seedCanvas();
-    const { ws, messages } = await connect("projectId=prj_1&since=1");
+    const { ws, messages } = await connect("canvasId=prj_1&since=1");
     await until(() => messages.some((m) => m.type === "resumed"));
     await op({ type: "item.move", itemId: "itm_1", x: 77, y: 77 });
     await until(() => messages.some((m) => m.type === "op-applied" && m.entry.seq === 3));

@@ -2,16 +2,17 @@
  * A canvas's address, spelled in exactly one place.
  *
  * This module exists because of a bug that cost a browser session to find.
- * The product is a **canvas** in the docs and a **project** in the code, and
- * the seam leaked into the one string a stranger pastes to another stranger:
- * the journey and the desk design both wrote `isocan.io/c/7f3a…`, and nothing
- * ever served `/c/` — the app has had exactly two routes, `/` and
- * `/p/:projectId`, since it was written. A doc-shaped share link returned 200,
+ * The product used to be a **canvas** in the docs and a **project** in the
+ * code, and the seam leaked into the one string a stranger pastes to another
+ * stranger: the journey and the desk design both wrote `isocan.io/c/7f3a…`,
+ * and nothing ever served `/c/` — the app has had exactly two routes, `/` and
+ * `/p/:canvasId`, since it was written. A doc-shaped share link returned 200,
  * served the app shell, and rendered a blank page.
  *
  * Dimitri settled the address on 2026-08-23: **keep `/p/`**, correct the docs,
- * and leave the rename itself deliberately open (`docs/phases.md`,
- * "Deliberately open"). This file is the other half of that ruling. The router
+ * and take the rename itself later (it landed in phase 13.5, which is why the
+ * code says canvas everywhere now). This file is the other half of that
+ * ruling. The router
  * builds its path from `CANVAS_ROUTE`, the Share dialog builds its copyable URL
  * from `canvasUrl`, and `isocan open` and `isocan share` build theirs from the
  * same function — so the next time somebody changes their mind about the
@@ -28,14 +29,14 @@
 export const CANVAS_PATH_PREFIX = "/p";
 
 /** The router's pattern, so the route and the links agree by construction. */
-export const CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:projectId`;
+export const CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:canvasId`;
 
 /** The same canvas with one item filling the screen — see `itemPath`. */
 export const ITEM_ROUTE = `${CANVAS_ROUTE}/i/:itemId`;
 
 /** The path a canvas is served at, origin-relative. */
-export function canvasPath(projectId: string): string {
-  return `${CANVAS_PATH_PREFIX}/${encodeURIComponent(projectId)}`;
+export function canvasPath(canvasId: string): string {
+  return `${CANVAS_PATH_PREFIX}/${encodeURIComponent(canvasId)}`;
 }
 
 /**
@@ -58,13 +59,13 @@ export function canvasPath(projectId: string): string {
  */
 export const ITEM_PATH_SEGMENT = "i";
 
-export function itemPath(projectId: string, itemId: string): string {
-  return `${canvasPath(projectId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
+export function itemPath(canvasId: string, itemId: string): string {
+  return `${canvasPath(canvasId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
 }
 
 /** The whole address of one item, full screen: origin + path. */
-export function itemUrl(origin: string, projectId: string, itemId: string): string {
-  return `${origin.replace(/\/+$/, "")}${itemPath(projectId, itemId)}`;
+export function itemUrl(origin: string, canvasId: string, itemId: string): string {
+  return `${origin.replace(/\/+$/, "")}${itemPath(canvasId, itemId)}`;
 }
 
 /**
@@ -75,8 +76,8 @@ export function itemUrl(origin: string, projectId: string, itemId: string): stri
  * `location.origin` in a tab. A trailing slash is tolerated because a home
  * address read out of a config file often has one.
  */
-export function canvasUrl(origin: string, projectId: string): string {
-  return `${origin.replace(/\/+$/, "")}${canvasPath(projectId)}`;
+export function canvasUrl(origin: string, canvasId: string): string {
+  return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}`;
 }
 
 /**
@@ -96,8 +97,8 @@ export function canvasUrl(origin: string, projectId: string): string {
  * this string and the CLI's `setup` PARSES it, and one spelling in two clients
  * is the exact bug this module was created by.
  */
-export function canvasUrlWithPass(origin: string, projectId: string, token: string): string {
-  return urlWithPass(canvasUrl(origin, projectId), token);
+export function canvasUrlWithPass(origin: string, canvasId: string, token: string): string {
+  return urlWithPass(canvasUrl(origin, canvasId), token);
 }
 
 /**
@@ -140,7 +141,7 @@ export function splitPassFragment(address: string): { address: string; pass?: st
 export interface CanvasAddress {
   /** The home's origin — `https://isocan.io`, `http://127.0.0.1:4441`. */
   origin: string;
-  projectId: string;
+  canvasId: string;
   /** The `#fragment`, when one rode along. Never logged, never printed. */
   pass?: string;
 }
@@ -198,9 +199,9 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
   // question nobody asked with a canvas nobody named.
   const parts = url.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
-  const projectId = decodeURIComponent(parts[2] ?? "");
-  if (!projectId) return null;
-  return { origin: url.origin, projectId, ...(pass !== undefined ? { pass } : {}) };
+  const canvasId = decodeURIComponent(parts[2] ?? "");
+  if (!canvasId) return null;
+  return { origin: url.origin, canvasId, ...(pass !== undefined ? { pass } : {}) };
 }
 
 /**
@@ -305,7 +306,7 @@ export const SKILL_INSTALL_COMMAND = "npx skills add dglazkov/isocan";
  * command, which is what a person is handed when the canvas's link grant is
  * open and no credential is needed to arrive.
  */
-export function setupCommand(origin: string, projectId: string, token?: string): string {
-  const address = token ? canvasUrlWithPass(origin, projectId, token) : canvasUrl(origin, projectId);
+export function setupCommand(origin: string, canvasId: string, token?: string): string {
+  const address = token ? canvasUrlWithPass(origin, canvasId, token) : canvasUrl(origin, canvasId);
   return `npx ${INSTALL_SPEC} setup ${address}`;
 }

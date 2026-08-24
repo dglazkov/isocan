@@ -93,7 +93,7 @@ directory also creates a canvas named after that directory.
 ### 3. Create a local canvas
 
 ```sh
-isocan project create "Acme Scratch"
+isocan canvas create "Acme Scratch"
 ```
 
 This canvas is local, because you haven't set a birth default yet. Use it to
@@ -128,8 +128,8 @@ then create a canvas there:
 
 ```sh
 isocan home https://dev.isocan.io
-isocan project create "Widget Redesign"
-isocan --project "Widget Redesign" share
+isocan canvas create "Widget Redesign"
+isocan --canvas "Widget Redesign" share
 ```
 
 The `share` command prints the canvas address:
@@ -143,7 +143,7 @@ Open that address in a browser. Writes from your terminal go through your local
 daemon to dev:
 
 ```sh
-isocan --project "Widget Redesign" add notes.md --title "Acme spec"
+isocan --canvas "Widget Redesign" add notes.md --title "Acme spec"
 ```
 
 ### 6. Verify your setup
@@ -191,10 +191,10 @@ To confirm that writes reach the home, read them back from a separate machine
 that has only ever contacted the home:
 
 ```sh
-isocan --project "Widget Redesign" pass
+isocan --canvas "Widget Redesign" pass
 cd /some/empty/dir
 npm --prefix ~/src/isocan run dev:replica -- setup 'https://dev.isocan.io/p/<id>#<pass>'
-npm --prefix ~/src/isocan run dev:replica -- --project "Widget" ls
+npm --prefix ~/src/isocan run dev:replica -- --canvas "Widget" ls
 ```
 
 The item you added appears on a scratch machine with its own state directory,

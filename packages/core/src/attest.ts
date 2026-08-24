@@ -28,7 +28,7 @@ import type { AttestedKind, GrantSubject } from "./grants.ts";
  *
  * One route, two verbs, for `grantsRoute`'s reason: the reader and the writer
  * are the same subject, and a second path is a second thing to keep in step.
- * NOT project-scoped — an attestation is a fact about the HOLDER, not about a
+ * NOT canvas-scoped — an attestation is a fact about the HOLDER, not about a
  * room. It is the same argument `BADGES_ROUTE` is written on, and it matters
  * here twice over: a badge that is not admitted anywhere must still be able to
  * prove its address, because proving it is how it comes to be admitted.

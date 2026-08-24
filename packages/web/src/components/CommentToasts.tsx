@@ -53,8 +53,8 @@ function Toast({ notice }: { notice: CommentNotice }) {
     const target = state?.threads[notice.threadId];
     if (target?.main) {
       // The main thread lives in the docked panel, not at a canvas spot.
-      const projectId = useCanvasStore.getState().projectId;
-      if (projectId) openMainPanel(projectId, true);
+      const canvasId = useCanvasStore.getState().canvasId;
+      if (canvasId) openMainPanel(canvasId, true);
     } else if (target) {
       const world = threadWorldPos(state!, target);
       const ui = useUiStore.getState();

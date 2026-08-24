@@ -201,7 +201,7 @@ if (!gate.ok && requireEmulator()) {
           seq: 4,
           envelope: {
             id: "op_huge",
-            projectId: "prj_1",
+            canvasId: "prj_1",
             actor: { id: "usr_test", name: "Tester" },
             ts: new Date(Date.UTC(2026, 0, 2)).toISOString(),
             op: { type: "project.update", patch: { description: huge } },
@@ -225,17 +225,17 @@ if (!gate.ok && requireEmulator()) {
       "a soft-deleted canvas keeps every seq it ever claimed",
       withStore(async ({ store, firestore }) => {
         await seed(store);
-        await store.softDeleteProject("prj_1");
+        await store.softDeleteCanvas("prj_1");
         expect(await store.load("prj_1")).toBeNull();
-        expect(await store.listProjects()).toEqual([]);
+        expect(await store.listCanvases()).toEqual([]);
         const docs = await firestore.collection(opsCollection("prj_1")).get();
         expect(docs.size).toBe(3);
         expect((await firestore.doc(canvasDoc("prj_1")).get()).data()!["deleted"]).toBe(true);
-        // …so the id stays taken. The engine asks `projectExists` to refuse a
+        // …so the id stays taken. The engine asks `canvasExists` to refuse a
         // duplicate `project.create`, and it must refuse: seqs 1..3 are still
         // claimed, so a create would be fenced two lines later and would
         // surface as `writer-fenced` — a lie, since there is no other writer.
-        expect(await store.projectExists("prj_1")).toBe(true);
+        expect(await store.canvasExists("prj_1")).toBe(true);
       }),
     );
 
@@ -342,14 +342,14 @@ if (!gate.ok && requireEmulator()) {
         for (const method of [
           "init",
           "close",
-          "listProjects",
-          "createProjectDir",
-          "projectExists",
+          "listCanvases",
+          "createCanvasDir",
+          "canvasExists",
           "load",
-          "saveProject",
+          "saveCanvas",
           "saveSnapshot",
           "appendLog",
-          "softDeleteProject",
+          "softDeleteCanvas",
           "loadCommands",
           "saveCommand",
           "deleteCommand",

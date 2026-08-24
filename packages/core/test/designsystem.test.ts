@@ -6,7 +6,7 @@ import {
   designSystemProperties,
   isDesignSystem,
   slopRulesAsText,
-  type CanvasState,
+  type CanvasContents,
 } from "../src/index.ts";
 
 const ACTOR = { id: "usr_1", name: "Di" };
@@ -15,7 +15,7 @@ const item = (id: string, props: Record<string, string>, updatedAt = "2026-08-21
   versions: [{ id: `v_${id}`, blobHash: "h", mimeType: "text/markdown", filename: "style.md", size: 1, createdAt: updatedAt, createdBy: ACTOR }],
   currentVersionId: `v_${id}`, createdAt: updatedAt, createdBy: ACTOR, updatedAt, updatedBy: ACTOR,
 });
-const canvas = (items: ReturnType<typeof item>[]): CanvasState => ({
+const canvas = (items: ReturnType<typeof item>[]): CanvasContents => ({
   items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [],
 });
 

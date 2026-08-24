@@ -8,7 +8,7 @@ import type {
   LogEntry,
   Operation,
   PresenceSession,
-  Project,
+  Canvas,
 } from "@isocan/core";
 import { BADGES_ROUTE, HOMES_ROUTE } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
@@ -115,12 +115,12 @@ async function post(node: Node, url: string, body: unknown): Promise<Response> {
 
 async function op(
   node: Node,
-  projectId: string | null,
+  canvasId: string | null,
   operation: Operation,
   extra: { home?: string } = {},
 ): Promise<{ seq: number }> {
   const res = await post(node, "/api/ops", {
-    projectId,
+    canvasId,
     actor: dion,
     op: operation,
     ...extra,
@@ -179,17 +179,17 @@ const item = (id: string, x: number): Operation => ({
  * travels is the marker's assertion, beside the op, at a birth.
  */
 async function birthAll(): Promise<void> {
-  await op(D, null, { type: "project.create", projectId: LOCAL, title: "Scratch Notes" });
+  await op(D, null, { type: "project.create", canvasId: LOCAL, title: "Scratch Notes" });
   await op(
     D,
     null,
-    { type: "project.create", projectId: ONE, title: "Acme Sprint Board" },
+    { type: "project.create", canvasId: ONE, title: "Acme Sprint Board" },
     { home: H1.base },
   );
   await op(
     D,
     null,
-    { type: "project.create", projectId: TWO, title: "Widget Redesign" },
+    { type: "project.create", canvasId: TWO, title: "Widget Redesign" },
     { home: H2.base },
   );
 }
@@ -221,27 +221,27 @@ describe("one daemon, many homes", () => {
 
     // Each home holds its own canvas…
     const atH1 = await until(
-      () => H1.daemon.engine.listProjects(),
-      (list) => list.some((project) => project.id === ONE),
+      () => H1.daemon.engine.listCanvases(),
+      (list) => list.some((canvas) => canvas.id === ONE),
       "prj_one at H1",
     );
     const atH2 = await until(
-      () => H2.daemon.engine.listProjects(),
-      (list) => list.some((project) => project.id === TWO),
+      () => H2.daemon.engine.listCanvases(),
+      (list) => list.some((canvas) => canvas.id === TWO),
       "prj_two at H2",
     );
     // …and only its own. Not the other home's canvas, and — the assertion the
     // whole phase turns on — **neither home ever holds the local one**. A
     // daemon with a home used to forward every write on its disk; a canvas
     // born here and staying here was not a thing it could hold.
-    expect(atH1.map((project) => project.id)).toEqual([ONE]);
-    expect(atH2.map((project) => project.id)).toEqual([TWO]);
-    expect((await H1.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(TWO);
-    expect((await H1.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(LOCAL);
-    expect((await H2.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(ONE);
-    expect((await H2.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(LOCAL);
+    expect(atH1.map((canvas) => canvas.id)).toEqual([ONE]);
+    expect(atH2.map((canvas) => canvas.id)).toEqual([TWO]);
+    expect((await H1.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(TWO);
+    expect((await H1.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(LOCAL);
+    expect((await H2.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(ONE);
+    expect((await H2.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(LOCAL);
 
-    // The state really travelled, rather than merely the project row.
+    // The state really travelled, rather than merely the canvas row.
     expect((await canvas(H1, ONE)).canvas.items["itm_one"]).toMatchObject({ x: 2, y: 2 });
     expect((await canvas(H2, TWO)).canvas.items["itm_two"]).toMatchObject({ x: 3, y: 3 });
     expect((await canvas(D, LOCAL)).canvas.items["itm_local"]).toMatchObject({ x: 1, y: 1 });
@@ -277,7 +277,7 @@ describe("one daemon, many homes", () => {
     await H1.daemon.close();
 
     const refused = await post(D, "/api/ops", {
-      projectId: ONE,
+      canvasId: ONE,
       actor: dion,
       op: { type: "item.move", itemId: "itm_one", x: 99, y: 99 },
     });
@@ -312,7 +312,7 @@ describe("one daemon, many homes", () => {
    * `HomeHandshakes` counts rather than remembers precisely so that the
    * negative question can be asked — its own doc says *"the interesting
    * question is negative"* — and this is the assertion that catches a `sweep()`
-   * which quietly kept the old "every project in the local store" line. That
+   * which quietly kept the old "every canvas in the local store" line. That
    * line would have H1's link dial `prj_two`, and in the clone-and-twin case
    * (one id at both homes) the wrong home would answer with a SNAPSHOT and
    * `adoptRemoteSnapshot` would overwrite the local copy. The narrowing is a
@@ -359,9 +359,9 @@ describe("one daemon, many homes", () => {
     // H2 grows a canvas with H1's id and different contents — the twin, made
     // the way twins are actually made (two machines, one id, no coordination).
     const created = await post(H2, "/api/ops", {
-      projectId: null,
+      canvasId: null,
       actor: { id: "usr_h2", name: "Widget Home" },
-      op: { type: "project.create", projectId: ONE, title: "Not The Acme Board" },
+      op: { type: "project.create", canvasId: ONE, title: "Not The Acme Board" },
     });
     expect(created.status).toBe(200);
     // …and D's badge at H2 is admitted to it, so H2's narrow listing will
@@ -498,7 +498,7 @@ describe("a machine that predates all of this", () => {
      * writes `config.json` and restarts. The migration used to `return` before
      * writing anything on the first boot, so the second one found no record,
      * saw a configured home, and froze the canvas at a home it had never been
-     * to. Measured on a real rig: 404 on its page, `project not found` on a
+     * to. Measured on a real rig: 404 on its page, `canvas not found` on a
      * write.
      */
     // A store that genuinely predates `homes.json`. Creating the canvas with
@@ -506,7 +506,7 @@ describe("a machine that predates all of this", () => {
     // enough to disarm the migration, which is why a test that skipped this
     // line passed against the bug it was written to catch.
     const zeroth = await dionsRig(dDir, null);
-    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await post(zeroth, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_dion", title: "Acme Sprint Board" } });
     await zeroth.daemon.close();
     await fs.rm(p.homesFile(dDir), { force: true });
 
@@ -545,7 +545,7 @@ describe("a machine that predates all of this", () => {
      * and this rig has never knocked on anybody's door.
      */
     const zeroth = await dionsRig(dDir, null);
-    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await post(zeroth, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_dion", title: "Acme Sprint Board" } });
     await zeroth.daemon.close();
     await fs.rm(p.homesFile(dDir), { force: true });
 
@@ -570,7 +570,7 @@ describe("a machine that predates all of this", () => {
      * the home recognised it: a badge in `identity.json`'s `auth` block.
      */
     const zeroth = await dionsRig(dDir, null);
-    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_old", title: "Acme Sprint Board" } });
+    await post(zeroth, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_old", title: "Acme Sprint Board" } });
     await zeroth.daemon.close();
     await fs.rm(p.homesFile(dDir), { force: true });
     // What a replica has and a merely-configured machine does not.
@@ -595,7 +595,7 @@ describe("a machine that predates all of this", () => {
      * saying "replica".
      */
     const zeroth = await dionsRig(dDir, null);
-    await post(zeroth, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await post(zeroth, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_dion", title: "Acme Sprint Board" } });
     await zeroth.daemon.close();
     await fs.rm(p.homesFile(dDir), { force: true });
 
@@ -626,7 +626,7 @@ describe("a machine that predates all of this", () => {
      * freeze — a different case, tested above.
      */
     const first = await dionsRig(dDir, null);
-    await post(first, "/api/ops", { projectId: null, actor: dion, op: { type: "project.create", projectId: "prj_dion", title: "Acme Sprint Board" } });
+    await post(first, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_dion", title: "Acme Sprint Board" } });
     await first.daemon.close();
     // A record that knows about somebody else's canvas and not this one.
     await fs.writeFile(p.homesFile(dDir), JSON.stringify({ prj_someone_else: H1.base }));
@@ -725,8 +725,8 @@ describe("what makes many homes durable rather than incidental", () => {
     );
     expect((await canvas(H1, ONE)).canvas.items["itm_two_c"]).toBeUndefined();
     expect((await canvas(H2, TWO)).canvas.items["itm_one_c"]).toBeUndefined();
-    expect((await H1.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(LOCAL);
-    expect((await H2.daemon.engine.listProjects()).map((x) => x.id)).not.toContain(LOCAL);
+    expect((await H1.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(LOCAL);
+    expect((await H2.daemon.engine.listCanvases()).map((x) => x.id)).not.toContain(LOCAL);
   }, 40_000);
 
   it("drops a canvas's row when the canvas is deleted, so a re-created id inherits nothing", async () => {
@@ -756,7 +756,7 @@ describe("what makes many homes durable rather than incidental", () => {
     expect(D.daemon.homes.assignments()).toEqual({ [LOCAL]: null, [TWO]: H2.base });
     // And a canvas re-created under the same id, naming nothing, is born HERE
     // rather than at the home the dead row pointed at.
-    await op(D, null, { type: "project.create", projectId: ONE, title: "Acme, Again" });
+    await op(D, null, { type: "project.create", canvasId: ONE, title: "Acme, Again" });
     expect(D.daemon.homes.homeOf(ONE)).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect((await canvas(D, ONE)).project.title).toBe("Acme, Again");
@@ -764,7 +764,7 @@ describe("what makes many homes durable rather than incidental", () => {
 
   it("lists only the canvases it is the home of when the caller asks `reach=here`", async () => {
     /**
-     * The server half of closing a real hole (§6). `ProjectListPage` links to a
+     * The server half of closing a real hole (§6). `CanvasListPage` links to a
      * canvas with a react-router `<Link>` — a client-side navigation that never
      * touches the server — so the per-canvas page guard is simply bypassed for
      * anything in that list, and this origin would render a replica of a canvas
@@ -776,12 +776,12 @@ describe("what makes many homes durable rather than incidental", () => {
      * standing rule.
      */
     await birthAll();
-    const here = await get<Project[]>(D, "/api/projects?reach=here");
-    expect(here.map((project) => project.id)).toEqual([LOCAL]);
+    const here = await get<Canvas[]>(D, "/api/projects?reach=here");
+    expect(here.map((canvas) => canvas.id)).toEqual([LOCAL]);
     // …and the default answer is untouched, because a person browsing their own
     // machine still gets the whole picture.
-    const all = await get<Project[]>(D, "/api/projects");
-    expect(all.map((project) => project.id).sort()).toEqual([LOCAL, ONE, TWO].sort());
+    const all = await get<Canvas[]>(D, "/api/projects");
+    expect(all.map((canvas) => canvas.id).sort()).toEqual([LOCAL, ONE, TWO].sort());
   }, 30_000);
 
   it("answers `GET /api/homes` with the per-canvas picture the whole-daemon field cannot", async () => {

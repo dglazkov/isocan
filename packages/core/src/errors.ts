@@ -54,12 +54,12 @@ export class OplogFencedError extends Error {
 
   constructor(
     /** Which canvas — a fence is per-canvas, not per-process. */
-    public readonly projectId: string,
+    public readonly canvasId: string,
     /** The seq this writer believed was next, and which was already taken. */
     public readonly seq: number,
     message?: string,
   ) {
-    super(message ?? `another writer already holds seq ${seq} on ${projectId}`);
+    super(message ?? `another writer already holds seq ${seq} on ${canvasId}`);
     this.name = "OplogFencedError";
   }
 }
@@ -69,7 +69,7 @@ export class OplogFencedError extends Error {
  * variant a compile error; at runtime it rejects an op this build predates —
  * a stale daemon meeting a newer CLI. Without it the switch falls through and
  * returns undefined, which the engine would log as an inverse-less entry and
- * assign as project state.
+ * assign as canvas state.
  */
 export function unknownOperation(op: never): never {
   const type = (op as { type?: unknown }).type;

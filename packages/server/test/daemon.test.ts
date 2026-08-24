@@ -45,8 +45,8 @@ async function post(url: string, body: unknown): Promise<{ status: number; json:
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 
-async function op(operation: Operation, projectId: string | null = "prj_1", actor = alice) {
-  return post("/api/ops", { projectId, actor, op: operation });
+async function op(operation: Operation, canvasId: string | null = "prj_1", actor = alice) {
+  return post("/api/ops", { canvasId, actor, op: operation });
 }
 
 async function get(url: string): Promise<any> {
@@ -58,8 +58,8 @@ function nv(id: string) {
   return { id, blobHash: `h_${id}`, mimeType: "text/markdown", filename: `${id}.md`, size: 4 };
 }
 
-async function createProjectWithItem(): Promise<void> {
-  await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+async function createCanvasWithItem(): Promise<void> {
+  await op({ type: "project.create", canvasId: "prj_1", title: "P" }, null);
   await op({
     type: "item.add",
     itemId: "itm_1",
@@ -94,9 +94,9 @@ describe("daemon HTTP", () => {
   });
 
   it("applies ops and serves snapshots", async () => {
-    await createProjectWithItem();
-    const projects = await get("/api/projects");
-    expect(projects.map((p: any) => p.id)).toEqual(["prj_1"]);
+    await createCanvasWithItem();
+    const canvases = await get("/api/projects");
+    expect(canvases.map((p: any) => p.id)).toEqual(["prj_1"]);
     const snapshot = await get("/api/projects/prj_1/canvas");
     expect(snapshot.canvas.items["itm_1"].x).toBe(5);
     expect(snapshot.lastSeq).toBe(2);
@@ -104,7 +104,7 @@ describe("daemon HTTP", () => {
   });
 
   it("normalizes anchored placement before logging", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     const { json } = await op({
       type: "item.add",
       itemId: "itm_2",
@@ -120,7 +120,7 @@ describe("daemon HTTP", () => {
   });
 
   it("rejects invalid ops with 400 and typed codes", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     const bad = await op({ type: "item.move", itemId: "itm_nope", x: 0, y: 0 });
     expect(bad.status).toBe(400);
     expect(bad.json.code).toBe("unknown-item");
@@ -136,10 +136,10 @@ describe("daemon HTTP", () => {
 
   // Regression: a daemon older than the client that sent the op used to fall
   // out of the reducer switch — the entry landed in the oplog with no inverse
-  // and undefined became the project's in-memory state, 500ing every read
+  // and undefined became the canvas's in-memory state, 500ing every read
   // afterwards.
-  it("rejects an op type it does not know, leaving the project intact", async () => {
-    await createProjectWithItem();
+  it("rejects an op type it does not know, leaving the canvas intact", async () => {
+    await createCanvasWithItem();
     const future = await op({ type: "item.teleport", itemId: "itm_1" } as unknown as Operation);
     expect(future.status).toBe(400);
     expect(future.json.code).toBe("unknown-op");
@@ -149,18 +149,18 @@ describe("daemon HTTP", () => {
     const snapshot = await get("/api/projects/prj_1/canvas");
     expect(snapshot.canvas.items["itm_1"].x).toBe(5);
 
-    // The project still accepts ops.
+    // The canvas still accepts ops.
     const move = await op({ type: "item.move", itemId: "itm_1", x: 9, y: 9 });
     expect(move.status).toBe(200);
   });
 
-  it("404s unknown projects", async () => {
+  it("404s unknown canvases", async () => {
     const res = await fetch(`${base}/api/projects/prj_nope/canvas`, { headers: badge.headers });
     expect(res.status).toBe(404);
   });
 
   it("undo/redo are actor-scoped: each actor walks only their own ops", async () => {
-    await createProjectWithItem(); // alice: create (1), add itm_1 at 5,6 (2)
+    await createCanvasWithItem(); // alice: create (1), add itm_1 at 5,6 (2)
     await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 }, "prj_1", alice); // 3
     await op({ type: "item.move", itemId: "itm_1", x: 200, y: 200 }, "prj_1", bob); // 4
 
@@ -196,7 +196,7 @@ describe("daemon HTTP", () => {
   });
 
   it("a fresh op truncates only that actor's redo branch", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 }, "prj_1", alice);
     await op({ type: "item.move", itemId: "itm_1", x: 200, y: 200 }, "prj_1", bob);
     await post("/api/projects/prj_1/undo", { actor: alice }); // move back toward 5,6
@@ -212,7 +212,7 @@ describe("daemon HTTP", () => {
   });
 
   it("undo skips entries whose targets another actor deleted", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op(
       { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: null, comment: { id: "cmt_1", body: "one" } },
       "prj_1",
@@ -235,7 +235,7 @@ describe("daemon HTTP", () => {
   });
 
   it("redo of a creation restores full fidelity, including others' replies", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op(
       { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: null, comment: { id: "cmt_1", body: "mine" } },
       "prj_1",
@@ -262,7 +262,7 @@ describe("daemon HTTP", () => {
   });
 
   it("batch inverses are repaired to their surviving members", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op({
       type: "item.add",
       itemId: "itm_2",
@@ -306,7 +306,7 @@ describe("daemon HTTP", () => {
    * ONE order, and each actor's stack has only their own ops in it.
    */
   it("two actors writing at once get one order, and two separate stacks", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op({
       type: "item.add",
       itemId: "itm_2",
@@ -360,7 +360,7 @@ describe("daemon HTTP", () => {
    * quietly re-restored on top of their work.
    */
   it("undoing a multi-item delete restores only the members still in the trash", async () => {
-    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    await op({ type: "project.create", canvasId: "prj_1", title: "P" }, null);
     for (const id of ["itm_1", "itm_2", "itm_3"]) {
       await op({
         type: "item.add",
@@ -391,7 +391,7 @@ describe("daemon HTTP", () => {
   });
 
   it("a batch undo whose every member is gone is skipped, not half-applied", async () => {
-    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    await op({ type: "project.create", canvasId: "prj_1", title: "P" }, null);
     for (const id of ["itm_1", "itm_2"]) {
       await op({
         type: "item.add",
@@ -436,7 +436,7 @@ describe("daemon HTTP", () => {
    * test's timeout should be set from what it costs, not left at the default.
    */
   it("a hundred-item move is one op and one undo step", { timeout: 30_000 }, async () => {
-    await op({ type: "project.create", projectId: "prj_1", title: "P" }, null);
+    await op({ type: "project.create", canvasId: "prj_1", title: "P" }, null);
     const ids = Array.from({ length: 100 }, (_, i) => `itm_${i}`);
     await Promise.all(
       ids.map((id, i) =>
@@ -481,7 +481,7 @@ describe("daemon HTTP", () => {
   });
 
   it("undo state survives a daemon restart (rebuilt from oplog)", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op({ type: "item.move", itemId: "itm_1", x: 100, y: 100 });
     await post("/api/projects/prj_1/undo", { actor: alice });
 
@@ -498,7 +498,7 @@ describe("daemon HTTP", () => {
   });
 
   it("oplog long-poll holds until an entry lands, or times out empty", async () => {
-    await createProjectWithItem(); // seqs 1..2
+    await createCanvasWithItem(); // seqs 1..2
     // Timeout path: nothing new past seq 2 → empty after ~waitMs.
     let started = Date.now();
     const empty = await get("/api/projects/prj_1/oplog?since=2&waitMs=250");
@@ -519,7 +519,7 @@ describe("daemon HTTP", () => {
   });
 
   it("the home-wide watch seeds at now, then hears every canvas — new ones included", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
 
     // Seeding (no cursors) reports tips and no entries: "from here on".
     const seed = await post("/api/oplog/watch", {});
@@ -528,7 +528,7 @@ describe("daemon HTTP", () => {
 
     // A canvas born after the agent parked, and a comment on it. The watcher
     // never saw prj_2, so it is streamed from its very first op — issue #37.
-    await op({ type: "project.create", projectId: "prj_2", title: "New space" }, null, bob);
+    await op({ type: "project.create", canvasId: "prj_2", title: "New space" }, null, bob);
     await op(
       {
         type: "thread.create",
@@ -544,7 +544,7 @@ describe("daemon HTTP", () => {
     );
 
     const batch = await post("/api/oplog/watch", { cursors: seed.json.cursors });
-    expect(batch.json.entries.map((e: any) => [e.projectId, e.projectTitle, e.envelope.op.type]))
+    expect(batch.json.entries.map((e: any) => [e.canvasId, e.canvasTitle, e.envelope.op.type]))
       .toEqual([
         ["prj_2", "New space", "project.create"],
         ["prj_2", "New space", "thread.create"],
@@ -565,12 +565,12 @@ describe("daemon HTTP", () => {
     const woke = await pending;
     expect(Date.now() - started).toBeLessThan(3000);
     expect(woke.json.entries).toHaveLength(1);
-    expect(woke.json.entries[0].projectId).toBe("prj_1");
+    expect(woke.json.entries[0].canvasId).toBe("prj_1");
   });
 
   it("`only` pins the watch to named canvases — the rest of the home is silent", async () => {
-    await createProjectWithItem();
-    await op({ type: "project.create", projectId: "prj_2", title: "Elsewhere" }, null, bob);
+    await createCanvasWithItem();
+    await op({ type: "project.create", canvasId: "prj_2", title: "Elsewhere" }, null, bob);
 
     // Pinned to prj_2, which has nothing past its creation. A canvas absent
     // from `only` must not be swept in from seq 0.
@@ -596,7 +596,7 @@ describe("daemon HTTP", () => {
   });
 
   it("uploads and serves blobs with security headers", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     const body = "<h1>hi</h1>";
     const upload = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",
@@ -618,7 +618,7 @@ describe("daemon HTTP", () => {
   });
 
   it("project.delete parks the directory and 404s afterwards", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     await op({ type: "project.delete" });
     const res = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
     expect(res.status).toBe(404);
@@ -627,9 +627,9 @@ describe("daemon HTTP", () => {
 });
 
 describe("daemon WS", () => {
-  function connect(projectId: string): Promise<{ ws: WebSocket; messages: ServerMessage[] }> {
+  function connect(canvasId: string): Promise<{ ws: WebSocket; messages: ServerMessage[] }> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=${projectId}`, {
+      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`, {
         headers: badge.headers,
       });
       const messages: ServerMessage[] = [];
@@ -648,7 +648,7 @@ describe("daemon WS", () => {
   }
 
   it("sends snapshot on connect, then op-applied per mutation", async () => {
-    await createProjectWithItem();
+    await createCanvasWithItem();
     const { ws, messages } = await connect("prj_1");
     await until(() => messages.length >= 1);
     expect(messages[0]!.type).toBe("snapshot");
@@ -662,12 +662,12 @@ describe("daemon WS", () => {
     ws.close();
   });
 
-  it("notifies project-deleted and closes the room", async () => {
-    await createProjectWithItem();
+  it("notifies canvas-deleted and closes the room", async () => {
+    await createCanvasWithItem();
     const { ws, messages } = await connect("prj_1");
     await until(() => messages.length >= 1);
     await op({ type: "project.delete" });
-    await until(() => messages.some((m) => m.type === "project-deleted"));
+    await until(() => messages.some((m) => m.type === "canvas-deleted"));
     await until(() => ws.readyState === WebSocket.CLOSED);
   });
 });
@@ -688,7 +688,7 @@ describe("daemon WS", () => {
  */
 describe("placement is decided once, before it is logged", () => {
   it("logs where the item went, not where it was asked to go", async () => {
-    await op({ type: "project.create", projectId: "prj_p", title: "P" }, null);
+    await op({ type: "project.create", canvasId: "prj_p", title: "P" }, null);
     const add = (id: string) =>
       op({
         type: "item.add",
@@ -713,7 +713,7 @@ describe("placement is decided once, before it is logged", () => {
   });
 
   it("puts the same canvas back when the log is replayed", async () => {
-    await op({ type: "project.create", projectId: "prj_r", title: "R" }, null);
+    await op({ type: "project.create", canvasId: "prj_r", title: "R" }, null);
     for (const id of ["itm_a", "itm_b", "itm_c"]) {
       await op({
         type: "item.add",

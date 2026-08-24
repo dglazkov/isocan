@@ -1,11 +1,11 @@
 export { startDaemon, runDaemon, stopDaemons } from "./daemon.ts";
 export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.ts";
-export { Engine, ProjectNotFoundError, NothingToUndoError } from "./engine.ts";
+export { Engine, CanvasNotFoundError, NothingToUndoError } from "./engine.ts";
 export type {
   BlobListing,
   BlobMeta,
   BlobUploadRequest,
-  LoadedProject,
+  LoadedCanvas,
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";

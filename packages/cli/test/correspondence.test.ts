@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MintPassResponse, PostOpResponse, Project } from "@isocan/core";
+import type { MintPassResponse, PostOpResponse, Canvas } from "@isocan/core";
 import { PASS_REDEEM_ROUTE, passesRoute } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
@@ -64,9 +64,9 @@ beforeEach(async () => {
   owner = await mintTestBadge(homeBase);
   await owner.speakAs(priya);
   await atHome(owner, {
-    projectId: null,
+    canvasId: null,
     actor: priya,
-    op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" },
+    op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" },
   });
 
   // Priya's machine: a replica of that home, and Isaac is who its CLI speaks
@@ -108,8 +108,8 @@ beforeEach(async () => {
   });
   if (!redeemed.ok) throw new Error(`redeeming at the laptop: ${await redeemed.text()}`);
   await until(
-    () => laptop.engine.listProjects(),
-    (projects: Project[]) => projects.some((p) => p.id === CANVAS),
+    () => laptop.engine.listCanvases(),
+    (canvases: Canvas[]) => canvases.some((p) => p.id === CANVAS),
     "the laptop to replicate the canvas",
   );
 });
@@ -171,7 +171,7 @@ async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: s
 async function jordanArrives(): Promise<{ badge: TestBadge; actor: { id: string; name: string } }> {
   const badge = await mintTestBadge(homeBase);
   const claimed = await atHome(badge, {
-    projectId: CANVAS,
+    canvasId: CANVAS,
     op: { type: "actor.claim", sessionKey: "web:jordan-tab", name: "Jordan" },
   });
   return { badge, actor: claimed.envelope.actor };
@@ -197,13 +197,13 @@ async function parked(): Promise<void> {
 
 describe("Scene 4 — a comment at the home wakes an agent on a laptop", () => {
   it("wakes the parked agent it names, through the relay", async () => {
-    expect((await cli("session", "start", "--project", CANVAS)).code).toBe(0);
-    const run = cli("wait", "--json", "--project", CANVAS, "--timeout", "25");
+    expect((await cli("session", "start", "--canvas", CANVAS)).code).toBe(0);
+    const run = cli("wait", "--json", "--canvas", CANVAS, "--timeout", "25");
     await parked();
 
     const jordan = await jordanArrives();
     await atHome(jordan.badge, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: jordan.actor,
       op: {
         type: "thread.create",
@@ -251,13 +251,13 @@ describe("Scene 4 — a comment at the home wakes an agent on a laptop", () => {
   }, 90_000);
 
   it("does not stir for a comment that names somebody else", async () => {
-    expect((await cli("session", "start", "--project", CANVAS)).code).toBe(0);
-    const run = cli("wait", "--json", "--project", CANVAS, "--timeout", "5");
+    expect((await cli("session", "start", "--canvas", CANVAS)).code).toBe(0);
+    const run = cli("wait", "--json", "--canvas", CANVAS, "--timeout", "5");
     await parked();
 
     const jordan = await jordanArrives();
     await atHome(jordan.badge, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: jordan.actor,
       op: {
         type: "thread.create",

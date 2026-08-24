@@ -232,29 +232,29 @@ img { height: auto; }
 /* Coming back: the names this browser has worn, one click each. */
 .identity-dialog .identity-known { margin-bottom: 14px; }
 
-/* ---------- project list ---------- */
-.projects-page { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
-.projects-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
-.projects-head h1 { font-size: 24px; margin: 0; }
-.projects-head .who { position: relative; margin-left: auto; }
-.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-.project-card {
+/* ---------- canvas list ---------- */
+.canvases-page { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
+.canvases-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+.canvases-head h1 { font-size: 24px; margin: 0; }
+.canvases-head .who { position: relative; margin-left: auto; }
+.canvas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.canvas-card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-card); padding: 16px; display: flex; flex-direction: column; gap: 6px;
   min-height: 120px; text-align: left;
 }
-.project-card:hover { border-color: var(--accent); }
-.project-card h3 { margin: 0; font-size: 15px; }
-.project-card .desc { color: var(--ink-muted); font-size: 12.5px; flex: 1; }
-.project-card .meta { color: var(--ink-soft); font-size: 11px; }
-.project-card .row { display: flex; gap: 6px; }
-.project-card.create {
+.canvas-card:hover { border-color: var(--accent); }
+.canvas-card h3 { margin: 0; font-size: 15px; }
+.canvas-card .desc { color: var(--ink-muted); font-size: 12.5px; flex: 1; }
+.canvas-card .meta { color: var(--ink-soft); font-size: 11px; }
+.canvas-card .row { display: flex; gap: 6px; }
+.canvas-card.create {
   border-style: dashed; align-items: stretch; justify-content: center; gap: 8px;
   background: transparent; box-shadow: none;
 }
 
 /* ---------- who you are ---------- */
-/* The menu behind your own face (and behind your name on the project list):
+/* The menu behind your own face (and behind your name on the canvas list):
    rename in place, return as someone this browser already knows, or leave. */
 .identity-anchor { position: relative; display: flex; align-items: center; }
 .identity-popover {
@@ -384,23 +384,23 @@ img { height: auto; }
   border-color: var(--chip-line); box-shadow: var(--shadow-card);
 }
 
-/* The project list wears the same handle in its header. */
-.projects-head .who-btn {
+/* The canvas list wears the same handle in its header. */
+.canvases-head .who-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
   background: none; border: 1px solid transparent;
 }
-.projects-head .who-btn:hover, .projects-head .who-btn.active {
+.canvases-head .who-btn:hover, .canvases-head .who-btn.active {
   background: var(--chip); border-color: var(--chip-line);
 }
-.projects-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.canvases-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 
-/* ---------- editing a project's name ---------- */
-.project-editor { display: flex; flex-direction: column; gap: 8px; }
-.project-editor .text-input { width: 100%; }
-.project-editor textarea { resize: vertical; min-height: 46px; }
-.project-editor .row { display: flex; gap: 6px; }
-.project-editor-error { font-size: 11px; color: var(--danger); }
+/* ---------- editing a canvas's name ---------- */
+.canvas-editor { display: flex; flex-direction: column; gap: 8px; }
+.canvas-editor .text-input { width: 100%; }
+.canvas-editor textarea { resize: vertical; min-height: 46px; }
+.canvas-editor .row { display: flex; gap: 6px; }
+.canvas-editor-error { font-size: 11px; color: var(--danger); }
 
 /* ---------- canvas page ---------- */
 .canvas-page { position: fixed; inset: 0; overflow: hidden; }
@@ -471,7 +471,7 @@ img { height: auto; }
   background: var(--panel); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
 }
-.toolbar .project-name { position: relative; min-width: 0; display: flex; }
+.toolbar .canvas-name { position: relative; min-width: 0; display: flex; }
 .toolbar .title {
   font-weight: 600; font-size: 14px; margin-right: 6px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -482,7 +482,7 @@ img { height: auto; }
 .toolbar .title:hover:enabled { background: var(--chip); border-color: var(--chip-line); }
 .toolbar .title:disabled { cursor: default; }
 /* The rename popover hangs under the name it renames. */
-.project-popover {
+.canvas-popover {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: var(--z-popover);
   width: 300px; padding: 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;

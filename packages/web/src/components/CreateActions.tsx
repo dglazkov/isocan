@@ -14,7 +14,7 @@ import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
  * (a live Site) and open the Main thread — the direct channel to your emissary.
  * File upload has moved to the right tool rail (CanvasTools).
  */
-export function CreateActions({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function CreateActions({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const [siteOpen, setSiteOpen] = useState(false);
   const [siteUrl, setSiteUrl] = useState("");
   const [siteError, setSiteError] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
   async function onProjectSite(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const itemId = await addBrowserItem(projectId, actor, siteUrl, createPlacement());
+      const itemId = await addBrowserItem(canvasId, actor, siteUrl, createPlacement());
       setSiteOpen(false);
       setSiteUrl("");
       setSiteError(null);
@@ -70,7 +70,7 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
               }}
             />
             <button className="btn primary" type="submit" disabled={!siteUrl.trim()}>
-              Project
+              Canvas
             </button>
             {siteError && <div className="site-error">{siteError}</div>}
           </form>
@@ -90,7 +90,7 @@ export function CreateActions({ projectId, actor }: { projectId: string; actor: 
  * put it; an action makes something and is over. Mixing the two in one cluster
  * is why the row never quite parsed.
  */
-export function PanelSwitch({ projectId, actor }: { projectId: string; actor: Actor }) {
+export function PanelSwitch({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -103,7 +103,7 @@ export function PanelSwitch({ projectId, actor }: { projectId: string; actor: Ac
         className={`btn${mainOpen ? " active" : ""}`}
         aria-pressed={mainOpen}
         title="Main thread — the canvas's direct channel"
-        onClick={() => openMainPanel(projectId, !mainOpen)}
+        onClick={() => openMainPanel(canvasId, !mainOpen)}
       >
         <span className="shelf-glyph">✳</span> Main
         {unread > 0 && <span className="shelf-badge">{unread}</span>}
@@ -112,7 +112,7 @@ export function PanelSwitch({ projectId, actor }: { projectId: string; actor: Ac
         className={`btn${filesOpen ? " active" : ""}`}
         aria-pressed={filesOpen}
         title="Files — everything on this canvas, by kind"
-        onClick={() => openFilesPanel(projectId, !filesOpen)}
+        onClick={() => openFilesPanel(canvasId, !filesOpen)}
       >
         <span className="shelf-glyph">▤</span> Files
       </button>

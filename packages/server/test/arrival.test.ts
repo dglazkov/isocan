@@ -72,9 +72,9 @@ async function op(badge: TestBadge, body: unknown): Promise<Response> {
 /** A week of Priya's work: a canvas with something on it and a thread. */
 async function seed(): Promise<void> {
   const acts: unknown[] = [
-    { projectId: null, actor: priya, op: { type: "project.create", projectId: CANVAS, title: "Acme Sprint Board" } },
+    { canvasId: null, actor: priya, op: { type: "project.create", canvasId: CANVAS, title: "Acme Sprint Board" } },
     {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: priya,
       op: {
         type: "item.add",
@@ -86,7 +86,7 @@ async function seed(): Promise<void> {
       },
     },
     {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       actor: priya,
       op: {
         type: "thread.create",
@@ -175,7 +175,7 @@ describe("Scene 3 — a thin arrival", () => {
     expect(before).toEqual([]);
 
     const claimed = await op(jordan, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       op: { type: "actor.claim", sessionKey: "web:jordan-tab", name: "Jordan" },
     });
     expect(claimed.status).toBe(200);
@@ -191,7 +191,7 @@ describe("Scene 3 — a thin arrival", () => {
     expect(extractMentions("@Jordan take a look?", await mentionable(owner))).toEqual([]);
 
     const claimed = await op(jordan, {
-      projectId: CANVAS,
+      canvasId: CANVAS,
       op: { type: "actor.claim", sessionKey: "web:jordan-tab", name: "Jordan" },
     });
     const her = ((await claimed.json()) as PostOpResponse).envelope.actor;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORMAT_GAP_X, formatMoves, lineageProperties, type CanvasState } from "../src/index.ts";
+import { FORMAT_GAP_X, formatMoves, lineageProperties, type CanvasContents } from "../src/index.ts";
 
 const ACTOR = { id: "usr_1", name: "Di" };
 let clock = 0;
@@ -16,7 +16,7 @@ function item(
     currentVersionId: `v_${id}`, createdAt: at, createdBy: ACTOR, updatedAt: at, updatedBy: ACTOR,
   };
 }
-const canvas = (items: ReturnType<typeof item>[]): CanvasState => ({
+const canvas = (items: ReturnType<typeof item>[]): CanvasContents => ({
   items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [],
 });
 

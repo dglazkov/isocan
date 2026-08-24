@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Operation, ProjectState } from "../src/index.ts";
+import type { Operation, CanvasState } from "../src/index.ts";
 import { applyOperation, invertOperation } from "../src/index.ts";
 import { alice, bob, envelope, normalize, nv, seedState } from "./helpers.ts";
 
@@ -25,7 +25,7 @@ let uid = 0;
 const fresh = (prefix: string) => `${prefix}_rw${++uid}`;
 
 /** Build a random op that is valid against the given state, or null. */
-function randomOp(state: ProjectState, rnd: () => number): Operation | null {
+function randomOp(state: CanvasState, rnd: () => number): Operation | null {
   const items = Object.values(state.canvas.items);
   const threads = Object.values(state.canvas.threads);
   const pickItem = () => items[Math.floor(rnd() * items.length)]!;
@@ -174,7 +174,7 @@ describe("random walks", () => {
     for (let seed = 1; seed <= 50; seed++) {
       const rnd = mulberry32(seed);
       const initial = seedState();
-      let state: ProjectState = initial;
+      let state: CanvasState = initial;
       const inverses: Operation[] = [];
 
       for (let step = 0; step < 40; step++) {
