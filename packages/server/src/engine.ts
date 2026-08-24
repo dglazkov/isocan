@@ -38,6 +38,7 @@ import {
   invertOperation,
   newOpId,
   notYourActor,
+  positionIsMeaningful,
   resolvePlacement,
   SHELF,
 } from "@isocan/core";
@@ -1524,13 +1525,31 @@ export class Engine {
     }
     const runtime = await this.runtime(projectId);
 
-    // Normalize placement so the logged op never references ephemeral
-    // client selection state.
+    // Normalize placement so the logged op never references ephemeral client
+    // state — and so it records where the item ACTUALLY went.
+    //
+    // This used to run only for an anchored placement, and passed no height,
+    // which meant the collision search in `resolvePlacement` was skipped here
+    // and then ran in the reducer instead. The log said `{x: 0, y: 0}` while
+    // the item sat at 440,0: the position was decided at apply time and never
+    // written down, so replaying the log re-derived it with whatever the
+    // search does today. An oplog that has to be re-cooked is not a record.
+    //
+    // Resolving it fully here makes the logged position already clear, which
+    // is what makes the reducer's own call a no-op on the way back: any
+    // correct search returns a free spot unchanged, so the layout survives the
+    // algorithm changing.
     const normalizedOp: Operation =
-      op.type === "item.add" && "anchorItemId" in op.placement
+      op.type === "item.add"
         ? {
             ...op,
-            placement: resolvePlacement(runtime.state.canvas, op.placement, op.width),
+            placement: resolvePlacement(
+              runtime.state.canvas,
+              op.placement,
+              op.width,
+              op.height,
+              positionIsMeaningful(op),
+            ),
           }
         : op;
 

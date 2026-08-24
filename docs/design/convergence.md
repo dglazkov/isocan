@@ -81,14 +81,25 @@ states out loud.
 cards into one item with a deeper stack, and `S` still shows everything that
 was considered. The canvas gets simpler and loses nothing.
 
-### The inverse is the expensive half
+### The inverse is the expensive half, and this doc was wrong about it
 
 The forward path is easy. The inverse has to remove the versions that were
-added and restore the retired children, which means the entry carries enough
-to rebuild both. Two internal operations already exist for the first half —
-`item.removeVersion` and `item.restoreVersion`, reachable only via undo — and
-`items.restore` for the second. That the vocabulary already has these is a good
-sign the seam was left open on purpose.
+added and restore the retired children.
+
+**An earlier version of this section said the pieces already existed** —
+`item.removeVersion`, `item.restoreVersion` and `items.restore` — and called
+that a sign the seam was left open on purpose. The
+[architecture review](../reviews/2026-08-24-architecture.md) checked, and it is
+not: `invert.ts` returns `Operation | null`, **one** operation, so an inverse
+cannot be three of them. Adopting needs a new internal op that undoes the whole
+act in one step, the way `items.delete` has one.
+
+That is a cost this proposal understated rather than a blocker — but it changes
+the size of the work, and the review's counter-shape is the better starting
+point: the op carries `contributions: { childId, versionId }[]`, so the reducer
+validates a set it was handed rather than minting version ids itself, which it
+has no business doing when every other version carries a client-minted id. The
+thread post moves out of the op and into the verb for the same reason.
 
 **The risk to design against** is a partial inverse: an undo that restores the
 children but leaves the versions, or the reverse, is worse than no undo,

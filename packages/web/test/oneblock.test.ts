@@ -40,8 +40,17 @@ function bareClassSelectors(text: string): string[] {
 
 describe("the stylesheet", () => {
   it("declares each class once, unscoped", () => {
+    const selectors = bareClassSelectors(css);
+    // The parser has to have found something. Everything below is "how many
+    // times does each of these appear", and the answer for a list of nothing
+    // is a clean bill of health — so a regex that stops matching turns this
+    // guard off silently, which is lessons.md #5 exactly. The sibling
+    // "state classes" case already asserts its own parse; this one did not.
+    expect(selectors.length, "no bare class selectors found — the parser is wrong").toBeGreaterThan(
+      100,
+    );
     const counts = new Map<string, number>();
-    for (const selector of bareClassSelectors(css)) {
+    for (const selector of selectors) {
       counts.set(selector, (counts.get(selector) ?? 0) + 1);
     }
     const twice = [...counts].filter(([, n]) => n > 1).map(([selector]) => selector);

@@ -70,7 +70,13 @@ describe("the layer scale", () => {
   });
 
   it("uses the scale for anything that can meet another component", () => {
-    const raw = declarations().filter(({ value }) => {
+    const all = declarations();
+    // Same reason as oneblock's: this test's answer for "no declarations
+    // found" is identical to its answer for "every declaration is fine". A
+    // z-index written across two lines, or the regex losing its semicolon,
+    // and the whole scale stops being enforced with the suite green.
+    expect(all.length, "no z-index declarations found — the parser is wrong").toBeGreaterThan(10);
+    const raw = all.filter(({ value }) => {
       if (value.includes("var(--z-")) return false;
       const n = Number(value);
       return !Number.isFinite(n) || Math.abs(n) >= LOCAL_MAX;

@@ -1,4 +1,7 @@
 import type { CanvasState } from "./model.ts";
+import type { Operation } from "./ops.ts";
+import { DRAWING_MIME } from "./drawing.ts";
+import { ANNOTATES_PROP } from "./annotation.ts";
 import type { Box } from "./annotation.ts";
 import type { Placement } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
@@ -120,4 +123,17 @@ export function resolvePlacement(
   const occupied = Object.values(canvas.items);
   if (exact || height <= 0 || width <= 0 || occupied.length === 0) return want;
   return nearestFreeSpot({ ...want, width, height }, occupied);
+}
+
+/**
+ * Whether this item's position MEANS something, and must not be tidied.
+ *
+ * Ink is where the pen drew it and an annotation sits over the thing it is
+ * about. Lives here, beside the rule it exempts, because two callers need the
+ * same answer: the daemon, which resolves the final position before logging,
+ * and the reducer, which must reach the same place when the log is replayed.
+ * Two implementations of this predicate is two canvases.
+ */
+export function positionIsMeaningful(op: Extract<Operation, { type: "item.add" }>): boolean {
+  return op.version.mimeType === DRAWING_MIME || op.properties?.[ANNOTATES_PROP] !== undefined;
 }
