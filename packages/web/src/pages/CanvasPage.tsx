@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
+import { itemPath } from "@isocan/core";
 import {
   connectToProject,
   disconnect,
@@ -16,6 +17,7 @@ import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
+import { FullScreen } from "../components/FullScreen.tsx";
 import { CommandBar } from "../components/CommandBar.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { ZoomControls } from "../components/ZoomControls.tsx";
@@ -25,7 +27,7 @@ import { revealItem, zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../li
 import { findNextItem, nearestToPoint, type Direction } from "../lib/spatialnav.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
-import { MainThreadPanel, PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
+import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { FilesPanel } from "../components/FilesPanel.tsx";
 import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
@@ -99,7 +101,9 @@ function CanvasSurface({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, itemId } = useParams<{ projectId: string; itemId?: string }>();
+  const navigate = useNavigate();
+  const panelResizing = useUiStore((s) => s.panelResizing);
   const canvas = useCanvasStore((s) => s.canvas);
   const connection = useCanvasStore((s) => s.connection);
   const seen = useUnreadStore((s) => s.seen);
@@ -169,7 +173,7 @@ function CanvasSurface({
         ui.setFollow(null); // they left, or lost their place — nothing to watch
         return;
       }
-      const width = window.innerWidth + (ui.mainPanelOpen || ui.filesPanelOpen ? PANEL_WIDTH : 0);
+      const width = window.innerWidth + (ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0);
       const target = centerOn(ui.viewport, locus.x, locus.y, width, window.innerHeight);
       const dx = target.tx - ui.viewport.tx;
       const dy = target.ty - ui.viewport.ty;
@@ -373,6 +377,12 @@ function CanvasSurface({
           e.preventDefault();
           ui.setRenaming(ids[0]!);
         }
+      } else if (e.key === "Enter" && ui.selectedItemIds.length === 1) {
+        // Enter opens the selection full screen. It is a NAVIGATION, not a
+        // mode flag: the address bar ends up holding the screen you are
+        // looking at, so Back leaves it and the link is sendable.
+        e.preventDefault();
+        navigate(itemPath(projectId!, ui.selectedItemIds[0]!));
       } else if (e.key === "Escape") {
         // Watching is the outermost mode: Esc hands the camera back first.
         if (ui.renamingItemId) ui.setRenaming(null);
@@ -473,7 +483,10 @@ function CanvasSurface({
   }
 
   return (
-    <div className="canvas-page">
+    // `resizing-panel` while the panel's edge is being dragged: chrome that
+    // steps aside for the panel eases to its new place, which is right for the
+    // one step of opening and wrong for a width changing every frame.
+    <div className={`canvas-page${panelResizing ? " resizing-panel" : ""}`}>
       <CanvasViewport projectId={projectId} actor={actor} />
       <CommandBar projectId={projectId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
@@ -501,6 +514,10 @@ function CanvasSurface({
       <OfflineBar />
       <HelpPanel />
       <OwnCursor actor={actor} />
+      {/* Last, so it covers the panels and the toolbar: full screen means the
+          screen. Driven by the route rather than by state — see
+          FullScreen.tsx for why that distinction is the whole design. */}
+      {itemId && <FullScreen projectId={projectId} itemId={itemId} />}
     </div>
   );
 }

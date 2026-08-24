@@ -53,6 +53,15 @@
   --accent-text: #1f3fd0;
   --danger: #b3261e;
   --warn: #a06000;
+  /* RUNNING: an item you have stepped inside, whose scripts are live and whose
+     links work. Green because it is the one thing on this canvas that is not a
+     picture of software but software — the same green a build goes when it
+     passes, said about a screen. Deliberately NOT the accent: selection is
+     "this one" and running is "this is live", and a canvas where both wear one
+     colour cannot say which it means. Measured 5.26:1 on `--ground` and
+     5.45:1 on `--card` — comfortably past the 3:1 a border needs, and past
+     4.5:1 too, so it can carry text later without being re-picked. */
+  --running: #10794a;
   /* Frosted surfaces that float over the canvas: toolbar, minimap, popovers. */
   --panel: rgba(255, 255, 255, 0.92);
   /* Dimmer behind a modal. */
@@ -102,6 +111,10 @@
   --accent-text: #8fa8ff;
   --danger: #f26a60;
   --warn: #d99a3a;
+  /* Lifted on graphite for the reason `--focus` is: the light green is far too
+     dark on this ground. This one measures 9.16 on `--ground`, 7.98 on
+     `--card`. */
+  --running: #3fca8b;
   --guide-spacing: #a672f0;
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
@@ -141,6 +154,10 @@ input, textarea { font: inherit; color: var(--ink); }
   --z-popover: 40;   /* menus, thread popovers, peek cards — a click opened it */
   --z-toast: 45;
   --z-overlay: 50;   /* drop target: the whole window is the answer */
+  --z-fullscreen: 55; /* one item given the whole window: over every panel and
+                        popover the canvas has, under the two things that must
+                        still be able to interrupt — ⌘K and being asked who
+                        you are */
   --z-modal: 90;     /* ⌘K, with its own backdrop */
   --z-dialog: 100;   /* who-are-you: the one thing nothing else outranks */
 }
@@ -478,6 +495,41 @@ button, select { color: inherit; }
   z-index: 0;
 }
 .item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
+/* STEPPED INSIDE — the item is running. Its scripts are live, its links work,
+   and the wheel belongs to it rather than to the canvas. That is a different
+   fact from "this one is selected", so it gets a different colour rather than
+   a thicker accent: green reads as live everywhere else software is watched,
+   and a person glancing at a board can see which card is a picture and which
+   one is on.
+   
+   Heavier than the selection ring by a pixel, because it outranks it: an
+   entered item is also a selected one, and the outer state is the one to say. */
+.item.entered {
+  outline: calc(3px / var(--scale, 1)) solid var(--running);
+  z-index: 1;
+  /* A SHIMMER, and the brief was "subtle" — so it breathes rather than
+     travels. The work-sheen next door sweeps a highlight across an item
+     because it reports somebody else's activity and has to catch your eye
+     from across the canvas; this reports YOUR OWN state, on the one thing you
+     are already looking at, so it only has to be alive. It never stops, and a
+     thing that never stops must be quiet or it becomes the room's metronome.
+     
+     Two rules keep it there: the colour moves between the green and 62% of it
+     rather than to transparent (the ring never breaks, it only softens), and
+     it moves slowly enough — 2.8s, one full breath — that peripheral vision
+     reads it as steady. `alternate` rather than a loop, so there is no jump
+     from the end of the cycle back to the start. */
+  animation: running-breathe 2.8s ease-in-out infinite alternate;
+}
+@keyframes running-breathe {
+  from { outline-color: var(--running); }
+  to { outline-color: color-mix(in srgb, var(--running) 62%, transparent); }
+}
+/* Motion is decoration here — the green already says running, and the shimmer
+   only says it more warmly. So it is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  .item.entered { animation: none; }
+}
 .item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
 /* A mark sits over what it marks. */
 .item.annotation { z-index: 3; }
@@ -497,6 +549,14 @@ button, select { color: inherit; }
   outline: 1px dashed var(--accent); outline-offset: 2px;
 }
 .canvas-viewport:not(.pen) .item.selected:hover { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+/* …and pointing at a running item does not turn it back into a selected one. */
+.canvas-viewport:not(.pen) .item.entered:hover {
+  /* Width only. Restating the COLOUR here would out-specify the keyframes on
+     the hovered item and freeze the shimmer exactly when somebody is pointing
+     at it. */
+  outline-width: calc(3px / var(--scale, 1));
+  outline-style: solid;
+}
 /* Pointing at a row in the files panel points at the thing itself. */
 .item.peeked { outline: calc(2px / var(--scale, 1)) dashed var(--accent); outline-offset: calc(3px / var(--scale, 1)); }
 .item.peeked .item-titlebar { opacity: 1; }
@@ -691,7 +751,7 @@ button, select { color: inherit; }
 .item-hint {
   position: absolute; left: 0; right: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
-  display: flex; justify-content: center; padding-top: 5px;
+  display: flex; justify-content: center; gap: 6px; padding-top: 5px;
   pointer-events: none; transform-origin: center top;
   opacity: 0; transition: opacity 0.12s ease;
 }
@@ -768,6 +828,89 @@ button, select { color: inherit; }
 .resize-handle-ne { right: calc(-6px / var(--scale, 1)); top: calc(-6px / var(--scale, 1)); cursor: nesw-resize; }
 .resize-handle-sw { left: calc(-6px / var(--scale, 1));  bottom: calc(-6px / var(--scale, 1)); cursor: nesw-resize; }
 .resize-handle-se { right: calc(-6px / var(--scale, 1)); bottom: calc(-6px / var(--scale, 1)); cursor: nwse-resize; }
+
+/* The docked panel's right edge, as a handle.
+   
+   A STRIP straddling the edge, not the border itself: a one-pixel target is
+   not a target, and the cursor is what tells you it is draggable. Invisible
+   until pointed at, because a permanent bar down the side of a panel is
+   furniture — and this is a thing you use twice a week. */
+.panel-resizer {
+  position: absolute; top: 0; bottom: 0; right: -3px; width: 7px;
+  z-index: 5; cursor: col-resize;
+  /* The line it paints on hover sits in the MIDDLE of the strip, over the
+     panel's own border, so pointing at it lights up the edge you are about to
+     move rather than a second edge beside it. */
+  background: linear-gradient(to right, transparent 3px, transparent 3px);
+}
+.panel-resizer:hover, .panel-resizer:focus-visible {
+  background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 4px, transparent 4px);
+}
+.panel-resizer:focus-visible { outline: none; }
+/* While a drag is live the pointer is captured, so the cursor is right
+   everywhere — but text under it would still select without this. */
+.panel-resizer:active { user-select: none; -webkit-user-select: none; }
+
+/* ---------- full screen ---------- */
+/* One item, given the whole window.
+   
+   Fixed and above everything, because "full screen" that a panel can cover is
+   not the thing that was asked for. The canvas is still mounted BEHIND this —
+   see FullScreen.tsx — so coming back is not a reload, and this is a cover
+   rather than a page. */
+.fullscreen {
+  position: fixed; inset: 0; z-index: var(--z-fullscreen);
+  /* `--ground`, and it is load-bearing rather than decorative: this element
+     COVERS the canvas, and an undefined token here is not a wrong colour, it
+     is no colour — `var(--nope)` with no fallback drops the declaration and
+     leaves the canvas showing through a "full screen". `tokens.test.ts` now
+     refuses a token nothing defines, because nothing else would. */
+  background: var(--ground);
+  display: flex; flex-direction: column;
+}
+/* A thin bar, not a chrome header: the item is what you came for, and every
+   pixel this takes is one the thing you are reading does not get. */
+.fullscreen-bar {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px; border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.fullscreen-title {
+  display: flex; align-items: baseline; gap: 7px; min-width: 0; flex: 1;
+}
+.fullscreen-title .kind-icon { align-self: center; }
+.fullscreen-title b { font-size: 13px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fullscreen-title i { font-style: normal; font-size: 11px; color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+/* The way out, and it says where out IS. First in the bar and first in the
+   tab order: the one control somebody in here is looking for. */
+.fullscreen-back {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600; line-height: 1;
+  padding: 6px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+}
+.fullscreen-copy {
+  flex: none; font: inherit; font-size: 12px; line-height: 1;
+  padding: 6px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink-muted);
+}
+.fullscreen-back:hover,
+.fullscreen-copy:hover { border-color: var(--accent); color: var(--accent-text); }
+/* The item itself, and everything left over is its. */
+.fullscreen-stage { flex: 1; min-height: 0; position: relative; overflow: auto; }
+.fullscreen-stage > * { width: 100%; height: 100%; }
+
+/* The way IN, beside the size chip under a selected item. A chip, not a
+   titlebar button: the title row's width belongs to the name (lib/chrome.ts),
+   and a control up there would cost the name at every zoom for something you
+   press twice a session. */
+.open-btn {
+  flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
+  padding: 1px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line-soft); background: var(--chip); color: var(--ink-muted);
+}
+.open-btn:hover { border-color: var(--accent); color: var(--accent-text); }
 
 /* ---------- version fan-out ---------- */
 .fan-card {
@@ -986,6 +1129,8 @@ button, select { color: inherit; }
    mirror; messages hug the bottom, chat-style; #item references render as
    cards (ItemCard). Collapsed, it is a pill above the zoom chip. */
 .main-panel {
+  /* `width` is set inline from `uiStore.panelWidth` — this is the floor, and
+     what the panel is before React has said otherwise. */
   position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
   background: var(--card); border-right: 1px solid var(--line);
   box-shadow: 12px 0 24px -18px var(--shade);
@@ -1213,6 +1358,10 @@ button.mt-card:hover { border-color: var(--accent); }
   /* left comes from the component: it steps aside for a docked panel. */
   transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
+/* …except while the edge is being DRAGGED, when the width changes every frame
+   and an ease means the map trails your hand and settles a fifth of a second
+   after you stop. The ease is for the one step of opening and closing. */
+.canvas-page.resizing-panel .minimap-dock { transition: none; }
 .minimap-panel {
   transform-origin: 0 100%;
   transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.18s ease;
@@ -1251,7 +1400,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .minimap-dock.folded .minimap-handle { opacity: 1; transform: none; pointer-events: auto; }
 .minimap-handle:hover { color: var(--ink); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
-  .minimap-panel, .minimap-handle { transition-duration: 0.01ms; }
+  /* The dock's `left` belongs here too — it slides further than either of the
+     others, and it was the one left out. */
+  .minimap-dock, .minimap-panel, .minimap-handle { transition-duration: 0.01ms; }
 }
 /* A collaborator's place on the map. Clicking one recenters there like any
    minimap click — the dot IS the answer to "where is the agent?" (#39). */

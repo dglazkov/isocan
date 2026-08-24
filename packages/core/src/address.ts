@@ -30,9 +30,41 @@ export const CANVAS_PATH_PREFIX = "/p";
 /** The router's pattern, so the route and the links agree by construction. */
 export const CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:projectId`;
 
+/** The same canvas with one item filling the screen — see `itemPath`. */
+export const ITEM_ROUTE = `${CANVAS_ROUTE}/i/:itemId`;
+
 /** The path a canvas is served at, origin-relative. */
 export function canvasPath(projectId: string): string {
   return `${CANVAS_PATH_PREFIX}/${encodeURIComponent(projectId)}`;
+}
+
+/**
+ * **One item, filling the screen.**
+ *
+ * Full screen is a ROUTE and not an operation, and the distinction is the
+ * whole design. Operations are mutations — the reducer applies them, they land
+ * in the oplog, they undo, and both surfaces see them. What you are looking at
+ * is none of those things: your zoom is not my zoom, and an `item.focus` op
+ * would drag every open tab to the same screen because one person opened it.
+ *
+ * But it is not merely local state either, because then only the person whose
+ * finger was on the key could ever reach it. A route makes it **addressable**:
+ * the browser's Back button leaves it for free, the address bar holds the
+ * thing you are looking at, a link to one screen is a link to one screen — and
+ * `isocan open <item>` can hand somebody exactly the view it means, which is
+ * how the CLI takes part in a feature that has no op to send.
+ *
+ * `/i/` for the same reason as `/p/`: short, and spelled once.
+ */
+export const ITEM_PATH_SEGMENT = "i";
+
+export function itemPath(projectId: string, itemId: string): string {
+  return `${canvasPath(projectId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
+}
+
+/** The whole address of one item, full screen: origin + path. */
+export function itemUrl(origin: string, projectId: string, itemId: string): string {
+  return `${origin.replace(/\/+$/, "")}${itemPath(projectId, itemId)}`;
 }
 
 /**
@@ -65,7 +97,21 @@ export function canvasUrl(origin: string, projectId: string): string {
  * is the exact bug this module was created by.
  */
 export function canvasUrlWithPass(origin: string, projectId: string, token: string): string {
-  return `${canvasUrl(origin, projectId)}#${token}`;
+  return urlWithPass(canvasUrl(origin, projectId), token);
+}
+
+/**
+ * The general form: any address of ours, with a pass on the end.
+ *
+ * Extracted when `isocan open` learned to target one ITEM — the pass has to
+ * follow the whole path, because a fragment is only a fragment if nothing
+ * comes after it, and `canvasUrlWithPass` could only ever build the canvas
+ * shape. Everything the doc above says about WHY it is a fragment rather than
+ * a query parameter is said about this line; that function is now its
+ * canvas-shaped caller.
+ */
+export function urlWithPass(url: string, token: string): string {
+  return `${url}#${token}`;
 }
 
 /**
@@ -143,6 +189,13 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
   // The path must be exactly one canvas: `/p/<id>`, nothing before it and
   // nothing after. A trailing slash is forgiven (browsers add them); a deeper
   // path is a different page and must not be mistaken for a canvas.
+  //
+  // `/p/<id>/i/<itemId>` is now a real page, and it is deliberately NOT
+  // accepted here. This function's caller is `isocan setup`, which enrols a
+  // machine on a canvas — and an address pointing at one screen inside a
+  // canvas is a thing to LOOK at, not a thing to set a machine up from. A
+  // parser that quietly widened to the item address would be answering a
+  // question nobody asked with a canvas nobody named.
   const parts = url.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
   const projectId = decodeURIComponent(parts[2] ?? "");

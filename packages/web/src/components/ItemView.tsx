@@ -21,6 +21,8 @@ import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { badgeCorner, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
+import { useNavigate } from "react-router-dom";
+import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
@@ -46,6 +48,7 @@ export function ItemView({
   projectId: string;
   actor: Actor;
 }) {
+  const navigate = useNavigate();
   const colors = useActorColors();
   const names = useActorNames();
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
@@ -360,7 +363,7 @@ export function ItemView({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,
@@ -512,6 +515,24 @@ export function ItemView({
           space under an item quiet, which is where comment pins land. */}
       {underSlot === "size" && roomy && (
         <div className="item-hint size" style={chrome}>
+          {/* The click path into full screen, in the one place there is room
+              for a word. It sits beside the size rather than up in the title
+              row because that row's width is the name's, and a control there
+              would cost the name at every zoom for a button you want twice a
+              session. Every kind gets it, not just the interactive ones: a
+              picture worth opening big is as ordinary as a screen worth
+              clicking through. */}
+          <button
+            className="open-btn"
+            title="Open full screen (Enter)"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(itemPath(projectId, item.id));
+            }}
+          >
+            Open
+          </button>
           <span>
             {Math.round(width)} × {Math.round(height)}
           </span>
