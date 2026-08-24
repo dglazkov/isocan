@@ -12,6 +12,7 @@ import {
   hasRoomForChrome,
   nameFits,
   nameRoom,
+  titleRow,
   underSlotFor,
 } from "../src/lib/chrome.ts";
 
@@ -135,13 +136,24 @@ describe("the room a name is given", () => {
   const SCALES = [0.02, 0.05, 0.13, 0.5, 1, 3];
   const WIDTHS = [40, 80, 200, 480, 1200, 4000];
 
-  it("is linear in what the item is worth on screen — there is no floor to bend it", () => {
+  it("is linear in what the item is worth on screen, within one row layout", () => {
     // A floor is a BEND in this line, and the bend is where the name went
     // through the star. Stated with no constant in it: doubling the item's
-    // width adds exactly the item's screen width to the room, at every size
-    // and every zoom. `Math.max(48, …)` flattens it to zero below the knee.
+    // width adds exactly the item's screen width to the room. `Math.max(48, …)`
+    // flattens it to zero below the knee.
+    //
+    // Compared only WITHIN one layout, because there is now one honest step in
+    // this function: the glyph appears, and its room stops being the name's.
+    // The step is the next case's business.
     for (const scale of SCALES) {
       for (const width of WIDTHS) {
+        const here = titleRow(width, scale);
+        const twice = titleRow(2 * width, scale);
+        // Same layout means the same pair showing. `nameRoom` is documented as
+        // meaningless where the name is hidden, so a case that compares a
+        // hidden name to a shown one compares one real number to one that was
+        // never a promise.
+        if (!here.name || !twice.name || here.glyph !== twice.glyph) continue;
         expect(
           nameRoom(2 * width, scale) - nameRoom(width, scale),
           `a bend at ${width} world units @ ${scale}`,
@@ -150,18 +162,41 @@ describe("the room a name is given", () => {
     }
   });
 
-  it("never claims more of the item than is left after everything sharing the row", () => {
+  it("never claims more of the item than is left after whatever else the row shows", () => {
     // Only where the name is actually SHOWN: below that it is hidden, and what
-    // a hidden element was offered is not a thing anybody can see.
+    // a hidden element was offered is not a thing anybody can see. The budget
+    // is conditional on the glyph now — subtracting for a glyph that is not
+    // there would be the mirror of the original bug, a name given LESS than
+    // exists rather than more.
     for (const scale of SCALES) {
       for (const width of WIDTHS) {
-        if (!nameFits(width, scale)) continue;
+        const row = titleRow(width, scale);
+        if (!row.name) continue;
         expect(
-          nameRoom(width, scale),
+          row.nameRoom,
           `${width} world units @ ${scale} overflows the star or the kind glyph`,
         ).toBeLessThanOrEqual(
-          width * scale - STAR_ROOM - GLYPH_ROOM - CHROME_INSET * 2 + 1e-9,
+          width * scale - STAR_ROOM - (row.glyph ? GLYPH_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
         );
+      }
+    }
+  });
+
+  it("costs the name at most the glyph's room when the glyph arrives", () => {
+    // Zooming IN can shorten the visible name by one step, once, as the glyph
+    // appears and takes its room back. That is a real cost and it is bounded:
+    // never more than the glyph occupies, and never below the width where a
+    // name says something. Anything worse is the row re-laying itself out.
+    for (const scale of [0.05, 0.13, 0.2, 0.5, 1]) {
+      for (let width = 40; width < 2000; width += 1) {
+        const before = titleRow(width, scale);
+        const after = titleRow(width + 1, scale);
+        if (before.glyph || !after.glyph || !after.name) continue;
+        expect(after.nameRoom).toBeGreaterThanOrEqual(MIN_NAME_ROOM);
+        expect(
+          before.nameRoom - after.nameRoom,
+          `the glyph cost the name more than it occupies at ${width} @ ${scale}`,
+        ).toBeLessThanOrEqual(GLYPH_ROOM + 1e-9);
       }
     }
   });
@@ -288,5 +323,68 @@ describe("the strip under an item", () => {
     for (const on of [{ soleSelection: true }, { resizing: true }, { interactive: true }]) {
       expect(underSlotFor({ ...idle, ...on, entered: true })).toBeNull();
     }
+  });
+});
+
+/**
+ * There is no size at which a card says nothing about itself.
+ *
+ * Reported from a real canvas: between roughly 12% and 19% zoom on a 480-unit
+ * item, the title row showed a bare star. The name had been dropped (correctly
+ * — text is a smudge down there) and the kind glyph went with it, because both
+ * lived in one element that was hidden as a pair. Adding the glyph had also
+ * pushed the name's own vanish threshold up by three points of zoom, since its
+ * room came out of the name's.
+ *
+ * The rule that fixes both: the glyph yields to the name, and then outlives it.
+ */
+describe("what a card says as it shrinks", () => {
+  const WIDTH = 480; // the item this was reported on
+
+  it("always says something while the chrome is shown at all", () => {
+    for (let pct = 1; pct <= 300; pct += 1) {
+      const scale = pct / 100;
+      if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue; // no chrome at all: fine
+      const row = titleRow(WIDTH, scale);
+      expect(
+        row.glyph || row.name,
+        `a bare star at ${pct}% — the card says nothing about itself`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the kind mark exactly where the name gives up", () => {
+    // The handover is the whole design: the glyph is what is left when the
+    // name goes, so the band that used to be empty is the band it covers.
+    for (let pct = 1; pct <= 300; pct += 1) {
+      const scale = pct / 100;
+      if (!hasRoomForChrome(WIDTH, WIDTH, scale)) continue;
+      const row = titleRow(WIDTH, scale);
+      if (!row.name) expect(row.glyph, `nothing at all at ${pct}%`).toBe(true);
+    }
+  });
+
+  it("does not make the name disappear earlier than it did before the glyph", () => {
+    // The regression the glyph introduced, stated as the property rather than
+    // as the number: the kind mark must never be the reason a name is gone.
+    // Room for a name is decided against the star and the inset alone.
+    for (const scale of [0.05, 0.1, 0.13, 0.154, 0.16, 0.2, 0.5, 1]) {
+      for (const width of [80, 200, 480, 1200]) {
+        const withoutGlyph = width * scale - STAR_ROOM - CHROME_INSET * 2;
+        if (withoutGlyph >= MIN_NAME_ROOM) {
+          expect(
+            titleRow(width, scale).name,
+            `${width} @ ${scale}: room for a name, but the glyph took it`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("shows all three the moment there is room for all three", () => {
+    const scale = (MIN_NAME_ROOM + STAR_ROOM + GLYPH_ROOM + CHROME_INSET * 2) / WIDTH;
+    const row = titleRow(WIDTH, scale);
+    expect(row).toMatchObject({ glyph: true, name: true });
+    expect(row.nameRoom).toBeCloseTo(MIN_NAME_ROOM, 6);
   });
 });

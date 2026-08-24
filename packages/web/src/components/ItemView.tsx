@@ -21,7 +21,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome, nameFits, nameRoom, underSlotFor } from "../lib/chrome.ts";
+import { badgeCorner, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
 import { KIND_GLYPH, KIND_NOUN } from "../lib/kinds.ts";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
@@ -83,8 +83,7 @@ export function ItemView({
   // the row's own inset are taken off the top. Constant across selection.
   // The rule lives in lib/chrome.ts so a test can reach it without a browser —
   // there is no floor, and chrome.test.ts is where that is held.
-  const room = nameRoom(width, scale);
-  const namesFit = nameFits(width, scale);
+  const row = titleRow(width, scale);
   const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
   // Same rule as the badge, applied to the star: a pin marks a place a person
   // chose, so the chrome is what moves. Here that means the other end of the
@@ -409,8 +408,12 @@ export function ItemView({
             // NO FLOOR, and `nameRoom` in lib/chrome.ts is where that is
             // argued and tested. Below the width where a name says anything
             // the name is dropped instead, and the star stays.
-            maxWidth: room,
-            ...(namesFit || renaming ? null : { display: "none" }),
+            maxWidth: row.nameRoom,
+            // The row is here if anything in it is. Which of the glyph and the
+            // name survive at this size is `titleRow`'s call, and they do NOT
+            // fall together: hiding the pair is what left a bare star between
+            // 12% and 19% zoom on a 480-unit item.
+            ...(row.glyph || row.name || renaming ? null : { display: "none" }),
           }}
         >
         {/* What this item IS, before its name — so a canvas of cards reads as
@@ -419,19 +422,21 @@ export function ItemView({
             mark that means one thing in a list and another on the thing itself
             is worse than no mark. It is not a button: the kind is derived from
             the file and there is nothing to set. */}
-        <span className="kind-glyph" aria-hidden="true" title={KIND_NOUN[kind]}>
-          {KIND_GLYPH[kind]}
-        </span>
+        {row.glyph && (
+          <span className="kind-glyph" aria-hidden="true" title={KIND_NOUN[kind]}>
+            {KIND_GLYPH[kind]}
+          </span>
+        )}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
-        ) : (
+        ) : row.name ? (
           <span
             className="name"
             title={`${item.title} (${current.filename}) — ${KIND_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
           >
             {item.title}
           </span>
-        )}
+        ) : null}
         {isBrowser && (
           <button
             className="browser-reload"
