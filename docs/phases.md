@@ -55,14 +55,14 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 9 is closed — the desk is hardened, and identity is
-now something a person can PROVE rather than only assert. Phase 10, offline
-in the browser, is next.** Note what phase 9 did not do, so a clean session
-does not assume it: `repo:` grants are still refused (deferred to phase 11
-with Scene 6), `{root: "link"}` admissions written before phase 7 are
-unreachable by any revocation. **dev.isocan.io is running phases 7 through 9**
-as of 2026-08-24: `GET /api/attest` answers `{"attesters":["email"]}` there and
-a real magic-link token was verified against the deployed home. This line moves as phases close; a clean
+**Where we are: Phase 10 is closed — a tab now survives its home, and every
+replica (tab or daemon) reconnects with the same seq-cursor gesture, which is
+journey rule 6 made physically true. Phase 11, the thin agent (Scene 6), is
+next.** One thing phase 10 surfaced that belongs to no phase yet: **the plane
+has two surfaces and only one of them works** — a tab keeps going offline, but
+a replica's CLI writes are still refused, and the two cannot see each other
+even on the same machine. See "Deliberately open" below. This line moves as
+phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1711,7 +1711,13 @@ resumption driven in Chrome.
 
 ## Phase 10 — Offline in the browser
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-24. The tab survives its home: shell from the
+service worker, canvas from a durable IndexedDB replica, writes queued and
+flushed **before** the tail comes down. Actuated by the conductor with the
+home stopped — a second writer was raced in first and the tab's offline op
+landed *after* it, at seq 4, under the id it minted while offline; replaying
+that id returned the same entry and appended nothing. Blobs offline are
+deliberately deferred and fail with a sentence naming the file.
 
 **Work:** The service worker: cached shell, durable browser replica,
 ops applied optimistically and queued when the network is gone,
@@ -1724,7 +1730,56 @@ journey rule 6, physically true.
 **Proof:** Chrome offline emulation, actuated: work offline, reconnect,
 verify order and convergence on a second profile.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24 — Runtime caching alone does not make a tab offline-capable,
+  and only a browser could say so.** The service worker began as
+  runtime-caching-only, argued well: no build step, no dependency, and the
+  cache fills on the first successful load. Driving Chrome killed it in one
+  move. **A service worker does not control the page load that registers
+  it**, and this SPA routes client-side — so on a first visit the worker sees
+  no navigation at all and holds neither the shell nor the bundle. Stopping
+  the daemon after one visit produced Chrome's dinosaur. The fix keeps the
+  no-dependency argument intact: at install, fetch `/index.html`, cache it,
+  and read the `/assets/…` URLs out of the markup it already contains — **the
+  shell names its own assets**, so the manifest is always exactly this
+  build's, computed at runtime, with no plugin. No unit test could have found
+  this; the failure lives entirely in when a browser hands a worker control.
+- **2026-08-24 — The duplicate we were designing against does not exist; the
+  false refusal does.** The phase was briefed around "a replayed `item.add`
+  would add a second item". Measured against the reducer, it would not: every
+  creating op already carries a client-minted id (`itemId`, `threadId`,
+  `comment.id`) and the second is refused `duplicate-id`; the rest are
+  absolute-valued or refuse on the second pass. **The op vocabulary has been
+  accidentally exactly-once since the beginning**, and the damage of
+  at-least-once is one layer along and quieter: a replay returns a REFUSAL,
+  indistinguishable from the home genuinely rejecting the work — so the
+  honest client behaviour, roll back and tell the person, becomes a lie about
+  an item that is sitting in the canvas. The idempotency key was built
+  anyway, with its reason rewritten: **it exists so a replay is not mistaken
+  for a refusal.** Both halves are kept as tests, the false refusal included.
+  The conductor's brief asserted the duplicate as fact; a worker measuring
+  the premise rather than accepting it is what this is supposed to look like.
+- **2026-08-24 — "Reconnecting" is truthful about the socket and wrong about
+  the situation.** With the home stopped and nothing queued, a tab restored
+  entirely from its own replica sat on "reconnecting" forever — accurate (it
+  *is* retrying) and the wrong thing to tell somebody looking at a perfectly
+  good canvas they are about to write to. There is no better signal
+  available: a socket that never connected and one that dropped both arrive
+  as `onclose` 1006. So a dial that closes without ever being greeted counts
+  as a failure, and two in a row says "offline" — two rather than one so an
+  ordinary blip never flashes the word at anybody. Found by stopping a
+  server, not by a test.
+- **2026-08-24 — `isocan mv <item> --to 900,900` writes NaN coordinates and
+  the home accepts them.** Met while driving the CLI as the second writer:
+  the verb is `mv <item> [x] [y]`, `--to` is not an option, and rather than
+  being refused the command reported *"moved … to NaN,NaN"* and appended an
+  `item.move` with `x: null, y: null`, which `isocan ls` then renders as
+  `null,null`. **Nothing in the op vocabulary validates that a number is a
+  number** — not the CLI, not the route, not the reducer. Not phase 10's to
+  fix and deliberately left alone; filed as an issue, because the shape is
+  general (any op with numeric fields) and because a bad coordinate is
+  durable: it is in the oplog forever. *none yet.*
 
 ## Phase 11 — The thin agent (Scene 6)
 

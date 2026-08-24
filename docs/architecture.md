@@ -240,6 +240,42 @@ min-instances = 0 on purpose — every dev request cold-boots through
 the crash-recovery path, which keeps the most important code path in
 daily use.
 
+## The browser replica, and the key that makes a retry safe
+
+The `browsers` box says "web app + service worker", and as of phase 10 it
+means it. A tab is a replica in the same sense a daemon is — the shared
+reducer over a seq-numbered stream — and it now has the two things it was
+missing: a **disk** (IndexedDB: the confirmed canvas, its `lastSeq`, and the
+queue) and a **shell** that loads with no network. It reconnects with the
+same gesture `HomeLink` uses, `?since=<lastSeq>`, which is journey rule 6
+made physical. [design/offline-tab.md](design/offline-tab.md) is the
+mechanism; two things about it belong on the map.
+
+**The op pipeline gained an idempotency key, and it is the envelope id.**
+`POST /api/ops` may carry `opId`; the engine looks for an entry with that id
+in the canvas's live log before it applies or forwards anything, and hands
+back the entry it already wrote rather than appending a second. A queue that
+retries is at-least-once by construction — the tab posted, the connection
+died before the answer came back — and this is what makes retrying safe.
+
+Note what it is *not* protecting against, because the measurement is worth
+keeping: the vocabulary was already duplicate-proof. Every op that creates
+something carries a client-minted id and the reducer refuses the second one;
+the rest are absolute-valued or refuse on the second pass. What the key buys
+is that **a replay is not mistaken for a refusal** — which matters because a
+client that rolls an optimistic change back on a refusal would otherwise be
+lying about an item sitting in the canvas. Its horizon is compaction, and
+past it a replay degrades to that older refusal, never to a duplicate.
+
+**The service worker never caches `/api/*`, and that is a security line
+rather than a policy preference.** A service worker cache is per-ORIGIN,
+shared by every tab and persona in the profile; the blob route is
+credentialed as of phase 9 (`Cache-Control: private`). A blob cached there
+would be handed to a request the door would have refused, with the caching
+layer never asking — the back gate phase 9 closed, reopened by an
+optimization. `packages/web/test/shell.test.ts` drives the shipped worker
+and asserts it.
+
 ## The desk on Firestore
 
 The desk's ledgers are ordinary collections, innkeeper-private per the
@@ -426,10 +462,15 @@ comes from the object store rather than from the client.
 What the code does not have yet — an inventory, not a sequence (the
 sequence is [phases.md](phases.md)):
 
-- The service worker: cached shell, durable browser replica, offline
-  queue.
 - The Share dialog and grant routes; registrations and the dispatch
   path.
+- **Blobs offline.** Phase 10 gave the browser a cached shell, a durable
+  replica and a queue, and cut exactly one thing: adding a FILE with no
+  network. Queueing bytes is a second durable store with its own quota
+  and eviction story, and the `item.add` riding on it would name a
+  `blobHash` that exists nowhere until the upload lands. It fails
+  legibly instead, which is the only part that could not be deferred.
+  See [design/offline-tab.md](design/offline-tab.md).
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
   uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is

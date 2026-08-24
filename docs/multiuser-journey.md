@@ -376,7 +376,10 @@ replica durable.
    to CLIs, never pages to persons; offline in the browser is the service
    worker's job — cached shell, durable browser replica, queued ops — so
    per-viewer state has exactly one home, and every replica (tab or
-   daemon) reconnects with the same seq-cursor gesture.
+   daemon) reconnects with the same seq-cursor gesture. (Built in phase
+   10; the mechanism, and the questions it forced about retrying an op
+   whose answer never came, are in
+   [design/offline-tab.md](design/offline-tab.md).)
 
 ## Open debts
 
