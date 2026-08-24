@@ -1,4 +1,11 @@
-import { GRANTED_BY_HOME, isLive, LINK, newId, NOT_ADMITTED } from "@isocan/core";
+import {
+  attestationSatisfying,
+  GRANTED_BY_HOME,
+  isLive,
+  LINK,
+  newId,
+  NOT_ADMITTED,
+} from "@isocan/core";
 import type { Grant } from "@isocan/core";
 import type { BadgeRecord, Desk } from "./desk.ts";
 
@@ -47,33 +54,43 @@ export class NotAdmittedError extends Error {
 /**
  * The grant that lets this badge in, or null.
  *
- * **`link` is the only subject that can be satisfied today**, and that is the
- * phase boundary rather than an oversight: `email:` and `repo:` are satisfied
- * by ATTESTATIONS on the badge, and phase 9 owns attesters — `BadgeRecord`
- * does not even carry an `attestations` field yet, on purpose (phase 2 wrote
- * that decision down: "an array that is always empty is a speculative clean
- * seam"). The API refuses those subjects at write time, so a row that reaches
- * this function unsatisfiable is a row nothing wrote.
+ * **All three subjects are checkable here, since phase 9.** `link` is
+ * satisfied by presenting the address — a fact about the REQUEST, which is
+ * why it is answered here and not in core — and `email:` / `repo:` are
+ * satisfied by an ATTESTATION on the badge, a fact about the HOLDER, which is
+ * `attestationSatisfying`'s question and belongs in core beside the subject
+ * type it compares against.
  *
- * The badge is a parameter rather than unused because phase 9's branch lands
- * exactly here — `grant.subject.startsWith("email:") && badge.attestations…`
- * — and a signature that had to change to accommodate it would be a signature
- * that tempted somebody to put the check somewhere else.
+ * The badge was a parameter from phase 7 precisely so that this branch could
+ * land here and nowhere else; the phase-7 comment said so, and it is what
+ * kept the check from ending up in `http.ts` and `ws.ts` as two copies.
+ *
+ * **The order matters and it is not alphabetical.** Oldest first, so a
+ * canvas's standing link grant is the row named in provenance when several
+ * would do — the row a person recognizes when they later ask why somebody is
+ * here. That ordering has a second consequence phase 9 makes real: a badge
+ * that could enter by EITHER the link or her own email grant is rooted at the
+ * link, so revoking the link sweeps her — and the sweep then re-runs this
+ * function, finds the email grant, and RE-ROOTS her instead of expelling her.
+ * Which is the design's whole sentence about not expelling the people who
+ * were invited by name, arriving as a consequence of two lines rather than as
+ * a special case.
  */
 export async function admittingGrant(
   desk: Desk,
   canvasId: string,
-  _badge: BadgeRecord,
+  badge: BadgeRecord,
 ): Promise<Grant | null> {
   const grants = await desk.grantsFor(canvasId);
-  // Oldest first, so a canvas's standing link grant is the one named in
-  // provenance when several would do — the row a person recognizes.
   const live = grants.filter(isLive).sort((a, b) => a.at.localeCompare(b.at));
   for (const grant of live) {
     if (grant.subject === LINK) return grant;
-    // email: / repo: — phase 9. Named rather than silently skipped, because
-    // "the door quietly ignores a subject it does not understand" is how a
-    // grant that was supposed to admit somebody admits nobody in silence.
+    if (attestationSatisfying(grant.subject, badge.attestations ?? [])) return grant;
+    // Anything else falls through, and falling through is the correct answer
+    // rather than a gap: a subject nobody has proved is a row that admits
+    // nobody YET. The refusal a caller sees is the door's, and the remedy is
+    // to go and prove the attribute — which is what the design means by "the
+    // door offers the attesters".
   }
   return null;
 }

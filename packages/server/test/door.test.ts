@@ -272,19 +272,28 @@ describe("the badge-less are refused, actionably", () => {
     expect((await door({ carrier: "bearer" })).status).toBe(200);
   });
 
-  it("leaves the blob GET open — DELIBERATELY, and phase 3 inherits it", async () => {
-    // A sandboxed HTML blob has an OPAQUE origin, so it has a null
-    // site-for-cookies: nothing it then requests (a relative <img>, a
-    // stylesheet, a fetch) can carry a SameSite cookie at all. The route is
-    // open today; requiring a badge here would break every HTML blob with a
-    // relative asset reference.
-    //
-    // The honest long-term answer is that a blob hash IS a capability — 256
-    // bits of content address — and PHASE 3, which re-asks
-    // `projectId ∈ admissions` per route, is the phase that decides whether
-    // that is capability enough or whether HTML blobs get a per-blob token.
-    // This assertion exists so that closing the hole is a deliberate act:
-    // whoever closes it has to come here and say so.
+  /**
+   * **The blob GET is closed, and this assertion is the deliberate act the
+   * old one asked for.**
+   *
+   * The test that stood here said the route was open and why: *"a sandboxed
+   * HTML blob has an OPAQUE origin, so it has a null site-for-cookies:
+   * nothing it then requests can carry a SameSite cookie at all"*, and it
+   * ended *"this assertion exists so that closing the hole is a deliberate
+   * act: whoever closes it has to come here and say so."*
+   *
+   * So, said here: the argument described the wrong request. Measured in
+   * Chrome against a server logging its request headers, the load of a
+   * `sandbox="allow-scripts"` iframe arrives `Sec-Fetch-Site: same-origin`
+   * and CARRIES the badge cookie — it is issued by the parent page, not by
+   * the sandboxed document. What has a null site-for-cookies is what the
+   * loaded document requests AFTERWARDS, and that case is moot anyway: a
+   * relative `<img src="pic.png">` inside a blob resolves to
+   * `…/blobs/pic.png`, which is not a content hash and has never resolved.
+   *
+   * The whole argument is in `isOpen`; what is left here is the assertion.
+   */
+  it("closes the blob GET, so a hash on its own is not a way in", async () => {
     const badge = await mintTestBadge(base);
     await badge.speakAs(usrA); // a badge speaks only for actors it claims
     await fetch(`${base}/api/ops`, {
@@ -304,9 +313,16 @@ describe("the badge-less are refused, actionably", () => {
     const { blobHash } = (await upload.json()) as { blobHash: string };
 
     const bare = await fetch(`${base}/api/projects/prj_1/blobs/${blobHash}`);
-    expect(bare.status).toBe(200);
-    expect(await bare.text()).toBe("<h1>hi</h1>");
-    // Uploading one, though, is an ordinary write and does want a badge.
+    expect(bare.status).toBe(401);
+    expect(((await bare.json()) as { code: string }).code).toBe("no-badge");
+    // With one, the bytes come back exactly as they always did — the in-app
+    // paths (the iframe load, an `<img>`, a `fetch`) all carry the cookie.
+    const badged = await fetch(`${base}/api/projects/prj_1/blobs/${blobHash}`, {
+      headers: badge.headers,
+    });
+    expect(badged.status).toBe(200);
+    expect(await badged.text()).toBe("<h1>hi</h1>");
+    // Uploading one is an ordinary write and has always wanted a badge.
     expect(
       (
         await fetch(`${base}/api/projects/prj_1/blobs`, {

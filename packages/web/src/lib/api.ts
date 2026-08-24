@@ -1,7 +1,11 @@
 import type {
   Actor,
   ActorClaimOp,
+  AttestOffer,
+  AttestRequest,
+  AttestResponse,
   ActorColors,
+  BadgesResponse,
   BlobUploadResponse,
   CanvasSnapshotResponse,
   GcReport,
@@ -9,6 +13,7 @@ import type {
   GrantResponse,
   GrantsResponse,
   GrantSubject,
+  KillBadgeResponse,
   LogEntry,
   MintPassResponse,
   Operation,
@@ -19,6 +24,9 @@ import type {
   SlashCommand,
 } from "@isocan/core";
 import {
+  ATTEST_ROUTE,
+  badgeRoute,
+  BADGES_ROUTE,
   DOOR_ROUTE,
   encodeFilename,
   FILENAME_HEADER,
@@ -209,9 +217,10 @@ export function listGrants(projectId: string): Promise<GrantsResponse> {
   return request("GET", grantsRoute(projectId));
 }
 
-/** Share it. Today `link` is the only subject a home can check, and the API
- * refuses the others by naming phase 9 — the dialog shows that refusal rather
- * than hiding it behind a disabled control. */
+/** Share it. `link` needs no attester; `email:` and `repo:` need one this home
+ * has borrowed, and a home that has borrowed none refuses with `no-attester`
+ * — the dialog shows that refusal rather than hiding it behind a disabled
+ * control. */
 export function createGrant(projectId: string, subject: GrantSubject): Promise<GrantResponse> {
   return request("POST", grantsRoute(projectId), { subject });
 }
@@ -224,6 +233,56 @@ export function createGrant(projectId: string, subject: GrantSubject): Promise<G
  */
 export function revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
   return request("DELETE", grantRoute(projectId, grantId));
+}
+
+// ---- what this holder has proved (phase 9 stage 2) ----
+//
+// One route, two verbs, and not project-scoped: an attestation is a fact about
+// the HOLDER rather than about a room, and a badge that is not admitted
+// anywhere must still be able to prove its address — because proving it is how
+// it comes to be admitted.
+
+/**
+ * What this home can verify, what this badge has proved, and who that lets it
+ * be.
+ *
+ * The `auth` half is why this is a fetch and not a build-time constant: the
+ * key and project reach the page from the home at run time, so one image runs
+ * at dev.isocan.io, at isocan.io, and on a laptop that has borrowed nothing.
+ * A page that baked them in would be a per-home bundle.
+ */
+export function attestOffer(): Promise<AttestOffer> {
+  return request("GET", ATTEST_ROUTE);
+}
+
+/**
+ * Hand the home a token from the attester it named, and have it write the row.
+ *
+ * The address is read out of the verified token at the daemon, never sent
+ * beside it: a body naming the mailbox to attest would be this page attesting
+ * for itself with a signature stapled on.
+ */
+export function attest(idToken: string): Promise<AttestResponse> {
+  return request("POST", ATTEST_ROUTE, { idToken } satisfies AttestRequest);
+}
+
+// ---- your own surfaces: kill-a-badge (phase 9) ----
+//
+// Not project-scoped, unlike the grant routes above: a badge is not about one
+// canvas, and ending one ends that holder's recognition everywhere at once.
+// The routes come from core for `grantsRoute`'s reason — this browser, the
+// CLI and a replica's home connection speak to the same daemon, and a URL
+// that drifts shows up at runtime as a refusal with nothing to read.
+
+/** Every surface that shares an identity with this browser's badge, this one
+ * marked `self`. A badge with no personas sees exactly itself. */
+export function listBadges(): Promise<BadgesResponse> {
+  return request("GET", BADGES_ROUTE);
+}
+
+/** End one. No body, for `revokeGrant`'s reason. */
+export function killBadge(badgeId: string): Promise<KillBadgeResponse> {
+  return request("DELETE", badgeRoute(badgeId));
 }
 
 // ---- the escalation pass (Scene 5) ----

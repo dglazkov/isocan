@@ -51,7 +51,11 @@ beforeEach(async () => {
   upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-home-"));
   laptopDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-laptop-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-share-work-"));
-  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null });
+  // `auth: null`: this home has borrowed nothing, said rather than inherited
+  // from whatever the developer's shell has in `ISOCAN_AUTH_PROJECT`. The
+  // email refusal below is about a home with no attester, and it must be about
+  // that on every machine.
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, homeUrl: null, auth: null });
   homeBase = baseOf(homeDaemon);
   await fs.writeFile(
     path.join(laptopDir, "identity.json"),
@@ -165,16 +169,30 @@ describe("isocan share", () => {
     expect(bad.stderr).toMatch(/on or off/);
   }, 60_000);
 
-  it("hands back the HOME's refusal for an email, naming the phase that will serve it", async () => {
+  it("hands back the HOME's refusal for an email — a home with no attester, not a stub", async () => {
     await bornCanvas();
     const refused = await cli("share", "jordan@example.com");
     expect(refused.code).toBe(1);
     // Not a client-side "not yet": the request went up, and the message is the
     // one the API gives, so a later build that can satisfy the subject needs
-    // no change here.
-    expect(refused.stderr).toMatch(/attester/);
-    expect(refused.stderr).toMatch(/phase 9/);
+    // no change here. Phase 9 made `email:` a real subject and moved the
+    // refusal from "the phase has not happened" to "this home has borrowed
+    // nowhere to verify it" — the verb did not have to be touched for either.
+    expect(refused.stderr).toMatch(/verify an email/);
+    expect(refused.stderr).toMatch(/borrowed/);
     expect(refused.stderr).toContain("jordan@example.com");
+  }, 60_000);
+
+  it("--revoke refuses loudly when nobody is granted that, rather than reporting nothing", async () => {
+    await bornCanvas();
+    // "Jordan is out" when Jordan was never in is the worst possible answer to
+    // this gesture, and a mistyped address is the ordinary way to get it. The
+    // verb takes the SENTENCE rather than a grant id, so a typo is exactly
+    // what a person is most likely to hand it.
+    const missed = await cli("share", "--revoke", "jordan@example.com");
+    expect(missed.code).toBe(1);
+    expect(missed.stderr).toContain("email:jordan@example.com");
+    expect(missed.stderr).toMatch(/nothing on/);
   }, 60_000);
 
   it("--json carries the address and the live rows", async () => {

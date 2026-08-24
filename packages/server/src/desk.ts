@@ -1,4 +1,9 @@
-import type { ActorClaim, Grant, Pass } from "@isocan/core";
+import type { ActorClaim, Attestation, BadgeKind, Grant, Pass } from "@isocan/core";
+
+/** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
+ * so the type has one definition. It moved to core in phase 9 because
+ * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
+export type { BadgeKind };
 
 /**
  * The desk: the home's PRIVATE ledgers — who holds a badge, what it has been
@@ -80,6 +85,19 @@ export type Provenance =
    * cannot re-root one of these to a grant it never named, which is the
    * concrete cost of having written provenance before there was any, and the
    * reason phase 7 is careful to write `grant` from the first admission.
+   *
+   * **Phase 9 measured what that cost actually is, and chose to pay it.** The
+   * sweep treats a `link` root as STANDING — it names no grant, so no
+   * revocation can find it, and re-testing it against the door would be the
+   * sweep inventing a root the desk never wrote. So a badge admitted before
+   * phase 7 survives every revocation of every grant on that canvas, and the
+   * only thing that reaches it is kill-a-badge. That is a real hole in
+   * revocation and it is bounded: it can only ever contain badges minted
+   * between phase 2 and phase 7, on a home that has run continuously since,
+   * and it shrinks to nothing on any home born after phase 7. Sweeping them
+   * anyway was considered and refused — it would mean a revocation expelling
+   * holders it cannot name, which is worse than one that visibly cannot reach
+   * them.
    */
   | { root: "link" }
   /**
@@ -99,21 +117,12 @@ export interface Admission {
   at: string;
 }
 
-/** Which carrier this badge was minted for. Informational in phase 2 — both
- * carriers are accepted from anyone — and the handle a later phase needs to
- * say "cookie badges are browsers". */
-export type BadgeKind = "cookie" | "bearer";
-
 /**
  * One badge, as the desk holds it.
  *
  * Never crosses the wire: this type belongs here the way `LoadedProject`
  * belongs in `store.ts`. What a client sees of a badge is its id and, once,
- * its secret.
- *
- * `attestations` is DELIBERATELY absent. Phase 9 owns it, nothing writes it,
- * and an array that is always empty is a speculative clean seam where phase
- * 1's lesson asks for an honest leaky one.
+ * its secret — and, from phase 9, a `BadgeSummary` of its own surfaces.
  */
 export interface BadgeRecord {
   badgeId: string;
@@ -137,6 +146,48 @@ export interface BadgeRecord {
   /** Who this badge may speak as. Several, on purpose: a browser's personas,
    * or everyone a machine's daemon relays. */
   claims: ActorClaim[];
+  /**
+   * What this holder has PROVED — mechanism 3's "attestations ride the badge",
+   * and the field phase 2 refused to write until something could fill it.
+   *
+   * Phase 2's note read: *"`attestations` is DELIBERATELY absent. Phase 9 owns
+   * it, nothing writes it, and an array that is always empty is a speculative
+   * clean seam where phase 1's lesson asks for an honest leaky one."* Phase 9
+   * earns it — the door genuinely reads this array now (`admittingGrant`), the
+   * sweep re-roots on it, and `Desk.attest` genuinely writes it.
+   *
+   * **What is still empty is the ATTESTER, and that is stated rather than
+   * papered over.** Stage 1 ships no code that verifies an email or a GitHub
+   * identity; `server/attest.ts` says so out loud and the grant API refuses a
+   * subject this home cannot verify. So in a shipped stage-1 home this array
+   * is empty in practice — but it is empty because nobody has proved anything
+   * yet, which is a different thing from being empty because nothing reads it.
+   *
+   * Optional, so that every badge document written before phase 9 loads
+   * without a migration. An absent array reads as "has proved nothing", which
+   * is the truth about every badge that predates attesters and the only safe
+   * reading of a missing field at a door.
+   */
+  attestations?: Attestation[];
+  /**
+   * When this badge stopped being recognised — kill-a-badge, mechanism 1's
+   * enforcement primitive.
+   *
+   * **A tombstone, never a delete**, for `Grant.revokedAt`'s two reasons and
+   * one of its own. Audit: "which surface was ended, when, and by whom" is the
+   * question asked after a laptop goes missing. Provenance: a pass-derived
+   * admission names its minter by id, and an id that pointed at nothing would
+   * be a chain the sweep could not tell from one it had never seen. And
+   * reuse: an id that could be minted again is an id a killed badge could come
+   * back as.
+   *
+   * A killed badge is **a badge nobody holds**: `badge()` refuses it, so it can
+   * never authenticate again, and it drops out of every query, so its claims
+   * stop counting as held and its admissions stop counting as scope.
+   */
+  killedAt?: string;
+  /** Which badge ended it. The holder itself, for a plain sign-out. */
+  killedBy?: string;
 }
 
 /**
@@ -165,7 +216,10 @@ export interface Desk {
   put(badge: BadgeRecord): Promise<void>;
 
   /** The hot path: every request, once. Null for a badge this home does not
-   * know — a home that was wiped, and in phase 9 a badge that was killed. */
+   * know — a home that was wiped, and from phase 9 a badge that was killed.
+   * The two answer alike on purpose: `bad-badge` already means "throw away
+   * what you stored and get a new one", which is exactly what the holder of a
+   * killed badge should do. */
   badge(badgeId: string): Promise<BadgeRecord | null>;
 
   /** Freshen `lastSeen`. Separate from `put` because it happens on every
@@ -196,13 +250,22 @@ export interface Desk {
   claimsOf(badgeId: string): Promise<ActorClaim[]>;
 
   /**
-   * Every claim on one actor, anywhere on the desk, shelf included. Actor ids
-   * are global and never recycled, so this question is deliberately NOT
-   * admission-scoped: reincarnating a live actor must be refused however far
-   * away its holder sits. Firestore: `where("claimIds", "array-contains",
-   * actorId)` over the denormalized id list on each badge.
+   * Every claim on one actor, anywhere on the desk, shelf included — **with
+   * the badge id beside each row**. Actor ids are global and never recycled,
+   * so this question is deliberately NOT admission-scoped: reincarnating a
+   * live actor must be refused however far away its holder sits. Firestore:
+   * `where("claimIds", "array-contains", actorId)` over the denormalized id
+   * list on each badge.
+   *
+   * **The badge id is phase 9's addition, and it is why there is no second
+   * method here.** Kill-a-badge needs to name your other surfaces, and "a
+   * surface of yours" is exactly "a badge holding a claim on an actor this
+   * badge claims" — the same query, with the id the query already walked. A
+   * `holdersOfActor` beside this one would be a second spelling of one index,
+   * which is the kind of duplication that ends with the two disagreeing.
+   * `holdersOf` has answered in this shape since phase 3, `SHELF` and all.
    */
-  claimants(actorId: string): Promise<ActorClaim[]>;
+  claimants(actorId: string): Promise<{ badgeId: string; claim: ActorClaim }[]>;
 
   /**
    * Who holds a claim under this session key — the badge id beside the row,
@@ -229,8 +292,105 @@ export interface Desk {
 
   /** Record that this badge has been in this canvas. No longer policy-free:
    * from phase 7 the door decides whether this is called at all, and the
-   * provenance it passes is what phase 9's sweep will grip. */
+   * provenance it passes is what phase 9's sweep grips. */
   admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void>;
+
+  // ---- revocation's grip: the sweep, and kill-a-badge (phase 9) ----
+
+  /**
+   * **Every live badge admitted to one canvas** — the population the sweep
+   * walks, and mechanism 1's "who has been here is a per-canvas listing of
+   * badges" arriving for the first time.
+   *
+   * Firestore: `where("admittedTo", "array-contains", canvasId)`, the array
+   * `denormalize` has maintained since phase 4 for exactly the queries that
+   * had not been written yet. Killed badges are not returned: a badge that can
+   * no longer authenticate is not somebody the door has to reconsider, and
+   * leaving them in would make every sweep report an expulsion that had
+   * already happened.
+   *
+   * No fallback, per the rule above. A canvas whose badges never wrote
+   * `admittedTo` sweeps nobody, loudly, rather than being rescued by a scan.
+   */
+  badgesIn(canvasId: string): Promise<BadgeRecord[]>;
+
+  /**
+   * Rewrite one admission's provenance — **re-rooting**, the half of the sweep
+   * that nobody expects and the design insists on. A badge whose attestations
+   * satisfy a surviving grant keeps the canvas and comes to be there for a new
+   * reason; without this, "turning off the link would expel the very people
+   * who were invited by name".
+   *
+   * A no-op when the badge is not admitted here: two sweeps racing (a person
+   * in a browser and an agent at a terminal revoking two grants at once) must
+   * not resurrect an admission one of them has just dropped.
+   */
+  reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void>;
+
+  /** Drop one admission — the expulsion itself. Idempotent: expelling a badge
+   * that is not here is what the second of two racing sweeps does, and it is
+   * not an error. */
+  expel(badgeId: string, canvasId: string): Promise<void>;
+
+  /**
+   * **End this holder's recognition.** Returns the record as it was at the
+   * moment it died — the caller needs its admissions to know which canvases to
+   * sweep, and its claims to say whose surface it was — or null when there is
+   * no such live badge.
+   *
+   * Idempotent for the same reason `revokeGrant` is: the first stamp stands,
+   * so two people ending one stolen laptop do not argue about when it went.
+   */
+  killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null>;
+
+  // ---- attestations: what a holder has proved (mechanism 3) ----
+
+  /**
+   * Write a verified attribute onto a badge, replacing any earlier attestation
+   * of the SAME attribute.
+   *
+   * Upsert rather than append, because re-verifying is a thing people do and
+   * two rows for one mailbox are not two proofs — they are one proof and a
+   * stale copy, and the stale copy is the one a later freshness rule would
+   * trip over. The newest `at` wins.
+   *
+   * **Nothing in stage 1 calls this except tests and the desk's own suite.**
+   * That is the honest state of the seam: the attesters are stage 2 and need a
+   * cloud resource, so this is the method they will call after they verify,
+   * and it is real so that the door's branch above it can be proved without a
+   * pretend verifier standing in for one. See `server/attest.ts`.
+   */
+  attest(badgeId: string, attestation: Attestation): Promise<void>;
+
+  /**
+   * **Every live badge that has proved this attribute** — the query person
+   * resumption is made of (mechanism 6).
+   *
+   * A badge attesting `email:jordan@…` and a badge that CLAIMED an actor are
+   * the same person when they share that attribute, which is the design's
+   * whole sentence about a phone being Jordan. Answering it needs the reverse
+   * of `attest`: not "what has this badge proved" (a document read) but "who
+   * else has proved this" — one indexed query over the denormalized
+   * `attested` array, exactly the shape `badgesIn` takes over `admittedTo`.
+   *
+   * **Not derived from `claimants` instead**, though it looks like it could
+   * be. Going the other way — take the actor, find its claimants, read their
+   * attestations — answers the `as` check and nothing else. The surface a
+   * person actually needs is the LISTING ("you may be Jordan here"), and that
+   * question starts from the attribute, not from an actor id the phone has
+   * never seen. One query serves both directions; two would drift.
+   *
+   * The attribute is compared as stored, so callers pass a normalized one —
+   * `upsertAttestation` normalizes on the way in, so the rows are already
+   * folded and a raw `Jordan@Acme.Test` would match nothing.
+   *
+   * No fallback, per this file's rule. A desk whose `attested` index was never
+   * written vouches for nobody, loudly, rather than being rescued by a scan —
+   * and the failure of THIS index is somebody being told to sign in again,
+   * which is a far better failure than a badge resuming an actor it should
+   * not.
+   */
+  badgesAttesting(attribute: string): Promise<BadgeRecord[]>;
 
   // ---- grants: who may enter one canvas (mechanisms 3 + 2) ----
 

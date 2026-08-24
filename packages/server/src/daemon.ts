@@ -13,6 +13,7 @@ import { runMigrations } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
+import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
 import { HomeLink } from "./home-link.ts";
 
 export interface DaemonOptions {
@@ -64,6 +65,23 @@ export interface DaemonOptions {
    * carries presence both ways.
    */
   homeUrl?: string | null;
+  /**
+   * The identity provider this home has borrowed, or null for none.
+   *
+   * Read from `ISOCAN_AUTH_PROJECT` + `ISOCAN_AUTH_API_KEY` by `resolveAuth`
+   * — environment and configuration rather than a flag, for `homeUrl`'s
+   * reason, and with no compiled-in default for the same reason: a daemon
+   * with nothing configured has no attester, which is what every daemon in
+   * this repo is, so the whole mechanism is invisible until an innkeeper
+   * configures it. `undefined` means "nobody has said, go and look"; an
+   * explicit `null` is a caller stating that this home has borrowed nothing,
+   * which a test needs to be able to say on a machine whose environment has.
+   */
+  auth?: AuthConfig | null;
+  /** Where the public keys a presented ID token is checked against come from.
+   * Defaults to Google's published endpoint; `SigningKeys` in `attest.ts`
+   * carries the argument for why it is configuration at all. */
+  signingKeys?: SigningKeys;
   /** How often the home connection re-reads which canvases to replicate.
    * A knob rather than a constant only because tests want it small and a
    * gentle innkeeper might want it large; see `HomeLink.sync`. */
@@ -150,6 +168,11 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // caller saying "this one is a home", which a test needs to be able to say
   // on a machine whose config.json names one.
   const homeUrl = options.homeUrl !== undefined ? options.homeUrl : await resolveHomeUrl(home);
+  // The attester, resolved the same way and at the same moment as the home:
+  // both are innkeeper configuration that decides what kind of daemon this is,
+  // and an explicit value is a caller (a test) saying so on a machine whose
+  // environment says otherwise.
+  const auth = options.auth !== undefined ? options.auth : resolveAuth();
 
   // The composition root, and the ONE place any backing is named.
   const { store, desk } = await openBacking(home);
@@ -203,7 +226,12 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
   const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
-  registerRoutes(app, engine, store, desk, presence, { homeUrl, home: homeLink });
+  registerRoutes(app, engine, store, desk, presence, {
+    homeUrl,
+    home: homeLink,
+    auth,
+    ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
+  });
   await app.listen({ port, host });
   // Dialling starts only once we are serving: the first thing that arrives
   // down a canvas socket is written through the engine, and an engine whose

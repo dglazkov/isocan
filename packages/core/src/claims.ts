@@ -173,6 +173,33 @@ export interface ClaimContext {
    * admitted somewhere else.
    */
   claimants: readonly ActorClaim[];
+  /**
+   * **Does a badge that is NOT this one already speak as the actor `as` names,
+   * under a key this claimant is not presenting?** — gathered, never derived
+   * here.
+   *
+   * It is a boolean rather than the rows themselves because this file has
+   * never heard of a badge and must not start: the reducer judges actors, the
+   * gathering knows who is holding what (`Engine.claimContext`). What the
+   * boolean buys is the tightening mechanism 6 asks for — see `admit`, where
+   * "resuming somebody who is already somebody needs a vouch" replaces
+   * "resuming somebody who is *visibly* somebody needs a vouch".
+   */
+  heldElsewhere?: boolean;
+  /**
+   * **The attribute that vouches for `as`** — the second satisfier of
+   * resumption's one rule (mechanism 6), or absent when nothing does.
+   *
+   * A string and not a badge, for `heldElsewhere`'s reason: what the reducer
+   * needs to know is that somebody who is already this actor has proved the
+   * same thing this claimant has proved — `email:jordan@acme.test`, held by
+   * her laptop and now by her phone. Who holds it is the gathering's business.
+   *
+   * It is carried rather than collapsed into a boolean because a refusal and
+   * an audit both want to name it, and because a vouch nobody can name is the
+   * kind of authorization that is impossible to review.
+   */
+  vouchedBy?: string;
   /** Everyone the canvases IN SCOPE answer to — live faces AND names
    * remembered from history, the same set an @-mention resolves against.
    * Scoped to the claiming badge's admissions, for mechanism 10's reason. */
@@ -390,7 +417,9 @@ export function notYourActor(actorId: string): OpValidationError {
     "not-your-actor",
     `this badge does not speak for ${actorId} — claim that actor first ` +
       "(`isocan identity --session`, or the web app's identity dialog); " +
-      "`--as <actor id>` is how a holder that lost its badge comes back",
+      "`--as <actor id>` is how a holder that lost its badge comes back, and since " +
+      "phase 9 it needs a vouch when another surface still speaks as them — a pass " +
+      "from that surface, or the address they signed in with",
   );
 }
 
@@ -426,10 +455,16 @@ export function actorNames(registry: ActorRegistry): ActorNames {
   return names;
 }
 
-/** Deliberate return of an actor whose conversation is gone. Refused while
- * the actor is visibly someone — a live face, or a session that claimed
- * recently enough to still be working — so the suggestion "use `as` if you
- * are them" cannot be followed by somebody who is not. */
+/**
+ * Deliberate return of an actor whose conversation is gone — and, since phase
+ * 9 stage 2, **never an open assertion.**
+ *
+ * Resuming an actor somebody else is already speaking as needs a VOUCH: a
+ * surface that already is them handed it over (a pass), or the claimant proved
+ * the attribute that surface proved (an attestation). Without one, the answers
+ * are the three refusals in `admit` — so the suggestion "use `as` if you are
+ * them" cannot be followed by somebody who is not.
+ */
 function reincarnate(
   ctx: ClaimContext,
   op: ActorClaimOp,
@@ -447,64 +482,152 @@ function reincarnate(
     );
   }
   /**
-   * This badge holds a HANDED-OVER claim on this actor — a row with no session
-   * key, which is what redeeming a pass writes (`bindHandoff`).
+   * **A vouch, and there are two ways to have one.** (Mechanism 3's
+   * resumption rule, and mechanism 6 standing on it.)
    *
-   * When that is true both refusals below are switched off, and the reasoning
-   * is the design's rather than a convenience: "a badge already holding the
-   * claim vouches for anyone" (mechanism 3's resumption rule). Keying an actor
-   * this badge can already speak as grants it nothing it did not have a moment
-   * ago — mechanism 5's check is `claimsActor`, which asks about the BADGE and
-   * never about the key, so every process presenting this badge could already
-   * write as this actor before it asked.
+   * The design's sentence is one rule: *"The `as:` lever stops being open
+   * assertion: resuming an actor now requires a vouch. A badge already holding
+   * the claim vouches for anyone… past that, the routes split by what the
+   * actor has: a person's actor resumes on a matching attestation (a person
+   * has an inbox); an agent's on a pass."*
    *
-   * **Phase 8 forced it, and without it the pass does not work.** A pass hands
-   * one actor to a SECOND badge — "Jordan's tab and her daemon", which
-   * `bindClaim` below has anticipated since phase 3 — so from the moment a
-   * pass is redeemed there are legitimately two holders of one actor. Every
-   * later `as` from the endowed badge (a replica's `ensureClaim` after a
-   * restart, a CLI keying the identity it was just handed) would otherwise
-   * meet `wornLive`, because the OTHER holder's tab is live, or
-   * `otherSession`, because that holder claimed within the half hour — and be
-   * refused from being the person it was handed thirty seconds ago.
+   * So: **one predicate, two satisfiers, and deliberately not two special
+   * cases.** Phase 8 carved the first — a keyless handoff row, written by
+   * redeeming a pass — and phase 9 stage 2 adds the second — an attestation
+   * this badge shares with a badge that already claims the actor. Both say the
+   * same thing in different currencies: *somebody who is already this actor
+   * said so*. The pass says it by having been minted; the inbox says it by
+   * being the same inbox. Everything below reads `vouched` and never asks
+   * which, which is what keeps them one rule.
    *
-   * **Deliberately NOT "any row on this badge".** A keyed row belongs to a
-   * session: on one machine every agent shares the CLI's badge, so letting a
-   * second session key an actor a first is holding would unseat a working
-   * agent (`bindClaim` evicts the old key), and that refusal is exactly what
-   * `claims.test.ts`'s "`as` is refused while the actor was claimed moments
-   * ago" protects. A handoff row belongs to no session, so there is nothing to
-   * unseat — one row per actor per badge is what `bindClaim` and `bindHandoff`
-   * both maintain, so "there is a keyless row" and "no session holds it here"
-   * are the same statement.
+   * `handed` is this badge's own keyless row — see the argument below for why
+   * it is NOT "any row on this badge".
    */
-  const alreadyMine =
-    mine?.actorId === as ||
-    ctx.own.some((row) => row.actorId === as && row.sessionKey === undefined);
-  const wornLive = !alreadyMine && ctx.held.some((h) => h.live && h.actor.id === as);
+  const vouched = handedRow(ctx, as, mine) || ctx.vouchedBy !== undefined;
+  return admit(ctx, op, as, known, vouched);
+}
+
+/**
+ * The refusals, and the vouch that switches them off.
+ *
+ * Split from `reincarnate` so the one-rule-two-satisfiers line above is
+ * readable as one statement, and so the three refusal reasons sit together
+ * where they can be compared.
+ */
+function admit(
+  ctx: ClaimContext,
+  op: ActorClaimOp,
+  as: string,
+  known: Actor | undefined,
+  vouched: boolean,
+): Actor {
+  const wornLive = !vouched && ctx.held.some((h) => h.live && h.actor.id === as);
+  /**
+   * **Somebody else's badge already speaks as this actor** — the tightening
+   * phase 9 stage 2 owes, and the thing that makes attestation worth having.
+   *
+   * Until this line, `as` was refused only while the actor was *visibly*
+   * somebody: live on a canvas, or claimed within the half hour. Which meant
+   * that half an hour after Jordan closed her laptop, anybody who knew her
+   * actor id could simply be her — the desk design's own complaint about
+   * mechanism 6, verbatim: *"today the honest path is refused (name taken) and
+   * the dishonest one (`as:`) is open to anyone — exactly backwards."*
+   * Resumption is the honest path arriving, and it would be worth nothing if
+   * the dishonest one stayed open beside it: a phone that can prove its
+   * address gains exactly what a stranger already had.
+   *
+   * **Where it stops, and why it stops there.** A claim under THE SAME SESSION
+   * KEY is not "elsewhere", so the shipped lost-badge recovery still works:
+   * `/api/actors/orphaned` names the actor behind a key the caller already
+   * holds, and `--as` with that key brings it back. That route is phase 3's,
+   * it is what an agent harness whose credential was cleared actually does,
+   * and nothing else replaces it — a replacement holds no claims, so it cannot
+   * even SEE the badge that is holding its actor, let alone kill it. Breaking
+   * it to close this would have traded a real recovery for a hole that stayed
+   * open anyway.
+   *
+   * So the honest statement of what this buys: **a session key is a weak
+   * vouch and an attestation is a strong one.** A caller that knows the actor
+   * id but not the conversation key can no longer wait half an hour and be
+   * somebody — which is every stranger on a shared canvas, because actor ids
+   * ride in the oplog and are visible to anyone admitted while session keys
+   * are not. A caller that knows both is where the weak vouch runs out, and
+   * the answer to that is the strong one.
+   *
+   * Rows on THIS badge are not "elsewhere" (that is `otherSession` below, a
+   * narrower and older refusal), and a killed badge holds nothing at all: the
+   * desk drops it from every query, so a stolen laptop stops blocking its
+   * owner's return the moment it is ended.
+   */
+  const heldElsewhere = !vouched && ctx.heldElsewhere === true;
   // Somebody else's claim on this actor, anywhere on the desk — another badge,
   // another session key on this one, or a shelved legacy row. Rows under THIS
   // session key are excluded wherever they sit: a browser persona resuming
   // itself sends `as` AND its own key, and must not be refused as theft by its
   // own past self.
   const otherSession =
-    !alreadyMine &&
+    !vouched &&
     ctx.claimants.some(
       (row) =>
         row.sessionKey !== op.sessionKey &&
         row.actorId === as &&
         Date.parse(ctx.now) - Date.parse(row.boundAt) < CLAIM_STANDS_MS,
     );
-  if (wornLive || otherSession) {
+  if (wornLive || heldElsewhere || otherSession) {
     throw new OpValidationError(
       "name-taken",
-      `${as} is somebody right now (${wornLive ? "live on a canvas" : "claimed by another session just now"}) — ` +
-        "becoming them would be one actor wearing two faces",
+      `${as} is somebody else here (${
+        wornLive
+          ? "live on a canvas"
+          : heldElsewhere
+            ? "another surface already speaks as them"
+            : "claimed by another session just now"
+      }) — becoming them would be one actor wearing two faces. ` +
+        "Be handed it by a surface that already is them (`isocan pass`, or “Work from your " +
+        "terminal…”), or prove the address they signed in with.",
     );
   }
   const name = op.name ?? known!.name;
   if (op.name && !sameName(known?.name ?? "", op.name)) requireFree(ctx, op, as);
   return { id: as, name };
+}
+
+/**
+ * The first satisfier: this badge holds a HANDED-OVER claim on this actor — a
+ * row with no session key, which is what redeeming a pass writes
+ * (`bindHandoff`).
+ *
+ * Keying an actor this badge can already speak as grants it nothing it did not
+ * have a moment ago — mechanism 5's check is `claimsActor`, which asks about
+ * the BADGE and never about the key, so every process presenting this badge
+ * could already write as this actor before it asked.
+ *
+ * **Phase 8 forced it, and without it the pass does not work.** A pass hands
+ * one actor to a SECOND badge — "Jordan's tab and her daemon", which
+ * `bindClaim` has anticipated since phase 3 — so from the moment a pass is
+ * redeemed there are legitimately two holders of one actor. Every later `as`
+ * from the endowed badge (a replica's `ensureClaim` after a restart, a CLI
+ * keying the identity it was just handed) would otherwise meet `wornLive`,
+ * because the OTHER holder's tab is live, or `heldElsewhere`, because that
+ * holder is a different badge, or `otherSession`, because it claimed within
+ * the half hour — and be refused from being the person it was handed thirty
+ * seconds ago.
+ *
+ * **Deliberately NOT "any row on this badge".** A keyed row belongs to a
+ * session: on one machine every agent shares the CLI's badge, so letting a
+ * second session key an actor a first is holding would unseat a working agent
+ * (`bindClaim` evicts the old key), and that refusal is exactly what
+ * `claims.test.ts`'s "`as` is refused while the actor was claimed moments ago"
+ * protects. A handoff row belongs to no session, so there is nothing to
+ * unseat — one row per actor per badge is what `bindClaim` and `bindHandoff`
+ * both maintain, so "there is a keyless row" and "no session holds it here"
+ * are the same statement.
+ */
+function handedRow(ctx: ClaimContext, as: string, mine: ActorClaim | undefined): boolean {
+  return (
+    mine?.actorId === as ||
+    ctx.own.some((row) => row.actorId === as && row.sessionKey === undefined)
+  );
 }
 
 /** Throw if `name` answers to anyone who is not `selfId`. */

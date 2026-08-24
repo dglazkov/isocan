@@ -1,6 +1,6 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Grant } from "@isocan/core";
-import { SHELF } from "@isocan/core";
+import type { ActorClaim, Attestation, Grant } from "@isocan/core";
+import { SHELF, upsertAttestation } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -43,18 +43,18 @@ const DISJUNCTION_LIMIT = 30;
  * phase 7 one per grant at `grants/{id}`, and from phase 8 one per pass at
  * `passes/{id}` — exactly the shapes the architecture draws.
  *
- * ## The three arrays, and why there is exactly one writer
+ * ## The denormalized arrays, and why there is exactly one writer
  *
- * `claimIds`, `claimKeys` and `admittedTo` are the same data denormalized,
- * one array per question the desk is actually asked, because each is an
- * `array-contains` here and a whole-table scan everywhere else. Phase 3's
- * warning is exact: a CloudDesk that does not write them on every claim and
- * every admission passes the suite on a FileDesk and answers nothing in the
- * cloud.
+ * `claimIds`, `claimKeys`, `admittedTo` and — from phase 9 stage 2 —
+ * `attested` are the same data denormalized, one array per question the desk
+ * is actually asked, because each is an `array-contains` here and a
+ * whole-table scan everywhere else. Phase 3's warning is exact: a CloudDesk
+ * that does not write them on every claim and every admission passes the suite
+ * on a FileDesk and answers nothing in the cloud.
  *
  * So they cannot be forgotten, structurally: **nothing writes a badge except
- * `writeBadge`**, and `writeBadge` derives all three from `claims` and
- * `admissions` on every call. There is no code path that writes a claim and a
+ * `writeBadge`**, and `writeBadge` derives every one of them from `claims`,
+ * `admissions` and `attestations` on every call. There is no code path that writes a claim and a
  * separate code path that writes an array — they are the same statement. A
  * reviewer's whole job on this file is to confirm there is one writer.
  *
@@ -91,9 +91,14 @@ export class CloudDesk implements Desk {
     await this.writeBadge(badge);
   }
 
+  /** Null for a killed badge, exactly as for one this home never minted —
+   * the desk seam's contract, and what turns a kill into `bad-badge` at the
+   * killed holder's very next request. */
   async badge(badgeId: string): Promise<BadgeRecord | null> {
     const doc = await this.db.collection(BADGES).doc(badgeId).get();
-    return doc.exists ? toRecord(doc.data()!) : null;
+    if (!doc.exists) return null;
+    const record = toRecord(doc.data()!);
+    return record.killedAt === undefined ? record : null;
   }
 
   async touch(badgeId: string, at: string): Promise<void> {
@@ -103,6 +108,7 @@ export class CloudDesk implements Desk {
     const ref = this.db.collection(BADGES).doc(badgeId);
     const doc = await ref.get();
     if (!doc.exists) return;
+    if (typeof doc.data()!["killedAt"] === "string") return; // nobody holds it
     const previous = Date.parse((doc.data()!["lastSeen"] as string) ?? at);
     this.lastWrittenSeen.set(badgeId, stamp);
     if (!(stamp - previous >= TOUCH_DEBOUNCE_MS)) return;
@@ -122,20 +128,22 @@ export class CloudDesk implements Desk {
 
   /** Global, and deliberately not admission-scoped: actor ids never recycle,
    * so reincarnating a live actor must be refused however far away its holder
-   * sits. One `array-contains` over `claimIds`, plus the shelf. */
-  async claimants(actorId: string): Promise<ActorClaim[]> {
+   * sits. One `array-contains` over `claimIds`, plus the shelf. The badge id
+   * rides along because kill-a-badge needs to name your other surfaces and
+   * this is the query that already found them (see `Desk.claimants`). */
+  async claimants(actorId: string): Promise<{ badgeId: string; claim: ActorClaim }[]> {
     const found = await this.db
       .collection(BADGES)
       .where("claimIds", "array-contains", actorId)
       .get();
-    const rows: ActorClaim[] = [];
+    const rows: { badgeId: string; claim: ActorClaim }[] = [];
     for (const doc of found.docs) {
       for (const row of toRecord(doc.data()).claims) {
-        if (row.actorId === actorId) rows.push(row);
+        if (row.actorId === actorId) rows.push({ badgeId: doc.id, claim: row });
       }
     }
     for (const row of Object.values(await this.shelf())) {
-      if (row.actorId === actorId) rows.push(row);
+      if (row.actorId === actorId) rows.push({ badgeId: SHELF, claim: row });
     }
     return rows;
   }
@@ -190,6 +198,94 @@ export class CloudDesk implements Desk {
       const admission: Admission = { canvasId, provenance, at: new Date().toISOString() };
       return { ...badge, admissions: [...badge.admissions, admission] };
     });
+  }
+
+  // ---- the sweep, and kill-a-badge (phase 9) ----
+
+  /**
+   * `where("admittedTo", "array-contains", canvasId)` — the query the
+   * denormalized array has existed for since phase 4, finally asked.
+   *
+   * Single-field, so Firestore's automatic index serves it and
+   * `firestore.indexes.json` needs nothing. Killed badges cannot come back
+   * from it by construction rather than by a filter here: `denormalize`
+   * writes an empty `admittedTo` for a tombstoned badge, so it is not in the
+   * index at all. That is the same "one writer" discipline the class comment
+   * describes, doing a second job.
+   */
+  async badgesIn(canvasId: string): Promise<BadgeRecord[]> {
+    const found = await this.db
+      .collection(BADGES)
+      .where("admittedTo", "array-contains", canvasId)
+      .get();
+    return found.docs.map((doc) => toRecord(doc.data()));
+  }
+
+  async reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+    await this.mutate(badgeId, (badge) => {
+      if (!badge.admissions.some((a) => a.canvasId === canvasId)) return null;
+      return {
+        ...badge,
+        admissions: badge.admissions.map((a) =>
+          a.canvasId === canvasId ? { ...a, provenance } : a,
+        ),
+      };
+    });
+  }
+
+  async expel(badgeId: string, canvasId: string): Promise<void> {
+    await this.mutate(badgeId, (badge) => {
+      if (!badge.admissions.some((a) => a.canvasId === canvasId)) return null;
+      return { ...badge, admissions: badge.admissions.filter((a) => a.canvasId !== canvasId) };
+    });
+  }
+
+  /**
+   * A transaction, for `revokeGrant`'s reason at higher stakes: two people
+   * ending one stolen laptop must not produce two different times of death,
+   * and the SECOND of them must be told there was nothing left to sweep
+   * rather than sweeping a second time.
+   *
+   * It cannot go through `mutate`, which refuses to touch a killed badge —
+   * this is the one write that reads the tombstone rather than obeying it.
+   */
+  async killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null> {
+    const ref = this.db.collection(BADGES).doc(badgeId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return null;
+      const badge = toRecord(doc.data()!);
+      if (badge.killedAt !== undefined) return null;
+      tx.set(ref, denormalize({ ...badge, killedAt: at, killedBy: by }));
+      // The record as it was ALIVE: the caller sweeps these admissions and
+      // names these actors. Ending the badge is not forgetting where it was.
+      return badge;
+    });
+  }
+
+  async attest(badgeId: string, attestation: Attestation): Promise<void> {
+    await this.mutate(badgeId, (badge) => ({
+      ...badge,
+      attestations: upsertAttestation(badge.attestations, attestation),
+    }));
+  }
+
+  /**
+   * `where("attested", "array-contains", attribute)` — the reverse of
+   * `attest`, and the query person resumption is made of.
+   *
+   * Single-field, so Firestore's automatic index serves it and
+   * `firestore.indexes.json` needs nothing. A killed badge derives an empty
+   * `attested` in `denormalize`, so it is not in the index at all: a holder
+   * the home no longer recognises cannot vouch for anybody, by construction
+   * rather than by a filter here.
+   */
+  async badgesAttesting(attribute: string): Promise<BadgeRecord[]> {
+    const found = await this.db
+      .collection(BADGES)
+      .where("attested", "array-contains", attribute)
+      .get();
+    return found.docs.map((doc) => toRecord(doc.data()));
   }
 
   // ---- grants ----
@@ -331,6 +427,12 @@ export class CloudDesk implements Desk {
    * two processes.
    *
    * Returning null from `change` means "nothing to do" and writes nothing.
+   *
+   * **A killed badge is never mutated here.** One guard rather than one per
+   * caller, so "a killed badge is a badge nobody holds" is a property of this
+   * function and not a rule six methods have to remember — the same argument
+   * `writeBadge` makes about the denormalized arrays. `killBadge` is the
+   * deliberate exception and runs its own transaction.
    */
   private async mutate(
     badgeId: string,
@@ -340,24 +442,45 @@ export class CloudDesk implements Desk {
     await this.db.runTransaction(async (tx) => {
       const doc = await tx.get(ref);
       if (!doc.exists) return;
-      const next = change(toRecord(doc.data()!));
+      const current = toRecord(doc.data()!);
+      if (current.killedAt !== undefined) return;
+      const next = change(current);
       if (!next) return;
       tx.set(ref, denormalize(next));
     });
   }
 }
 
-/** A badge document: the record, plus the three arrays derived from it. */
+/**
+ * A badge document: the record, plus the arrays derived from it.
+ *
+ * **A killed badge derives EMPTY arrays**, and that one line is how "a killed
+ * badge drops out of every query" becomes structural rather than a filter
+ * repeated in `claimants`, `holdersOf`, `claimsIn`, `badgesIn` and
+ * `badgesAttesting`. The arrays ARE the index; a document that is not in the index cannot come back
+ * from a query, whatever a read-side branch does or forgets to do. Its
+ * `claims` and `admissions` stay on the document, because the tombstone is
+ * the audit record of what that surface could do and where it had been.
+ *
+ * The equivalent on `FileDesk` is a `live()` helper every method goes
+ * through; two backings, one rule, expressed in each one's own grain.
+ */
 function denormalize(badge: BadgeRecord): DocumentData {
+  const dead = badge.killedAt !== undefined;
   return {
     ...jsonSafe(badge),
-    claimIds: unique(badge.claims.map((claim) => claim.actorId)),
-    claimKeys: unique(
-      badge.claims
-        .map((claim) => claim.sessionKey)
-        .filter((key): key is string => typeof key === "string"),
-    ),
-    admittedTo: unique(badge.admissions.map((admission) => admission.canvasId)),
+    claimIds: dead ? [] : unique(badge.claims.map((claim) => claim.actorId)),
+    claimKeys: dead
+      ? []
+      : unique(
+          badge.claims
+            .map((claim) => claim.sessionKey)
+            .filter((key): key is string => typeof key === "string"),
+        ),
+    admittedTo: dead ? [] : unique(badge.admissions.map((admission) => admission.canvasId)),
+    // The fourth array, phase 9 stage 2's: what this holder has PROVED, so
+    // "who else is this person" is one indexed query instead of a scan.
+    attested: dead ? [] : unique((badge.attestations ?? []).map((row) => row.attribute)),
   };
 }
 
@@ -372,6 +495,13 @@ function toRecord(data: DocumentData): BadgeRecord {
     lastSeen: data["lastSeen"] as string,
     admissions: (data["admissions"] as Admission[] | undefined) ?? [],
     claims: (data["claims"] as ActorClaim[] | undefined) ?? [],
+    // Absent on every badge written before phase 9, and both absences read
+    // correctly: nothing proved, and nobody killed it.
+    ...(Array.isArray(data["attestations"])
+      ? { attestations: data["attestations"] as Attestation[] }
+      : {}),
+    ...(typeof data["killedAt"] === "string" ? { killedAt: data["killedAt"] } : {}),
+    ...(typeof data["killedBy"] === "string" ? { killedBy: data["killedBy"] } : {}),
   };
 }
 

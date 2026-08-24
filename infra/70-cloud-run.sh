@@ -61,12 +61,45 @@ have "${IMAGE}"
 #                               the run.app URL keeps working; naming the
 #                               domain here is what makes the rule explicit
 #                               rather than emergent.
+# ISOCAN_AUTH_PROJECT           the Identity Platform project a presented ID
+# ISOCAN_AUTH_API_KEY           token is checked against, and the browser key
+#                               the page starts a sign-in with. Added only if
+#                               100-identity-platform.sh has run — see below.
 ENV_VARS="ISOCAN_STORE=cloud"
 ENV_VARS="${ENV_VARS},ISOCAN_GCP_PROJECT=${PROJECT_ID}"
 ENV_VARS="${ENV_VARS},ISOCAN_BUCKET=${BUCKET}"
 ENV_VARS="${ENV_VARS},ISOCAN_BIND=0.0.0.0"
 ENV_VARS="${ENV_VARS},ISOCAN_HOME=/tmp/isocan"
 ENV_VARS="${ENV_VARS},ISOCAN_ALLOWED_ORIGINS=https://${DOMAIN}"
+
+# **The borrowed attester, as CONFIGURATION.** This is what makes one image run
+# at dev.isocan.io, at isocan.io, and on somebody's laptop: the container is
+# byte-identical everywhere and what differs is whether there is an Identity
+# Platform project to check tokens against. A daemon with these unset has no
+# attester, refuses `email:` grants with a reason, and shows no sign-in control
+# — which is exactly right for a local daemon and is why there is no default.
+#
+# **The key is LOOKED UP, never written down.** It is not a secret — a browser
+# API key identifies a project, ships in every page that uses it, and is
+# defended by the provider's authorized-domain list — but a literal `AIza…`
+# string in a repository trips GitHub's secret scanner, and a scanner that
+# cries wolf is a scanner people stop reading. So it is read from the API at
+# deploy time, from the key `initializeAuth` made.
+#
+# Skipped rather than fatal when Identity Platform is not initialized: stage A
+# stands on its own, and a home with no attester is a working home.
+if gcloud services list --project="${PROJECT_ID}" --enabled \
+     --filter="config.name=identitytoolkit.googleapis.com" --format='value(config.name)' \
+     2>/dev/null | grep -q identitytoolkit; then
+  AUTH_KEY_RES="$(gcloud services api-keys list --project="${PROJECT_ID}" --format='value(name)' 2>/dev/null | head -1 || true)"
+  AUTH_KEY="$(gcloud services api-keys get-key-string "${AUTH_KEY_RES}" --project="${PROJECT_ID}" --format='value(keyString)' 2>/dev/null || true)"
+  if [ -n "${AUTH_KEY}" ]; then
+    ENV_VARS="${ENV_VARS},ISOCAN_AUTH_PROJECT=${PROJECT_ID}"
+    ENV_VARS="${ENV_VARS},ISOCAN_AUTH_API_KEY=${AUTH_KEY}"
+  else
+    note "identitytoolkit is on but no API key came back — deploying with no attester"
+  fi
+fi
 
 step "deploying ${SERVICE}"
 note "min=${MIN_INSTANCES} max=${MAX_INSTANCES} cpu=${CPU} memory=${MEMORY} concurrency=${CONCURRENCY} timeout=${REQUEST_TIMEOUT}s"

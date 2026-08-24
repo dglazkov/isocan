@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { onReBadge } from "./lib/api.ts";
 import { beginArrival, reloadOnLatePass } from "./lib/arrival.ts";
+import { beginSignIn } from "./lib/signin.ts";
 import { reclaimIdentity } from "./lib/identity.ts";
 import { initTheme } from "./lib/theme.ts";
 import { loadActorColors } from "./lib/colors.ts";
@@ -31,6 +32,17 @@ void loadActorNames();
  * identity arriving behind it is worse than wrong.
  */
 const arrival = beginArrival();
+/**
+ * And a tab that came back from an INBOX starts spending its code here, for
+ * the arrival's reasons exactly: a sign-in code is single-use, StrictMode runs
+ * an effect body twice in development, and the second run would tell a person
+ * their link had already been used moments after they used it.
+ *
+ * Unlike a pass it does not decide who this tab IS — proving an address
+ * decorates the badge and offers a resume; it never takes one — so the first
+ * render is not held for it. It arrives as a notice.
+ */
+const signIn = beginSignIn();
 // And one that shows up later, in the bar of a tab that is already open — a
 // same-document navigation that would otherwise leave a live credential
 // sitting there doing nothing (measured in Chrome; see `reloadOnLatePass`).
@@ -38,6 +50,6 @@ reloadOnLatePass();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App arrival={arrival} />
+    <App arrival={arrival} signIn={signIn} />
   </StrictMode>,
 );
