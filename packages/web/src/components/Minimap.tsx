@@ -21,7 +21,7 @@ const PAD = 8;
  */
 export function Minimap() {
   const colors = useActorColors();
-  const projectId = useCanvasStore((s) => s.projectId);
+  const canvasId = useCanvasStore((s) => s.canvasId);
   /**
    * Which node the pointer is on, and where to hang its card.
    *
@@ -188,9 +188,9 @@ export function Minimap() {
           />
         </svg>
       </div>
-      {peek && projectId && (
+      {peek && canvasId && (
         <ItemPeek
-          projectId={projectId}
+          canvasId={canvasId}
           itemId={peek.itemId}
           // ABOVE the map, because the map lives in a bottom corner and a card
           // hanging below it would be off the window. Centred on the node and

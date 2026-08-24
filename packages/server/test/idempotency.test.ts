@@ -206,7 +206,7 @@ describe("an op sent twice, meant once", () => {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
       body: JSON.stringify({
-        projectId: "prj_1",
+        canvasId: "prj_1",
         actor: sam,
         op: { type: "item.move", itemId: "itm_acme", x: 99, y: 99 } satisfies Operation,
         opId: "op_samsownwrit",
