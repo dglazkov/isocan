@@ -14,7 +14,7 @@
  * That keeps it honest in two ways: it needs no badge and no API, and it
  * measures the artifact somebody would actually receive.
  *
- *   node scripts/grade.mjs --file marketing/index.html
+ *   node scripts/grade.mjs --file test/fixtures/deliberately-bad.html
  *   node scripts/grade.mjs --project prj_VXBXnkxp4C
  *   node scripts/grade.mjs --project prj_VXBXnkxp4C --json
  *

@@ -450,6 +450,17 @@ directly; the only build is the web bundle):
 | `packages/cli` | `isocan` — commander CLI mapping 1:1 to operations, daemon auto-spawn |
 | `packages/web` | React + zustand canvas in the "Drafting Table" design; WS replica applying the shared reducer |
 
+**The logged-out surface is a route, not a site.** A browser that is nobody yet
+and asks for `/` gets a front page — the idea in two sentences, the three steps
+that get you onto a canvas with the install line ready to copy, one screenshot
+of a real canvas with four cursors on it, and the ledger that is the whole
+argument: a gesture on the left, the command that performs the identical
+operation on the right. Every other address still asks who you are, so a share
+link is unchanged. This used to be a separate static site under `marketing/`,
+which nothing served and which drifted from the app the day it was written; it
+was folded into `packages/web` and the directory deleted, because two front
+doors is one too many.
+
 Storage lives under `~/.isocan` (override with `ISOCAN_HOME`): per-project
 directories with human-readable JSON snapshots, an append-only `oplog.jsonl`
 as the source of truth (crash recovery replays the tail), and sha256

@@ -197,6 +197,20 @@ input:focus-visible, textarea:focus-visible { outline: none; }
    unless it says otherwise. This is the whole of the dark-mode card bug. */
 button, select { color: inherit; }
 
+/* Every image keeps its own aspect ratio, everywhere, by default.
+   `width`/`height` on an <img> are presentational HINTS with a used value, so
+   a rule that sets one axis and says nothing about the other leaves the
+   attribute's value in force on the axis it forgot — which is how the front
+   page's screenshot once shipped 1158x1346 on a 2880x1346 file (lessons.md
+   #3). The attributes are worth having: they reserve the right box before the
+   bytes arrive. `height: auto` is what turns them back into a hint.
+   Stated as a blanket rather than per-image on purpose. The first version of
+   the guard asked any rule setting an image's WIDTH to also set the height,
+   and sizing with `max-width` walked straight past it; the invariant has no
+   width in it. Anything that genuinely wants a fixed box (`.img-view`,
+   `.item-thumb`) is more specific and still wins. */
+img { height: auto; }
+
 .text-input {
   padding: 7px 10px; border-radius: 6px;
   border: 1px solid var(--chip-line); background: var(--card);
@@ -1931,31 +1945,56 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- the front page: the origin wearing a face (phase 13.5) ----------
    Scene 0's three steps, at the same address every canvas lives at. It is the
    app's own world and not a second one: the same tokens, the same 8px radius,
-   the same system stack, the same `.btn`. Nothing loads — no image, no
-   webfont, no third party — because this is the first paint a stranger gets
-   and phase 10's service worker only holds the shell.
-   The ledger shape rather than a hero: a number, the move, and — on the one
-   step that is a command — the command itself, sitting in the same monospace
-   chip the "Work from your terminal…" line already uses. */
+   the same system stack, the same `.btn`.
+
+   THIS ABSORBED `marketing/`, which was a static site for the same audience at
+   the same address that nothing ever served. What came across is the REGISTER
+   and the ARGUMENT — a headline allowed to be large, the accent allowed to own
+   the region the page is actually asking for, and the split ledger, which is
+   the thesis as a layout rather than as a sentence. What did not come across is
+   the webfont: Bricolage Grotesque arrived from fonts.googleapis.com, and a
+   third-party host on the critical path of the first page a stranger sees is
+   exactly what phase 10's cached shell exists to avoid. The display voice here
+   is size, weight, tracking and colour on the system stack, which costs nothing
+   and renders offline.
+
+   The one raster is `/front/canvas.webp` (49KB, 1440x673, lazy) and it sits
+   below the steps, so nothing a reader is asked to do waits on it. */
 .front-page {
-  max-width: 620px; margin: 0 auto; padding: 88px 24px 64px;
-  display: flex; flex-direction: column; gap: 36px;
+  /* Wider than the 620px it started at, because the ledger is two columns and
+     the screenshot is a canvas. The prose inside is held to a measure. */
+  max-width: 880px; margin: 0 auto; padding: 88px 24px 72px;
+  display: flex; flex-direction: column; gap: 40px;
 }
-.front-head { display: flex; flex-direction: column; gap: 12px; }
-.front-head h1 { margin: 0; font-size: 30px; letter-spacing: -0.01em; }
-.front-lede { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-muted); }
+.front-head { display: flex; flex-direction: column; gap: 14px; }
+/* The register, without a webfont. Large, tight and unapologetic — the three
+   levers a system stack still has — rather than a display face fetched from
+   somebody else's server. `text-wrap: balance` keeps the two lines even. */
+.front-title {
+  margin: 0; max-width: 15ch;
+  font-size: clamp(2.125rem, 6vw, 3.375rem);
+  font-weight: 700; line-height: 1.04; letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.front-title em { font-style: normal; color: var(--accent-text); }
+.front-lede { margin: 0; max-width: 54ch; font-size: 16.5px; line-height: 1.55; color: var(--ink-muted); }
 /* The numbers are drawn by `.front-step-n`, so the marker is off: a list
-   marker and a chip would be two numbers for one step. */
+   marker and a chip would be two numbers for one step.
+   COLOUR OWNS THIS REGION, and it owns this one rather than a closing band:
+   the steps are what the page is for, so they are the thing lifted off the
+   ground onto a surface with the accent on it. */
 .front-steps {
-  list-style: none; margin: 0; padding: 0;
+  list-style: none; margin: 0; padding: 26px 26px 28px;
   display: flex; flex-direction: column; gap: 22px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow-card);
 }
 .front-step { display: flex; align-items: flex-start; gap: 14px; }
 .front-step-n {
   flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12.5px; font-weight: 600;
-  background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink-muted);
+  font-size: 12.5px; font-weight: 700;
+  background: var(--accent); border: 1px solid var(--accent); color: var(--accent-ink);
 }
 .front-step-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
 .front-step-say { font-size: 15px; line-height: 1.4; }
@@ -1977,6 +2016,65 @@ button.mt-card:hover { border-color: var(--accent); }
 .front-command-said { flex: 1 0 100%; font-size: 11.5px; line-height: 1.4; color: var(--ink-soft); }
 .front-command[data-copy-state="copied"] .front-command-said { color: var(--good); }
 .front-command[data-copy-state="copied"] .front-command-line { border-color: var(--good); }
+
+/* The shot sits on the page the way an item sits on the canvas: a hairline, the
+   app's radius, and the app's own card shadow under it. The screenshot is of
+   the dark theme, so on vellum the frame is what stops it reading as a hole —
+   which is the reason it gets a border rather than bleeding. */
+.front-shot {
+  margin: 0; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); box-shadow: var(--shadow-card); overflow: hidden;
+}
+/* `height: auto` is the load-bearing half (lessons.md #3). The width/height
+   attributes on the tag reserve the box before the bytes land; without this
+   they stay a USED value and the picture is drawn to whatever the CSS width
+   leaves, which is how a stretched screenshot once shipped on a page selling a
+   design tool.
+   A DESCENDANT SELECTOR, not a class on the <img>, and that is the guard's
+   doing rather than taste: `shot.test.ts` finds the rules that can squash an
+   image by looking for `img` as an element token, and a class NAMED
+   `.front-shot-img` is invisible to it — `img` there is preceded by a hyphen,
+   not by a combinator. Mutation testing found that the day this was written:
+   pinning `height: 400px` on the class rule reproduced lesson #3 exactly, with
+   the suite green. Same shape as lesson #16. */
+.front-shot img { display: block; width: 100%; height: auto; }
+.front-shot-note {
+  display: flex; flex-wrap: wrap; gap: 5px 18px;
+  padding: 12px 14px 13px; border-top: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 12.5px; line-height: 1.45;
+}
+
+/* ---- the split ledger: the thesis as a layout ----
+   A gesture on the left, the command that performs the identical operation on
+   the right. Rows and hairlines rather than a card grid, because a card grid
+   says "nine features" and this says "nine acts, twice each". */
+.front-claim { display: flex; flex-direction: column; gap: 12px; }
+.front-claim-head {
+  margin: 0; max-width: 20ch;
+  font-size: clamp(1.375rem, 3.4vw, 1.875rem);
+  font-weight: 700; line-height: 1.12; letter-spacing: -0.025em;
+}
+.front-claim-lede { margin: 0; max-width: 62ch; font-size: 14.5px; line-height: 1.55; color: var(--ink-muted); }
+.front-ledger { margin-top: 10px; border-top: 1px solid var(--line-soft); }
+.front-row {
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 9fr);
+  gap: 8px 32px; align-items: baseline;
+  padding: 14px 2px; border-bottom: 1px solid var(--line-soft);
+}
+.front-row-did { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.front-row-note { display: block; margin-top: 3px; font-weight: 400; font-size: 12.5px; color: var(--ink-soft); }
+/* Mono here is not a costume for "technical": every one of these is a string
+   you can paste into a shell, which is the whole argument of the section. */
+.front-row-cmd {
+  display: block; min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.5; color: var(--accent-text);
+  overflow-x: auto; overscroll-behavior-x: contain; white-space: pre;
+}
+@media (max-width: 720px) {
+  .front-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
+
 /* The second face's entrance: somebody who already has a canvas. Quieter than
    the steps, because it is the smaller of the two audiences at this address. */
 .front-onward {
