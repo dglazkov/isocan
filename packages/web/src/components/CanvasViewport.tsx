@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
-import { publishCursor, useCanvasStore } from "../stores/canvasStore.ts";
+import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
@@ -509,7 +509,13 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       await addVersionFromFile(projectId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
       return;
     }
-    const ids = await addFiles(projectId, actor, files, world);
+    // The drop's own failure, said out loud rather than left as an unhandled
+    // rejection: offline, files are not queued (phase 10's deferred scope) and
+    // `uploadBlob` throws with the sentence that explains why.
+    const ids = await addFiles(projectId, actor, files, world).catch((err: unknown) => {
+      setNotice(err instanceof Error ? err.message : "Those files could not be added.");
+      return [] as string[];
+    });
     const last = ids[ids.length - 1];
     if (last) ui.select(last);
   }

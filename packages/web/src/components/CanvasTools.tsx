@@ -5,7 +5,7 @@ import { addFiles } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openFavourites } from "./FavouritesBar.tsx";
 import { isStarred } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 
 /**
@@ -127,7 +127,14 @@ export function CanvasTools({ projectId, actor }: { projectId: string; actor: Ac
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
-    const ids = await addFiles(projectId, actor, files, createPlacement());
+    // A file that cannot be added offline is phase 10's deferred scope, and
+    // the one thing that was not deferred with it is saying so — the error
+    // carries the sentence (see `uploadBlob`), this puts it where it can be
+    // read. An unhandled rejection in a console is not a person being told.
+    const ids = await addFiles(projectId, actor, files, createPlacement()).catch((err: unknown) => {
+      setNotice(err instanceof Error ? err.message : "That file could not be added.");
+      return [] as string[];
+    });
     const last = ids[ids.length - 1];
     if (last) useUiStore.getState().select(last);
   }

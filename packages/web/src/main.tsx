@@ -1,7 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
-import { onReBadge } from "./lib/api.ts";
+import { onOfflineWrite, onReBadge } from "./lib/api.ts";
+import { queueOfflineWrite } from "./stores/canvasStore.ts";
+import { registerShell } from "./lib/shell.ts";
 import { beginArrival, reloadOnLatePass } from "./lib/arrival.ts";
 import { beginSignIn } from "./lib/signin.ts";
 import { reclaimIdentity } from "./lib/identity.ts";
@@ -15,6 +17,16 @@ initTheme();
 // the door's retry replays anything (the identity desk's mechanism 5). Wired
 // here, at the entry point, so it is in place before the first fetch.
 onReBadge(reclaimIdentity);
+/**
+ * Where a write goes when the home cannot be reached (phase 10). Wired here
+ * for `onReBadge`'s reason exactly — the queue lives in the canvas store,
+ * which already imports `lib/api.ts`, and a hook keeps the dependency pointing
+ * one way — and before the first render, because the first gesture a person
+ * makes on a plane must not be the one that discovers nothing was listening.
+ */
+onOfflineWrite(queueOfflineWrite);
+// And the cached shell, so the app loads at all with no network.
+registerShell();
 // Faces are painted before any canvas is open; the WS snapshot refreshes this.
 void loadActorColors();
 void loadActorNames();

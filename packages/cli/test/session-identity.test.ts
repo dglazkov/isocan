@@ -271,7 +271,28 @@ describe("two agents, two faces", () => {
     const byLabel = Object.fromEntries(roster.map((s) => [s.label, s.actor.name]));
     expect(byLabel).toEqual({ "Iona 🤖": "Iona", "Osian 🤖": "Osian" });
     expect(new Set(roster.map((s) => s.actor.id)).size).toBe(2);
-  });
+    /**
+     * **Eight real CLI spawns, so eight Node starts** — the most of any test
+     * here, and every one of them is load-bearing: two claims and two session
+     * starts to get two faces onto the canvas, and the three narrating
+     * commands are the beats that reproduced the pointer bug in the first
+     * place. Nothing here can be dropped without the test stopping to pin
+     * what it pins.
+     *
+     * That makes it the slowest test in the suite against vitest's default
+     * 5s, which was always thin and which phase 10 tipped over by adding
+     * three more files for the workers to run in parallel. CI failed it three
+     * times in six runs while every local run passed — the flake phase 8
+     * recorded as unnamed, finally named by a machine slower than this one.
+     *
+     * **This is not a timeout lengthened to hide a signal** (phase 7.5's
+     * finding, and the rule still stands). There is no signal: the assertions
+     * above are about roster state, not about time, and the failure was
+     * always "eight process spawns did not fit in five seconds on a shared
+     * runner". The honest fix for a test that is genuinely slow is to say how
+     * slow it is allowed to be, next to the reason it is slow.
+     */
+  }, 30_000);
 });
 
 describe("leaving is leaving", () => {

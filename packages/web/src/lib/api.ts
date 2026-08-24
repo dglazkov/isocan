@@ -33,6 +33,7 @@ import {
   grantRoute,
   grantsRoute,
   newClientId,
+  newOpId,
   PASS_REDEEM_ROUTE,
   passesRoute,
 } from "@isocan/core";
@@ -49,6 +50,40 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/**
+ * **The home never answered, and this act could not wait for it** (phase 10).
+ *
+ * Deliberately NOT an `ApiError`: the difference between "the home said no"
+ * and "the home did not say anything" is the difference between a decision and
+ * an absence, and everything downstream branches on it. A queue retries an
+ * absence and must never retry a decision; a person is told different
+ * sentences about each.
+ *
+ * Thrown only for the acts that CANNOT be queued, each of which owns its own
+ * sentence rather than getting a generic one — see `offlineNote`.
+ */
+export class OfflineError extends Error {
+  readonly offline = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "OfflineError";
+  }
+}
+
+/**
+ * Did the home answer at all?
+ *
+ * An `ApiError` means it did — with a refusal, but an answer. Anything else
+ * out of `fetch` (a `TypeError`, an aborted request, DNS) means the request
+ * never got a verdict, and the honest thing to say about the op is "unknown",
+ * not "failed". That distinction is why the idempotency key exists: an op
+ * whose answer was lost may well have LANDED, and asking again with the same
+ * key is the only way to find out without risking a second one.
+ */
+export function homeAnswered(err: unknown): err is ApiError {
+  return err instanceof ApiError;
 }
 
 /**
@@ -140,12 +175,87 @@ export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
   return request("POST", "/api/ops", { projectId: null, clientId: CLIENT_ID, op });
 }
 
-export function sendOp(
+/**
+ * One op, straight up, under a name the caller chose.
+ *
+ * The unqueued core of `sendOp`, and the call the offline queue makes when it
+ * flushes: the key is supplied rather than minted here precisely because a
+ * flush is a RE-send and has to say the same thing twice.
+ */
+export function postOp(
   projectId: string | null,
   actor: Actor,
   op: Operation,
+  opId: string,
 ): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { projectId, actor, clientId: CLIENT_ID, op });
+  return request("POST", "/api/ops", { projectId, actor, clientId: CLIENT_ID, opId, op });
+}
+
+/**
+ * Where a write goes when the home cannot be reached (phase 10).
+ *
+ * A hook rather than an import, for the reason `onReBadge` above is a hook:
+ * the queue lives in `stores/canvasStore.ts`, which already imports this
+ * module, and a hook keeps the dependency pointing one way. Registered from
+ * `main.tsx`, at the entry point, before the first gesture can happen.
+ *
+ * Returns true when the op was kept. False means it could not be — a canvas
+ * born with no network (phase 13's offline birth), naming yourself against a
+ * namespace this tab cannot see, or an op about a canvas this tab does not
+ * have open — and then `sendOp` throws, because a gesture that quietly
+ * evaporates is the failure this phase exists to remove.
+ */
+let queueWrite: ((projectId: string | null, actor: Actor, op: Operation, opId: string) => boolean) | null =
+  null;
+
+export function onOfflineWrite(fn: typeof queueWrite): void {
+  queueWrite = fn;
+}
+
+/** What to tell somebody whose act cannot wait in a queue. Each sentence
+ * names the act, says what happened, and — where there is one — the remedy;
+ * "something went wrong" is not any of those things. */
+function offlineNote(op: Operation): string {
+  switch (op.type) {
+    case "project.create":
+      return "A new canvas has to be made at its home, and this browser cannot reach it. Try again when you are back online.";
+    case "project.delete":
+      return "Deleting a canvas has to be done at its home, and this browser cannot reach it.";
+    case "actor.claim":
+    case "actor.setColor":
+      return "Changing who you are needs the home — it is the only place that knows what names are taken. You can keep working as you are.";
+    default:
+      return "This change is about a canvas this tab does not have open, and the home cannot be reached to make it.";
+  }
+}
+
+/**
+ * Write an op — and, if the home cannot be reached, keep it (phase 10).
+ *
+ * Every op the app sends is minted with an id HERE rather than at the daemon,
+ * because that id is the idempotency key and the key has to survive the thing
+ * it protects against: a POST whose answer never came. When the network is
+ * gone the op goes into the queue carrying the same key it was posted under,
+ * so the flush after reconnect asks the home the same question a second time
+ * and gets the same answer rather than a `duplicate-id` refusal.
+ *
+ * Resolves to `null` when the op was queued instead of sent — no caller in the
+ * app reads the response, and inventing a seq for an op the home has not seen
+ * would be exactly the sort of comfortable lie phase 7 spent a finding on.
+ */
+export async function sendOp(
+  projectId: string | null,
+  actor: Actor,
+  op: Operation,
+): Promise<PostOpResponse | null> {
+  const opId = newOpId();
+  try {
+    return await postOp(projectId, actor, op, opId);
+  } catch (err) {
+    if (homeAnswered(err)) throw err;
+    if (queueWrite?.(projectId, actor, op, opId)) return null;
+    throw new OfflineError(offlineNote(op));
+  }
 }
 
 /** Chosen identity colors, actor id → hex. */
@@ -171,14 +281,76 @@ export function getSnapshot(projectId: string): Promise<CanvasSnapshotResponse> 
   return request("GET", `/api/projects/${projectId}/canvas`);
 }
 
-export function undo(projectId: string, actor: Actor): Promise<LogEntry> {
-  return request("POST", `/api/projects/${projectId}/undo`, { actor, clientId: CLIENT_ID });
+/**
+ * **Undo is the home's, and offline it says so** (phase 10's honesty problem,
+ * second half).
+ *
+ * Undo here is not "reverse the last thing I did in this tab". It is an
+ * actor-scoped walk of a stack the home rebuilds from the oplog, applying
+ * stored INVERSES computed against the state each op was applied to, repairing
+ * or skipping the ones another actor's work has invalidated (`server/undo.ts`).
+ * A tab holds none of that. It holds a canvas.
+ *
+ * Three things were on the table and two were rejected out loud:
+ *
+ * - **Undo locally and queue the resulting op.** This is the tempting one and
+ *   it is wrong for the reason the engine already gives about REPLICAS: *"a
+ *   replica whose live log was re-snapshotted holds no entries to walk.
+ *   Choosing what to undo here and forwarding the resulting op would be a
+ *   second opinion about a stack that has one owner."* A tab is a thinner
+ *   replica than that daemon, and the same sentence applies harder.
+ * - **Queue the undo REQUEST and let the home decide on reconnect.** Worse,
+ *   because it is invisible: the button does nothing now and something
+ *   surprising in ten minutes, against a stack that has moved.
+ * - **Refuse, and say why.** What this does. `⌘Z` on a plane is a reasonable
+ *   thing to try and an unreasonable thing to be met with silence by.
+ *
+ * The refusal is an `OfflineError`, so it reaches a person as a sentence
+ * rather than as a caught-and-dropped promise (see `ZoomControls`).
+ */
+export async function undo(projectId: string, actor: Actor): Promise<LogEntry> {
+  return history("undo", projectId, actor);
 }
 
-export function redo(projectId: string, actor: Actor): Promise<LogEntry> {
-  return request("POST", `/api/projects/${projectId}/redo`, { actor, clientId: CLIENT_ID });
+export async function redo(projectId: string, actor: Actor): Promise<LogEntry> {
+  return history("redo", projectId, actor);
 }
 
+const HISTORY_OFFLINE =
+  "Undo lives at the canvas's home — it walks your own history over the whole canvas, which this browser cannot see from here. Your changes are being kept and will go up when you reconnect.";
+
+async function history(kind: "undo" | "redo", projectId: string, actor: Actor): Promise<LogEntry> {
+  try {
+    return await request<LogEntry>("POST", `/api/projects/${projectId}/${kind}`, {
+      actor,
+      clientId: CLIENT_ID,
+    });
+  } catch (err) {
+    if (homeAnswered(err)) throw err;
+    throw new OfflineError(HISTORY_OFFLINE);
+  }
+}
+
+/**
+ * **Blobs are NOT queued offline, and the refusal is loud** (phase 10, the
+ * scope that was cut, with its reason).
+ *
+ * Adding a file offline means queueing BYTES, not an op — a second durable
+ * store with its own quota, its own eviction story, and its own answer to what
+ * happens when the browser reclaims it before the network comes back. And the
+ * op that would ride on top of it names a `blobHash` that does not exist
+ * anywhere yet, so the queue would hold an `item.add` pointing at nothing: a
+ * canvas that renders locally and cannot render for anybody else, until the
+ * upload it depends on either succeeds or is quietly forgotten. That is a
+ * design (content-addressed staging, upload-then-op ordering, a GC that knows
+ * about un-landed bytes), not a phase-10 detail.
+ *
+ * So it is deferred — and the one thing that could not be deferred with it is
+ * saying so. A drop that silently does nothing is exactly the failure mode
+ * this phase is about, so the sentence is specific: the file is named, the
+ * reason is given, and the remedy (try again when reconnected — the file is
+ * still on your disk) is stated.
+ */
 export async function uploadBlob(
   projectId: string,
   file: File | Blob,
@@ -195,7 +367,15 @@ export async function uploadBlob(
       },
       body: file,
     });
-  let res = await send();
+  let res: Response;
+  try {
+    res = await send();
+  } catch {
+    throw new OfflineError(
+      `“${filename}” was not added: files go to the canvas's home and this browser cannot reach it. ` +
+        "Everything else you do here is being kept — try the file again when you reconnect.",
+    );
+  }
   if (res.status === 401 && (await knockOnDoor())) res = await send();
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);

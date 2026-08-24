@@ -123,12 +123,26 @@ function stubGlobals(): void {
   (globalThis as Record<string, unknown>).WebSocket = FakeSocket;
 }
 
+/**
+ * Let the store's own async steps run.
+ *
+ * Phase 10 put two awaits in front of the socket — the durable replica is read
+ * from disk, then the queue is flushed — so "connect" and "a socket exists"
+ * are a few microtasks apart where they used to be one statement. Nothing here
+ * is a timer; this is the promise chain, not the clock (which these tests
+ * fake).
+ */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+}
+
 /** Connect and land a snapshot at `lastSeq`, which is where every test starts:
  * a tab that already holds state for this canvas. */
 async function connected(lastSeq: number): Promise<ProjectState> {
   const { connectToProject } = await store();
   const state = seed();
   connectToProject("prj_1", priya);
+  await settle();
   FakeSocket.last.deliver({
     type: "snapshot",
     project: state.project,
@@ -155,17 +169,19 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-/** Kill the live socket and let the store's 800ms backoff bring it back. */
-function reconnect(): void {
+/** Kill the live socket and let the store's 800ms backoff bring it back. The
+ * settle is phase 10's: the retry flushes the (empty) queue before it dials. */
+async function reconnect(): Promise<void> {
   FakeSocket.last.close();
   vi.advanceTimersByTime(900);
+  await settle();
 }
 
 describe("reconnecting with a cursor", () => {
   it("asks for nothing on a fresh connect, and for the tail on a reconnect", async () => {
     await connected(5);
     expect(FakeSocket.opened[0]).toContain("since=0");
-    reconnect();
+    await reconnect();
     // "I have through 241" — the beat, in a query string.
     expect(FakeSocket.opened[1]).toContain("since=5");
   });
@@ -173,7 +189,7 @@ describe("reconnecting with a cursor", () => {
   it("keeps the canvas mounted through the resume", async () => {
     const { useCanvasStore } = await store();
     await connected(5);
-    reconnect();
+    await reconnect();
     FakeSocket.last.deliver({ type: "resumed", from: 5, lastSeq: 6, colors: {}, names: {} });
     // A fresh connect nulls `project` and `canvas`; a resume must not, or the
     // canvas unmounts for as long as the tail takes to arrive.
@@ -186,7 +202,7 @@ describe("reconnecting with a cursor", () => {
   it("applies the tail on top of the state it kept", async () => {
     const { useCanvasStore } = await store();
     await connected(2);
-    reconnect();
+    await reconnect();
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 4, colors: {}, names: {} });
     FakeSocket.last.deliver({
       type: "op-applied",
@@ -204,7 +220,7 @@ describe("reconnecting with a cursor", () => {
   it("takes the colors and names that changed while the lid was shut", async () => {
     const { useCanvasStore } = await store();
     await connected(2);
-    reconnect();
+    await reconnect();
     FakeSocket.last.deliver({
       type: "resumed",
       from: 2,
@@ -220,7 +236,7 @@ describe("reconnecting with a cursor", () => {
 
   it("still resyncs on a gap — the resume's braces do not replace the belt", async () => {
     await connected(2);
-    reconnect();
+    await reconnect();
     const resumed = FakeSocket.last;
     resumed.deliver({ type: "resumed", from: 2, lastSeq: 5, colors: {}, names: {} });
     // A tail with a hole in it: the home said 3…5 and 4 never arrived. The
@@ -239,7 +255,7 @@ describe("reconnecting with a cursor", () => {
   it("takes a snapshot answer to a cursored question without complaint", async () => {
     const { useCanvasStore } = await store();
     await connected(2);
-    reconnect();
+    await reconnect();
     // The home could not serve the tail — compacted, or it is behind us. The
     // fallback is the other half of one contract, not an error.
     const fresh = seed();
@@ -262,6 +278,7 @@ describe("reconnecting with a cursor", () => {
     // something else here, and applying that canvas's tail to this one would
     // be worse than a slow reconnect.
     connectToProject("prj_2", priya);
+    await settle();
     expect(FakeSocket.opened[FakeSocket.opened.length - 1]).toContain("since=0");
   });
 });
@@ -271,7 +288,7 @@ describe("what an evening away sounds like", () => {
     const { useUnreadStore } = await unread();
     const { useCanvasStore } = await store();
     await connected(2);
-    reconnect();
+    await reconnect();
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 3, colors: {}, names: {} });
     FakeSocket.last.deliver({
       type: "op-applied",
@@ -298,7 +315,7 @@ describe("what an evening away sounds like", () => {
   it("still toasts a comment that arrives after the tail is done", async () => {
     const { useUnreadStore } = await unread();
     await connected(2);
-    reconnect();
+    await reconnect();
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 2, colors: {}, names: {} });
     FakeSocket.last.deliver({
       type: "op-applied",

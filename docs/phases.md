@@ -55,14 +55,14 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 9 is closed — the desk is hardened, and identity is
-now something a person can PROVE rather than only assert. Phase 10, offline
-in the browser, is next.** Note what phase 9 did not do, so a clean session
-does not assume it: `repo:` grants are still refused (deferred to phase 11
-with Scene 6), `{root: "link"}` admissions written before phase 7 are
-unreachable by any revocation. **dev.isocan.io is running phases 7 through 9**
-as of 2026-08-24: `GET /api/attest` answers `{"attesters":["email"]}` there and
-a real magic-link token was verified against the deployed home. This line moves as phases close; a clean
+**Where we are: Phase 10 is closed — a tab now survives its home, and every
+replica (tab or daemon) reconnects with the same seq-cursor gesture, which is
+journey rule 6 made physically true. Phase 11, the thin agent (Scene 6), is
+next.** One thing phase 10 surfaced that belongs to no phase yet: **the plane
+has two surfaces and only one of them works** — a tab keeps going offline, but
+a replica's CLI writes are still refused, and the two cannot see each other
+even on the same machine. See "Deliberately open" below. This line moves as
+phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -70,6 +70,25 @@ rather than in a phase because they belong to no phase's Proof and would
 otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
+
+- **The local bridge, opened 2026-08-24 (phase 10).** Phase 10 gave the
+  browser its own replica and queue, and in doing so made visible that a
+  machine now has **two** replicas that cannot see each other: the tab's,
+  and the daemon's. Offline they queue separately toward a home neither
+  can reach. The design — the tab reaching its local daemon through a
+  same-origin bridge frame, so the agent and the browser share one
+  replica — is written up in
+  [design/local-bridge.md](design/local-bridge.md) and is **deliberately
+  not chosen**. It is open because it trades against three things this
+  project holds on purpose: the one-origin rule, "the daemon never serves
+  pages to persons", and `home-link.ts`'s refusal to half-build an offline
+  queue. Choosing it means the daemon learns to queue (which phase 13
+  wants anyway), a browser-policy dependency on Private Network Access,
+  and a framing policy the daemon does not have today. Whoever takes it up
+  should read the failure modes section first: this makes the local daemon
+  a dependency of the browser experience, and a tab silently falling back
+  to a *stale* daemon would be the cheerful-wrong-address bug in its worst
+  form yet.
 
 - **Canvas or project, opened 2026-08-23 (phase 7).** The product is a
   **canvas** in every doc — 160 mentions against 15 of "project" — and a
@@ -1711,7 +1730,13 @@ resumption driven in Chrome.
 
 ## Phase 10 — Offline in the browser
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-24. The tab survives its home: shell from the
+service worker, canvas from a durable IndexedDB replica, writes queued and
+flushed **before** the tail comes down. Actuated by the conductor with the
+home stopped — a second writer was raced in first and the tab's offline op
+landed *after* it, at seq 4, under the id it minted while offline; replaying
+that id returned the same entry and appended nothing. Blobs offline are
+deliberately deferred and fail with a sentence naming the file.
 
 **Work:** The service worker: cached shell, durable browser replica,
 ops applied optimistically and queued when the network is gone,
@@ -1724,7 +1749,72 @@ journey rule 6, physically true.
 **Proof:** Chrome offline emulation, actuated: work offline, reconnect,
 verify order and convergence on a second profile.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-24 — The unnamed flake has a name, and CI found it because CI is
+  slower than this machine.** Phase 8 recorded a single failing run whose
+  output was not captured, and noted the lesson had by then cost two phases.
+  Pushing phase 10 named it: `session-identity.test.ts` → *"presence beats
+  never cross"*, `Test timed out in 5000ms`, failing **three of six** CI runs
+  while every local run passed. The test makes **eight real CLI spawns** —
+  the most in the suite — against vitest's default 5s, which was always thin;
+  phase 10 tipped it over by adding three more test files for the workers to
+  run in parallel. It is fixed by saying how slow the test is allowed to be,
+  beside the reason it is slow, and that is **not** phase 7.5's forbidden
+  move: no signal is hidden, because the assertions are about roster state
+  and never about time. The lesson worth keeping is the one about
+  *where* it was found — a flake that hides from twenty local runs shows up
+  immediately on hardware that is merely slower, and CI had been reporting it
+  in plain language for hours while nobody read the failure.
+
+- **2026-08-24 — Runtime caching alone does not make a tab offline-capable,
+  and only a browser could say so.** The service worker began as
+  runtime-caching-only, argued well: no build step, no dependency, and the
+  cache fills on the first successful load. Driving Chrome killed it in one
+  move. **A service worker does not control the page load that registers
+  it**, and this SPA routes client-side — so on a first visit the worker sees
+  no navigation at all and holds neither the shell nor the bundle. Stopping
+  the daemon after one visit produced Chrome's dinosaur. The fix keeps the
+  no-dependency argument intact: at install, fetch `/index.html`, cache it,
+  and read the `/assets/…` URLs out of the markup it already contains — **the
+  shell names its own assets**, so the manifest is always exactly this
+  build's, computed at runtime, with no plugin. No unit test could have found
+  this; the failure lives entirely in when a browser hands a worker control.
+- **2026-08-24 — The duplicate we were designing against does not exist; the
+  false refusal does.** The phase was briefed around "a replayed `item.add`
+  would add a second item". Measured against the reducer, it would not: every
+  creating op already carries a client-minted id (`itemId`, `threadId`,
+  `comment.id`) and the second is refused `duplicate-id`; the rest are
+  absolute-valued or refuse on the second pass. **The op vocabulary has been
+  accidentally exactly-once since the beginning**, and the damage of
+  at-least-once is one layer along and quieter: a replay returns a REFUSAL,
+  indistinguishable from the home genuinely rejecting the work — so the
+  honest client behaviour, roll back and tell the person, becomes a lie about
+  an item that is sitting in the canvas. The idempotency key was built
+  anyway, with its reason rewritten: **it exists so a replay is not mistaken
+  for a refusal.** Both halves are kept as tests, the false refusal included.
+  The conductor's brief asserted the duplicate as fact; a worker measuring
+  the premise rather than accepting it is what this is supposed to look like.
+- **2026-08-24 — "Reconnecting" is truthful about the socket and wrong about
+  the situation.** With the home stopped and nothing queued, a tab restored
+  entirely from its own replica sat on "reconnecting" forever — accurate (it
+  *is* retrying) and the wrong thing to tell somebody looking at a perfectly
+  good canvas they are about to write to. There is no better signal
+  available: a socket that never connected and one that dropped both arrive
+  as `onclose` 1006. So a dial that closes without ever being greeted counts
+  as a failure, and two in a row says "offline" — two rather than one so an
+  ordinary blip never flashes the word at anybody. Found by stopping a
+  server, not by a test.
+- **2026-08-24 — `isocan mv <item> --to 900,900` writes NaN coordinates and
+  the home accepts them.** Met while driving the CLI as the second writer:
+  the verb is `mv <item> [x] [y]`, `--to` is not an option, and rather than
+  being refused the command reported *"moved … to NaN,NaN"* and appended an
+  `item.move` with `x: null, y: null`, which `isocan ls` then renders as
+  `null,null`. **Nothing in the op vocabulary validates that a number is a
+  number** — not the CLI, not the route, not the reducer. Not phase 10's to
+  fix and deliberately left alone; filed as an issue, because the shape is
+  general (any op with numeric fields) and because a bad coordinate is
+  durable: it is in the oplog forever. *none yet.*
 
 ## Phase 11 — The thin agent (Scene 6)
 

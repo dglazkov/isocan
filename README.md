@@ -346,6 +346,19 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   own ops, never a collaborator's. Entries invalidated by others (your target
   got deleted) are skipped; batch inverses shrink to their surviving members.
   Trash-empty and project-delete are confirmation-gated and not undoable.
+- **Offline, in the browser**: a tab that loses its network keeps working. A
+  service worker caches the app shell, the canvas and its seq cursor live in
+  IndexedDB — so a reload with no network comes back to the canvas, not to a
+  blank page — and changes made meanwhile are applied at once and queued. On
+  reconnect the queue goes up FIRST and is ordered by the home; only then is
+  the socket dialled with the cursor, so the tail that comes down already
+  contains your work in the home's order. A bar says how many changes are
+  being held; anything the home refuses is rolled back **and said out loud**,
+  never silently. Every write carries a client-minted op id, so retrying one
+  whose answer was lost is answered with the entry it already became rather
+  than a duplicate-id refusal. Two things deliberately do not work offline
+  and say so: adding a **file** (bytes are not queued) and **undo** (the
+  stack is the home's, walked over the whole oplog).
 - **Projects**: each project is its own canvas; create/list/edit/delete from
   either surface.
 - **A directory is its project** (#60): `<dir>/.isocan/project.json` binds a
