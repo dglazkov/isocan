@@ -84,4 +84,20 @@ describe("chrome inside the zoomed world", () => {
       /"--scale":\s*viewport\.scale/,
     );
   });
+
+  /**
+   * The star is always on the right, whatever else is in the row.
+   *
+   * Hiding the name at small sizes sent it to the LEFT edge, because
+   * `space-between` puts a lone child at the start — the exact swap ItemView's
+   * own comment says must never happen ("a name that grows rightward from
+   * there runs off the item entirely"). `margin-left: auto` pins it regardless
+   * of siblings, so the rule does not depend on what else happens to render.
+   */
+  it("keeps the star on the right when it is the only thing in the row", () => {
+    const right = rulesFor(".chrome-right").join(" ");
+    expect(right, ".chrome-right must not rely on a sibling to sit right").toMatch(
+      /margin-left:\s*auto/,
+    );
+  });
 });
