@@ -26,6 +26,21 @@
  * exists rather than a line in the README telling people to run
  * `isocan home`.
  *
+ * **It starts EMPTY, and that is not a bug.** Since phase 8 a replica
+ * mirrors the canvases it was let into, not everything its home would show
+ * it — so a scratch replica whose badge has been nowhere holds nothing, no
+ * matter how many canvases are sitting at dev. Two ways to give it one:
+ *
+ *   npm run dev:replica -- setup <home>/p/<canvas>#<pass>   # the real gesture
+ *   npm run dev:replica -- setup <home>/p/<canvas>          # link grant only
+ *
+ * The first is what a second machine actually does (mint the pass from a
+ * session already on the canvas: `isocan pass`), and it is the flow worth
+ * exercising when you are working on the home. The second works while the
+ * canvas's link grant is on and hands over no identity. Either way the
+ * canvas is asked for BY NAME — nothing here enumerates dev, and a replica
+ * that shows an empty `list` has simply not been given anything yet.
+ *
  * The address is deliberately not compiled into the CLI — a default of
  * `isocan.io` would turn `isocan serve` in this checkout into a replica of
  * production, and that flip belongs to phase 14's promotion gesture. It is
@@ -68,7 +83,12 @@ if (args.length > 0) {
   console.log(`isocan replica of ${homeUrl}`);
   console.log(`  port  ${port}`);
   console.log(`  home  ${isocanHome}  (its own — your ~/.isocan is untouched)`);
-  console.log(`  drive it with: npm run dev:replica -- <command>\n`);
+  console.log(`  drive it with: npm run dev:replica -- <command>`);
+  // Said every time, because an empty replica looks broken and the fix is one
+  // line. A replica carries what it was let into; this one has been let into
+  // nothing yet.
+  console.log(`  it holds nothing until you join a canvas:`);
+  console.log(`    npm run dev:replica -- setup ${homeUrl}/p/<canvas>#<pass>\n`);
   spawn(process.execPath, [cli, "serve", "--foreground", "--force"], {
     stdio: "inherit",
     env,

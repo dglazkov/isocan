@@ -3,12 +3,14 @@ import type { ActorClaim, Grant } from "@isocan/core";
 import { SHELF } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
-import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
+import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
 
 /**
  * The desk on a disk. Layout under `~/.isocan/desk/`:
  *   badges.jsonl — append-only; the durable half. The source of truth.
- *   badges.json  — { lastSeq, badges, shelf } derived snapshot.
+ *   badges.json  — { lastSeq, badges, shelf, grants, passes } derived
+ *                  snapshot. One file for all of the desk's ledgers, because
+ *                  they are written by one chain and recovered by one replay.
  *
  * Snapshot-plus-tail, the same idiom as `actors.jsonl`/`actors.json`, for the
  * same reason: a claim row carries authorization now, and a table that is
@@ -16,11 +18,14 @@ import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
  * own name back until phase 9 ships kill-a-badge". The log is fsynced before
  * a write is acknowledged.
  *
- * WHAT IS LOGGED: mints, claim-list replacements, shelving, adoption, and —
- * from phase 7 — grants and their revocations. Everything that would
- * otherwise be unrecoverable. A grant is policy: losing the row that says
- * "the link is off" would quietly turn a closed canvas back on, which is the
- * one direction a lost file must never fail in.
+ * WHAT IS LOGGED: mints, claim-list replacements, shelving, adoption, grants
+ * and their revocations (phase 7), and — from phase 8 — passes and their
+ * redemptions. Everything that would otherwise be unrecoverable. A grant is
+ * policy: losing the row that says "the link is off" would quietly turn a
+ * closed canvas back on, which is the one direction a lost file must never
+ * fail in. A REDEMPTION is the same shape of fact: losing it would un-spend a
+ * single-use pass, and a pass that can be used twice is not single-use at
+ * all — so the redemption is fsynced before the redeemer is told it worked.
  *
  * WHAT IS NOT: `lastSeen` and `admissions`, which re-derive themselves — a
  * badge that lost its admissions re-admits itself on its next request, and
@@ -46,7 +51,9 @@ type DeskLogEntry =
   | { seq: number; type: "shelve"; rows: Record<string, ActorClaim>; at: string }
   | { seq: number; type: "adopt"; sessionKey: string; badgeId: string; at: string }
   | { seq: number; type: "grant"; grant: Grant; at: string }
-  | { seq: number; type: "revoke"; grantId: string; by: string; at: string };
+  | { seq: number; type: "revoke"; grantId: string; by: string; at: string }
+  | { seq: number; type: "pass"; pass: PassRecord; at: string }
+  | { seq: number; type: "redeem"; passId: string; by: string; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -60,6 +67,10 @@ interface DeskSnapshot {
    * backing keys its documents, so `grantsFor` is the same walk-or-query
    * split every other read here already has. */
   grants: Record<string, Grant>;
+  /** `passes/{id}`, on a disk, keyed the same way. Never queried by anything
+   * but id — a pass is presented, never listed — so this needs none of the
+   * denormalization the badge documents carry. */
+  passes: Record<string, PassRecord>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -68,7 +79,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -85,6 +96,10 @@ export class FileDesk implements Desk {
       // `migrations.ts` writes the rows, so that a canvas whose grant was
       // never written answers nothing here instead of answering helpfully.
       grants: snapshot?.grants ?? {},
+      // Absent in every desk written before phase 8, and empty is the only
+      // safe reading: a pass nobody can find is a pass nobody can redeem,
+      // which is what an unknown row must always mean here.
+      passes: snapshot?.passes ?? {},
     };
     // Crash recovery: replay any log tail the snapshot doesn't cover.
     let recovered = false;
@@ -221,6 +236,47 @@ export class FileDesk implements Desk {
     });
   }
 
+  // ---- passes ----
+
+  async putPass(pass: PassRecord): Promise<void> {
+    await this.enqueue(async () => {
+      this.state.passes[pass.id] = { ...pass };
+      await this.append({ type: "pass", pass, at: pass.createdAt });
+    });
+  }
+
+  async pass(passId: string): Promise<PassRecord | null> {
+    const found = this.state.passes[passId];
+    return found ? { ...found } : null;
+  }
+
+  /**
+   * Single-use, and on a file backing the guarantee comes from the desk's own
+   * write chain: `enqueue` serializes this read-modify-write against every
+   * other desk write, so two redemptions of one pass arriving in the same
+   * millisecond are two runs of this function one after the other, and the
+   * second one sees `redeemedAt` set.
+   *
+   * Both halves of the answer are load-bearing. `redeemed` says who won;
+   * `pass` is the row as the WINNER left it, so the loser can be told when it
+   * was spent rather than merely refused.
+   */
+  async redeemPass(
+    passId: string,
+    at: string,
+    by: string,
+  ): Promise<{ pass: PassRecord; redeemed: boolean } | null> {
+    return this.enqueue(async () => {
+      const pass = this.state.passes[passId];
+      if (!pass) return null;
+      if (pass.redeemedAt !== undefined) return { pass: { ...pass }, redeemed: false };
+      pass.redeemedAt = at;
+      pass.redeemedBy = by;
+      await this.append({ type: "redeem", passId, by, at });
+      return { pass: { ...pass }, redeemed: true };
+    });
+  }
+
   // ---- the migration shelf ----
 
   async adopt(sessionKey: string, badgeId: string): Promise<ActorClaim | null> {
@@ -307,6 +363,19 @@ export class FileDesk implements Desk {
         if (!grant || grant.revokedAt !== undefined) return;
         grant.revokedAt = entry.at;
         grant.revokedBy = entry.by;
+        return;
+      }
+      case "pass": {
+        this.state.passes[entry.pass.id] ??= { ...entry.pass };
+        return;
+      }
+      case "redeem": {
+        const pass = this.state.passes[entry.passId];
+        // The first redemption stands, exactly as the first revocation does:
+        // replaying a log must not hand a spent pass to a second badge.
+        if (!pass || pass.redeemedAt !== undefined) return;
+        pass.redeemedAt = entry.at;
+        pass.redeemedBy = entry.by;
         return;
       }
     }

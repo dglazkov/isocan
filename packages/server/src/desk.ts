@@ -1,4 +1,4 @@
-import type { ActorClaim, Grant } from "@isocan/core";
+import type { ActorClaim, Grant, Pass } from "@isocan/core";
 
 /**
  * The desk: the home's PRIVATE ledgers — who holds a badge, what it has been
@@ -31,6 +31,12 @@ import type { ActorClaim, Grant } from "@isocan/core";
  * the journey's rule 5" — so putting them behind this seam is what makes "no
  * grant ever appears in an oplog envelope" a fact about the code rather than
  * a convention somebody could break by adding an op.
+ *
+ * Phase 8 adds the THIRD: passes, at `passes/{id}`, in exactly the shape the
+ * grants ledger has and for exactly the same reason — a pass is a credential
+ * an innkeeper hands out, it must never travel to a replica, and the seam is
+ * what makes that a fact rather than a convention. It is the one ledger with
+ * a genuinely single-use row, and `redeemPass` is where that lives.
  *
  * ## The rule a query-backed desk lives or dies by
  *
@@ -76,8 +82,13 @@ export type Provenance =
    * reason phase 7 is careful to write `grant` from the first admission.
    */
   | { root: "link" }
-  /** Redeemed a pass (phase 8). A pass-derived admission inherits the ROOT of
-   * the badge that minted the pass, so a sweep reaches it too. */
+  /**
+   * Redeemed a pass (phase 8). `badgeId` is the badge that MINTED it, which is
+   * what makes the chain walkable: a pass-derived admission inherits the root
+   * of its minter, one hop at a time, so a sweep that starts at a revoked
+   * grant reaches Jordan's daemon and Nico however many passes away they are.
+   * Written by `redeemPass` in `passes.ts` and nowhere else.
+   */
   | { root: "pass"; badgeId: string }
   /** Admitted by a grant — the ordinary case from phase 7 on. */
   | { root: "grant"; grantId: string };
@@ -126,6 +137,20 @@ export interface BadgeRecord {
   /** Who this badge may speak as. Several, on purpose: a browser's personas,
    * or everyone a machine's daemon relays. */
   claims: ActorClaim[];
+}
+
+/**
+ * One pass, as the desk holds it: the wire row plus the secret's hash.
+ *
+ * The split is the badge's, for the badge's reason. `Pass` (in core) is what
+ * the API hands back and what a caller may keep; the hash never crosses the
+ * wire and never leaves this seam, so a leaked ledger leaks no redeemable
+ * tokens. SHA-256 and not a KDF, again for the badge's reason: the secret is
+ * 256 bits of CSPRNG, there is no dictionary to slow down, and the comparison
+ * is timing-safe because that is the threat that is real.
+ */
+export interface PassRecord extends Pass {
+  secretHash: string;
 }
 
 export interface Desk {
@@ -236,6 +261,46 @@ export interface Desk {
    * the same answer either way.
    */
   revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
+
+  // ---- passes: what an admitted badge hands an unadmitted one (phase 8) ----
+
+  /**
+   * Write a freshly minted pass. A plain document write at `passes/{id}`: the
+   * id is minted by the caller and a pass is never edited except by being
+   * redeemed, which is `redeemPass` below.
+   */
+  putPass(pass: PassRecord): Promise<void>;
+
+  /** The pass behind a presented id, or null for one this home does not know.
+   * The desk seam's no-fallback rule in its plainest form: an unknown pass
+   * answers nothing, and the route turns that into `unknown-pass`. */
+  pass(passId: string): Promise<PassRecord | null>;
+
+  /**
+   * **Spend a pass, at most once, ever.**
+   *
+   * The whole security property of a pass lives in this one method, so its
+   * contract is stated rather than implied: two redemptions of one pass
+   * racing — two terminals, two tabs, a retry that was not as failed as it
+   * looked — must not both win. Exactly one caller gets `redeemed: true`; the
+   * other gets `redeemed: false` and the row as the winner left it, so it can
+   * say *when* and *by whom* rather than "no".
+   *
+   * `null` means there is no such pass at all, which is a different answer
+   * from "already spent" and must stay one (phase 7's finding: a caller must
+   * be able to tell them apart).
+   *
+   * Expiry is deliberately NOT judged here. It is a pure function of the row
+   * and the clock, the caller has both, and a desk method that could refuse
+   * for two unrelated reasons is a method whose callers stop reading the
+   * answer. `CloudDesk` implements this as a transaction; `FileDesk` gets it
+   * from its own serialized write chain.
+   */
+  redeemPass(
+    passId: string,
+    at: string,
+    by: string,
+  ): Promise<{ pass: PassRecord; redeemed: boolean } | null>;
 
   // ---- the migration shelf; it dies when it empties ----
 

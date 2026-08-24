@@ -2,7 +2,17 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CANVAS_PATH_PREFIX, CANVAS_ROUTE, canvasPath, canvasUrl } from "../src/address.ts";
+import {
+  CANVAS_PATH_PREFIX,
+  CANVAS_ROUTE,
+  INSTALL_SPEC,
+  canvasPath,
+  canvasUrl,
+  canvasUrlWithPass,
+  parseCanvasAddress,
+  setupCommand,
+  splitPassFragment,
+} from "../src/address.ts";
 
 /**
  * **One spelling of a canvas's address.**
@@ -28,6 +38,102 @@ describe("a canvas's address", () => {
     expect(CANVAS_PATH_PREFIX).toBe("/p");
     expect(CANVAS_ROUTE).toBe("/p/:projectId");
     expect(canvasPath("prj_acme")).toBe("/p/prj_acme");
+  });
+
+  it("carries an escalation pass in the FRAGMENT, and takes it back off", () => {
+    const token = "pss_abc123.s3cr3t-value_x";
+    const address = canvasUrlWithPass("https://isocan.io", "prj_acme", token);
+    // A fragment, never a query parameter: `#` is not sent to a server, so a
+    // pass pasted into a browser by mistake never reaches an access log — and
+    // the round trip is what the dialog (which builds it) and `setup` (which
+    // reads it) both depend on.
+    expect(address).toBe(`https://isocan.io/p/prj_acme#${token}`);
+    expect(splitPassFragment(address)).toEqual({
+      address: "https://isocan.io/p/prj_acme",
+      pass: token,
+    });
+  });
+
+  it("treats a bare address, and a trailing #, as no pass at all", () => {
+    expect(splitPassFragment("https://isocan.io/p/prj_acme")).toEqual({
+      address: "https://isocan.io/p/prj_acme",
+    });
+    // A trailing `#` is what a copy-paste leaves behind; asking the home to
+    // redeem the empty string would turn a typo into a refusal.
+    expect(splitPassFragment("https://isocan.io/p/prj_acme#")).toEqual({
+      address: "https://isocan.io/p/prj_acme",
+    });
+    // Everything after the FIRST hash is the token, so a mangled paste is
+    // refused by the desk rather than silently truncated into a different one.
+    expect(splitPassFragment("https://isocan.io/p/prj_acme#a#b")).toEqual({
+      address: "https://isocan.io/p/prj_acme",
+      pass: "a#b",
+    });
+  });
+
+  it("reads an address back apart, filling in the scheme a person did not type", () => {
+    // Scene 5's literal command has no scheme — `setup isocan.io/p/7f3a…` —
+    // and neither does an address copied out of a browser bar, because every
+    // browser hides `https://` on display. Refusing would be defensible and
+    // would fail the exact paste the scene is built around.
+    expect(parseCanvasAddress("isocan.io/p/prj_acme")).toEqual({
+      origin: "https://isocan.io",
+      projectId: "prj_acme",
+    });
+    expect(parseCanvasAddress("https://isocan.io/p/prj_acme#pss_1.s3cret")).toEqual({
+      origin: "https://isocan.io",
+      projectId: "prj_acme",
+      pass: "pss_1.s3cret",
+    });
+    // Loopback gets http, because nobody runs TLS on 127.0.0.1 and the one
+    // place a scheme-less loopback address is typed is a developer's terminal.
+    expect(parseCanvasAddress("127.0.0.1:4441/p/prj_acme")).toEqual({
+      origin: "http://127.0.0.1:4441",
+      projectId: "prj_acme",
+    });
+    // A trailing slash is what a browser adds; it is not a different canvas.
+    expect(parseCanvasAddress("https://isocan.io/p/prj_acme/")?.projectId).toBe("prj_acme");
+    // Round trip, both directions, against the one writer.
+    const built = canvasUrlWithPass("https://isocan.io", "prj_acme", "pss_1.s3cret");
+    expect(parseCanvasAddress(built)).toEqual({
+      origin: "https://isocan.io",
+      projectId: "prj_acme",
+      pass: "pss_1.s3cret",
+    });
+  });
+
+  it("refuses everything that is not exactly one canvas", () => {
+    // Null, never a partial answer: `isocan setup` has to decide between "this
+    // is an address" and "this is a directory", and a near-miss that parsed
+    // into something plausible is phase 7's cheerful wrong address.
+    for (const nope of [
+      "",
+      "isocan.io", // a home, not a canvas
+      "isocan.io/prj_acme", // the prefix people guess
+      "isocan.io/c/prj_acme", // the prefix the DOCS used to guess
+      "isocan.io/p/", // no canvas named
+      "isocan.io/p/prj_acme/extra", // a deeper page is a different page
+      "ftp://isocan.io/p/prj_acme",
+      "./some/dir",
+    ]) {
+      expect(parseCanvasAddress(nope), nope).toBeNull();
+    }
+  });
+
+  it("builds Scene 5's whole command, with the branch on the install spec", () => {
+    // The one command a person pastes, built rather than written: the CLI's
+    // `isocan pass` and the web app's "Work from your terminal…" dialog both
+    // hand over this exact string, so they cannot disagree.
+    expect(setupCommand("https://isocan.io", "prj_acme", "pss_1.s3cret")).toBe(
+      `npx ${INSTALL_SPEC} setup https://isocan.io/p/prj_acme#pss_1.s3cret`,
+    );
+    // The pass-less form is the same builder: what a person is handed when the
+    // link grant is open and no credential is needed to arrive.
+    expect(setupCommand("https://isocan.io", "prj_acme")).toBe(
+      `npx ${INSTALL_SPEC} setup https://isocan.io/p/prj_acme`,
+    );
+    // #47: a branchless spec installs an EMPTY directory and a dangling bin.
+    expect(INSTALL_SPEC).toContain("#release");
   });
 
   it("joins an origin without doubling or dropping the slash", () => {

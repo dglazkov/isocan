@@ -1,7 +1,7 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
 import type { ActorClaim, Grant } from "@isocan/core";
 import { SHELF } from "@isocan/core";
-import type { Admission, BadgeRecord, Desk, Provenance } from "@isocan/server";
+import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
 /** `grants/{id}` — the architecture's other desk row, one document per grant,
@@ -10,6 +10,13 @@ export const BADGES = "badges";
  * replicates, the desk's ledgers never leave the home, and a grant that rode
  * on a project document would be a grant that travelled. */
 export const GRANTS = "grants";
+/** `passes/{id}` — the desk's third row (phase 8). A collection for the same
+ * reason grants are one, plus a sharper one: a pass is redeemed exactly once,
+ * and single-use across two instances of a home has to be a TRANSACTION on
+ * one document. A pass that lived inside an array on some other document
+ * would be a pass whose spending raced with every other write to that
+ * document. */
+export const PASSES = "passes";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -32,9 +39,9 @@ const TOUCH_DEBOUNCE_MS = 60_000;
 const DISJUNCTION_LIMIT = 30;
 
 /**
- * The desk on Firestore: one document per badge at `badges/{badgeId}`, and
- * from phase 7 one per grant at `grants/{id}` — exactly the shapes the
- * architecture draws.
+ * The desk on Firestore: one document per badge at `badges/{badgeId}`, from
+ * phase 7 one per grant at `grants/{id}`, and from phase 8 one per pass at
+ * `passes/{id}` — exactly the shapes the architecture draws.
  *
  * ## The three arrays, and why there is exactly one writer
  *
@@ -224,6 +231,49 @@ export class CloudDesk implements Desk {
     });
   }
 
+  // ---- passes ----
+
+  async putPass(pass: PassRecord): Promise<void> {
+    await this.db.collection(PASSES).doc(pass.id).set(jsonSafe(pass));
+  }
+
+  async pass(passId: string): Promise<PassRecord | null> {
+    const doc = await this.db.collection(PASSES).doc(passId).get();
+    return doc.exists ? toPass(doc.data()!) : null;
+  }
+
+  /**
+   * **Single-use, across instances, in a transaction.**
+   *
+   * `adopt` is the model and the resemblance is not stylistic: both are
+   * first-come read-modify-writes where two winners would be a real bug rather
+   * than a lost update. Here the stakes are higher — two badges redeeming one
+   * pass would each be admitted to a canvas that was invited to admit exactly
+   * one. A `get`-then-`set` outside a transaction would let both reads see an
+   * unspent row and both writes succeed, and it would do so precisely under
+   * the conditions that matter (a person pasting one command twice, two
+   * instances of the home mid-rollout).
+   *
+   * The loser is handed the row the WINNER wrote, which is what lets the route
+   * answer "already redeemed, at 14:02" instead of "no".
+   */
+  async redeemPass(
+    passId: string,
+    at: string,
+    by: string,
+  ): Promise<{ pass: PassRecord; redeemed: boolean } | null> {
+    const ref = this.db.collection(PASSES).doc(passId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return null;
+      const pass = toPass(doc.data()!);
+      if (pass.redeemedAt !== undefined) return { pass, redeemed: false };
+      const spent: PassRecord = { ...pass, redeemedAt: at, redeemedBy: by };
+      tx.set(ref, jsonSafe(spent));
+      return { pass: spent, redeemed: true };
+    });
+  }
+
   // ---- the migration shelf ----
 
   /**
@@ -337,6 +387,22 @@ function toGrant(data: DocumentData): Grant {
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
+  };
+}
+
+/** A pass document, back as a record. Nothing is derived here either: a pass
+ * is only ever fetched by id, because it is presented rather than listed. */
+function toPass(data: DocumentData): PassRecord {
+  return {
+    id: data["id"] as string,
+    canvasId: data["canvasId"] as string,
+    mintedBy: data["mintedBy"] as string,
+    secretHash: data["secretHash"] as string,
+    createdAt: data["createdAt"] as string,
+    expiresAt: data["expiresAt"] as string,
+    ...(typeof data["actorId"] === "string" ? { actorId: data["actorId"] } : {}),
+    ...(typeof data["redeemedAt"] === "string" ? { redeemedAt: data["redeemedAt"] } : {}),
+    ...(typeof data["redeemedBy"] === "string" ? { redeemedBy: data["redeemedBy"] } : {}),
   };
 }
 

@@ -149,6 +149,26 @@ and redo are the home's, and `wait` and `tail` are cursor-based — but
 "sovereignty by replica is also disaster recovery" is a claim about the
 canvas, not about its oplog, and this is the line that says so.
 
+**Which canvases a replica holds, as of phase 8.** Not "the ones its
+home will show it" — **the ones it was let into**. A replica's sweep asks
+its home `GET /api/projects?reach=admitted`, which is that badge's
+admissions and nothing else, and unions the answer with what this machine
+already holds locally (so a home that is down cannot make a laptop forget
+its work, and a canvas born here survives on its own store as well as on
+the `{root: "created"}` admission the home wrote when it was made). The
+listing route still answers the WIDE question by default, because a
+browser asks a different question on the same route — "what can I open
+from here", which on a solo home includes the canvas a CLI just made
+under a badge the tab has never carried — and the caller states which,
+never the route sniffing who called. Enumerate-and-mirror was the easiest
+thing that worked while a home had one member; it is how a stranger's
+canvas landed on a laptop the moment a link grant was on. An arrival that
+holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
+`isocan setup` — asks for that one canvas by name (`POST
+/api/home/join`), and the home runs the same door test it would have run
+when the sweep dialled. **This is what makes the pass load-bearing**:
+redemption is what writes the admission that a machine then mirrors.
+
 **Deploy overlap is the one moment two instances exist.** During a
 rollout the old instance drains while the new one starts. Two writers
 against one oplog is the disaster the whole design forbids, so the
@@ -389,13 +409,6 @@ sequence is [phases.md](phases.md)):
   queue.
 - The Share dialog and grant routes; registrations and the dispatch
   path.
-- **Which canvases a replica replicates.** The home connection discovers
-  them by polling `GET /api/projects`, which is home-wide rather than
-  scoped to the asking badge's admissions — so a replica of a
-  MULTI-TENANT home would mirror strangers' canvases onto its own disk.
-  Correct today, because a solo home has one member and that is what
-  phase 6 proves; wrong the moment a home has two. The narrowing is
-  mechanism 10's and belongs on the route, in phase 7.
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
   uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is

@@ -16,7 +16,10 @@ import type { BadgeRecord, Desk } from "./desk.ts";
  *   (phase 8) → an attestation satisfies a grant → refused
  *
  * Everything above is a call site's business except the last two, which are
- * here.
+ * here. The pass branch turned out not to be a branch at all: phase 8 spends a
+ * pass at its own route, which writes the admission itself, so by the time a
+ * pass-enrolled badge asks for anything it is answered by the first test.
+ * `http.ts`'s `admit` carries that argument where somebody would look for it.
  */
 
 /**

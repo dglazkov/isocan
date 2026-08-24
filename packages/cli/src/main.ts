@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import type {
   Actor,
+  CanvasAddress,
   CanvasSnapshotResponse,
   GrantSubject,
   Comment,
@@ -28,9 +29,14 @@ import {
   DRAWING_TITLE,
   COMMAND_NAME,
   IDENTITY_COLORS,
+  INSTALL_SPEC,
   LINK,
+  PASS_TTL_MS,
   actorNameIn,
   canvasUrl,
+  canvasUrlWithPass,
+  parseCanvasAddress,
+  setupCommand,
   actorsAnswerTo,
   cancelledSince,
   commandFileText,
@@ -97,6 +103,7 @@ import {
 import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
+  adoptIdentity,
   readIdentity,
   claimSessionIdentity,
   HOME_CLAIM_KEY,
@@ -935,32 +942,17 @@ program
         return;
       }
 
-      if (override) {
-        throw new Error(
-          `ISOCAN_HOME_URL=${override} is set in this shell and wins over the config file — ` +
-            "unset it first (`unset ISOCAN_HOME_URL`), then run this again",
-        );
-      }
-
       const target = opts.clear ? null : normalizeHomeUrl(url!);
-      const reachable = target ? await homeAnswers(target) : null;
-      if (reachable && !reachable.ok && !opts.force) {
-        // Phase 6 made this loud for a reason: a replica that cannot reach its
-        // home REFUSES every write, with nothing queued. Walking somebody into
-        // that quietly is exactly what this verb must not do — so say it, and
-        // offer the honest escape rather than deciding for them.
-        throw new Error(
-          `nothing answered at ${target} (${reachable.why}) — a daemon whose home is ` +
-            "unreachable refuses every write, and nothing is queued. " +
-            `\`isocan home ${target} --force\` sets it anyway.`,
-        );
-      }
+      const { changed, stopped, reachable } = await pointDaemonAtHome({
+        isocanHome,
+        port,
+        target,
+        configured,
+        live,
+        force: opts.force ?? false,
+      });
 
-      // A no-op is a no-op: pointing a daemon at the home it already answers
-      // to should not bounce it. Restarting is cheap but not free — anything
-      // parked on `isocan wait` loses its socket — so it happens only when
-      // something actually changed.
-      if (configured === target && live === target) {
+      if (!changed) {
         if (globals.json) {
           return printJson({
             role: target ? "replica" : "home",
@@ -976,20 +968,6 @@ program
         return;
       }
 
-      if (target) config.home = target;
-      else delete config.home;
-      await writeConfig(isocanHome, config);
-
-      // The daemon reads its home once, at boot. Writing the file is half the
-      // gesture; the restart is what makes it true.
-      const { stopped, health: after } = await restartDaemon(isocanHome, port);
-      const became = after?.home ?? null;
-      if (became !== target) {
-        throw new Error(
-          `wrote ${paths.configFile(isocanHome)} but the daemon came back as ` +
-            `${became ? `a replica of ${became}` : "a home"} — check that file`,
-        );
-      }
       if (globals.json) {
         return printJson({
           role: target ? "replica" : "home",
@@ -1013,6 +991,81 @@ program
       });
     }),
   );
+
+/**
+ * **Point this daemon at a home, for real** — the machinery behind
+ * `isocan home <url>`, extracted in phase 8 because `isocan setup <address>`
+ * has to do the identical thing.
+ *
+ * Extracted rather than reimplemented, and rather than shelling out to
+ * `isocan home`. Scene 5's one command is Priya's three steps collapsed into
+ * a line, and the first of those steps IS "answer to that home" — so setup
+ * needs this whole sequence, refusals included. A second way to write
+ * `config.json` would be a second place for the `ISOCAN_HOME_URL` refusal, the
+ * reachability check and the read-once-at-boot restart to drift, and the
+ * symptom of that drift is a daemon that reports a home it is not serving.
+ *
+ * Everything here is `isocan home`'s reasoning, unchanged:
+ *
+ * - the environment variable WINS over the file, so writing the file while it
+ *   is set changes nothing and the restart would silently come back on the
+ *   variable's address. Refusing is the only honest answer.
+ * - a home that does not answer is REPORTED, not quietly accepted: a replica
+ *   that cannot reach its home refuses every write and queues nothing.
+ *   `--force` is the escape, and it is the caller's to offer.
+ * - a no-op does not bounce the daemon — anything parked on `isocan wait`
+ *   loses its socket to a restart, and pointing a daemon at the home it
+ *   already answers to should cost nobody their connection.
+ * - the daemon reads its home once, at boot, so the restart is what makes the
+ *   write true, and the health route afterwards is what proves it did.
+ */
+async function pointDaemonAtHome(opts: {
+  isocanHome: string;
+  port: number;
+  /** The address to answer to; null clears it and makes this daemon a home. */
+  target: string | null;
+  /** What `config.json` says now, and what the running daemon actually is. */
+  configured: string | null;
+  live: string | null;
+  force: boolean;
+}): Promise<{
+  changed: boolean;
+  stopped: number[];
+  reachable: { ok: boolean; why: string } | null;
+}> {
+  const { isocanHome, port, target, configured, live, force } = opts;
+  const override = process.env.ISOCAN_HOME_URL?.trim();
+  if (override) {
+    throw new Error(
+      `ISOCAN_HOME_URL=${override} is set in this shell and wins over the config file — ` +
+        "unset it first (`unset ISOCAN_HOME_URL`), then run this again",
+    );
+  }
+  const reachable = target ? await homeAnswers(target) : null;
+  if (reachable && !reachable.ok && !force) {
+    throw new Error(
+      `nothing answered at ${target} (${reachable.why}) — a daemon whose home is ` +
+        "unreachable refuses every write, and nothing is queued. " +
+        `\`isocan home ${target} --force\` sets it anyway.`,
+    );
+  }
+  if (configured === target && live === target) return { changed: false, stopped: [], reachable };
+
+  const config = await readConfig(isocanHome);
+  if (target) config.home = target;
+  else delete config.home;
+  await writeConfig(isocanHome, config);
+
+  const { stopped, health: after } = await restartDaemon(isocanHome, port);
+  const became = after?.home ?? null;
+  if (became !== target) {
+    throw new Error(
+      `wrote ${paths.configFile(isocanHome)} but the daemon came back as ` +
+        `${became ? `a replica of ${became}` : "a home"} — check that file`,
+    );
+  }
+  return { changed: true, stopped, reachable };
+}
 
 /**
  * A home address, as somebody would type it — and the refusals that show the
@@ -1157,9 +1210,31 @@ program
     }),
   );
 
+/**
+ * **`isocan open` — and the pass it quietly hands the browser it spawns.**
+ *
+ * Mechanism 2's line, and the reason a person's second machine is not a
+ * stranger in their own browser: *"`isocan open` appends a pass minted by her
+ * daemon's badge — Scene 5's outward flow, pointed the other way."* It matters
+ * twice over. It keeps her own surfaces working when she turns the LINK GRANT
+ * OFF, since a pass admits regardless of what the link says; and it carries
+ * whatever actor claim this machine's badge holds — on a pass-enrolled
+ * machine, herself — so picking "Priya" in the browser is a resume rather than
+ * a re-mint or a refusal.
+ *
+ * **The pass goes to the BROWSER and never to the terminal.** The spawned tab
+ * gets the fragment; the line printed on stdout is the clean, pass-less
+ * address. That asymmetry is the whole point and it is not an oversight to be
+ * tidied up later: the printed line is what an agent copies onto a thread and
+ * what a person pastes into Slack, and a bearer credential that rides into a
+ * chat log because a verb printed it is not a mistake anybody gets to make
+ * twice. A fragment never reaches a server, so the spawned URL leaks into no
+ * access log either — the browser's own history is where it ends, and it is
+ * spent the moment the page loads.
+ */
 program
   .command("open")
-  .description("Open the project in your browser")
+  .description("Open the project in your browser — as you, with a one-use pass the browser keeps")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -1168,15 +1243,63 @@ program
       // always enter through the home, so the address a person is handed is
       // the home's when there is one — opening `127.0.0.1` on a replica lands
       // them on `registerHomeElsewhere`'s 404, which is a correct answer to
-      // the wrong question.
+      // the wrong question. (On a replica the pass is minted at the home too,
+      // by the daemon forwarding: that is where the badge lives that the
+      // browser's redemption will be judged against.)
       const url = canvasUrl(ctx.homeUrl ?? ctx.client.base, project.id);
-      spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
-        stdio: "ignore",
-        detached: true,
-      }).unref();
+      const token = await browserPass(ctx, project.id);
+      spawn(
+        process.platform === "darwin" ? "open" : "xdg-open",
+        [token ? canvasUrlWithPass(ctx.homeUrl ?? ctx.client.base, project.id, token) : url],
+        { stdio: "ignore", detached: true },
+      ).unref();
       console.log(url);
     }),
   );
+
+/**
+ * The pass `isocan open` hands the browser, or null when there is none to be
+ * had.
+ *
+ * **It endows the machine's PERSON, not whoever typed the command**, and that
+ * is a real decision. The one-origin rule says the daemon serves ops to CLIs
+ * and never pages to persons — so whoever is about to look at the page this
+ * spawns is the human who owns this machine, not the agent that ran the verb.
+ * An agent's `isocan open` that made the browser be *Nico* would be the
+ * directory-identity bug (#56) reborn in a new slot: the last agent through
+ * the door becomes the user. So the actor comes from `identity.json`, the one
+ * slot that belongs to the human, and an agent-only machine (no person in that
+ * file at all) mints the admission-only shape instead — which is still worth
+ * having, because admission is the half that survives the link being switched
+ * off.
+ *
+ * **Nothing here may break `open`.** Opening the canvas is the job; the pass
+ * is an improvement on it. A home that cannot be reached, a claim the badge
+ * cannot prove, a daemon too old to have the route — every one of them lands
+ * on the plain address, which is exactly what this verb printed for its whole
+ * life before phase 8.
+ */
+async function browserPass(ctx: Ctx, projectId: string): Promise<string | null> {
+  const person = await readIdentity(ctx.home);
+  try {
+    if (!person) return (await ctx.client.mintPass(projectId)).token;
+    try {
+      return (await ctx.client.mintPass(projectId, person.id)).token;
+    } catch (err) {
+      // `not-your-actor` means this machine's badge has never claimed its own
+      // human — the home identity is a local file that nothing ever claimed
+      // (see `reclaimIdentity`). `DaemonClient` retries that refusal on its
+      // own, but with the key of whoever this COMMAND speaks as, which for an
+      // agent is not the person we are asking about. So claim the person's
+      // key explicitly and ask once more.
+      if (!(err instanceof ApiError) || err.code !== "not-your-actor") throw err;
+      await reclaimIdentity(ctx.client, { actor: person, key: HOME_CLAIM_KEY });
+      return (await ctx.client.mintPass(projectId, person.id)).token;
+    }
+  } catch {
+    return null;
+  }
+}
 
 /**
  * **Share** — the verb half of the Share dialog, and the first gesture in this
@@ -1261,6 +1384,106 @@ program
   );
 
 /**
+ * **`isocan pass` — the escalation credential, minted from a terminal.**
+ *
+ * The journey is explicit that Scene 5's dialog is not the only way to get
+ * one: *"any admitted session can mint the same pass from the CLI — how Priya
+ * would enroll her own second machine."* Isomorphism is a house rule here, not
+ * a courtesy, and this is the verb half of the button stage 3 builds. Neither
+ * surface spells the command: `setupCommand` in `@isocan/core` does, so the
+ * string the dialog shows and the string this prints agree by construction
+ * rather than by two people remembering the same thing.
+ *
+ * **It is named after the thing it makes.** Every other name considered read
+ * as the wrong gesture: `isocan enroll` and `isocan escalate` are imperatives
+ * about a machine, and the machine they name is the one being enrolled — which
+ * is the machine running `setup`, not this one. `isocan invite` is `isocan
+ * share`, which already exists and is a different act. "Pass" is the word the
+ * design, the journey, the refusal codes and the desk all already use.
+ *
+ * **What it prints is the whole command, never a bare token**, for one reason:
+ * a person holding a bare token has to be told what to do with it, and being
+ * told what to do with a credential is how credentials end up in the wrong
+ * place. A line that begins `npx` is a line you paste into a terminal.
+ *
+ * **Share versus pass — the distinction to keep straight.** `isocan share`
+ * hands a PERSON an address; they arrive thin, in a browser, and the door
+ * decides. `isocan pass` hands a MACHINE a credential; it arrives thick,
+ * admitted whatever the link grant says, and — by default — being you. The
+ * first is an invitation and the second is a key, so the second is
+ * short-lived, single-use, and not something to post anywhere.
+ */
+program
+  .command("pass")
+  .description(
+    "Mint a short-lived, single-use pass: the one command that puts another machine of yours on this canvas",
+  )
+  .option(
+    "--admit-only",
+    "admit the machine but hand over no identity — it names itself when it arrives",
+  )
+  .action(
+    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const project = await resolveProject(ctx);
+      // The one origin again: a pass is redeemed at the home, and the address
+      // it rides on is the address a person enters through.
+      const origin = ctx.homeUrl ?? ctx.client.base;
+      /**
+       * **Two real shapes, and the default endows.**
+       *
+       * With a claim, the machine that redeems it arrives BEING you — Scene
+       * 5's "the CLI arrives knowing who it speaks for", and the only honest
+       * way to be the same person on a second surface, since self-claiming a
+       * worn name is either refused or impersonation. That is the case this
+       * verb exists for ("how Priya would enroll her own second machine"), so
+       * it is what you get by typing nothing.
+       *
+       * `--admit-only` is not a stub. It is Scene 6's shape — Sonia claims her
+       * OWN actor, never Inna's — and day-one `isocan open` before the human
+       * has an actor to resume at all. The design says the claim slot is
+       * optional and means it; a pass that always dragged an identity along
+       * would make "let this machine in" impossible to say.
+       *
+       * The home refuses a claim this badge does not hold (`not-your-actor`,
+       * mechanism 5's own check rather than a second spelling of it), so
+       * "endow somebody else" is not reachable from here by construction.
+       */
+      const actor = opts.admitOnly ? null : ctx.actor;
+      const { pass, token } = await ctx.client.mintPass(project.id, actor?.id);
+      const command = setupCommand(origin, project.id, token);
+      const minutes = Math.round(PASS_TTL_MS / 60_000);
+
+      if (ctx.json) {
+        return printJson({
+          command,
+          // The pass-bearing address, for a caller building its own line. The
+          // clean address is `isocan share`'s, and that is the one to hand a
+          // person — this one is a credential.
+          address: canvasUrlWithPass(origin, project.id, token),
+          canvas: canvasUrl(origin, project.id),
+          expiresAt: pass.expiresAt,
+          ...(actor ? { actor } : {}),
+        });
+      }
+      printKeyValues({
+        canvas: `${project.title} (${canvasUrl(origin, project.id)})`,
+        identity: actor
+          ? `${actor.name} (${actor.id}) — the machine that redeems this arrives as them`
+          : "none — the machine that redeems this is admitted and names itself",
+        expires: `in ${minutes} minutes (${pass.expiresAt})`,
+      });
+      console.log(`\nPaste this into a terminal on the other machine, in an empty directory:\n`);
+      console.log(`  ${command}\n`);
+      console.log(
+        `That line is a credential — it works once, and only for the next ${minutes} minutes.\n` +
+          "Do not post it on a thread and do not commit it. To invite a PERSON, hand them the\n" +
+          "address from `isocan share` instead; they arrive in a browser with nothing installed.",
+      );
+    }),
+  );
+
+/**
  * What a person typed, as a grant subject.
  *
  * It lives here rather than in core because only one surface computes it: the
@@ -1286,15 +1509,6 @@ function grantSubjectOf(who: string): GrantSubject {
 const SKILL_NAME = "isocan-collab";
 const skillSource = () =>
   fileURLToPath(new URL(`../../../.agents/skills/${SKILL_NAME}`, import.meta.url));
-/**
- * How to get this CLI without a registry — the repo is the package, and the
- * `release` branch is the installable face of it: same tree, plus the built
- * web app, minus the manifest keys npm's git installer trips over. Installing
- * from `main` puts an EMPTY directory on your disk and a dangling `isocan` on
- * your PATH (#47) — see scripts/release.mjs for the whole story.
- */
-const INSTALL_SPEC = "github:dglazkov/isocan#release";
-
 async function exists(target: string): Promise<boolean> {
   return fs.stat(target).then(() => true, () => false);
 }
@@ -1348,10 +1562,60 @@ async function runningFromCheckout(): Promise<boolean> {
 /** This copy's package root — the thing a daemon's `root` is compared against. */
 const myRoot = () => fileURLToPath(new URL("../../..", import.meta.url));
 
+/**
+ * **Is this argument a directory, or the address of a canvas to join?**
+ *
+ * `isocan setup [dir]` has meant "ready this directory" since #42, and Scene 5
+ * gives the same word a second object: `setup isocan.io/p/7f3a…#<pass>`. An
+ * argument that is *sometimes* a path and *sometimes* a URL is the kind of
+ * thing that reads as obvious for a month and then bites, so the rule is
+ * written down here rather than inferred at the call site, and it is decided
+ * by the SHAPE of the string — never by what happens to exist on disk. A
+ * disambiguation that asked the filesystem would mean `setup ./isocan.io` did
+ * different things on two machines.
+ *
+ * In order, and the order is the whole rule:
+ *
+ * 1. **Anything that starts like a path is a path.** `.`, `..`, `/`, `~`, and
+ *    a Windows drive letter. This is first so that a directory can always be
+ *    named unambiguously — `setup ./whatever` is a directory even if somebody
+ *    creates one called `isocan.io`.
+ * 2. **Anything `parseCanvasAddress` accepts is an address**, pass and all.
+ *    That is the same parser `@isocan/core` uses to spell the address in the
+ *    first place, so "what setup accepts" and "what the dialog produces"
+ *    cannot drift.
+ * 3. **Anything that is trying to be an address is refused as one.** A scheme,
+ *    or a first segment shaped like a hostname (a dot or a port, or
+ *    `localhost`), means the person pasted an address — and a near-miss must
+ *    say so, not go looking for a directory named `isocan.io/7f3a`. Phase 7's
+ *    finding is that this system's default answer to a wrong address is a
+ *    cheerful one; this is the same class of mistake at the one gesture where
+ *    the person typing is a stranger who was thin thirty seconds ago.
+ * 4. **Everything else is a directory**, exactly as before.
+ *
+ * Returns null for "this is a directory", so the caller reads as a branch
+ * rather than as a catch.
+ */
+function setupAddress(raw: string): CanvasAddress | null {
+  if (/^([.~]|\/|[a-zA-Z]:[\\/])/.test(raw)) return null;
+  const parsed = parseCanvasAddress(raw);
+  if (parsed) return parsed;
+  const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw);
+  const host = raw.split("/")[0] ?? "";
+  const hostish = /^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?$/i.test(host);
+  if (!scheme && !hostish) return null;
+  throw new Error(
+    `that is not a canvas address: "${raw}" — one looks like ` +
+      "isocan.io/p/prj_7f3a, with the pass on the end when you were given one " +
+      "(isocan.io/p/prj_7f3a#<pass>). `isocan share` on a machine that is " +
+      "already on the canvas prints the address; `isocan pass` prints the whole command.",
+  );
+}
+
 program
-  .command("setup [dir]")
+  .command("setup [target]")
   .description(
-    "Ready a directory for canvas work: the skill agents read, the CLI they run, the daemon serving the app",
+    "Ready a directory for canvas work — or, given a canvas address, put this machine on that canvas",
   )
   .option("--no-install", "don't install the isocan CLI when it isn't on PATH")
   .option("--open", "open the app in a browser (default when you're at a terminal)")
@@ -1360,20 +1624,37 @@ program
   .action(
     run(
       async (
-        dir: string | undefined,
+        target: string | undefined,
         opts: { install?: boolean; open?: boolean; force?: boolean },
         cmd: Command,
       ) => {
         const globals = cmd.optsWithGlobals() as { json?: boolean };
-        const target = path.resolve(dir ?? process.cwd());
-        if (!(await exists(target))) throw new Error(`no such directory: ${target}`);
+        /**
+         * **Scene 5's one command, or the directory setup has always taken.**
+         *
+         * "One command — Priya's three steps collapsed to a line, because the
+         * address carries everything setup would otherwise ask." What the
+         * address carries is: which home to answer to (its origin), which
+         * canvas this directory is (its path), and — in the fragment, which no
+         * server ever sees — the credential that makes this machine's badge
+         * welcome there and tells it whose it is.
+         *
+         * The joining form runs in the CWD, deliberately, and takes no
+         * directory of its own. The scene is a person pasting into "a terminal
+         * in an empty directory"; a `setup <address> <dir>` would be a second
+         * argument nobody in the scene types, and the directory a person means
+         * is the one they are standing in.
+         */
+        const arrival = target === undefined ? null : setupAddress(target);
+        const work = arrival ? process.cwd() : path.resolve(target ?? process.cwd());
+        if (!(await exists(work))) throw new Error(`no such directory: ${work}`);
         const report: Record<string, string> = {};
 
-        const skill = await installSkill(target, opts.force ?? false);
+        const skill = await installSkill(work, opts.force ?? false);
         report.skill =
           skill.state === "differs"
-            ? `${path.relative(target, skill.path)} — differs from this build's copy; --force to refresh`
-            : `${path.relative(target, skill.path)} (${skill.state})`;
+            ? `${path.relative(work, skill.path)} — differs from this build's copy; --force to refresh`
+            : `${path.relative(work, skill.path)} (${skill.state})`;
 
         // The skill's every instruction starts with `isocan`, so a setup that
         // leaves it unrunnable has set up nothing — and "runnable" means from
@@ -1407,12 +1688,18 @@ program
           }
         }
 
-        // Setup deliberately creates NO canvas, and so needs no identity of
+        // Setup with no address creates NO canvas, and so needs no identity of
         // its own. Making one here would stamp it with whoever typed the
         // command — often an agent, acting for a person who has not said their
         // name yet. The web app is where the human names themselves, and
         // making a canvas there is one click; a name picked in the browser is
         // the person's, which is the point.
+        //
+        // The JOINING form does not break that rule, it satisfies it from the
+        // other side: it creates no canvas either — the canvas already exists
+        // at the home and arrives here by replication — and the identity it
+        // ends up holding was chosen by the person in a browser and HANDED
+        // over, never minted here.
         const home = paths.isocanHome();
         const port = daemonPort(cmd);
         const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
@@ -1462,6 +1749,101 @@ program
           report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
         }
 
+        let daemonUp = report.app === client.base;
+
+        /**
+         * **Step one of the collapsed three: answer to that home.**
+         *
+         * `isocan home`'s machinery, not a second copy of it — same refusals
+         * (an `ISOCAN_HOME_URL` in the shell wins over the file and is
+         * refused rather than silently ignored; a home that does not answer is
+         * named rather than accepted), same write, same restart, because a
+         * daemon reads its home once at boot.
+         *
+         * `--force` is deliberately NOT passed through. On `isocan home` it is
+         * the escape for somebody who knows their home is down and means it
+         * anyway; here the very next thing we do is redeem a pass AT that
+         * home, so an unreachable address is not a warning, it is the end of
+         * the command — and the refusal says which address and why.
+         */
+        if (arrival && daemonUp) {
+          const health = await client.healthz(2000);
+          const configured = (await readConfig(home)).home?.trim() || null;
+          /**
+           * **A machine that already answers to a different home is not
+           * repointed by a pasted line.**
+           *
+           * The same refusal `ctx.ts` makes about a marker naming a foreign
+           * home, one level up: this one moves the whole MACHINE, so every
+           * other directory bound to the old home would start refusing every
+           * command, and the person would have no idea why. Escalation is
+           * supposed to be one command; it is not supposed to be one command
+           * with a demolition inside it.
+           *
+           * Deliberately narrow. A daemon that is its own home IS repointed
+           * without argument — that is `isocan home <url>` doing exactly what
+           * phase 7.5 shipped it to do, and it is Scene 5's case: a fresh
+           * machine, an empty directory, nothing to lose. (A home holding
+           * canvases of its own is demoted the same way; `isocan home --clear`
+           * puts it back, and no guard here would be honest about what a
+           * person meant.)
+           */
+          const answering = health?.home ?? null;
+          if (answering && answering !== arrival.origin) {
+            throw new Error(
+              `this daemon answers to ${answering}, and that canvas lives at ${arrival.origin}. ` +
+                "Joining it would repoint this whole machine — every directory bound to " +
+                `${answering} would stop working. If that is really what you mean, do it on ` +
+                `purpose: \`isocan home ${arrival.origin}\`, then run this again.`,
+            );
+          }
+          await pointDaemonAtHome({
+            isocanHome: home,
+            port,
+            target: arrival.origin,
+            configured,
+            live: health?.home ?? null,
+            force: false,
+          });
+          daemonUp = await client.health(2000);
+          report.home = arrival.origin;
+        }
+
+        /**
+         * **Step two: redeem the pass, so this machine is admitted and knows
+         * whose it is.**
+         *
+         * The redemption forwards to the home (a pass is desk state; the row
+         * lives where the door is), and what comes back is the ONLY
+         * announcement of the endowed identity there will ever be — a handoff
+         * claim carries no session key, and `GET /api/actors` answers by
+         * session key, so nothing can ask again. It goes straight into
+         * `identity.json`, this machine's person, which is the slot a human at
+         * a fresh terminal resolves from before any daemon exists.
+         *
+         * `adoptIdentity` refuses to overwrite a DIFFERENT person already on
+         * this machine, and setup says so rather than papering over it: a
+         * command pasted out of a chat window is not the gesture that renames
+         * the human who owns a laptop. The badge still holds the handed claim
+         * either way — what is lost is only the convenience of it being the
+         * default identity here.
+         *
+         * A pass-less address is a real and supported form; see below.
+         */
+        if (arrival?.pass && daemonUp) {
+          const answer = await client.redeemPass(arrival.pass);
+          if (!answer.actor) {
+            report.identity = "admitted — this pass carried no identity, so name yourself here";
+          } else {
+            const { actor, adopted } = await adoptIdentity(home, answer.actor);
+            report.identity = adopted
+              ? `${actor.name} (${actor.id}) — handed over by the pass, saved to ${paths.identityFile(home)}`
+              : `this machine already answers to ${actor.name} (${actor.id}); the pass's ` +
+                `${answer.actor.name} (${answer.actor.id}) is admitted but not made default — ` +
+                "`isocan whoami` shows which";
+          }
+        }
+
         /**
          * Where the person is sent.
          *
@@ -1471,11 +1853,86 @@ program
          * my daemon up" is still the question it answers; `report.canvas` is
          * the new line, and it is the one a person reads.
          */
-        const daemonUp = report.app === client.base;
         const homeUrl = daemonUp ? ((await client.healthz(2000))?.home ?? null) : null;
         const origin = homeUrl ?? client.base;
         if (homeUrl) {
           report.app = `${client.base} — replica of ${homeUrl} (ops to CLIs, no pages here)`;
+        }
+
+        /**
+         * **Step three: the marker, and the wait that proves the canvas is
+         * really here.**
+         *
+         * The brief for this work said to verify that the canvas replicates
+         * rather than to assume it, and the assumption is genuinely worth
+         * distrusting: replication is a background sweep on the daemon, and
+         * what makes the canvas appear in it is the badge's admission AT THE
+         * HOME — written by the redemption for a pass, and by the canvas's
+         * standing link grant when there is none. So this waits, briefly, for
+         * the canvas to actually land, and says which of the two answers it
+         * got. A setup that printed an address for a canvas that never arrived
+         * would be the cheerful wrong address again, with a person's whole
+         * first impression riding on it.
+         *
+         * The wait is bounded and its failure is not fatal: the marker is
+         * written either way (it is the durable half — a clone carries it, and
+         * the sweep keeps trying every couple of seconds), and the report says
+         * plainly that nothing has arrived yet.
+         */
+        if (arrival && daemonUp) {
+          const standing = await findBinding(work, home);
+          if (standing && standing.projectId !== arrival.projectId) {
+            // Not a merge and not a re-home: two canvases cannot share one
+            // directory, and quietly rewriting the marker would orphan the
+            // work the first one holds. `ctx.ts`'s `refuseForeignHome` makes
+            // the same refusal about the same file for the same reason.
+            throw new Error(
+              `this directory is already this canvas: ${standing.projectId} ` +
+                `(${markerFile(standing.root)}). Joining ${arrival.projectId} here would ` +
+                "replace that binding — run this in an empty directory instead.",
+            );
+          }
+          const root = standing?.root ?? (await bindableRoot(work, home));
+          /**
+           * **The pass-less arrival asks for its canvas by name.**
+           *
+           * With a pass, redemption already wrote the admission and the sweep
+           * has the canvas in `?reach=admitted` before this line runs. Without
+           * one, this machine holds nothing but the ADDRESS somebody pasted —
+           * and since phase 8 stage 4 a replica no longer enumerates its home,
+           * so nothing would ever offer it the canvas. `joinFromHome` is the
+           * arrival saying which canvas it means; the home's own door decides,
+           * exactly as it decided when the sweep used to dial it blind.
+           *
+           * Swallowed rather than thrown, because the report below already
+           * says what happened and says it better: a refusal here means the
+           * link is off, and `report.replicated` names the gesture that fixes
+           * that (ask for a pass). Turning a legible report into a stack trace
+           * would be a worse command.
+           */
+          if (!arrival.pass) {
+            await client.joinFromHome(arrival.projectId).catch(() => null);
+          }
+          const landed = await canvasArrives(client, arrival.projectId, 15_000);
+          if (root) {
+            report.marker = await writeMarker(root, {
+              projectId: arrival.projectId,
+              ...(landed?.title !== undefined ? { title: landed.title } : {}),
+              home: arrival.origin,
+            });
+            await recordDir(home, root, arrival.projectId);
+          } else {
+            report.marker =
+              "not written — this directory cannot hold one (your home directory, or the " +
+              "filesystem root). Run this in a project directory.";
+          }
+          report.replicated = landed
+            ? `"${landed.title}" is on this machine`
+            : "not yet — the home has not offered this canvas to this machine. " +
+              (arrival.pass
+                ? "The pass was redeemed, so this should heal on the next sweep."
+                : "Without a pass you arrive under the canvas's link grant; if that is off, " +
+                  "ask for a pass (`isocan pass`) from a session that is already on it.");
         }
 
         /**
@@ -1489,7 +1946,7 @@ program
          * told what makes one, rather than being handed a bare origin and left
          * to guess.
          */
-        const bound = daemonUp ? await findBinding(target, home) : null;
+        const bound = daemonUp ? await findBinding(work, home) : null;
         const where = bound ? canvasUrl(origin, bound.projectId) : origin;
         if (bound) report.canvas = where;
         else if (homeUrl) {
@@ -1497,7 +1954,9 @@ program
         }
 
         // A person at a terminal gets the app opened for them; a script or an
-        // agent gets the URL to hand over.
+        // agent gets the URL to hand over. Never with a pass on it: `isocan
+        // open` is the verb that escalates a browser, and a bearer credential
+        // in a line setup printed is one that ends up in a transcript.
         const open = opts.open ?? Boolean(process.stdout.isTTY);
         if (open && daemonUp) {
           spawn(process.platform === "darwin" ? "open" : "xdg-open", [where], {
@@ -1519,6 +1978,33 @@ program
       },
     ),
   );
+
+/**
+ * Has the canvas actually replicated onto this machine yet?
+ *
+ * A poll and not a subscription, for the reason the home connection's own
+ * sweep is one: what we are waiting for IS that sweep (every couple of
+ * seconds), and there is no event to listen to from out here. Bounded, and a
+ * null answer is a fact worth reporting rather than an error — the marker
+ * stands, the sweep keeps trying, and the person is told the truth about what
+ * is on their machine right now.
+ */
+async function canvasArrives(
+  client: DaemonClient,
+  projectId: string,
+  withinMs: number,
+): Promise<Project | null> {
+  const deadline = Date.now() + withinMs;
+  for (;;) {
+    const found = await client
+      .listProjects()
+      .then((projects) => projects.find((project) => project.id === projectId) ?? null)
+      .catch(() => null);
+    if (found) return found;
+    if (Date.now() >= deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
 
 // ---------- projects ----------
 

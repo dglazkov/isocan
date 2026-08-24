@@ -375,6 +375,46 @@ async function write(file: string, actor: Actor): Promise<Actor> {
   return actor;
 }
 
+/**
+ * **The person a pass handed this machine** — Scene 5's `setup`, and the one
+ * place an identity arrives from outside instead of being chosen here.
+ *
+ * `writeIdentity` cannot do this job: it takes a NAME and mints an id when it
+ * finds none, which is precisely the wrong act. The actor id came from the
+ * home, attached to a claim the redeeming badge now holds, and minting a
+ * second Jordan beside the real one is the "quietly becomes new" failure the
+ * whole `--as` apparatus exists to prevent.
+ *
+ * **It has to be written down at all because the redeem response is the only
+ * announcement there will ever be.** A handoff row carries no session key by
+ * design (nobody presented one), and `GET /api/actors` answers by session key
+ * — so the identity a pass endowed is *unaskable* after the moment it is
+ * handed over, even though the badge holds it and every op will be accepted
+ * under it. Dropping the answer would strand the person on their own machine.
+ *
+ * **It never overwrites a person who is already here.** A machine has one
+ * human, they chose their own name, and a command pasted out of a chat window
+ * is not the gesture that renames them — so an identity file naming a
+ * DIFFERENT actor is left exactly as it is and the caller says so. The same
+ * actor is refreshed, which is how a rename at the home reaches a machine that
+ * has been offline. Returns what the file says afterwards, and whether this
+ * call is what put it there.
+ */
+export async function adoptIdentity(
+  home: string,
+  actor: Actor,
+): Promise<{ actor: Actor; adopted: boolean }> {
+  const file = paths.identityFile(home);
+  const existing = await readFrom(file);
+  if (existing && existing.id !== actor.id) return { actor: existing, adopted: false };
+  // A nameless actor is not something this file can hold — `readFrom` needs
+  // both halves, so writing one would produce a file that resolves to nobody
+  // and looks like corruption later. It means the home's registry has no name
+  // for the endowed actor, which is a hole the next roster to arrive fills.
+  if (!actor.name) return { actor, adopted: false };
+  return { actor: await write(file, actor), adopted: true };
+}
+
 /** Rename in place — the actor id is the stable key, so your history stays
  * yours — unless `fresh`, which makes you a new person entirely. */
 export async function writeIdentity(home: string, name: string, fresh = false): Promise<Actor> {

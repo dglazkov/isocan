@@ -4,7 +4,8 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PostOpResponse, Project } from "@isocan/core";
+import type { MintPassResponse, PostOpResponse, Project } from "@isocan/core";
+import { PASS_REDEEM_ROUTE, passesRoute } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -77,6 +78,35 @@ beforeEach(async () => {
   );
   laptop = await startDaemon({ port: 0, home: laptopDir, homeUrl: homeBase, homePollMs: 50 });
   local = await mintTestBadge(baseOf(laptop));
+  /**
+   * **Scene 5 first, then Scene 4 — which is the order the journey puts them
+   * in.**
+   *
+   * Until phase 8 stage 4 this line did not exist: the laptop enumerated the
+   * home, the canvas's standing link grant made it visible to any badge, and
+   * it replicated on its own. A replica now mirrors only what it was let into,
+   * so the laptop is ENROLLED the way a second machine is actually enrolled —
+   * a pass minted at the home for this canvas, redeemed through the laptop's
+   * own daemon.
+   *
+   * That is not scaffolding around the test; it is the beat immediately before
+   * the one under test. The conductor's manual play of this phase was exactly
+   * this: `setup <address>#<pass>` on a second machine, then a mention typed
+   * at the home waking an agent under the other roof.
+   */
+  const minted = await fetch(`${homeBase}${passesRoute(CANVAS)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...owner.headers },
+    body: JSON.stringify({}),
+  });
+  if (!minted.ok) throw new Error(`minting a pass: ${await minted.text()}`);
+  const { token } = (await minted.json()) as MintPassResponse;
+  const redeemed = await fetch(`${baseOf(laptop)}${PASS_REDEEM_ROUTE}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...local.headers },
+    body: JSON.stringify({ token }),
+  });
+  if (!redeemed.ok) throw new Error(`redeeming at the laptop: ${await redeemed.text()}`);
   await until(
     () => laptop.engine.listProjects(),
     (projects: Project[]) => projects.some((p) => p.id === CANVAS),

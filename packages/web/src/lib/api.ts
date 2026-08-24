@@ -10,10 +10,12 @@ import type {
   GrantsResponse,
   GrantSubject,
   LogEntry,
+  MintPassResponse,
   Operation,
   PostOpResponse,
   Project,
   ActorNames,
+  RedeemPassResponse,
   SlashCommand,
 } from "@isocan/core";
 import {
@@ -23,6 +25,8 @@ import {
   grantRoute,
   grantsRoute,
   newClientId,
+  PASS_REDEEM_ROUTE,
+  passesRoute,
 } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
@@ -220,6 +224,48 @@ export function createGrant(projectId: string, subject: GrantSubject): Promise<G
  */
 export function revokeGrant(projectId: string, grantId: string): Promise<GrantResponse> {
   return request("DELETE", grantRoute(projectId, grantId));
+}
+
+// ---- the escalation pass (Scene 5) ----
+//
+// Two routes with deliberately different shapes, and neither is spelled here:
+// `passesRoute` and `PASS_REDEEM_ROUTE` come from core, because this browser,
+// the CLI and a replica's home connection all speak to the same daemon and a
+// URL that drifts shows up at runtime as a refusal with nothing to read.
+//
+// Minting is project-scoped, so the door has already asked whether this badge
+// may be in this room before the handler runs. Redeeming is NOT, and cannot
+// be: the redeemer is by definition not admitted yet, and a project-scoped
+// path would have the door refuse the one request whose purpose is to become
+// admitted. `passes.ts` in core argues both at length.
+
+/**
+ * Mint one for this canvas, endowing an actor this badge already holds.
+ *
+ * The "Work from your terminal…" dialog's only call. The endowment is the
+ * point rather than an option — Scene 5's pass is *minted by her admitted tab,
+ * for her actor* — and the home refuses a claim this badge does not hold
+ * (`not-your-actor`), so endowing somebody else is not reachable from here.
+ * The `--admit-only` shape the CLI offers has no button, because the gesture
+ * that needs it (an agent that will name itself) is not one a person makes in
+ * a browser.
+ */
+export function mintPass(projectId: string, actorId: string): Promise<MintPassResponse> {
+  return request("POST", passesRoute(projectId), { actorId });
+}
+
+/**
+ * Redeem the pass a tab arrived carrying — see `lib/arrival.ts`, the only
+ * caller, for why it rides in a `#fragment`.
+ *
+ * The refusals are three different sentences (`unknown-pass`, `pass-spent`,
+ * `pass-expired`) and reach the caller as an `ApiError` with its `code`
+ * intact, which is the whole reason they are separate codes at the daemon: a
+ * person who just clicked a link needs to be told which of the three happened,
+ * because the remedies differ.
+ */
+export function redeemPass(token: string): Promise<RedeemPassResponse> {
+  return request("POST", PASS_REDEEM_ROUTE, { token });
 }
 
 export function runGc(projectId: string, options: GcRequest = {}): Promise<GcReport> {

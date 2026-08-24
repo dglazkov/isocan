@@ -55,10 +55,14 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 7.5 is closed and dev.isocan.io is running phases 7
-and 7.5 — Phase 8, escalation (Scene 5), is next, and it inherits the
-question phase 7 could not settle: a replica still discovers canvases by
-enumerating the home, and the pass is the mechanism that fixes it.** This line moves as phases close; a clean
+**Where we are: Phase 8 is built and played on one machine, and is
+PART-DONE until it is played against dev — that walk is the next thing to
+do, and it needs the code deployed there.** The question phase 8 inherited
+is settled: a replica no longer enumerates its home, it mirrors the canvases
+it was let into, and the pass is what writes the admission that lets one in.
+After dev, Phase 9 — attesters and revocation — is next, and it inherits a
+pass-shaped debt: an admission rooted `{root: "pass", badgeId}` is a chain
+the sweep must walk a hop at a time, and nothing has ever walked it. This line moves as phases close; a clean
 session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
@@ -1199,7 +1203,14 @@ walk with the exports deleted.
 
 ## Phase 8 — Escalation (Scene 5)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE** — built and played whole on this machine
+(`3aa561b` and the commit beside it), and **not yet played against dev**,
+which is what the Proof names. The scene ran end to end on two `ISOCAN_HOME`
+directories and a real browser: the tab minted the pass, one pasted command
+escalated the second machine, its agent claimed its own actor, and an
+`@`-mention typed at the home woke that agent under the other roof. What is
+left is the same walk against `dev.isocan.io`, which needs this code deployed
+there.
 
 **Work:** Pass minting from an admitted session; the one-command setup
 consuming `address#pass`; the redeemed badge born knowing its person;
@@ -1212,7 +1223,135 @@ roof.
 **Proof:** The scene, played end to end against dev; vitest for pass
 lifecycle (single-use, short TTL, named claim, admission-only form).
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-23 — A pass that lands in the bar of a tab that is already
+  open never arrives at all.** Measured in Chrome while driving the web
+  half: pointing an open canvas tab at *its own address* with `#<pass>`
+  appended is a **same-document navigation**. Nothing reloads, the entry
+  point never runs again, and the credential simply sits in the address
+  bar doing nothing — no redemption, no refusal, no page to read. It is
+  the cheerful wrong address in its quietest form yet, and this codebase
+  has now met that shape five times. `isocan open` usually escapes it by
+  spawning a new tab, but "usually" is not a property: a person pasting
+  the line into the bar of the tab they already have open lands here
+  every time. The fix is four lines — a `hashchange` listener that
+  reloads when the new fragment is a pass, after which the page comes
+  back through the ordinary arrival path. It cannot loop, because the
+  fragment is stripped with `replaceState`, which fires no `hashchange`.
+  **The general lesson is about fragments, not passes:** a credential
+  carried in a `#fragment` is invisible to the one event a SPA usually
+  relies on (a page load), so anything that arrives that way has to be
+  read at load *and* on change.
+- **2026-08-23 — The same handed identity is adopted differently on the
+  two surfaces, on purpose.** `setup` refuses to let a pasted command
+  overwrite a DIFFERENT person already in `identity.json` — that file is
+  a machine's one durable answer to "who owns this laptop", and nothing
+  stands behind it. The browser does the opposite and overwrites: the
+  persona it displaces is still one click away in the identity menu's
+  "Switch to" roster, and the tab was opened by a link that names who it
+  is for, so refusing would burn a single-use pass and leave the person
+  looking at somebody else's face. Two surfaces, one mechanism, two
+  answers — because what is behind the slot differs, not because either
+  side got it wrong. Recorded so a later phase does not "fix" the
+  asymmetry into consistency.
+- **2026-08-23 — A copy button cannot be proven in an automated tab.**
+  The dialog's Copy was driven both by a real click and from the page,
+  and `navigator.clipboard.writeText` neither resolved nor rejected:
+  Chrome blocks the clipboard while `document.visibilityState` is
+  `hidden`, which is what an automated tab is. The command itself was
+  read off the screen and out of the DOM, and the fallback path (a
+  refusal message, plus `user-select: all` on the command so it can be
+  selected by hand) is what a real browser would show. Worth knowing
+  before the next phase writes a Chrome proof around a clipboard.
+- **2026-08-23 — Discovery by enumeration is gone, and the thing that
+  replaced it is not one mechanism but two.** Narrowing the sweep was the
+  easy half: `HomeLink.sweep` asks
+  `GET /api/projects?reach=admitted`, the route answers admissions and
+  nothing else when a caller asks that question, and a replica mirrors
+  what it was let into. Measured on real daemons before and after: a
+  scratch replica pointed at a home holding two link-granted canvases
+  replicated **both** in under two seconds, and now replicates **none**,
+  indefinitely. What the narrowing revealed is that **two shipped
+  arrivals carried an ADDRESS and no admission** and were living entirely
+  off enumeration — a `.isocan/project.json` cloned by git onto a second
+  machine (Scene 0's multi-device beat) and a pass-less
+  `isocan setup <address>`, both of which have their own tests and one of
+  which stage 3 wrote a week ago. They were not designed to enumerate;
+  they worked because the home listed itself. So the arrival now says
+  what it wants — `POST /api/home/join`, one canvas by name, the home
+  running the same door test it would have run when the sweep dialled —
+  and the CLI speaks it where the marker is resolved. **The general
+  shape: removing an accidental capability is cheap, and finding
+  everything that was standing on it is the work.** The suite found all
+  three callers in one run (14 failures, five files); no amount of
+  reading would have.
+- **2026-08-23 — The narrowing had to be caller-stated, because one
+  route answers two different questions.** `GET /api/projects` is the
+  BROWSER's list as well as the replica's, and on a solo home the
+  household is one machine: a canvas created from the CLI is admitted to
+  the CLI's bearer badge while the person's tab carries a cookie badge
+  that has never been in it. Narrowing the route wholesale would have
+  hidden a person's own canvas from their own front page — a worse bug
+  than the one being fixed. So `?reach=admitted` is stated by the caller
+  and the wide answer is the default, which also makes the change
+  backwards compatible in the direction that matters (an old replica
+  polling a new home gets exactly what it always got). Sniffing the
+  carrier was the obvious shortcut and is the one this codebase already
+  refuses; the vocabulary is deliberately the same two words
+  `claimContext`'s `NameReach` uses one layer down, because it is the
+  same distinction.
+- **2026-08-23 — A canvas born on a replica survives on two legs, and
+  only one of them was obvious.** The brief asked why birth-on-a-replica
+  keeps replicating after the narrowing, and the honest answer is that
+  it is over-determined: the forwarded `project.create` lands in the
+  local store (so the sweep's local half names it, which is also what
+  makes "a home that is down must not make a replica forget" true — one
+  line, two properties), AND the home writes `{root: "created"}` onto
+  the creating daemon's badge, so the narrow listing names it too. The
+  second leg is the one a reader would doubt and the one asserted
+  directly, with the replica's own home badge, because it is invisible
+  from the machine that owns it and it is what survives a local store
+  being thrown away.
+- **2026-08-23 — The design doc lost an argument to the browser, and the
+  doc moved.** Mechanism 1's diagram had redemption minting a THIRD badge
+  (`H-->>D: badge B₃`), and the code endows the badge the caller already
+  presents. The reason is not convenience: a browser holds a cookie badge
+  before it can ask for anything, and the door deliberately never returns a
+  cookie's secret in a body — so "the reply carries a new badge" is a shape a
+  browser physically cannot receive, and what it would mean there is
+  re-setting the one cookie and dropping its admissions. The design's
+  substance survives untouched — a badge that arrived knowing nothing leaves
+  knowing its person, and badges still "differ only in dowry". Ruled by the
+  conductor and [identity-desk.md](design/identity-desk.md) now says what the
+  code does, with the argument beside it. The same section also stops drawing
+  the pass as a branch the door runs on every arrival: it is a route, because
+  a single-use credential presented on every request is a contradiction.
+- **2026-08-23 — How the Proof was actually played on this machine, stated
+  so nobody over-reads it.** Two "machines" were two `ISOCAN_HOME`
+  directories and two daemons on one host, which is a real second machine as
+  far as every ledger involved is concerned — separate desk, separate badge,
+  separate identity file, separate store — and it is how the escalation was
+  driven: the tab minted the pass, `setup <address>#<pass>` in an empty
+  directory pointed the daemon, redeemed, replicated, and wrote the marker;
+  the agent there claimed its own actor; and `@`-mentioning it in a browser
+  **at the home** woke it **on the other machine**, its face in the facepile
+  and its cursor on the canvas. What that does NOT exercise is the internet
+  between them, which is exactly what phase 7.5 learned can turn a passing
+  local test into a failure at a real home — a claim won a race over loopback
+  that it lost across the wire. So the dev walk is not a formality here, and
+  the phase stays PART-DONE until it is done.
+- **2026-08-23 — Turning off a link stops arrivals; it does not empty a
+  laptop, and that is still correct.** Measured: a machine enrolled by a
+  pass keeps both its canvases after the link grant is revoked at the
+  home, while a sixth machine's pass-less `setup` of the same canvas is
+  refused and says so. Admissions stand until something expels them,
+  which is phase 9's sweep. What changed here is only that the refusal
+  is now LEGIBLE — a cloned marker whose home will not have this machine
+  gets "…would not hand this machine prj_… : this badge is not admitted
+  … mint a pass from a session that is already on it", where before the
+  narrowing it got a canvas it should not have had, and after the
+  narrowing but before the join route it would have got silence.
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActorClaim, Grant } from "@isocan/core";
-import { LINK, SHELF } from "@isocan/core";
-import type { BadgeRecord, Desk } from "@isocan/server";
+import { LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
+import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
 
 /**
@@ -213,6 +213,70 @@ export function deskConformance(
     );
 
     test(
+      "passes: written by id, read back by id, and nothing else's",
+      withDesk(async ({ desk }) => {
+        // No fallback here either: a pass this desk has never seen answers
+        // nothing, which is what the route turns into `unknown-pass`.
+        expect(await desk.pass("pss_nope")).toBeNull();
+        await desk.putPass(pass("pss_1", "prj_a", "bdg_1"));
+        await desk.putPass(pass("pss_2", "prj_b", "bdg_1", "usr_jordan"));
+        expect(await desk.pass("pss_1")).toMatchObject({
+          canvasId: "prj_a",
+          mintedBy: "bdg_1",
+          secretHash: "hash_pss_1",
+        });
+        // The claim slot is optional and both shapes are real: an
+        // admission-only pass admits a surface that will claim its own actor.
+        expect((await desk.pass("pss_1"))!.actorId).toBeUndefined();
+        expect((await desk.pass("pss_2"))!.actorId).toBe("usr_jordan");
+      }),
+    );
+
+    test(
+      "redeemPass is SINGLE-USE: exactly one caller wins, and the loser is told why",
+      withDesk(async ({ desk }) => {
+        await desk.putPass(pass("pss_1", "prj_a", "bdg_1", "usr_jordan"));
+        const at = "2026-08-23T12:00:00.000Z";
+        const first = await desk.redeemPass("pss_1", at, "bdg_2");
+        expect(first).toMatchObject({ redeemed: true });
+        expect(first!.pass).toMatchObject({ redeemedAt: at, redeemedBy: "bdg_2" });
+
+        // The second caller does NOT win, and is handed the row the winner
+        // left — so the route can say "already used, at 12:00" rather than the
+        // one answer a person cannot act on.
+        const second = await desk.redeemPass("pss_1", "2026-08-23T12:00:01.000Z", "bdg_3");
+        expect(second).toMatchObject({ redeemed: false });
+        expect(second!.pass).toMatchObject({ redeemedAt: at, redeemedBy: "bdg_2" });
+
+        // And it stays spent when read back — this is a row, not a lock.
+        expect((await desk.pass("pss_1"))!.redeemedBy).toBe("bdg_2");
+
+        // A pass this desk does not know is null, not a throw, and null is a
+        // DIFFERENT answer from "already spent".
+        expect(await desk.redeemPass("pss_nope", at, "bdg_2")).toBeNull();
+      }),
+    );
+
+    test(
+      "two redemptions racing: one winner, whatever the backing",
+      withDesk(async ({ desk }) => {
+        await desk.putPass(pass("pss_1", "prj_a", "bdg_1"));
+        const at = "2026-08-23T12:00:00.000Z";
+        // Started together on purpose. A `get`-then-`set` outside a
+        // transaction passes the sequential test above and fails this one,
+        // which is exactly the bug worth catching: two badges admitted by a
+        // pass that invited one.
+        const [a, b] = await Promise.all([
+          desk.redeemPass("pss_1", at, "bdg_2"),
+          desk.redeemPass("pss_1", at, "bdg_3"),
+        ]);
+        expect([a!.redeemed, b!.redeemed].filter(Boolean)).toHaveLength(1);
+        const winner = a!.redeemed ? "bdg_2" : "bdg_3";
+        expect((await desk.pass("pss_1"))!.redeemedBy).toBe(winner);
+      }),
+    );
+
+    test(
       "the migration shelf: shelved rows answer every question, and adoption is first-come",
       withDesk(async ({ desk }) => {
         await desk.put(mint("bdg_1"));
@@ -259,6 +323,29 @@ export function mint(badgeId: string): BadgeRecord {
 
 export function claim(actorId: string, sessionKey: string): ActorClaim {
   return { actorId, boundAt: new Date(Date.UTC(2026, 0, 1)).toISOString(), sessionKey };
+}
+
+/**
+ * A pass, as the desk holds it. The secret's hash stands in for a real one:
+ * hashing is the caller's job (`server/passes.ts`), and what the desk owes is
+ * to give back exactly what it was handed.
+ */
+export function pass(
+  id: string,
+  canvasId: string,
+  mintedBy: string,
+  actorId?: string,
+): PassRecord {
+  const at = Date.UTC(2026, 0, 1);
+  return {
+    id,
+    canvasId,
+    mintedBy,
+    secretHash: `hash_${id}`,
+    createdAt: new Date(at).toISOString(),
+    expiresAt: new Date(at + PASS_TTL_MS).toISOString(),
+    ...(actorId !== undefined ? { actorId } : {}),
+  };
 }
 
 /** A standing link grant, the only subject a v1 door can check. */

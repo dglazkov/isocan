@@ -41,32 +41,61 @@ export type BadgeCarrier = "cookie" | "bearer";
 // ---- the token on the wire ----
 
 /**
- * `<badgeId>.<secret>` — one opaque string in both carriers.
+ * `<id>.<secret>` — the dot idiom, and there is exactly ONE parser for it.
  *
  * The dot is load-bearing: the home splits it, looks the record up by id in
  * O(1), and compares one secret, instead of hashing the presented string and
- * scanning the whole table. It also means a log line that leaked a badge id
- * leaked an identifier and not a credential.
+ * scanning the whole table. It also means a log line that leaked an id leaked
+ * an identifier and not a credential.
+ *
+ * **Shared with the pass** (`passes.ts`, phase 8), deliberately and not by
+ * coincidence. A pass token is the same shape for the same reasons — an
+ * opaque id the desk can index, plus 256 bits of CSPRNG the desk only ever
+ * holds as a hash — so a second parser would be a second set of edge cases
+ * (a leading dot, a trailing dot, an id containing a dot) that could disagree
+ * with this one. When they disagree the failure is a refusal with no
+ * explanation, which is the exact class of bug `address.ts` exists to prevent
+ * one layer up. `passes.ts` says the same thing from its end.
+ *
+ * Generic in `id`, not in what the id MEANS: the callers below keep their own
+ * field names, because a `badgeId` and a `passId` are different things and
+ * code that reads `token.id` at a badge check would be code that could
+ * present the wrong one.
  */
+export interface DotToken {
+  id: string;
+  secret: string;
+}
+
+export function formatDotToken(id: string, secret: string): string {
+  return `${id}.${secret}`;
+}
+
+/** Split a presented token. Null for anything that is not one — a malformed
+ * token is refused the same way a missing one is. */
+export function parseDotToken(raw: string | undefined | null): DotToken | null {
+  if (!raw) return null;
+  const dot = raw.indexOf(".");
+  if (dot <= 0 || dot === raw.length - 1) return null;
+  const id = raw.slice(0, dot);
+  const secret = raw.slice(dot + 1);
+  if (id.includes(".")) return null;
+  return { id, secret };
+}
+
+/** A badge's token: `<badgeId>.<secret>`, in both carriers. */
 export interface BadgeToken {
   badgeId: string;
   secret: string;
 }
 
 export function formatBadgeToken(badgeId: string, secret: string): string {
-  return `${badgeId}.${secret}`;
+  return formatDotToken(badgeId, secret);
 }
 
-/** Split a presented token. Null for anything that is not one — a malformed
- * token is refused the same way a missing one is. */
 export function parseBadgeToken(raw: string | undefined | null): BadgeToken | null {
-  if (!raw) return null;
-  const dot = raw.indexOf(".");
-  if (dot <= 0 || dot === raw.length - 1) return null;
-  const badgeId = raw.slice(0, dot);
-  const secret = raw.slice(dot + 1);
-  if (badgeId.includes(".")) return null;
-  return { badgeId, secret };
+  const parsed = parseDotToken(raw);
+  return parsed ? { badgeId: parsed.id, secret: parsed.secret } : null;
 }
 
 // ---- the door ----
