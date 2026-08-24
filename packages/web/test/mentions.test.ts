@@ -92,4 +92,54 @@ describe("mention roster", () => {
     // which is what actually wakes it.
     expect(extractMentions("@Isaac 🤖 can you re-cut these?", candidates)).toEqual([isaac.id]);
   });
+
+  /**
+   * A stamped name is a log entry, not an identity — and the @-menu is the
+   * surface where that costs the most.
+   *
+   * `PresenceSession.actor.name` is frozen at the moment the session started.
+   * The menu used to offer it directly (`session.label ?? session.actor.name`),
+   * so somebody who renamed themselves mid-session was still listed under the
+   * old name, and picking that entry wrote a mention that reached nobody.
+   *
+   * `actorsAnswerTo` does not cover this: it walks the actors the CANVAS
+   * remembers, and a live session on a canvas this person has not written on
+   * yet is not one of them. That is the exact case in the first test in this
+   * file.
+   */
+  it("offers a live agent under the name they answer to NOW, not the one they arrived with", () => {
+    const { peers, candidates } = mentionRoster(
+      emptyCanvas(),
+      [session({ id: "usr_dion", name: "Dion 2" })],
+      alice.id,
+      { usr_dion: "Di" },
+    );
+    expect(peers).toEqual([{ id: "usr_dion", name: "Di", online: true }]);
+    // …and the name the menu just offered actually reaches them.
+    expect(extractMentions("@Di can you look?", candidates)).toEqual(["usr_dion"]);
+  });
+
+  it("still lets an explicit --label win over the registry", () => {
+    // The label is a deliberate display override for THIS session ("Kenny 🤖"),
+    // so a rename of the underlying actor must not overwrite it.
+    const { peers } = mentionRoster(
+      emptyCanvas(),
+      [session({ id: "usr_dion", name: "Dion 2" }, "deploy bot")],
+      alice.id,
+      { usr_dion: "Di" },
+    );
+    expect(peers).toEqual([{ id: "usr_dion", name: "deploy bot", online: true }]);
+  });
+
+  it("falls through a blank label to the registry rather than offering nobody", () => {
+    // An empty chip names no one; `sessionName` treats a blank label as absent
+    // for the same reason `actorNameIn` treats a blank registry name as absent.
+    const { peers } = mentionRoster(
+      emptyCanvas(),
+      [session({ id: "usr_dion", name: "Dion 2" }, "   ")],
+      alice.id,
+      { usr_dion: "Di" },
+    );
+    expect(peers).toEqual([{ id: "usr_dion", name: "Di", online: true }]);
+  });
 });
