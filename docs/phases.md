@@ -31,7 +31,25 @@ the phases: each phase carries a **Findings** section that accumulates
 dated entries as the work teaches us things. Beside the "where we are"
 line sits **Deliberately open** — the short list of decisions postponed
 on purpose, so a later session chooses them awake instead of meeting
-them mid-task and improvising.
+them mid-task and improvising. Above the phases sits **Standing
+lessons** — the handful of things re-learned in three and four different
+places, hoisted out of the phases that taught them so they are read once
+rather than met once per phase.
+
+**Compacted 2026-08-24, and how to write a finding now.** The Findings
+were written long — argument, evidence, and the blow-by-blow of the
+session that found each one — and had reached fourteen thousand words
+against five thousand of everything else. They are an index now: one
+dated line, the claim and nothing else. **The long form is not gone, it
+is in `git log -p docs/phases.md`**, thirty commits deep, and the date
+on a line is how the commit that wrote it is found. What survived the
+cut is what would change a later session's behaviour — decisions still
+binding, debts still unpaid, and reversals where the obvious move turned
+out to be wrong. What was cut is evidence for claims nothing disputes,
+and bugs a test now guards: where a test guards it, **the test is the
+memory**. Findings written from here on should be this short in the
+first place, and the argument that produced them belongs in the commit
+message.
 
 Every phase also carries a **Status** line directly under its heading —
 `CLOSED` with the date and the commit that closed it, `PART-DONE` with
@@ -39,7 +57,10 @@ what is missing, or `NOT STARTED`. It is there so completion is *stated*
 rather than inferred from whether Findings say "none yet": a phase can
 close without surprising anybody, and an empty Findings section must
 never be read as an untouched phase. `grep '^\*\*Status' docs/phases.md`
-is the whole roster in one screen. When a phase closes, its Status line
+is the whole roster in one screen, and `grep -n '— Open' docs/phases.md`
+is the roster of unpaid debts — a finding's one piece of content that
+nothing else in the repo records, which is why those are marked and why
+they were compacted least. When a phase closes, its Status line
 moves in the same change as the "where we are" line — one gesture, or
 they drift. A finding that redraws
 the map edits [architecture.md](architecture.md) in the same change —
@@ -136,6 +157,67 @@ is how it goes wrong.
   the [map](architecture.md)'s GC line**, which today promises a
   mechanism the code cannot perform.
 
+## Standing lessons
+
+A dozen things the phases taught more than once, hoisted out of whichever
+phase taught them first — each was re-learned somewhere the earlier telling
+could not reach, and a lesson retold once per phase reads as trivia.
+Bracketed numbers are the phases that taught it.
+
+- **This system's default answer to a wrong address is a cheerful one**
+  [5, 6, 7, 7.5, 8, 9]. Six sightings: `/healthz/` returns the app shell at
+  200; `/c/<id>` renders blank; a refused socket is indistinguishable from a
+  network blip; an unmatched `/api/` path returns the web app, so version
+  negotiation with an older home works only because HTML fails to parse as
+  JSON; `address#pass` pasted into an open tab runs nothing; a provisioning
+  call on the wrong path got an HTML 404 whose body held no `"error"`, and the
+  check passed. **A step that cannot read back the state it wanted has
+  verified nothing.**
+- **A comment that reasons about a browser is a hypothesis** [2, 8, 9, 10].
+  Wrong twice by not measuring: the blob route held open four phases on a
+  cookie argument about a different request, and a service worker argued into
+  runtime-caching-only. What a browser *refuses* is equally unprovable in an
+  automated tab — Chrome blocks the clipboard while `visibilityState` is
+  `hidden`.
+- **A guard written as a predicate over a list says yes to the empty list**
+  [6]. `[].every()` is vacuously true, and a resume check built on it told a
+  client it was current with four ops missing.
+- **A proof is what was measured, and by whom** [5, 6, 7, 8, 9]. "Two Chrome
+  profiles" was two cookie hosts on one profile; "two machines" was two
+  `ISOCAN_HOME` directories on one host. Each proves something narrower than
+  its sentence, so each says so — and a phase that can prove half its outcome
+  states which half.
+- **An unnamed flake is one nobody can fix** [7, 8, 10]. It cost three phases,
+  and was solved not by remembering to capture output but by CI, which is
+  merely slower than this machine and had been printing the name for hours.
+- **Removing an accidental capability is cheap; finding what stood on it is
+  the work** [7, 8]. Narrowing enumeration broke replicas outright and exposed
+  two shipped arrivals living off it; the suite found all three callers in one
+  run.
+- **A rule the build can check is a rule; anything else is a hope** [1, 7].
+  `store.ts` imports one type, so it structurally cannot reach `FileStore`; a
+  test greps every source file for a hand-built canvas URL, and found three.
+- **An honest leaky seam beats a speculative clean one** [1, 2, 9]. Three
+  file-shaped methods crossed the `Store` seam named as debts;
+  `BadgeRecord.attestations` was refused as an always-empty array and earned
+  seven phases later; an `Attester` interface with no implementations was
+  written and deleted inside one phase.
+- **A fix that falls out as a side effect is a fix that ships untested** [2].
+  The first test for one was a tautology that never removed a claim. Relatedly,
+  a proof written as "no test edited" means "no test *rewritten*".
+- **When a capability looks like it must be compiled in, check whether what
+  actually varies is an input the code already needs** [9].
+- **Local timing wins races the internet loses** [6, 7.5, 8]. A claim that won
+  over loopback lost across the wire, invisible to every local test; a dev walk
+  is worth most where the home holds state a scratch daemon cannot fake; and a
+  test placeholder naming a real host is a placeholder only until the code
+  learns to dial it.
+- **A sticky failure status is not a stuck state machine** [5]. The only
+  evidence a retry is not coming is a retry that has already not come. Sibling
+  shape: when the manual and automatic paths disagree, it is usually the
+  automatic one that is wrong and the manual one quietly confirming an ordering
+  it does not share.
+
 ---
 
 ## Phase 1 — The store seam
@@ -153,48 +235,9 @@ untouched, which is the entire point of the phase.
 
 **Findings:**
 
-- **2026-08-22 — "no test edited" met a rename, and the proof bent by
-  three lines.** `store.test.ts` constructs the concrete class, so a
-  rename cannot leave it alone. The conductor authorized exactly the
-  identifier substitution and the module path that the file split
-  forces — one import, one type annotation, one `new` — and checked
-  the whole `test/` diff to confirm nothing else moved. Not an
-  assertion, not a fixture. Recorded so no later phase reads "566
-  passing, untouched" as literally true. The lesson for the phases
-  that follow: a proof written as "no test edited" is really "no test
-  *rewritten*", and should be stated that way when it is meant.
-- **2026-08-22 — The seam is two files, and that is the point.**
-  `store.ts` holds the interface and nothing else — its only import is
-  a single `import type` from core, so it has no runtime dependency at
-  all. `file-store.ts` holds the class. That split turns "the engine
-  compiles against the interface and nothing else" from a claim into a
-  grep: `store.ts` structurally *cannot* reach the concrete class, so
-  no future edit can quietly re-couple them. `FileStore` is named in
-  exactly three places — `daemon.ts` (the composition root that picks
-  the backing), `index.ts` (the export), and that one test.
-- **2026-08-22 — Three file-shaped methods survived onto the
-  interface, on purpose.** An honest leaky seam beats a speculative
-  clean one, so today's code crossed unchanged and the debts are named
-  instead of paid: `getBlob` returns `{ path }` and `http.ts` streams
-  from it; `migrateLegacyAgents()` is a one-time `agents.json` fold-in
-  (#59) no cloud backing will ever have; and the blob index crosses
-  whole — `blobIndex(id)` hands back the entire record and
-  `writeBlobIndex` takes it back.
-- **2026-08-22 — The third debt is bigger than a signature, and it
-  redrew the map.** `Engine.gc` drives the blob cycle from *above* the
-  seam: read the whole index, age each blob, delete files, write the
-  index back. So CloudStore's per-blob `blobmeta/{hash}` docs are not
-  a schema swap behind an unchanged method — the read-modify-write
-  lives in the engine, and Phase 4 must move that loop behind the seam
-  before the schema means anything. [architecture.md](architecture.md)
-  now says so where the blob row is.
-- **2026-08-22 (phase 2) — one of the three debts is already paid.**
-  `migrateLegacyAgents()` has left the `Store` interface. It produced
-  *claims*, and phase 2 made claims desk state, so it walked out on its
-  own rather than being cleaned up: both one-time migrations now live in
-  `migrations.ts` and write two ledgers. Two file-shaped methods remain
-  on the seam — `getBlob`'s path return and the whole-index blob
-  handoff — and the second is still Phase 4's real work.
+- **2026-08-22 — Open:** `getBlob`'s `{ path }` and the whole blob index still
+  cross the `Store` seam, and `Engine.gc` drives the read-modify-write from
+  above it.
 
 ## Phase 2 — The badge
 
@@ -216,76 +259,13 @@ lives through the bearer flow.
 
 **Findings:**
 
-- **2026-08-22 — The trap: once claims key on badges, the claims table
-  is no longer reconstructible from the oplog.** Badge ids stay out of
-  envelopes (mechanism 5 says so), and `loadActors` rebuilt the claims
-  table by replaying `actors.jsonl` — so a re-key that left `claims`
-  inside `ActorRegistry` would have broken crash recovery *silently*.
-  The fix is not a fix: it is the two-ledger rule asserting itself. The
-  registry split in half — the public face (ids, names, colors) stays
-  in the `Store`, replicates, and replays; the claims table is desk
-  state, written directly, never replayed. The architecture had already
-  drawn this line in its storage table; the phase discovered it is not
-  a preference but a constraint.
-- **2026-08-22 — A name was silently lost every thirty days, and
-  nobody knew.** `prune()` dropped an aged claim, `actorNames()`
-  derived names *from* claims, so an actor whose only claim aged out
-  reverted to whatever name was stamped on each op — "Dion 2" still
-  talking in a thread after Dion 2 became Di, the exact failure the
-  registry exists to prevent. The split fixes it as a side effect,
-  which is precisely how a fix ships untested: the first attempt was a
-  tautology that never removed a claim. The real proof runs end to end
-  through a daemon — rename an actor so the stamped and registry names
-  genuinely differ, delete the claim row, reboot, and the canvas still
-  shows the stale name while the registry answers with the true one.
-- **2026-08-22 — `prune()` is retired, and it is this phase's one
-  exception to "Policy unchanged."** A claim row now carries
-  authorization, and silently expiring authorization at thirty days
-  would quietly unvoice a daemon that "reconnects for months". The
-  price, stated rather than smuggled: names stop being freed after
-  thirty days. It is smaller than it sounds — `heldNames()` already
-  made any name ever used on a canvas permanently taken, so pruning
-  only ever freed names for actors that claimed and never touched
-  anything — but the Outcome line says policy is unchanged, and here
-  it changed.
-- **2026-08-22 — The blob route cannot carry a badge, so it stays
-  open, and there is now a test that says so on purpose.** A sandboxed
-  HTML blob is served with `sandbox allow-scripts` and no
-  `allow-same-origin`, which gives it an *opaque origin* and a null
-  site-for-cookies: its subresource requests carry no `SameSite`
-  cookie at all. The route is open today, so nothing regressed — but
-  the hole is now asserted rather than assumed, and Phase 3, which
-  re-asks `projectId ∈ admissions` per route, is where it gets decided
-  whether a 256-bit content address is capability enough.
-- **2026-08-22 — Dev had lost its WebSocket the moment the cookie
-  arrived.** `wsUrl()` hardcoded `127.0.0.1` while Vite serves the page
-  from `localhost`, and cookies are scoped by *host*, ignoring port —
-  so the handshake would have arrived badge-less. Two words fixed it
-  (`location.hostname`). Recorded because no test exercises a dev-mode
-  socket: it is reasoned, driven by hand, and still the least-covered
-  line in the phase.
-- **2026-08-22 — Losing a badge strands your claim, and the CLI used
-  to lie about it.** A re-badged machine holds no claims, so identity
-  resolution came up empty and said "no identity configured — run
-  `isocan identity --name`" — which would mint a stranger and leave
-  your history behind, the exact mistake `--as` exists to prevent. The
-  claim is recoverable *immediately* (`reincarnate` excludes the
-  caller's own `sessionKey`, so a same-key claim on a dead badge never
-  trips the thirty-minute window); nothing was telling anyone. The
-  refusal now names the badge, the actor, and the `--as` that works.
-  One narrowing worth keeping: the route answering this is
-  **key-scoped** — it reports only about session keys the caller
-  already presents. A home-wide answer would say "there is an Isaac
-  here, come back as him" to a conversation that is not Isaac, which is
-  an impersonation aid and a roster leak in the same breath.
-- **2026-08-22 — Badges are keyed by home *address*, not by home.** A
-  scratch daemon left running on `127.0.0.1:4441` was talked to by a
-  CLI whose `ISOCAN_HOME` pointed somewhere else entirely — the auth
-  block matched on the address, so the badge crossed. Pre-existing
-  (one default port has always been a footgun) and harmless on a real
-  machine that runs one daemon, but Phase 6 gives every local daemon a
-  *second* badge for the remote home, and address-keying is the slot
-  it will be stored in. Worth knowing before that phase, not during.
+- **2026-08-22** — Badge ids stay out of envelopes, so claims cannot be
+  replayed: the public registry replays, the claims table is desk state. Two
+  ledgers is a constraint, not a preference.
+- **2026-08-22** — `prune()` is retired, because expiring a claim now expires
+  authorization. The price is that names are never freed.
+- **2026-08-22** — The lost-badge recovery route is key-scoped on purpose; a
+  home-wide answer is an impersonation aid and a roster leak at once.
 
 ## Phase 3 — Actor binding and registry scope
 
@@ -328,66 +308,19 @@ color repaints never cross admission lines.
 
 **Findings:**
 
-- **2026-08-22 — "A local daemon's badge is admitted to everything on
-  it" is false, and mechanism 10 leaned on it.** Admissions are earned
-  per visit, so a badge that has been nowhere has an *empty* name scope
-  — which is more permissive than the home-wide walk it replaced, not
-  less. The visible case is the front door: the identity dialog opens
-  before the router mounts, so a fresh browser names itself with a badge
-  that has been nowhere, and a second Kenny walks straight in beside the
-  first. The fix uses what was already in the vocabulary — `actor.claim`
-  carries a `projectId`, so the claim names the canvas in the address
-  bar and is judged against that roster. It grants no admission, and
-  today it can only reach a canvas the address would have admitted the
-  asker to anyway. Under a grant it must be admission-checked, or "is
-  this name taken here" becomes a probe into a room you were never let
-  into — written into Phase 7's Work.
-- **2026-08-22 — The presence check is deliberately off the
-  single-writer chain.** Mechanism 5 puts the membership check inside
-  it, and for ops, undo/redo and `setColor` that is where it runs. Not
-  for presence beats: `putBlob` is on that queue, and a 30 MiB upload
-  would stall every cursor in the room behind it. So a beat's check is a
-  desk read beside the chain, memoized per socket per actor — a cursor
-  flood costs one read, a persona switch is a new question. The race it
-  admits is small and self-correcting: a beat can be judged against
-  claims a hair stale, and a refused beat is *dropped rather than
-  fatal*, because the tab may be mid-claim. Correctness of ops is
-  untouched; this is presence, which was always the honest-but-soft
-  half.
-- **2026-08-22 — `actor.setColor` got a check the design does not
-  name, on both of its actors.** Mechanism 5 lists ops, undo/redo and
-  presence. `setColor` is an op, so it is checked — but it names an
-  actor *twice*, once as the speaker and once as `op.actorId`, and
-  repainting somebody else's face is impersonation even when you are
-  honestly yourself. Its own comment used to say "any actor can be
-  addressed — there is no authentication here". There is now.
-- **2026-08-22 — The blob route stays open, and this is the ruling
-  Phase 2 asked for rather than another deferral.** The hash *is* the
-  capability: 256 bits of content address, obtainable only from canvas
-  state that already required admission, on a route that physically
-  cannot carry a badge (a sandboxed blob has an opaque origin and a null
-  site-for-cookies). Closing it would break every HTML blob with a
-  relative asset reference and buy nothing the canvas link does not
-  already give away. The limit is honest and now written where it will
-  matter: a Phase 9 sweep that expels somebody does not expel the hashes
-  they wrote down, so that phase decides whether revocation means that
-  too.
-- **2026-08-22 — Narrowing the colour broadcast by presence would have
-  been the wrong narrowing, quietly.** A colour change repaints the
-  rooms where an actor *appears* — and a rename travels the same
-  channel, which has to re-letter comments an absent author wrote months
-  ago. Scope by who is connected and the rename silently stops reaching
-  the rooms that need it most. "Appears" is history *and* presence, and
-  the test that says so is the one worth keeping.
-- **2026-08-22 — The seam needed four queries, not the two predicted.**
-  Phase 2 guessed `claimants(actorId)` and `claimsOf(badgeId)` would
-  replace the whole-table read. They do not cover "who holds this
-  session key" (the lost-badge recovery Phase 2 itself built) or "whose
-  rosters do I share" (the admission scope this phase needed), so there
-  are four. Each is one document read or one `array-contains`, and the
-  [map](architecture.md) now names the three denormalized arrays that
-  answer them — with the warning that a CloudDesk which fails to write
-  them passes the suite on a FileDesk and answers nothing in the cloud.
+- **2026-08-22** — Admissions are earned per visit, so a badge that has been
+  nowhere has an *empty* name scope — more permissive than the home-wide walk
+  it replaced, not less. `actor.claim` names the canvas it is made from, and
+  phase 7 admission-checks it — without that, "is this name taken here" probes
+  a room you were never let into.
+- **2026-08-22** — The presence check sits off the single-writer chain, because
+  `putBlob` is on that queue and a 30 MiB upload would stall every cursor.
+- **2026-08-22** — Scope the colour broadcast by presence and a rename stops
+  reaching the rooms an absent author's comments live in. "Appears" is history
+  **and** presence.
+- **2026-08-22** — The desk seam needs four queries, and a CloudDesk that fails
+  to write the three denormalized arrays passes on a FileDesk and answers
+  nothing in the cloud.
 
 ## Phase 4 — CloudStore
 
@@ -419,78 +352,16 @@ large-blob round trip exercises the signed-URL branch.
 
 **Findings:**
 
-- **2026-08-22 — The no-delete rule was necessary and not sufficient,
-  and the gap would have eaten a blob.** Compaction must not delete op
-  documents, because a deleted `ops/{seq}` frees that id for creation
-  again and holes the create-only precondition. But a horizon alone is
-  also wrong: `chooseRetained` extends its cut to a pair-complete set,
-  so it can pull an entry back above the line that sits *below* the
-  newest dropped seq. A horizon of `max(dropped)` hides that entry; a
-  horizon of `min(retained) − 1` bounds almost nothing. So compaction
-  does both — it advances `compactedThrough` **and** marks each dropped
-  document, and the tail read filters on the mark. The horizon bounds
-  the read; the mark makes it exact. Without both, GC sweeps a blob
-  that a resurrected entry still references and the undo stack comes
-  back holding a dangling hash.
-- **2026-08-22 — Debouncing the snapshot would have made a brand-new
-  canvas invisible.** `createProject` calls `saveSnapshot` and nothing
-  else, so a fully debounced backing answers `projectExists` false and
-  `listProjects` empty until a timer fires. The split that fixes it is
-  the useful distinction: the *GCS snapshot object* is debounced (it is
-  a fast boot, and the oplog is truth), while the `canvases/{id}`
-  **document** is written when project metadata actually changes —
-  which is not per-op either, so the one-write-per-second-per-document
-  ceiling still holds.
-- **2026-08-22 — "Identical behavior" is a claim about the engine, not
-  about every field of every record.** A cloud boot routinely finds a
-  snapshot lagging the log, so `recoveredSeqs` is normally non-empty
-  where the file backing's is normally `[]`. The conformance suite
-  therefore asserts *convergence* — the state equals what the ops
-  produce, `lastSeq` is right — and the empty-recovery assertion stays
-  as a FileStore-only case. Worth stating plainly, because it is the
-  one place the Outcome sentence needs reading precisely.
-- **2026-08-22 — A soft-deleted canvas id is claimed forever in the
-  cloud, and this is the one thing the two backings genuinely do not
-  agree on.** No-delete means the ops stay at seqs 1..N, so re-creating
-  that id would be *fenced* — a lie, since no second writer exists. So
-  `CloudStore.projectExists` reports a deleted canvas as existing and
-  the engine refuses with `duplicate-id`, where a file home frees the
-  id by moving the directory aside. Canvas ids are minted and never
-  chosen, so nothing reaches it; pinned on both sides so a later phase
-  cannot reach it by accident either.
-- **2026-08-22 — The port bought less purity than the design promised,
-  and said so.** `ObjectStore` was drawn as five methods of pure
-  delegation, on the argument that "read it" would be a complete review
-  of the untested surface. In fact `list` was never needed, `stat` and
-  `readAll` were, and `append` had to exist because **object stores
-  have no append** — the oplog archive wants one, and in GCS that is a
-  compose-then-delete, plus a 404 branch. So `GcsObjects` is 143 lines
-  with real branching, not 80 without. The bargain still holds — the
-  untested surface is one dull file — but "trivial to review" was
-  overclaimed and is now "cheap to review".
-- **2026-08-22 — Option B needed zero changes to `gc.test.ts`, which
-  is the argument for it.** The design predicted two tests would have
-  to be pinned as file-only. Keeping the GC policy in the engine and
-  moving only the storage down meant the pure logic stayed exactly
-  where its tests already were, and none of the seven moved. Phase 1's
-  debt is paid without disturbing anything that was already proven.
-- **2026-08-22 — The emulator needs Java 21, and the tooling survey
-  said 17.** Discovered by running it. The consequence is a design
-  input rather than a note: the test setup cannot spawn the emulator
-  and inherit `PATH`, because the *wrong* `java` first fails exactly
-  like no `java` at all. Discovery is explicit and ordered, a missing
-  21+ JRE is its own named skip, and CI pins 21. A second correction
-  from the same source: `gcloud emulators firestore start` is a bash
-  wrapper that forks a JVM, so killing the wrapper leaves a JVM holding
-  a port — teardown kills the process **group**, escalating to SIGKILL,
-  after a real 22-second straggler was caught doing exactly that.
-- **2026-08-22 — What is still unproven, named rather than implied.**
-  Blob bytes, snapshots and range reads run against an in-process
-  double, not GCS; everything deciding *what* to store and *where*
-  runs against a real Firestore. `GcsObjects` itself is executed by
-  nothing but the signing path. And three assertions about signing
-  cannot be made without a bucket — they are Phase 5's first act, and
-  that phase's Work now says so.
+- **2026-08-22** — Compaction retains a *set* with holes, so it advances
+  `compactedThrough` **and** marks dropped documents: the horizon bounds the
+  read, the mark makes it exact. Without both, GC eats a live blob.
+- **2026-08-22** — A soft-deleted canvas id is claimed forever in the cloud
+  where a file home frees it — the backings' one genuine disagreement, pinned
+  on both sides.
+- **2026-08-22 — Open, partly discharged:** blob bytes, snapshots and range
+  reads still run against an in-process double, and `GcsObjects` is executed by
+  nothing but the signing path. Phase 5 discharged the three signing assertions
+  against a real bucket; the rest of that surface is unproven.
 
 ## Phase 5 — A home in the sky (dev) ⚑ provision
 
@@ -603,123 +474,9 @@ observed in production conditions).
 
 **Findings:**
 
-- **2026-08-22 — Stage A is provisioned and the home is real.**
-  `isocan-io-dev` in `us-west1`, Cloud Run at `min=0/max=1`, Firestore
-  with PITR, two buckets, three service accounts. A canvas created in a
-  browser — "Acme Sprint Board", `prj_M6E50pTpki` — persisted as
-  Firestore documents and read back through a freshly minted badge.
-  Phases 2 and 4 are therefore true in production and not only in the
-  suite: the door mints, `/api/projects` is 401 without a badge and 200
-  with one, and the oplog is where CloudStore says it is.
-- **2026-08-22 — Phase 4's debt is discharged: all three signing
-  assertions PASS against a real bucket.** Including the one Phase 4 was
-  least sure of — `x-goog-if-generation-match: 0` **is** honored inside a
-  signed request, so the second PUT of a ticket is refused with 412 and
-  blob writes really are create-only. And a service account with no
-  private key signed in 423ms through the IAM `signBlob` path, which
-  worked only because `roles/iam.serviceAccountTokenCreator` went in at
-  service-account creation. One extra came back off-spec and is recorded
-  rather than smoothed: dropping a signed header returns **400, not
-  403** — GCS rejects such a request as malformed before it evaluates
-  the signature, so a client that gets an upload wrong sees "bad
-  request" rather than "forbidden".
-- **2026-08-22 — Google's frontend swallows the exact path `/healthz`,
-  and the architecture had built two things on it.** Measured against
-  the live home: `/` 200, `/nonexistent` 200, `/healthz/` 200,
-  `/HEALTHZ` 200, and `/healthz` a 404 from Google's own error page —
-  with the container's request log never seeing it at all. The uptime
-  check the map specifies would have monitored Google's frontend
-  instead of the daemon, a check that cannot fail for the right reason;
-  and `infra/70-cloud-run.sh`'s own gate ended a *successful* deploy
-  with "deployed, but not serving", which is how this was found. The
-  daemon now also answers `/api/healthz` — under `/api/`, deliberately,
-  because that is the one prefix the SPA fallback does not answer with
-  a cheerful 200, so a vanished handler shows up as a red check instead
-  of a green lie. `/healthz` is untouched and still correct on
-  localhost; this is an addition, not a rename. The interception itself
-  is unverifiable outside a deployed home, so no local test pretends
-  otherwise — what is pinned is that both paths are one handler.
-- **2026-08-22 — The Proof is played, and the deploy overlap behaved
-  exactly as designed.** The correspondence half — two people at
-  dev.isocan.io, cursors live — was exercised by Dimitri, not by this
-  session, and is recorded on his word rather than measured here; that
-  attribution matters, because a proof is only worth what its witness
-  saw. The rollout half was measured: 150 ops written continuously
-  against the live home while the service took **two** revision
-  rollovers (`isocan-00010-vmn` → `isocan-00012-krt`). Every one
-  succeeded — **zero refused** — and the oplog reads back 150 entries,
-  seqs ascending, contiguous from 31 to 180 with no gaps and no
-  duplicates, and the order they landed is the order they were written.
-  This is phase 4's create-only precondition observed under the
-  condition it was built for and could previously only be shown against
-  an emulator: during a rollout two instances briefly exist, and the
-  schema — not an agreement — is what keeps one oplog honest. Left
-  behind on purpose: 150 `thr_roll*` threads on the dev canvas, which
-  are the evidence.
-- **2026-08-22 — Stage D, and two gcloud shapes that only fail when you
-  run them.** Continuous deploy works: a push to `main` builds, runs the
-  container's own boot check, pushes, and deploys — revision
-  `isocan-00004-q8v` from image `:b4642d5`, the commit sha, with the
-  canvas intact across the rollout. Getting there corrected three
-  things. **The connection check could never have passed:**
-  `95-build-trigger.sh` verified the repository with `gcloud builds
-  repositories list`, which is 2nd-gen Developer Connect only, while the
-  console flow it instructs you to use — and the `triggers create github
-  --repo-owner/--repo-name` form it then calls — are 1st gen. The two
-  generations cannot see each other, so a correctly connected repository
-  always listed empty and the script refused forever. There is no
-  1st-gen "list what is linked" command, so the create is the check.
-  **And `triggers create github` names its trigger with `--name`**, not
-  a positional, unlike most `create` verbs.
-- **2026-08-22 — `images:` is pushed after every step, which makes it
-  useless to a step that deploys.** The first trigger build failed with
-  `Image …:da3e43a not found` while the registry still held only the
-  previous tag — `_TAG` had expanded correctly, the bytes simply were
-  not there. Cloud Build pushes the top-level `images:` list only once
-  all steps finish. That is fine for a build-only run, which is why
-  `60-build-image.sh` never hit it and why `70-cloud-run.sh` deploying
-  afterwards always worked; it is exactly wrong for an in-build deploy,
-  which runs while the image exists nowhere but the worker's local
-  docker. The push is its own step now, before deploy. Worth noting the
-  shape of this bug: **the manual path and the automatic path disagreed
-  about when a push happens, and only the automatic one was wrong** —
-  so every hand-run of Stage A had been quietly confirming an ordering
-  that continuous deploy did not share.
-- **2026-08-22 — Two principals, one tarball.** `gcloud builds submit`
-  uploads the source as the *human*, and Cloud Build reads it as the
-  *build service account*. Nothing bridges them, so the first build died
-  on a 403 that talks about a storage object and reads like a corrupt
-  upload. Folded into `infra/40-service-account.sh`.
-- **2026-08-22 — The managed certificate, and a mistake of mine worth
-  keeping.** `dev.isocan.io` is live on a Google-managed cert, and the
-  ordering the README describes is real: the load balancer and its
-  static IP must exist first, then DNS points at it, and only then can
-  the cert validate. What the README did not say is that the cert was
-  created **before** the A record existed, so Google probed, failed, and
-  parked the domain in `FAILED_NOT_VISIBLE` — a *sticky* verdict, not a
-  live one. With DNS then correct, a verified chain (one IP, both
-  forwarding rules, cert on the proxy that serves 443), and no CAA
-  record in the way, it still read FAILED for ten minutes. I concluded
-  the state machine was stuck and recreated the certificate. The
-  background watcher then logged the original going **ACTIVE at
-  19:45:25** — within seconds of my deleting it. The diagnosis was
-  right and the patience was wrong: Google's retry had already
-  succeeded, and recreating cost seven more minutes for nothing.
-  The lesson, which is the reason this is written down: **a sticky
-  failure status is not a stuck state machine.** When the chain is
-  verifiable and DNS is clean, the correct action is to wait, because
-  the only evidence that a retry is not coming is a retry that has
-  already not come — and ten minutes is not that evidence. Create the
-  cert *after* the DNS record next time and the whole episode does not
-  occur. A cert also lags its own `ACTIVE` by a few minutes at the
-  edge: 19:52 active, 19:53 serving.
-- **2026-08-22 — The image's own boot test could not boot the image,
-  and was right not to.** `cloudbuild.yaml`'s smoke step starts the
-  container to check it serves; the image bakes `ISOCAN_STORE=cloud`,
-  and a cloud home correctly refuses to start without a bucket. The step
-  now overrides to the file backing: what it tests is that the *image*
-  boots, not that a build step can reach Firestore — a build step has no
-  business talking to the real home.
+- **2026-08-22** — `--max-instances=1` is per *revision*, so a rollout runs
+  two; the create-only schema rather than the flag is what keeps one oplog
+  honest. Measured: 150 ops across two rollovers, zero refused.
 
 ## Phase 6 — Birth at home, replica at home
 
@@ -758,171 +515,21 @@ the lid-close/reopen beat played with Chrome and the CLI.
 
 **Findings:**
 
-- **2026-08-23 — "Is my cursor past the horizon" is the wrong question,
-  and the empty answer to it is the dangerous one.** Compaction retains
-  a **set, not a suffix**: `chooseRetained` walks undo/redo causes back
-  into the past, so the live log after a GC has holes. A resume check
-  written as "is `since` past `compactedThrough`" would therefore be
-  wrong on any canvas with undo history, and the worker got that right
-  on its own — contiguity from `since + 1` is the honest test. What
-  contiguity cannot see is the empty tail: `[].every()` is vacuously
-  true, and `chooseRetained` returns `[]` outright for `keepOps <= 0`,
-  which `POST /api/projects/:id/gc` passes straight through from a
-  request body. Measured on the working tree: a canvas at seq 6, gc with
-  `keepOps: 0`, a socket at `?since=2` — and the answer was
-  `{"type":"resumed","from":2,"lastSeq":2}`, telling the client it was
-  current while four ops were missing. A tab self-heals on the next op,
-  because the gap check fires; **a quiet canvas leaves nothing to fire**,
-  and from this phase on that client can be a replica daemon that
-  believes it is in sync. The check needs completeness beside
-  contiguity — `since + tail.length >= lastSeq`. Recorded because the
-  shape recurs: a guard written as a predicate over a list is a guard
-  that says yes to the empty list.
-- **2026-08-23 — A replica's oplog is a cache, not a copy of the
-  history, and the map said otherwise.** A joining replica can only
-  present cursor 0, and a cursor that cannot be served is answered with
-  a snapshot — so a replica's log starts where it joined. Verified as a
-  *mutation of the conductor's own proof* rather than reasoned: with the
-  home made unable to serve a tail, the reopened replica's local oplog
-  came back `[]` while its state converged exactly, against `[1,2,3,4,5]`
-  when it genuinely resumed. That is also what makes "it resumed rather
-  than re-snapshotted" assertable at all — contiguity of the local log
-  is the observable difference, and it is what both the test and the
-  hand-played beat check. [architecture.md](architecture.md) now says
-  the log is a cache where it used to imply a replica ends up holding
-  the history.
-- **2026-08-23 — A replica discovers canvases by a home-wide route, so
-  a multi-tenant home would replicate strangers onto a laptop.** The
-  home connection polls `GET /api/projects`, which is not scoped to the
-  asking badge's admissions. Solo is correct — one member, which is
-  Scene 0 and everything this phase proves — but the moment a home has
-  two members a replica pulls down canvases it was never admitted to.
-  The narrowing is mechanism 10's and belongs on the route, in phase 7;
-  it is on the [map](architecture.md) now rather than in a worker's
-  head, because "everything is per-canvas" is exactly the belief phase
-  4's finding warned would be acted on later by somebody who did not
-  check.
-- **2026-08-23 — A person cannot be one actor in the tab and the
-  terminal while both are live — and the reported reason was the wrong
-  one.** The worker reported this as `reincarnate`'s 30-minute window
-  refusing with `name-taken`, called it "the one place phase 6 leans on
-  phase 8", and it is neither. Measured: the refusal is
-  `claims.ts`'s **liveness** clause — *"usr_… is somebody right now
-  (live on a canvas) — becoming them would be one actor wearing two
-  faces"* — and with no live face the same `--as` claim **succeeds**,
-  which is the recovery the registry itself prints as the remedy. The
-  guard consults `presence.roster`, which was per-daemon before this
-  phase too, so tab-and-CLI-as-one-live-actor was refused exactly this
-  way when both sat on one local daemon: the constraint is pre-existing
-  and phase 6 does not lean on passes for it. Recorded at length
-  because the correction matters more than the fact — a finding that
-  names the wrong mechanism sends the next phase to fix the wrong code,
-  and this one would have sent phase 8 after a problem it does not own.
-- **2026-08-23 — Two badges, and the one that had a slot waiting.**
-  `client.ts`'s `StoredBadge` comment predicted this phase in writing —
-  "keyed by home address, so phase 6's second badge … has a slot waiting
-  instead of needing a second file" — and it was right, but the slot was
-  in the wrong package: the door knock and the badge store lived in the
-  CLI, and the daemon needed both. They moved to
-  `packages/server/src/badge-store.ts` and both surfaces import one
-  mechanism. The prediction paid off; the location did not, which is
-  the ordinary fate of a seam designed one caller early.
-- **2026-08-23 — A forwarded write holds the single-writer chain across
-  an HTTP round trip, and that opened a window the design did not have
-  before.** With the write in flight the local store still said "I have
-  nothing" about a canvas one line from being written, so the home
-  connection dialled with `since=0`, was correctly answered with a
-  snapshot, and adopted it *over* the entry about to land — losing seq 1
-  from the replica's own log. Fixed twice over (`Engine.settled()`
-  before reading a cursor; `adoptRemoteSnapshot` refusing when the local
-  `lastSeq` already equals the snapshot's). The general shape is worth
-  keeping: the chain used to serialize writes against writes, and now it
-  serializes writes against *arrivals*, which are not under this
-  process's control.
-- **2026-08-23 — Blobs are not ops, but items are named by them.** The
-  write-forwarding list was written as "ops", and a replica that
-  forwarded only ops replicated a canvas of items whose bytes nobody
-  else could resolve. Uploads go to the home first and are kept locally
-  too; a local blob miss reads through to the home, Range passed up.
-- **2026-08-23 — A test pointed at the real dev home, and only stage 2
-  made it fire.** `replica.test.ts` used `https://dev.isocan.io` as a
-  configured address. Harmless while a replica merely declined to serve
-  pages; the moment a replica *dials*, the suite started knocking on the
-  live dev home's door. Now `https://home.invalid` (RFC 2606, which can
-  never resolve). A placeholder that names a real host is a placeholder
-  only until the code grows the ability to use it.
-- **2026-08-23 — The address was dialled, and everything held over the
-  real wire.** Recorded on Dimitri's run rather than this session's, and
-  the attribution matters: a replica pointed at **dev.isocan.io**, badge
-  minted at the real door, one socket over **wss:** through the load
-  balancer. All fourteen checks passed — the canvas born through the
-  replica exists at dev; a write forwards and the item is at the home by
-  name; the lid closes, the evening is written at dev by another actor,
-  the lid reopens and the local oplog comes back contiguous `[1,2,3]`.
-  That last is the phase's whole claim: it **resumed** rather than
-  re-snapshotting, across the internet, through a load balancer, against
-  a Cloud Run instance that had cold-started from zero.
-- **2026-08-23 — And the run overturned phase 5's health-path finding
-  inside a day.** Phase 5 measured `/healthz` on the dev home as a
-  branded 404 from Google's frontend that never reached the container.
-  Re-measured on the same home one day later, it returns **the daemon's
-  own body** — `pid`, `root: /app`, byte-identical to `/api/healthz`.
-  Whether Google's frontend changed or something in the load balancer
-  did is not established, and that is exactly the finding: the fact the
-  map rested on was never ours, and it moved without notice.
-  What survives is the *other* argument, which never depended on the
-  frontend and which the same measurement sharpens: `/healthz/` and
-  `/HEALTHZ` come back as **1001 bytes of `index.html`** at 200, so a
-  check on a near-miss path is green forever and cannot fail for the
-  right reason — `/api/` is the one prefix the SPA fallback does not
-  answer cheerfully. `healthPath()` is therefore **defensive rather than
-  necessary** now, and is kept on those terms.
-  [architecture.md](architecture.md) keeps both reasons in order, the
-  expired one first, rather than deleting the dead one — a map that
-  quietly drops a reason teaches the next reader that the surviving one
-  was always the whole story.
-- **2026-08-23 — A replica is not a backup, and the map said it was the
-  best one.** Found by walking Scene 0's multi-device beat by hand: two
-  replicas of one home, a file added on the first, and the second
-  machine listing the item perfectly while holding **zero bytes of it**.
-  Blobs a replica did not itself upload are streamed from the home on
-  demand and are **not cached** — the second machine's blob directory
-  was still empty after reading the file through twice. Put beside the
-  earlier finding that a replica's oplog begins where it joined, the
-  shape is clear: a replica holds the canvas's **state**, not its
-  **history** and not its **bytes**.
-  [architecture.md](architecture.md)'s backups bullet said "the best
-  backup remains a thick replica — sovereignty by replica is also
-  disaster recovery"; it was written before replicas existed and is now
-  corrected, because it fails in the one direction that matters — a
-  replica looks complete right up until the home is gone.
-  **This is phase 13's problem before it is anyone else's.** Re-homing
-  is drawn in [offline-birth.md](design/offline-birth.md) as "a thick
-  replica offers its store to a *new* home … hello, badge, offer,
-  replay", and the store it would offer today is missing precisely the
-  two things a replay consumes. Whether re-homing is restricted to the
-  originating replica, or a replica learns to backfill history and
-  blobs, is a phase 13 decision — named here so it is chosen rather than
-  discovered.
-- **2026-08-23 — Scene 0's multi-device beat works, including the race
-  nobody had run.** A marker carried to a second machine by git — the
-  clone case — resolves against a replica that has never heard of the
-  canvas, and it does so without a `duplicate-id`: the command was run
-  deliberately in the window before the home connection's first sweep,
-  and the binding still landed on the existing canvas rather than trying
-  to create it again. What the second machine then sees is the first
-  machine's work, which is the beat Scene 0 promises and the one that
-  makes solo multi-device fall out of the multiuser topology.
-- **2026-08-23 — What the conductor did NOT verify, stated plainly.**
-  The `writer-fenced` (409) pass-through is proven by construction — one
-  branch, one error shape — and not by execution: a real fence needs two
-  writers against one oplog, which a `FileStore` home does not produce,
-  and the dev run did not force a rollout underneath itself. Phase 5
-  measured the real thing against the hosted home under a rollout; this
-  phase did not re-measure it through the replica path. Nor was a
-  **browser at dev.isocan.io** driven against a replica: the hand-played
-  Chrome half ran entirely against local daemons, and the dev half was
-  CLI-only.
+- **2026-08-23** — A resume check needs completeness beside contiguity —
+  `since + tail.length >= lastSeq`. A quiet canvas leaves nothing to self-heal.
+- **2026-08-23** — A replica's oplog is a cache that starts where it joined,
+  which is what makes "resumed rather than re-snapshotted" assertable.
+- **2026-08-23 — Open, phase 13's:** a replica holds the canvas's state, not
+  its history and not its bytes, so it looks complete right up until the home
+  is gone — and re-homing would replay a store missing both.
+- **2026-08-23** — A forwarded write holds the single-writer chain across an
+  HTTP round trip, so the chain now serializes writes against **arrivals**,
+  which this process does not control.
+- **2026-08-23** — `healthPath()` is defensive rather than necessary: phase 5's
+  `/healthz` measurement expired within a day, and what survives is that
+  `/api/` is the one prefix the SPA fallback does not answer cheerfully.
+- **2026-08-23 — Not verified:** `writer-fenced` 409 through the replica path,
+  and a browser at dev driven against a replica.
 
 ## Phase 7 — The share (Scenes 1–4)
 
@@ -958,93 +565,19 @@ name.
 
 **Findings:**
 
-- **2026-08-23 — The same silent failure, a third time, one layer down.**
-  Stage 1 taught the socket to refuse (4402) and 4404 already existed, and
-  the browser handled *neither*: both fell into the ordinary 800 ms
-  reconnect backoff, so a canvas whose link had been switched off, or a
-  mistyped id, sat forever on "reconnecting" over an empty canvas. That is
-  the third instance of one pattern in two days — phase 6's `/healthz/`
-  answering 200 with the app shell, `/c/<id>` rendering a blank page, and
-  now a refusal indistinguishable from a network blip. **The shape: this
-  system's default answer to a wrong address is a cheerful one.** Both are
-  terminal states with their own copy now, and the door was not loosened
-  to do it — only its legibility changed.
-- **2026-08-23 — Discovery by enumeration is the wrong primitive, and
-  phase 6's debt is only partly paid.** Narrowing `GET /api/projects` to
-  admissions alone **breaks replicas**, measured rather than reasoned: a
-  fresh replica's badge has no admissions, `HomeLink.sweep` unions the
-  local list with that route, both come back empty, so it never dials and
-  nothing ever admits it. A link grant admits whoever *presents* the
-  address; it does not make a canvas enumerable, and enumeration is what
-  discovery currently needs. The shipped compromise is the door's own test
-  on the listing — a badge sees what it is admitted to plus what a grant
-  *would* admit it to — which closes the leak for a revoked link and
-  leaves it open while the link is on. The honest wording for phase 6's
-  finding is therefore **"narrowed to the door's test; full closure needs
-  phase 8's pass"**, not "paid". And the deeper question, named here so
-  phase 8 chooses it rather than meets it: a replica arguably should
-  replicate **the canvases its markers name**, not everything a home will
-  show it. Enumerate-and-mirror was never the design; it was the easiest
-  thing that worked when there was one member.
-- **2026-08-23 — A replica needs its own grant rows, which no design doc
-  had considered.** The desk's mechanisms only ever discuss the *home's*
-  door. Without a local row a second machine's CLI does not get a clean
-  403 — it gets "this directory is bound to project prj_… which does not
-  exist in this home yet", because the local listing hides the replicated
-  canvas from a fresh local badge. The local row is a different sentence
-  in a different ledger: *who on this machine may reach the local copy*. It
-  deliberately does **not** inherit the home's revocation — what stops a
-  laptop is that its badge is expelled at the home and replication goes
-  stale, which is phase 9's to state.
-- **2026-08-23 — `/api/ops` was admitting AFTER the write.** Harmless for
-  five phases, because the check could not refuse; the moment it could, a
-  refusal that arrives after the op has landed is not a refusal. Now the
-  door runs before `engine.submit` for every op naming a canvas, and the
-  conductor confirmed by hand that a refused write leaves `lastSeq`
-  untouched. The general lesson is about *order surviving a change in
-  meaning*: code that runs in the wrong order is invisible while it is a
-  no-op, and correct-looking right up until the day it matters.
-- **2026-08-23 — A caller's mistake was being reported as our failure.**
-  `DELETE` with `Content-Type: application/json` and no body returned
-  **500 "internal error"**. Pre-existing — `/api/commands` and
-  `/api/presence/actors` had always done it — because Fastify refuses an
-  empty JSON body and `setErrorHandler` collapsed the unknown error to
-  500. It became this phase's because stage 1 adds a revoke that both
-  surfaces call, and plenty of clients set that header unconditionally.
-  The fix is better than the report asked for: gate on **`statusCode`**
-  rather than a list of `FST_ERR_CTP_*` codes, because Fastify already
-  tags a caller's mistake 4xx and its own failures 5xx. The rule that fell
-  out is worth keeping — **4xx is about the request, so its message is
-  safe to repeat; 5xx is ours and stays opaque.**
-- **2026-08-23 — The address got a forcing function, not just a
-  decision.** Keeping `/p/` would have been a comment somebody violated in
-  a month, so the prefix now has exactly one definition in
-  `core/address.ts` and a test greps every source file for a hand-built
-  canvas URL in either spelling. It found three on its first run — the
-  CLI's `open` and two in the project list. Same instinct as
-  `surface.test.ts` catching a verb missing from the agent guide: a rule
-  the build can check is a rule, and anything else is a hope.
-- **2026-08-23 — How the Proof was actually played, stated so nobody
-  over-reads it.** The Proof says "two Chrome profiles"; the conductor
-  used **two cookie hosts** — `127.0.0.1` and `localhost`, which are
-  different hosts for cookies and therefore different badges, on one
-  profile. That is a real second person as far as the desk is concerned
-  and it is how Jordan arrived on nothing but a link. What it does not
-  exercise is a genuinely separate browser profile's storage, and the
-  badge cookie is `HttpOnly` by design, so a third arrival needs a third
-  host or a real profile. Everything else played: the parked agent on a
-  **replica** woke from a mention typed in a browser at the **home**, the
-  `@` picker showed him LIVE across the relay, and his "reading your
-  comment…" came back the other way.
-- **2026-08-23 — One unreproduced flake, recorded rather than closed.**
-  Stage 1 reported a single failing test in one run out of seven and could
-  not name it — the grep that would have captured it swallowed the name.
-  It did not recur in roughly twenty subsequent runs (six full suites and
-  eight of the concentrated integration files by the conductor, plus the
-  worker's own). Left open on purpose: a flake nobody can name is not a
-  flake anybody has fixed. The operational lesson is the cheap one — **a
-  stress loop that does not capture failures by name is a stress loop that
-  buys nothing.**
+- **2026-08-23** — Narrowing `GET /api/projects` to admissions **breaks
+  replicas** — a fresh badge has none, so it never dials and nothing ever
+  admits it. A link grant admits whoever presents the address; it does not make
+  a canvas enumerable.
+- **2026-08-23** — A replica needs its own grant rows, which no design doc
+  considered; the local row deliberately does not inherit the home's
+  revocation.
+- **2026-08-23** — `/api/ops` admitted *after* the write for five phases,
+  invisible while the check could not refuse. Wrong order is a no-op until the
+  day it matters.
+- **2026-08-23** — **4xx is about the request, so its message is safe to
+  repeat; 5xx is ours and stays opaque.** Gate on `statusCode`, not framework
+  codes.
 
 ## Phase 7.5 — The home you answer to
 
@@ -1113,112 +646,15 @@ walk with the exports deleted.
 
 **Findings:**
 
-- **2026-08-23 — A name allocated on a replica was a name the home would
-  refuse, and the obvious diagnosis was wrong.** The walk's first
-  `isocan identity --session` against dev failed with *"Isaac" is taken
-  here*. The conductor assumed a race — the home's actor registry not yet
-  replicated — **and tested it, and it was not.** With eleven names
-  confirmed replicated locally and a twelve-second wait, allocation still
-  picked Isaac. The real cause is a **scope mismatch**: `allocateName`
-  builds its taken-set from *admission-scoped* queries, and a fresh
-  replica's badge has no admissions — `desk.ts` says so on purpose
-  ("a badge that has never been in a canvas shares a roster with
-  nobody"). So the local answer is right by its own rules and wrong at
-  the home, which judges the same name against its own scope. It looked
-  like it self-healed on retry; that was **accidental** — the failed
-  attempt left Isaac claimed locally, so allocation moved to the next
-  roster entry, burning names until one was free at both ends.
-  The fix asks the home for a free name and treats the answer as a
-  **preference**, not a reservation: forwarding the claim itself would
-  put a local session key into the home's ledger — the precise thing
-  `Engine.claim` forbids — and would make a nameless claim *fail* when
-  the home is unreachable, which a replica must survive. Two replicas
-  asking in the same instant can still be handed the same name; closing
-  that needs a reservation, and a reservation is a claim, so it is named
-  in the code rather than half-built.
-- **2026-08-23 — The fix reproduced the bug inside itself, and it took a
-  real remote home to show that.** Asking the home for a free name was
-  the right shape, and `freeName` was built from `claimContext` — which
-  gathers scope with the CLAIM's reach, admissions only. A replica's
-  badge is minted fresh and admitted to nothing at the moment it asks, so
-  every roster name looked free and the home returned the one name
-  guaranteed to collide. Measured against dev with **one badge and two
-  calls a single GET apart**:
-
-      no admissions           -> {"name":"Isaac"}   (taken on a canvas)
-      after one admitting GET -> {"name":"Nico"}
-
-  It passed every local test because a replica's sweep admits its badge
-  in milliseconds over loopback, so by claim time the scope was
-  populated; across the internet the claim wins that race. The refusal
-  then names a canvas the badge had **not** been in when it asked, which
-  is what made it so hard to read.
-  The conductor got there third. The first diagnosis was a registry race
-  (tested, wrong). The second was "dev runs old code" — plausible, since
-  dev genuinely lacked the route, and **still wrong**: dev was redeployed
-  and the walk failed identically. Only then did the one-badge-two-calls
-  measurement isolate it. Both wrong diagnoses were *reasonable* and both
-  would have shipped a fix for a bug that was not there. What finally
-  worked was reducing to a single call whose answer could only mean one
-  thing.
-  The fix gives `claimContext` a **reach**: `freeName` alone asks for
-  "admissible" — admissions plus whatever a grant would admit this badge
-  to, through the same `admittingGrant` the projects listing walks. That
-  is the same trick phase 7 used when scoping `GET /api/projects` to
-  admissions broke replicas, for the same reason, and the code says so
-  rather than leaving two coincidences. Disclosure is a strict function
-  of what the asker can already obtain: one name, never the taken set,
-  across canvases `GET /api/projects` already lists to that badge. A
-  revoked link drops the canvas out, and judging a name admits nobody —
-  both asserted.
-- **2026-08-23 — The flake was two flakes, both timing, and one of them
-  was a product bug.** Dimitri's read — *"flakes come from when I forget
-  to design the tests to not depend on timing"* — was right on both
-  counts. Caught by running the suite twenty times and writing **full
-  output to a file per run**, which is the whole lesson: two earlier
-  sightings were lost because the reporter grepped a stream that had
-  already scrolled, and an unnamed flake is one nobody can fix.
-  **The first was not a test bug at all.** `Daemon.close()` never drained
-  the engine's single-writer chain. `app.close()` destroys sockets, which
-  does not cancel a handler already running behind one, so a request that
-  had reached `engine.claim` had work still queued — and that work wrote
-  to the desk *after* `desk.close()` had drained and returned. Caught in
-  the act with a post-close write detector: a `.tmp-*` file appearing in
-  a `desk/` directory belonging to a daemon that had said it was shut.
-  Under test that is `ENOTEMPTY … rmdir …/desk`; in a container it is a
-  write racing process exit. `await engine.settled()` in `close()` is the
-  fix, and it is safe there rather than earlier only because the home
-  connection is closed above it.
-  The second was a test asking the wrong question: `exitCode !== null` is
-  **null for a process killed by a signal**, so on the SIGKILL path the
-  helper read a dead daemon as alive and waited on an `exit` event that
-  had already fired. Intermittent because `stopDaemons` only escalates to
-  SIGKILL when a daemon misses its SIGTERM grace, which happens under a
-  loaded suite and never on an idle machine. Neither was fixed by
-  lengthening a timeout or sleeping in teardown — both of which hide a
-  signal rather than remove it.
-- **2026-08-23 — And the shutdown could not always shut down.**
-  `runDaemon`'s handler was `close().then(() => process.exit(0))` with no
-  catch, so a rejection from `desk.close()` or `store.close()` left a
-  process alive with its handlers detached: stopped serving, will not
-  die. That is *exactly* the condition that makes `stopDaemons` escalate
-  to SIGKILL — so chasing a flake caused by the escalation is how the
-  line got read at all. It now logs and exits 1, because a close that
-  could not flush is not a clean shutdown and a process reporting success
-  is one nobody investigates. Named and not fixed: a `close()` that never
-  *settles* hangs the same way, and a watchdog that killed a daemon
-  mid-flush would be its own bug.
-- **2026-08-23 — The cheerful wrong address, a fourth time, now between
-  versions.** `GET /api/actors/free-name` against dev returns **HTTP 200
-  and the web app**, because an unmatched `/api/` path on a badged
-  request falls through to the SPA handler. After `/healthz/`, `/c/<id>`
-  and the refused socket, this is the same shape in a new place — and
-  this one has teeth beyond legibility: **a replica's version
-  negotiation with an older home works only because parsing HTML as JSON
-  throws.** The fallback is correct by accident rather than by design.
-  A route that does not exist under `/api/` should say so; that is the
-  general fix, and it wants doing before something asks a question whose
-  wrong answer is not conveniently unparseable.
+- **2026-08-23** — `allocateName` builds its taken-set from admission-scoped
+  queries, so a fresh replica allocates in an empty scope and the home refuses.
+  The home is asked for a free name and the answer is a **preference, not a
+  reservation**.
+- **2026-08-23** — The fix reproduced the bug inside itself: `freeName`
+  gathered scope with the *claim's* reach. `claimContext` has a **reach** now.
+- **2026-08-23** — `Daemon.close()` never drained the writer chain, and
+  `exitCode !== null` is null for a signal-killed process. Neither flake was
+  fixed by lengthening a timeout.
 
 ## Phase 8 — Escalation (Scene 5)
 
@@ -1243,167 +679,17 @@ lifecycle (single-use, short TTL, named claim, admission-only form).
 
 **Findings:**
 
-- **2026-08-23 — A pass that lands in the bar of a tab that is already
-  open never arrives at all.** Measured in Chrome while driving the web
-  half: pointing an open canvas tab at *its own address* with `#<pass>`
-  appended is a **same-document navigation**. Nothing reloads, the entry
-  point never runs again, and the credential simply sits in the address
-  bar doing nothing — no redemption, no refusal, no page to read. It is
-  the cheerful wrong address in its quietest form yet, and this codebase
-  has now met that shape five times. `isocan open` usually escapes it by
-  spawning a new tab, but "usually" is not a property: a person pasting
-  the line into the bar of the tab they already have open lands here
-  every time. The fix is four lines — a `hashchange` listener that
-  reloads when the new fragment is a pass, after which the page comes
-  back through the ordinary arrival path. It cannot loop, because the
-  fragment is stripped with `replaceState`, which fires no `hashchange`.
-  **The general lesson is about fragments, not passes:** a credential
-  carried in a `#fragment` is invisible to the one event a SPA usually
-  relies on (a page load), so anything that arrives that way has to be
-  read at load *and* on change.
-- **2026-08-23 — The same handed identity is adopted differently on the
-  two surfaces, on purpose.** `setup` refuses to let a pasted command
-  overwrite a DIFFERENT person already in `identity.json` — that file is
-  a machine's one durable answer to "who owns this laptop", and nothing
-  stands behind it. The browser does the opposite and overwrites: the
-  persona it displaces is still one click away in the identity menu's
-  "Switch to" roster, and the tab was opened by a link that names who it
-  is for, so refusing would burn a single-use pass and leave the person
-  looking at somebody else's face. Two surfaces, one mechanism, two
-  answers — because what is behind the slot differs, not because either
-  side got it wrong. Recorded so a later phase does not "fix" the
-  asymmetry into consistency.
-- **2026-08-23 — A copy button cannot be proven in an automated tab.**
-  The dialog's Copy was driven both by a real click and from the page,
-  and `navigator.clipboard.writeText` neither resolved nor rejected:
-  Chrome blocks the clipboard while `document.visibilityState` is
-  `hidden`, which is what an automated tab is. The command itself was
-  read off the screen and out of the DOM, and the fallback path (a
-  refusal message, plus `user-select: all` on the command so it can be
-  selected by hand) is what a real browser would show. Worth knowing
-  before the next phase writes a Chrome proof around a clipboard.
-- **2026-08-23 — Discovery by enumeration is gone, and the thing that
-  replaced it is not one mechanism but two.** Narrowing the sweep was the
-  easy half: `HomeLink.sweep` asks
-  `GET /api/projects?reach=admitted`, the route answers admissions and
-  nothing else when a caller asks that question, and a replica mirrors
-  what it was let into. Measured on real daemons before and after: a
-  scratch replica pointed at a home holding two link-granted canvases
-  replicated **both** in under two seconds, and now replicates **none**,
-  indefinitely. What the narrowing revealed is that **two shipped
-  arrivals carried an ADDRESS and no admission** and were living entirely
-  off enumeration — a `.isocan/project.json` cloned by git onto a second
-  machine (Scene 0's multi-device beat) and a pass-less
-  `isocan setup <address>`, both of which have their own tests and one of
-  which stage 3 wrote a week ago. They were not designed to enumerate;
-  they worked because the home listed itself. So the arrival now says
-  what it wants — `POST /api/home/join`, one canvas by name, the home
-  running the same door test it would have run when the sweep dialled —
-  and the CLI speaks it where the marker is resolved. **The general
-  shape: removing an accidental capability is cheap, and finding
-  everything that was standing on it is the work.** The suite found all
-  three callers in one run (14 failures, five files); no amount of
-  reading would have.
-- **2026-08-23 — The narrowing had to be caller-stated, because one
-  route answers two different questions.** `GET /api/projects` is the
-  BROWSER's list as well as the replica's, and on a solo home the
-  household is one machine: a canvas created from the CLI is admitted to
-  the CLI's bearer badge while the person's tab carries a cookie badge
-  that has never been in it. Narrowing the route wholesale would have
-  hidden a person's own canvas from their own front page — a worse bug
-  than the one being fixed. So `?reach=admitted` is stated by the caller
-  and the wide answer is the default, which also makes the change
-  backwards compatible in the direction that matters (an old replica
-  polling a new home gets exactly what it always got). Sniffing the
-  carrier was the obvious shortcut and is the one this codebase already
-  refuses; the vocabulary is deliberately the same two words
-  `claimContext`'s `NameReach` uses one layer down, because it is the
-  same distinction.
-- **2026-08-23 — A canvas born on a replica survives on two legs, and
-  only one of them was obvious.** The brief asked why birth-on-a-replica
-  keeps replicating after the narrowing, and the honest answer is that
-  it is over-determined: the forwarded `project.create` lands in the
-  local store (so the sweep's local half names it, which is also what
-  makes "a home that is down must not make a replica forget" true — one
-  line, two properties), AND the home writes `{root: "created"}` onto
-  the creating daemon's badge, so the narrow listing names it too. The
-  second leg is the one a reader would doubt and the one asserted
-  directly, with the replica's own home badge, because it is invisible
-  from the machine that owns it and it is what survives a local store
-  being thrown away.
-- **2026-08-23 — One unnamed failure, and the conductor made the exact
-  mistake phase 7.5 wrote down.** The first full suite run after rebasing onto
-  four commits from another session reported **1 failed / 950 passed**, and
-  that run's output was not captured to a file — so the failing test has no
-  name, which is precisely the operational lesson phase 7.5 recorded ("a
-  stress loop that does not capture failures by name is a stress loop that
-  buys nothing"). It did not recur: five full runs and five concentrated runs
-  over the daemon-heavy files, all captured per run, all green, plus three
-  green full runs before the rebase. Recorded rather than closed, exactly as
-  phase 7 recorded its own. The lesson has now cost two phases, which suggests
-  the fix is not a resolution to remember — it is that the default way to run
-  this suite should write per-run output somewhere, so remembering is not
-  required.
-- **2026-08-23 — The dev walk agreed with the local one, and the one thing
-  that could only be seen there was the name.** Everything the local rehearsal
-  showed, dev showed again on deployed code: the dialog under a real face at
-  `dev.isocan.io`, one pasted command onto a machine with a clean shell, the
-  canvas replicated, the agent's own actor, the mention waking it under the
-  other roof, the reply coming back. The measurement that could NOT have been
-  made locally is the allocated name: the agent on the escalated machine was
-  handed **Sonia**, not Isaac — because Isaac, Kenny and Nico are all worn at
-  dev, and only a home with a populated roster can prove that the question was
-  asked THERE. That is phase 7.5's fix, re-measured in the place where its
-  bug lived: a name allocated in a replica's own empty scope was the bug, and
-  a name allocated in the home's scope across the internet is the fix. Worth
-  keeping as a habit — a dev walk is worth most where the home holds state a
-  scratch daemon cannot fake.
-- **2026-08-23 — And the narrowing was proved where enumeration used to
-  hurt.** dev holds six canvases, five of them nothing to do with this walk.
-  The escalated machine mirrored **one**: the canvas its pass named. Before
-  this phase it would have pulled down all six, because every one of them
-  carries a live link grant — which is the concrete shape of "a replica of a
-  MULTI-TENANT home would mirror strangers' canvases onto its own disk", a
-  sentence that has been in the map since phase 6 and is now deleted from it.
-- **2026-08-23 — The design doc lost an argument to the browser, and the
-  doc moved.** Mechanism 1's diagram had redemption minting a THIRD badge
-  (`H-->>D: badge B₃`), and the code endows the badge the caller already
-  presents. The reason is not convenience: a browser holds a cookie badge
-  before it can ask for anything, and the door deliberately never returns a
-  cookie's secret in a body — so "the reply carries a new badge" is a shape a
-  browser physically cannot receive, and what it would mean there is
-  re-setting the one cookie and dropping its admissions. The design's
-  substance survives untouched — a badge that arrived knowing nothing leaves
-  knowing its person, and badges still "differ only in dowry". Ruled by the
-  conductor and [identity-desk.md](design/identity-desk.md) now says what the
-  code does, with the argument beside it. The same section also stops drawing
-  the pass as a branch the door runs on every arrival: it is a route, because
-  a single-use credential presented on every request is a contradiction.
-- **2026-08-23 — How the Proof was actually played on this machine, stated
-  so nobody over-reads it.** Two "machines" were two `ISOCAN_HOME`
-  directories and two daemons on one host, which is a real second machine as
-  far as every ledger involved is concerned — separate desk, separate badge,
-  separate identity file, separate store — and it is how the escalation was
-  driven: the tab minted the pass, `setup <address>#<pass>` in an empty
-  directory pointed the daemon, redeemed, replicated, and wrote the marker;
-  the agent there claimed its own actor; and `@`-mentioning it in a browser
-  **at the home** woke it **on the other machine**, its face in the facepile
-  and its cursor on the canvas. What that does NOT exercise is the internet
-  between them, which is exactly what phase 7.5 learned can turn a passing
-  local test into a failure at a real home — a claim won a race over loopback
-  that it lost across the wire. So the dev walk is not a formality here, and
-  the phase stays PART-DONE until it is done.
-- **2026-08-23 — Turning off a link stops arrivals; it does not empty a
-  laptop, and that is still correct.** Measured: a machine enrolled by a
-  pass keeps both its canvases after the link grant is revoked at the
-  home, while a sixth machine's pass-less `setup` of the same canvas is
-  refused and says so. Admissions stand until something expels them,
-  which is phase 9's sweep. What changed here is only that the refusal
-  is now LEGIBLE — a cloned marker whose home will not have this machine
-  gets "…would not hand this machine prj_… : this badge is not admitted
-  … mint a pass from a session that is already on it", where before the
-  narrowing it got a canvas it should not have had, and after the
-  narrowing but before the join route it would have got silence.
+- **2026-08-23** — **A credential in a `#fragment` is invisible to the one
+  event a SPA relies on** — read fragments at load *and* on change.
+- **2026-08-23** — `setup` refuses to overwrite a different person in
+  `identity.json`; the browser overwrites. Two surfaces, two answers, because
+  what stands behind the slot differs — do not "fix" it into consistency.
+- **2026-08-23** — `?reach=admitted` is caller-stated because one route answers
+  two questions; narrowing it wholesale would hide a person's own canvas from
+  their own front page.
+- **2026-08-23** — Removing enumeration exposed two shipped arrivals carrying
+  an address and no admission; both ask by name now through
+  `POST /api/home/join`.
 
 ## Phase 9 — The desk hardened: attesters and revocation ⚑ provision
 
@@ -1447,286 +733,36 @@ resumption driven in Chrome.
 
 **Findings:**
 
-- **2026-08-24 — The Outcome, measured end to end, including the half stage
-  1 could not reach.** Against a daemon configured to the real dev Identity
-  Platform project, with a real ID token minted for a synthetic address:
-  the owner invited `acme-tester@example.test` by name, a stranger walked in
-  on the link, the invited badge proved the address and walked in too — and
-  turning the link off answered **`{expelled: 1, rerooted: 1}`**. The
-  stranger got 403; the person invited by name was **re-rooted onto the email
-  grant and stayed**. Then revoking her email grant expelled her. The
-  creator's `{root: "created"}` admission was untouched throughout. That is
-  the design's sentence — "it stops strangers without expelling the invited" —
-  as a measurement rather than a promise, and it is the sentence stage 1 had
-  to leave as eleven tests and no reachable surface.
-- **2026-08-24 — Resumption, driven in Chrome, and it is the gesture the
-  phase exists for.** A browser that had never been Jordan: refused when it
-  tried to self-claim the name ("Jordan is taken here … @Jordan would reach
-  both of you"), entered as somebody else, proved the address through the real
-  provider, and was then offered **"Another surface that proved the same
-  address answers to: Be Jordan"**. One click and the tab was Jordan — avatar
-  and cursor label both. The `oobCode` was stripped from the URL on arrival.
-  A person who never proves anything is untouched by all of it: a home with no
-  attester refuses an `email:` grant with its reasons and shares by link
-  exactly as before, which was the trap this stage was told not to walk into
-  and did not.
-- **2026-08-24 — A refusal written for a terminal, shown in a browser.** The
-  name-taken message a browser gets still ends in `--as usr_…` and `--new` —
-  CLI flags offered to somebody who has no command line. It is one shared
-  message from `core/claims.ts`, which is exactly why it is right that both
-  surfaces use it and exactly why it now reads oddly on one of them: the
-  refusal is correct, the remedy is addressed to the wrong reader. Recorded
-  rather than fixed, because the fix is a shape — a refusal that carries its
-  reason as data and lets each surface word the remedy — and that is a change
-  worth making deliberately rather than at the end of a phase.
-- **2026-08-24 — A documentation edit ran the provisioning script.** The
-  conductor inserted these Findings with an UNQUOTED shell heredoc, so the
-  backticks around `` `infra/100-identity-platform.sh` `` were command
-  substitution: writing the document executed the script and pasted its entire
-  output — a browser API key among it — into the middle of the finding. **No
-  harm was done, and only because that script is idempotent**: every step
-  checks before it creates, so the second run changed nothing. Had it been a
-  script that created unconditionally, editing a doc would have provisioned
-  cloud resources. That is a better argument for the idempotence rule than the
-  one in `infra/README.md`, and it is now the one that is written down. The
-  key was scrubbed before anything was pushed; the reason it had to be is not
-  that it is secret (a browser key ships in the page) but that GitHub's
-  scanner flags every `AIza…` string, and a scanner people learn to ignore is
-  worse than no scanner.
-
-- **2026-08-24 — Attesters are configuration, and stage 1's argument for a
-  constant was the same mistake pointing the other way.** `server/attest.ts`
-  shipped its roster as a compile-time constant with the reason written down:
-  *"a home that could be told it has an email attester by setting a variable is
-  a home that can be made to lie to the Share dialog."* The instinct was right
-  and the conclusion was backwards. **The verification ships in every build**,
-  identically — a laptop's daemon contains it byte for byte — so "what the code
-  can DO" cannot be the discriminator. What a local daemon lacks is an Identity
-  Platform *project*, which is exactly what the configuration names; and the
-  same value is what `iss` and `aud` are bound to when a token arrives, so it
-  is not a boolean claim that could be false, it is the thing verification is
-  performed WITH. A home configured with a project it does not own verifies
-  nobody and says so at the first sign-in. `ISOCAN_AUTH_PROJECT` +
-  `ISOCAN_AUTH_API_KEY`, and no compiled-in default, so the mechanism is
-  invisible until an innkeeper configures it. **This is the deployment-detail
-  thesis reaching a home's capabilities rather than its storage for the first
-  time** — one image, many homes, and the generalisable form is: *when a
-  capability looks like it must be compiled in, check whether what actually
-  varies is an input the code already needs.*
-- **2026-08-24 — Re-rooting has a surface now, and it says "0 expelled, 1 kept
-  by another grant".** Stage 1's finding named this as the half it could not
-  prove: *"the only subject a badge can satisfy today is `link`… so the half of
-  the sweep that stops a revocation being a purge is real code with eleven
-  tests and no reachable surface."* Measured against a real daemon with a real
-  Identity Platform token: a browser tab proved an address, an `email:` grant
-  was written from the CLI, and `isocan share --link off` printed exactly that
-  line while the tab stayed live on the canvas and a badge-less stranger got
-  403. Nothing in the sweep changed to make this work — the surface arrived
-  underneath it, which is what "no reachable surface" meant.
-- **2026-08-24 — `as:` stops being open assertion, and the tightening stops
-  exactly where a shipped recovery begins.** Resuming an actor another badge
-  holds now needs a VOUCH, and there are two satisfiers written as one
-  predicate: phase 8's keyless handoff row (a pass), and phase 9's shared
-  attestation (an inbox). Before this, `as` was refused only while the actor
-  was *visibly* somebody — live, or claimed within the half hour — so half an
-  hour after Jordan closed her laptop, anybody who knew her actor id could be
-  her. Actor ids ride in the oplog, so that is every stranger on a shared
-  canvas.
-  **What the tightening does NOT close is deliberate and was measured before it
-  was chosen.** A claim under the SAME session key is still resumable without a
-  vouch, because that is `/api/actors/orphaned` → `--as`, the lost-badge
-  recovery phase 3 shipped, and nothing replaces it: a replacement badge holds
-  no claims, so it cannot see the badge holding its actor, let alone kill it.
-  Closing it fully was implemented first and run against the suite — eight
-  failures, six of them that recovery path in different clothes. So the honest
-  statement is **a session key is a weak vouch and an attestation is a strong
-  one**, and the weak one is left standing where the strong one is not
-  available. Narrowing it to "a different session key" cost one line and broke
-  nothing: 1001 tests green.
-- **2026-08-24 — Two bugs only a browser could find, both in the Share
-  dialog's new half, and both of the shape this codebase keeps meeting.**
-  Driving the un-invite in real Chrome: (1) the sweep's count rendered under
-  the LINK toggle's note, so un-inviting one person read as *"anyone with the
-  link — 2 surfaces lost this canvas"*. That is stage 1's own "the verb
-  contradicted itself in one screen" finding arriving in the dialog rather than
-  the CLI: a count with no subject attaches itself to whatever sentence is
-  nearest. The report now carries WHICH revocation it was. (2) Un-inviting
-  somebody can expel the person doing it — the ordinary case for anyone who was
-  themselves invited by name — and the follow-up `listGrants` then 403s, so the
-  dialog kept showing the revoked invitation with a live-looking "Un-invite"
-  beside it. The row is dropped locally before the re-read now. Neither is
-  reachable from a unit test, because both are about what is on the screen
-  AFTER a request that succeeded.
-- **2026-08-24 — `repo:` is deferred, with the reason, and the refusal is the
-  part that had to stay true.** Verifying "can read this repository" is not
-  another token check: it needs the GitHub OAuth *access* token (Identity
-  Platform returns that only at sign-in, and holding one is a credential-custody
-  decision nobody has made), an outbound call to GitHub on a request path, and
-  a scope on the OAuth app that private repos require. It belongs with Scene 6
-  and the thin agent that needs it — phase 11. What matters is what the brief
-  named as unacceptable: **a `repo:` grant that can be written and admits
-  nobody.** It cannot be written; `attesterRefusal` says which attester is
-  missing and what to do instead, and the sentence is different from the email
-  one because they are different things to go and fix.
-- **2026-08-24 — What an AGENT can and cannot do here, decided rather than
-  inherited.** Signing in is a person-only gesture and stays one: an agent has
-  no inbox and no browser, and the only way to give it one would be to let it
-  present somebody else's token, which is the impersonation this whole
-  mechanism exists to prevent. But *inviting by name* and *seeing what a badge
-  has proved* are ordinary collaboration work, so both are CLI verbs:
-  `isocan share <email>`, `isocan share --revoke <email>` (which takes the
-  address, not a grant id — a person who wants somebody out knows their
-  address), and a `proved` column on `isocan badges`. An agent that could only
-  hand out the link would be handing out more access than it was asked for,
-  which is the asymmetry that decided it.
-
-- **2026-08-24 — The floor works, and it landed in spam.** The first
-  `EMAIL_SIGNIN` from the freshly provisioned dev project reached
-  Dimitri's inbox — as spam. That is not a configuration slip, it is the
-  default: Identity Platform sends from `noreply@isocan-io-dev.firebaseapp.com`,
-  a domain with no relationship to isocan.io and no SPF or DKIM alignment
-  a receiver can use, which is precisely the profile a spam filter is
-  built to catch. **It matters more than it looks, because the magic link
-  is not a notification — it is the arrival itself.** A canvas link that
-  lands in spam is an inconvenience; a *sign-in* link that lands in spam
-  is a person who cannot get in at all and has no way to know why. The
-  design leans on this: "a magic link to the inbox attests it with no IdP
-  at all" is the FLOOR, the thing that works when somebody has neither a
-  Google nor a GitHub account. A floor that silently fails for a fraction
-  of arrivals is not a floor.
-  Recorded rather than fixed, deliberately, and the fix is not code: it
-  is a sender domain isocan actually owns, with SPF and DKIM published,
-  configured in Identity Platform's email templates. That is a
-  **`isocan.io` concern and belongs with phase 14's promotion gesture** —
-  dev can live in a spam folder, because everyone who uses dev has been
-  told to look there. What must not happen is that phase 14 meets this
-  for the first time on launch day, so it is written here, where the
-  attesters were chosen.
-- **2026-08-24 — The provisioning taught the provisioning script two
-  things, and both were the repo's own recurring bugs wearing gcloud.**
-  `infra/100-identity-platform.sh` was written from the API docs and then
-  rewritten from what its first run MEASURED. First: a user credential
-  from `gcloud auth login` bills its API quota to **gcloud's own shared
-  client project**, not the one named in the URL — so identitytoolkit
-  answers `403 SERVICE_DISABLED` naming a project nobody has heard of,
-  moments after the script watched the API turn on for ours. Every call
-  sends `x-goog-user-project` now. It is exactly the disease
-  `lib/common.sh` exists to prevent — an ambient default deciding which
-  project a command really touches — one layer below where `--project`
-  can reach, because curl is not gcloud. Second: `initializeAuth` lives
-  under `v2/` while every neighbouring call is `admin/v2/`, and the
-  wrong path answers an **HTML 404**, so the first version's check for
-  `"error"` in the body found none and reported success. That is the
-  cheerful-wrong-address shape for the sixth time, reproduced *by the
-  conductor* in a provisioning script on the day the phase that closed it
-  was committed. The lesson that generalises is not "check for HTML": it
-  is that **a step which cannot read back the state it wanted has not
-  verified anything**, and every step in that script now does.
-- **2026-08-24 — What the conductor verified by hand, and the one half
-  that has no surface to verify through yet.** Measured against a real
-  daemon: a link-admitted tab, a daemon holding a pass from that tab, and
-  an agent holding a pass from the daemon were **all three expelled by one
-  revocation** — two hops down a chain nothing had ever walked — while the
-  creator's `{root: "created"}` admission was untouched, and the answer
-  came back `{expelled: 3, rerooted: 0}` on the response both surfaces
-  read. The blob ruling was re-measured independently: badge-less `curl`
-  is 401, a badged one is 200 with `Cache-Control: private`, and a real
-  browser renders the sandboxed HTML blob **with its script running**.
-  What could NOT be verified end to end is **re-rooting**, and the reason
-  is structural rather than an oversight: the only subject a badge can
-  satisfy today is `link`, a canvas has exactly one live link row, and
-  `email:` cannot be granted until something can attest one. So the half
-  of the sweep that stops a revocation being a purge is real code with
-  eleven tests and **no reachable surface until stage 2 borrows an
-  attester**. Stated rather than glossed: a phase that can only prove half
-  its outcome should say which half.
-
-- **2026-08-23 — The blob route was open on an argument about the wrong
-  request, and it is closed.** `isOpen` had held `GET
-  /api/projects/:id/blobs/:hash` open to badge-less callers since phase 2,
-  reasoning that a `sandbox="allow-scripts"` iframe has an opaque origin and
-  therefore a null site-for-cookies, so "nothing it then requests carries a
-  `SameSite` cookie at all". Every clause of that is true; the conclusion did
-  not follow. Measured in Chrome against a server that logged the request
-  headers of each sub-request the canvas actually makes: the **iframe's own
-  load** arrives `Sec-Fetch-Site: same-origin` and **carries the badge
-  cookie**, because it is issued by the PARENT page — the opaque origin
-  governs what the loaded document does afterwards, and the blob's own
-  subresources (`Origin: null`, `cross-site`, no cookie) are what the old
-  comment described. The second half of the hypothesis held too: a relative
-  `<img src="pic.png">` inside a blob resolves to `…/blobs/pic.png`, which is
-  not a content hash and has never resolved, so the relative-asset case the
-  route was held open for was never working. Re-measured in the real app with
-  the route closed: the HTML blob renders, its scripts run, and a badge-less
-  `curl` of the same URL gets 401. **Expulsion now reaches the bytes**, which
-  is what the phase's Work said had to be decided here. One consequence that
-  had to move with it: the response's `Cache-Control` gained `private`,
-  because the hosted home's Cloud CDN backend runs `USE_ORIGIN_HEADERS` and a
-  credentialed response cached at an edge is a closed route with an open back
-  gate. The general shape is worth keeping: **a comment that reasons about a
-  browser is a hypothesis, and this codebase has now been wrong twice by not
-  measuring one.**
-- **2026-08-23 — A sweep in list order is a coin toss, and the design named
-  the failure before it happened.** The first implementation walked the
-  canvas's badges in whatever order the desk returned and asked of each "does
-  its root still stand?". With Jordan's tab admitted by the link and her
-  daemon by a pass from the tab, considering the daemon FIRST resolved its
-  chain through a tab whose root had just been revoked — so the daemon was
-  expelled a moment before the tab was re-rooted onto the email grant that had
-  invited her by name. Two badges of one person, one kept and one thrown out,
-  decided by an array's order. That is "turning off the link would expel the
-  very people who were invited by name" arriving one hop down from where the
-  design warns about it. The fix is that a chain adopts its minter's
-  **outcome** rather than its stale **root**: a memoized recursion, so every
-  badge is decided once per round whatever order they arrive in. The suite
-  caught it on the first run because the test was written from the design's
-  named failure rather than from the happy path.
-- **2026-08-23 — Turning the link off can expel the person turning it off,
-  and it is left that way on purpose.** Measured against a real daemon: a
-  canvas created from a terminal (`{root: "created"}` on the CLI's bearer
-  badge) and opened in a browser (`{root: "grant"}` on the cookie badge) can
-  be locked out of that browser by its own Share dialog — the sweep expels
-  the tab, and phase 7's terminal page then tells the person who just switched
-  the link off to "ask whoever shared it". Exempting the revoker was
-  considered and refused: it would leave that badge rooted at a revoked grant,
-  which the next sweep of the canvas would expel anyway — a one-gesture
-  reprieve that evaporates silently — and there is no honest root to give them
-  instead. The thing that would provide one is a subject that binds to a
-  person, which is the roles question the design deliberately leaves open.
-  What changed instead is that the consequence is stated BEFORE the click, in
-  the dialog and in `isocan share --link off`'s own help. **Recorded as a
-  decision rather than fixed**, with a test that pins it, because the real
-  answer is a scene nobody has played yet.
-- **2026-08-23 — The verb contradicted itself in one screen, and only a walk
-  caught it.** `isocan share --link off` printed the sweep's "1 expelled" and
-  then, two lines later, phase 7's "people already on this canvas keep their
-  access". Both lines were individually defensible — one was new and one had
-  been true for a phase — and no test compared them, because no test reads a
-  command's whole output as prose. The general shape: **when a behaviour
-  inverts, the copy that described the old behaviour is a bug in every place
-  it survives**, and the places are found by running the thing, not by
-  grepping for the feature's name.
-- **2026-08-23 — Phase 2's refused field, earned.** `BadgeRecord.attestations`
-  was left out on purpose with the reason written down — "an array that is
-  always empty is a speculative clean seam where phase 1's lesson asks for an
-  honest leaky one" — and this is the phase that made it read. The same
-  instinct killed the first version of `server/attest.ts`, which had an
-  `Attester` interface, an always-empty registry and a route that only ever
-  answered 501: an interface with no implementations is a design by somebody
-  who has not talked to Firebase yet, and every test written around it proves
-  something about a stub. What ships instead is a list of what this home can
-  verify, which is empty and says so, plus the refusal that follows from it.
-  The real seam is `Desk.attest`, and it is real because the door above it
-  reads what it writes.
-- **2026-08-23 — The refusal moved rather than disappearing, and that is the
-  honest shape of a half-built phase.** `email:` and `repo:` used to be
-  refused by core with "phase 9 owns attesters". They are real subjects now —
-  the door genuinely checks them against a badge's attestations — so core
-  refuses only SHAPE, and the server refuses "this home has borrowed nowhere
-  to verify that". The two answers are deliberately distinguishable: a caller
-  told "not a grant subject" about a perfectly good address goes hunting for a
-  typo that is not there. Stage 2 flips the second one by adding a word to a
-  constant, and touches nothing else.
+- **2026-08-23 — Decided: the blob route is CLOSED.** The argument that held it
+  open described a different request — the iframe's own load is issued by the
+  parent page and carries the badge cookie. **Expulsion reaches the bytes**,
+  and `Cache-Control` gained `private` so no CDN edge caches a credentialed
+  response.
+- **2026-08-24 — Decided: attesters are configuration, not a constant.** The
+  verification ships in every build identically; what varies is the Identity
+  Platform project `iss` and `aud` bind to. No compiled-in default.
+- **2026-08-24 — Decided: `as:` needs a vouch** — a pass, or a shared
+  attestation. **Left open on purpose:** the same session key still resumes
+  without one, because that is the shipped lost-badge recovery. A session key
+  is a weak vouch, an attestation a strong one.
+- **2026-08-23** — A chain adopts its minter's **outcome**, not its stale root;
+  a sweep in list order decided one person's two badges by an array.
+- **2026-08-23 — Decided, not fixed:** turning the link off can expel the
+  person turning it off, because exempting the revoker leaves a badge rooted at
+  a revoked grant. The consequence is stated before the click.
+- **2026-08-24 — Open, phase 14's:** the magic-link floor lands in **spam** —
+  Identity Platform sends from `…firebaseapp.com`, with no SPF or DKIM
+  alignment to isocan.io. A sign-in link in spam is a person who cannot get in
+  and cannot know why. The fix is a sender domain isocan owns, not code.
+- **2026-08-24 — Open, phase 11's:** `repo:` is deferred — it needs the GitHub
+  OAuth *access* token, an outbound call on a request path, and a
+  credential-custody decision nobody has made. A `repo:` grant cannot be
+  written, so the refusal stays honest.
+- **2026-08-24** — Signing in stays person-only, but inviting by name and
+  reading a badge's proofs are CLI verbs: an agent that could only hand out the
+  link would hand out more access than it was asked for.
+- **2026-08-24 — Open:** the name-taken refusal ends in `--as` and `--new` in a
+  browser. The remedy wants to be data each surface words for itself.
 
 ## Phase 10 — Offline in the browser
 
@@ -1751,70 +787,20 @@ verify order and convergence on a second profile.
 
 **Findings:**
 
-- **2026-08-24 — The unnamed flake has a name, and CI found it because CI is
-  slower than this machine.** Phase 8 recorded a single failing run whose
-  output was not captured, and noted the lesson had by then cost two phases.
-  Pushing phase 10 named it: `session-identity.test.ts` → *"presence beats
-  never cross"*, `Test timed out in 5000ms`, failing **three of six** CI runs
-  while every local run passed. The test makes **eight real CLI spawns** —
-  the most in the suite — against vitest's default 5s, which was always thin;
-  phase 10 tipped it over by adding three more test files for the workers to
-  run in parallel. It is fixed by saying how slow the test is allowed to be,
-  beside the reason it is slow, and that is **not** phase 7.5's forbidden
-  move: no signal is hidden, because the assertions are about roster state
-  and never about time. The lesson worth keeping is the one about
-  *where* it was found — a flake that hides from twenty local runs shows up
-  immediately on hardware that is merely slower, and CI had been reporting it
-  in plain language for hours while nobody read the failure.
-
-- **2026-08-24 — Runtime caching alone does not make a tab offline-capable,
-  and only a browser could say so.** The service worker began as
-  runtime-caching-only, argued well: no build step, no dependency, and the
-  cache fills on the first successful load. Driving Chrome killed it in one
-  move. **A service worker does not control the page load that registers
-  it**, and this SPA routes client-side — so on a first visit the worker sees
-  no navigation at all and holds neither the shell nor the bundle. Stopping
-  the daemon after one visit produced Chrome's dinosaur. The fix keeps the
-  no-dependency argument intact: at install, fetch `/index.html`, cache it,
-  and read the `/assets/…` URLs out of the markup it already contains — **the
-  shell names its own assets**, so the manifest is always exactly this
-  build's, computed at runtime, with no plugin. No unit test could have found
-  this; the failure lives entirely in when a browser hands a worker control.
-- **2026-08-24 — The duplicate we were designing against does not exist; the
-  false refusal does.** The phase was briefed around "a replayed `item.add`
-  would add a second item". Measured against the reducer, it would not: every
-  creating op already carries a client-minted id (`itemId`, `threadId`,
-  `comment.id`) and the second is refused `duplicate-id`; the rest are
-  absolute-valued or refuse on the second pass. **The op vocabulary has been
-  accidentally exactly-once since the beginning**, and the damage of
-  at-least-once is one layer along and quieter: a replay returns a REFUSAL,
-  indistinguishable from the home genuinely rejecting the work — so the
-  honest client behaviour, roll back and tell the person, becomes a lie about
-  an item that is sitting in the canvas. The idempotency key was built
-  anyway, with its reason rewritten: **it exists so a replay is not mistaken
-  for a refusal.** Both halves are kept as tests, the false refusal included.
-  The conductor's brief asserted the duplicate as fact; a worker measuring
-  the premise rather than accepting it is what this is supposed to look like.
-- **2026-08-24 — "Reconnecting" is truthful about the socket and wrong about
-  the situation.** With the home stopped and nothing queued, a tab restored
-  entirely from its own replica sat on "reconnecting" forever — accurate (it
-  *is* retrying) and the wrong thing to tell somebody looking at a perfectly
-  good canvas they are about to write to. There is no better signal
-  available: a socket that never connected and one that dropped both arrive
-  as `onclose` 1006. So a dial that closes without ever being greeted counts
-  as a failure, and two in a row says "offline" — two rather than one so an
-  ordinary blip never flashes the word at anybody. Found by stopping a
-  server, not by a test.
-- **2026-08-24 — `isocan mv <item> --to 900,900` writes NaN coordinates and
-  the home accepts them.** Met while driving the CLI as the second writer:
-  the verb is `mv <item> [x] [y]`, `--to` is not an option, and rather than
-  being refused the command reported *"moved … to NaN,NaN"* and appended an
-  `item.move` with `x: null, y: null`, which `isocan ls` then renders as
-  `null,null`. **Nothing in the op vocabulary validates that a number is a
-  number** — not the CLI, not the route, not the reducer. Not phase 10's to
-  fix and deliberately left alone; filed as an issue, because the shape is
-  general (any op with numeric fields) and because a bad coordinate is
-  durable: it is in the oplog forever. *none yet.*
+- **2026-08-24** — **A service worker does not control the page load that
+  registers it**, so runtime caching cached nothing on a first visit. At
+  install it reads its asset URLs out of `/index.html` — the shell names its
+  own assets.
+- **2026-08-24** — Every creating op carries a client-minted id, so the
+  vocabulary has been accidentally exactly-once from the start. The real damage
+  is the **false refusal**: a replay is indistinguishable from a rejection, so
+  honest rollback becomes a lie.
+- **2026-08-24** — A dial that closes without ever being greeted counts as a
+  failure, and two in a row says "offline"; "reconnecting" is truthful about
+  the socket and wrong about the situation.
+- **2026-08-24 — Open, filed:** nothing in the op vocabulary validates that a
+  number is a number — `isocan mv --to 900,900` writes `x: null, y: null` into
+  the oplog forever.
 
 ## Phase 11 — The thin agent (Scene 6)
 
