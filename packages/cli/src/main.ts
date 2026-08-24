@@ -40,6 +40,8 @@ import {
   PASS_TTL_MS,
   actorNameIn,
   canvasUrl,
+  itemUrl,
+  urlWithPass,
   canvasUrlWithPass,
   parseCanvasAddress,
   setupCommand,
@@ -1439,12 +1441,24 @@ program
  * spent the moment the page loads.
  */
 program
-  .command("open")
-  .description("Open the project in your browser — as you, with a one-use pass the browser keeps")
+  .command("open [item]")
+  .description(
+    "Open the canvas in your browser — as you, with a one-use pass the browser keeps. " +
+      "Name an item and it opens full screen",
+  )
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (ref: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const project = await resolveProject(ctx);
+      // Full screen is a ROUTE, which is the whole reason the CLI can take
+      // part in it at all: there is no op to send — what somebody is looking
+      // at is not a mutation — but there IS an address, and handing over an
+      // address is something a terminal is good at. `isocan open <item>` and
+      // a person pressing Enter on that item land on the same page.
+      const { project, snapshot } =
+        ref === undefined
+          ? { project: await resolveProject(ctx), snapshot: null }
+          : await projectAndSnapshot(ctx);
+      const item = snapshot === null ? null : resolveItem(snapshot, ref!);
       // **THIS canvas's home, never the daemon's** (phase 10.3). The
       // one-origin rule is per canvas: a canvas has exactly one door, and it is
       // the door of the home that holds it. Opening `127.0.0.1` for a canvas
@@ -1457,11 +1471,17 @@ program
       // the daemon forwarding: that is where the badge lives that the browser's
       // redemption will be judged against.)
       const origin = (await ctx.homeOf(project.id)) ?? ctx.client.base;
-      const url = canvasUrl(origin, project.id);
+      const url = item ? itemUrl(origin, project.id, item.id) : canvasUrl(origin, project.id);
       const token = await browserPass(ctx, project.id);
+      // The pass goes on the END of whichever address was built — canvas or
+      // item — because a fragment is only a fragment if nothing follows it.
+      // `urlWithPass` is the one spelling of that; `canvasUrlWithPass` is now
+      // its canvas-shaped caller. The browser strips the fragment on arrival
+      // (`lib/arrival.ts`), so the route it is left standing on is the one
+      // that was asked for.
       spawn(
         process.platform === "darwin" ? "open" : "xdg-open",
-        [token ? canvasUrlWithPass(origin, project.id, token) : url],
+        [token ? urlWithPass(url, token) : url],
         { stdio: "ignore", detached: true },
       ).unref();
       console.log(url);

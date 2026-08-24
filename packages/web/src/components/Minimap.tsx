@@ -3,7 +3,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
-import { PANEL_WIDTH } from "./MainThreadPanel.tsx";
+
 
 const MAP_W = 168;
 const MAP_H = 108;
@@ -20,6 +20,7 @@ const PAD = 8;
 export function Minimap() {
   const colors = useActorColors();
   const open = useUiStore((s) => s.minimapOpen);
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
@@ -88,7 +89,7 @@ export function Minimap() {
   return (
     <div
       className={`minimap-dock${open ? "" : " folded"}`}
-      style={{ left: (panelOpen ? PANEL_WIDTH : 0) + 14 }}
+      style={{ left: (panelOpen ? panelWidth : 0) + 14 }}
     >
       <button
         className="minimap-handle"

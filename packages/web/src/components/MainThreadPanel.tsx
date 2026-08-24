@@ -33,8 +33,15 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 
 
-/** Must match .main-panel's width in styles.css. */
-export const PANEL_WIDTH = 320;
+/**
+ * The panel's width is no longer a constant — it is dragged, and it lives in
+ * `uiStore` as `panelWidth` (floor: `PANEL_MIN_WIDTH`). Re-exported here
+ * because this module was where everything asked, and one import site moving
+ * is cheaper than six.
+ */
+export { PANEL_MIN_WIDTH } from "../stores/uiStore.ts";
+
+import { PanelResizer } from "./PanelResizer.tsx";
 
 /**
  * What the message is about: the current selection, shown as chips over the
@@ -162,6 +169,7 @@ export function openMainPanel(projectId: string, open: boolean): void {
 export function MainThreadPanel({ projectId, actor }: { projectId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
+  const panelWidth = useUiStore((s) => s.panelWidth);
 
   // First snapshot decides the default: open when a main thread already
   // exists (someone designated this channel), closed on a virgin canvas.
@@ -185,6 +193,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
   const selected = useUiStore((s) => s.selectedItemIds);
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const colors = useActorColors();
   // Names come from the registry, not from the comment: a rename has to reach
   // what its author said before it (lib/names.ts).
@@ -224,7 +233,12 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
   }
 
   return (
-    <div className="main-panel" onPointerDown={(e) => e.stopPropagation()}>
+    <div
+      className="main-panel"
+      style={{ width: panelWidth }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <PanelResizer />
       <header>
         <span className="main-glyph">✳</span>
         <b>Main thread</b>
@@ -349,6 +363,7 @@ function Panel({ projectId, actor }: { projectId: string; actor: Actor }) {
  */
 function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const [peekTop, setPeekTop] = useState<number | null>(null);
   if (!item) {
     return (
@@ -391,7 +406,7 @@ function ItemCard({ projectId, itemId }: { projectId: string; itemId: string }) 
           // Beside the panel, centred on the card, never off the window it is
           // meant to be read on — the files panel's peek, in the other panel.
           style={{
-            left: PANEL_WIDTH + 10,
+            left: panelWidth + 10,
             top: Math.min(Math.max(peekTop, 110), window.innerHeight - 110),
             transform: "translateY(-50%)",
           }}

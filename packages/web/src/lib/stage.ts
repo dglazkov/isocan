@@ -1,5 +1,5 @@
 import { useUiStore } from "../stores/uiStore.ts";
-import { PANEL_WIDTH } from "../components/MainThreadPanel.tsx";
+
 import { TRASH_WIDTH } from "../components/TrashPanel.tsx";
 import { FAVOURITES_WIDTH } from "../components/FavouritesBar.tsx";
 
@@ -31,7 +31,7 @@ export interface Stage {
 
 export function stageRect(): Stage {
   const ui = useUiStore.getState();
-  const left = ui.mainPanelOpen || ui.filesPanelOpen ? PANEL_WIDTH : 0;
+  const left = ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0;
   const right = ui.trashOpen
     ? TRASH_WIDTH
     : ui.favouritesOpen
