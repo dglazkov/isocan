@@ -799,3 +799,47 @@ export interface GcReport {
   /** Unreachable but inside the grace period — left for a later run. */
   skippedRecentBlobs: number;
 }
+
+/**
+ * **Collect the whole home** — one sweep over many canvases (phase 13.7).
+ *
+ * Wanted by two callers who agree on nothing else: a person or agent who has
+ * just emptied a lot of trash and does not want to name every canvas it
+ * touched, and the daemon's own hourly timer, which has nobody to name them
+ * for it. Both run the same per-canvas policy — `Engine.gc`, unchanged — so
+ * this is an ENUMERATING CALLER and never a second policy.
+ *
+ * The request body is a plain {@link GcRequest}: whatever it says applies to
+ * every canvas in the sweep, because a horizon that meant one thing on one
+ * canvas and another on the next would be a report nobody could read.
+ *
+ * Outside `/api/projects/` deliberately, and that is the whole security
+ * question: the `onRequest` hook's canvas-scoped admission check reads the
+ * canvas out of the path and so does not fire here. The route answers it
+ * itself — see `http.ts`, where the argument is written down beside the code
+ * that performs it.
+ */
+export const HOME_GC_ROUTE = "/api/gc";
+
+/** One canvas's outcome in a home-wide sweep. */
+export interface HomeGcCanvas {
+  canvasId: string;
+  /** Null exactly when this canvas's sweep threw; `error` then says what. One
+   * canvas's failure is reported, never propagated — the sweep carries on to
+   * the next, because the alternative is one broken canvas keeping a whole
+   * home un-collected forever. */
+  report: GcReport | null;
+  error?: string;
+}
+
+/**
+ * What a home-wide sweep did, per canvas and in total.
+ *
+ * `totals` is a {@link GcReport} rather than a new shape so that both clients
+ * can render a home-wide sweep with the code they already have for one canvas
+ * — the sum of dry runs is a dry run, and every other field adds.
+ */
+export interface HomeGcReport {
+  canvases: HomeGcCanvas[];
+  totals: GcReport;
+}

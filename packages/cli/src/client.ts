@@ -13,6 +13,7 @@ import type {
   CreateSessionResponse,
   GcReport,
   GcRequest,
+  HomeGcReport,
   GrantResponse,
   GrantsResponse,
   GrantSubject,
@@ -41,6 +42,7 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
   HOMES_ROUTE,
   normalizeHomeUrl,
@@ -48,7 +50,7 @@ import {
   passesRoute,
 } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
-import { bearerHeader, knockOnDoor, paths, readBadge, writeBadge } from "@isocan/server";
+import { askTheDoor, bearerHeader, paths, readBadge, writeBadge } from "@isocan/server";
 
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
@@ -162,10 +164,24 @@ export class DaemonClient {
   }
 
   /** Go to the door and keep what it hands over. Returns false if the door
-   * itself refused, so a caller does not loop. */
+   * itself refused, so a caller does not loop.
+   *
+   * **One refusal is not silent: a metered door** (phase 13.7). The rest stay
+   * false and let the original refusal be the one reported — but a 429 must
+   * not, because the sentence the caller would otherwise print is the 401 this
+   * recovery was launched from: *"a badge is required — ask the door for
+   * one."* That is advice to repeat the thing that was just refused. Throwing
+   * the door's own words instead ends the command with what actually happened
+   * and how long to wait, in `{error, code}` an agent can read. */
   private async reBadge(): Promise<boolean> {
-    const badge = await knockOnDoor(this.base);
-    if (!badge) return false;
+    const answer = await askTheDoor(this.base);
+    if ("refused" in answer) {
+      if (answer.refused.status === 429) {
+        throw new ApiError(429, answer.refused.error, answer.refused.code);
+      }
+      return false;
+    }
+    const badge = answer.badge;
     this.badge = badge;
     await writeBadge(this.home, this.base, badge);
     // Re-claim, THEN replay. Without this the recovery path is a 401
@@ -514,6 +530,13 @@ export class DaemonClient {
 
   gc(canvasId: string, request: GcRequest): Promise<GcReport> {
     return this.request("POST", `/api/projects/${canvasId}/gc`, request);
+  }
+
+  /** Every canvas this badge is admitted to at this home, in one sweep — the
+   * same per-canvas policy, aggregated (phase 13.7). Names no canvas, so it
+   * works in a directory that is bound to none. */
+  gcHome(request: GcRequest): Promise<HomeGcReport> {
+    return this.request("POST", HOME_GC_ROUTE, request);
   }
 
   async uploadBlob(

@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { CANVAS_SHOT } from "../src/lib/shot.ts";
 import { FrontPage } from "../src/pages/FrontPage.tsx";
 
@@ -121,7 +122,12 @@ describe("the picture on the front page", () => {
   });
 
   it("is drawn on the page, at that size, with the words for somebody who cannot see it", () => {
-    const html = renderToStaticMarkup(h(FrontPage, { onIdentity: () => {} }));
+    // Inside a router since phase 13.7: the page's footnote to the terms is a
+    // client-side `<Link>`, which throws outside one. It adds no markup, so
+    // every assertion below reads the page's own HTML exactly as before.
+    const html = renderToStaticMarkup(
+      h(MemoryRouter, { initialEntries: ["/"] }, h(FrontPage, { onIdentity: () => {} })),
+    );
     const tags = html.match(/<img[^>]*>/g) ?? [];
     expect(tags.length, "the front page draws no image at all").toBe(1);
     const tag = tags[0]!;

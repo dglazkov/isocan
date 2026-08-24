@@ -14,6 +14,7 @@ import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
 
 export interface DaemonOptions {
@@ -92,6 +93,30 @@ export interface DaemonOptions {
    * A knob rather than a constant only because tests want it small and a
    * gentle innkeeper might want it large; see `HomeLink.sync`. */
   homePollMs?: number;
+  /**
+   * **How often this home collects its own garbage** (phase 13.7), in
+   * milliseconds. `0` never sweeps.
+   *
+   * Read from `ISOCAN_GC_INTERVAL_MS` by `gcIntervalFromEnv`, defaulting to an
+   * hour — environment and configuration rather than a flag, for the same
+   * reason `ISOCAN_BIND` and `ISOCAN_HOME_URL` are. It is a `DaemonOptions`
+   * field for the reason `homePollMs` is: a sweep on the hour is not something
+   * a test can wait for, and a proof that the timer FIRES has to be able to
+   * run it at millisecond scale against a real daemon.
+   */
+  gcIntervalMs?: number;
+  /**
+   * **When the first sweep runs**, in milliseconds after start. Defaults to
+   * `firstSweepDelay` of the interval — a minute — and is here as its own
+   * field because the two answer different questions: the interval is how
+   * often garbage is worth collecting, this is how soon an instance that may
+   * not live long must collect some.
+   *
+   * Deliberately NOT its own environment variable. An innkeeper configures a
+   * rhythm, not a boot delay, and a second knob would be a second thing to get
+   * wrong for no decision anybody wants to make.
+   */
+  gcFirstSweepMs?: number;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -274,6 +299,37 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   await homes.start();
   const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
 
+  /**
+   * **The home's own housekeeping** (phase 13.7): every canvas the store
+   * holds, swept a minute after boot and every interval after that, with
+   * nobody at the door.
+   *
+   * A timer inside the process rather than a scheduler outside it, and that is
+   * a decision rather than an expedient — `docs/architecture.md`'s GC line and
+   * `infra/91-scheduler-gc.sh` both carry the argument in full. The short
+   * form: the door admits BADGES, a cron cannot hold one, and the two ways to
+   * give it one are a long-lived robot key in a secret store or a new kind of
+   * caller at the door. Garbage accrues only while a home is in use, which is
+   * exactly when this process is alive, so the instance is the right clock.
+   *
+   * **The boot sweep is what makes that clock real, and it is not a nicety.**
+   * The instance is the clock, so the sweep has to fit inside the instance's
+   * LIFE: dev runs `MIN_INSTANCES=0` and Cloud Run reaps an idle one after
+   * about fifteen minutes, so a first tick an hour away belongs to a process
+   * that no longer exists. `firstSweepDelay` carries the full reasoning.
+   *
+   * Started here, after `listen`, because it writes: a sweep compacts oplogs
+   * and deletes blob bytes, and doing that while the engine is still coming up
+   * would be racing the boot for no gain. That is also why the boot sweep is a
+   * minute out rather than immediate — boot is the busiest the daemon gets.
+   */
+  const sweeper = startGcSweeper({
+    engine,
+    canvases: () => store.listCanvases(),
+    intervalMs: options.gcIntervalMs ?? gcIntervalFromEnv(),
+    ...(options.gcFirstSweepMs !== undefined ? { firstSweepMs: options.gcFirstSweepMs } : {}),
+  });
+
   await fs.writeFile(
     daemonFile(home),
     JSON.stringify({ pid: process.pid, port, startedAt: new Date().toISOString() }, null, 2),
@@ -281,6 +337,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const close = async () => {
     presence.close();
+    // The sweeper first, and awaited: an interval that survives its daemon is
+    // the shape of handle this file has already paid for twice (the sockets,
+    // and the writes `engine.settled()` exists to catch). Stopping it before
+    // anything else closes means no tick can enqueue work behind a store that
+    // is on its way down; awaiting it means the tick already running has
+    // finished asking for any.
+    await sweeper.stop();
     // The home connections first, and before the store: they are the one thing
     // here that is still WRITING (an entry may be mid-apply), and a socket
     // left open is a process that never exits — which phase 4's finding

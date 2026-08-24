@@ -36,7 +36,8 @@ usage: $0 <stage>
 
   c   THE KEEPING         nightly Firestore export, uptime check.
                           Costs at rest: cents.
-                          (GC is NOT scheduled — infra/91-scheduler-gc.sh says why.)
+                          (GC needs no job — the daemon sweeps itself on a
+                          timer; infra/91-scheduler-gc.sh says why.)
 
   d   CONTINUOUS DEPLOY   Cloud Build trigger on push to \`green\` — the ref
                           CI advances when the suite passes.

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -13,6 +13,8 @@ import {
   type DoorResponse,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { askTheDoor } from "../src/badge-store.ts";
+import { MINT_BURST, TOO_MANY_BADGES } from "../src/meter.ts";
 import * as p from "../src/paths.ts";
 import { mintTestBadge } from "./badge.ts";
 
@@ -805,5 +807,189 @@ describe("the pre-badge home", () => {
     await daemon.close();
     await boot();
     expect((await deskFile()).shelf).toEqual({});
+  });
+});
+
+// ---- metered ----
+
+/**
+ * **The door is metered** (phase 13.7 — `innkeeper.md`: badges are free to
+ * mint, and free may not mean unmetered).
+ *
+ * These drive the seam. The bucket's own arithmetic and, more importantly,
+ * the choice of WHICH ADDRESS a bucket is keyed on live in `meter.test.ts` as
+ * pure logic — a flood test passes just as happily against a meter that has
+ * put the entire internet in one bucket, so the keying is asserted where it
+ * can be asserted directly, and what is proved here is that both mint paths
+ * are actually wired to it.
+ */
+describe("the door is metered", () => {
+  /** The door, with the response headers a refusal is carried in. */
+  const knock = async (headers: Record<string, string> = {}) => {
+    const res = await fetch(`${base}${DOOR_ROUTE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ carrier: "bearer" }),
+    });
+    return {
+      status: res.status,
+      retryAfter: res.headers.get("retry-after"),
+      json: (await res.json().catch(() => null)) as
+        | (DoorResponse & { error?: string; code?: string })
+        | null,
+    };
+  };
+
+  const flood = async (times: number, headers: Record<string, string> = {}) => {
+    const seen = [];
+    for (let i = 0; i < times; i += 1) seen.push(await knock(headers));
+    return seen;
+  };
+
+  it("refuses a flood legibly — 429, its own code, and how long to wait", async () => {
+    const seen = await flood(MINT_BURST + 1);
+    expect(seen.slice(0, MINT_BURST).map((r) => r.status)).toEqual(
+      Array(MINT_BURST).fill(200),
+    );
+
+    const refused = seen[MINT_BURST]!;
+    expect(refused.status).toBe(429);
+    // `{error, code}` — this file's shape for every refusal, so an agent
+    // reads the same field it reads for `not-admitted` and `bad-badge`.
+    expect(refused.json?.code).toBe(TOO_MANY_BADGES);
+    expect(refused.json?.error).toMatch(/badge/i);
+    // And the machine-readable half, for anything that retries on its own.
+    expect(Number(refused.retryAfter)).toBeGreaterThan(0);
+    // No badge came back with the refusal, which is the whole point: the
+    // desk got no row.
+    expect(refused.json?.badgeId).toBeUndefined();
+  });
+
+  it("counts MINTS, not knocks — a caller holding a badge is never metered", async () => {
+    const badge = await mintTestBadge(base); // one token spent
+    // The door answers an already-badged caller with its own id and no new
+    // secret, so this costs the desk nothing however long it goes on.
+    for (let i = 0; i < MINT_BURST * 3; i += 1) {
+      const held = await knock(badge.headers);
+      expect(held.status).toBe(200);
+      expect(held.json?.badgeId).toBe(badge.badgeId);
+      expect(held.json?.secret).toBeUndefined();
+    }
+    // The bucket was untouched by any of that: 19 mints are still there.
+    const rest = await flood(MINT_BURST - 1);
+    expect(rest.every((r) => r.status === 200)).toBe(true);
+  });
+
+  it("refills — the same client mints again once time passes", async () => {
+    // The clock is injected rather than waited out: `Date.now` is what the
+    // meter reads, and `new Date()` (which everything else here uses for
+    // timestamps) is untouched by this.
+    let clock = Date.now();
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      const seen = await flood(MINT_BURST + 1);
+      expect(seen[MINT_BURST]!.status).toBe(429);
+
+      clock += 60_000;
+      const later = await knock();
+      expect(later.status).toBe(200);
+      expect(later.json?.badgeId).toMatch(/^bdg_/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("gives two X-Forwarded-For values behind one socket two buckets", async () => {
+    // The failure this asserts against: behind a load balancer every request
+    // arrives from the balancer's address, so a socket-keyed bucket would put
+    // every visitor in one and the first flood would lock out the rest — at
+    // 429, looking exactly like the feature working.
+    //
+    // A daemon bound wide is the hosted posture: `loopbackBound` is false, so
+    // the forwarded chain is what it keys on. SYNTHETIC addresses.
+    const wideHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-meter-"));
+    const wide = await startDaemon({ port: 0, home: wideHome, host: "0.0.0.0" });
+    try {
+      const address = wide.app.server.address();
+      const wideBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+      const knockAs = async (client: string) =>
+        (
+          await fetch(`${wideBase}${DOOR_ROUTE}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              /**
+               * `<client-ip>, <lb-ip>` — **both entries written by the
+               * infrastructure**, neither one claimed by the caller. Google's
+               * ALB APPENDS the address it saw the connection come from and
+               * then its own, so a visitor who sent no header at all arrives
+               * looking exactly like this, and position 0 here is the genuine
+               * client address rather than anything a caller chose.
+               *
+               * A caller's own claim would be a THIRD entry, to the LEFT of
+               * these two — which is the case `meter.test.ts` covers under
+               * "counts from the RIGHT, so a prepended claim cannot buy a
+               * private bucket". Getting this backwards matters more than a
+               * mislabelled fixture usually would: a reader who believes
+               * position 0 is caller-supplied concludes the bucket is keyed
+               * on a forgeable value, and the obvious repair from there is to
+               * switch to the leftmost entry — which is the actual
+               * vulnerability, introduced while fixing a bug that was never
+               * in the code.
+               */
+              "X-Forwarded-For": `${client}, 192.0.2.1`,
+            },
+            body: JSON.stringify({ carrier: "bearer" }),
+          })
+        ).status;
+
+      for (let i = 0; i < MINT_BURST; i += 1) expect(await knockAs("203.0.113.7")).toBe(200);
+      expect(await knockAs("203.0.113.7")).toBe(429);
+      // A different visitor, same socket, same load balancer: unaffected.
+      expect(await knockAs("198.51.100.9")).toBe(200);
+    } finally {
+      await wide.close();
+      await fs.rm(wideHome, { recursive: true, force: true });
+    }
+  });
+
+  it("hands a bearer holder the door's own words, not the 401 it was recovering from", async () => {
+    // `knockOnDoor` flattens every refusal to null, and one frame up that
+    // becomes the ORIGINAL 401 the CLI was recovering from — "a badge is
+    // required, ask the door for one" — told to somebody the door just
+    // refused. `askTheDoor` is the form that keeps the refusal, and
+    // `DaemonClient.reBadge` throws it so the person reads what happened.
+    await flood(MINT_BURST);
+    const answer = await askTheDoor(base);
+    expect(answer).toEqual({
+      refused: expect.objectContaining({ status: 429, code: TOO_MANY_BADGES }),
+    });
+  });
+
+  it("meters the page load too — and withholds the badge, never the page", async () => {
+    // The second mint path: the SPA fallback mints a cookie badge for any
+    // badge-less browser. A limit on `POST /api/door` alone is one somebody
+    // walks around by requesting `/` in a loop.
+    const load = async () => {
+      const res = await fetch(`${base}/`, { headers: { Accept: "text/html" } });
+      return { status: res.status, setCookie: res.headers.get("set-cookie") };
+    };
+
+    for (let i = 0; i < MINT_BURST; i += 1) {
+      const page = await load();
+      expect(page.status).toBe(200);
+      expect(page.setCookie).toContain(BADGE_COOKIE);
+    }
+
+    // One budget, not two: the page loads spent what the door would have.
+    expect((await knock()).status).toBe(429);
+
+    // And the refusal a VISITOR gets is the narrow one — the page still
+    // arrives, with no badge on it. Addresses are shared (CGNAT, an office),
+    // so a 429 where the app should be would break the front door of the
+    // product for somebody who did nothing.
+    const metered = await load();
+    expect(metered.status).toBe(200);
+    expect(metered.setCookie).toBeNull();
   });
 });

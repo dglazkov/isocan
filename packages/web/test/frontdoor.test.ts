@@ -6,9 +6,10 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { SKILL_INSTALL_COMMAND } from "@isocan/core";
-import { faceFor } from "../src/lib/faces.ts";
+import { TERMS_PATH, faceFor } from "../src/lib/faces.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
+import { TERMS } from "../src/lib/terms.ts";
 import { CANVAS_SHOT } from "../src/lib/shot.ts";
 import { CopyCommandView, FrontPage } from "../src/pages/FrontPage.tsx";
 
@@ -105,6 +106,37 @@ describe("which face the origin wears", () => {
       expect(faceFor(at, priya)).toBe("here");
     }
   });
+
+  /**
+   * **The terms, phase 13.7 — the one face that does not ask who you are.**
+   *
+   * The obligation is to tell somebody what this operator can read off their
+   * canvas BEFORE they put work here, so a rule that showed the door first
+   * would be asking a stranger to accept the terms in order to read them. Both
+   * arms are asserted, because "for everybody" is a claim with two halves and
+   * the actor branch sits between them in the function.
+   */
+  it("shows the terms to a stranger and to somebody alike", () => {
+    expect(faceFor(TERMS_PATH, null)).toBe("terms");
+    expect(faceFor(TERMS_PATH, priya)).toBe("terms");
+    expect(faceFor(`${TERMS_PATH}/`, null)).toBe("terms");
+  });
+
+  /**
+   * And it is EXACTLY that path. The regression adding a face can cause is a
+   * widened match: a prefix test here would swallow a canvas whose id started
+   * with the word, and the origin and the share link must answer exactly what
+   * they answered before phase 13.7 existed.
+   */
+  it("does not widen: the origin and a canvas answer as they did before", () => {
+    expect(faceFor("/", null)).toBe("front-page");
+    expect(faceFor("/p/prj_acme", null)).toBe("door");
+    expect(faceFor("/p/prj_acme", priya)).toBe("here");
+    // Neighbours of the terms path, none of which are it.
+    expect(faceFor("/terms-of-service", null)).toBe("door");
+    expect(faceFor("/terms/why", null)).toBe("door");
+    expect(faceFor("/p/terms", null)).toBe("door");
+  });
 });
 
 /** What `Doorway` actually renders — the rule wired to the pages. */
@@ -141,10 +173,38 @@ describe("the front door", () => {
     expect(html).toContain("the app, for Priya");
     expect(html).not.toContain(SKILL_INSTALL_COMMAND);
   });
+
+  /**
+   * The rule wired to the page (phase 13.7). `faceFor` deciding "terms" is half
+   * of it; the other half is `Doorway` drawing the terms rather than the door
+   * or the app, for a stranger and for somebody alike. `terms.test.ts` is what
+   * checks the page then says the right things.
+   */
+  it("shows the terms at their own address, to anybody", () => {
+    for (const who of [null, priya]) {
+      const html = meet(TERMS_PATH, who);
+      expect(html).toContain(TERMS[0]!.heading);
+      expect(html).not.toContain("Pick a name");
+      expect(html).not.toContain("the app, for");
+      expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+    }
+  });
 });
 
+/**
+ * The front page on its own — inside a `MemoryRouter` since phase 13.7, because
+ * its footnote to the terms is a client-side `<Link>` and a `Link` outside a
+ * router throws. Nothing is rendered by the router itself, so the markup this
+ * returns is the page's own and every assertion below is unchanged by it.
+ */
+function frontPage(): string {
+  return renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ["/"] }, h(FrontPage, { onIdentity: () => {} })),
+  );
+}
+
 describe("the front page", () => {
-  const page = () => renderToStaticMarkup(h(FrontPage, { onIdentity: () => {} }));
+  const page = frontPage;
 
   it("says the idea and then hands over Scene 0's three steps", () => {
     const html = page();
@@ -161,12 +221,24 @@ describe("the front page", () => {
     }
   });
 
+  /**
+   * Scene 0's rule. A link to the repo is a footnote and is allowed; it must
+   * not be an instruction, and there must be no OTHER outbound link on the page
+   * competing with the steps.
+   *
+   * **Relaxed by exactly one path in phase 13.7, and the relaxation is named
+   * rather than widened.** The terms footnote is a second link, and the rule it
+   * has to survive is about being SENT AWAY: it goes to this same origin, so
+   * nobody leaves to learn how to enter. So the case is now stated as the rule
+   * — every outbound link is the repo, and the only local link is the terms —
+   * which still says no to the thing it was written to say no to (a second
+   * off-site link, a docs site, a pricing page) and would fail the day somebody
+   * adds a third address of any kind.
+   */
   it("sends nobody away to documentation to learn how to enter", () => {
-    // Scene 0's rule. A link to the repo is a footnote and is allowed; it must
-    // not be an instruction, and there must be no OTHER outbound link on the
-    // page competing with the steps.
     const hrefs = [...page().matchAll(/href="([^"]*)"/g)].map((m) => m[1]!);
-    expect(hrefs).toEqual(["https://github.com/dglazkov/isocan"]);
+    expect(hrefs.filter((h) => !h.startsWith("/"))).toEqual([GITHUB]);
+    expect(hrefs.filter((h) => h.startsWith("/"))).toEqual([TERMS_PATH]);
   });
 
   /**
@@ -367,9 +439,7 @@ describe("the install command", () => {
         SKILL_INSTALL_COMMAND,
       );
     }
-    expect(renderToStaticMarkup(h(FrontPage, { onIdentity: () => {} }))).toContain(
-      SKILL_INSTALL_COMMAND,
-    );
+    expect(frontPage()).toContain(SKILL_INSTALL_COMMAND);
   });
 
   it("is written down once in the source, and imported everywhere else", async () => {
