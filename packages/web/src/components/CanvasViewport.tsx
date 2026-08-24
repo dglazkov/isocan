@@ -92,12 +92,17 @@ export function CanvasViewport({ projectId, actor }: { projectId: string; actor:
       if (!content) return false;
       const scroller = scrollerIn(content);
       if (!scroller) return false;
-      const before = scroller.scrollTop;
       scroller.scrollTop += dy;
       scroller.scrollLeft += dx;
-      // At the end of its own scroll the canvas takes the gesture back, the
-      // way a nested scroll area hands off anywhere else.
-      return scroller.scrollTop !== before;
+      // NO CHAINING. A scrollable region inside a page hands the rest of the
+      // gesture back when it reaches its end, and that is right there: the
+      // region is part of the page you were already reading. Here the outer
+      // thing is an infinite canvas, and selecting the item was an explicit
+      // "I am working in this" — so reaching the bottom of a document should
+      // not fling the whole canvas away and make you find your place again.
+      // The same reasoning `overscroll-behavior: contain` encodes, which this
+      // stylesheet already uses on the face card's list.
+      return true;
     }
 
     function onWheel(e: WheelEvent) {
