@@ -74,6 +74,13 @@ in it to steal.
 
 ## What it buys
 
+*(A third reason arrived after this was written: it is what makes a hosted
+extension panel possible at all. See [extensions.md](extensions.md) — a panel
+on the app's origin can read the badge cookie and act as the user, so without
+a content origin that tier does not exist. This proposal is load-bearing for
+three separate things now, which is the strongest argument for doing it.)*
+
+
 - **The isolation stops depending on an attribute.** Even a misconfigured
   sandbox on the content origin reaches nothing.
 - **Interactive items get storage.** An explorable page — the
