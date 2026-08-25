@@ -13,6 +13,7 @@ import {
   nameFits,
   nameRoom,
   titleRow,
+  underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
 
@@ -445,19 +446,17 @@ describe("the strip under an item lets its one control be clicked", () => {
 });
 
 /**
- * **The full-screen control is a glyph, always.**
+ * **The full-screen control always has an icon, and spells itself out when roomy.**
  *
- * It was a word that became a glyph under 210 screen pixels, and the
- * threshold is gone rather than retuned. The label cost 77 pixels of a line
- * that also carries the marks, the `+` and the size — on a small item, or any
- * item zoomed out, that was the whole row — and it bought nothing a hover
- * cannot say. Two forms also meant two sets of geometry to keep matching.
+ * The button always carries the `[ ]` icon (`EXPAND`). When there is plenty of
+ * room (`>= 210px`), it also spells out "Full screen" beside the icon. When
+ * space is tight, it collapses to just the icon so the whole row still fits
+ * without crowding marks or size chips.
  *
- * What must not go is the NAME. A glyph-only control that does not say what
- * it is on hover is a guess, so the tooltip and the accessible label are
- * asserted here as the price of dropping the word.
+ * It keeps its name on hover via `data-tip` and for screen readers via
+ * `aria-label`.
  */
-describe("the full-screen control names itself without a label", () => {
+describe("the full-screen control has an icon and adapts its label to room", () => {
   const itemView = readFileSync(
     fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
     "utf8",
@@ -467,10 +466,19 @@ describe("the full-screen control names itself without a label", () => {
     "utf8",
   );
 
-  it("never spells the label out in the row", () => {
-    const button = itemView.match(/<button\s+className="fullscreen-btn"[\s\S]*?<\/button>/);
+  it("always carries the icon and conditionally spells the label", () => {
+    const button = itemView.match(/<button\s+className=\{`fullscreen-btn\$\{spellItOut \? "" : " compact"\}`\}[\s\S]*?<\/button>/);
     expect(button, "no fullscreen button").toBeTruthy();
-    expect(button![0]).not.toMatch(/>\s*Full screen\s*</);
+    expect(button![0]).toContain("{EXPAND}");
+    expect(button![0]).toContain('{spellItOut && <span>Full screen</span>}');
+  });
+
+  it("decides room from FULL_LABEL_ROOM", () => {
+    expect(underRowSpellsItOut(220, 1)).toBe(true);
+    expect(underRowSpellsItOut(210, 1)).toBe(true);
+    expect(underRowSpellsItOut(200, 1)).toBe(false);
+    expect(underRowSpellsItOut(400, 0.5)).toBe(false);
+    expect(underRowSpellsItOut(500, 0.5)).toBe(true);
   });
 
   it("keeps the name for a screen reader", () => {
@@ -494,3 +502,4 @@ describe("the full-screen control names itself without a label", () => {
     expect(tip![1]).toMatch(/pointer-events:\s*none/);
   });
 });
+
