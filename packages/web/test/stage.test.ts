@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitInto, worldToScreen } from "../src/lib/viewport.ts";
+import { fitInto, revealDelta, worldToScreen } from "../src/lib/viewport.ts";
 
 /**
  * Fitting has to aim at the part of the window the canvas actually has. The
@@ -58,3 +58,67 @@ describe("fitting into the visible canvas", () => {
     expect(Math.abs(leftSpill - rightSpill)).toBeLessThan(1);
   });
 });
+
+describe("revealing items on the visible stage", () => {
+  const stage = withPanel; // x: 320, y: 48, width: 1120, height: 852
+  const margin = 76;
+
+  it("does not move when already fully visible inside stage margins", () => {
+    const item = { left: 450, top: 150, right: 850, bottom: 450 };
+    const { dx, dy } = revealDelta(item, stage, margin);
+    expect(dx).toBe(0);
+    expect(dy).toBe(0);
+  });
+
+  it("slides an item in from under the left panel", () => {
+    // Left edge is at 100px (under 320px panel)
+    const item = { left: 100, top: 150, right: 500, bottom: 450 };
+    const { dx, dy } = revealDelta(item, stage, margin);
+    expect(dx).toBe(stage.x + margin - item.left);
+    expect(dy).toBe(0);
+    expect(item.left + dx).toBe(stage.x + margin);
+  });
+
+  it("slides an item in from beyond the right edge/toolbar", () => {
+    // Right edge is at 1400px (past stage right edge minus margin: 1440 - 76 = 1364)
+    const item = { left: 1000, top: 150, right: 1400, bottom: 450 };
+    const { dx, dy } = revealDelta(item, stage, margin);
+    const maxX = stage.x + stage.width - margin;
+    expect(dx).toBe(maxX - item.right);
+    expect(dy).toBe(0);
+    expect(item.right + dx).toBe(maxX);
+  });
+
+  it("centres an item that is too wide to fit in the stage margins", () => {
+    // Item width 1100px > stage.width - 2*margin (1120 - 152 = 968)
+    const item = { left: 200, top: 150, right: 1300, bottom: 450 };
+    const { dx, dy } = revealDelta(item, stage, margin);
+    const stageCenterX = stage.x + stage.width / 2;
+    const itemCenterX = (item.left + item.right) / 2;
+    expect(dx).toBe(stageCenterX - itemCenterX);
+    expect(dy).toBe(0);
+
+    const newLeft = item.left + dx;
+    const newRight = item.right + dx;
+    const leftGap = newLeft - stage.x;
+    const rightGap = stage.x + stage.width - newRight;
+    expect(leftGap).toBe(rightGap);
+  });
+
+  it("centres an item that is too tall to fit in the stage margins", () => {
+    // Item height 800px > stage.height - 2*margin (852 - 152 = 700)
+    const item = { left: 450, top: 0, right: 850, bottom: 800 };
+    const { dx, dy } = revealDelta(item, stage, margin);
+    const stageCenterY = stage.y + stage.height / 2;
+    const itemCenterY = (item.top + item.bottom) / 2;
+    expect(dy).toBe(stageCenterY - itemCenterY);
+    expect(dx).toBe(0);
+
+    const newTop = item.top + dy;
+    const newBottom = item.bottom + dy;
+    const topGap = newTop - stage.y;
+    const bottomGap = stage.y + stage.height - newBottom;
+    expect(topGap).toBe(bottomGap);
+  });
+});
+

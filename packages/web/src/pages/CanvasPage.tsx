@@ -12,7 +12,8 @@ import {
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
 import { applyLocalEcho } from "../stores/canvasStore.ts";
-import { centerOn, fitBounds, itemsBounds } from "../lib/viewport.ts";
+import { centerOn, fitBounds, fitInto, itemsBounds } from "../lib/viewport.ts";
+import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
@@ -151,7 +152,7 @@ function CanvasSurface({
     if (box) {
       useUiStore
         .getState()
-        .setViewport(fitBounds(box, window.innerWidth, window.innerHeight));
+        .setViewport(fitInto(box, stageRect()));
     }
   }, [canvas]);
 
@@ -259,7 +260,12 @@ function CanvasSurface({
       const selected = ui.selectedItemIds;
 
       if (selected.length === 0) {
-        const middle = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
+        const stage = stageRect();
+        const middle = screenToWorld(
+          ui.viewport,
+          stage.x + stage.width / 2,
+          stage.y + stage.height / 2,
+        );
         const start = nearestToPoint(all, middle.x, middle.y);
         if (start) {
           ui.select(start.id);

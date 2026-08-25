@@ -109,3 +109,48 @@ export function fitBounds(
     ty: (viewHeight - h * scale) / 2 - box.minY * scale,
   };
 }
+
+/**
+ * Compute the translation offset needed to bring an item's screen rectangle
+ * into view on the stage without moving the camera more than necessary.
+ * An item already visible inside stage margins produces { dx: 0, dy: 0 }.
+ * An item that cannot fit within the stage margins is centered in the stage.
+ */
+export function revealDelta(
+  itemScreen: { left: number; top: number; right: number; bottom: number },
+  stage: { x: number; y: number; width: number; height: number },
+  margin = 76,
+): { dx: number; dy: number } {
+  const itemWidth = itemScreen.right - itemScreen.left;
+  const itemHeight = itemScreen.bottom - itemScreen.top;
+
+  const minX = stage.x + margin;
+  const maxX = stage.x + stage.width - margin;
+  const minY = stage.y + margin;
+  const maxY = stage.y + stage.height - margin;
+
+  const fitsX = itemWidth <= stage.width - margin * 2;
+  const fitsY = itemHeight <= stage.height - margin * 2;
+
+  let dx = 0;
+  let dy = 0;
+
+  if (!fitsX) {
+    dx = stage.x + stage.width / 2 - (itemScreen.left + itemScreen.right) / 2;
+  } else if (itemScreen.left < minX) {
+    dx = minX - itemScreen.left;
+  } else if (itemScreen.right > maxX) {
+    dx = maxX - itemScreen.right;
+  }
+
+  if (!fitsY) {
+    dy = stage.y + stage.height / 2 - (itemScreen.top + itemScreen.bottom) / 2;
+  } else if (itemScreen.top < minY) {
+    dy = minY - itemScreen.top;
+  } else if (itemScreen.bottom > maxY) {
+    dy = maxY - itemScreen.bottom;
+  }
+
+  return { dx, dy };
+}
+
