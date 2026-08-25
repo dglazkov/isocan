@@ -86,6 +86,19 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
 }
 
 /**
+ * Screen pixels required under an item to spell out "Full screen" next to the
+ * expand icon. Below this, the button collapses to just the icon so the whole
+ * row still fits without crowding marks or size chips.
+ */
+export const FULL_LABEL_ROOM = 210;
+
+/** Does the row under the item have room to spell the button label out? */
+export function underRowSpellsItOut(width: number, scale: number): boolean {
+  return width * scale >= FULL_LABEL_ROOM;
+}
+
+
+/**
  * Screen pixels the row keeps at its FAR END, past the name.
  *
  * It was the star's, and the star is gone — reactions replaced it, and they

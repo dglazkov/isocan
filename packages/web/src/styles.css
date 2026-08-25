@@ -1077,8 +1077,8 @@ img { height: auto; }
    one number that is already right. */
 .fullscreen-btn {
   flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
-  padding: 1px; width: 22px; align-self: stretch;
-  display: inline-flex; align-items: center; justify-content: center;
+  padding: 1px 8px; align-self: stretch;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   /* **The whole strip is `pointer-events: none`** — it exists so a hint under
@@ -1089,7 +1089,11 @@ img { height: auto; }
   pointer-events: auto;
   position: relative;
 }
-.fullscreen-btn svg { display: block; }
+.fullscreen-btn.compact {
+  padding: 1px; width: 22px; gap: 0;
+}
+.fullscreen-btn svg { display: block; flex: none; }
+.fullscreen-btn span { white-space: nowrap; }
 /* The name, on hover and on keyboard focus. Drawn rather than left to `title`
    — the native tooltip waits about a second, appears at the pointer rather
    than at the control, and takes no styling. A button whose whole face is a
