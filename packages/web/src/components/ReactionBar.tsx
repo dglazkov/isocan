@@ -83,7 +83,7 @@ export function ReactionBar({ canvasId }: { canvasId: string }) {
       </header>
       {groups.length === 0 ? (
         <p className="marks-empty">
-          No marks yet. Point at a screen and press the ＋ under it — whatever your
+          No marks yet. Click a screen, then press the ＋ under it — whatever your
           team decides 👀 or ✅ means, this is where it adds up.
         </p>
       ) : (

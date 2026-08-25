@@ -34,8 +34,22 @@ export function Reactions({
    * lives inside the scaled world; without this the chips are drawn in WORLD
    * pixels and a canvas at 15% shows an 11px chip as under two. */
   scale: number;
-  /** Whether the item is hovered or selected — decides only whether the `+`
-   * shows, never whether existing reactions do. */
+  /**
+   * Whether this item is SELECTED — decides only whether the `+` shows, never
+   * whether existing reactions do.
+   *
+   * Hover used to count too, and it could not work. The `+` sits under the
+   * item and its picker opens under THAT, so the trip from the button to the
+   * emoji you want leaves the item — hover ends, `visible` goes false, and the
+   * picker unmounts somewhere in the middle of the journey. You could open it
+   * and never click it, which is the worst of the three possible states
+   * because it looks like it works.
+   *
+   * The usual patch is a close-delay or an invisible bridge over the gap
+   * between the two. Selection is already the sticky version of exactly this
+   * signal — you clicked the thing, it stays clicked — so gating on it makes
+   * the bug unreachable instead of narrow.
+   */
   visible: boolean;
 }) {
   const names = useActorNames();
