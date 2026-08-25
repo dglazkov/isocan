@@ -2095,10 +2095,64 @@ button.mt-card:hover { border-color: var(--accent); }
   padding-top: 8px; border-top: 1px solid var(--line-soft);
 }
 .front-onward-note { font-size: 12.5px; color: var(--ink-soft); }
-/* A footnote, and it stays one: the steps above are the entry, and this is
-   for somebody who wants the code. */
-.front-foot { font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+/* Footnotes, and they stay footnotes: the steps above are the entry, and these
+   are for somebody who wants the code and somebody who wants to know whose
+   machine their canvas will sit on. Stacked rather than run together, because
+   two asides in one paragraph read as a paragraph. */
+.front-foot {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px; line-height: 1.5; color: var(--ink-soft);
+}
 .front-foot a { color: var(--accent-text); }
+
+/* ---------- the innkeeper's obligations (phase 13.7) ----------
+   The terms, at the origin, wearing the same clothes as everything else: the
+   app's tokens, the app's system stack, no display face, nothing fetched. The
+   argument `FrontPage.tsx` makes about a webfont is stronger here — this is the
+   page somebody reads on a bad connection while deciding whether to trust the
+   address.
+
+   A narrower measure than the front page's 880px, and that is not tidiness: the
+   front page is that wide because it holds a two-column ledger and a
+   screenshot, and this page is nothing but prose. A wall of 880px lines is what
+   nobody reads, and being read is the whole of the obligation.
+
+   Every step here is one the front page already had — `scale.test.ts` counts the
+   two pages as one surface and its numbers did not move for this page, which is
+   the cheap version of "this is the same door" being true rather than claimed.
+   The title reuses the front page's section clamp rather than a third display
+   size. */
+.terms-page {
+  max-width: 640px; margin: 0 auto; padding: 72px 24px;
+  display: flex; flex-direction: column; gap: 28px;
+}
+.terms-head { display: flex; flex-direction: column; gap: 12px; }
+.terms-title {
+  margin: 0; font-size: clamp(1.375rem, 3.4vw, 1.875rem);
+  font-weight: 700; line-height: 1.12; letter-spacing: -0.025em; text-wrap: balance;
+}
+.terms-lede { margin: 0; font-size: 15px; line-height: 1.6; color: var(--ink-muted); }
+/* One block per obligation, each with a hairline above it, because somebody
+   arrives here to answer ONE question — "can they read my canvas", "how do I
+   get something taken down" — and should not have to read the other six to find
+   it. The `id` on each section (see `lib/terms.ts`) makes each one linkable. */
+.terms-section {
+  display: flex; flex-direction: column; gap: 12px;
+  padding-top: 24px; border-top: 1px solid var(--line-soft);
+}
+.terms-section-head {
+  margin: 0; font-size: 16.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;
+}
+/* Full ink, NOT `--ink-muted`. Prose a page exists to have somebody actually
+   read is not secondary text, and greying it is exactly how a terms page
+   acquires the tone this one is written to avoid. */
+.terms-p { margin: 0; font-size: 14.5px; line-height: 1.65; }
+.terms-foot {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  padding-top: 24px; border-top: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+}
+.terms-foot a { color: var(--accent-text); }
 
 /* ---------- nothing here ---------- */
 .notfound-page {

@@ -258,10 +258,14 @@ handler and the same body, on a prefix Google forwards. `/healthz` still exists
 and is unchanged — it is what every localhost caller uses, including the CLI's
 own daemon lifecycle — so this was an addition, not a rename.
 
-GC is deliberately **not** scheduled. `./infra/91-scheduler-gc.sh` explains
-why in full and exits non-zero rather than creating a job that would 401 every
-night. Read it — it is the most important file in this directory that creates
-nothing.
+GC is deliberately **not** scheduled, because the daemon collects its own
+garbage on a timer inside the process — a minute after each start, then every
+`ISOCAN_GC_INTERVAL_MS` (an hour by default). The minute is what makes it work
+here: `MIN_INSTANCES=0` means an idle instance is gone about fifteen minutes
+after the last request, so a first tick an hour away would never arrive. `./infra/91-scheduler-gc.sh` explains why a scheduler
+was refused rather than deferred — the door admits badges and Cloud Scheduler
+cannot hold one — and checks that the sweep is still in the code. Read it; it
+is the most important file in this directory that creates nothing.
 
 ### Stage D — continuous deploy  ($0 until you push)
 
@@ -406,13 +410,15 @@ project id is burned.
 
 Named so nobody assumes it is there.
 
-- **GC on a schedule.** The architecture says Cloud Scheduler calls the GC
-  endpoint with an OIDC identity. It cannot: the door reads
-  `Authorization: Bearer …` as a *badge* token, a Google OIDC JWT parses as
-  nothing, and the request is refused — correctly. There is also no home-wide
-  GC route; `POST /api/projects/:id/gc` sweeps one canvas at a time and
-  nothing enumerates them. `91-scheduler-gc.sh` lays out the three ways
-  forward. Not urgent: un-swept blobs cost cents.
+- **GC on a schedule.** Not missing — refused. Cloud Scheduler cannot hold a
+  badge (a Google OIDC JWT runs through `parseBadgeToken` and parses as
+  nothing, so the request arrives badge-less and is correctly refused), and
+  giving a cron one would mean a long-lived robot key or a second kind of
+  caller at the door. The home sweeps itself instead, on an in-process timer
+  that fires a minute after boot and hourly after that (the minute is for
+  scale-to-zero — see above);
+  `POST /api/gc` collects on demand for a badge, over the canvases that badge
+  is admitted to. `91-scheduler-gc.sh` carries the argument.
 - **A KMS key.** `cloudkms.googleapis.com` is enabled; no key ring and no key
   exist. Registration launch tokens are Phase 9/12.
 - **Firebase Auth.** Attesters are Phase 9. Nothing here enables it.

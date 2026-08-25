@@ -415,7 +415,9 @@ isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
-isocan gc [--dry-run] [--keep-ops N]   # compact the oplog, sweep unreachable blobs
+isocan gc [--all] [--dry-run] [--keep-ops N]   # compact the oplog, sweep
+                                       # unreachable blobs (--all: every canvas
+                                       # you are admitted to at this home)
 isocan session start|on|work|point|move|say|end · isocan who   # presence
 isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
@@ -473,6 +475,13 @@ pair-complete so redo never dangles; dropped entries go to
 `oplog-archive.jsonl`), then sweeps blobs unreachable from live items, the
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
+
+The daemon also does this to itself: every canvas it holds, a minute after it
+starts serving and every hour after that (`ISOCAN_GC_INTERVAL_MS`), so a home
+that runs for months does not need anybody to remember — and one that is only
+alive in short bursts still collects, which is why the first sweep is a minute
+out rather than an hour. Nothing schedules it from outside: a home collects its
+own garbage, which is why there is no credential anywhere in this story.
 
 ## Answering to a home
 

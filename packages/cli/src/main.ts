@@ -9,6 +9,7 @@ import type {
   BadgeSummary,
   CanvasAddress,
   CanvasSnapshotResponse,
+  GcReport,
   GrantSubject,
   Comment,
   CommentThread,
@@ -4823,29 +4824,62 @@ program
     }),
   );
 
+/** One GC report as the lines a person reads. Shared by the one-canvas sweep
+ * and the home-wide one's totals: a home-wide sweep is the same measurement
+ * added up, so it must not grow a second vocabulary for it. */
+function gcLines(report: GcReport): Record<string, string> {
+  const verb = report.dryRun ? "would sweep" : "swept";
+  return {
+    oplog: `${report.retainedEntries} entries kept, ${report.droppedEntries} ${report.dryRun ? "would be archived" : "archived"}`,
+    reachable: `${report.reachableBlobs} blobs (${formatBytes(report.reachableBytes)})`,
+    [verb]: `${report.sweptBlobs} blobs (${formatBytes(report.sweptBytes)})`,
+    ...(report.skippedRecentBlobs > 0
+      ? { "skipped (too recent)": String(report.skippedRecentBlobs) }
+      : {}),
+  };
+}
+
 program
   .command("gc")
   .description("Reclaim storage: compact the oplog and sweep unreachable blobs")
   .option("--dry-run", "report what would be freed without deleting anything")
   .option("--keep-ops <n>", "how many recent operations to keep undoable (default 500)")
+  // One act, one place: collecting a home is the same act as collecting a
+  // canvas, over a different set, so it is a flag on this verb rather than a
+  // second one. `--all` also names no canvas, which is the point — it is the
+  // command to run in a directory bound to nothing.
+  .option("--all", "sweep every canvas you are admitted to at this home, not just this one")
   .action(
-    run(async (opts: { dryRun?: boolean; keepOps?: string }, cmd: Command) => {
+    run(async (opts: { dryRun?: boolean; keepOps?: string; all?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const p = await resolveCanvas(ctx);
-      const report = await ctx.client.gc(p.id, {
+      const request = {
         ...(opts.dryRun ? { dryRun: true } : {}),
         ...(opts.keepOps !== undefined ? { keepOps: Number(opts.keepOps) } : {}),
-      });
+      };
+      if (opts.all) {
+        const home = await ctx.client.gcHome(request);
+        if (ctx.json) return printJson(home);
+        printTable(
+          home.canvases.map((row) => ({
+            canvas: row.canvasId,
+            // A canvas that threw is a row, not a missing row: the sweep went
+            // on without it, and the thing worth seeing is which one it was.
+            swept: row.report
+              ? `${row.report.sweptBlobs} blobs (${formatBytes(row.report.sweptBytes)})`
+              : `failed: ${row.error ?? "unknown"}`,
+            archived: row.report ? String(row.report.droppedEntries) : "",
+          })),
+        );
+        console.log("");
+        return printKeyValues({
+          canvases: String(home.canvases.length),
+          ...gcLines(home.totals),
+        });
+      }
+      const p = await resolveCanvas(ctx);
+      const report = await ctx.client.gc(p.id, request);
       if (ctx.json) return printJson(report);
-      const verb = report.dryRun ? "would sweep" : "swept";
-      printKeyValues({
-        oplog: `${report.retainedEntries} entries kept, ${report.droppedEntries} ${report.dryRun ? "would be archived" : "archived"}`,
-        reachable: `${report.reachableBlobs} blobs (${formatBytes(report.reachableBytes)})`,
-        [verb]: `${report.sweptBlobs} blobs (${formatBytes(report.sweptBytes)})`,
-        ...(report.skippedRecentBlobs > 0
-          ? { "skipped (too recent)": String(report.skippedRecentBlobs) }
-          : {}),
-      });
+      printKeyValues(gcLines(report));
     }),
   );
 

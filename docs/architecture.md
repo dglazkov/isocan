@@ -514,9 +514,45 @@ comes from the object store rather than from the client.
   project's Firestore, this bucket, this KMS key, named secrets —
   nothing else, so home compromise stays the innkeeper doc's honest
   worst case and not a lateral move into the rest of the cloud.
-- **GC** — Cloud Scheduler calls the existing GC endpoint on a
-  schedule, authenticated by OIDC service identity, behind the door
-  like every route.
+- **GC** — **the home collects itself, on a timer inside the process**
+  (phase 13.7). Every canvas the store holds, swept **a minute after
+  the daemon starts serving and every interval after that**
+  (`ISOCAN_GC_INTERVAL_MS`, an hour by default), stopped with the
+  daemon; plus `POST /api/gc` for anyone who wants to collect now,
+  behind the door like every route — it sweeps exactly the canvases the
+  calling badge is admitted to, which is the whole home at a local
+  daemon and your own work at a hosted one. This line used to promise
+  Cloud Scheduler with an OIDC service identity, and that was
+  **refused, not deferred: the door admits badges, and Cloud Scheduler
+  cannot hold one.** A Google identity token is a JWT; it runs through
+  `parseBadgeToken`, parses as nothing, and the job arrives badge-less
+  and is correctly refused. The two ways to give it a badge were a
+  long-lived robot key in Secret Manager (the desk's posture is that a
+  badge belongs to a person or a daemon, not to a cron) and teaching
+  the door a second kind of carrier for maintenance routes — a new kind
+  of caller admitted, for a chore. The timer needs neither, and it fits
+  what GC actually is: garbage accrues only while a home is in use,
+  which is exactly when the instance is alive, and a sweep that runs
+  late reclaims the same bytes. `infra/91-scheduler-gc.sh` creates
+  nothing, permanently, and says so. Like presence, this leans on
+  exactly-one-instance: one home is one sweeper, and every sweep it
+  runs is queued on the same single-writer chain as the writes it is
+  compacting behind.
+
+  **The sweep after boot is not a nicety — without it this mechanism
+  would never have run in production once.** If the instance is the
+  clock, the sweep has to fit inside the instance's *life*: dev runs
+  `MIN_INSTANCES=0` and Cloud Run reaps an idle instance about fifteen
+  minutes after the last request, so an hourly timer whose first tick
+  is an hour away belongs to a process that was reaped forty-five
+  minutes earlier. Nothing would have reported this — green tests, and
+  a quiet log, because a quiet log means "nothing to collect". A minute
+  is late enough to stay out of the way of boot (migrations, snapshot
+  loads, home links dialling) and early enough to fit the shortest life
+  an instance has. What was *not* the obstacle, since it is the first
+  thing anyone will suspect: CPU throttling. `70-cloud-run.sh` sets
+  `--no-cpu-throttling`, so timers do run between requests. Instance
+  lifetime was the whole of it.
 - **Backups** — Firestore point-in-time recovery on, plus a scheduled
   export to the bucket. The export writes a **new timestamped folder
   per run**, never a fixed one, so the bucket holds many restore points

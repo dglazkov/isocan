@@ -159,9 +159,10 @@ step "the ops account (Cloud Scheduler)"
 # and nothing else.
 bind_project_role "serviceAccount:${OPS_SA}" roles/datastore.importExportAdmin
 bind_bucket_role "${BACKUP_BUCKET}" "serviceAccount:${OPS_SA}" roles/storage.objectCreator
-# run.invoker is granted here so it is in place if and when a GC endpoint the
-# scheduler can actually reach exists. Today it cannot — see 91-scheduler-gc.sh,
-# which explains why and refuses to create a job that would 401 every night.
+# run.invoker is granted here for the Firestore export job. It was also held
+# open for a GC job, and that is over: GC runs on a timer inside the daemon and
+# no scheduler will ever call it (see 91-scheduler-gc.sh). Left in place because
+# the export still needs this account; narrowing it is that job's business.
 bind_project_role "serviceAccount:${OPS_SA}" roles/run.invoker
 
 step "done"

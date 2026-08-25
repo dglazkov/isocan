@@ -425,6 +425,21 @@ you and what you were trying to do.
 `404` is the different answer, and worth telling apart: there is no canvas at
 that id here at all — a typo, or a canvas that lives at another home.
 
+## When the DOOR refuses you
+
+A **429 with `too-many-badges`** is not about a canvas at all — it is the home
+metering the door. Badges are free to mint, and free does not mean unmetered:
+a home will hand out only so many new badges a minute to one caller.
+
+You should essentially never see it, and that is the useful part. A badge is
+good for a year and lives in `~/.isocan/identity.json`, so a machine mints one
+and reuses it for everything afterwards. Being metered means something is
+throwing that file away between commands — most often an ephemeral working
+directory with no persisted home. So: wait the seconds the message names, and
+then fix the cause rather than the symptom. Do not loop on the door, and do
+not delete your identity file to "start clean" — that is the one action that
+makes this refusal certain.
+
 ## Working a canvas that is not this directory's
 
 Only when the human asks for it. Pass `--canvas <ref>` to each command — do
@@ -804,7 +819,9 @@ make),
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
-`undo`/`redo`, `wait`, `tail -f`, `gc`, `use`, `canvas`,
+`undo`/`redo`, `wait`, `tail -f`, `gc [--all]` (`--all`: every canvas you are
+admitted to at this home, not just this one),
+`use`, `canvas`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),

@@ -79,12 +79,22 @@ const FONT_SIZE = /(?:^|[;{\s])font-size\s*:\s*([^;{}]+)/g;
  * The front page gets its own counts rather than an exemption. It is younger
  * and still being designed, so its numbers are expected to move — but
  * deliberately, in a diff, which is the entire point of counting.
+ *
+ * **The split is by SURFACE, not by page** (phase 13.7). The terms page joined
+ * the front door — same audience, same reading distance, same column of prose —
+ * and it is counted with the front page rather than with the app or in a third
+ * bucket of its own. A per-page bucket would make every new page its own scale,
+ * which is the discipline dissolving one page at a time; the question worth
+ * asking is whether the door's second page invented a step its first page did
+ * not have. Measured when it landed: it did not. All three door numbers below
+ * are unchanged from 2026-08-24, and the APP numbers are unchanged too, which
+ * is what says the partition still cuts where it claims to.
  */
 function partition(): { app: string; front: string } {
   const app: string[] = [];
   const front: string[] = [];
   for (const rule of outside.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
-    (/\.front[-\b]/.test(rule[1] ?? "") ? front : app).push(rule[0]);
+    (/\.front[-\b]|\.terms[-\b]/.test(rule[1] ?? "") ? front : app).push(rule[0]);
   }
   return { app: app.join("\n"), front: front.join("\n") };
 }
@@ -267,12 +277,17 @@ describe("type sizes", () => {
  * them in a diff, with a reason, is the whole point; discovering afterwards
  * that a page grew four type sizes nobody chose is what this prevents.
  */
-describe("the front page's scale", () => {
+describe("the front door's scale", () => {
   it("is actually being measured — the parser has to find it", () => {
     // Same reason as every other counter here: a parser that stopped matching
     // reports zero and passes (lessons.md #8, #14).
-    expect(FRONT_CSS.length, "no front-page rules found — renamed?").toBeGreaterThan(500);
+    expect(FRONT_CSS.length, "no front-door rules found — renamed?").toBeGreaterThan(500);
     expect(distinct(frontSpacing).length).toBeGreaterThan(5);
+    // Both pages, not just the first one: the partition matches two prefixes
+    // now, and a regex that quietly stopped matching one of them would leave
+    // this whole block measuring the other and passing (phase 13.7).
+    expect(FRONT_CSS, "the front page fell out of this measurement").toContain(".front-steps");
+    expect(FRONT_CSS, "the terms page fell out of this measurement").toContain(".terms-section");
   });
 
   it("invents no new spacing step", () => {
@@ -299,10 +314,17 @@ describe("the front page's scale", () => {
     ).toBe(9);
   });
 
-  it("uses fluid type only for the two display lines", () => {
+  it("uses fluid type only for display lines, and only two of them", () => {
     // `clamp()` is right for a headline that has to hold from a phone to a
     // desktop and wrong for body copy, where it makes a size nobody can name.
+    //
+    // Three declarations since phase 13.7 and still TWO VALUES: the terms page's
+    // title is the front page's section clamp, reused. Both halves are asserted,
+    // because the count alone would have let a third display size in as long as
+    // somebody deleted one elsewhere, and the distinct set alone would have let
+    // a clamp onto every paragraph on the page.
     const fluid = frontSizes.filter((one) => one.startsWith("clamp("));
-    expect(fluid.length, `fluid sizes: ${fluid.join(" | ")}`).toBe(2);
+    expect(fluid.length, `fluid sizes: ${fluid.join(" | ")}`).toBe(3);
+    expect(new Set(fluid).size, `fluid values: ${[...new Set(fluid)].join(" | ")}`).toBe(2);
   });
 });

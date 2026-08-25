@@ -43,6 +43,7 @@ import {
   FREE_NAME_ROUTE,
   grantSubjectRefusal,
   CANVAS_PATH_PREFIX,
+  HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
   HOMES_ROUTE,
   isLive,
@@ -73,7 +74,15 @@ import {
   type AuthConfig,
   type SigningKeys,
 } from "./attest.ts";
+import { gcCanvases } from "./gc.ts";
 import { admittingGrant, NotAdmittedError } from "./grants.ts";
+import {
+  clientAddress,
+  MINT_PER_MINUTE,
+  TokenBuckets,
+  TOO_MANY_BADGES,
+  type MintRefusal,
+} from "./meter.ts";
 import { killAndSweep, sweepCanvas } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
@@ -299,6 +308,51 @@ export function registerRoutes(
   const auth = options.auth ?? null;
   const attesters = attestersOf(auth);
   const signingKeys = options.signingKeys ?? googleSigningKeys;
+
+  /**
+   * **The door's meter** (phase 13.7 — `innkeeper.md`: badges are free to
+   * mint, and free may not mean unmetered). One bucket per client, per
+   * daemon, in memory — see `meter.ts` for what it protects and for the whole
+   * argument about which address a bucket is keyed on.
+   *
+   * **One meter, and BOTH mint paths draw from it.** There are two: `POST
+   * /api/door`, the explicit one, and the SPA fallback in `registerPages`,
+   * which mints a cookie badge for any badge-less browser that loads a page.
+   * A limit on only the first is one somebody walks around by requesting `/`
+   * in a loop. They share a bucket rather than getting one each because they
+   * spend the same resource — a desk row — and a caller that alternates
+   * between them must not get twice the budget.
+   *
+   * What differs is the REFUSAL, not the accounting; the page path's own
+   * comment says why.
+   */
+  const mintMeter = new TokenBuckets();
+  const mayMint = (req: FastifyRequest): MintRefusal | null =>
+    mintMeter.take(clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }));
+
+  /**
+   * What a refused mint is written down as, for the reader who is neither the
+   * caller nor in the room: the key it was charged to, the chain that key was
+   * read out of, and how many distinct keys the meter holds.
+   *
+   * That last number is the instrument. A hosted home keyed correctly sees it
+   * grow with its visitors; a home that has collapsed the whole internet into
+   * its load balancer's address sees refusals climb while it sits at 1. Both
+   * look identical from outside — 429s — which is exactly why the difference
+   * has to be legible from inside.
+   */
+  const logRefusal = (req: FastifyRequest, what: string, refusal: MintRefusal) => {
+    app.log.warn(
+      {
+        key: clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }),
+        forwardedFor: req.headers["x-forwarded-for"] ?? null,
+        socket: req.ip,
+        distinctKeys: mintMeter.size,
+        retryAfter: refusal.retryAfter,
+      },
+      what,
+    );
+  };
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof OpValidationError) {
@@ -535,9 +589,33 @@ export function registerRoutes(
    * The door mints only for the badge-less. A caller that already holds a
    * valid badge is told its own id and handed no new secret, so a refresh
    * storm or a retry loop cannot mint a badge per request.
+   *
+   * **The meter runs after that branch and not before** (phase 13.7). The
+   * limit is on MINTS, not on knocks: a client holding a badge that hammers
+   * this route costs the desk nothing, and metering it would lock out the one
+   * caller that is behaving. `mayMint` is therefore consulted at the exact
+   * line below which a row gets written.
    */
   app.post(DOOR_ROUTE, async (req, reply) => {
     if (req.badge) return { badgeId: req.badge.badgeId } satisfies DoorResponse;
+    const refusal = mayMint(req);
+    if (refusal) {
+      logRefusal(req, "the door refused a mint: metered", refusal);
+      // `Retry-After` for the machine, the same seconds in the sentence for
+      // the person, `{error, code}` for the agent reading it off the CLI —
+      // one refusal, three readers. The message names the reuse the caller
+      // should have done, because "wait" alone teaches a retry loop to wait.
+      return reply
+        .status(429)
+        .header("Retry-After", String(refusal.retryAfter))
+        .send({
+          error:
+            `too many new badges from here — this door mints ${MINT_PER_MINUTE} a minute per caller, ` +
+            "and a badge is good for a year, so hold on to the one you were handed rather than " +
+            `knocking again. Try again in ${refusal.retryAfter}s.`,
+          code: TOO_MANY_BADGES,
+        });
+    }
     const carrier = ((req.body ?? {}) as DoorRequest).carrier ?? "bearer";
     const { record, token } = mintBadge(carrier === "cookie" ? "cookie" : "bearer");
     await desk.put(record);
@@ -1668,6 +1746,46 @@ export function registerRoutes(
     return engine.gc(id, body);
   });
 
+  /**
+   * **Collect the whole home** — the same policy, over many canvases at once
+   * (phase 13.7). One `Engine.gc` per canvas, unchanged; what is new here is
+   * an enumerating caller, never a second policy.
+   *
+   * **The admission question, which is the whole of this route.** `/api/gc`
+   * carries no canvas in its path, so `CANVAS_API_ROUTE` does not match it and
+   * the `onRequest` hook's `canvasId ∈ admissions` check never fires. A route
+   * that then swept `store.listCanvases()` would be a badge deleting bytes on
+   * canvases it was never let into — the door held for every other route and
+   * walked around by this one. So the list is the badge's own admissions,
+   * intersected with what this daemon actually holds: **"collect the whole
+   * home" means "collect everything I can reach"**, which on a local daemon
+   * (one person, admitted to everything) is the whole home, and at a hosted
+   * one is your own work and nothing else. There is no home-wide sweep for
+   * anybody at the door, and there does not need to be: the home's own timer
+   * collects the rest, from inside the process, where no badge is involved.
+   *
+   * **Admissions, not `admittingGrant`** — the narrow answer, where `GET
+   * /api/projects` takes the wide one. The wide answer is right for a LISTING
+   * because listing is not acting: telling a person that a link-granted canvas
+   * exists costs nothing. This route deletes bytes and rewrites oplogs, and
+   * "every canvas I could have entered" is not a set anybody meant to hand a
+   * chore. An admission is written the moment its holder actually enters, so
+   * the sweep follows where someone has been rather than where they might go.
+   *
+   * The intersection with the held list is not belt-and-braces: an admission
+   * outlives the canvas it names (a delete does not walk every badge), and
+   * `Engine.gc` on an id this daemon does not hold would throw — which
+   * `gcCanvases` would faithfully report as a per-canvas error, turning every
+   * sweep after any delete into a report full of red.
+   */
+  app.post(HOME_GC_ROUTE, async (req) => {
+    const badge = req.badge!;
+    const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const held = (await engine.listCanvases()).filter((canvas) => admitted.has(canvas.id));
+    return gcCanvases(engine, held.map((canvas) => canvas.id), body);
+  });
+
   app.post("/api/projects/:id/blobs", async (req, reply) => {
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id); // 404 for unknown canvases
@@ -1847,7 +1965,9 @@ export function registerRoutes(
   });
 
   // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
-  registerPages(app, desk, store, options);
+  // The meter travels with it: the SPA fallback is the second mint path, and
+  // it draws on the same bucket the door does (phase 13.7).
+  registerPages(app, desk, store, options, { mayMint, logRefusal });
 }
 
 /**
@@ -2089,6 +2209,13 @@ function registerPages(
   desk: Desk,
   store: Store,
   options: RouteOptions,
+  /** The door's meter, handed in rather than built here: one bucket per
+   * client covers both mint paths, and a second meter would be a second
+   * budget for the same desk rows (phase 13.7). */
+  meter: {
+    mayMint: (req: FastifyRequest) => MintRefusal | null;
+    logRefusal: (req: FastifyRequest, what: string, refusal: MintRefusal) => void;
+  },
 ): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(here, "../../web/dist");
@@ -2220,11 +2347,31 @@ function registerPages(
     // which is exactly where this line can be reached from — the signpost
     // above returns first for every canvas that lives elsewhere, and for every
     // request at all on a pure replica.
+    //
+    // **Metered, and metered by WITHHOLDING THE BADGE rather than the page**
+    // (phase 13.7). This is the mint path a flood walks in through — a loop
+    // on `/` with no cookie mints a desk row per request — so it cannot be
+    // left unmetered. But the caller here asked for a PAGE, and refusing that
+    // is the wrong refusal twice over: a bucket is per address, addresses are
+    // shared (CGNAT, an office, a school), and a 429 where the app should be
+    // is the front door of the product broken for somebody who did nothing.
+    // Serving the page and minting nothing is the narrowest answer that still
+    // protects what is actually scarce, and it degrades into a path that
+    // already exists — the app arrives badge-less and takes `api.ts`'s
+    // 401-and-recover route, which comes back here the moment the bucket
+    // refills. The door, whose caller asked for the CREDENTIAL and can act on
+    // being told to wait, answers 429 instead. Same accounting, two refusals,
+    // because they are two different asks.
     if (!req.badge) {
-      const { record, token } = mintBadge("cookie");
-      await desk.put(record);
-      const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-      reply.header("Set-Cookie", badgeCookie(token, secure));
+      const refusal = meter.mayMint(req);
+      if (refusal) {
+        meter.logRefusal(req, "served a page without minting: metered", refusal);
+      } else {
+        const { record, token } = mintBadge("cookie");
+        await desk.put(record);
+        const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+        reply.header("Set-Cookie", badgeCookie(token, secure));
+      }
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback
   });

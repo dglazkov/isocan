@@ -133,6 +133,31 @@ export async function writeBadge(home: string, base: string, badge: StoredBadge)
  * page JavaScript the very credential `HttpOnly` exists to hide).
  */
 export async function knockOnDoor(base: string, timeoutMs = 10_000): Promise<StoredBadge | null> {
+  const answer = await askTheDoor(base, timeoutMs);
+  return "badge" in answer ? answer.badge : null;
+}
+
+/**
+ * What the door said, refusal and all — the same knock, with the answer kept
+ * instead of flattened to null.
+ *
+ * **Why this exists** (phase 13.7). The door is metered now, and a `null`
+ * here becomes, one frame up the stack, the ORIGINAL 401 the caller was
+ * recovering from: *"a badge is required — ask the door for one."* Told to a
+ * person whose knock was just refused 429, that is this codebase's oldest
+ * failure — the cheerful wrong answer — delivered as advice to do the one
+ * thing that cannot work. So the refusal travels.
+ *
+ * `knockOnDoor` keeps its null contract for the callers whose recovery is
+ * genuinely "give up quietly" (`HomeLink.ensureBadge`, where the replica's
+ * next attempt is the retry), and the CLI takes this form because its caller
+ * is a person reading a terminal.
+ */
+export type DoorAnswer =
+  | { badge: StoredBadge }
+  | { refused: { status: number; error: string; code?: string } };
+
+export async function askTheDoor(base: string, timeoutMs = 10_000): Promise<DoorAnswer> {
   try {
     const res = await fetch(`${base}${DOOR_ROUTE}`, {
       method: "POST",
@@ -140,13 +165,32 @@ export async function knockOnDoor(base: string, timeoutMs = 10_000): Promise<Sto
       body: JSON.stringify({ carrier: "bearer" }),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
-    const door = (await res.json()) as DoorResponse;
-    if (!door.secret) return null;
-    return { badgeId: door.badgeId, secret: door.secret, at: new Date().toISOString() };
-  } catch {
-    return null;
+    const body = (await res.json().catch(() => null)) as (DoorResponse & Refused) | null;
+    if (!res.ok) {
+      return {
+        refused: {
+          status: res.status,
+          error: body?.error ?? `the door refused: HTTP ${res.status}`,
+          ...(body?.code ? { code: body.code } : {}),
+        },
+      };
+    }
+    if (!body?.secret) {
+      // 200 with no secret is the door answering a caller it already knows —
+      // which this function's caller, by construction, is not. Nothing to
+      // keep, and nothing a retry improves.
+      return { refused: { status: res.status, error: "the door handed back no secret" } };
+    }
+    return { badge: { badgeId: body.badgeId, secret: body.secret, at: new Date().toISOString() } };
+  } catch (err) {
+    return { refused: { status: 0, error: `could not reach the door at ${base}: ${(err as Error).message}` } };
   }
+}
+
+/** This file's `{error, code}` — the shape every refusal in `http.ts` uses. */
+interface Refused {
+  error?: string;
+  code?: string;
 }
 
 /** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling

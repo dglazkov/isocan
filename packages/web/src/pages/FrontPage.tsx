@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { SKILL_INSTALL_COMMAND } from "@isocan/core";
 import {
@@ -9,6 +10,7 @@ import {
   type CopyState,
 } from "../lib/copy.ts";
 import { IdentityDialog } from "../components/IdentityDialog.tsx";
+import { TERMS_PATH } from "../lib/faces.ts";
 import { LEDGER } from "../lib/ledger.ts";
 import { CANVAS_SHOT } from "../lib/shot.ts";
 
@@ -27,6 +29,16 @@ import { CANVAS_SHOT } from "../lib/shot.ts";
  * argument for having taken them, and the one link on the page is a footnote
  * at the bottom worded as an aside, because the moment it becomes the ask, the
  * page has failed the rule.
+ *
+ * **A second footnote since phase 13.7, and the rule above did not move.** The
+ * terms page — what this operator can read off your canvas, and what to do if
+ * that is unacceptable — sits in the same footer, in the same register, as one
+ * more aside. It is there because the innkeeper's obligation is to say that
+ * BEFORE somebody puts work here, and an obligation discharged where nobody
+ * can reach it is not discharged. It is still not the ask: it is below the
+ * steps, below the argument, at the bottom, and unlike the repo link it does
+ * not send anybody off this origin at all. What it must never become is a nav
+ * item, a banner, or a thing to agree to.
  *
  * **This absorbed `marketing/`**, which was a second front door: a static site
  * for the same audience, at the same address, that nothing served. Its thesis
@@ -167,9 +179,19 @@ export function FrontPage({ onIdentity }: { onIdentity: (actor: Actor) => void }
       </div>
 
       <footer className="front-foot">
-        isocan is open source; the code and the longer story are{" "}
-        <a href="https://github.com/dglazkov/isocan">on GitHub</a>. You do not
-        need any of it to run the three steps.
+        <div>
+          isocan is open source; the code and the longer story are{" "}
+          <a href="https://github.com/dglazkov/isocan">on GitHub</a>. You do not
+          need any of it to run the three steps.
+        </div>
+        {/* Said in the sentence, not only in the link, so that a reader who
+            never clicks has still been told the one fact the terms exist to
+            deliver. */}
+        <div>
+          A canvas made here is hosted on somebody's machine, and its operator
+          can read it — <Link to={TERMS_PATH}>the terms say who, and what to do
+          if that is unacceptable</Link>.
+        </div>
       </footer>
 
       {doorOpen && <IdentityDialog onDone={onIdentity} />}

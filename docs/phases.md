@@ -76,31 +76,38 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 13.5 is CLOSED — the front door is open on dev, and the
-code says canvas.** `dev.isocan.io` serves Scene 0's three steps to a browser
-that has never been here, `marketing/` is folded into it and gone, and the
-magic-link floor now arrives **in an inbox** from `noreply@dev.isocan.io`. That
-last one turned out to be code as well as DNS: the provider moves the From:
-address and the action-link domain together, so the daemon serves
-`/__/auth/action` itself rather than sending people to a second origin. The
-rename landed with it — canvas everywhere a stranger reads, and six contracts
-deliberately still spelling `project`, each commented at its site.
+**Where we are: Phase 13.7 is PART-DONE — the home keeps its own house, and
+says out loud what it can see.** The obligations `innkeeper.md` named and no
+phase owned are built: GC sweeps every canvas the store holds on a timer inside
+the process (plus `POST /api/gc` for anyone who wants it now, scoped to what
+the calling badge is admitted to), the door is metered per client, and `/terms`
+serves the plain statement — the operator can read your canvas, run your own
+home if that is unacceptable — under a named operator, with the sovereignty
+caveat stated honestly. **What is NOT proven is the one clause naming dev:**
+"the sweep … is observed on dev". Nobody deployed. That is a push, a CI pass
+and a look at the log, and it belongs to nothing else, so it stays here rather
+than being rounded up.
 
-**Two things a clean session must know before it types anything.** The wire
+**Three things a clean session must know before it types anything.** The wire
 keys renamed, so **a pre-rename CLI or replica cannot WRITE to a current home**
 — it gets 426 and the upgrade command, reads still work, and Dion and Paul both
 need `npx github:dglazkov/isocan#release setup`. And phase 10.5 is still
 PART-DONE for the same reason it always was: Paul and Dion have not walked
 `development.md`. Phase 13.5's own unproven half — that Scene 0's three steps,
-*run*, produce a canvas — is that same walk, counted once, over there.
+*run*, produce a canvas — is that same walk, counted once, over there. Third,
+and new: **the door's rate limit has a known bypass that is one flag away**,
+and the flag is a provisioning decision phase 14 should make on purpose rather
+than a fix somebody slips in — see 13.7's findings.
 
 The launch-first order set 2026-08-24 by Dimitri runs 10.3 → 10.5 → 13.5 → 13.7
 → 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as features added to a
 live isocan.io. The cut line is the journey's own built/unbuilt boundary: Scenes
 0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt remainder, so
-launching first ships exactly the journey that exists. **Phase 13.7, the
-innkeeper's obligations, is next** — GC on a timer, rate limits at the door, and
-the words. The two-surfaces problem phase 10 surfaced still has its address —
+launching first ships exactly the journey that exists. **Phase 14, isocan.io,
+is next** — the last car of the launch train, and the first phase that provisions
+since 13.5. It inherits two small errands from 13.7 rather than being clean:
+the sweep still wants watching on a real deploy, and `--ingress=all` is the
+flag decision. The two-surfaces problem phase 10 surfaced still has its address —
 the airplane arc, phases 12.5 and 12.7. This line moves as phases close; a clean
 session starts by believing it.
 
@@ -148,7 +155,20 @@ is how it goes wrong.
   sixth category: persisted and wire JSON *keys*, which are neither a route nor
   an op string. Those DID rename, deliberately, and the break is real — see
   phase 13.5's findings.
-- **The GC schedule, opened 2026-08-22 (phase 5).** Nothing schedules
+- **The GC schedule — CLOSED 2026-08-24 (phase 13.7).** Kept as a headstone,
+  because what it decided still binds and because the *shape* of the answer is
+  worth more than the answer. **Chosen: the in-process timer**, plus
+  `POST /api/gc`; the map's line is redrawn and `infra/91-scheduler-gc.sh`
+  creates nothing, now permanently rather than pending. Cloud Scheduler was
+  **refused, not deferred** — the door admits badges and a cron cannot hold
+  one, and both ways to give it one (a long-lived robot key, a second carrier
+  at the door) buy a standing risk for a chore. **The one thing the entry did
+  not foresee**, and the finding below is the real lesson: choosing a timer
+  makes the *instance's lifetime* part of the mechanism, and dev runs at
+  `MIN_INSTANCES=0`. The original text below is left standing because it is
+  the argument, and because "not urgent and not load-bearing" is still true.
+
+  Nothing schedules
   garbage collection at the hosted home, on purpose;
   [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
   nothing and explains why at length. Two independent blockers: the door
@@ -170,7 +190,8 @@ is how it goes wrong.
   the [map](architecture.md)'s GC line**, which today promises a
   mechanism the code cannot perform. **Scheduled 2026-08-24:** the
   in-process timer, in phase 13.7, with `POST /api/gc`; the entry stands
-  until the map's line is redrawn there.
+  until the map's line is redrawn there. **Redrawn 2026-08-24** — see the
+  headstone above.
 
 ## Standing lessons
 
@@ -180,7 +201,7 @@ could not reach, and a lesson retold once per phase reads as trivia.
 Bracketed numbers are the phases that taught it.
 
 - **This system's default answer to a wrong address is a cheerful one**
-  [5, 6, 7, 7.5, 8, 9, 13.5]. Eight sightings: `/healthz/` returns the app shell at
+  [5, 6, 7, 7.5, 8, 9, 13.5, 13.7]. Nine sightings: `/healthz/` returns the app shell at
   200; `/c/<id>` renders blank; a refused socket is indistinguishable from a
   network blip; an unmatched `/api/` path returns the web app, so version
   negotiation with an older home works only because HTML fails to parse as
@@ -193,7 +214,15 @@ Bracketed numbers are the phases that taught it.
   `<img>`. **A step that cannot read back the state it wanted has verified
   nothing** — and phase 13.5 adds the sharper form: **an instrument can be
   cheerful too.** `returnOobLink` reported the old sender domain twice while
-  real mail already carried the new one.
+  real mail already carried the new one. Phase 13.7 adds the ninth, and the
+  sharpest yet because nothing was wrong to read: a GC timer whose first tick
+  was an hour away, inside a process reaped after fifteen minutes, would have
+  swept nothing forever — and said nothing, because an idle sweep is silent *by
+  design*. **A mechanism that cannot fire looks exactly like a mechanism with
+  nothing to do.** Its sibling landed the same day: a rate limit keyed on the
+  socket address puts the whole internet in one bucket behind a load balancer
+  and refuses every visitor at 429, looking precisely like a rate limit that
+  works.
 - **A comment that reasons about a browser is a hypothesis** [2, 8, 9, 10].
   Wrong twice by not measuring: the blob route held open four phases on a
   cookie argument about a different request, and a service worker argued into
@@ -1143,7 +1172,18 @@ inbox rather than spam. The rename proven by the suite, green, and by
 
 ## Phase 13.7 — The innkeeper's obligations
 
-**Status: NOT STARTED.**
+**Status: PART-DONE** 2026-08-24. All three obligations are built and green at
+1399 tests, and two of the three proofs played in full, measured by the
+conductor rather than reported: a mint flood against a real daemon is refused
+429 `too-many-badges` with a `Retry-After`, and `/terms` answers 200 `text/html`
+from a booted home with every required claim — the caveat included — present in
+the **built bundle** rather than only in source. The sweep's vitest half played
+too, including the case that matters: a daemon carrying the real hour-long
+interval, living about a second, still collects. **The half not proven: "…and
+is observed on dev".** Nobody deployed — this session committed and did not
+push, so `green` never moved. It is a push, a CI pass and a look at the log,
+and unlike phase 13.5's unproven half it belongs to no other phase, so it stays
+named here.
 
 **Work:** What [innkeeper.md](design/innkeeper.md) obligates and no
 phase ever owned, due before strangers rather than after. **GC,
@@ -1165,7 +1205,45 @@ and the map's GC line tells the truth.
 a mint flood is refused legibly; the terms page is served from the
 origin, caveat included.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- 2026-08-24: A timer inside a scale-to-zero process has the INSTANCE'S LIFE
+  as its clock, not its interval. The first sweep was one interval away and the
+  interval is an hour; dev runs `MIN_INSTANCES=0` and Cloud Run reaps an idle
+  instance in ~15 minutes, so the mechanism would have run in vitest and never
+  once in production — silently, because an idle sweep logs nothing by design.
+  Fixed with a sweep a minute after boot. CPU throttling was NOT the cause and
+  is the first thing anyone will re-suspect: `--no-cpu-throttling` is set.
+- 2026-08-24: The door hook admits by PATH SHAPE, so a route with no canvas in
+  its path gets no admission check at all. `POST /api/gc` is the first
+  *destructive* route in that position and re-asks the door's question itself;
+  every home-wide route a later phase adds inherits this.
+- 2026-08-24: Proving the home-wide timer fires needs a genuinely aged blob —
+  it runs GC's real defaults, and a test passing `graceMs: 0` proves a sweep no
+  home performs.
+- 2026-08-24: `--ingress=all` leaves the `*.run.app` URL reachable around the
+  load balancer, and on that path the forwarded chain is short enough that the
+  entry the meter keys on is caller-supplied — so a flooder who finds that
+  address gets unlimited buckets. One flag in `infra/70-cloud-run.sh` closes it;
+  deliberately not changed here, because it is provisioning with its own blast
+  radius and belongs to phase 14's gesture. — Open
+- 2026-08-24: The meter's model of the forwarded chain is READ FROM GOOGLE'S
+  DOCS and not measured against dev. `ISOCAN_PROXY_HOPS` moves it without new
+  code; one request against dev with the refusal log open settles it. Refusals
+  climbing while distinct keys sit at 1 is the whole-internet-in-one-bucket
+  signature. — Open
+- 2026-08-24: `ISOCAN_PROXY_HOPS` is named only inside `meter.ts`;
+  `infra/70-cloud-run.sh` and `infra/README.md` are where an operator would
+  look. — Open
+- 2026-08-24: The front door's no-third-party guard read only RENDERED MARKUP,
+  so a webfont arriving the way webfonts actually arrive — a `url()` in the
+  stylesheet — left all 44 cases green. The guard now reads the stylesheet.
+- 2026-08-24: The CLI flattened a metered door refusal back into the original
+  401, whose message says to ask the door — advice to repeat the thing just
+  refused. `askTheDoor` now carries the refusal through.
+- 2026-08-24: On a pure replica `/terms` signposts to the birth home rather
+  than serving, so "the terms are served from the origin" is a claim about a
+  HOME, not about every daemon.
 
 ## Phase 14 — isocan.io ⚑ provision
 
@@ -1185,6 +1263,17 @@ registrations, custody-wrapped tokens, adoption state — after prod
 exists, so they land as migrations under strangers rather than
 greenfield. Chosen eyes-open: the desk has migration precedent from
 phase 2, and early-prod data is small.
+
+**Two errands inherited from 13.7**, both provisioning-shaped, which is why
+they waited for the phase that provisions. **The ingress flag:**
+`--ingress=all` leaves the `*.run.app` URL reachable around the load balancer,
+and the door's meter keys on a forwarded chain that path does not produce — the
+rate limit's real bypass. `--ingress=internal-and-cloud-load-balancing` closes
+it and has its own blast radius, so it is a decision made out loud here rather
+than a fix slipped in there. **The sweep, watched:** 13.7's one unplayed proof
+clause — the GC timer observed on a real deploy — is a look at the log once
+this phase has a deploy to look at, and prod's `MIN_INSTANCES=1` changes which
+half of the rhythm does the work.
 
 **Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
 steps, a canvas born at its hosted home.

@@ -178,4 +178,4 @@ else
 fi
 
 step "done"
-note "next: infra/91-scheduler-gc.sh — read it. It refuses to create a job, and says why."
+note "next: infra/91-scheduler-gc.sh — read it. It creates nothing, on purpose, and says why."

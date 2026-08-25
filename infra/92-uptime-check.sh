@@ -137,4 +137,4 @@ YAML
 fi
 
 step "done"
-note "Stage C is finished except for GC, which 91-scheduler-gc.sh explains and refuses."
+note "Stage C is finished. GC needs no job — the daemon sweeps itself; 91-scheduler-gc.sh says why."

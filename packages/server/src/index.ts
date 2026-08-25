@@ -13,8 +13,9 @@ export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } 
 export { FileDesk } from "./file-desk.ts";
 export { readConfigFile, resolveHomeUrl } from "./config.ts";
 export type { HomeConfig } from "./config.ts";
-export { bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
-export type { StoredBadge } from "./badge-store.ts";
+export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
+export type { DoorAnswer, StoredBadge } from "./badge-store.ts";
+export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 export type {
   HomeConnection,

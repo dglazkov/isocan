@@ -9,6 +9,7 @@ import { adoptIdentity } from "./lib/identity.ts";
 import { faceFor } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
+import { TermsPage } from "./pages/TermsPage.tsx";
 import { CanvasListPage } from "./pages/CanvasListPage.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { NotHerePage } from "./pages/NotHerePage.tsx";
@@ -136,6 +137,10 @@ export function Doorway({
 }) {
   const { pathname } = useLocation();
   const face = faceFor(pathname, actor);
+  // Before the actor branch, exactly as the rule orders them: the terms are the
+  // same document for a stranger, for somebody with a badge, and for an agent
+  // (phase 13.7).
+  if (face === "terms") return <TermsPage />;
   if (face === "here" && actor) return <>{children(actor)}</>;
   if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
   return <IdentityDialog onDone={onIdentity} />;
