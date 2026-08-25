@@ -51,6 +51,16 @@ memory**. Findings written from here on should be this short in the
 first place, and the argument that produced them belongs in the commit
 message.
 
+**Compacted again 2026-08-25**, because the paragraph above was written
+and then not obeyed: five phases closed after it, and each wrote its
+Findings at the old length — three times the budget, re-teaching lessons
+already standing above. So the budget is a number now. **One entry is
+one claim in about forty words**, and a phase's whole Findings section
+wants to stay under three hundred. An entry that needs a second sentence
+is usually two entries, or one entry and a **Standing lesson**; an entry
+that needs a paragraph belongs in the commit message, with the line here
+pointing at its date.
+
 Every phase also carries a **Status** line directly under its heading —
 `CLOSED` with the date and the commit that closed it, `PART-DONE` with
 what is missing, or `NOT STARTED`. It is there so completion is *stated*
@@ -202,60 +212,65 @@ is how it goes wrong.
 
 ## Standing lessons
 
-A dozen things the phases taught more than once, hoisted out of whichever
+A dozen-odd things the phases taught more than once, hoisted out of whichever
 phase taught them first — each was re-learned somewhere the earlier telling
 could not reach, and a lesson retold once per phase reads as trivia.
 Bracketed numbers are the phases that taught it.
 
 - **This system's default answer to a wrong address is a cheerful one**
-  [5, 6, 7, 7.5, 8, 9, 13.5, 13.7]. Nine sightings: `/healthz/` returns the app shell at
-  200; `/c/<id>` renders blank; a refused socket is indistinguishable from a
+  [5, 6, 7, 7.5, 8, 9, 10.5, 13.5, 13.7, 14]. `/healthz/` returns the app shell
+  at 200; `/c/<id>` renders blank; a refused socket is indistinguishable from a
   network blip; an unmatched `/api/` path returns the web app, so version
-  negotiation with an older home works only because HTML fails to parse as
-  JSON; `address#pass` pasted into an open tab runs nothing; a provisioning
-  call on the wrong path got an HTML 404 whose body held no `"error"`, and the
-  check passed; `dev.isocan.io/__/auth/action` answered 200 with the app shell
-  while being shopped as a sender domain, which would have swallowed a sign-in
-  code; and the first `.webp` this tree ever served went out as
-  `application/octet-stream` and RENDERED anyway, because Chrome sniffs an
+  negotiation with an older home works only because HTML fails to parse as JSON;
+  a provisioning call on the wrong path got an HTML 404 whose body held no
+  `"error"`, and the check passed; `dev.isocan.io/__/auth/action` answered 200
+  with the app shell while being shopped as a sender domain, which would have
+  swallowed a sign-in code; and the first `.webp` this tree ever served went out
+  as `application/octet-stream` and RENDERED anyway, because Chrome sniffs an
   `<img>`. **A step that cannot read back the state it wanted has verified
-  nothing** — and phase 13.5 adds the sharper form: **an instrument can be
-  cheerful too.** `returnOobLink` reported the old sender domain twice while
-  real mail already carried the new one. Phase 13.7 adds the ninth, where there
-  was nothing wrong to read at all: a sweep that finds nothing and a sweep that
-  never ran say the same thing, which is nothing, because an idle sweep is
-  silent *by design*. **A mechanism that cannot fire looks exactly like a
-  mechanism with nothing to do**, so the only honest proof is to hand it
-  something to collect and watch the bytes leave — which is how it was settled
-  on dev, and two cheaper checks were cheerful on the way there (`/api/gc`
-  answers 401 for any unmatched `/api/` path; `/terms` answers 200 because the
-  SPA fallback answers everything). Its sibling landed the same day: a rate limit keyed on the
-  socket address puts the whole internet in one bucket behind a load balancer
-  and refuses every visitor at 429, looking precisely like a rate limit that
-  works. **Phase 14 adds the tenth, and it is the sharpest form yet: the
-  INSTRUMENT was cheerful.** `Fastify({})` with no `logger` key hands back
-  `abstract-logging`, whose `warn` is `function noop () {}` — so every
-  deliberate log line the server ever wrote went nowhere, including the one
-  13.7 added expressly so this failure would be visible at 3am. Code that reads
-  exactly like logging, under a comment explaining what the logging is for,
-  emitting nothing. The pattern to carry forward: **when a mechanism's only
-  evidence is an instrument, the instrument needs its own proof** — and a spy
-  installed on a no-op proves nothing, so the guard asserts the method is not
-  named `noop`.
-- **A comment that reasons about a browser is a hypothesis** [2, 8, 9, 10].
+  nothing** — and there are three sharper forms, each learned later than it
+  should have been. **An instrument can be cheerful too:** `returnOobLink`
+  reported the old sender domain twice while real mail already carried the new
+  one. **A mechanism that cannot fire looks exactly like a mechanism with
+  nothing to do:** an idle sweep is silent *by design*, so the only honest proof
+  is to hand it something to collect and watch the bytes leave; its sibling is a
+  rate limit keyed on the socket address, which puts the whole internet in one
+  bucket behind a load balancer and refuses every visitor at 429, looking
+  precisely like a limit that works. And sharpest, **the instrument itself was
+  cheerful:** `Fastify({})` hands back a logger whose `warn` is
+  `function noop () {}`, so every deliberate log line the server ever wrote went
+  nowhere — code that reads exactly like logging, under a comment explaining
+  what the logging is for, emitting nothing. **When a mechanism's only evidence
+  is an instrument, the instrument needs its own proof**, and a spy installed on
+  a no-op proves nothing.
+- **A guard nobody watched fail is decoration** [6, 10.5, 13.5, 13.7]. They ship
+  green, which is the point: three regression tests written after their fix and
+  passing against the bug, an image guard matching `img` as an element token, a
+  "both halves" case asserting two fields of three, two security cases the URL
+  parser was passing on the code's behalf, and a no-third-party guard reading
+  rendered markup while webfonts arrive as `url()` in a stylesheet. The
+  companion is **a fixture built by today's code cannot see yesterday's
+  machine**, which is how phase 10.5's migration bug reached a rig with a full
+  green suite behind it.
+- **A comment that reasons about a runtime it cannot see is a hypothesis**
+  [2, 8, 9, 10, 13.7].
   Wrong twice by not measuring: the blob route held open four phases on a
   cookie argument about a different request, and a service worker argued into
   runtime-caching-only. What a browser *refuses* is equally unprovable in an
   automated tab — Chrome blocks the clipboard while `visibilityState` is
-  `hidden`.
+  `hidden`. Infrastructure reads the same way: "the sweep would never fire in
+  production" was reasoned from a comment and written into three documents,
+  with the uptime check that refutes it sitting in the next file.
 - **A guard written as a predicate over a list says yes to the empty list**
   [6]. `[].every()` is vacuously true, and a resume check built on it told a
   client it was current with four ops missing.
-- **A proof is what was measured, and by whom** [5, 6, 7, 8, 9]. "Two Chrome
+- **A proof is what was measured, and by whom** [5, 6, 7, 8, 9, 13.5]. "Two Chrome
   profiles" was two cookie hosts on one profile; "two machines" was two
   `ISOCAN_HOME` directories on one host. Each proves something narrower than
   its sentence, so each says so — and a phase that can prove half its outcome
-  states which half.
+  states which half. A **control** is what separates a regression from a
+  standing bug: removing a snapshot loses a canvas on pre-rename code too, so
+  what looked like a data-loss report was the seam all along.
 - **An unnamed flake is one nobody can fix** [7, 8, 10]. It cost three phases,
   and was solved not by remembering to capture output but by CI, which is
   merely slower than this machine and had been printing the name for hours.
@@ -820,11 +835,11 @@ resumption driven in Chrome.
 - **2026-08-23 — Decided, not fixed:** turning the link off can expel the
   person turning it off, because exempting the revoker leaves a badge rooted at
   a revoked grant. The consequence is stated before the click.
-- **2026-08-24 — Open, phase 13.5's (was 14's before the resequencing):**
-  the magic-link floor lands in **spam** —
-  Identity Platform sends from `…firebaseapp.com`, with no SPF or DKIM
-  alignment to isocan.io. A sign-in link in spam is a person who cannot get in
-  and cannot know why. The fix is a sender domain isocan owns, not code.
+- **2026-08-24 — CLOSED in 13.5 (dev) and 14 (prod):** the magic-link floor
+  landed in **spam**, because Identity Platform sends from `…firebaseapp.com`
+  with no alignment to isocan.io, and a sign-in link in spam is a person who
+  cannot get in and cannot know why. The fix was a sender domain isocan owns —
+  and a little code, since the sender must serve `/__/auth/action` itself.
 - **2026-08-24 — Open, phase 11's:** `repo:` is deferred — it needs the GitHub
   OAuth *access* token, an outbound call on a request path, and a
   credential-custody decision nobody has made. A `repo:` grant cannot be
@@ -932,51 +947,28 @@ of the walk waits for phase 14, by necessity.)
 **Findings:**
 
 - **2026-08-24** — The sweep's "every canvas on this disk is this home's" was a
-  **data-loss bug waiting for a second home**, not a tidy-up: two homes can
-  hold one canvas id, and the wrong home answers a dial with a *snapshot* that
-  `adoptRemoteSnapshot` writes over the local copy. The narrowing is the fix
-  and its test is a refusal test.
-- **2026-08-24 — Measured, and it reversed the design.** The two-home name flap
-  does **not** self-heal: a stale roster overwrites a rename permanently, and a
-  live relay never corrects it, because the roster overwrites the name before
-  `ensureClaim`'s cache can see it. A one-home control shows the identical
-  flap, so the seam **predates this phase** — what 10.3 changed is the window,
-  because a down home used to refuse every write on the machine and nobody
-  worked through an outage. The fix is timestamps on the wire; deliberately not
-  made here.
-- **2026-08-24** — Lazy link creation exposed two races that were safe only by
-  accident: `ensureBadge` had un-gated awaits (boot awaited `start()` before the
-  port was bound, so the first call always ran alone), and two links racing it
-  made the home answer `not-your-actor` about an actor just claimed;
-  `writeBadge` was an unserialized read-modify-write whose second writer erased
-  the first's key.
-- **2026-08-24** — A home-scoped question with no canvas in it — `isocan
-  badges`, an attestation — has no honest answer on a mixed rig, and the code's
-  instinct was to fall through to the **local desk**: a short, plausible,
-  completely wrong ledger, in silence, about a credential. Refused with
-  `ambiguous-home` instead. **A pass escaped that seam by carrying its own
-  address**, which it can because a pass is never handed over alone — it
-  arrives as `address#pass`.
+  data-loss bug waiting for a second home: two homes can hold one canvas id, and
+  the wrong one answers a dial with a snapshot that overwrites the local copy.
+- **2026-08-24 — Open, and it reversed the design:** the two-home name flap does
+  not self-heal — the roster overwrites a rename before `ensureClaim`'s cache
+  can see it, and a one-home control shows the identical flap, so the seam
+  predates this phase. The fix is timestamps on the wire.
+- **2026-08-24** — A home-scoped question with no canvas in it has no honest
+  answer on a mixed rig, and the code's instinct was the **local desk**: a
+  plausible, wrong ledger, in silence, about a credential. Refused with
+  `ambiguous-home`; a pass escapes because it arrives as `address#pass`.
 - **2026-08-24 — Open:** the badge and attest routes still have no home to name,
-  so on a mixed rig with no birth default they are refused rather than
-  answered. The fix is the one the pass already got: let the request carry its
-  home.
+  so on a mixed rig with no birth default they are refused rather than answered.
+  The fix is the pass's: let the request carry its home.
+- **2026-08-24 — Open:** a canvas created from the web front page is born at the
+  birth default, so it never appears in the `?reach=here` list it came from —
+  the button looks like it silently failed.
 - **2026-08-24** — A React page cannot ask "is this canvas mine" inside its own
-  render. `CanvasPage`'s mount effect dials the socket and opens the IndexedDB
-  replica, and effects run before any later conditional render can undo them —
-  so the check has to be a **gate in front of the page**, not a branch inside
-  it. A check made inside is a check made after the damage.
-- **2026-08-24 — Open:** on a mixed rig, creating a canvas from the web front
-  page births it at the birth default, so it does not appear in the
-  `?reach=here` list it just came from — the button looks like it silently
-  failed.
-- **2026-08-24** — The map's socket ceiling was wrong *before* this phase, and
-  in the wrong direction: `/ws` is per canvas, so a thick replica is one socket
-  **per canvas**, not one per machine. Phase 6 built it that way on its first
-  day and nobody revisited the arithmetic.
-- **2026-08-24** — A raw NUL byte in a source file makes it non-text, and
-  **`grep` then skips the whole file in silence** — in a repo whose own tests
-  grep its sources. Write the escape, never the byte.
+  render: the mount effect dials and opens the replica before any conditional
+  render can undo it. The check is a **gate in front of the page**.
+- **2026-08-24** — A raw NUL byte makes a source file non-text and **`grep`
+  skips it in silence** — in a repo whose own tests grep its sources. Write the
+  escape, never the byte.
 
 ## Phase 10.5 — Two doors into the repo
 
@@ -1040,52 +1032,28 @@ phase runs now rather than letting the knowledge trickle in over Slack.
 
 **Findings:**
 
-- **2026-08-24 — Phase 10.3 shipped a bug and this phase's walk is what found
-  it.** On a rig that predates `homes.json`, the first `isocan home <address>`
-  froze every locally-born canvas at that home: pages 404, `isocan add` →
-  `project not found` — under a verb whose own output reads *"nothing already
-  here moved"*. No test caught it because every test built its fixture with
-  today's code, and **birth writes a row**, which silently disarms the
-  migration. A machine that predates a file cannot be reconstructed by a
-  process that always creates it.
-- **2026-08-24** — One rule, disagreed with in three places. `homes.json` says
-  absent and `null` mean the same thing; the migration armed on the absent
-  FILE, `pureReplica` counted only explicit nulls (so a daemon 404'd pages for
-  canvases it was the home of), and `GET /api/homes` reported only rows (so
-  `isocan home` listed nothing and `isocan status` called it a replica). Each
-  was defensible alone; together they are one invariant nobody enforced.
+- **2026-08-24 — A machine that predates a file cannot be reconstructed by a
+  process that always creates it.** 10.3's migration armed on the absent
+  `homes.json`, but birth writes a row and disarms it — so the first
+  `isocan home` on an older rig froze every locally-born canvas.
+- **2026-08-24** — One rule, disagreed with in three places: the migration,
+  `pureReplica` and `GET /api/homes` each read "absent means `null`"
+  differently. Each defensible alone; together, one invariant nobody enforced.
 - **2026-08-24 — Decided:** a configured home is **not** evidence a machine was
-  ever a replica, because `isocan home` writes `config.json` and only then
-  restarts — so the first boot on new code can already see a home nobody has
-  ever dialled. The evidence is a **badge at that address**. It fails toward
-  "this is mine", which loses nothing; the other direction hands local work to
-  a stranger's home.
-- **2026-08-24** — A regression test written after the fix passed against the
-  bug. Verifying that a guard FAILS without its fix is not ceremony: three of
-  these were decorative until the fixture was made to predate the code.
-- **2026-08-24** — Phase 6's `/healthz` hazard has narrowed: measured today,
-  `https://dev.isocan.io/healthz` returns 200 with the daemon's own body
-  through the load balancer. The rule stands (a bare `*.run.app` address is a
-  valid home address and Google swallows it there), but the doc states the
-  measurement rather than repeating a claim no longer visible at that address.
-- **2026-08-24 — Open, Dion's:** `scripts/new-project.sh` is referenced by
-  `docs/new-project.md`, `README.md` and `AGENTS.md`, and is in neither the tree
-  nor the history. Everything it automates works by hand.
-- **2026-08-24** — Both instruments are consumed on first use, which is why the
-  Status above is PART-DONE rather than closed on the doc's existence.
-- **2026-08-24 — Two things about repointing a Cloud Build trigger**, learned
-  doing it. `infra/provision.sh d` **cannot**: the script exits early when a
-  trigger exists, and deleting to re-create is what forces the browser step that
-  rebuilds the GitHub App connection. And `gcloud builds triggers update github`
-  refuses a first-generation GitHub App trigger with `INVALID_ARGUMENT` — its
-  repo is `github.owner/name`, not a second-generation `repository` resource.
-  `triggers import` with the `id` kept updates in place.
+  ever a replica — `isocan home` writes `config.json` before the first dial. The
+  evidence is a **badge at that address**, which fails toward "this is mine".
+- **2026-08-24** — Phase 6's `/healthz` hazard has narrowed: through the load
+  balancer, `dev.isocan.io/healthz` returns the daemon's own body. The rule
+  stands for a bare `*.run.app` address, which Google swallows.
+- **2026-08-24 — Repointing a Cloud Build trigger:** `provision.sh` cannot (it
+  exits early when one exists, and deleting forces the browser step that
+  rebuilds the GitHub App connection), and `triggers update github` refuses a
+  first-generation trigger with `INVALID_ARGUMENT`. `triggers import` with the
+  `id` kept updates in place.
 - **2026-08-24** — `_DEPLOY: yes` unquoted in an imported trigger is a **YAML
-  boolean**, and `cloudbuild.yaml` tests `[ "${_DEPLOY}" != "yes" ]` — so the
-  round trip yields a pipeline that builds, pushes, reports success and deploys
-  nothing. `--format=json` is the only way to see which one is stored; the YAML
-  rendering prints `yes` for both. Caught before it shipped, by quoting it and
-  then reading the type back.
+  boolean**, and `cloudbuild.yaml` tests `!= "yes"` — a pipeline that builds,
+  pushes, reports success and deploys nothing. `--format=json` is the only
+  rendering that shows which is stored.
 
 ## Phase 13.5 — The front door ⚑ provision
 
@@ -1128,66 +1096,31 @@ inbox rather than spam. The rename proven by the suite, green, and by
 
 **Findings:**
 
-- **2026-08-24 — This section was wrong: the spam fix is code as well as DNS.**
-  The provider moves the From: address and the action-link domain together, so
-  the sender domain must answer `/__/auth/action`. The daemon serves it now,
-  which is what let the sender be `dev.isocan.io` rather than a second origin.
-- **2026-08-24 — Two candidate sender domains were disqualified by their own
-  answers.** The apex `isocan.io` has no A record; `dev.isocan.io/__/auth/action`
-  returned **200 and the app shell** — the seventh sighting of the standing
-  lesson, met while shopping for a domain to trust.
+- **2026-08-24** — The spam fix is code as well as DNS: the provider moves the
+  From: address and the action-link domain together, so the sender domain must
+  answer `/__/auth/action`. The daemon serves it.
 - **2026-08-24 — Decided: no second origin.** `auth.isocan.io` on Firebase
-  Hosting was the researched answer and was refused — a sign-in link landing on
-  a different hostname than the product would put the badge cookie, the service
-  worker and the browser replica behind two doors.
-- **2026-08-24 — Firebase Hosting is NOT required for a custom sender domain.**
-  The console accepted a Cloud Run origin. The research assumed otherwise; the
-  console settled it in one field.
-- **2026-08-24 — `returnOobLink` renders the DEFAULT domain whatever the custom
-  domain says.** Probed twice, got `firebaseapp.com` twice, and was one message
-  from reporting the change ineffective — while sent mail already said
-  `dev.isocan.io`. The only instrument for what a sent email says is a sent
-  email.
-- **2026-08-24 — An open redirect was one parser quirk from shipping.** An
+  Hosting was the researched answer and was refused — a sign-in link on a
+  different hostname than the product puts the badge cookie, the service worker
+  and the browser replica behind two doors. Firebase Hosting turns out not to be
+  required for a custom sender domain.
+- **2026-08-24** — An open redirect was one parser quirk from shipping: an
   unknown scheme is not "special", so `continueUrl=foo:\\evil.example/x` keeps
-  its backslashes into `pathname` and a `Location` of `\\evil.example/x`
-  resolves off-site with a live `oobCode` attached. Found because a worker
-  checked whether its own tests could fail.
-- **2026-08-24 — A sixth contract category nobody listed: persisted/wire JSON
-  KEYS**, as distinct from routes and op strings. `OpEnvelope.projectId` and its
-  siblings are neither. **Decided by Dimitri: take the break now**, while the
-  audience is three people — and make it legible, because it failed on WRITE
-  with `internal error`. 426 with the upgrade command; reads were unaffected,
-  which is what made it quiet.
-- **2026-08-24 — Detection of a stale client needs BOTH halves.** Mutating it to
-  "new key missing" alone turned all seven tests red: the door's own bearer
-  request carries no `canvasId`, so half a signal refuses the product.
-- **2026-08-24 — Measured, and the control is what proved it:** removing a
-  snapshot loses a canvas on PRE-rename code too, so the oplog's envelope key is
-  not read back on load. Without the control this was a false data-loss report.
-- **2026-08-24 — `marketing/` was a second front door that nothing served**, and
-  Scene 0 rules against it in words. Folded in and deleted; three of its four
-  test cases repointed rather than deleted with it.
-- **2026-08-24 — A hand-rolled 6-entry mime map served the first `.webp` as
-  `application/octet-stream`.** It rendered, because Chrome sniffs an `<img>` —
-  invisible until the day anything sets `nosniff`. The guard is the rule (every
-  extension under `public/` is named), not the instance.
-- **2026-08-24 — Namecheap's MX and SPF are NOT host records.** They are
+  its backslashes into `pathname` and resolves off-site with a live `oobCode`.
+- **2026-08-24 — A sixth contract category nobody had listed: persisted and wire
+  JSON KEYS**, as distinct from routes and op strings. `OpEnvelope.projectId`
+  and its siblings renamed — **decided by Dimitri: take the break now**, while
+  the audience is three people, and make it legible: 426 with the upgrade
+  command, because it failed on write with `internal error`.
+- **2026-08-24** — Namecheap's MX and SPF are **not** host records: they are
   synthesized by `EmailType=FWD`, so a `setHosts` that omits it deletes email
-  forwarding and the SPF with it, invisibly. Every write reads the full set
-  first and carries `EmailType` explicitly.
-- **2026-08-24 — Open, phase 14's:** at the apex, Firebase's SPF and the
-  forwarding SPF are two TXT records on one name — a **permerror**, not a merge.
-  Prod either gives up `@isocan.io` forwarding or hand-manages MX plus one
-  merged record. Subdomains do not collide, which is why dev does not.
-- **2026-08-24 — Three decorative tests in one day**, all found by the same
-  question: an image guard matching `img` as an element token (lesson #3
-  reproduced with 24 green), a "both halves" case asserting two fields of three,
-  and two security cases the URL parser was passing on the code's behalf.
-- **2026-08-24 — `packages/cli/test/restart.test.ts` asserts the repo directory
-  is named `isocan`**, so the suite fails from a worktree named anything else —
-  which lessons.md #7 tells people to use. Cost one false failure before the
-  assertion was read.
+  forwarding and the SPF with it, invisibly.
+- **2026-08-24 — Open, narrowed:** two `v=spf1` records on one name is a
+  **permerror**, not a merge, so the apex cannot carry both Firebase's and the
+  forwarder's. Measured 2026-08-25: the apex holds exactly one, Firebase's,
+  with MX still pointing at the forwarders — the permerror is gone and
+  `@isocan.io` forwarding now runs with no SPF of its own. Subdomains do not
+  collide, which is why dev never saw this.
 
 ## Phase 13.7 — The innkeeper's obligations
 
@@ -1229,64 +1162,35 @@ origin, caveat included.
 
 **Findings:**
 
-- 2026-08-24: A timer inside a scale-to-zero process has the INSTANCE'S LIFE as
-  its clock, not its interval — the first sweep was one interval away and the
-  interval is an hour, against `MIN_INSTANCES=0` and a ~15-minute idle reap.
-  Fixed with a sweep a minute after boot. CPU throttling was NOT the cause and
-  is the first thing anyone will re-suspect: `--no-cpu-throttling` is set.
-- 2026-08-25, **correcting the line above, which this session overstated on the
-  day it wrote it.** "It would never have fired in production" was reasoned
-  from `70-cloud-run.sh`'s idle-reap comment and never checked against what
-  else is provisioned — and `infra/92-uptime-check.sh` pings dev every 300s, so
-  the instance never idles and lives long enough for the hourly tick. Measured:
-  a dev instance ran 63 minutes across a deliberate 17-minute quiet window and
-  swept on its own at 01:33:36Z. **The boot sweep still earns its place** — it
-  is what a home with no heartbeat depends on, a laptop daemon included, and it
-  makes the first sweep after a deploy prompt rather than an hour late — but it
-  was never the difference between "runs" and "never runs" on dev. The lesson
-  is the older one, self-inflicted: *a comment that reasons about
-  infrastructure is a hypothesis*, and this one was written into three
-  documents before anybody looked at the uptime check sitting next to it.
-- 2026-08-24: The door hook admits by PATH SHAPE, so a route with no canvas in
-  its path gets no admission check at all. `POST /api/gc` is the first
-  *destructive* route in that position and re-asks the door's question itself;
-  every home-wide route a later phase adds inherits this.
-- 2026-08-24: Proving the home-wide timer fires needs a genuinely aged blob —
-  it runs GC's real defaults, and a test passing `graceMs: 0` proves a sweep no
+- **2026-08-24** — A timer inside a scale-to-zero process has the **instance's
+  life** as its clock, not its interval: the first sweep was an hour away
+  against `MIN_INSTANCES=0`. Fixed with a sweep a minute after boot; CPU
+  throttling was not the cause and is the first thing anyone will re-suspect.
+- **2026-08-25 — correcting the line above.** "It would never have fired in
+  production" was reasoned from a comment and written into three documents
+  before anybody read `infra/92-uptime-check.sh` sitting next to it — it pings
+  dev every 300s, so the instance never idles. Measured: 63 minutes, swept on
+  its own. The boot sweep still earns its place, for a home with no heartbeat.
+- **2026-08-24** — The door hook admits by **path shape**, so a route with no
+  canvas in its path gets no admission check at all. `POST /api/gc` re-asks the
+  door's question itself; every home-wide route a later phase adds inherits
+  this.
+- **2026-08-24** — Proving the home-wide timer fires needs a genuinely aged blob
+  — it runs GC's real defaults, so a test passing `graceMs: 0` proves a sweep no
   home performs.
-- 2026-08-24: `--ingress=all` leaves the `*.run.app` URL reachable around the
-  load balancer, and on that path the forwarded chain is short enough that the
-  entry the meter keys on is caller-supplied — so a flooder who finds that
-  address gets unlimited buckets. One flag in `infra/70-cloud-run.sh` closes it;
-  deliberately not changed here, because it is provisioning with its own blast
-  radius and belongs to phase 14's gesture. — **CLOSED 2026-08-25 in phase 14**,
-  and the hypothesis was MEASURED against prod's run.app URL before it was
-  closed: with the honest bucket already refusing at 429, eight invented
-  `X-Forwarded-For` values each minted freely, and one invented value repeated
-  metered at exactly 21. Prod runs `internal-and-cloud-load-balancing`; dev
+- **2026-08-24 — CLOSED 2026-08-25 in phase 14:** `--ingress=all` leaves the
+  `*.run.app` URL reachable around the load balancer, where the entry the meter
+  keys on is caller-supplied. Prod runs `internal-and-cloud-load-balancing`; dev
   stays open.
-- 2026-08-24: The meter's model of the forwarded chain is READ FROM GOOGLE'S
-  DOCS and not measured against dev. `ISOCAN_PROXY_HOPS` moves it without new
-  code; one request against dev with the refusal log open settles it. Refusals
-  climbing while distinct keys sit at 1 is the whole-internet-in-one-bucket
-  signature. — **CLOSED 2026-08-25 in phase 14** — but note HOW: "with the
-  refusal log open" was not a thing anybody could do, because there was no
-  refusal log (see 14's first finding). Once there was one, the chain measured
-  as documented and `ISOCAN_PROXY_HOPS` stays unset.
-- 2026-08-24: `ISOCAN_PROXY_HOPS` is named only inside `meter.ts`;
-  `infra/70-cloud-run.sh` and `infra/README.md` are where an operator would
-  look. — **CLOSED 2026-08-25 in phase 14**: `config.sh` declares it,
-  `70-cloud-run.sh` passes it through only when set, and `infra/README.md`
-  names the collapse signature beside it.
-- 2026-08-24: The front door's no-third-party guard read only RENDERED MARKUP,
-  so a webfont arriving the way webfonts actually arrive — a `url()` in the
-  stylesheet — left all 44 cases green. The guard now reads the stylesheet.
-- 2026-08-24: The CLI flattened a metered door refusal back into the original
-  401, whose message says to ask the door — advice to repeat the thing just
-  refused. `askTheDoor` now carries the refusal through.
-- 2026-08-24: On a pure replica `/terms` signposts to the birth home rather
+- **2026-08-24 — CLOSED 2026-08-25 in phase 14:** the meter's forwarded-chain
+  model was read from Google's docs, never measured, and `ISOCAN_PROXY_HOPS` was
+  named only inside `meter.ts`. Measured, the chain is as documented and the
+  knob stays unset; `config.sh`, `70-cloud-run.sh` and `infra/README.md` now
+  declare it beside the collapse signature — refusals climbing while distinct
+  keys sit at 1.
+- **2026-08-24** — On a pure replica `/terms` signposts to the birth home rather
   than serving, so "the terms are served from the origin" is a claim about a
-  HOME, not about every daemon.
+  **home**, not about every daemon.
 
 ## Phase 14 — isocan.io ⚑ provision
 
@@ -1352,84 +1256,50 @@ steps, a canvas born at its hosted home.
 
 **Findings:**
 
-- 2026-08-25: **The instrument phase 13.7 built was writing to nowhere, and had
-  been since it was typed.** `Fastify({})` with no `logger` key does not give a
-  quiet logger, it gives `abstract-logging`, whose `warn` is
-  `function noop () {}` — so every `app.log` call in the server was silent,
-  including the refusal line 13.7 added precisely so a home keyed on its own
-  load balancer would be visible at 3am instead of looking like a limit that
-  works. Found by going to READ that line: 21 mints against dev, a legible 429,
-  and Cloud Logging holding only Google's own request log. The house failure in
-  new clothes — **an instrument can be cheerful too** — and the second sighting
-  in two phases. Logging is on at `warn` now, with pino's level mapped to
-  Google's `severity`, because a deliberate warning arriving labelled INFO is
-  the same bug one layer up. `door.test.ts` asserts the refusal reaches a real
-  logger, and asserts `log.warn.name !== "noop"` — a spy on a no-op proves
-  nothing.
-- 2026-08-25: The forwarded chain, MEASURED at last, is what Google documents:
-  through the load balancer it arrives `<client>, <lb>` and `hops = 1` keys on
-  the real client; on the run.app path it is ONE entry and the key falls back to
-  the socket. `ISOCAN_PROXY_HOPS` stays unset.
-- 2026-08-25: **The bypass was demonstrated before it was closed**, which is the
-  only honest way to justify a flag with a blast radius. Against prod's run.app
+- **2026-08-25 — The instrument phase 13.7 built was writing to nowhere, and had
+  been since it was typed.** `Fastify({})` with no `logger` key gives
+  `abstract-logging`, whose `warn` is `function noop () {}` — so every `app.log`
+  call in the server was silent, including the refusal line added precisely to
+  be visible at 3am. Logging is on at `warn` now, pino's level mapped to
+  Google's `severity`; the guard asserts `log.warn.name !== "noop"`.
+- **2026-08-25** — The bypass was **demonstrated before it was closed**, the
+  only honest way to justify a flag with a blast radius: against prod's run.app
   URL, with the honest socket bucket already refusing at 429, eight invented
-  `X-Forwarded-For` values each minted a badge; one invented value repeated
-  metered at exactly 21. The caller's fiction IS the key on that path.
-- 2026-08-25: A locked ingress makes STAGE ORDER load-bearing in a way no other
-  variable does: it may only be set on a home whose load balancer exists, so a
-  brand-new prod runs stage A once with `ISOCAN_INGRESS=all` and re-runs
-  `70-cloud-run.sh` afterwards. The script asks the DOMAIN instead of the
-  run.app URL whenever ingress is not `all` — a check pointed at an address
-  closed by design would fail on a healthy home, and a check that shrugged
-  would be the older bug.
-- 2026-08-25: `exists gcloud projects describe` cannot tell "no such project"
-  from "the resolver is down". A DNS outage mid-session had `60-build-image.sh`
-  refuse with *"project isocan-io-prod does not exist"* about a project created
-  twenty minutes earlier. The direction is safe — it refuses rather than
-  proceeding — so this is recorded rather than fixed.
-- 2026-08-25: **`80-load-balancer.sh` creates the certificate before it tells
-  you the IP**, which is the only order it can (the IP is what the record
-  points at) — so Google's first validation ALWAYS runs against a domain that
-  does not resolve yet, and on isocan.io it stuck at `FAILED_NOT_VISIBLE`
-  rather than retrying into success. A managed certificate cannot be renamed or
-  re-validated in place, so the fix is a second cert on the same proxy, and
-  prod's is called `isocan-cert-2` forever. `prod.env` names it so the tooling
-  reads the live one; a home provisioned later should expect the same detour.
-- 2026-08-25: Prod's magic-link mail sends from
-  `noreply@isocan-io-prod.firebaseapp.com`, with no SPF or DKIM alignment to
-  isocan.io — a stranger's first sign-in email, likely in spam. Dev solved this
-  in phase 13.5 with a custom sender domain, and the code half already ships
-  (the daemon serves `/__/auth/action` itself). What is missing is the Firebase
-  console flow for the prod project and the DNS records it emits. — **CLOSED
-  the same day**, and by the only check that counts: not the console's
-  "verified" (phase 13.5's instrument said that twice while lying), but a real
-  sign-in played through — mail from the aligned sender, link followed,
-  `dimitri@glazkov.com` PROVED onto a badge in a browser at isocan.io. That is
-  phase 9's whole attester loop working on prod, which is more than this
-  finding asked for. Two apex TXT records and two DKIM CNAMEs now sit beside
-  dev's, which are at the `dev` label — each name has exactly one `v=spf1`,
-  which is what the spec requires.
-- 2026-08-25: **Namecheap's API takes host names RELATIVE to the domain, and
-  the Firebase console emits them as FQDNs.** Pasting
-  `firebase1._domainkey.isocan.io` through creates
-  `firebase1._domainkey.isocan.io.isocan.io` — which resolves as nothing and
-  fails verification in a way that reads as the provider's fault. Its
-  `setHosts` also REPLACES the entire zone, so every write here is
-  read-all-then-send-all; there is no add-one call.
-- 2026-08-25: **A single `dig` is a sample, not a state.** After the sender
-  records landed, `8.8.8.8` answered the apex TXT from a SPLIT CACHE — some
-  backends holding the pre-change single record, some the new three — so
-  consecutive identical queries disagreed for half an hour. A watcher exited on
-  a condition that passed and printed a readback contradicting it one second
-  later. The authoritative server and two other public resolvers were correct
-  throughout. Nothing was wrong and nothing needed fixing; what it nearly cost
-  was a Verify clicked into a stale answer, and a validation that sticks in a
-  failed state is exactly how prod's certificate came to be named
-  `isocan-cert-2`. Check repeatedly and require agreement.
-- 2026-08-25: The ~60 badges minted while demonstrating the bypass are real
-  desk rows on a brand-new prod. They are anonymous and admitted to nothing,
-  and there is no bulk revoke — recorded so nobody reads prod's first badge
-  count as organic. — Open
+  `X-Forwarded-For` values each minted a badge.
+- **2026-08-25** — A locked ingress makes **stage order** load-bearing: it may
+  only be set on a home whose load balancer exists, so a brand-new prod runs
+  stage A once with `ISOCAN_INGRESS=all` and re-runs `70-cloud-run.sh`
+  afterwards. The script asks the domain rather than the run.app URL whenever
+  ingress is not `all`.
+- **2026-08-25** — `gcloud projects describe` cannot tell "no such project" from
+  "the resolver is down": a DNS outage had `60-build-image.sh` refuse about a
+  project created twenty minutes earlier. Recorded rather than fixed, because
+  the direction is safe.
+- **2026-08-25** — `80-load-balancer.sh` creates the certificate before it can
+  tell you the IP, which is the only order it can — so Google's first validation
+  always runs against a domain that does not resolve yet, and on isocan.io it
+  stuck at `FAILED_NOT_VISIBLE` rather than retrying into success. A managed
+  certificate cannot be re-validated in place: **prod's is `isocan-cert-2`
+  forever**, and `prod.env` names it.
+- **2026-08-25** — Prod's magic-link mail sent from `firebaseapp.com`, unaligned
+  to isocan.io — a stranger's first sign-in email, likely in spam. **CLOSED the
+  same day** by the only check that counts: not the console's "verified" (13.5's
+  instrument said that twice while lying) but a real sign-in played through to a
+  badge PROVED in a browser at isocan.io.
+- **2026-08-25 — Namecheap's API takes host names RELATIVE to the domain, and
+  the Firebase console emits FQDNs**, so a pasted
+  `firebase1._domainkey.isocan.io` becomes `…isocan.io.isocan.io` and fails
+  verification in a way that reads as the provider's fault. `setHosts` also
+  replaces the entire zone: every write is read-all-then-send-all.
+- **2026-08-25 — A single `dig` is a sample, not a state.** `8.8.8.8` answered
+  the apex TXT from a SPLIT CACHE for half an hour, so identical queries
+  disagreed and a watcher exited on a condition its own readback contradicted.
+  Check repeatedly and require agreement — a Verify clicked into a stale answer
+  is how the certificate came to be named `-2`.
+- **2026-08-25 — Open:** the ~60 badges minted while demonstrating the bypass
+  are real desk rows on a brand-new prod — anonymous, admitted to nothing, and
+  there is no bulk revoke. Recorded so nobody reads prod's first badge count as
+  organic.
 
 ---
 
