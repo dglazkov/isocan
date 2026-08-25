@@ -113,12 +113,16 @@ phase): transient chrome first (expanded row, picker, find bar), then
 `history.back()`, so a long browsing trail is not replayed in reverse. `W`
 flips from the canvas (the letter is free in the key handler; verified).
 
-**A mandatory non-feature ships with the cover.** `CanvasSurface`'s window
-keydown has an `isTyping` guard and **no route gate** — verified: Delete and
-arrow-nudge fire under FullScreen *today*, with the viewed item still
-selected, so Delete under full screen deletes the thing you are looking at.
-The workbench makes this latent bug load-bearing. Gate the handler on
-"covered"; the fix repairs FullScreen retroactively.
+**A mandatory non-feature shipped ahead of the cover.** `CanvasSurface`'s
+window keydown had an `isTyping` guard and **no route gate** — Delete and
+arrow-nudge fired under FullScreen, with the viewed item still selected, so
+Delete under full screen deleted the thing you were looking at. Landed
+independently (it was a live FullScreen bug, not a workbench prerequisite):
+the handler now gates on the item route through `crossesCover` in
+`lib/keys.ts`, where the cover policy has its one home — only ⌘K crosses, Esc
+belongs to the cover itself — and `test/cover.test.ts` guards both the rule
+and the wiring. The workbench's routes must sit under the same gate; extend
+`crossesCover` there rather than growing a second policy in the handler.
 
 ## The frame
 

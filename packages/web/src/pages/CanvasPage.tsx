@@ -35,7 +35,7 @@ import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
-import { isTyping } from "../lib/keys.ts";
+import { crossesCover, isTyping } from "../lib/keys.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
@@ -307,6 +307,12 @@ function CanvasSurface({
       if (moves.length > 0) void sendOp(canvasId!, actor, moveOp(moves));
     }
     function onKeyDown(e: KeyboardEvent) {
+      // A cover route hides the canvas but keeps its selection — Enter
+      // arrives full screen with the viewed item still selected, so any
+      // shortcut that fired under here would act on the exact thing being
+      // looked at (Delete deleted it). Only what crossesCover says may pass;
+      // Esc is the cover's own, bound in capture phase.
+      if (itemId && !crossesCover(e)) return;
       // ⌘K is global — the lane to your emissary opens from anywhere, even
       // mid-typing in another field.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -472,7 +478,10 @@ function CanvasSurface({
         flushNudge(); // leaving mid-nudge still records where things landed
       }
     };
-  }, [canvasId, actor]);
+    // itemId is a dependency because the handler closes over it: without it,
+    // the listener registered on the canvas route keeps a stale undefined
+    // forever and the cover gate never turns on.
+  }, [canvasId, actor, itemId]);
 
   if (!canvasId) return null;
 

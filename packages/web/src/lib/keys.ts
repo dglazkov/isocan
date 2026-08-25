@@ -30,3 +30,32 @@ export function isTyping(target: EventTarget | KeyTarget | null | undefined): bo
   }
   return false;
 }
+
+/**
+ * Does this keystroke cross a cover?
+ *
+ * A cover route (`itemPath` — FullScreen today, the workbench next)
+ * hides the canvas without unmounting it, and Enter navigates there with the
+ * selection intact. A canvas shortcut that fires underneath acts on things
+ * nobody can see, against the exact item being viewed: Delete under full
+ * screen deleted the thing on screen and landed on "that item is not on this
+ * canvas any more". So while a cover is up, the page's key handler asks this
+ * FIRST and drops whatever does not cross.
+ *
+ * Only ⌘K crosses — the lane to your emissary is deliberately open from
+ * anywhere. Esc is not decided here: a cover owns its own way home, bound in
+ * capture phase so it answers before the canvas could. Everything else —
+ * arrows, undo, zoom, tools, Delete — waits for the canvas to be visible.
+ *
+ * Takes a plain object as well as a real event, so the rule can be tested
+ * without a DOM.
+ */
+export interface CoverKey {
+  key: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+}
+
+export function crossesCover(e: CoverKey): boolean {
+  return Boolean(e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+}
