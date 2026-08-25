@@ -672,12 +672,17 @@ isocan fit <items...>                  # grow items to the size their content wa
 
   The count is the number of PEOPLE wearing it, never a tally you add to: your
   own is a toggle, and reacting twice is not reacting twice.
-- **Stars are the canvas's shortlist.** `isocan ls --starred` is what the
-  person has marked as worth getting back to — the screens actually in play,
-  which nothing else on the canvas tells you. `isocan star <item>` (or
-  `--off`) sets it, and it is an ordinary property, so it undoes like anything
-  else. Star what you build when they asked for it to be easy to find; do not
-  star everything you touch.
+- **The marks ARE the shortlist.** There is no star any more; reactions
+  replaced it, and the right-hand bar groups the canvas by them. `isocan ls
+  --reaction 👀` is every screen wearing one mark — which is how you find out
+  what is in review, or in flight, or signed off, without anybody having built
+  those states.
+
+  What a mark MEANS is the team's, not ours. Read before you assume: if every
+  screen they care about wears ⭐ and the ones they are working on wear 🚧,
+  that is the system, and `ls --reaction` is how you learn it. Mark what you
+  built when they asked for it to be easy to find; do not mark everything you
+  touch.
 - **A message can come with items attached.** What the person had selected
   travels with their message as ids, in the comment's item references — so
   "make these two match" names its two. Read `comment.items` before you guess

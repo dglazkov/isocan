@@ -108,14 +108,13 @@ function paintsAccentText(): string[] {
  */
 const KNOWN_UNREADABLE_IN_DARK = [
   ".item.selected .item-titlebar",
-  ".star-btn.on",
   ".thread-popover .thread-actions button.promote",
   ".main-glyph, .main-pill-glyph",
   ".mt-glyph",
   ".mention-dot.command-dot",
   ".command-card b",
-  ".favourites-glyph",
-  ".favourite-name b",
+  ".marks-glyph",
+  ".mark-name b",
   ".files-glyph",
   ".files-row.active .files-kind",
   ".files-size em",

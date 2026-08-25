@@ -31,29 +31,25 @@ const MIN_CHROME_HEIGHT = 40;
 
 export type BadgeCorner = "se" | "ne";
 
-/**
- * Is a comment pin sitting on the item's top-right corner — where the star at
- * the end of the name row lives? Then the star moves to the other end, for the
- * same reason the badge moves: a pin is where somebody pointed, and the chrome
- * is ours.
- */
-export function pinTakesTopRight(item: Item, canvas: CanvasContents | null, scale: number): boolean {
-  if (!canvas) return false;
-  const reach = PIN_REACH / scale;
-  const right = item.x + item.width;
-  const top = item.y;
-  return pinPositions(canvas).some(
-    (pin) => Math.abs(pin.x - right) < reach && Math.abs(pin.y - top) < reach,
-  );
-}
-
 /** Is the item big enough on screen to wear a label and a badge? */
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
 }
 
-/** Screen pixels the star keeps at the far end of the name row. */
-export const STAR_ROOM = 26;
+/**
+ * Screen pixels the row keeps at its FAR END, past the name.
+ *
+ * It was the star's, and the star is gone — reactions replaced it, and they
+ * live under the item rather than in this row. The reservation stays because
+ * the row's far end is still occupied when an agent is working there: the
+ * work chip sits at that end with `flex: none`, and a name allowed to run the
+ * full width would be squeezed into it the moment somebody started working.
+ *
+ * Kept at the star's 26 deliberately rather than retuned to the chip's real
+ * width: this is the number every scale guard was measured against, and a
+ * layout change is not what removing a button should smuggle in.
+ */
+export const ROW_END_ROOM = 26;
 /**
  * Screen pixels the kind icon keeps at the near end — the mark itself plus the
  * row's gap after it. **Measured on the rendered row (13 + 6), not guessed**,
@@ -61,10 +57,10 @@ export const STAR_ROOM = 26;
  * icon drawn to be legible is a different width. A budget copied forward from
  * the thing it used to describe is a budget that is wrong.
  *
- * It is budgeted for the same reason the star is, and the reason is in
- * `titleRow` below: anything sharing the row that is NOT subtracted gets drawn
- * through once the item is small enough on screen. That already happened once
- * with the star.
+ * It is budgeted for the same reason the row's far end is, and the reason is
+ * in `titleRow` below: anything sharing the row that is NOT subtracted gets
+ * drawn through once the item is small enough on screen. That already
+ * happened once, to the star that used to sit at that far end.
  */
 export const ICON_ROOM = 19;
 /** Under this many screen pixels a name says nothing, so it is not shown. */
@@ -81,7 +77,7 @@ export const MIN_NAME_ROOM = 48;
  * way and never re-ellipsizes on a click.
  *
  * And it is ZERO. Being above the handles means there is nothing to step
- * around, so the name starts where the item starts and the star ends where it
+ * around, so the name starts where the item starts and the row ends where it
  * ends — the way the name of a thing normally sits over the thing. An inset
  * here buys nothing and reads as the label drifting inward from its own item.
  */
@@ -99,9 +95,9 @@ export interface TitleRow {
  * What fits on the title row, in the order things yield.
  *
  * **NO FLOOR ON THE ROOM ITSELF**, which is the older half of this function.
- * It used to be `Math.max(MIN_NAME_ROOM, width * scale - STAR_ROOM)`. At 13% a
- * 480-unit item is 62 screen px and the star wants 26, so the floor handed the
- * name 48 and it was drawn straight through the star. *A minimum that exceeds
+ * It used to be `Math.max(MIN_NAME_ROOM, width * scale - ROW_END_ROOM)`. At 13% a
+ * 480-unit item is 62 screen px and the far end wants 26, so the floor handed
+ * the name 48 and it was drawn straight through the star that lived there. *A minimum that exceeds
  * what exists is not a minimum, it is an overlap with a reason.* Below the
  * width where a name says anything the name is DROPPED rather than squeezed:
  * "H…" is a smudge.
@@ -109,19 +105,19 @@ export interface TitleRow {
  * **The icon yields to the name, and then outlives it.** Three sizes, and the
  * order is the point:
  *
- * 1. Room for everything — icon, name, star.
+ * 1. Room for everything — icon, name, and the row's far end.
  * 2. Not enough for all three: the ICON goes first. Of the two, the name is
  *    the more specific answer — "which one is this" beats "what kind is this"
  *    — so the kind mark must never be the reason a name disappeared. This is
  *    also what keeps the name's threshold exactly where it was before the
  *    glyph existed, rather than 3 points of zoom worse.
  * 3. Not enough for a name either: the name goes, and the icon comes BACK.
- *    A shape still reads at a size where text does not, which is the same
- *    argument that keeps the star down here — and a bare star, which is what
- *    this band showed at first, says the least of any of these states.
+ *    A shape still reads at a size where text does not. This band used to
+ *    show a bare star and nothing else, which said the least of any state
+ *    the row has ever had: that an item exists, which you could already see.
  */
 export function titleRow(width: number, scale: number): TitleRow {
-  const available = width * scale - STAR_ROOM - CHROME_INSET * 2;
+  const available = width * scale - ROW_END_ROOM - CHROME_INSET * 2;
   const withIcon = available - ICON_ROOM;
   if (withIcon >= MIN_NAME_ROOM) return { icon: true, name: true, nameRoom: withIcon };
   if (available >= MIN_NAME_ROOM) return { icon: false, name: true, nameRoom: available };

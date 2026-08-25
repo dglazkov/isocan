@@ -199,14 +199,22 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
-- **Favourites**: the star at the end of an item's name (it appears when the
-  name does) marks it, and the starred shortlist docks on the right — a click
-  away from flying there. Each entry previews the item itself, rendered small
-  and inert rather than reduced to its first letter, and the rail's star is
-  solid when there is anything in there. The star is a property on the item
-  rather than a note in one browser, so it survives a reload, reaches the other
-  machine, and tells an agent which screens are actually in play
-  (`isocan ls --starred`, `isocan star <item>`).
+- **Reactions**: hover or select an item and a row of marks appears beneath
+  it — click one to add yours, click it again to take it back, `＋` to reach
+  for another. A mark carries WHO left it, so a chip reads "3" and knows which
+  three; yours is outlined, so agreeing with somebody is one click and never a
+  guess about whether you already did.
+
+  The right-hand dock is the canvas grouped by those marks: a section per
+  emoji, ordered by how many items wear it, each entry previewing the item
+  itself rather than reducing it to a first letter. It replaced a favourites
+  star, and the reason is that a star is one shared bit with nobody's name on
+  it — a team that wants "needs review" and "shipped" and "blocked" had one
+  flag and an argument. Nothing here defines what 👀 means; the team does, by
+  using it, and the dock shows whatever system they invented without our
+  having built it. Marks are properties on the item, so they survive a reload,
+  reach the other machine, and answer an agent asking what is in play
+  (`isocan react 👀 <item>`, `isocan ls --reaction 👀`).
 - **The files panel**: the same dock, showing the canvas as what it is — a
   directory of files. Grouped by kind (drawings, images, documents, sites),
   filterable by name, each row carrying the filename, size, and version count.

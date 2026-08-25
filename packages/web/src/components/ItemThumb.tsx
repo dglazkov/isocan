@@ -12,7 +12,7 @@ import { VersionContent } from "./ItemView.tsx";
  * Images are drawn directly; everything else is the same renderer the canvas
  * uses, shrunk to fit and inert. Shared by everything that peeks at an item
  * without going to it: the edge radar's card, the files panel's, the
- * favourites bar.
+ * marks dock.
  */
 export function ItemThumb({
   canvasId,

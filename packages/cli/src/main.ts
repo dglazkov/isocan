@@ -78,7 +78,6 @@ import {
   extractMentions,
   isIdentityColor,
   isDrawingItem,
-  isStarred,
   skillNameFrom,
   // This file already has a `skillSource`: the directory of the skill this
   // build ships. Core's answers a different question — where a PUBLISHED
@@ -87,7 +86,6 @@ import {
   itemKind,
   mergeDrawings,
   opMatchesFilters,
-  starPatch,
   renamedFilename,
   mainThread,
   newCommentId,
@@ -3109,9 +3107,9 @@ program
   .description("List items on the canvas")
   .option("--kind <kind>", `only this kind: ${ITEM_KINDS.join(", ")}`)
   .option("--filter <text>", "only items whose title or filename contains this")
-  .option("--starred", "only the shortlist")
+  .option("--reaction <emoji>", "only items wearing this mark")
   .action(
-    run(async (opts: { kind?: string; filter?: string; starred?: boolean }, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string; reaction?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
@@ -3122,7 +3120,7 @@ program
       // The same two questions the web's files panel answers, so a canvas
       // reads the same way from either side.
       const items = Object.values(snapshot.canvas.items).filter((item) => {
-        if (opts.starred && !isStarred(item)) return false;
+        if (opts.reaction && !(item.reactions?.[opts.reaction]?.length)) return false;
         if (opts.kind && itemKind(item) !== opts.kind) return false;
         if (!needle) return true;
         const current = item.versions.find((v) => v.id === item.currentVersionId);
@@ -3135,7 +3133,11 @@ program
       printTable(
         items.map((i) => ({
           id: i.id,
-          title: `${isStarred(i) ? "★ " : ""}${truncate(i.title, 22)}`,
+          // The marks it wears, ahead of the name — the same thing the bar
+          // groups by, in the place a star used to sit.
+          title: `${Object.keys(i.reactions ?? {}).join("")}${
+            i.reactions ? " " : ""
+          }${truncate(i.title, 22)}`,
           kind: itemKind(i),
           file: truncate(i.versions.find((v) => v.id === i.currentVersionId)?.filename ?? "?", 22),
           pos: `${i.x},${i.y}`,
@@ -3291,22 +3293,6 @@ async function applyMoves(
   );
   console.log(done);
 }
-
-program
-  .command("star <items...>")
-  .description("Star items — the shortlist worth getting back to; --off to unstar")
-  .option("--off", "take the star away")
-  .action(
-    run(async (refs: string[], opts: { off?: boolean }, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const items = refs.map((ref) => resolveItem(snapshot, ref));
-      for (const item of items) {
-        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: starPatch(!opts.off) });
-      }
-      console.log(`${opts.off ? "unstarred" : "starred"} ${items.map((i) => i.id).join(", ")}`);
-    }),
-  );
 
 program
   .command("react <emoji> <items...>")

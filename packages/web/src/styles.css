@@ -146,7 +146,7 @@ input, textarea { font: inherit; color: var(--ink); }
      thing that OWNS a popover sits at --z-bar, and the popover rides along. */
 :root {
   --z-canvas: 15;    /* guides, marquee, spacing bars: over items, under chrome */
-  --z-dock: 25;      /* panels docked to an edge: main, files, favourites, trash */
+  --z-dock: 25;      /* panels docked to an edge: main, files, marks, trash */
   --z-float: 26;     /* chrome floating over the canvas with a gutter around it,
                         and the menus it opens — they only have to clear a dock */
   --z-bar: 30;       /* chrome whose popovers hang ACROSS the floating chrome:
@@ -623,13 +623,6 @@ img { height: auto; }
 .item.selected .item-titlebar { color: var(--accent); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
-.star-btn {
-  flex: none; padding: 0 2px; line-height: 1;
-  background: none; border: none; color: var(--ink-soft); font-size: 12px;
-  user-select: none; -webkit-user-select: none; cursor: pointer;
-}
-.star-btn:hover { color: var(--ink); }
-.star-btn.on { color: var(--accent); }
 
 /* Renaming in place: the label IS the field. Same type, same spot, a hairline
    to say it is live — no fill, no chunky box, nothing that reads as a form.
@@ -665,9 +658,8 @@ img { height: auto; }
    with the one you did ("which one is this?"). Quieter via a TOKEN and not
    via opacity — dimmed text is a contrast decision no colour test can see,
    which `dimmed.test.ts` refuses on sight, and it caught this rule's first
-   draft. It keeps `--ink-soft` when the row turns accent, exactly as the
-   unstarred star at the other end of the row does: selecting an item should
-   light up its name, not everything standing near it. No pointer events — it
+   draft. It keeps `--ink-soft` when the row turns accent: selecting
+   an item should light up its NAME, not everything standing near it. No pointer events — it
    is a statement about the file, not a control. */
 .kind-icon {
   flex: none; width: 13px; height: 13px; display: block;
@@ -870,6 +862,24 @@ img { height: auto; }
 /* While a drag is live the pointer is captured, so the cursor is right
    everywhere — but text under it would still select without this. */
 .panel-resizer:active { user-select: none; -webkit-user-select: none; }
+
+/* A section of the reactions bar: one mark, and everything wearing it. */
+.react-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.react-group-head {
+  display: flex; align-items: center; gap: 7px; margin: 0; padding: 4px 10px 2px;
+  font-size: 11px; font-weight: 600; color: var(--ink-soft);
+  position: sticky; top: 0; background: var(--panel); z-index: 1;
+}
+.react-group-emoji { font-size: 14px; line-height: 1; }
+.react-group-head i { font-style: normal; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* The tail, folded. A team's vocabulary fits in five; past that the rest is a
+   click rather than a scroll nobody reaches the end of. */
+.react-more {
+  font: inherit; font-size: 11.5px; cursor: pointer; margin: 2px 10px 6px;
+  padding: 4px 10px; border-radius: 999px; align-self: flex-start;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
+}
+.react-more:hover { border-color: var(--accent); color: var(--accent-text); }
 
 /* ---------- reactions ---------- */
 /* The marks an item is wearing. PERSISTENT, unlike the size chip and the
@@ -1456,12 +1466,30 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; bottom: 16px; z-index: var(--z-float);
   /* left comes from the component: it steps aside for a docked panel. */
   transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* THE BOX PAINTS NOTHING, SO IT CATCHES NOTHING. It is a positioning box
+     that is larger than either thing inside it — 168×108 around a 138×89 map,
+     and around a 32×32 handle once folded — and at `--z-float` it sat over
+     the canvas swallowing clicks in a region where a person can see straight
+     through to the item underneath.
+
+     That is not theoretical. Flying to an item centres it, which puts its
+     reaction chips at exactly this corner, so EVERY "go to item" from the
+     marks dock landed the chips under this box and they could not be clicked.
+     Folding the map did not help: folding hides the panel and leaves the box.
+
+     Same shape as the identity menu under the trash panel and the beacon card
+     under the right dock (21 Aug). The fix is the same one: a floating
+     container yields, and the things that are actually drawn claim back. */
+  pointer-events: none;
 }
 /* …except while the edge is being DRAGGED, when the width changes every frame
    and an ease means the map trails your hand and settles a fifth of a second
    after you stop. The ease is for the one step of opening and closing. */
 .canvas-page.resizing-panel .minimap-dock { transition: none; }
 .minimap-panel {
+  /* Claimed back from the dock above — this one is drawn, so it is clickable
+     (the folded rule below hands it straight back). */
+  pointer-events: auto;
   transform-origin: 0 100%;
   transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.18s ease;
 }
@@ -1566,50 +1594,50 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .item-peek .item-thumb { border-radius: 8px; }
 
-/* ---------- the favourites bar (right) ---------- */
+/* ---------- the marks dock (right): the canvas grouped by reaction ---------- */
 /* Opposite the reading panels: this is a place you leave from, so it sits on
    the side the tool rail is on and stays out of the canvas's middle. */
-.favourites {
+.marks {
   position: absolute; top: 48px; right: 76px; bottom: 16px; width: 232px; z-index: calc(var(--z-dock) - 1);
   display: flex; flex-direction: column; gap: 2px;
   background: var(--panel); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 14px;
   box-shadow: var(--shadow-pop); font-size: 12px; overflow: hidden;
 }
-.favourites header {
+.marks header {
   display: flex; align-items: center; gap: 7px; flex: none;
   padding: 10px 10px 8px 12px; border-bottom: 1px solid var(--line-soft);
 }
-.favourites header b { font-size: 12.5px; }
-.favourites header .spacer { flex: 1; }
-.favourites-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
-.favourites-empty {
+.marks header b { font-size: 12.5px; }
+.marks header .spacer { flex: 1; }
+.marks-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+.marks-empty {
   margin: 0; padding: 16px 14px; color: var(--ink-soft); line-height: 1.5;
 }
-.favourites-list {
+.marks-list {
   flex: 1; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 8px; padding: 10px;
 }
-.favourite {
+.mark-row {
   display: flex; flex-direction: column; gap: 6px; padding: 0; width: 100%;
   background: none; border: none; text-align: left; color: var(--ink);
 }
-.favourite-shot {
+.mark-shot {
   display: flex; align-items: center; justify-content: center;
   height: 92px; border-radius: 9px; background: var(--chip);
   border: 1px solid var(--line-soft); overflow: hidden;
 }
-.favourite-shot .item-thumb {
+.mark-shot .item-thumb {
   width: 100%; height: 100%; border: none; border-radius: 0; object-fit: contain;
   background: none;
 }
-.favourite:hover .favourite-shot { border-color: var(--accent); }
-.favourite.active .favourite-shot { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.favourite-name {
+.mark-row:hover .mark-shot { border-color: var(--accent); }
+.mark-row.active .mark-shot { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mark-name {
   display: flex; align-items: center; gap: 5px; padding: 0 2px;
   font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.favourite-name b { color: var(--accent); font-size: 10px; }
+.mark-name b { color: var(--accent); font-size: 10px; }
 
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */

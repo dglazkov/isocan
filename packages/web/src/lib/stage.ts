@@ -1,10 +1,10 @@
 import { useUiStore } from "../stores/uiStore.ts";
 
 import { TRASH_WIDTH } from "../components/TrashPanel.tsx";
-import { FAVOURITES_WIDTH } from "../components/FavouritesBar.tsx";
+import { MARKS_WIDTH } from "../components/ReactionBar.tsx";
 
-/** The gutter the favourites bar floats in, from the window's right edge. */
-const FAVOURITES_GUTTER = 76;
+/** The gutter the marks dock floats in, from the window's right edge. */
+const MARKS_GUTTER = 76;
 
 /**
  * The part of the window the canvas actually has.
@@ -34,8 +34,8 @@ export function stageRect(): Stage {
   const left = ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0;
   const right = ui.trashOpen
     ? TRASH_WIDTH
-    : ui.favouritesOpen
-      ? FAVOURITES_WIDTH + FAVOURITES_GUTTER
+    : ui.marksOpen
+      ? MARKS_WIDTH + MARKS_GUTTER
       : 0;
   return {
     x: left,
