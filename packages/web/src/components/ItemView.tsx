@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
 import { KindIcon } from "./KindIcon.tsx";
+import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 
@@ -110,6 +111,11 @@ export function ItemView({
   // Bumping this remounts a browser item's iframe — the reload button. Vite
   // sites refresh themselves over HMR; this is for everything that doesn't.
   const [reloadToken, setReloadToken] = useState(0);
+  // Pointer-over on the item itself, so the react `+` can be offered without
+  // making somebody select first. Kept local: it is not shared state and has
+  // no business on the wire.
+  const [hovered, setHovered] = useState(false);
+  const wearing = Object.keys(item.reactions ?? {}).length > 0;
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -379,6 +385,8 @@ export function ItemView({
       }}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
       {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
@@ -514,7 +522,7 @@ export function ItemView({
           read. Sharing the slot rather than stacking two pills also keeps the
           space under an item quiet, which is where comment pins land. */}
       {underSlot === "size" && roomy && (
-        <div className={`item-hint size${resize ? " live" : ""}`} style={chrome}>
+        <div className={`item-hint size${resize ? " live" : ""}${wearing ? " under-reactions" : ""}`} style={chrome}>
           {/* The click path into full screen, in the one place there is room
               for a word. It sits beside the size rather than up in the title
               row because that row's width is the name's, and a control there
@@ -551,9 +559,19 @@ export function ItemView({
         </div>
       )}
       {underSlot === "hint" && roomy && (
-        <div className="item-hint" style={chrome}>
+        <div className={`item-hint${wearing ? " under-reactions" : ""}`} style={chrome}>
           <span>double-click to interact</span>
         </div>
+      )}
+      {/* Persistent, and therefore closest to the item: the strip below it is
+          for the size and the hint, which are about your current gesture. */}
+      {roomy && !entered && (
+        <Reactions
+          canvasId={canvasId}
+          item={item}
+          actor={actor}
+          visible={selected || peeked || hovered}
+        />
       )}
       {soleSelection && !entered && (
         <>

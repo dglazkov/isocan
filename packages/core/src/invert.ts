@@ -54,6 +54,12 @@ export function invertOperation(
       return { type: "item.resize", itemId: op.itemId, width, height };
     }
 
+    case "item.react":
+      // Exact without knowing the actor, because undo is per-actor: the
+      // inverse is replayed stamped with the same person, and removing your
+      // own id from a set is the precise opposite of adding it.
+      return { type: "item.react", itemId: op.itemId, emoji: op.emoji, on: !op.on };
+
     case "item.update": {
       const item = getItem(op.itemId);
       const current = item.versions.find((version) => version.id === item.currentVersionId);

@@ -44,6 +44,23 @@ export interface Item {
   title: string;
   description: string;
   properties: Record<string, string>;
+  /**
+   * Who reacted with what: emoji → the actors wearing it, in the order they
+   * arrived. Absent on items nobody has reacted to, which is most of them.
+   *
+   * **A set of actors, deliberately, and not a count.** A number would have to
+   * be incremented, and two people reacting in the same instant would each
+   * read it, add one, and write the same value — one reaction lost, silently
+   * and permanently. A set is idempotent and commutative: both ids land, in
+   * either order, and the count is `length`. It is also the only shape that
+   * can answer "did I already?" and "who liked this?", which are the two
+   * questions anybody actually asks of a reaction.
+   *
+   * Ids rather than names, for the reason mentions are: a stamped name is a
+   * log entry, not an identity, and a rename has to reach what somebody did
+   * before it.
+   */
+  reactions?: Record<string, string[]>;
   /** Append-only, creation order. The visible "top of stack" is currentVersionId. */
   versions: ItemVersion[];
   currentVersionId: string;

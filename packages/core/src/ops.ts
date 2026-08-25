@@ -145,6 +145,17 @@ export type Operation =
       description?: string;
       properties?: Record<string, string>;
     }
+  /**
+   * Wear or take off ONE emoji, as the actor in the envelope.
+   *
+   * `on` rather than a toggle, and that is not fussiness. `invertOperation`
+   * is handed the state and the op and NOT the actor, so a toggle's inverse
+   * would be unknowable — while `on: !on` is exact, because undo is per-actor
+   * and replays the inverse stamped with the same person. The op says what
+   * should be true; who it is true of comes from the envelope, which is also
+   * what makes reacting as somebody else unrepresentable.
+   */
+  | { type: "item.react"; itemId: string; emoji: string; on: boolean }
   | { type: "item.move"; itemId: string; x: number; y: number }
   | { type: "item.resize"; itemId: string; width: number; height: number }
   | {

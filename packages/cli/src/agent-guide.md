@@ -660,6 +660,18 @@ isocan fit <items...>                  # grow items to the size their content wa
   answers to — the same list their `?` panel shows, from the same source. When
   somebody asks how to do a thing without a mouse, or you are telling them
   where to look, name the actual key rather than describing the menu path.
+- **A reaction is a cheap answer.** `isocan react 👍 <item>` wears an emoji on
+  an item; `--off` takes yours back and `--who` says who else is wearing it.
+  The canvas draws them as chips under the item and a person toggles theirs by
+  clicking, exactly as they would in a chat app.
+
+  It is worth reaching for when the honest answer is one bit. Somebody asked
+  "do these two work?" and they do: 👍 on both beats a paragraph, costs one op,
+  and leaves a mark the next reader can see without opening a thread. Where a
+  judgment call needs saying, still say it — a chip cannot carry a reason.
+
+  The count is the number of PEOPLE wearing it, never a tally you add to: your
+  own is a toggle, and reacting twice is not reacting twice.
 - **Stars are the canvas's shortlist.** `isocan ls --starred` is what the
   person has marked as worth getting back to — the screens actually in play,
   which nothing else on the canvas tells you. `isocan star <item>` (or
@@ -826,6 +838,7 @@ make),
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,
 `add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
+`react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
