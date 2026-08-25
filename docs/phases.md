@@ -98,9 +98,9 @@ failure mode was silent from the day it was typed.
 **What is next is a choice, not a queue.** Everything below is a feature added to
 a live isocan.io, and its order returns to being a hypothesis — real users get a
 vote on whether the spark (11, 12) or the airplane (12.5, 12.7) matters more.
-Two unpaid debts sit outside that: phase 10.5 is still PART-DONE because Paul and
-Dion have not walked `development.md`, and prod's sign-in mail has no sender
-domain (phase 14's findings).
+One unpaid debt sits outside that: phase 10.5 is still PART-DONE because Paul
+and Dion have not walked `development.md`. Prod's sign-in mail is done —
+magic-link from an aligned sender, proved on a browser at isocan.io.
 
 **Two things that were true before launch and still are.** The wire keys renamed
 in 13.5, so **a pre-rename CLI or replica cannot WRITE to a current home** — it
@@ -1314,9 +1314,11 @@ the build deployed, and the service came back with ingress and every
 environment variable intact, because `cloudbuild.yaml` moves only the image.
 The ingress bypass was DEMONSTRATED against prod's run.app URL before the flag
 closed it, then re-checked afterwards: that URL now answers 404 to everything
-while the domain answers 200. Two debts remain and are findings below, neither
-load-bearing for the scene: prod's sign-in mail has no sender-domain alignment,
-and the badges minted while demonstrating the bypass are still desk rows.
+while the domain answers 200. Prod's sign-in mail was finished the same day and
+is a finding below — a real magic-link sign-in played through at isocan.io,
+which proves phase 9's attester loop on prod as well. One debt remains, not
+load-bearing for anything: the badges minted while demonstrating the bypass are
+still desk rows.
 
 **Work:** Stand up `isocan-prod`; the domain; the `release`-branch
 promotion; flipping the default home address from unset to isocan.io
@@ -1398,7 +1400,32 @@ steps, a canvas born at its hosted home.
   isocan.io — a stranger's first sign-in email, likely in spam. Dev solved this
   in phase 13.5 with a custom sender domain, and the code half already ships
   (the daemon serves `/__/auth/action` itself). What is missing is the Firebase
-  console flow for the prod project and the DNS records it emits. — Open
+  console flow for the prod project and the DNS records it emits. — **CLOSED
+  the same day**, and by the only check that counts: not the console's
+  "verified" (phase 13.5's instrument said that twice while lying), but a real
+  sign-in played through — mail from the aligned sender, link followed,
+  `dimitri@glazkov.com` PROVED onto a badge in a browser at isocan.io. That is
+  phase 9's whole attester loop working on prod, which is more than this
+  finding asked for. Two apex TXT records and two DKIM CNAMEs now sit beside
+  dev's, which are at the `dev` label — each name has exactly one `v=spf1`,
+  which is what the spec requires.
+- 2026-08-25: **Namecheap's API takes host names RELATIVE to the domain, and
+  the Firebase console emits them as FQDNs.** Pasting
+  `firebase1._domainkey.isocan.io` through creates
+  `firebase1._domainkey.isocan.io.isocan.io` — which resolves as nothing and
+  fails verification in a way that reads as the provider's fault. Its
+  `setHosts` also REPLACES the entire zone, so every write here is
+  read-all-then-send-all; there is no add-one call.
+- 2026-08-25: **A single `dig` is a sample, not a state.** After the sender
+  records landed, `8.8.8.8` answered the apex TXT from a SPLIT CACHE — some
+  backends holding the pre-change single record, some the new three — so
+  consecutive identical queries disagreed for half an hour. A watcher exited on
+  a condition that passed and printed a readback contradicting it one second
+  later. The authoritative server and two other public resolvers were correct
+  throughout. Nothing was wrong and nothing needed fixing; what it nearly cost
+  was a Verify clicked into a stale answer, and a validation that sticks in a
+  failed state is exactly how prod's certificate came to be named
+  `isocan-cert-2`. Check repeatedly and require agreement.
 - 2026-08-25: The ~60 badges minted while demonstrating the bypass are real
   desk rows on a brand-new prod. They are anonymous and admitted to nothing,
   and there is no bulk revoke — recorded so nobody reads prod's first badge
