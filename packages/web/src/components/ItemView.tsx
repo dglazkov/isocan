@@ -18,7 +18,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
+import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underRow, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
@@ -522,7 +522,7 @@ export function ItemView({
           are dragging a corner, the live number is the point, and
           "double-click to interact" is something you have already read. */}
       {roomy && !entered && (underSlot !== null || reactionRow) && (
-        <div className="item-under" style={chrome}>
+        <div className="item-under" style={underRow(width, scale)}>
           {/* Persistent, and therefore first: a mark is something the item is
               wearing, where the rest of the row is about your current gesture. */}
           <Reactions
@@ -534,7 +534,7 @@ export function ItemView({
             visible={selected}
           />
           {underSlot === "size" && (
-            <div className={`item-hint size${resize ? " live" : ""}`}>
+            <div className={`item-hint size under-right${resize ? " live" : ""}`}>
               {/* The click path into full screen, in the one place there is
                   room for a word. It sits beside the size rather than up in
                   the title row because that row's width is the name's, and a
@@ -580,7 +580,11 @@ export function ItemView({
             </div>
           )}
           {underSlot === "hint" && (
-            <div className="item-hint">
+            /* Centred in what the marks left it, and no further. `flex: 1`
+               means it starts centred under the item and gets nudged right as
+               marks accumulate, rather than being overlapped by them or
+               pinned somewhere it does not belong. */
+            <div className="item-hint under-mid">
               <span>double-click to interact</span>
             </div>
           )}

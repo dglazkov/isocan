@@ -54,6 +54,32 @@ export function counterScale(scale: number): { transform: string } {
   return { transform: `scale(${1 / scale})` };
 }
 
+/**
+ * The row under an item: counter-scaled AND given the item's width in screen
+ * pixels, so ordinary flex layout works inside it.
+ *
+ * This is the piece that took three attempts. Chrome under an item wants three
+ * things at once — marks pinned LEFT, the hint CENTRED, the size and the
+ * full-screen button pinned RIGHT — and a centre and a right edge only exist
+ * if the row knows how wide the item is.
+ *
+ * Pinning the row to both of the item's edges gives it that width in WORLD
+ * units, and then counter-scaling it multiplies that width by 1/scale: at 20%
+ * zoom the box is five times the item's width, so `flex-end` lands far off the
+ * right of the item and `center` is only right by luck of the symmetry. That
+ * is not a fixable alignment, it is the wrong box.
+ *
+ * So the row is pinned at the LEFT only, scaled from that corner, and told its
+ * width directly — `width * scale`, which inside an element scaled by
+ * `1 / scale` is exactly the item's width as drawn. Everything inside is then
+ * measured in screen pixels, and `flex: 1` on the middle slot does what it
+ * looks like it does: centre the hint in whatever room the marks left it, and
+ * give the room back as they are removed.
+ */
+export function underRow(width: number, scale: number): { transform: string; width: number } {
+  return { ...counterScale(scale), width: width * scale };
+}
+
 /** Is the item big enough on screen to wear a label and a badge? */
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
