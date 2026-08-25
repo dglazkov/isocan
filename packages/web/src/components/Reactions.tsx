@@ -7,6 +7,28 @@ import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { sendOp } from "../lib/api.ts";
 import { useActorNames } from "../lib/names.ts";
 
+/** Smiley with a plus in the corner — the standard icon for adding a reaction. */
+const SMILE_PLUS = (
+  <svg
+    viewBox="0 0 24 24"
+    width="13"
+    height="13"
+    aria-hidden
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M22 11v1a10 10 0 1 1-9-10" />
+    <path d="M8 14a4 4 0 0 0 8 0" />
+    <circle cx="9" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
+    <path d="M16 5h6" />
+    <path d="M19 2v6" />
+  </svg>
+);
+
 /**
  * The marks an item is wearing, and the way to add one.
  *
@@ -110,7 +132,7 @@ export function Reactions({
               setPicking((open) => !open);
             }}
           >
-            ＋
+            {SMILE_PLUS}
           </button>
           {picking && (
             <EmojiPicker
