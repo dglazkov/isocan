@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { rules } from "./cssrules.ts";
 
 /**
  * The measures this stylesheet is written in.
@@ -93,8 +94,20 @@ const FONT_SIZE = /(?:^|[;{\s])font-size\s*:\s*([^;{}]+)/g;
 function partition(): { app: string; front: string } {
   const app: string[] = [];
   const front: string[] = [];
-  for (const rule of outside.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
-    (/\.front[-\b]|\.terms[-\b]/.test(rule[1] ?? "") ? front : app).push(rule[0]);
+  // Parsed by `cssrules.ts` rather than by a regex here. The regex this used
+  // to run could not nest, so `.front-row` — which lives inside
+  // `@media (max-width: 720px)` — had `@media (max-width: 720px)` for a
+  // selector, landed in the APP bucket, and made a front-page-only step fail
+  // the app's count with a message pointing at the wrong scale. Reproduced,
+  // then fixed.
+  //
+  // `at` is consulted as well as the selector: a door rule inside a media
+  // query belongs to the door, and asking the selector alone is the bug above.
+  const doorish = (text: string) => /\.front[-\b]|\.terms[-\b]/.test(text);
+  for (const rule of rules()) {
+    (doorish(rule.selector) || rule.at.some(doorish) ? front : app).push(
+      `${rule.selector}{${rule.body}}`,
+    );
   }
   return { app: app.join("\n"), front: front.join("\n") };
 }
@@ -291,10 +304,14 @@ describe("the front door's scale", () => {
   });
 
   it("invents no new spacing step", () => {
+    // 18, not the 17 first recorded here: that number was taken with a parser
+    // that could not see inside `@media`, so the page's own responsive rule
+    // (`.front-row`, at max-width 720) was being counted against the app. The
+    // count did not change — the attribution did.
     expect(
       distinct(frontSpacing).length,
       `front-page spacing: ${distinct(frontSpacing).join(", ")}. Reuse one, or add a token.`,
-    ).toBe(17);
+    ).toBe(18);
   });
 
   it("keeps to one corner radius that is not the token", () => {
