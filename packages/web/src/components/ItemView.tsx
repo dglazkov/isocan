@@ -18,7 +18,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
+import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
@@ -37,6 +37,15 @@ const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
 const MIN_H = 60;
+
+/** Four corners pushing outward — the mark every video player and window
+ * manager uses for this, so it needs no legend. */
+const EXPAND = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" />
+  </svg>
+);
 
 export function ItemView({
   item,
@@ -113,6 +122,23 @@ export function ItemView({
   // making somebody select first. Kept local: it is not shared state and has
   // no business on the wire.
   const wearing = Object.keys(item.reactions ?? {}).length > 0;
+  /**
+   * Is the reaction row TAKING UP ROOM under the item — which is the question
+   * the strip below it has to ask, and is not the same as "wearing marks".
+   *
+   * The row also appears with no marks on it at all, because selecting an item
+   * shows the `+`. Clearing only for `wearing` meant a selected, unmarked item
+   * drew the `+` straight through "Full screen": the two most likely controls
+   * to want on a screen you just clicked, overlapping, on every unmarked item
+   * on the canvas.
+   *
+   * Kept as one named value used by both strips so they cannot disagree — the
+   * size strip and the hint strip are two rules that must clear the same row.
+   */
+  const reactionRow = wearing || selected;
+  // Does the under-item line have room to spell the button out? Below this
+  // it becomes a glyph so the whole line still fits on one row.
+  const spellItOut = underRowSpellsItOut(width, scale);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -477,70 +503,86 @@ export function ItemView({
 
         {worker && <div className="work-sheen" />}
       </div>
-      {/* One slot under the item, and two things that want it.
+      {/* ONE row under the item, and everything that wants to be there.
           
-          They are different KINDS of message and they have different triggers,
-          which is what lets them share: the size is a fact about the thing you
-          are currently manipulating (selected, or mid-resize), and the hint is
-          an evergreen tip shown while you point at it. When both apply the size
-          wins — if you are dragging a corner, the live number is the whole
-          point, and "double-click to interact" is something you have already
-          read. Sharing the slot rather than stacking two pills also keeps the
-          space under an item quiet, which is where comment pins land. */}
-      {underSlot === "size" && roomy && (
-        <div className={`item-hint size${resize ? " live" : ""}${wearing ? " under-reactions" : ""}`} style={chrome}>
-          {/* The click path into full screen, in the one place there is room
-              for a word. It sits beside the size rather than up in the title
-              row because that row's width is the name's, and a control there
-              would cost the name at every zoom for a button you want twice a
-              session. Every kind gets it, not just the interactive ones: a
-              picture worth opening big is as ordinary as a screen worth
-              clicking through. */}
-          {/* "Full screen", not "Open" — which was the first label and said
-              nothing. Open in what? A new tab, a menu, an editor? Worse, this
-              product already uses the word: `isocan open` means "open the
-              canvas in your browser", and you are ALREADY in the browser when
-              you press this, so the same word would have had to mean two
-              things a surface apart. The button says the state it puts you in,
-              which is also what the shortcut list calls it. */}
-          {/* Not while a corner is being dragged: your pointer is busy, the
-              button would be under it, and the number beside it is the thing
-              you are actually reading. */}
-          {!resize && (
-          <button
-            className="fullscreen-btn"
-            title="Fill the window with this item (Enter) — Esc comes back"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(itemPath(canvasId, item.id));
-            }}
-          >
-            Full screen
-          </button>
+          Marks, the `+`, the full-screen button and the size all live on this
+          line. They used to be two absolutely-positioned elements that each
+          counter-scaled themselves, which put two half-empty rows under every
+          selected item — and made the `+` and "Full screen" collide before
+          that, because one of them stepped down and the other did not.
+          
+          One wrapper carries the counter-scale for all of it, so there is a
+          single answer to "how big is chrome" under here, and the children are
+          ordinary flex items. Centred, because the box is the item's WORLD
+          width and centre is the only alignment that survives being scaled
+          about its own middle — `flex-end` lands somewhere off the side of the
+          item, which is how this was learned.
+          
+          The size and the hint still share their half of it. They are
+          different KINDS of message with different triggers: the size is a
+          fact about the thing you are manipulating, the hint an evergreen tip
+          shown while you point at it. When both apply the size wins — if you
+          are dragging a corner, the live number is the point, and
+          "double-click to interact" is something you have already read. */}
+      {roomy && !entered && (underSlot !== null || reactionRow) && (
+        <div className="item-under" style={chrome}>
+          {/* Persistent, and therefore first: a mark is something the item is
+              wearing, where the rest of the row is about your current gesture. */}
+          <Reactions
+            canvasId={canvasId}
+            item={item}
+            actor={actor}
+            // Selected ONLY, not hovered — see the prop's own note. Reactions
+            // already worn stay visible either way; this is just the `+`.
+            visible={selected}
+          />
+          {underSlot === "size" && (
+            <div className={`item-hint size${resize ? " live" : ""}`}>
+              {/* The click path into full screen, in the one place there is
+                  room for a word. It sits beside the size rather than up in
+                  the title row because that row's width is the name's, and a
+                  control there would cost the name at every zoom for a button
+                  you want twice a session. Every kind gets it, not just the
+                  interactive ones: a picture worth opening big is as ordinary
+                  as a screen worth clicking through.
+                  
+                  "Full screen", not "Open" — which was the first label and
+                  said nothing. Open in what? A new tab, a menu, an editor?
+                  Worse, this product already uses the word: `isocan open`
+                  means "open the canvas in your browser", and you are ALREADY
+                  in the browser when you press this. The button says the state
+                  it puts you in, which is what the shortcut list calls it.
+                  
+                  Not while a corner is being dragged: your pointer is busy,
+                  the button would be under it, and the number beside it is the
+                  thing you are actually reading. */}
+              {!resize && (
+                <button
+                  className={`fullscreen-btn${spellItOut ? "" : " compact"}`}
+                  title="Fill the window with this item (Enter) — Esc comes back"
+                  // The word goes, the NAME never does: a narrow item still
+                  // answers "Full screen" to a screen reader and to a hover.
+                  aria-label="Full screen"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(itemPath(canvasId, item.id));
+                  }}
+                >
+                  {spellItOut ? "Full screen" : EXPAND}
+                </button>
+              )}
+              <span>
+                {Math.round(width)} × {Math.round(height)}
+              </span>
+            </div>
           )}
-          <span>
-            {Math.round(width)} × {Math.round(height)}
-          </span>
+          {underSlot === "hint" && (
+            <div className="item-hint">
+              <span>double-click to interact</span>
+            </div>
+          )}
         </div>
-      )}
-      {underSlot === "hint" && roomy && (
-        <div className={`item-hint${wearing ? " under-reactions" : ""}`} style={chrome}>
-          <span>double-click to interact</span>
-        </div>
-      )}
-      {/* Persistent, and therefore closest to the item: the strip below it is
-          for the size and the hint, which are about your current gesture. */}
-      {roomy && !entered && (
-        <Reactions
-          canvasId={canvasId}
-          item={item}
-          actor={actor}
-          scale={scale}
-          // Selected ONLY, not hovered — see the prop's own note. Reactions
-          // already worn stay visible either way; this is just the `+`.
-          visible={selected}
-        />
       )}
       {soleSelection && !entered && (
         <>

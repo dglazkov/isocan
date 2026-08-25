@@ -288,11 +288,19 @@ describe("chrome holds its size, by transform or by --scale", () => {
   };
   const everySource = Object.values(sources).join("\n");
 
-  /** The chrome an item wears, and where each one is rendered. */
+  /**
+   * The chrome an item wears, and where each one is rendered.
+   *
+   * There are two counter-scaled elements now rather than four: the title row
+   * above the item, and ONE wrapper for everything below it. The marks, the
+   * `+`, the full-screen button and the size are children of that wrapper and
+   * inherit its scale — which is why `.item-reactions` and `.item-hint` are
+   * not in this list any more. They stopped counter-scaling themselves when
+   * they stopped being positioned themselves.
+   */
   const CHROME = [
     { className: "item-titlebar", where: "ItemView" },
-    { className: "item-hint", where: "ItemView" },
-    { className: "item-reactions", where: "Reactions" },
+    { className: "item-under", where: "ItemView" },
   ];
 
   it("renders each one with the counter-scale from its one home", () => {
@@ -393,5 +401,57 @@ describe("the react button is gated on selection", () => {
       "utf8",
     );
     expect(reactions).toMatch(/if \(reactions\.length === 0 && !visible\) return null;/);
+  });
+});
+
+/**
+ * **One row under the item, carrying everything that goes there.**
+ *
+ * It was two absolutely-positioned elements. The marks row appeared whenever
+ * an item was selected (that is when the `+` shows) but the strip below only
+ * stepped out of its way when the item WORE marks — so a selected unmarked
+ * item, which is every item on a fresh canvas the moment you click it, drew
+ * the `+` straight through "Full screen". Keying the clearance on selection
+ * too fixed the overlap and left two half-empty rows of chrome instead.
+ *
+ * One flex row fixes both, and deletes the clearance rule rather than
+ * correcting it. Frozen here because splitting it again is the obvious way to
+ * add the next thing that wants to live under an item.
+ */
+describe("the row under an item is one row", () => {
+  const itemView = readFileSync(
+    fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("puts the marks and the strip in the same wrapper", () => {
+    const row = itemView.match(/<div className="item-under"[\s\S]*?\n {8}<\/div>/);
+    expect(row, "no .item-under wrapper").toBeTruthy();
+    expect(row![0]).toContain("<Reactions");
+    expect(row![0]).toContain("item-hint");
+  });
+
+  it("has no clearance rule left to get wrong", () => {
+    // The fix was deleting the workaround, not tuning it.
+    expect(css).not.toContain("under-reactions");
+    expect(itemView).not.toContain("under-reactions");
+  });
+
+  it("centres that row, because the box is scaled about its middle", () => {
+    // The box is the item's WORLD width and is counter-scaled about its own
+    // centre, so centre is the only alignment that lands where it looks like
+    // it will. `flex-end` was tried and put the contents off the item.
+    const rule = allRules().find((r) => r.selectors.includes(".item-under"));
+    expect(rule, ".item-under has no rule").toBeTruthy();
+    expect(rule!.body).toMatch(/justify-content:\s*center/);
+    expect(rule!.body).not.toMatch(/justify-content:\s*flex-(end|start)/);
+  });
+
+  it("keeps the transient half fading on its own", () => {
+    // Marks are persistent; the hint is not. One opacity for both would fade
+    // the marks with it.
+    const hint = allRules().find((r) => r.selectors.includes(".item-hint"));
+    expect(hint!.body).toMatch(/opacity:\s*0/);
+    expect(rulesFor(".item-reactions").join(";")).not.toMatch(/opacity:\s*0/);
   });
 });

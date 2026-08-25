@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { QUICK_REACTIONS, hasReacted, reactionsOf } from "@isocan/core";
+import { hasReacted, reactionsOf } from "@isocan/core";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
-import { counterScale } from "../lib/chrome.ts";
+import { EmojiPicker } from "./EmojiPicker.tsx";
+import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { sendOp } from "../lib/api.ts";
 import { useActorNames } from "../lib/names.ts";
 
@@ -24,16 +25,11 @@ export function Reactions({
   canvasId,
   item,
   actor,
-  scale,
   visible,
 }: {
   canvasId: string;
   item: Item;
   actor: Actor;
-  /** The viewport's zoom, so the row can hold its size against it. Chrome
-   * lives inside the scaled world; without this the chips are drawn in WORLD
-   * pixels and a canvas at 15% shows an 11px chip as under two. */
-  scale: number;
   /**
    * Whether this item is SELECTED — decides only whether the `+` shows, never
    * whether existing reactions do.
@@ -54,6 +50,7 @@ export function Reactions({
 }) {
   const names = useActorNames();
   const [picking, setPicking] = useState(false);
+  const addButton = useRef<HTMLButtonElement>(null);
   const reactions = reactionsOf(item, actor.id);
   if (reactions.length === 0 && !visible) return null;
 
@@ -68,15 +65,16 @@ export function Reactions({
     } as const;
     applyLocalEcho(op, actor);
     void sendOp(canvasId, actor, op);
+    // Only ADDING a mark is a reach worth remembering. Taking yours back is
+    // the opposite gesture, and promoting it would put the thing you just
+    // rejected at the front of the list next time.
+    if (op.on) rememberEmoji(emoji);
     setPicking(false);
   }
 
   return (
     <div
       className="item-reactions"
-      // A mark is a label on the item, not part of it: it stays the size of a
-      // chip however far out you zoom, exactly as the name above it does.
-      style={counterScale(scale)}
       // The strip under an item is `pointer-events: none` so a hint never eats
       // a click meant for the canvas. These ARE controls (lessons.md #20).
       onPointerDown={(e) => e.stopPropagation()}
@@ -102,6 +100,7 @@ export function Reactions({
       {visible && (
         <span className="react-add-wrap">
           <button
+            ref={addButton}
             className="react-add"
             title="React"
             aria-label="React to this item"
@@ -114,22 +113,12 @@ export function Reactions({
             ＋
           </button>
           {picking && (
-            <span className="react-picker" role="menu">
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  className="react-option"
-                  role="menuitem"
-                  title={emoji}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggle(emoji);
-                  }}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </span>
+            <EmojiPicker
+              anchor={addButton}
+              worn={reactions.map((one) => one.emoji)}
+              onPick={toggle}
+              onClose={() => setPicking(false)}
+            />
           )}
         </span>
       )}
