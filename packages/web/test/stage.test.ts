@@ -7,8 +7,8 @@ import { fitInto, revealDelta, worldToScreen } from "../src/lib/viewport.ts";
  * edge of everything lands underneath the panel you were reading.
  */
 const WINDOW = { w: 1440, h: 900 };
-const withPanel = { x: 320, y: 48, width: WINDOW.w - 320, height: WINDOW.h - 48 };
-const bare = { x: 0, y: 48, width: WINDOW.w, height: WINDOW.h - 48 };
+const withPanel = { x: 320, y: 48, width: WINDOW.w - 320 - 76, height: WINDOW.h - 48 };
+const bare = { x: 0, y: 48, width: WINDOW.w - 76, height: WINDOW.h - 48 };
 
 /** Where the box's corners land on screen. */
 function onScreen(box: { minX: number; minY: number; maxX: number; maxY: number }, stage: typeof bare) {
@@ -38,10 +38,13 @@ describe("fitting into the visible canvas", () => {
     expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
   });
 
-  it("uses the whole window when nothing is docked", () => {
+  it("clears the right tool rail gutter when no panels are docked", () => {
     const at = onScreen(small, bare);
     expect(at.left).toBeGreaterThanOrEqual(0);
-    expect(Math.abs(at.left - (WINDOW.w - at.right))).toBeLessThan(1);
+    expect(at.right).toBeLessThanOrEqual(WINDOW.w - 76);
+    const leftGap = at.left - bare.x;
+    const rightGap = bare.x + bare.width - at.right;
+    expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
   });
 
   it("scales down for a panel — the same box gets less room", () => {

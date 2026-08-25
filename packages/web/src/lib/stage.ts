@@ -36,7 +36,7 @@ export function stageRect(): Stage {
     ? TRASH_WIDTH
     : ui.marksOpen
       ? MARKS_WIDTH + MARKS_GUTTER
-      : 0;
+      : MARKS_GUTTER;
   return {
     x: left,
     y: TOPBAR_HEIGHT,
@@ -50,11 +50,18 @@ export function stageRect(): Stage {
  * minimap all float with a gutter, and a 6px rim lives in that gutter quite
  * happily. */
 export function stageInsets(): { top: number; right: number; bottom: number; left: number } {
-  const stage = stageRect();
+  const ui = useUiStore.getState();
+  const left = ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0;
+  const right = ui.trashOpen
+    ? TRASH_WIDTH
+    : ui.marksOpen
+      ? MARKS_WIDTH + MARKS_GUTTER
+      : 0;
   return {
-    top: stage.y,
-    right: window.innerWidth - (stage.x + stage.width),
+    top: TOPBAR_HEIGHT,
+    right,
     bottom: 0,
-    left: stage.x,
+    left,
   };
 }
+
