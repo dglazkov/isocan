@@ -289,30 +289,31 @@ describe("chrome holds its size, by transform or by --scale", () => {
   const everySource = Object.values(sources).join("\n");
 
   /**
-   * The chrome an item wears, and where each one is rendered.
+   * The chrome an item wears that holds its size with a TRANSFORM, and the
+   expression each one's own JSX has to carry.
    *
-   * There are two counter-scaled elements now rather than four: the title row
-   * above the item, and ONE wrapper for everything below it. The marks, the
-   * `+`, the full-screen button and the size are children of that wrapper and
-   * inherit its scale — which is why `.item-reactions` and `.item-hint` are
-   * not in this list any more. They stopped counter-scaling themselves when
-   * they stopped being positioned themselves.
+   * Asked per ELEMENT, not per file. The first version of this searched the
+   * whole source for `style={chrome}` and asked it once per entry — so every
+   * entry passed as long as ANY element in the file was counter-scaled, which
+   * is lesson #16's shape exactly: a check a relative can satisfy. It went
+   * green for `.item-titlebar`, which is not counter-scaled by JS at all, and
+   * it stayed green through a refactor that changed which elements carry a
+   * transform. Now each entry names the expression it must be holding.
    */
-  const CHROME = [
-    { className: "item-titlebar", where: "ItemView" },
-    { className: "item-under", where: "ItemView" },
+  const CHROME: { className: string; where: string; carries: RegExp }[] = [
+    { className: "item-under", where: "ItemView", carries: /style=\{underRow\(/ },
+    { className: "chrome-left", where: "ItemView", carries: /\.\.\.chrome,/ },
   ];
 
   it("renders each one with the counter-scale from its one home", () => {
-    for (const { className, where } of CHROME) {
+    for (const { className, where, carries } of CHROME) {
       const source = sources[where]!;
       // The element exists where we say it does — otherwise this whole
       // describe passes by looking for nothing (#16).
       expect(source, `${className} is not rendered in ${where}`).toContain(className);
-      expect(
-        /style=\{(chrome|counterScale\()/.test(source),
-        `${where} renders ${className} but never counter-scales`,
-      ).toBe(true);
+      expect(carries.test(source), `${where} renders ${className} but never counter-scales`).toBe(
+        true,
+      );
     }
   });
 
@@ -455,6 +456,36 @@ describe("the row under an item is one row", () => {
       /right:\s*0/,
     );
     expect(rule!.body).toMatch(/transform-origin:\s*left top/);
+  });
+
+  it("gives the row the item's SCREEN width, which is what makes it a row", () => {
+    // A centre and a right edge only exist if the row knows how wide the item
+    // is. Pinning it to both edges would give it the item's WORLD width, which
+    // counter-scaling then multiplies by 1/scale — at 20% zoom that box is
+    // five times the item and every alignment but centre lands off it.
+    const itemView = readFileSync(
+      fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+      "utf8",
+    );
+    expect(itemView).toMatch(/style=\{underRow\(width, scale\)\}/);
+  });
+
+  it("holds the three slots apart: marks left, hint centred, size right", () => {
+    // The whole arrangement, stated as the three rules that produce it.
+    const body = (selector: string) => {
+      const rule = allRules().find((r) => r.selectors.includes(selector));
+      expect(rule, `${selector} has no rule`).toBeTruthy();
+      return rule!.body;
+    };
+    // Left: never moves, never shrinks.
+    expect(body(".item-reactions")).toMatch(/flex:\s*none/);
+    // Middle: takes the REMAINING room and centres in it, so it starts centred
+    // under the item and is nudged right as marks accumulate. A fixed centre
+    // would let the hint sit under the marks.
+    expect(body(".item-hint.under-mid")).toMatch(/flex:\s*1/);
+    expect(body(".item-hint.under-mid")).toMatch(/justify-content:\s*center/);
+    // Right: hard against the item's right edge.
+    expect(body(".item-hint.under-right")).toMatch(/margin-left:\s*auto/);
   });
 
   it("puts the marks FIRST in that row, so they are the leftmost thing", () => {
