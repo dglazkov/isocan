@@ -354,3 +354,44 @@ describe("chrome holds its size, by transform or by --scale", () => {
     }
   });
 });
+
+/**
+ * **The `+` waits for a click, not a hover.**
+ *
+ * It sits under the item and opens a picker under ITSELF, so the trip from
+ * the button to the emoji leaves the item's own box. On hover that ends the
+ * hover, `visible` goes false, and the picker unmounts partway through the
+ * journey — you could open it every time and click it never, which is worse
+ * than a control that plainly does not work, because it looks like it does.
+ *
+ * The usual patches are a close-delay or an invisible bridge across the gap.
+ * Selection is the sticky version of the same signal and was already being
+ * passed in, so gating on it alone makes the bug unreachable rather than
+ * narrow. Frozen here because "also show it on hover" is a one-word change
+ * that reads like an improvement.
+ */
+describe("the react button is gated on selection", () => {
+  const itemView = readFileSync(
+    fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("passes selection alone as the reason to show it", () => {
+    const call = itemView.match(/<Reactions[\s\S]*?\/>/);
+    expect(call, "ItemView no longer renders <Reactions>").toBeTruthy();
+    expect(call![0]).toMatch(/visible=\{selected\}/);
+    expect(call![0], "hover cannot survive the trip to the picker").not.toMatch(
+      /visible=\{[^}]*(hovered|peeked)/,
+    );
+  });
+
+  it("keeps worn marks visible without any of that", () => {
+    // The gate is only the `+`. An item wearing marks shows them to everyone
+    // at all times — that is the whole point of putting them on the canvas.
+    const reactions = readFileSync(
+      fileURLToPath(new URL("../src/components/Reactions.tsx", import.meta.url)),
+      "utf8",
+    );
+    expect(reactions).toMatch(/if \(reactions\.length === 0 && !visible\) return null;/);
+  });
+});

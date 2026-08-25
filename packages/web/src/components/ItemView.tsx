@@ -112,7 +112,6 @@ export function ItemView({
   // Pointer-over on the item itself, so the react `+` can be offered without
   // making somebody select first. Kept local: it is not shared state and has
   // no business on the wire.
-  const [hovered, setHovered] = useState(false);
   const wearing = Object.keys(item.reactions ?? {}).length > 0;
 
   function onPointerDown(e: React.PointerEvent) {
@@ -382,8 +381,6 @@ export function ItemView({
       }}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
-      onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
     >
       {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
       {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
@@ -540,7 +537,9 @@ export function ItemView({
           item={item}
           actor={actor}
           scale={scale}
-          visible={selected || peeked || hovered}
+          // Selected ONLY, not hovered — see the prop's own note. Reactions
+          // already worn stay visible either way; this is just the `+`.
+          visible={selected}
         />
       )}
       {soleSelection && !entered && (
