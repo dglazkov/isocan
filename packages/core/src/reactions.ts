@@ -49,15 +49,6 @@ export function reactionCount(item: Item): number {
   return Object.keys(item.reactions ?? {}).length;
 }
 
-/**
- * A short, opinionated starter set for a picker.
- *
- * Not an emoji keyboard: a canvas of screens gets asked the same handful of
- * questions — is this the one, does it need work, is it funny, is it done —
- * and a grid of 1,800 glyphs answers none of them faster than eight do. The
- * picker takes anything typed; this is what it offers.
- */
-export const QUICK_REACTIONS = ["👍", "🎉", "👀", "🤔", "❤️", "🔥", "🚧", "✅"] as const;
 
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */

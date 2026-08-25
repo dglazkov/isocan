@@ -754,11 +754,24 @@ img { height: auto; }
    it hangs UNDER the item rather than lying across the bottom of it, and only
    while you are pointing at the thing it is talking about. Same bargain as the
    name above: chrome that holds its size, and stays out of the way. */
-.item-hint {
+/* THE row under an item: marks, the `+`, the full-screen button, the size.
+   One wrapper carries the counter-scale for all of it — chrome under here has
+   a single answer to "how big am I", and the children are ordinary flex items.
+   
+   Centred, and that is not a taste call: the box is the item's WORLD width and
+   is then scaled about its own middle, so centre is the only alignment that
+   lands where it looks like it will. `flex-end` puts the contents somewhere
+   off the side of the item entirely. */
+.item-under {
   position: absolute; left: 0; right: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
-  display: flex; justify-content: center; gap: 6px; padding-top: 5px;
-  pointer-events: none; transform-origin: center top;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding-top: 5px; pointer-events: none; transform-origin: center top;
+}
+/* The transient half of that row. Its own opacity, because the marks beside it
+   are persistent and must not fade with it. */
+.item-hint {
+  display: flex; align-items: center; gap: 6px;
   opacity: 0; transition: opacity 0.12s ease;
 }
 .item:hover .item-hint { opacity: 1; }
@@ -888,9 +901,7 @@ img { height: auto; }
    Counter-scaled like the rest of an item's chrome, and anchored bottom-left
    so a long row grows away from the item rather than across it. */
 .item-reactions {
-  position: absolute; left: 0; top: 100%; padding-top: 5px;
   display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-  transform-origin: left top;
   /* Its own events: the strip is otherwise inert so a hint never eats a click
      meant for the canvas, and these are controls (lessons.md #20). */
   pointer-events: auto;
@@ -923,19 +934,66 @@ img { height: auto; }
 /* The picker: eight marks, not an emoji keyboard. A canvas of screens gets
    asked the same handful of questions, and a grid of 1,800 glyphs answers
    none of them faster than eight do. */
+/* The picker: a panel, not a row. It was eight marks in a strip until
+   reactions became the way a team invents its own vocabulary, at which point
+   a strip that cannot reach 🐛 or 📉 is a strip deciding that vocabulary for
+   them. Width is fixed so the grid does not reflow between groups — a picker
+   whose columns move as you switch tabs makes you re-find the same mark. */
 .react-picker {
-  position: absolute; left: 0; top: calc(100% + 5px); z-index: var(--z-popover);
-  display: flex; gap: 2px; padding: 4px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: var(--shadow-pop); backdrop-filter: blur(4px);
+  /* FIXED, and positioned in JS: this is portaled to the body so it can beat
+     the docks and stay on screen. See the layout effect in EmojiPicker.tsx. */
+  position: fixed; z-index: var(--z-popover);
+  width: 268px; padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow-pop); backdrop-filter: blur(8px);
 }
+.react-search {
+  font: inherit; font-size: 12.5px; width: 100%; padding: 6px 9px;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.react-search::placeholder { color: var(--ink-soft); }
+.react-search:focus { outline: none; border-color: var(--accent); }
+.react-recent h4 {
+  margin: 0 0 4px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+/* The tabs wrap rather than scroll: eight short labels in a 268px panel come
+   to two rows, and two readable rows beat one row you have to drag. */
+.react-tabs { display: flex; flex-wrap: wrap; gap: 3px; }
+.react-tab {
+  font: inherit; font-size: 11px; line-height: 1.4; cursor: pointer;
+  padding: 2px 7px; border-radius: 999px;
+  border: 1px solid transparent; background: none; color: var(--ink-muted);
+}
+.react-tab:hover { background: var(--chip); color: var(--ink); }
+.react-tab.on { background: var(--chip); border-color: var(--line); color: var(--ink); }
+.react-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+}
+/* Bounded, so a group of 28 does not make the panel taller than the item it
+   is hanging off. `overscroll-behavior` keeps the wheel from panning the
+   canvas out from under the picker once the list bottoms out. */
+.react-results { max-height: 172px; overflow-y: auto; overscroll-behavior: contain; }
 .react-option {
-  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
-  padding: 4px 5px; border-radius: 7px; border: none; background: none;
+  font: inherit; font-size: 17px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; padding: 0; border-radius: 7px;
+  border: 1px solid transparent; background: none;
 }
 .react-option:hover { background: var(--chip); }
+.react-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Already yours: the picker says so before you click, because clicking it
+   again TAKES IT BACK and that is not what a highlighted option usually does. */
+.react-option.worn { border-color: var(--accent); background: var(--chip); }
+.react-none {
+  grid-column: 1 / -1; margin: 0; padding: 6px 2px;
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+}
+.react-none code { font-size: 11px; }
 /* The transient strip steps below a row of reactions rather than under it. */
-.item-hint.under-reactions { padding-top: 28px; }
+
 
 /* ---------- full screen ---------- */
 /* One item, given the whole window.
@@ -991,6 +1049,19 @@ img { height: auto; }
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
    and a control up there would cost the name at every zoom for something you
    press twice a session. */
+/* The glyph form, for an item too narrow to spell the label out.
+   
+   Only the HORIZONTAL padding goes, and it STRETCHES. An svg is replaced
+   content, so the `line-height` that gives the spelled-out button its height
+   does not apply to the glyph — zeroing the padding left it 13px against
+   21px chips either side, and keeping the vertical padding only got it to 15.
+   `align-self: stretch` takes its height from the row instead, which is the
+   one number that is already correct and stays correct if the chips change. */
+.fullscreen-btn.compact {
+  padding-left: 0; padding-right: 0; width: 22px; align-self: stretch;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.fullscreen-btn.compact svg { display: block; }
 .fullscreen-btn {
   flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
   padding: 1px 9px; border-radius: 999px; cursor: pointer;

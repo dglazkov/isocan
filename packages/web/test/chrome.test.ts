@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CHROME_INSET,
+  FULL_LABEL_ROOM,
   ICON_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
@@ -13,6 +14,7 @@ import {
   nameFits,
   nameRoom,
   titleRow,
+  underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
 
@@ -418,16 +420,68 @@ describe("the strip under an item lets its one control be clicked", () => {
     return "";
   }
 
-  it("keeps the strip itself inert — the half that is deliberate", () => {
+  it("keeps the row itself inert — the half that is deliberate", () => {
     // Stated so the pair is held together: if this ever stops being none, the
-    // opt-out below is dead weight and somebody should know.
-    expect(block(".item-hint")).toMatch(/pointer-events:\s*none/);
+    // opt-outs below are dead weight and somebody should know.
+    //
+    // It moved from `.item-hint` to `.item-under` when the chrome below an
+    // item became ONE row instead of two. The invariant did not change — the
+    // container a stray click lands in is inert, and the controls inside it
+    // claim their events back — but the container did, and a guard naming the
+    // old element would have gone quietly vacuous.
+    expect(block(".item-under")).toMatch(/pointer-events:\s*none/);
   });
 
   it("gives the button its events back", () => {
     expect(
       block(".fullscreen-btn"),
-      "inside a pointer-events:none strip a button is decoration — it needs pointer-events: auto",
+      "inside a pointer-events:none row a button is decoration — it needs pointer-events: auto",
     ).toMatch(/pointer-events:\s*auto/);
+  });
+
+  it("gives the marks theirs back too — they share that row now", () => {
+    // Same rule, second control. The reaction chips and the `+` sit in the
+    // same inert wrapper as the button and would be equally decorative.
+    expect(block(".item-reactions")).toMatch(/pointer-events:\s*auto/);
+  });
+});
+
+/**
+ * **One line under the item, at every width it is shown at.**
+ *
+ * The row carries the marks, the `+`, the full-screen button and the size.
+ * Spelling the button out costs 77 screen pixels of a line that needs 201 in
+ * total; below that the four fit only if the button becomes its glyph.
+ *
+ * Guarded as a THRESHOLD with a bracket rather than as a constant, per lesson
+ * #11: one case fails if the number goes lower, one fails if it goes higher,
+ * so it can be retuned but not deleted and not drifted.
+ */
+describe("the row under an item stays on one line", () => {
+  it("spells the button out when the row has room", () => {
+    expect(underRowSpellsItOut(480, 1)).toBe(true);
+    expect(underRowSpellsItOut(2400, 0.22)).toBe(true);
+  });
+
+  it("drops to the glyph when it does not", () => {
+    // The user's case: a small item, or any item zoomed well out.
+    expect(underRowSpellsItOut(480, 0.3)).toBe(false);
+    expect(underRowSpellsItOut(200, 1)).toBe(false);
+  });
+
+  it("brackets the threshold, so it can be retuned but not lost", () => {
+    // Measured: 201px for the whole line spelled out. A threshold under that
+    // puts the button and the size chip on top of each other; one far above it
+    // sends a roomy item to the glyph for no reason.
+    expect(FULL_LABEL_ROOM).toBeGreaterThanOrEqual(201);
+    expect(FULL_LABEL_ROOM).toBeLessThan(320);
+  });
+
+  it("depends on SCREEN width, not world width", () => {
+    // The row is counter-scaled, so what decides is how big the item looks —
+    // the same item is roomy at 100% and cramped at 20%.
+    const world = 900;
+    expect(underRowSpellsItOut(world, 1)).toBe(true);
+    expect(underRowSpellsItOut(world, 0.1)).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ export * from "./badge.ts";
 export * from "./grants.ts";
 export * from "./passes.ts";
 export * from "./address.ts";
+export * from "./emoji.ts";
 export * from "./reactions.ts";
 export * from "./claims.ts";
 export * from "./invert.ts";
