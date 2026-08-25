@@ -501,5 +501,14 @@ describe("the full-screen control has an icon and adapts its label to room", () 
     const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/);
     expect(tip![1]).toMatch(/pointer-events:\s*none/);
   });
+
+  it("keeps the button face one solid color without an inner chip", () => {
+    // The label is text on the button, not a nested chip: .item-hint > span
+    // must not style .fullscreen-btn span with background or borders.
+    const btnSpan = css.match(/\.fullscreen-btn span\s*\{([^}]*)\}/);
+    expect(btnSpan, "no .fullscreen-btn span rule").toBeTruthy();
+    expect(btnSpan![1]).toMatch(/background:\s*none/);
+    expect(btnSpan![1]).toMatch(/border:\s*none/);
+  });
 });
 
