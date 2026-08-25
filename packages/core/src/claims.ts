@@ -126,32 +126,32 @@ export interface NameHolder {
  * or no harness at all — starts.
  */
 const INITIAL_NAMES: Readonly<Record<string, readonly string[]>> = {
-  a: ["Ada", "Arlo", "Anya"],
-  b: ["Bo", "Bram", "Bea"],
-  c: ["Charlie", "Cass", "Cleo"],
-  d: ["Dara", "Dov", "Della"],
-  e: ["Esme", "Ewan", "Elu"],
-  f: ["Fen", "Faye", "Flor"],
-  g: ["Gina", "Gus", "Gale"],
-  h: ["Hana", "Hugo", "Hale"],
-  i: ["Ines", "Ivo", "Isla"],
-  j: ["Juno", "Jai", "Jess"],
-  k: ["Kit", "Kai", "Kira"],
-  l: ["Lore", "Luca", "Liv"],
-  m: ["Mira", "Milo", "Mae"],
-  n: ["Noor", "Nils", "Nell"],
-  o: ["Orin", "Ola", "Odie"],
-  p: ["Pip", "Pax", "Posy"],
-  q: ["Quinn", "Quill", "Qi"],
-  r: ["Remy", "Rue", "Ro"],
-  s: ["Sage", "Soren", "Sol"],
-  t: ["Tess", "Thea", "Toma"],
-  u: ["Uma", "Uri", "Udo"],
-  v: ["Vera", "Vik", "Vale"],
-  w: ["Wren", "Wes", "Willa"],
-  x: ["Xan", "Xia", "Xola"],
-  y: ["Yuki", "Yael", "Yann"],
-  z: ["Zia", "Zed", "Zoe"],
+  a: ["Ada", "Arlo", "Anya", "Amos", "Aziz", "Alba", "Ansel", "Ari"],
+  b: ["Bo", "Bram", "Bea", "Bodhi", "Basil", "Bex", "Boaz", "Bree"],
+  c: ["Charlie", "Cass", "Cleo", "Cyrus", "Coral", "Caleb", "Cato", "Ciri"],
+  d: ["Dara", "Dov", "Della", "Dex", "Duna", "Dmitri", "Dot", "Devi"],
+  e: ["Esme", "Ewan", "Elu", "Ezra", "Effie", "Enzo", "Eira", "Emrys"],
+  f: ["Fen", "Faye", "Flor", "Felix", "Fiora", "Fitz", "Freya", "Fox"],
+  g: ["Gina", "Gus", "Gale", "Greta", "Gideon", "Goro", "Gwen", "Gil"],
+  h: ["Hana", "Hugo", "Hale", "Hester", "Hiro", "Hopper", "Hedy", "Halcyon"],
+  i: ["Ines", "Ivo", "Isla", "Idris", "Ilse", "Iggy", "Ione", "Ilya"],
+  j: ["Juno", "Jai", "Jess", "Jonah", "Jade", "Joss", "Juniper", "Jules"],
+  k: ["Kit", "Kai", "Kira", "Knox", "Kesh", "Kova", "Kaya", "Kepler"],
+  l: ["Lore", "Luca", "Liv", "Lyra", "Linus", "Lark", "Leif", "Lumen"],
+  m: ["Mira", "Milo", "Mae", "Marlow", "Mika", "Moss", "Maren", "Mordecai"],
+  n: ["Noor", "Nils", "Nell", "Nova", "Nyx", "Nero", "Nadia", "Niko"],
+  o: ["Orin", "Ola", "Odie", "Otis", "Oona", "Osric", "Opal", "Oren"],
+  p: ["Pip", "Pax", "Posy", "Perrin", "Piper", "Prue", "Pascal", "Poe"],
+  q: ["Quinn", "Quill", "Qi", "Quest", "Quenna", "Quade", "Qadir", "Quincy"],
+  r: ["Remy", "Rue", "Ro", "Rowan", "Rex", "Reva", "Rafi", "Ridley"],
+  s: ["Sage", "Soren", "Sol", "Sable", "Sunny", "Sasha", "Sig", "Selah"],
+  t: ["Tess", "Thea", "Toma", "Tobin", "Tully", "Tarek", "Tamsin", "Tycho"],
+  u: ["Uma", "Uri", "Udo", "Ulla", "Umber", "Unwin", "Ursa", "Usha"],
+  v: ["Vera", "Vik", "Vale", "Vesper", "Vida", "Volt", "Verity", "Viggo"],
+  w: ["Wren", "Wes", "Willa", "Wilder", "Wynn", "Wade", "Wanda", "Wolfe"],
+  x: ["Xan", "Xia", "Xola", "Xeno", "Ximena", "Xerxes", "Xanthe", "Xu"],
+  y: ["Yuki", "Yael", "Yann", "Yara", "Yves", "Yusuf", "Yorick", "Yumi"],
+  z: ["Zia", "Zed", "Zoe", "Zane", "Zora", "Zeph", "Zuri", "Zamir"],
 };
 
 /**
@@ -162,6 +162,56 @@ const INITIAL_NAMES: Readonly<Record<string, readonly string[]>> = {
  * same key and derives the same letter, which is what keeps allocation
  * deterministic on both surfaces.
  */
+/**
+ * A stable 32-bit hash of a string — FNV-1a, in six lines and no dependency.
+ *
+ * Used to pick WHERE in a roster allocation starts, so that two agents who
+ * cannot see each other do not both reach for the same first name. It has to
+ * be a hash rather than `Math.random()` for two separate reasons:
+ *
+ * - **Same claimant, same answer.** A session that re-claims in a scope where
+ *   its name is free gets the name it had, rather than a new one each time.
+ * - **The suite stays honest.** A test that asserts a name is asserting
+ *   something real; with a random pick it would be asserting the weather.
+ *
+ * Randomness would in fact have been *safe* here, which is worth writing down
+ * because it is not obvious: an allocated name is stamped into the claim's
+ * envelope and replay re-binds it from that stamp (`file-store.ts` calls
+ * `bindName(registry, { actor: entry.envelope.actor })`, never `applyClaim`).
+ * Allocation runs once, on the writer. Determinism is a convenience here, not
+ * a correctness requirement — the opposite of the reducer, where it is the
+ * whole game.
+ */
+function hashOf(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * A roster walked from a hashed starting point, wrapping — so the first free
+ * name is *a* name rather than always the same one.
+ *
+ * In-order allocation meant the first Claude on every canvas anywhere was
+ * Charlie, every demo and every screenshot. Worse where it counts: two scopes
+ * that cannot see each other both reach for the head of the list, which is
+ * precisely the collision `ClaimContext.preferred` exists to paper over.
+ * Starting at a different index per claimant makes independent collisions
+ * unlikely rather than certain, and costs nothing — a scope that CAN see a
+ * name still skips it, exactly as before.
+ */
+function firstFree(roster: readonly string[], taken: Set<string>, seed: string): string | null {
+  const start = roster.length > 0 ? hashOf(seed) % roster.length : 0;
+  for (let i = 0; i < roster.length; i++) {
+    const name = roster[(start + i) % roster.length]!;
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+  return null;
+}
+
 export function harnessOf(sessionKey: string | undefined): string | null {
   const harness = sessionKey?.split(":")[0]?.trim();
   return harness ? harness : null;
@@ -348,13 +398,13 @@ export function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimResult {
 
   if (op.fresh) {
     // A second Kenny on purpose: no collision checks, a brand-new actor.
-    return settle({ id: mint(), name: op.name ?? allocateName(ctx, harnessOf(op.sessionKey)) });
+    return settle({ id: mint(), name: op.name ?? allocateName(ctx, op.sessionKey) });
   }
 
   if (!op.name) {
     // "Who am I?" / "hand me a name": resume this key, or allocate.
     if (mine) return settle({ id: mine.actorId, name: nameOf(ctx, mine.actorId) });
-    return settle({ id: mint(), name: allocateName(ctx, harnessOf(op.sessionKey)) });
+    return settle({ id: mint(), name: allocateName(ctx, op.sessionKey) });
   }
 
   if (mine) {
@@ -733,7 +783,7 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
  * would allocate here. Building a second, similar allocator for that route is
  * exactly the shape of the bug it exists to fix.
  */
-export function allocateName(ctx: ClaimContext, harness?: string | null): string {
+export function allocateName(ctx: ClaimContext, sessionKey?: string | null): string {
   const taken = new Set<string>();
   for (const holder of ctx.held) taken.add(holder.actor.name.trim().toLowerCase());
   for (const row of ctx.scoped) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
@@ -749,15 +799,23 @@ export function allocateName(ctx: ClaimContext, harness?: string | null): string
   const preferred = ctx.preferred?.trim();
   if (preferred && !taken.has(preferred.toLowerCase())) return preferred;
   // A name starting the way the harness does, when the harness is one we can
-  // take a letter from. Skipping what is taken is what makes a second Claude
-  // "Cass" rather than "Charlie 2".
-  const initial = harness?.trim().toLowerCase()[0];
-  for (const name of (initial && INITIAL_NAMES[initial]) || []) {
-    if (!taken.has(name.toLowerCase())) return name;
-  }
-  for (let round = 1; ; round++) {
+  // take a letter from — eight per letter, entered at a point derived from
+  // this claimant's session key. Skipping what is taken is what makes a second
+  // Claude another C name rather than "Charlie 2".
+  const seed = sessionKey?.trim() || "";
+  const initial = harnessOf(sessionKey ?? undefined)?.toLowerCase()[0];
+  const byLetter = (initial && INITIAL_NAMES[initial]) || [];
+  const lettered = firstFree(byLetter, taken, seed);
+  if (lettered) return lettered;
+  // The isocan roster: where an unknown harness starts, and where a letter
+  // that is used up lands. Walked the same way.
+  const roster = firstFree(ISOCAN_NAMES, taken, seed);
+  if (roster) return roster;
+  // Numbered rounds. Allocation can always answer — that is its one promise —
+  // and this is the floor it stands on when 216 names are somehow all worn.
+  for (let round = 2; ; round++) {
     for (const base of ISOCAN_NAMES) {
-      const name = round === 1 ? base : `${base} ${round}`;
+      const name = `${base} ${round}`;
       if (!taken.has(name.toLowerCase())) return name;
     }
   }

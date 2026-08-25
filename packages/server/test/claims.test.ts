@@ -74,10 +74,13 @@ describe("atomic allocation", () => {
     expect(b.status).toBe(200);
     expect(a.actor!.name).not.toBe(b.actor!.name);
     // Both claim under a C harness (`claude-code`, `codex`), so both draw from
-    // the C roster — which is exactly the interesting case for atomicity: two
-    // claims reaching for the SAME first name at the same instant.
-    expect(["Charlie", "Cass"]).toContain(a.actor!.name);
-    expect(["Charlie", "Cass"]).toContain(b.actor!.name);
+    // the C roster — the interesting case for atomicity. Asserted as the
+    // PROPERTY rather than as two literals: which C names they get depends on
+    // where each session key hashes into the roster, and pinning the pair
+    // would be testing the hash rather than the atomicity (lessons.md #4).
+    for (const claimed of [a, b]) {
+      expect(claimed.actor!.name[0], `${claimed.actor!.name} is not a C name`).toBe("C");
+    }
   });
 });
 

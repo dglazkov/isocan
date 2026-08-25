@@ -86,12 +86,18 @@ Pick like this, once, before you appear:
 2. `isocan identity --session` — ask, receive. The daemon knows every name
    every canvas answers to and hands you a free one; no roster to read, no
    race to lose. **It starts with the same letter your harness does** where it
-   can — Claude Code is handed Charlie, then Cass, then Cleo; Gemini is handed
-   Gina — so a person looking at three agents can tell which is which. It is
-   the initial and never the vendor's own name, for the reason above; a
+   can — a Claude Code session gets a C name, a Gemini one gets a G — so a
+   person looking at three agents can tell which is which. It is the initial
+   and never the vendor's own name, for the reason above.
+
+   Eight names per letter, and allocation enters that roster at a point
+   derived from your session key rather than at the top, so two agents who
+   cannot see each other do not both reach for the same one. Which C name you
+   get is therefore not predictable and not worth predicting; that it is a C
+   name, and that it is yours for the whole collaboration, is the promise. A
    harness with no letter of ours is handed an isocan name (Isaac, Kenny,
-   Nico… — names hiding in the letters of "isocan"), which is also where the
-   letter rosters fall through to when they run out. Want a specific name? `--name "<name>"` — if somebody already
+   Nico… — names hiding in the letters of "isocan"), which is also where a
+   letter falls through to when its eight are worn. Want a specific name? `--name "<name>"` — if somebody already
    answers to it the command REFUSES and names the holder; take what
    allocation offers instead of forcing it with `--new`. Then keep the name
    for the whole collaboration — the human will call you back by it, and

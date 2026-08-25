@@ -529,10 +529,24 @@ describe("a free name, for a badge that has been nowhere", () => {
   const freeName = async (badge: TestBadge): Promise<string> =>
     ((await (await get(badge, FREE_NAME_ROUTE)).json()) as FreeNameResponse).name;
 
-  /** The first roster name, on a canvas — `heldNames` reads rosters, so a
-   * claim alone would not put it in anybody's way. */
-  async function canvasHeldByIsaac(): Promise<void> {
-    const isaac = { id: "usr_isaac", name: ISOCAN_NAMES[0] };
+  /**
+   * The name a fresh badge WOULD be handed, worn by somebody on a canvas —
+   * `heldNames` reads rosters, so a claim alone would not put it in anybody's
+   * way.
+   *
+   * Asked for rather than assumed. Allocation no longer walks the roster from
+   * index 0 (it enters at a hashed point, so two scopes that cannot see each
+   * other do not both reach for the same first name), which makes
+   * `ISOCAN_NAMES[0]` no longer the answer to "what would this badge get".
+   * These cases are about SCOPE — whether a room's roster is in reach — so
+   * they have to park somebody on the name that is actually in the way, or
+   * they prove nothing.
+   */
+  async function wouldGet(): Promise<string> {
+    return freeName(await stranger());
+  }
+  async function canvasHeldBy(name: string): Promise<void> {
+    const isaac = { id: "usr_isaac", name };
     await owner.speakAs(isaac, "test:isaac");
     const made = await op(owner, {
       canvasId: null,
@@ -543,14 +557,17 @@ describe("a free name, for a badge that has been nowhere", () => {
   }
 
   it("skips a name taken in a canvas the asker has not entered but could", async () => {
-    await canvasHeldByIsaac();
+    const wanted = await wouldGet();
+    await canvasHeldBy(wanted);
     const fresh = await stranger();
-    expect(await freeName(fresh)).not.toBe(ISOCAN_NAMES[0]);
-    expect(await freeName(fresh)).toBe(ISOCAN_NAMES[1]);
+    // It reached into a room this badge has never entered, found the name
+    // worn, and moved on. That is the whole claim; which name it moved on TO
+    // is the hash's business, not this test's.
+    expect(await freeName(fresh)).not.toBe(wanted);
   });
 
   it("does not admit the asker to anything by answering", async () => {
-    await canvasHeldByIsaac();
+    await canvasHeldBy(await wouldGet());
     const fresh = await stranger();
     await freeName(fresh);
     // Same line the canvases listing holds: what a badge COULD get into is a
@@ -561,17 +578,19 @@ describe("a free name, for a badge that has been nowhere", () => {
   });
 
   it("does not reach into a canvas the asker could not enter", async () => {
-    await canvasHeldByIsaac();
+    const wanted = await wouldGet();
+    await canvasHeldBy(wanted);
     await revokeLink(owner);
     const fresh = await stranger();
     // With the link off the room is out of reach, so its roster is none of
-    // this badge's business and the first roster name is free again. The
-    // widening is the door's test, not "the whole home".
-    expect(await freeName(fresh)).toBe(ISOCAN_NAMES[0]);
+    // this badge's business and that name is free AGAIN — the same name the
+    // case above proved it would skip. The widening is the door's test, not
+    // "the whole home".
+    expect(await freeName(fresh)).toBe(wanted);
   });
 
   it("still answers an ADMITTED badge from what it is admitted to", async () => {
-    await canvasHeldByIsaac();
+    await canvasHeldBy(await wouldGet());
     await revokeLink(owner);
     // The link is off, so no grant would admit anybody now — but the badge
     // that MADE the canvas has an admission the sweep never walks, and that
@@ -582,8 +601,12 @@ describe("a free name, for a badge that has been nowhere", () => {
     // and that is phase 9 showing through: a stranger who had merely been in
     // is SWEPT when the link goes off, so there is no longer any such thing as
     // "admitted by a grant that is gone".
-    expect(await freeName(owner)).toBe(ISOCAN_NAMES[1]);
-    expect(await freeName(await stranger())).toBe(ISOCAN_NAMES[0]);
+    // Stated as the DIFFERENCE between the two, which is the whole point: the
+    // owner can see the room's roster and moves off the worn name; a stranger
+    // cannot reach the room, so the same name is free again for it.
+    const wanted = await wouldGet();
+    expect(await freeName(owner)).not.toBe(wanted);
+    expect(await freeName(await stranger())).toBe(wanted);
   });
 });
 
