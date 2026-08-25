@@ -31,6 +31,23 @@ process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
 delete process.env.ISOCAN_HOME_URL;
 
 /**
+ * And no test daemon is pointed at the DEFAULT home either (phase 14).
+ * `isocan setup` on a machine that has never held a canvas now writes
+ * `https://isocan.io` as the birth default — which is right for a stranger and
+ * catastrophic in a suite: a test would reach out to the real production home
+ * over the real internet, and a green run would depend on somebody else's
+ * uptime. Empty means "this build points fresh machines nowhere". A test that
+ * wants to prove the flip sets it to a daemon it started itself, which is
+ * exactly what `packages/cli/test/setup-npx.test.ts` does.
+ *
+ * Belt as well as braces: the CLI also suppresses the shipped default when it
+ * is running from a checkout, and the suite always is. This line is what makes
+ * the suite safe even for a test that deliberately runs a copy from somewhere
+ * else — which that file also does.
+ */
+process.env.ISOCAN_DEFAULT_HOME = "";
+
+/**
  * And this worker dies when vitest does. Test files run in forked children, and
  * a fork whose parent was killed is simply reparented to init — no signal, no
  * closed channel to notice, nothing to say the run it belongs to is over. A

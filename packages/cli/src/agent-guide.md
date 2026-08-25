@@ -20,7 +20,11 @@ isocan canvas list            # the directory's canvas; --all for the home
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
 this guide's skill where agents look, the CLI on PATH, and the daemon behind
-the app. A repo you do not have yet takes `isocan clone <repo>` — it clones,
+the app. On a machine that has never held a canvas it also writes **isocan.io**
+down as the birth default, so the first canvas somebody makes is at the hosted
+home rather than trapped on one laptop — it says so in its report, and `isocan
+home --clear` undoes it. A machine that already holds canvases keeps birthing
+them where it always did. A repo you do not have yet takes `isocan clone <repo>` — it clones,
 readies the directory the same way, and reports the canvas the repo's
 committed `.isocan/project.json` names, so a clone lands on THE canvas rather
 than a copy of it. It installs nothing from the repo and runs nothing: `npm

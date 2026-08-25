@@ -198,6 +198,57 @@ async function openBacking(home: string): Promise<{ store: Store; desk: Desk }> 
   });
 }
 
+/**
+ * **Fastify's logger, which this daemon did not have** — found in phase 14
+ * while trying to settle a question phase 13.7 left open.
+ *
+ * `Fastify({})` with no `logger` key does not give you a quiet logger, it
+ * gives you **`abstract-logging`**: `app.log.warn` is literally
+ * `function noop () {}`. So every `app.log` call in `http.ts` had been writing
+ * to nothing, on every home, since the day it was typed — including the one
+ * phase 13.7 added on purpose as the instrument for its own worst failure
+ * mode. That file says a home whose refusals climb while its distinct-key
+ * count sits at 1 is a home keyed on its own load balancer, and that "**that
+ * log line is how somebody at 3am sees it instead of concluding the limit
+ * works**". There was no log line. Measured on the dev home: 21 mints, a
+ * legible 429 at the door, and Cloud Logging holding only Google's own
+ * request log — the container's stdout carried nothing at all.
+ *
+ * It is the house failure wearing new clothes: **an instrument can be
+ * cheerful too.** Code that reads exactly like logging, next to a comment
+ * that explains what the logging is for, and no bytes anywhere.
+ *
+ * **`warn` and not `info`**, so this is an instrument rather than a firehose.
+ * Fastify logs a line per request and a line per response at `info`, and a
+ * canvas under an ordinary editing session is hundreds of ops a minute — on a
+ * laptop that is `~/.isocan/daemon.log` growing without bound, and on the
+ * hosted home it is a duplicate of the request log Google already keeps and
+ * bills for. What is wanted is the handful of lines the code writes
+ * DELIBERATELY: refused mints, errors the handler swallowed. Those are all
+ * `warn` and `error`. `ISOCAN_LOG_LEVEL` opens it up for somebody debugging.
+ *
+ * **The severity mapping is not decoration.** Cloud Logging reads a
+ * `severity` field off a JSON line and ignores pino's numeric `level`, so
+ * without this every deliberate warning would arrive labelled INFO — a
+ * refusal that says nothing is wrong, which is the same bug one layer up. The
+ * label is what a filter selects on, and `severity>=WARNING` is how anybody
+ * would go looking.
+ */
+function serverLogging(): { level: string; formatters: { level: (label: string) => object } } {
+  return {
+    level: process.env.ISOCAN_LOG_LEVEL ?? "warn",
+    formatters: {
+      // pino's labels are already Google's names for every level this daemon
+      // uses (warn -> WARNING is the one that differs, and pino calls it
+      // "warn"), so the map is a lookup with an honest fallback rather than a
+      // table nobody maintains.
+      level: (label: string) => ({
+        severity: { warn: "WARNING", error: "ERROR", fatal: "CRITICAL" }[label] ?? label.toUpperCase(),
+      }),
+    },
+  };
+}
+
 export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> {
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
@@ -285,7 +336,11 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
-  const app = Fastify({ bodyLimit: 512 * 1024 * 1024, forceCloseConnections: true });
+  const app = Fastify({
+    bodyLimit: 512 * 1024 * 1024,
+    forceCloseConnections: true,
+    logger: serverLogging(),
+  });
   registerRoutes(app, engine, store, desk, presence, {
     birthHome,
     homes,

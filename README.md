@@ -39,6 +39,13 @@ usually an agent acting for a person who hasn't said their name yet. It is
 idempotent; run it again anywhere. `isocan setup --help` for the knobs
 (`--no-open`, `--no-install`, `--force`).
 
+On a machine that has never held a canvas, setup also writes **isocan.io** down
+as the birth default — where the canvas you make next is born, so your laptop
+and your desktop show the same one. It says so in its report, and `isocan home
+--clear` is the whole of the way back: canvases made here then stay here, and
+nothing already on the machine ever moves either way. A machine that already
+holds canvases is left alone, and so is a git checkout of isocan itself.
+
 Keep the `#release` on the spec. It is the branch you install from: this same
 tree with the web app already built, and without the manifest keys npm's git
 installer reads as "must build this first" — given any of them (`prepare`,

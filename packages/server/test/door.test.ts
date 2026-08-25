@@ -865,6 +865,54 @@ describe("the door is metered", () => {
     expect(refused.json?.badgeId).toBeUndefined();
   });
 
+  /**
+   * **The refusal is WRITTEN DOWN, and that had never been true** (phase 14).
+   *
+   * `meter.ts` puts the whole weight of its own worst failure on one log
+   * line: a home whose refusals climb while its distinct-key count sits at 1
+   * is a home keyed on its own load balancer, both look identical from
+   * outside, and "that log line is how somebody at 3am sees it instead of
+   * concluding the limit works." Phase 14 went to read it on the dev home and
+   * there was nothing there — `Fastify({})` with no `logger` key hands back
+   * `abstract-logging`, whose `warn` is `function noop () {}`, so every
+   * `app.log` call in this package had been writing to nowhere since it was
+   * typed.
+   *
+   * The instrument is asserted here rather than the log FORMAT: what matters
+   * is that a refusal reaches a real logger carrying the two numbers a person
+   * would look at. `logRefusal` is the only caller that matters and it is
+   * driven through the door, not called directly, because the bug was never in
+   * `logRefusal` — it was in what `app.log` turned out to be.
+   */
+  it("writes the refusal down, with the chain and the key count", async () => {
+    const written: Array<Record<string, unknown>> = [];
+    const log = daemon.app.log as unknown as { warn: (...args: unknown[]) => void };
+    const real = log.warn.bind(log);
+    // A no-op logger cannot be spied into saying anything, so the spy proves
+    // nothing on its own — this is what does: the real method is not `noop`.
+    expect(log.warn.name).not.toBe("noop");
+    log.warn = (...args: unknown[]) => {
+      if (typeof args[0] === "object" && args[0] !== null) {
+        written.push({ ...(args[0] as object), msg: args[1] } as Record<string, unknown>);
+      }
+      real(...args);
+    };
+    try {
+      await flood(MINT_BURST + 1);
+    } finally {
+      log.warn = real;
+    }
+
+    const refusal = written.find((line) => String(line.msg).includes("metered"));
+    expect(refusal).toBeDefined();
+    // The key it was charged to, the chain that key was read out of, and the
+    // number that distinguishes a working meter from a collapsed one.
+    expect(refusal!.key).toBeTypeOf("string");
+    expect(refusal).toHaveProperty("forwardedFor");
+    expect(refusal!.distinctKeys).toBe(1);
+    expect(Number(refusal!.retryAfter)).toBeGreaterThan(0);
+  });
+
   it("counts MINTS, not knocks — a caller holding a badge is never metered", async () => {
     const badge = await mintTestBadge(base); // one token spent
     // The door answers an already-badged caller with its own id and no new

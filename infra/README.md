@@ -279,6 +279,96 @@ choosing **GitHub (Cloud Build GitHub App)** and region `us-west1`. Then:
 
 ---
 
+## And then: prod  (phase 14)
+
+Everything above provisions **`isocan-io-dev`**. `isocan-io-prod` is the same
+scripts with a handful of variables changed, and those variables live in
+[`prod.env`](prod.env) so they cannot be typed differently the second time:
+
+```bash
+source infra/prod.env       # source it; do not run it
+```
+
+That sets the project to `isocan-io-prod`, the domain to `isocan.io`,
+min-instances to 1, the ingress to `internal-and-cloud-load-balancing`, and the
+deploy trigger to fire on a `prod` **tag** rather than the `green` branch. Each
+one has its reason written beside it in the file. Everything else — the region,
+the service name, the service accounts, the LB resource names — is deliberately
+identical, because they are project-scoped and keeping them the same is what
+makes every command on this page work in either home.
+
+### The order, and its one trap
+
+```bash
+source infra/prod.env
+ISOCAN_INGRESS=all ./infra/provision.sh a     # the home — FIRST RUN ONLY
+./infra/provision.sh b                        # the load balancer and the cert
+#   … add the isocan.io A record, wait for the certificate …
+./infra/70-cloud-run.sh                       # now the ingress locks
+./infra/provision.sh c                        # backups, uptime
+./infra/provision.sh d                        # the prod tag trigger
+./infra/provision.sh e                        # the attesters
+```
+
+**Stage A must be run once with the ingress open**, and that is the only thing
+about prod that is not just "the same scripts with other variables". A locked
+ingress means the `*.run.app` URL stops answering entirely and the load
+balancer is the only door — so on a brand-new home, where there is no load
+balancer yet, there is no door at all, and `70-cloud-run.sh`'s own final check
+would be asking an address that cannot answer. Deploy open, build the front
+door, then re-run `70-cloud-run.sh` to close it. That last line is an ordinary
+idempotent re-run, not a repair, and from then on the script checks
+`https://isocan.io/api/healthz` instead of the run.app URL.
+
+### What prod actually costs
+
+**~$66/month standing**, whether or not anybody visits: ~$48 for the always-on
+instance and ~$18 for its load balancer. The instance is the difference from
+dev, and it is deliberate — scale-to-zero would hang up on every parked agent,
+and phase 13.7's GC timer wants a process that lives long enough to tick.
+Together with dev, both homes land under $100/month, which is what the
+architecture's cost section promises.
+
+### Promotion is a gesture
+
+Dev deploys whatever CI marks `green`. Prod deploys the commit somebody tagged:
+
+```bash
+git tag -f prod green && git push -f origin prod
+```
+
+`green`, not `main` — only a commit whose suite passed on CI may be promoted.
+The tag MOVES rather than accumulating, so what is running in prod is always
+`git rev-parse prod`, and a rollback is the same two commands pointed at an
+older sha. `95-build-trigger.sh` carries the argument for why this is a tag and
+not a fourth branch.
+
+### The ingress flag, and what it closes
+
+Phase 13.7 shipped a rate limit on the door and left one hole open on purpose:
+with `--ingress=all` the `*.run.app` URL is reachable **around** the load
+balancer, and on that path the forwarded chain is short enough that the entry
+the meter keys on is caller-supplied. A flooder who finds that address mints
+badges without limit by varying an `X-Forwarded-For` it invented.
+`internal-and-cloud-load-balancing` closes it, and prod is where strangers
+arrive, so prod is where it is closed.
+
+**Dev stays open on purpose.** Its run.app URL is what several proofs from
+phase 5 onward were measured against, and a home with no strangers on it has
+nothing to protect from the bypass.
+
+`ISOCAN_PROXY_HOPS` is the companion knob and it is **not** set: it says how
+many trailing `X-Forwarded-For` entries this home's own infrastructure
+appended, and the code's default of 1 is Google's documented behaviour for an
+external ALB. Move it only after measuring the real chain against the real
+home. The signature of getting it wrong is unmistakable if you know to look
+for it — **refusals climbing while the meter's distinct-key count sits at 1 is
+the whole internet in one bucket**, and every refusal is logged with both
+numbers for exactly that reason. `config.sh` names it, and `70-cloud-run.sh`
+passes it through only when it is set.
+
+---
+
 ## What needs a human, all in one place
 
 | # | thing | why a script cannot |
@@ -423,7 +513,9 @@ Named so nobody assumes it is there.
   exist. Registration launch tokens are Phase 9/12.
 - **Firebase Auth.** Attesters are Phase 9. Nothing here enables it.
 - **Secrets.** Secret Manager is enabled; nothing is stored in it.
-- **`isocan-io-prod`.** Phase 14. Same scripts, different variables.
+- ~~**`isocan-io-prod`.** Phase 14. Same scripts, different variables.~~
+  **Provisioned 2026-08-25** — see "And then: prod" above. The variables are
+  in `prod.env`; nothing in this list moved but this line.
 - **A lifecycle rule that sweeps the object store's scratch objects.**
   `GcsObjects.append` composes `<key>.part-<timestamp>-<random>` beside the
   archive and deletes it; a crash between the compose and the delete leaves

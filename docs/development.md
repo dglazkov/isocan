@@ -50,7 +50,7 @@ effect.
 | Canvas | The unit of work. Each canvas has exactly one home. |
 | Home | The daemon or server that owns a canvas and orders its writes. |
 | Marker | `.isocan/project.json` in a working directory. Records the canvas ID and, optionally, its home address. |
-| Birth default | The home where *new* canvases created on this machine are born. Set with `isocan home <url>`. |
+| Birth default | The home where *new* canvases created on this machine are born. Set with `isocan home <url>`. On a machine that has never held a canvas, an INSTALLED `isocan setup` now writes `https://isocan.io` here for you (phase 14) — **a checkout does not**, which is why the steps below have you set it by hand. |
 | Replica | A daemon that holds a copy of a canvas whose home is elsewhere. |
 
 A single daemon can be the home of some canvases and a replica for others at

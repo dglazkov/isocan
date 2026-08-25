@@ -44,10 +44,10 @@ in the same change.
 | blobs, snapshots | **Cloud Storage** — one bucket per environment |
 | desk ledgers | **Firestore** — badges, grants, attestations, registrations, audit; registration launch tokens wrapped by **Cloud KMS** |
 | attesters | **Firebase Auth** — magic-link email (the floor), Google, GitHub |
-| front door | global external HTTPS load balancer + Cloud CDN + managed cert → serverless NEG → the Cloud Run service |
+| front door | global external HTTPS load balancer + Cloud CDN + managed cert → serverless NEG → the Cloud Run service. **On prod the LB is the only way in** (`--ingress=internal-and-cloud-load-balancing`): the `*.run.app` URL reaches the service around the balancer, and on that path the door's rate limit keys on a caller-supplied forwarded chain. Dev stays open, having no strangers to protect from |
 | secrets | Secret Manager (GitHub app credentials and kin) |
-| deploy | **Cloud Build triggers** on the GitHub repo — push to `main` builds and deploys dev; prod promotes only by an explicit gesture (a `prod` tag, moved deliberately) — NOT the `release` branch, which CI regenerates from every main commit: it is the CLI distribution branch, not a gate; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
-| environments | two GCP projects: `isocan-dev` at dev.isocan.io, `isocan-prod` at isocan.io |
+| deploy | **Cloud Build triggers** on the GitHub repo — push to `green` (main's own commit, moved forward by CI once the suite passes) builds and deploys dev; prod promotes only by an explicit gesture (`git tag -f prod green && git push -f origin prod`) — NOT the `release` branch, which CI regenerates from every main commit: it is the CLI distribution branch, not a gate; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
+| environments | two GCP projects: `isocan-io-dev` at dev.isocan.io, `isocan-io-prod` at isocan.io (both live since phase 14; the ids carry the domain, because `isocan-dev` is ambiguous about whose isocan it is) |
 | observability | Cloud Logging + Error Reporting, uptime check on `/api/healthz` — see the note below |
 | infra as code | `infra/` — small idempotent gcloud scripts; Terraform waits for a second operator |
 
