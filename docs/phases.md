@@ -76,38 +76,47 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 13.7 is CLOSED — the home keeps its own house, and says
-out loud what it can see.** The obligations `innkeeper.md` named and no phase
-owned are built and live on dev: GC sweeps every canvas the store holds on a
-timer inside the process (plus `POST /api/gc` for anyone who wants it now,
-scoped to what the calling badge is admitted to), the door is metered per
-client, and `/terms` serves the plain statement — the operator can read your
-canvas, run your own home if that is unacceptable — under a named operator,
-with the sovereignty caveat stated honestly. The sweep was watched doing it
-unasked on the dev home, which is the one clause that needed a deploy.
+**Where we are: Phase 14 is CLOSED — isocan.io is live, and the launch train has
+arrived.** `isocan-io-prod` is a real home at the apex of the domain: its own
+project and Firestore, one always-on instance, a load balancer that is now the
+ONLY way in, nightly exports, an uptime check that pages, magic-link sign-in,
+and a deploy that happens only when somebody moves the `prod` tag. Scene 0 was
+played from scratch on the real address with the released CLI, and `isocan
+setup` on a machine that has never held a canvas now writes `https://isocan.io`
+down as the birth default — with a receipt, and `isocan home --clear` as the
+whole of the way back.
 
-**Three things a clean session must know before it types anything.** The wire
-keys renamed, so **a pre-rename CLI or replica cannot WRITE to a current home**
-— it gets 426 and the upgrade command, reads still work, and Dion and Paul both
-need `npx github:dglazkov/isocan#release setup`. And phase 10.5 is still
-PART-DONE for the same reason it always was: Paul and Dion have not walked
-`development.md`. Phase 13.5's own unproven half — that Scene 0's three steps,
-*run*, produce a canvas — is that same walk, counted once, over there. Third,
-and new: **the door's rate limit has a known bypass that is one flag away**,
-and the flag is a provisioning decision phase 14 should make on purpose rather
-than a fix somebody slips in — see 13.7's findings.
+**Three things a clean session should know about what launched.** The default is
+consulted in `setup`, NOT in `resolveHomeUrl`, and the difference is the whole
+care: a checkout is never flipped, nor is a machine that already holds canvases.
+Prod's certificate is called `isocan-cert-2` and `prod.env` says why. And the
+day's real find was underneath 13.7 rather than in 14: **every `app.log` call in
+the server had been writing to nowhere** — `Fastify({})` with no `logger` key
+hands back `abstract-logging` — so the instrument 13.7 built for its own worst
+failure mode was silent from the day it was typed.
 
-The launch-first order set 2026-08-24 by Dimitri runs 10.3 → 10.5 → 13.5 → 13.7
-→ 14 — the launch train — and then 11, 12, 12.5, 12.7, 13 as features added to a
-live isocan.io. The cut line is the journey's own built/unbuilt boundary: Scenes
-0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt remainder, so
-launching first ships exactly the journey that exists. **Phase 14, isocan.io,
-is next** — the last car of the launch train, and the first phase that provisions
-since 13.5. It inherits one errand from 13.7 rather than being clean:
-`--ingress=all` is a flag decision with its own blast radius, and it is the
-door meter's real bypass. The two-surfaces problem phase 10 surfaced still has its address —
-the airplane arc, phases 12.5 and 12.7. This line moves as phases close; a clean
-session starts by believing it.
+**What is next is a choice, not a queue.** Everything below is a feature added to
+a live isocan.io, and its order returns to being a hypothesis — real users get a
+vote on whether the spark (11, 12) or the airplane (12.5, 12.7) matters more.
+Two unpaid debts sit outside that: phase 10.5 is still PART-DONE because Paul and
+Dion have not walked `development.md`, and prod's sign-in mail has no sender
+domain (phase 14's findings).
+
+**Two things that were true before launch and still are.** The wire keys renamed
+in 13.5, so **a pre-rename CLI or replica cannot WRITE to a current home** — it
+gets 426 and the upgrade command, reads still work, and Dion and Paul both need
+`npx github:dglazkov/isocan#release setup`. And phase 13.5's own unproven half —
+that Scene 0's three steps, *run*, produce a canvas — **is now proved**, by
+phase 14 against isocan.io; what is still unwalked is `development.md`, which is
+10.5's and belongs to Paul and Dion rather than to a session.
+
+The launch-first order set 2026-08-24 by Dimitri ran 10.3 → 10.5 → 13.5 → 13.7
+→ 14, and has arrived. The cut line was the journey's own built/unbuilt
+boundary: Scenes 0–5 shipped and proven, Scenes 6–7 the entire unbuilt
+remainder, so launching first shipped exactly the journey that exists. The
+two-surfaces problem phase 10 surfaced still has its address — the airplane arc,
+phases 12.5 and 12.7. This line moves as phases close; a clean session starts by
+believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -223,7 +232,16 @@ Bracketed numbers are the phases that taught it.
   SPA fallback answers everything). Its sibling landed the same day: a rate limit keyed on the
   socket address puts the whole internet in one bucket behind a load balancer
   and refuses every visitor at 429, looking precisely like a rate limit that
-  works.
+  works. **Phase 14 adds the tenth, and it is the sharpest form yet: the
+  INSTRUMENT was cheerful.** `Fastify({})` with no `logger` key hands back
+  `abstract-logging`, whose `warn` is `function noop () {}` — so every
+  deliberate log line the server ever wrote went nowhere, including the one
+  13.7 added expressly so this failure would be visible at 3am. Code that reads
+  exactly like logging, under a comment explaining what the logging is for,
+  emitting nothing. The pattern to carry forward: **when a mechanism's only
+  evidence is an instrument, the instrument needs its own proof** — and a spy
+  installed on a no-op proves nothing, so the guard asserts the method is not
+  named `noop`.
 - **A comment that reasons about a browser is a hypothesis** [2, 8, 9, 10].
   Wrong twice by not measuring: the blob route held open four phases on a
   cookie argument about a different request, and a service worker argued into
@@ -1241,15 +1259,25 @@ origin, caveat included.
   entry the meter keys on is caller-supplied — so a flooder who finds that
   address gets unlimited buckets. One flag in `infra/70-cloud-run.sh` closes it;
   deliberately not changed here, because it is provisioning with its own blast
-  radius and belongs to phase 14's gesture. — Open
+  radius and belongs to phase 14's gesture. — **CLOSED 2026-08-25 in phase 14**,
+  and the hypothesis was MEASURED against prod's run.app URL before it was
+  closed: with the honest bucket already refusing at 429, eight invented
+  `X-Forwarded-For` values each minted freely, and one invented value repeated
+  metered at exactly 21. Prod runs `internal-and-cloud-load-balancing`; dev
+  stays open.
 - 2026-08-24: The meter's model of the forwarded chain is READ FROM GOOGLE'S
   DOCS and not measured against dev. `ISOCAN_PROXY_HOPS` moves it without new
   code; one request against dev with the refusal log open settles it. Refusals
   climbing while distinct keys sit at 1 is the whole-internet-in-one-bucket
-  signature. — Open
+  signature. — **CLOSED 2026-08-25 in phase 14** — but note HOW: "with the
+  refusal log open" was not a thing anybody could do, because there was no
+  refusal log (see 14's first finding). Once there was one, the chain measured
+  as documented and `ISOCAN_PROXY_HOPS` stays unset.
 - 2026-08-24: `ISOCAN_PROXY_HOPS` is named only inside `meter.ts`;
   `infra/70-cloud-run.sh` and `infra/README.md` are where an operator would
-  look. — Open
+  look. — **CLOSED 2026-08-25 in phase 14**: `config.sh` declares it,
+  `70-cloud-run.sh` passes it through only when set, and `infra/README.md`
+  names the collapse signature beside it.
 - 2026-08-24: The front door's no-third-party guard read only RENDERED MARKUP,
   so a webfont arriving the way webfonts actually arrive — a `url()` in the
   stylesheet — left all 44 cases green. The guard now reads the stylesheet.
@@ -1262,7 +1290,33 @@ origin, caveat included.
 
 ## Phase 14 — isocan.io ⚑ provision
 
-**Status: NOT STARTED.**
+**Status: CLOSED** 2026-08-25 (`00a945e` … the commits below). **Scene 0 played
+from scratch on the real address**, and every step of it was measured by the
+conductor rather than reported. A directory with an empty `~/.isocan` beside
+it; `npx github:dglazkov/isocan#release setup` — the copy a stranger's npx
+fetches, not this checkout — wrote `{"home": "https://isocan.io"}` and came
+back *"replica of https://isocan.io — ops to CLIs, pages at the home"*; a
+canvas made on that machine was born AT the home, which was confirmed from the
+outside by reading it off isocan.io with a badge minted at the door; the front
+page served the three steps over the real certificate; the canvas opened at
+`isocan.io/p/…`, and the browser naming itself **Priya** was refused by name
+because the CLI on the replica had already claimed that actor at the home —
+one desk, two surfaces, proved by a collision nobody staged. Then an item
+written from the terminal on the replica appeared live in that tab.
+
+Everything is provisioned: `isocan-io-prod` with its own Firestore (us-west1,
+PITR), buckets, service accounts and registry; Cloud Run at `min-instances=1`;
+the load balancer at the apex with the A record in the zone; nightly Firestore
+export, run once to prove it; an uptime check with an alert; Identity Platform
+with magic-link, `isocan.io` authorized and its attester wired in. **The
+promotion gesture was played end to end** — the `prod` tag fired the trigger,
+the build deployed, and the service came back with ingress and every
+environment variable intact, because `cloudbuild.yaml` moves only the image.
+The ingress bypass was DEMONSTRATED against prod's run.app URL before the flag
+closed it, then re-checked afterwards: that URL now answers 404 to everything
+while the domain answers 200. Two debts remain and are findings below, neither
+load-bearing for the scene: prod's sign-in mail has no sender-domain alignment,
+and the badges minted while demonstrating the bypass are still desk rows.
 
 **Work:** Stand up `isocan-prod`; the domain; the `release`-branch
 promotion; flipping the default home address from unset to isocan.io
@@ -1294,7 +1348,61 @@ steps, a canvas born at its hosted home.
 
 **Proof:** The scene, played from scratch, on the real address.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- 2026-08-25: **The instrument phase 13.7 built was writing to nowhere, and had
+  been since it was typed.** `Fastify({})` with no `logger` key does not give a
+  quiet logger, it gives `abstract-logging`, whose `warn` is
+  `function noop () {}` — so every `app.log` call in the server was silent,
+  including the refusal line 13.7 added precisely so a home keyed on its own
+  load balancer would be visible at 3am instead of looking like a limit that
+  works. Found by going to READ that line: 21 mints against dev, a legible 429,
+  and Cloud Logging holding only Google's own request log. The house failure in
+  new clothes — **an instrument can be cheerful too** — and the second sighting
+  in two phases. Logging is on at `warn` now, with pino's level mapped to
+  Google's `severity`, because a deliberate warning arriving labelled INFO is
+  the same bug one layer up. `door.test.ts` asserts the refusal reaches a real
+  logger, and asserts `log.warn.name !== "noop"` — a spy on a no-op proves
+  nothing.
+- 2026-08-25: The forwarded chain, MEASURED at last, is what Google documents:
+  through the load balancer it arrives `<client>, <lb>` and `hops = 1` keys on
+  the real client; on the run.app path it is ONE entry and the key falls back to
+  the socket. `ISOCAN_PROXY_HOPS` stays unset.
+- 2026-08-25: **The bypass was demonstrated before it was closed**, which is the
+  only honest way to justify a flag with a blast radius. Against prod's run.app
+  URL, with the honest socket bucket already refusing at 429, eight invented
+  `X-Forwarded-For` values each minted a badge; one invented value repeated
+  metered at exactly 21. The caller's fiction IS the key on that path.
+- 2026-08-25: A locked ingress makes STAGE ORDER load-bearing in a way no other
+  variable does: it may only be set on a home whose load balancer exists, so a
+  brand-new prod runs stage A once with `ISOCAN_INGRESS=all` and re-runs
+  `70-cloud-run.sh` afterwards. The script asks the DOMAIN instead of the
+  run.app URL whenever ingress is not `all` — a check pointed at an address
+  closed by design would fail on a healthy home, and a check that shrugged
+  would be the older bug.
+- 2026-08-25: `exists gcloud projects describe` cannot tell "no such project"
+  from "the resolver is down". A DNS outage mid-session had `60-build-image.sh`
+  refuse with *"project isocan-io-prod does not exist"* about a project created
+  twenty minutes earlier. The direction is safe — it refuses rather than
+  proceeding — so this is recorded rather than fixed.
+- 2026-08-25: **`80-load-balancer.sh` creates the certificate before it tells
+  you the IP**, which is the only order it can (the IP is what the record
+  points at) — so Google's first validation ALWAYS runs against a domain that
+  does not resolve yet, and on isocan.io it stuck at `FAILED_NOT_VISIBLE`
+  rather than retrying into success. A managed certificate cannot be renamed or
+  re-validated in place, so the fix is a second cert on the same proxy, and
+  prod's is called `isocan-cert-2` forever. `prod.env` names it so the tooling
+  reads the live one; a home provisioned later should expect the same detour.
+- 2026-08-25: Prod's magic-link mail sends from
+  `noreply@isocan-io-prod.firebaseapp.com`, with no SPF or DKIM alignment to
+  isocan.io — a stranger's first sign-in email, likely in spam. Dev solved this
+  in phase 13.5 with a custom sender domain, and the code half already ships
+  (the daemon serves `/__/auth/action` itself). What is missing is the Firebase
+  console flow for the prod project and the DNS records it emits. — Open
+- 2026-08-25: The ~60 badges minted while demonstrating the bypass are real
+  desk rows on a brand-new prod. They are anonymous and admitted to nothing,
+  and there is no bulk revoke — recorded so nobody reads prod's first badge
+  count as organic. — Open
 
 ---
 
