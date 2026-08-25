@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CHROME_INSET,
-  FULL_LABEL_ROOM,
   ICON_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
@@ -14,7 +13,6 @@ import {
   nameFits,
   nameRoom,
   titleRow,
-  underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
 
@@ -447,41 +445,52 @@ describe("the strip under an item lets its one control be clicked", () => {
 });
 
 /**
- * **One line under the item, at every width it is shown at.**
+ * **The full-screen control is a glyph, always.**
  *
- * The row carries the marks, the `+`, the full-screen button and the size.
- * Spelling the button out costs 77 screen pixels of a line that needs 201 in
- * total; below that the four fit only if the button becomes its glyph.
+ * It was a word that became a glyph under 210 screen pixels, and the
+ * threshold is gone rather than retuned. The label cost 77 pixels of a line
+ * that also carries the marks, the `+` and the size — on a small item, or any
+ * item zoomed out, that was the whole row — and it bought nothing a hover
+ * cannot say. Two forms also meant two sets of geometry to keep matching.
  *
- * Guarded as a THRESHOLD with a bracket rather than as a constant, per lesson
- * #11: one case fails if the number goes lower, one fails if it goes higher,
- * so it can be retuned but not deleted and not drifted.
+ * What must not go is the NAME. A glyph-only control that does not say what
+ * it is on hover is a guess, so the tooltip and the accessible label are
+ * asserted here as the price of dropping the word.
  */
-describe("the row under an item stays on one line", () => {
-  it("spells the button out when the row has room", () => {
-    expect(underRowSpellsItOut(480, 1)).toBe(true);
-    expect(underRowSpellsItOut(2400, 0.22)).toBe(true);
+describe("the full-screen control names itself without a label", () => {
+  const itemView = readFileSync(
+    fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+    "utf8",
+  );
+  const css = readFileSync(
+    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+    "utf8",
+  );
+
+  it("never spells the label out in the row", () => {
+    const button = itemView.match(/<button\s+className="fullscreen-btn"[\s\S]*?<\/button>/);
+    expect(button, "no fullscreen button").toBeTruthy();
+    expect(button![0]).not.toMatch(/>\s*Full screen\s*</);
   });
 
-  it("drops to the glyph when it does not", () => {
-    // The user's case: a small item, or any item zoomed well out.
-    expect(underRowSpellsItOut(480, 0.3)).toBe(false);
-    expect(underRowSpellsItOut(200, 1)).toBe(false);
+  it("keeps the name for a screen reader", () => {
+    expect(itemView).toMatch(/aria-label="Full screen"/);
   });
 
-  it("brackets the threshold, so it can be retuned but not lost", () => {
-    // Measured: 201px for the whole line spelled out. A threshold under that
-    // puts the button and the size chip on top of each other; one far above it
-    // sends a roomy item to the glyph for no reason.
-    expect(FULL_LABEL_ROOM).toBeGreaterThanOrEqual(201);
-    expect(FULL_LABEL_ROOM).toBeLessThan(320);
+  it("keeps the name for a pointer, and draws it rather than using `title`", () => {
+    // `title` waits about a second and lands at the pointer, not the control.
+    expect(itemView).toMatch(/data-tip="Full screen/);
+    expect(css).toMatch(/\.fullscreen-btn::after\s*\{[^}]*content:\s*attr\(data-tip\)/);
   });
 
-  it("depends on SCREEN width, not world width", () => {
-    // The row is counter-scaled, so what decides is how big the item looks —
-    // the same item is roomy at 100% and cramped at 20%.
-    const world = 900;
-    expect(underRowSpellsItOut(world, 1)).toBe(true);
-    expect(underRowSpellsItOut(world, 0.1)).toBe(false);
+  it("shows that tooltip on focus too, not only on hover", () => {
+    expect(css).toMatch(/\.fullscreen-btn:focus-visible::after/);
+  });
+
+  it("keeps the tooltip out of the pointer's way", () => {
+    // It sits above the button a person is travelling toward; if it caught
+    // events it would become the thing under the pointer.
+    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/);
+    expect(tip![1]).toMatch(/pointer-events:\s*none/);
   });
 });

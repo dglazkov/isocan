@@ -106,27 +106,6 @@ export const MIN_NAME_ROOM = 48;
  */
 export const CHROME_INSET = 0;
 
-/**
- * Screen pixels the under-item row needs before "Full screen" can be a WORD.
- *
- * Measured on the rendered row rather than guessed: the label button is 77px,
- * the size chip 87, the `+` 25, two 6px gaps — 201 for the whole line. Under
- * `FULL_LABEL_ROOM` the button drops to its glyph, which takes it to ~148 and
- * keeps everything on ONE line for another 60px of item.
- *
- * The alternative was "FS", and it is worse than a glyph: an abbreviation
- * nobody has agreed on is a word you have to decode, where an expand icon is
- * the same mark every video player and every window manager uses. The button
- * keeps its title and its accessible name either way, so what shrinks is the
- * drawing, never the label a screen reader reads.
- */
-export const FULL_LABEL_ROOM = 210;
-
-/** Does the row under the item have room to spell the button out? */
-export function underRowSpellsItOut(width: number, scale: number): boolean {
-  return width * scale >= FULL_LABEL_ROOM;
-}
-
 /** What the title row shows at this size, and how much of it the name gets. */
 export interface TitleRow {
   icon: boolean;

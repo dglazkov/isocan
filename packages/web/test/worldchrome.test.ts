@@ -437,14 +437,32 @@ describe("the row under an item is one row", () => {
     expect(itemView).not.toContain("under-reactions");
   });
 
-  it("centres that row, because the box is scaled about its middle", () => {
-    // The box is the item's WORLD width and is counter-scaled about its own
-    // centre, so centre is the only alignment that lands where it looks like
-    // it will. `flex-end` was tried and put the contents off the item.
+  it("anchors that row to the item's left edge, and scales from that corner", () => {
+    // The marks are always in the same place: the row grows rightward and the
+    // `+` never moves. Centring made the whole group shift every time a mark
+    // was added or the size chip changed width.
+    //
+    // The pin and the origin are ONE decision. A box pinned to both edges is
+    // the item's WORLD width, and scaling that from anywhere but the corner it
+    // is pinned to throws the contents off the side of the item — which is
+    // what `flex-end` did, and what `flex-start` in a `left: 0; right: 0` box
+    // does in the other direction. Shrink-wrapped, pinned left, scaled from
+    // left: the row lands where it looks like it will.
     const rule = allRules().find((r) => r.selectors.includes(".item-under"));
     expect(rule, ".item-under has no rule").toBeTruthy();
-    expect(rule!.body).toMatch(/justify-content:\s*center/);
-    expect(rule!.body).not.toMatch(/justify-content:\s*flex-(end|start)/);
+    expect(rule!.body).toMatch(/left:\s*0/);
+    expect(rule!.body, "a right pin makes this the item's full world width").not.toMatch(
+      /right:\s*0/,
+    );
+    expect(rule!.body).toMatch(/transform-origin:\s*left top/);
+  });
+
+  it("puts the marks FIRST in that row, so they are the leftmost thing", () => {
+    const row = readFileSync(
+      fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+      "utf8",
+    ).match(/<div className="item-under"[\s\S]*?\n {8}<\/div>/)![0];
+    expect(row.indexOf("<Reactions")).toBeLessThan(row.indexOf("item-hint"));
   });
 
   it("keeps the transient half fading on its own", () => {

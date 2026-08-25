@@ -758,15 +758,23 @@ img { height: auto; }
    One wrapper carries the counter-scale for all of it — chrome under here has
    a single answer to "how big am I", and the children are ordinary flex items.
    
-   Centred, and that is not a taste call: the box is the item's WORLD width and
-   is then scaled about its own middle, so centre is the only alignment that
-   lands where it looks like it will. `flex-end` puts the contents somewhere
-   off the side of the item entirely. */
+   Anchored to the item's LEFT EDGE, so the marks are always in the same place:
+   the row grows rightward as things are added to it and the `+` never moves.
+   Centring meant the whole group shifted every time a mark was added or the
+   size chip changed width, which is what "the placement is a lil weird" was.
+   
+   `left` with `transform-origin: left top` and NO `right`, which is the part
+   that has to stay together. A box pinned to both edges is the item's WORLD
+   width, and scaling that about any point other than the one it is pinned to
+   throws its contents off the side of the item — `justify-content: flex-start`
+   inside a `left: 0; right: 0` box lands well to the LEFT of the item, and
+   `flex-end` well to the right. Shrink-wrapped and scaled from the corner it
+   is anchored to, the row lands where it looks like it will. */
 .item-under {
-  position: absolute; left: 0; right: 0; top: 100%;
+  position: absolute; left: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding-top: 5px; pointer-events: none; transform-origin: center top;
+  display: flex; align-items: center; gap: 6px;
+  padding-top: 5px; pointer-events: none; transform-origin: left top;
 }
 /* The transient half of that row. Its own opacity, because the marks beside it
    are persistent and must not fade with it. */
@@ -1049,22 +1057,23 @@ img { height: auto; }
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
    and a control up there would cost the name at every zoom for something you
    press twice a session. */
-/* The glyph form, for an item too narrow to spell the label out.
+/* Always the glyph, never the word.
    
-   Only the HORIZONTAL padding goes, and it STRETCHES. An svg is replaced
-   content, so the `line-height` that gives the spelled-out button its height
-   does not apply to the glyph — zeroing the padding left it 13px against
-   21px chips either side, and keeping the vertical padding only got it to 15.
-   `align-self: stretch` takes its height from the row instead, which is the
-   one number that is already correct and stays correct if the chips change. */
-.fullscreen-btn.compact {
-  padding-left: 0; padding-right: 0; width: 22px; align-self: stretch;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.fullscreen-btn.compact svg { display: block; }
+   The label cost 77 screen pixels of a line that also carries the marks, the
+   `+` and the size — on a small item, or any item zoomed out, that was the
+   whole row. It earns them back by being the mark every video player and
+   window manager uses for this, so it needs no legend, and by naming itself on
+   hover (`data-tip` below) rather than in permanent ink.
+   
+   `align-self: stretch` gives it its height: an svg is replaced content and
+   ignores the `line-height` that used to size the spelled-out form, which left
+   the glyph 13px tall against 21px chips either side. The row's height is the
+   one number that is already right. */
 .fullscreen-btn {
   flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
-  padding: 1px 9px; border-radius: 999px; cursor: pointer;
+  padding: 1px; width: 22px; align-self: stretch;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   /* **The whole strip is `pointer-events: none`** — it exists so a hint under
      an item never eats a click meant for the canvas. This is the one thing in
@@ -1072,7 +1081,26 @@ img { height: auto; }
      button rendered, lit up nothing, and did nothing: `elementFromPoint` over
      its middle returned the canvas viewport. */
   pointer-events: auto;
+  position: relative;
 }
+.fullscreen-btn svg { display: block; }
+/* The name, on hover and on keyboard focus. Drawn rather than left to `title`
+   — the native tooltip waits about a second, appears at the pointer rather
+   than at the control, and takes no styling. A button whose whole face is a
+   glyph has to be able to say what it is promptly, or the glyph is a guess.
+   
+   Inert, and above the button: it must not become the thing the pointer is
+   over on its way to the control it describes. */
+.fullscreen-btn::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--ink); color: var(--ground);
+  font-size: 10.5px; font-weight: 500; line-height: 1.5;
+  opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
+}
+.fullscreen-btn:hover::after,
+.fullscreen-btn:focus-visible::after { opacity: 1; }
 .fullscreen-btn:hover {
   border-color: var(--accent); color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 7%, var(--card));

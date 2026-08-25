@@ -18,7 +18,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
@@ -136,9 +136,6 @@ export function ItemView({
    * size strip and the hint strip are two rules that must clear the same row.
    */
   const reactionRow = wearing || selected;
-  // Does the under-item line have room to spell the button out? Below this
-  // it becomes a glyph so the whole line still fits on one row.
-  const spellItOut = underRowSpellsItOut(width, scale);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -558,10 +555,15 @@ export function ItemView({
                   thing you are actually reading. */}
               {!resize && (
                 <button
-                  className={`fullscreen-btn${spellItOut ? "" : " compact"}`}
-                  title="Fill the window with this item (Enter) — Esc comes back"
-                  // The word goes, the NAME never does: a narrow item still
-                  // answers "Full screen" to a screen reader and to a hover.
+                  className="fullscreen-btn"
+                  // The tooltip is the label, and it is drawn rather than
+                  // handed to `title`: the native one waits about a second,
+                  // arrives at the pointer instead of at the button, and
+                  // cannot be styled. A control whose whole face is a glyph
+                  // needs its name to show up promptly or the glyph is a
+                  // guess. `aria-label` still carries it for anyone not
+                  // hovering anything.
+                  data-tip="Full screen — Enter, Esc comes back"
                   aria-label="Full screen"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -569,7 +571,7 @@ export function ItemView({
                     navigate(itemPath(canvasId, item.id));
                   }}
                 >
-                  {spellItOut ? "Full screen" : EXPAND}
+                  {EXPAND}
                 </button>
               )}
               <span>
