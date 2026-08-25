@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { rules, selectorsOf } from "./cssrules.ts";
+
 /**
  * The layer scale, enforced.
  *
@@ -112,5 +114,46 @@ describe("the layer scale", () => {
     for (const dock of [".main-panel", ".files-panel", ".trash-panel"]) {
       expect(layerOf(dock)).toBe("var(--z-dock)");
     }
+  });
+});
+
+/**
+ * A floating container yields its clicks; the things drawn inside claim back.
+ *
+ * The bug this freezes: `.minimap-dock` is a positioning box holding a 138×89
+ * map, or a 32×32 handle once folded. It painted nothing itself, but at
+ * `--z-float` its own 168×108 rectangle sat over the canvas and ate every
+ * click that landed in the gap — a person could see the item underneath and
+ * could not touch it. Folding made it worse, not better: folding hides the
+ * panel and leaves the box.
+ *
+ * It stayed invisible for as long as nothing needed that corner. Then item
+ * reaction chips arrived under the item, flying to an item centres it, and
+ * every "go to item" from the marks dock parked the chips right there.
+ *
+ * z-index is not the question here — the dock is SUPPOSED to float above the
+ * canvas. What is wrong is claiming a hit area for pixels you did not paint.
+ */
+describe("floating chrome does not eat clicks it cannot see", () => {
+  const bodyOf = (selector: string): string => {
+    const rule = rules().find((r) => selectorsOf(r).includes(selector) && r.at.length === 0);
+    expect(rule, `${selector} has no top-level rule`).toBeTruthy();
+    return rule!.body;
+  };
+
+  it("makes the minimap's positioning box transparent to the pointer", () => {
+    expect(bodyOf(".minimap-dock")).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("gives the map itself back, so it is still clickable", () => {
+    // Yielding is only safe when what is DRAWN claims back. The map is a
+    // control — clicking it recenters — and the handle is the way back.
+    expect(bodyOf(".minimap-panel")).toMatch(/pointer-events:\s*auto/);
+    expect(css).toMatch(/\.minimap-dock\.folded \.minimap-handle[^}]*pointer-events:\s*auto/);
+  });
+
+  it("still takes the map's clicks away while it is folded", () => {
+    // The folded panel is transparent and scaled down but still laid out.
+    expect(css).toMatch(/\.minimap-dock\.folded \.minimap-panel[^}]*pointer-events:\s*none/);
   });
 });

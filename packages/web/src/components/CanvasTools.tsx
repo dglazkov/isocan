@@ -3,8 +3,7 @@ import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
 import { screenToWorld } from "../lib/viewport.ts";
-import { openFavourites } from "./FavouritesBar.tsx";
-import { isStarred } from "@isocan/core";
+import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 
@@ -69,9 +68,18 @@ const PEN = (
   </svg>
 );
 
-/** Hollow when the shortlist is empty, solid when it is not: the rail says
- * whether there is anything in there before you open it. */
-const star = (filled: boolean) => (
+/**
+ * A face, hollow when nothing on the canvas is marked and solid when
+ * something is: the rail says whether there is anything in there before you
+ * open it.
+ *
+ * It was a star, and it changed with the dock behind it. A star means one
+ * thing — "favourite" — and the dock stopped meaning one thing the moment a
+ * team could invent 👀 and 🚧 and ✅ for themselves. A face makes no claim
+ * about WHICH marks are in there, which is the honest amount to promise from
+ * a 17px icon.
+ */
+const marksGlyph = (filled: boolean) => (
   <svg
     viewBox="0 0 16 16"
     width="17"
@@ -80,9 +88,14 @@ const star = (filled: boolean) => (
     fill={filled ? "currentColor" : "none"}
     stroke="currentColor"
     strokeWidth="1.3"
-    strokeLinejoin="round"
+    strokeLinecap="round"
   >
-    <path d="M8 2.2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.4l-3.6 1.9.7-4L2.2 6.5l4-.6z" />
+    <circle cx="8" cy="8" r="5.9" />
+    {/* Drawn ON the fill, so the face still reads when the circle is solid. */}
+    <g fill="none" stroke={filled ? "var(--panel)" : "currentColor"}>
+      <path d="M5.5 9.4a3 3 0 0 0 5 0" />
+      <path d="M6 6.2v.6M10 6.2v.6" />
+    </g>
   </svg>
 );
 
@@ -107,10 +120,12 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   const activeTool = useUiStore((s) => s.activeTool);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
-  const favouritesOpen = useUiStore((s) => s.favouritesOpen);
-  const hasFavourites = useCanvasStore((s) => {
+  const marksOpen = useUiStore((s) => s.marksOpen);
+  const hasMarks = useCanvasStore((s) => {
     const items = s.canvas?.items;
-    return items ? Object.values(items).some(isStarred) : false;
+    return items
+      ? Object.values(items).some((item) => Object.keys(item.reactions ?? {}).length > 0)
+      : false;
   });
   const fileInput = useRef<HTMLInputElement>(null);
   const mine = actorColorIn(colors, actor.id);
@@ -181,13 +196,13 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       ))}
       <div className="tool-sep" />
       <button
-        className={`tool-btn${favouritesOpen ? " active" : ""}`}
-        title={hasFavourites ? "Favourites — the starred shortlist" : "Favourites — nothing starred yet"}
-        aria-label="Favourites"
-        aria-pressed={favouritesOpen}
-        onClick={() => openFavourites(canvasId, !favouritesOpen)}
+        className={`tool-btn${marksOpen ? " active" : ""}`}
+        title={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}
+        aria-label="Reactions"
+        aria-pressed={marksOpen}
+        onClick={() => openReactionBar(canvasId, !marksOpen)}
       >
-        {star(hasFavourites)}
+        {marksGlyph(hasMarks)}
       </button>
       <button
         className="tool-btn"

@@ -29,7 +29,7 @@ import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { FilesPanel } from "../components/FilesPanel.tsx";
-import { FavouritesBar, restoreFavourites } from "../components/FavouritesBar.tsx";
+import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
@@ -125,7 +125,7 @@ function CanvasSurface({
   useEffect(() => {
     if (!canvasId) return;
     didFit.current = false;
-    restoreFavourites(canvasId);
+    restoreReactionBar(canvasId);
     connectToCanvas(canvasId, actorRef.current);
     return disconnect;
   }, [canvasId]);
@@ -523,7 +523,7 @@ function CanvasSurface({
       <TrashPanel canvasId={canvasId} actor={actor} />
       <MainThreadPanel canvasId={canvasId} actor={actor} />
       <FilesPanel canvasId={canvasId} />
-      <FavouritesBar canvasId={canvasId} />
+      <ReactionBar canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all
           (phase 10). Above the panels for the reason `ArrivalNotice` is:

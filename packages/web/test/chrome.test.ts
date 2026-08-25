@@ -7,7 +7,7 @@ import {
   ICON_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
-  STAR_ROOM,
+  ROW_END_ROOM,
   badgeCorner,
   hasRoomForChrome,
   nameFits,
@@ -122,7 +122,7 @@ describe("badgeCorner", () => {
 /**
  * **A minimum that exceeds what exists is not a minimum, it is an overlap.**
  *
- * The name's width was `Math.max(MIN_NAME_ROOM, width * scale - STAR_ROOM)`.
+ * The name's width was `Math.max(MIN_NAME_ROOM, width * scale - ROW_END_ROOM)`.
  * At 13% a 480-unit item is 62 screen pixels; the star wants 26 and the row is
  * inset 5 a side, so 26 is what is left — and the floor handed the name 48, so
  * it was drawn straight through the star. It shipped, and it shipped with the
@@ -174,9 +174,9 @@ describe("the room a name is given", () => {
         if (!row.name) continue;
         expect(
           row.nameRoom,
-          `${width} world units @ ${scale} overflows the star or the kind icon`,
+          `${width} world units @ ${scale} overflows the row's far end or the kind icon`,
         ).toBeLessThanOrEqual(
-          width * scale - STAR_ROOM - (row.icon ? ICON_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
+          width * scale - ROW_END_ROOM - (row.icon ? ICON_ROOM : 0) - CHROME_INSET * 2 + 1e-9,
         );
       }
     }
@@ -225,7 +225,7 @@ describe("the room a name is given", () => {
     expect(MIN_NAME_ROOM).toBeLessThan(120);
     // And the star's room is real: an item with nothing left over must not be
     // told it can show a name.
-    expect(nameFits(STAR_ROOM + ICON_ROOM + CHROME_INSET * 2, 1)).toBe(false);
+    expect(nameFits(ROW_END_ROOM + ICON_ROOM + CHROME_INSET * 2, 1)).toBe(false);
   });
 });
 
@@ -370,7 +370,7 @@ describe("what a card says as it shrinks", () => {
     // Room for a name is decided against the star and the inset alone.
     for (const scale of [0.05, 0.1, 0.13, 0.154, 0.16, 0.2, 0.5, 1]) {
       for (const width of [80, 200, 480, 1200]) {
-        const withoutGlyph = width * scale - STAR_ROOM - CHROME_INSET * 2;
+        const withoutGlyph = width * scale - ROW_END_ROOM - CHROME_INSET * 2;
         if (withoutGlyph >= MIN_NAME_ROOM) {
           expect(
             titleRow(width, scale).name,
@@ -382,7 +382,7 @@ describe("what a card says as it shrinks", () => {
   });
 
   it("shows all three the moment there is room for all three", () => {
-    const scale = (MIN_NAME_ROOM + STAR_ROOM + ICON_ROOM + CHROME_INSET * 2) / WIDTH;
+    const scale = (MIN_NAME_ROOM + ROW_END_ROOM + ICON_ROOM + CHROME_INSET * 2) / WIDTH;
     const row = titleRow(WIDTH, scale);
     expect(row).toMatchObject({ icon: true, name: true });
     expect(row.nameRoom).toBeCloseTo(MIN_NAME_ROOM, 6);
