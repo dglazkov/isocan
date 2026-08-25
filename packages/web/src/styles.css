@@ -796,17 +796,17 @@ img { height: auto; }
    pale ghost button — the eye went to the number, and the thing that looked
    pressable was the thing that was not. Emphasis has to point at the control.
    Tabular figures so the number does not jitter its own width while you drag. */
-.item-hint.size span {
+.item-hint.size > span {
   font-variant-numeric: tabular-nums;
 }
 /* …except mid-drag, when it stops being a fact you can look up and becomes the
    readout for the gesture your hand is making. That is what the accent is for,
    and the button is gone by then, so nothing is competing with it. */
-.item-hint.size.live span {
+.item-hint.size.live > span {
   background: var(--accent); border-color: var(--accent);
   color: var(--accent-ink); font-weight: 600;
 }
-.item-hint span {
+.item-hint > span {
   padding: 1px 9px; border-radius: 999px;
   background: var(--chip); border: 1px solid var(--line-soft);
   color: var(--ink-muted); font-size: 10.5px; line-height: 1.6; white-space: nowrap;
@@ -1093,7 +1093,10 @@ img { height: auto; }
   padding: 1px; width: 22px; gap: 0;
 }
 .fullscreen-btn svg { display: block; flex: none; }
-.fullscreen-btn span { white-space: nowrap; }
+.fullscreen-btn span {
+  background: none; border: none; padding: 0; border-radius: 0;
+  color: inherit; font: inherit; white-space: nowrap;
+}
 /* The name, on hover and on keyboard focus. Drawn rather than left to `title`
    — the native tooltip waits about a second, appears at the pointer rather
    than at the control, and takes no styling. A button whose whole face is a
