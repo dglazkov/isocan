@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findNextItem, nearestToPoint, type Rect } from "../src/lib/spatialnav.ts";
+import { GLIDE_MS, smoothEase } from "../src/lib/zoomactions.ts";
 
 const at = (id: string, x: number, y: number, width = 100, height = 100): Rect => ({
   id,
@@ -252,3 +253,20 @@ describe("where a walk starts", () => {
     expect(nearestToPoint([huge, small], 500, 500)?.id).toBe("small");
   });
 });
+
+describe("node travel glide transition", () => {
+  it("defaults to 500ms duration", () => {
+    expect(GLIDE_MS).toBe(500);
+  });
+
+  it("smoothEase provides a continuous smooth acceleration and deceleration curve", () => {
+    expect(smoothEase(0)).toBe(0);
+    expect(smoothEase(1)).toBe(1);
+    expect(smoothEase(0.5)).toBe(0.5);
+    // starts gentle (below linear progress)
+    expect(smoothEase(0.2)).toBeLessThan(0.2);
+    // ends gentle (above linear progress)
+    expect(smoothEase(0.8)).toBeGreaterThan(0.8);
+  });
+});
+
