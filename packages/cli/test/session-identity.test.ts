@@ -127,6 +127,10 @@ const canvases = async (): Promise<Canvas[]> =>
     (r) => r.json() as Promise<Canvas[]>,
   );
 const idOf = (out: string) => /\((usr_[^)]+)\)/.exec(out)?.[1];
+/** The name out of `identity saved: <name> (usr_…)`. Read rather than
+ *  asserted, because allocation enters its roster at a hashed point — the
+ *  LETTER is the promise, not the index. */
+const nameOf = (out: string) => /identity saved: (.+?) \(usr_/.exec(out)?.[1] ?? "";
 
 describe("two agents in one directory", () => {
   it("are two actors, and neither of them is the human", async () => {
@@ -222,32 +226,38 @@ describe("ask, receive", () => {
     // isocan one — a person looking at three agents can tell which is which.
     const first = await asAgent(claude("s-1"), "identity", "--session");
     expect(first.code).toBe(0);
-    expect(first.stdout).toContain("Charlie"); // the C roster, in order
+    const firstName = nameOf(first.stdout);
+    expect(firstName[0], `${firstName} is not a C name`).toBe("C");
 
     const second = await asAgent(claude("s-2"), "identity", "--session");
-    expect(second.stdout).toContain("Cass"); // Charlie is taken — no race, no retry
+    const secondName = nameOf(second.stdout);
+    // Also a C name, and NOT the first one — no race, no retry, no "Charlie 2".
+    expect(secondName[0], `${secondName} is not a C name`).toBe("C");
+    expect(secondName).not.toBe(firstName);
 
     // And asking again is being told who you already are, not a third name.
     const again = await asAgent(claude("s-1"), "identity", "--session");
-    expect(again.stdout).toContain("Charlie");
+    expect(nameOf(again.stdout)).toBe(firstName);
     expect(idOf(again.stdout)).toBe(idOf(first.stdout));
   });
 
   it("allocation skips names the canvases answer to, not just claimed ones", async () => {
-    // The taken name has to be one this agent would otherwise WANT, or the
-    // case passes for the wrong reason: a `claude-code` claim draws from the C
-    // roster, so parking the human on Isaac would prove nothing now. Charlie
-    // is the name it is actually reaching for.
-    await asAgent({}, "canvas", "create", "Charlie's Own");
-    await asAgent({}, "session", "start", "--canvas", "Charlie's Own");
-    // Rename the human to Charlie so the name is on the canvas's record.
-    await asAgent({}, "identity", "--name", "Charlie", "--home");
-    await asAgent({}, "ls", "--canvas", "Charlie's Own"); // put it on a live face
+    // The taken name has to be one this agent would otherwise WANT, or the case
+    // passes for the wrong reason. So: find out what it would be handed, then
+    // park the human on exactly that.
+    const probe = await asAgent(claude("probe"), "identity", "--session");
+    const wanted = nameOf(probe.stdout);
+
+    await asAgent({}, "canvas", "create", `${wanted}'s Own`);
+    await asAgent({}, "session", "start", "--canvas", `${wanted}'s Own`);
+    await asAgent({}, "identity", "--name", wanted, "--home");
+    await asAgent({}, "ls", "--canvas", `${wanted}'s Own`); // put it on a live face
 
     const claimed = await asAgent(claude("s-1"), "identity", "--session");
     expect(claimed.code).toBe(0);
-    expect(claimed.stdout).not.toContain("Charlie ("); // not handed the human's name
-    expect(claimed.stdout).toContain("Cass"); // the next one in its own roster
+    const got = nameOf(claimed.stdout);
+    expect(got).not.toBe(wanted); // not handed the human's name
+    expect(got[0], `${got} is not a C name`).toBe("C"); // still its own roster
   });
 });
 
