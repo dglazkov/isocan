@@ -927,7 +927,7 @@ img { height: auto; }
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   user-select: none; -webkit-user-select: none;
 }
-.react-chip:hover, .react-add:hover { border-color: var(--accent); }
+.react-chip:hover, .react-add:hover { border-color: var(--accent); color: var(--accent-text); }
 /* Yours reads as worn rather than merely present — the same accent that means
    "this one" everywhere else, at the weight a chip can carry. */
 .react-chip.mine {
@@ -938,12 +938,13 @@ img { height: auto; }
 .react-emoji { font-size: 12px; line-height: 1; }
 .react-count { font-variant-numeric: tabular-nums; font-weight: 600; }
 .react-add {
-  display: inline-flex; align-items: center;
+  display: inline-flex; align-items: center; justify-content: center;
   font: inherit; font-size: 11px; line-height: 1.5;
-  padding: 1px 6px; border-radius: 999px; cursor: pointer;
+  padding: 1px; width: 22px; height: 21px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
   user-select: none; -webkit-user-select: none;
 }
+.react-add svg { display: block; flex: none; }
 .react-add-wrap { position: relative; display: inline-flex; }
 /* The picker: eight marks, not an emoji keyboard. A canvas of screens gets
    asked the same handful of questions, and a grid of 1,800 glyphs answers

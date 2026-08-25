@@ -512,3 +512,30 @@ describe("the full-screen control has an icon and adapts its label to room", () 
   });
 });
 
+/**
+ * **The reaction add button carries the smiley-plus icon.**
+ */
+describe("the reaction add button", () => {
+  const reactionsView = readFileSync(
+    fileURLToPath(new URL("../src/components/Reactions.tsx", import.meta.url)),
+    "utf8",
+  );
+  const css = readFileSync(
+    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+    "utf8",
+  );
+
+  it("renders the SMILE_PLUS icon in the add reaction button", () => {
+    expect(reactionsView).toMatch(/className="react-add"[\s\S]*?\{SMILE_PLUS\}/);
+    expect(reactionsView).toContain('viewBox="0 0 24 24"');
+  });
+
+  it("styles the add reaction button as a compact icon button", () => {
+    const btn = css.match(/\.react-add\s*\{([^}]*)\}/);
+    expect(btn, "no .react-add rule").toBeTruthy();
+    expect(btn![1]).toMatch(/display:\s*inline-flex/);
+    expect(btn![1]).toMatch(/border-radius:\s*999px/);
+  });
+});
+
+
