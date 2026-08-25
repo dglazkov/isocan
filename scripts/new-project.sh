@@ -3,11 +3,22 @@
 # Start a project on a canvas: empty directory → git repo → GitHub → a canvas
 # bound to the directory → a main thread → agents parked on `isocan wait`.
 #
+# Or start from a repo that already exists, with --from: that hands the first
+# step to `isocan clone`, which clones and readies the directory and reports
+# the canvas the repo's committed marker names. Everything after it is the
+# same walk — every step here is idempotent, so a clone that arrived already
+# bound is met with "already bound" rather than a second canvas.
+#
+# `isocan clone` on its own is the whole answer when all you want is the repo
+# on this machine and on its canvas. This script is that plus the parts a
+# PROJECT wants: a person, a main thread, and agents parked on it.
+#
 # The walk this automates is `docs/new-project.md`, and that doc is the
 # explanation. This is the version you run when you already know why.
 #
 #   ./scripts/new-project.sh acme-widgets
 #   ./scripts/new-project.sh acme-widgets --agents claude,codex --launch
+#   ./scripts/new-project.sh --from dglazkov/isocan --agents claude,codex
 #   ./scripts/new-project.sh --here --no-github
 #
 set -euo pipefail
@@ -18,6 +29,7 @@ GENERIC_BRIEF='Read .agents/skills/isocan-collab/SKILL.md, then run isocan --age
 
 name=""
 dir=""
+from=""
 here=0
 github=1
 visibility="--private"
@@ -37,6 +49,9 @@ usage: new-project.sh [name] [options]
   name              directory to create, and the canvas's title (omit with --here)
 
   --here            use the current directory instead of creating one
+  --from <repo>     clone an existing repo instead of starting empty — any
+                    URL git takes, or owner/name. Uses `isocan clone`, so a
+                    repo carrying a .isocan marker lands on THAT canvas
   --dir <path>      create the project at <path> instead of ./<name>
   --title <text>    canvas title (default: the directory name)
   --as <name>       who you are, if this machine has no identity yet
@@ -53,6 +68,7 @@ USAGE
 while [ $# -gt 0 ]; do
   case "$1" in
     --here) here=1 ;;
+    --from) from="${2:-}"; shift ;;
     --dir) dir="${2:-}"; shift ;;
     --title) title="${2:-}"; shift ;;
     --as) person="${2:-}"; shift ;;
@@ -71,8 +87,14 @@ done
 
 if [ "$here" = 1 ]; then
   [ -z "$name" ] || die "--here takes no name — it means this directory"
+  [ -z "$from" ] || die "--from clones into a new directory; --here is this one"
   root="$PWD"
 else
+  # `--from` names the directory the way `git clone` does — the last path
+  # segment, minus `.git` — so `--from dglazkov/isocan` needs no second word.
+  if [ -z "$name" ] && [ -n "$from" ]; then
+    name="$(basename "${from%.git}")"
+  fi
   [ -n "$name" ] || { usage >&2; exit 1; }
   root="${dir:-$PWD/$name}"
 fi
@@ -105,8 +127,24 @@ fi
 # ---------- 1. the directory and the repo ----------
 
 step "The directory and the repo"
-if [ -d "$root" ]; then
+if [ -n "$from" ] && [ ! -d "$root" ]; then
+  # Hand the whole first step to `isocan clone`: it clones, readies the
+  # directory exactly as step 2 would, and says which canvas the repo's
+  # committed marker names. Nothing from the repo is installed or run — see
+  # `isocan clone --help` for why that is deliberate.
+  if command -v isocan >/dev/null; then
+    isocan clone "$from" "$root"
+  else
+    npx -y "$INSTALL_SPEC" clone "$from" "$root"
+    command -v isocan >/dev/null || die "clone did not put isocan on PATH — open a new shell and re-run"
+  fi
+  # A cloned repo has an origin already; creating one would be a second remote
+  # for somebody else's project.
+  github=0
+elif [ -d "$root" ]; then
   [ "$here" = 1 ] || note "$root already exists — using it"
+  [ -z "$from" ] || note "not cloning: $root is already here"
+  [ -z "$from" ] || github=0
 else
   mkdir -p "$root"
   note "created $root"
@@ -174,7 +212,10 @@ fi
 
 step "The canvas"
 if [ -f .isocan/project.json ]; then
-  note "already bound — $(isocan canvas list 2>/dev/null | head -1)"
+  # The marker, not `canvas list`: a freshly cloned canvas has not been
+  # materialized yet (that happens on the first write), so asking the daemon
+  # what it holds answers "(none)" about a directory that is plainly bound.
+  note "already bound — $(sed -n 's/.*"title" *: *"\([^"]*\)".*/\1/p' .isocan/project.json) ($(sed -n 's/.*"projectId" *: *"\([^"]*\)".*/\1/p' .isocan/project.json))"
 else
   canvas="$(isocan canvas create "$title" --json | sed -n 's/.*"canvasId" *: *"\([^"]*\)".*/\1/p')"
   [ -n "$canvas" ] || die "could not read the new canvas's id out of \`canvas create --json\`"

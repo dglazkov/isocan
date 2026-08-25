@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { rules, selectorsOf } from "./cssrules.ts";
 
 /**
  * One canonical block per class.
@@ -26,13 +27,31 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 
-/** Selectors, with comments removed so a commented-out rule is not a rule. */
-function bareClassSelectors(text: string): string[] {
+/**
+ * Every bare one-class selector at the TOP LEVEL of the sheet.
+ *
+ * Parsed by `cssrules.ts`, which can see inside at-rules — the regex here
+ * before it could not, and excluded them by accident rather than on purpose
+ * (`[^{}@]+?` refused any prelude containing `@`, so a media block's contents
+ * were skipped along with its prelude).
+ *
+ * **Accident and intent land in the same place here, and the intent is worth
+ * stating.** A conditional override is not a second canonical block — it is
+ * what a media query IS. Eight classes in this sheet have exactly that shape:
+ * `.minimap-item`, `.cursor-glow`, `.onit-dot`, `.front-row` and the rest each
+ * declare themselves once at the top level and once again under
+ * `prefers-reduced-motion`. Counting the second as a duplicate would fail the
+ * build for doing the right thing.
+ *
+ * So: `at.length === 0`, said out loud, rather than inherited from a regex
+ * that happened to choke on `@`.
+ */
+function bareClassSelectors(text: string = css): string[] {
   const found: string[] = [];
-  for (const rule of text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?:^|\})\s*([^{}@]+?)\{/g)) {
-    for (const selector of rule[1]!.split(",")) {
-      const trimmed = selector.trim();
-      if (/^\.[A-Za-z0-9_-]+$/.test(trimmed)) found.push(trimmed);
+  for (const rule of rules(text)) {
+    if (rule.at.length > 0) continue;
+    for (const selector of selectorsOf(rule)) {
+      if (/^\.[A-Za-z0-9_-]+$/.test(selector)) found.push(selector);
     }
   }
   return found;

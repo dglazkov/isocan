@@ -738,6 +738,20 @@ program
       await retireStrandedIdentities(process.cwd(), home);
       const resolved = await resolveIdentity(client, home);
       if (!resolved) throw new Error(await noIdentityHere(client, home));
+      // `--json` is promised by the global help for ANY command, and this was
+      // the only one that ignored it — found because a script asked for the
+      // machine's name, got the prose form, and printed an empty string where
+      // a person's name belonged. A flag that is silently a no-op is worse
+      // than one that is not offered.
+      if ((cmd.optsWithGlobals() as { json?: boolean }).json) {
+        return printJson({
+          ...resolved.actor,
+          source: resolved.source,
+          ...(resolved.harness !== undefined ? { harness: resolved.harness } : {}),
+          badge: (await client.badgeId()) ?? null,
+          home: client.base,
+        });
+      }
       const suffix = resolved.source === "session" ? " — this agent session" : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
       // The badge, never its secret. Nothing is DONE to a badge in this phase
