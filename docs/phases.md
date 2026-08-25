@@ -76,17 +76,15 @@ falsify every one of them. So a phase inserted into the middle gets a
 in the order it is written rather than by counting. Names are the
 identity, numbers are the address, and the address is load-bearing.
 
-**Where we are: Phase 13.7 is PART-DONE — the home keeps its own house, and
-says out loud what it can see.** The obligations `innkeeper.md` named and no
-phase owned are built: GC sweeps every canvas the store holds on a timer inside
-the process (plus `POST /api/gc` for anyone who wants it now, scoped to what
-the calling badge is admitted to), the door is metered per client, and `/terms`
-serves the plain statement — the operator can read your canvas, run your own
-home if that is unacceptable — under a named operator, with the sovereignty
-caveat stated honestly. **What is NOT proven is the one clause naming dev:**
-"the sweep … is observed on dev". Nobody deployed. That is a push, a CI pass
-and a look at the log, and it belongs to nothing else, so it stays here rather
-than being rounded up.
+**Where we are: Phase 13.7 is CLOSED — the home keeps its own house, and says
+out loud what it can see.** The obligations `innkeeper.md` named and no phase
+owned are built and live on dev: GC sweeps every canvas the store holds on a
+timer inside the process (plus `POST /api/gc` for anyone who wants it now,
+scoped to what the calling badge is admitted to), the door is metered per
+client, and `/terms` serves the plain statement — the operator can read your
+canvas, run your own home if that is unacceptable — under a named operator,
+with the sovereignty caveat stated honestly. The sweep was watched doing it
+unasked on the dev home, which is the one clause that needed a deploy.
 
 **Three things a clean session must know before it types anything.** The wire
 keys renamed, so **a pre-rename CLI or replica cannot WRITE to a current home**
@@ -105,9 +103,9 @@ live isocan.io. The cut line is the journey's own built/unbuilt boundary: Scenes
 0–5 are shipped and proven, Scenes 6–7 are the entire unbuilt remainder, so
 launching first ships exactly the journey that exists. **Phase 14, isocan.io,
 is next** — the last car of the launch train, and the first phase that provisions
-since 13.5. It inherits two small errands from 13.7 rather than being clean:
-the sweep still wants watching on a real deploy, and `--ingress=all` is the
-flag decision. The two-surfaces problem phase 10 surfaced still has its address —
+since 13.5. It inherits one errand from 13.7 rather than being clean:
+`--ingress=all` is a flag decision with its own blast radius, and it is the
+door meter's real bypass. The two-surfaces problem phase 10 surfaced still has its address —
 the airplane arc, phases 12.5 and 12.7. This line moves as phases close; a clean
 session starts by believing it.
 
@@ -214,12 +212,15 @@ Bracketed numbers are the phases that taught it.
   `<img>`. **A step that cannot read back the state it wanted has verified
   nothing** — and phase 13.5 adds the sharper form: **an instrument can be
   cheerful too.** `returnOobLink` reported the old sender domain twice while
-  real mail already carried the new one. Phase 13.7 adds the ninth, and the
-  sharpest yet because nothing was wrong to read: a GC timer whose first tick
-  was an hour away, inside a process reaped after fifteen minutes, would have
-  swept nothing forever — and said nothing, because an idle sweep is silent *by
-  design*. **A mechanism that cannot fire looks exactly like a mechanism with
-  nothing to do.** Its sibling landed the same day: a rate limit keyed on the
+  real mail already carried the new one. Phase 13.7 adds the ninth, where there
+  was nothing wrong to read at all: a sweep that finds nothing and a sweep that
+  never ran say the same thing, which is nothing, because an idle sweep is
+  silent *by design*. **A mechanism that cannot fire looks exactly like a
+  mechanism with nothing to do**, so the only honest proof is to hand it
+  something to collect and watch the bytes leave — which is how it was settled
+  on dev, and two cheaper checks were cheerful on the way there (`/api/gc`
+  answers 401 for any unmatched `/api/` path; `/terms` answers 200 because the
+  SPA fallback answers everything). Its sibling landed the same day: a rate limit keyed on the
   socket address puts the whole internet in one bucket behind a load balancer
   and refuses every visitor at 429, looking precisely like a rate limit that
   works.
@@ -1172,18 +1173,21 @@ inbox rather than spam. The rename proven by the suite, green, and by
 
 ## Phase 13.7 — The innkeeper's obligations
 
-**Status: PART-DONE** 2026-08-24. All three obligations are built and green at
-1399 tests, and two of the three proofs played in full, measured by the
-conductor rather than reported: a mint flood against a real daemon is refused
-429 `too-many-badges` with a `Retry-After`, and `/terms` answers 200 `text/html`
-from a booted home with every required claim — the caveat included — present in
-the **built bundle** rather than only in source. The sweep's vitest half played
-too, including the case that matters: a daemon carrying the real hour-long
-interval, living about a second, still collects. **The half not proven: "…and
-is observed on dev".** Nobody deployed — this session committed and did not
-push, so `green` never moved. It is a push, a CI pass and a look at the log,
-and unlike phase 13.5's unproven half it belongs to no other phase, so it stays
-named here.
+**Status: CLOSED** 2026-08-25 (`f7289a9` … the correction commit below). All
+three proofs played in full, each measured by the conductor rather than
+reported. A mint flood against a real daemon is refused 429 `too-many-badges`
+with a `Retry-After`. `/terms` answers 200 `text/html` **from dev**, with every
+required claim — the caveat included — grepped out of the bundle the origin
+actually serves, because both cheaper checks are cheerful: `/api/gc` answers
+401 for any unmatched `/api/` path, and `/terms` answers 200 because the SPA
+fallback answers every unmatched GET. And **the sweep was observed on dev**,
+unprompted, at `01:33:36Z`: `GC swept 1 blobs (69 bytes) … across 10 canvases`,
+an hour and two seconds after the boot sweep, with `startedAt` unchanged — so
+the same process swept itself on its ordinary tick. Corroborated two other
+ways: the blob went 404 and a dry run reported nothing left. `POST /api/gc` was
+exercised against the real Firestore/GCS backing at the same time, which no
+vitest run touches — including the empty answer for a badge admitted to
+nothing.
 
 **Work:** What [innkeeper.md](design/innkeeper.md) obligates and no
 phase ever owned, due before strangers rather than after. **GC,
@@ -1207,13 +1211,24 @@ origin, caveat included.
 
 **Findings:**
 
-- 2026-08-24: A timer inside a scale-to-zero process has the INSTANCE'S LIFE
-  as its clock, not its interval. The first sweep was one interval away and the
-  interval is an hour; dev runs `MIN_INSTANCES=0` and Cloud Run reaps an idle
-  instance in ~15 minutes, so the mechanism would have run in vitest and never
-  once in production — silently, because an idle sweep logs nothing by design.
+- 2026-08-24: A timer inside a scale-to-zero process has the INSTANCE'S LIFE as
+  its clock, not its interval — the first sweep was one interval away and the
+  interval is an hour, against `MIN_INSTANCES=0` and a ~15-minute idle reap.
   Fixed with a sweep a minute after boot. CPU throttling was NOT the cause and
   is the first thing anyone will re-suspect: `--no-cpu-throttling` is set.
+- 2026-08-25, **correcting the line above, which this session overstated on the
+  day it wrote it.** "It would never have fired in production" was reasoned
+  from `70-cloud-run.sh`'s idle-reap comment and never checked against what
+  else is provisioned — and `infra/92-uptime-check.sh` pings dev every 300s, so
+  the instance never idles and lives long enough for the hourly tick. Measured:
+  a dev instance ran 63 minutes across a deliberate 17-minute quiet window and
+  swept on its own at 01:33:36Z. **The boot sweep still earns its place** — it
+  is what a home with no heartbeat depends on, a laptop daemon included, and it
+  makes the first sweep after a deploy prompt rather than an hour late — but it
+  was never the difference between "runs" and "never runs" on dev. The lesson
+  is the older one, self-inflicted: *a comment that reasons about
+  infrastructure is a hypothesis*, and this one was written into three
+  documents before anybody looked at the uptime check sitting next to it.
 - 2026-08-24: The door hook admits by PATH SHAPE, so a route with no canvas in
   its path gets no admission check at all. `POST /api/gc` is the first
   *destructive* route in that position and re-asks the door's question itself;
@@ -1264,16 +1279,15 @@ exists, so they land as migrations under strangers rather than
 greenfield. Chosen eyes-open: the desk has migration precedent from
 phase 2, and early-prod data is small.
 
-**Two errands inherited from 13.7**, both provisioning-shaped, which is why
-they waited for the phase that provisions. **The ingress flag:**
-`--ingress=all` leaves the `*.run.app` URL reachable around the load balancer,
-and the door's meter keys on a forwarded chain that path does not produce — the
-rate limit's real bypass. `--ingress=internal-and-cloud-load-balancing` closes
-it and has its own blast radius, so it is a decision made out loud here rather
-than a fix slipped in there. **The sweep, watched:** 13.7's one unplayed proof
-clause — the GC timer observed on a real deploy — is a look at the log once
-this phase has a deploy to look at, and prod's `MIN_INSTANCES=1` changes which
-half of the rhythm does the work.
+**One errand inherited from 13.7**, provisioning-shaped, which is why it waited
+for the phase that provisions. `--ingress=all` leaves the `*.run.app` URL
+reachable around the load balancer, and the door's meter keys on a forwarded
+chain that path does not produce — the rate limit's real bypass.
+`--ingress=internal-and-cloud-load-balancing` closes it and has its own blast
+radius, so it is a decision made out loud here rather than a fix slipped in
+there. Note also that prod's `MIN_INSTANCES=1` changes which half of GC's
+rhythm does the work: an always-on instance lives on its hourly tick, and the
+boot sweep becomes merely the cheap first one.
 
 **Outcome:** Scene 0 plays for real: a clean machine, isocan.io, three
 steps, a canvas born at its hosted home.

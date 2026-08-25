@@ -539,20 +539,27 @@ comes from the object store rather than from the client.
   runs is queued on the same single-writer chain as the writes it is
   compacting behind.
 
-  **The sweep after boot is not a nicety — without it this mechanism
-  would never have run in production once.** If the instance is the
-  clock, the sweep has to fit inside the instance's *life*: dev runs
-  `MIN_INSTANCES=0` and Cloud Run reaps an idle instance about fifteen
-  minutes after the last request, so an hourly timer whose first tick
-  is an hour away belongs to a process that was reaped forty-five
-  minutes earlier. Nothing would have reported this — green tests, and
-  a quiet log, because a quiet log means "nothing to collect". A minute
-  is late enough to stay out of the way of boot (migrations, snapshot
-  loads, home links dialling) and early enough to fit the shortest life
-  an instance has. What was *not* the obstacle, since it is the first
-  thing anyone will suspect: CPU throttling. `70-cloud-run.sh` sets
-  `--no-cpu-throttling`, so timers do run between requests. Instance
-  lifetime was the whole of it.
+  **The sweep after boot is there because the instance is the clock.**
+  If a timer lives inside a process that scale-to-zero can reap, the
+  sweep has to fit inside the instance's *life*, not merely inside its
+  interval: `MIN_INSTANCES=0` plus an hourly first tick is a chore
+  scheduled for a process that may be gone. A minute is late enough to
+  stay out of the way of boot (migrations, snapshot loads, home links
+  dialling) and early enough to fit the shortest life an instance has.
+
+  **Two corrections to how that was first written here, both worth
+  keeping.** It said the mechanism "would never have run in production
+  once", which was reasoned from `70-cloud-run.sh`'s ~15-minute
+  idle-reap comment without checking what else is provisioned:
+  `92-uptime-check.sh` pings dev every 300s, so the instance never
+  idles and does reach its hourly tick — measured 2026-08-25, a dev
+  instance alive 63 minutes sweeping on its own. The boot sweep is
+  still right (a home with no heartbeat has nothing else, and a laptop
+  daemon is exactly that), but it was never the difference between
+  running and never running here. And the thing that is *not* the
+  obstacle, since it is the first thing anyone will suspect: CPU
+  throttling. `70-cloud-run.sh` sets `--no-cpu-throttling`, so timers
+  do run between requests.
 - **Backups** — Firestore point-in-time recovery on, plus a scheduled
   export to the bucket. The export writes a **new timestamped folder
   per run**, never a fixed one, so the bucket holds many restore points
