@@ -13,30 +13,37 @@ import { stageRect } from "./stage.ts";
 const cx = () => stageRect().x + stageRect().width / 2;
 const cy = () => stageRect().y + stageRect().height / 2;
 
-/** Glide length. Long enough to read as travel, short enough not to be a wait. */
-const GLIDE_MS = 380;
+/** Glide length. 500ms default gives a smooth sense of motion across nodes. */
+export const GLIDE_MS = 500;
 
 let gliding = 0;
 
 /**
- * Move the camera to a viewport over a few hundred milliseconds, so a jump
+ * Smooth ease transition (cubic ease-in-out).
+ * Starts smoothly, cruises steadily, and decelerates gently to a stop.
+ */
+export function smoothEase(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/**
+ * Move the camera to a viewport over a smooth ease transition, so a jump
  * across the canvas reads as travel rather than teleportation — you keep your
  * bearings because you saw which way you went. A second glide cancels the
  * first, and anyone who has asked for less motion gets there immediately.
  */
-export function glideTo(target: Viewport): void {
+export function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
   cancelAnimationFrame(gliding);
   const ui = useUiStore.getState();
   const from = ui.viewport;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
     ui.setViewport(target);
     return;
   }
   const started = performance.now();
   const step = (now: number) => {
-    const progress = Math.min(1, (now - started) / GLIDE_MS);
-    // easeOutCubic: leaves quickly, arrives gently.
-    const eased = 1 - Math.pow(1 - progress, 3);
+    const progress = Math.min(1, (now - started) / durationMs);
+    const eased = smoothEase(progress);
     useUiStore.getState().setViewport({
       tx: from.tx + (target.tx - from.tx) * eased,
       ty: from.ty + (target.ty - from.ty) * eased,
@@ -125,10 +132,10 @@ const REVEAL_MARGIN = 76;
  * Bring an item into view WITHOUT moving the camera more than it has to: an
  * item already on screen does not move the world at all, one just off the edge
  * slides in, and one that cannot fit at this zoom is centered in the visible
- * canvas stage. Spatial navigation walks item to item, and a camera that
- * recentered on every step would make the canvas feel like it was the thing moving.
+ * canvas stage. Spatial navigation walks item to item with a smooth glide so
+ * you get the feel of travelling between nodes.
  */
-export function revealItem(itemId: string): void {
+export function revealItem(itemId: string, durationMs = GLIDE_MS): void {
   const item = useCanvasStore.getState().canvas?.items[itemId];
   if (!item) return;
   const ui = useUiStore.getState();
@@ -141,7 +148,7 @@ export function revealItem(itemId: string): void {
 
   const { dx, dy } = revealDelta({ left, top, right, bottom }, stage, REVEAL_MARGIN);
   if (dx !== 0 || dy !== 0) {
-    ui.setViewport({ ...viewport, tx: viewport.tx + dx, ty: viewport.ty + dy });
+    glideTo({ ...viewport, tx: viewport.tx + dx, ty: viewport.ty + dy }, durationMs);
   }
 }
 
