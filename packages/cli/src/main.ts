@@ -3309,6 +3309,49 @@ program
   );
 
 program
+  .command("react <emoji> <items...>")
+  .description(
+    "Wear an emoji on items — the same marks the canvas shows as chips; --off takes yours back",
+  )
+  .option("--off", "take your reaction back")
+  .option("--who", "say who else is wearing it, rather than the count")
+  .action(
+    run(async (emoji: string, refs: string[], opts: { off?: boolean; who?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const items = refs.map((ref) => resolveItem(snapshot, ref));
+      // Reactions store ids and nothing else, so a name has to be looked up
+      // NOW — which is the point: a rename reaches what somebody reacted to
+      // before it (`lib/names.ts`, and the same rule mentions live by).
+      const names = opts.who ? await ctx.client.actorNames() : undefined;
+      const lines: string[] = [];
+      for (const item of items) {
+        // The op says what should be TRUE, not "flip it" — so running this
+        // twice is not a way to react twice, and the inverse is exact.
+        await sendOp(ctx, p.id, {
+          type: "item.react",
+          itemId: item.id,
+          emoji,
+          on: !opts.off,
+        });
+        const worn = (item.reactions?.[emoji] ?? []).filter((id) => id !== ctx.actor.id);
+        const after = opts.off ? worn : [...worn, ctx.actor.id];
+        lines.push(
+          opts.who
+            ? `${emoji} ${item.title} — ${after.length === 0 ? "nobody" : after.map((id) => names?.[id] ?? id).join(", ")}`
+            : `${emoji} ${item.title} — ${after.length}`,
+        );
+      }
+      if (ctx.json) {
+        return printJson(
+          items.map((item) => ({ itemId: item.id, emoji, on: !opts.off })),
+        );
+      }
+      for (const line of lines) console.log(line);
+    }),
+  );
+
+program
   .command("align <items...>")
   .description("Line items up on an edge — what the canvas's guides do, as a verb")
   .requiredOption(

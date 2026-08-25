@@ -124,6 +124,29 @@ export function applyOperation(
       return putItem(item);
     }
 
+    case "item.react": {
+      const item = getItem(op.itemId);
+      const emoji = op.emoji.trim();
+      if (!emoji) throw new OpValidationError("bad-op", "item.react: an emoji is required");
+      const worn = item.reactions?.[emoji] ?? [];
+      // Set semantics: adding is idempotent, so two people reacting in the
+      // same instant both land. Order is arrival order, which is what a
+      // tooltip wants to read out.
+      const next = op.on
+        ? worn.includes(actor.id)
+          ? worn
+          : [...worn, actor.id]
+        : worn.filter((id) => id !== actor.id);
+      const reactions = { ...item.reactions };
+      // An emoji nobody wears is removed rather than kept at zero — a chip
+      // with no count is a chip nobody can get rid of.
+      if (next.length > 0) reactions[emoji] = next;
+      else delete reactions[emoji];
+      const hasAny = Object.keys(reactions).length > 0;
+      const { reactions: _drop, ...rest } = item;
+      return putItem({ ...rest, ...(hasAny ? { reactions } : {}), ...stamp });
+    }
+
     case "item.move":
       requireFinite({ x: op.x, y: op.y }, "item.move");
       return putItem({ ...getItem(op.itemId), x: op.x, y: op.y, ...stamp });

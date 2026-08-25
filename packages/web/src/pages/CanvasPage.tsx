@@ -432,6 +432,23 @@ function CanvasSurface({
           e.preventDefault();
           ui.setFanned(ui.fannedItemId === ids[0] ? null : ids[0]!);
         }
+      } else if (e.shiftKey && e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
+        // ⇧C comments on WHAT IS SELECTED, rather than on wherever you next
+        // manage to click. The anchored thread already existed — comment mode
+        // makes one when you click an item, and `isocan comment add --item`
+        // has always made one from a terminal — but reaching it meant picking
+        // up a tool and then aiming at a thing you had already pointed at.
+        //
+        // Anchoring matters beyond convenience: an anchored thread RIDES its
+        // item, so the conversation stays on the screen it is about when
+        // somebody moves it. A pin dropped nearby does not.
+        const ids = ui.selectedItemIds;
+        if (ids.length === 1) {
+          e.preventDefault();
+          // Top-left of the item, in its own coordinates — where a thread
+          // anchored by the CLI lands too, so both surfaces agree.
+          ui.setPendingComment({ x: 0, y: 0, anchorItemId: ids[0]! });
+        }
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
       } else if (e.key === "?" && !e.metaKey && !e.ctrlKey) {

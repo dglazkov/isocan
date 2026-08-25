@@ -871,6 +871,62 @@ img { height: auto; }
    everywhere — but text under it would still select without this. */
 .panel-resizer:active { user-select: none; -webkit-user-select: none; }
 
+/* ---------- reactions ---------- */
+/* The marks an item is wearing. PERSISTENT, unlike the size chip and the
+   interact hint that share the strip below — a reaction belongs to the item,
+   not to your current gesture, so it shows without hovering or selecting.
+   Counter-scaled like the rest of an item's chrome, and anchored bottom-left
+   so a long row grows away from the item rather than across it. */
+.item-reactions {
+  position: absolute; left: 0; top: 100%; padding-top: 5px;
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  transform-origin: left top;
+  /* Its own events: the strip is otherwise inert so a hint never eats a click
+     meant for the canvas, and these are controls (lessons.md #20). */
+  pointer-events: auto;
+}
+.react-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: inherit; font-size: 11px; line-height: 1.5;
+  padding: 1px 7px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  user-select: none; -webkit-user-select: none;
+}
+.react-chip:hover, .react-add:hover { border-color: var(--accent); }
+/* Yours reads as worn rather than merely present — the same accent that means
+   "this one" everywhere else, at the weight a chip can carry. */
+.react-chip.mine {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+  color: var(--accent-text);
+}
+.react-emoji { font-size: 12px; line-height: 1; }
+.react-count { font-variant-numeric: tabular-nums; font-weight: 600; }
+.react-add {
+  display: inline-flex; align-items: center;
+  font: inherit; font-size: 11px; line-height: 1.5;
+  padding: 1px 6px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
+  user-select: none; -webkit-user-select: none;
+}
+.react-add-wrap { position: relative; display: inline-flex; }
+/* The picker: eight marks, not an emoji keyboard. A canvas of screens gets
+   asked the same handful of questions, and a grid of 1,800 glyphs answers
+   none of them faster than eight do. */
+.react-picker {
+  position: absolute; left: 0; top: calc(100% + 5px); z-index: var(--z-popover);
+  display: flex; gap: 2px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop); backdrop-filter: blur(4px);
+}
+.react-option {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  padding: 4px 5px; border-radius: 7px; border: none; background: none;
+}
+.react-option:hover { background: var(--chip); }
+/* The transient strip steps below a row of reactions rather than under it. */
+.item-hint.under-reactions { padding-top: 28px; }
+
 /* ---------- full screen ---------- */
 /* One item, given the whole window.
    
