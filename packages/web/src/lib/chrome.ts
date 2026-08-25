@@ -31,6 +31,29 @@ const MIN_CHROME_HEIGHT = 40;
 
 export type BadgeCorner = "se" | "ne";
 
+/**
+ * The transform that holds a piece of item chrome at a constant SCREEN size.
+ *
+ * Chrome lives inside `.world`, which carries `scale(viewport.scale)`, so a
+ * label written at 11px is 11 WORLD pixels — 11 on screen at 100% zoom and
+ * under four at 30%. A name, a hint, a chip: none of them are content, and
+ * none of them should shrink with the thing they describe.
+ *
+ * There are two ways to say this and item chrome uses both: a box that must
+ * stay in world coordinates (an outline, a resize handle) divides its lengths
+ * by `var(--scale)` in CSS, and everything else counter-scales with this.
+ * Pair it with `transform-origin` on the class, so the chrome grows away from
+ * the corner it is anchored to rather than around its own middle.
+ *
+ * It is a function in this file, and not `{ transform: … }` written inline at
+ * each site, because it was written inline at each site and the reaction row
+ * was the site that got missed — see `worldchrome.test.ts`, which now asks
+ * every chrome element which of the two it uses.
+ */
+export function counterScale(scale: number): { transform: string } {
+  return { transform: `scale(${1 / scale})` };
+}
+
 /** Is the item big enough on screen to wear a label and a badge? */
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;

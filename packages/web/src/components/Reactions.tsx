@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { QUICK_REACTIONS, hasReacted, reactionsOf } from "@isocan/core";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
+import { counterScale } from "../lib/chrome.ts";
 import { sendOp } from "../lib/api.ts";
 import { useActorNames } from "../lib/names.ts";
 
@@ -23,11 +24,16 @@ export function Reactions({
   canvasId,
   item,
   actor,
+  scale,
   visible,
 }: {
   canvasId: string;
   item: Item;
   actor: Actor;
+  /** The viewport's zoom, so the row can hold its size against it. Chrome
+   * lives inside the scaled world; without this the chips are drawn in WORLD
+   * pixels and a canvas at 15% shows an 11px chip as under two. */
+  scale: number;
   /** Whether the item is hovered or selected — decides only whether the `+`
    * shows, never whether existing reactions do. */
   visible: boolean;
@@ -54,6 +60,9 @@ export function Reactions({
   return (
     <div
       className="item-reactions"
+      // A mark is a label on the item, not part of it: it stays the size of a
+      // chip however far out you zoom, exactly as the name above it does.
+      style={counterScale(scale)}
       // The strip under an item is `pointer-events: none` so a hint never eats
       // a click meant for the canvas. These ARE controls (lessons.md #20).
       onPointerDown={(e) => e.stopPropagation()}

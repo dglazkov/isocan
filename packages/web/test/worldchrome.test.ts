@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -252,5 +252,105 @@ describe("chrome inside the zoomed world", () => {
     expect(right, ".chrome-right must not rely on a sibling to sit right").toMatch(
       /margin-left:\s*auto/,
     );
+  });
+});
+
+/**
+ * **Every piece of item chrome holds its screen size by ONE of two means.**
+ *
+ * The sweep above guards one of them — a box that must stay in world
+ * coordinates divides its lengths by `var(--scale)`. The other is a
+ * counter-scaling transform applied in JS, and until now nothing checked it,
+ * because the rule for it lived as `{ transform: scale(1 / scale) }` written
+ * inline at each render site. A site that simply did not write it was
+ * indistinguishable from one that had no need to.
+ *
+ * That is exactly what happened to the reaction row. It shipped with
+ * `transform-origin: left top` in its CSS — the half of the pattern that does
+ * nothing on its own — and no transform, so the chips were drawn in WORLD
+ * pixels: correct at 100% zoom, where it was verified, and under two pixels
+ * tall on a canvas at 15%, where it was reported. Every other piece of chrome
+ * in the same component was right, which is why review read past it.
+ *
+ * So the transform has one home, `counterScale`, and this asks each chrome
+ * element which of the two it uses. A new one that answers neither fails.
+ */
+describe("chrome holds its size, by transform or by --scale", () => {
+  const sources: Record<string, string> = {
+    ItemView: readFileSync(
+      fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
+      "utf8",
+    ),
+    Reactions: readFileSync(
+      fileURLToPath(new URL("../src/components/Reactions.tsx", import.meta.url)),
+      "utf8",
+    ),
+  };
+  const everySource = Object.values(sources).join("\n");
+
+  /** The chrome an item wears, and where each one is rendered. */
+  const CHROME = [
+    { className: "item-titlebar", where: "ItemView" },
+    { className: "item-hint", where: "ItemView" },
+    { className: "item-reactions", where: "Reactions" },
+  ];
+
+  it("renders each one with the counter-scale from its one home", () => {
+    for (const { className, where } of CHROME) {
+      const source = sources[where]!;
+      // The element exists where we say it does — otherwise this whole
+      // describe passes by looking for nothing (#16).
+      expect(source, `${className} is not rendered in ${where}`).toContain(className);
+      expect(
+        /style=\{(chrome|counterScale\()/.test(source),
+        `${where} renders ${className} but never counter-scales`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps that home a single function, not a transform written out again", () => {
+    // The failure mode this replaces: `{ transform: `scale(${1 / scale})` }`
+    // typed at each site, which is a rule with no name and therefore no way
+    // to notice a site that skipped it.
+    expect(everySource).not.toMatch(/transform:\s*`scale\(\$\{1 \/ scale\}\)`/);
+    expect(everySource).toMatch(/counterScale/);
+  });
+
+  it("pairs a transform-origin with an actual transform", () => {
+    // `transform-origin` alone is the tell that somebody meant to scale and
+    // did not: it is inert without a transform, so it never looks wrong. It
+    // was the only trace the reaction row's bug left in the stylesheet.
+    //
+    // A transform may arrive from either side, and both are legitimate — the
+    // chrome list above counter-scales in JS, and `.item-thumb-page` takes a
+    // fit-to-thumb `scale()` the same way. So the requirement is only that
+    // ONE of them exists: this rule declares a transform, or the component
+    // that renders the class applies one.
+    const named = new Set(CHROME.map((c) => c.className));
+    const components = readdirSync(
+      fileURLToPath(new URL("../src/components", import.meta.url)),
+    ).filter((f) => f.endsWith(".tsx"));
+    const appliesTransform = (cls: string): boolean =>
+      components.some((file) => {
+        const text = readFileSync(
+          fileURLToPath(new URL(`../src/components/${file}`, import.meta.url)),
+          "utf8",
+        );
+        return text.includes(cls) && /transform:|counterScale|style=\{chrome\}/.test(text);
+      });
+
+    for (const rule of allRules()) {
+      if (!/transform-origin/.test(rule.body)) continue;
+      for (const selector of rule.selectors) {
+        const cls = selector.match(/^\.([-\w]+)$/)?.[1];
+        if (!cls || !cls.startsWith("item-")) continue;
+        if (named.has(cls)) continue;
+        if (/transform:/.test(rule.body)) continue;
+        expect(
+          appliesTransform(cls),
+          `.${cls} sets transform-origin and nothing ever transforms it`,
+        ).toBe(true);
+      }
+    }
   });
 });

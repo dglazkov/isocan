@@ -1598,7 +1598,14 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Opposite the reading panels: this is a place you leave from, so it sits on
    the side the tool rail is on and stays out of the canvas's middle. */
 .marks {
-  position: absolute; top: 48px; right: 76px; bottom: 16px; width: 232px; z-index: calc(var(--z-dock) - 1);
+  /* Stops ABOVE the zoom bar rather than running behind it. Both live in this
+     corner: the bar is 16px off the bottom and 43px tall, so 59px is where it
+     reaches and 69 leaves ten of air. A dock that runs under a floating
+     control reads as a dock that did not know the control was there — and the
+     rows nearest the bottom are the ones behind the fold, which are the ones
+     a person is scrolling to see. `layers.test.ts` holds the arithmetic
+     against the bar's own rule, so moving the bar fails the test. */
+  position: absolute; top: 48px; right: 76px; bottom: 69px; width: 232px; z-index: calc(var(--z-dock) - 1);
   display: flex; flex-direction: column; gap: 2px;
   background: var(--panel); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 14px;

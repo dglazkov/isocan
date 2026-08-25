@@ -18,7 +18,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
+import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
@@ -79,7 +79,7 @@ export function ItemView({
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
-  const chrome = { transform: `scale(${1 / scale})` };
+  const chrome = counterScale(scale);
   const roomy = hasRoomForChrome(width, height, scale);
   // Screen pixels available to the name, once the star at the other end and
   // the row's own inset are taken off the top. Constant across selection.
@@ -539,6 +539,7 @@ export function ItemView({
           canvasId={canvasId}
           item={item}
           actor={actor}
+          scale={scale}
           visible={selected || peeked || hovered}
         />
       )}

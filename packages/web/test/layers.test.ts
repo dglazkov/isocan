@@ -157,3 +157,40 @@ describe("floating chrome does not eat clicks it cannot see", () => {
     expect(css).toMatch(/\.minimap-dock\.folded \.minimap-panel[^}]*pointer-events:\s*none/);
   });
 });
+
+/**
+ * Two things in one corner, and only one of them floats.
+ *
+ * The marks dock is anchored `bottom`-to-`top` down the right side and the
+ * zoom bar floats in the same corner at `--z-float`. The dock stopped at
+ * `bottom: 16px` — the bar's own offset — so its last rows sat behind the
+ * bar. Those rows are the ones past the fold, which are exactly the ones
+ * somebody scrolling is trying to reach.
+ *
+ * Guarded as arithmetic against the BAR's rule rather than as a literal, so
+ * moving or resizing the bar fails here instead of silently re-covering the
+ * dock.
+ */
+describe("the marks dock clears the zoom bar", () => {
+  /** Measured on the rendered bar: 5px padding, a 31px control row, 5px. */
+  const ZOOM_BAR_HEIGHT = 43;
+  const bottomOf = (selector: string): number => {
+    const rule = rules().find((r) => selectorsOf(r).includes(selector) && r.at.length === 0);
+    expect(rule, `${selector} has no top-level rule`).toBeTruthy();
+    const bottom = rule!.body.match(/bottom:\s*(\d+)px/);
+    expect(bottom, `${selector} sets no plain px bottom`).toBeTruthy();
+    return Number(bottom![1]);
+  };
+
+  it("starts above where the bar reaches", () => {
+    const bar = bottomOf(".zoom-controls");
+    expect(bottomOf(".marks")).toBeGreaterThanOrEqual(bar + ZOOM_BAR_HEIGHT);
+  });
+
+  it("does not float above it instead, which would cover the bar", () => {
+    // The other way to "fix" an overlap. The dock is a DOCK: it yields to the
+    // floating control, it does not outrank it.
+    const dock = rules().find((r) => selectorsOf(r).includes(".marks") && r.at.length === 0)!;
+    expect(dock.body).toMatch(/z-index:\s*calc\(var\(--z-dock\) - 1\)/);
+  });
+});
