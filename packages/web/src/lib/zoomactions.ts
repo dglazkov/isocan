@@ -1,7 +1,7 @@
 import type { CanvasContents } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { type Box, type Viewport, centerOn, fitInto, itemsBounds, zoomAt } from "./viewport.ts";
+import { type Box, type Viewport, centerOn, fitInto, itemsBounds, revealDelta, zoomAt } from "./viewport.ts";
 import { stageRect } from "./stage.ts";
 
 /**
@@ -118,40 +118,31 @@ export function zoomToSelection(): void {
   fitBox(boundsOfItems(useCanvasStore.getState().canvas, ids));
 }
 
-/** Breathing room to leave around an item the camera reveals. */
-const REVEAL_MARGIN = 48;
+/** Breathing room to leave around an item the camera reveals (clears tool rail). */
+const REVEAL_MARGIN = 76;
 
 /**
  * Bring an item into view WITHOUT moving the camera more than it has to: an
  * item already on screen does not move the world at all, one just off the edge
- * slides in, and one that cannot fit at this zoom is centered. Spatial
- * navigation walks item to item, and a camera that recentered on every step
- * would make the canvas feel like it was the thing moving.
+ * slides in, and one that cannot fit at this zoom is centered in the visible
+ * canvas stage. Spatial navigation walks item to item, and a camera that
+ * recentered on every step would make the canvas feel like it was the thing moving.
  */
 export function revealItem(itemId: string): void {
   const item = useCanvasStore.getState().canvas?.items[itemId];
   if (!item) return;
   const ui = useUiStore.getState();
   const { viewport } = ui;
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  const stage = stageRect();
   const left = item.x * viewport.scale + viewport.tx;
   const top = item.y * viewport.scale + viewport.ty;
   const right = left + item.width * viewport.scale;
   const bottom = top + item.height * viewport.scale;
 
-  const fitsX = right - left <= width - REVEAL_MARGIN * 2;
-  const fitsY = bottom - top <= height - REVEAL_MARGIN * 2;
-  let dx = 0;
-  let dy = 0;
-  if (!fitsX) dx = width / 2 - (left + right) / 2;
-  else if (left < REVEAL_MARGIN) dx = REVEAL_MARGIN - left;
-  else if (right > width - REVEAL_MARGIN) dx = width - REVEAL_MARGIN - right;
-  if (!fitsY) dy = height / 2 - (top + bottom) / 2;
-  else if (top < REVEAL_MARGIN) dy = REVEAL_MARGIN - top;
-  else if (bottom > height - REVEAL_MARGIN) dy = height - REVEAL_MARGIN - bottom;
-
-  if (dx !== 0 || dy !== 0) ui.setViewport({ ...viewport, tx: viewport.tx + dx, ty: viewport.ty + dy });
+  const { dx, dy } = revealDelta({ left, top, right, bottom }, stage, REVEAL_MARGIN);
+  if (dx !== 0 || dy !== 0) {
+    ui.setViewport({ ...viewport, tx: viewport.tx + dx, ty: viewport.ty + dy });
+  }
 }
 
 /** Fit one item — the hold-Z gesture: hold Z, click a node, land on it. */
