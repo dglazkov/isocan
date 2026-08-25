@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# STAGE D · continuous deploy — a commit goes green, and dev is running it.
+# STAGE D · continuous deploy — a commit goes green, and dev is running it;
+#           a tag moves, and prod is running that.
 #
-# CREATES   one Cloud Build trigger on the GitHub repository, firing on push
-#           to `green`, running cloudbuild.yaml with _DEPLOY=yes.
+# CREATES   one Cloud Build trigger on the GitHub repository, running
+#           cloudbuild.yaml with _DEPLOY=yes. It fires on push to `green`
+#           (dev) or on the `prod` tag (prod) — see ISOCAN_TRIGGER_TAG below.
 # COSTS     Cloud Build's default pool includes 2,500 free build-minutes a
 #           month. A build here is a few minutes, so a busy day of pushes is
 #           still free; beyond the free tier, ~$0.006/build-minute. The images
@@ -59,9 +61,37 @@
 # commits — one ships a CLI, one deploys a home — and neither waits for the
 # other; what changed is that both now start from a commit that passed.
 #
-# PROD, when it exists, is the same file with a tag pattern instead of a branch
-# pattern: `--tag-pattern='^prod$'`, a tag somebody moves deliberately. The
-# architecture's "promotes only by an explicit gesture".
+# ═══ AND PROD: A TAG, NOT A BRANCH (phase 14) ═══
+#
+# Prod is this same file with a TAG pattern instead of a branch pattern. Set
+# `ISOCAN_TRIGGER_TAG` (prod.env sets `^prod$`) and the create below asks for
+# `--tag-pattern` instead of `--branch-pattern`; everything else — the build
+# config, the substitutions, the build service account — is identical, because
+# the difference between dev and prod is WHICH COMMIT, never which pipeline.
+#
+# **Why a tag and not a fourth branch.** `green` moves by itself: CI advances
+# it on every commit whose suite passes, which is exactly right for a dogfood
+# home and exactly wrong for the one strangers are on. The architecture asks
+# that prod "promotes only by an explicit gesture", and a tag somebody moves is
+# that gesture in its smallest form — one command, no ref that drifts while
+# nobody is looking, and a name that reads as a decision in `git log`.
+#
+# The gesture, which is the whole promotion:
+#
+#   git tag -f prod green          # green, not main: only a CI-tested commit
+#   git push -f origin prod
+#
+# `-f` on both because the tag MOVES; it is a pointer at the running commit,
+# not a release marker that accumulates. What is running in prod is therefore
+# always `git rev-parse prod`, and rolling back is the same two commands
+# pointed at an older sha — no rebuild of anything, because the image for that
+# sha is already in the registry under its own tag.
+#
+# **`green`, not `main`, is what a promotion may name**, for phase 10.5's
+# reason twice over: a commit that is green on a laptop and red on CI must not
+# reach the dogfood home, and it must certainly not reach prod. Nothing
+# enforces that here — a tag can point anywhere — so it is written down where
+# the person typing the command will read it.
 
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib/common.sh"
 preflight
@@ -75,6 +105,17 @@ REPO_NAME="${ISOCAN_REPO_NAME:-isocan}"
 # that wants the old racy behaviour (or a fork with no CI) can still say so out
 # loud rather than editing this file.
 BRANCH="${ISOCAN_TRIGGER_BRANCH:-^green$}"
+# Set instead of a branch for a home promoted by a gesture — prod.env sets
+# `^prod$`. Empty means this is a branch trigger, which is dev.
+TAG_PATTERN="${ISOCAN_TRIGGER_TAG:-}"
+
+if [ -n "${TAG_PATTERN}" ]; then
+  FIRES_ON="tag ${TAG_PATTERN}"
+  PATTERN_FLAG="--tag-pattern=${TAG_PATTERN}"
+else
+  FIRES_ON="push to ${BRANCH}"
+  PATTERN_FLAG="--branch-pattern=${BRANCH}"
+fi
 
 step "is the repository connected?"
 # There are TWO connection generations and they do not see each other. The
@@ -98,7 +139,7 @@ if exists gcloud builds triggers describe "${TRIGGER}" --project="${PROJECT_ID}"
   exit 0
 fi
 
-confirm "create a trigger that deploys ${PROJECT_ID} on every push to green?"
+confirm "create a trigger that deploys ${PROJECT_ID} on ${FIRES_ON}?"
 
 # --name=, not a positional: `triggers create github` names the trigger with a
 # flag, unlike most `create` verbs in gcloud. Measured, after it rejected the
@@ -109,15 +150,20 @@ gcloud builds triggers create github \
   --region="${REGION}" \
   --repo-owner="${REPO_OWNER}" \
   --repo-name="${REPO_NAME}" \
-  --branch-pattern="${BRANCH}" \
+  "${PATTERN_FLAG}" \
   --build-config=cloudbuild.yaml \
   --service-account="projects/${PROJECT_ID}/serviceAccounts/${BUILD_SA}" \
   --substitutions="_IMAGE=${IMAGE_REPO},_SERVICE=${SERVICE},_REGION=${REGION},_DEPLOY=yes,_TAG=\$SHORT_SHA" \
-  --description="isocan: build and deploy ${SERVICE} on push to green (CI-tested)" >/dev/null
-made "${TRIGGER} — push to green deploys ${SERVICE}"
+  --description="isocan: build and deploy ${SERVICE} on ${FIRES_ON}" >/dev/null
+made "${TRIGGER} — ${FIRES_ON} deploys ${SERVICE}"
 
 step "done"
-note "the next commit CI marks green will build, run the container's own boot check, and deploy."
+if [ -n "${TAG_PATTERN}" ]; then
+  note "nothing deploys until somebody moves the tag:  git tag -f prod green && git push -f origin prod"
+  note "green, not main — only a commit CI has tested may be promoted."
+else
+  note "the next commit CI marks green will build, run the container's own boot check, and deploy."
+fi
 note "watch:  gcloud builds list --project=${PROJECT_ID} --region=${REGION} --limit=5"
 note ""
 note "Remember what a deploy IS here: the old revision drains while the new one starts,"

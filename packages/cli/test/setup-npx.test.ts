@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, stopDaemons } from "@isocan/server";
+import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 
 /**
  * Bootstrapping through npx, and what the next command finds (#48).
@@ -67,7 +67,10 @@ afterEach(async () => {
   for (const dir of [home, work, cache]) await fs.rm(dir, { recursive: true, force: true });
 });
 
-function setup(): Promise<{ code: number; stdout: string }> {
+function setup(extraEnv: Record<string, string> = {}): Promise<{
+  code: number;
+  stdout: string;
+}> {
   const child = spawn(process.execPath, [npxBin, "setup", "--no-install", "--no-open", "--json"], {
     cwd: work,
     env: {
@@ -75,6 +78,7 @@ function setup(): Promise<{ code: number; stdout: string }> {
       ISOCAN_HOME: home,
       ISOCAN_PORT: String(port),
       PATH: `${path.dirname(durableBin)}${path.delimiter}${process.env.PATH ?? ""}`,
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "ignore"],
   });
@@ -85,8 +89,10 @@ function setup(): Promise<{ code: number; stdout: string }> {
   );
 }
 
-const health = (): Promise<{ root?: string }> =>
-  fetch(`http://127.0.0.1:${port}/healthz`).then((r) => r.json() as Promise<{ root?: string }>);
+const health = (): Promise<{ root?: string; home?: string }> =>
+  fetch(`http://127.0.0.1:${port}/healthz`).then(
+    (r) => r.json() as Promise<{ root?: string; home?: string }>,
+  );
 
 describe("setup, bootstrapped through npx", () => {
   it("hands the daemon to the copy that will still be here tomorrow", async () => {
@@ -106,5 +112,86 @@ describe("setup, bootstrapped through npx", () => {
     const report = JSON.parse((await setup()).stdout) as Record<string, string>;
     expect(report.cli).toContain(durableBin);
     expect(report.cli).not.toContain("_npx");
+  });
+});
+
+/**
+ * **Phase 14's flip, and the only place the suite can see it.**
+ *
+ * `isocan setup` on a machine that has never held a canvas writes the shipped
+ * default home into `config.json`, so Scene 0's Priya makes her first canvas
+ * at the hosted home rather than trapping it on her laptop. The CLI suppresses
+ * that when it is running from a checkout — which every other test in this
+ * repo is — so this file is where it can be proved: the npx fixture above is a
+ * copy of the CLI living OUTSIDE the checkout, which is what a stranger's
+ * `npx` actually runs.
+ *
+ * The address is `ISOCAN_DEFAULT_HOME`, pointed at a second daemon started
+ * here rather than at `https://isocan.io`. What is under test is the RULE —
+ * who gets flipped, who is left alone, what the person is told — and a test
+ * that dialled the real production home would be measuring somebody else's
+ * uptime.
+ */
+describe("the default home a fresh machine gets", () => {
+  let elsewhere: Daemon;
+  let elsewhereHome: string;
+  let elsewhereUrl: string;
+
+  beforeEach(async () => {
+    elsewhereHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-npx-elsewhere-"));
+    elsewhere = await startDaemon({ port: 0, home: elsewhereHome, birthHome: null });
+    const address = elsewhere.app.server.address();
+    const at = typeof address === "object" && address ? address.port : 0;
+    elsewhereUrl = `http://127.0.0.1:${at}`;
+  });
+
+  afterEach(async () => {
+    await elsewhere.close();
+    await fs.rm(elsewhereHome, { recursive: true, force: true });
+  });
+
+  it("writes it on a machine that has never held a canvas, and says so", async () => {
+    const report = JSON.parse((await setup({ ISOCAN_DEFAULT_HOME: elsewhereUrl })).stdout) as Record<
+      string,
+      string
+    >;
+
+    // The receipt: where canvases go now, and the one command back.
+    expect(report.home).toBe(elsewhereUrl);
+    expect(report.birth).toContain(elsewhereUrl);
+    expect(report.birth).toContain("isocan home --clear");
+
+    // Written down, and the daemon restarted onto it — a config file the
+    // running daemon has not read is a setting nobody has.
+    const config = JSON.parse(await fs.readFile(path.join(home, "config.json"), "utf8"));
+    expect(config.home).toBe(elsewhereUrl);
+    expect((await health()).home).toBe(elsewhereUrl);
+  });
+
+  it("leaves a machine that already holds a canvas alone", async () => {
+    // Somebody who has been working locally: their next canvas stays here
+    // until they say otherwise. Silently sending it to a hosted home would be
+    // the upgrade-day behaviour change this default refuses to make.
+    await fs.mkdir(path.join(home, "projects", "prj_alreadyhere"), { recursive: true });
+
+    const report = JSON.parse((await setup({ ISOCAN_DEFAULT_HOME: elsewhereUrl })).stdout) as Record<
+      string,
+      string
+    >;
+    expect(report).not.toHaveProperty("birth");
+    await expect(fs.readFile(path.join(home, "config.json"), "utf8")).rejects.toThrow();
+    expect((await health()).home).toBeUndefined();
+  });
+
+  it("stays local, and says why, when the default home does not answer", async () => {
+    // A first run on a laptop with no network must still leave a working local
+    // daemon. The refusal is a line in the report, not an exit code.
+    await elsewhere.close();
+    const done = await setup({ ISOCAN_DEFAULT_HOME: elsewhereUrl });
+    expect(done.code).toBe(0);
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+    expect(report.birth).toContain("stay on this machine");
+    expect(report.app).toBe(`http://127.0.0.1:${port}`);
+    expect((await health()).home).toBeUndefined();
   });
 });

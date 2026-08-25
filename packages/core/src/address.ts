@@ -273,6 +273,46 @@ export function normalizeHomeUrl(raw: string): string {
 export const INSTALL_SPEC = "github:dglazkov/isocan#release";
 
 /**
+ * **Where a canvas is born on a machine nobody has configured** — phase 14's
+ * one line, and the flip phases 7.5 and 10.3 both deferred to here.
+ *
+ * The address alone is unremarkable; WHERE IT IS CONSULTED is the whole
+ * decision, and two placements were rejected before this one.
+ *
+ * **Not a fallback in `resolveHomeUrl`.** A compiled-in default there would
+ * change where every existing daemon's next canvas landed on the day it
+ * shipped — no gesture, no report, no way for a person who had been working
+ * locally for months to know their next canvas went to somebody else's
+ * server. `packages/server/src/config.ts` refused it in those words, and the
+ * refusal stands: that function still has no compiled-in default, and a
+ * daemon with nothing configured still births locally.
+ *
+ * **Not a flag either**, for `ISOCAN_BIND` and `ISOCAN_STORE`'s reason: where
+ * canvases are born is innkeeper configuration, not a per-invocation choice an
+ * agent reaches for.
+ *
+ * **It is consulted by `isocan setup`, once, on a machine that has never held
+ * a canvas** — where "setup" is the gesture and the report says what it did.
+ * That is what `config.ts` predicted ("that default belongs to phase 14, where
+ * setup writes the address down on purpose") and what Scene 0 needs: Priya
+ * runs three steps, and the canvas she makes a minute later is at the hosted
+ * home rather than trapped on her laptop. `isocan home --clear` is the whole
+ * of the way back, and setup's own report names it.
+ *
+ * **Why flipping it is safe now, which it was not before phase 10.3.** A birth
+ * default used to be a whole-daemon property: setting one demoted every canvas
+ * on the disk to a replica of somewhere else. It decides one thing now — where
+ * the NEXT canvas goes — and which home an existing canvas belongs to is a row
+ * written at binding and never inferred. So a shipped default is consulted
+ * only at a birth and can never re-point work that already exists.
+ *
+ * It lives here beside `INSTALL_SPEC` and `SKILL_INSTALL_COMMAND` because it
+ * is the third member of that set: the strings a stranger meets before they
+ * have decided anything, each spelled in exactly one place.
+ */
+export const DEFAULT_HOME_URL = "https://isocan.io";
+
+/**
  * **Scene 0's first step**, in the one place that spells it.
  *
  * A different command from `INSTALL_SPEC`'s and deliberately so: that one

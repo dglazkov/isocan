@@ -65,12 +65,25 @@ have "${IMAGE}"
 # ISOCAN_AUTH_API_KEY           token is checked against, and the browser key
 #                               the page starts a sign-in with. Added only if
 #                               100-identity-platform.sh has run — see below.
+# ISOCAN_PROXY_HOPS             how many trailing X-Forwarded-For entries this
+#                               home's own infrastructure appended — the door
+#                               meter's key (packages/server/src/meter.ts).
+#                               Set only when config.sh's PROXY_HOPS is set,
+#                               so an unset variable means the code's own
+#                               default rather than this script asserting one.
 ENV_VARS="ISOCAN_STORE=cloud"
 ENV_VARS="${ENV_VARS},ISOCAN_GCP_PROJECT=${PROJECT_ID}"
 ENV_VARS="${ENV_VARS},ISOCAN_BUCKET=${BUCKET}"
 ENV_VARS="${ENV_VARS},ISOCAN_BIND=0.0.0.0"
 ENV_VARS="${ENV_VARS},ISOCAN_HOME=/tmp/isocan"
 ENV_VARS="${ENV_VARS},ISOCAN_ALLOWED_ORIGINS=https://${DOMAIN}"
+# Only when it is set. An empty value would reach the container as an empty
+# string, which `configuredHops` reads as "not an integer" and answers with its
+# default anyway — but it would put a variable in the service description
+# claiming a decision nobody made.
+if [ -n "${PROXY_HOPS}" ]; then
+  ENV_VARS="${ENV_VARS},ISOCAN_PROXY_HOPS=${PROXY_HOPS}"
+fi
 
 # **The borrowed attester, as CONFIGURATION.** This is what makes one image run
 # at dev.isocan.io, at isocan.io, and on somebody's laptop: the container is
@@ -126,6 +139,13 @@ note "min=${MIN_INSTANCES} max=${MAX_INSTANCES} cpu=${CPU} memory=${MEMORY} conc
 # --execution-environment=gen2: a full Linux sandbox rather than gVisor —
 # needed for the network and filesystem behaviour a long-lived socket server
 # expects, and the only one where memory over 4 GiB is even available later.
+#
+# --ingress is config.sh's INGRESS, and on prod it is not `all`. See that
+# variable for the argument: `all` leaves the *.run.app URL reachable around
+# the load balancer, and the door's meter keys on a forwarded chain that path
+# does not produce. Restricting it makes the LB the only way in — and makes
+# the run.app URL stop answering, which is why the check at the end of this
+# script asks the domain instead when it is set.
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -140,7 +160,7 @@ gcloud run deploy "${SERVICE}" \
   --timeout="${REQUEST_TIMEOUT}" \
   --port="${CONTAINER_PORT}" \
   --execution-environment=gen2 \
-  --ingress=all \
+  --ingress="${INGRESS}" \
   --set-env-vars="${ENV_VARS}" \
   --quiet
 
@@ -188,12 +208,32 @@ step "does it answer?"
 # ended Stage A with "deployed, but not serving" on a home that was serving
 # perfectly. `/healthz` is untouched and still what localhost uses; see the
 # health-path note in README.md's Stage C.
-if curl -fsS --max-time 30 "${URL}/api/healthz"; then
-  printf '\n'
-  made "the home answers at ${URL}"
+#
+# **WHICH address gets asked depends on the ingress.** With `all`, the run.app
+# URL is the honest thing to check: it is a door this service is actually
+# holding open. With ingress restricted, that URL is CLOSED BY DESIGN — asking
+# it would fail on a perfectly healthy home, and asking it and shrugging would
+# be this codebase's oldest bug — so the domain is asked instead, and a domain
+# that does not answer is a real failure rather than a stage-ordering excuse.
+# Restricted ingress on a home whose Stage B has not finished is a
+# configuration mistake, and the message below says so.
+if [ "${INGRESS}" = "all" ]; then
+  CHECK_URL="${URL}"
 else
-  warn "no answer from ${URL}/api/healthz"
+  CHECK_URL="https://${DOMAIN}"
+  note "ingress is ${INGRESS} — the run.app URL is closed by design; checking ${CHECK_URL}"
+fi
+if curl -fsS --max-time 30 "${CHECK_URL}/api/healthz"; then
+  printf '\n'
+  made "the home answers at ${CHECK_URL}"
+else
+  warn "no answer from ${CHECK_URL}/api/healthz"
   note "logs: gcloud run services logs read ${SERVICE} --project=${PROJECT_ID} --region=${REGION} --limit=100"
+  if [ "${INGRESS}" != "all" ]; then
+    note "ingress is ${INGRESS}, so ${URL} cannot answer and the domain is the only door."
+    note "if Stage B has not finished for this home, deploy with ISOCAN_INGRESS=all first,"
+    note "finish the load balancer and the DNS record, then re-run this script."
+  fi
   die "deployed, but not serving"
 fi
 

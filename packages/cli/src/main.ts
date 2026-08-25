@@ -27,6 +27,7 @@ import {
   fitMoves,
   type FitTarget,
   BROWSER_MIME,
+  DEFAULT_HOME_URL,
   DEFAULT_PORT,
   DRAWING_FILENAME,
   DRAWING_MIME,
@@ -2110,6 +2111,64 @@ async function runningFromCheckout(): Promise<boolean> {
   return exists(fileURLToPath(new URL("../../../.git", import.meta.url)));
 }
 
+/**
+ * **Which address a fresh machine gets pointed at, and whether it gets one at
+ * all** — phase 14's default, and the two ways it is turned off.
+ *
+ * `ISOCAN_DEFAULT_HOME` set to an address REPLACES the shipped one; set to
+ * empty it means "this build points fresh machines nowhere". It is not a
+ * testing hatch bolted on: an innkeeper running isocan for their own
+ * organisation ships the same CLI and wants their own home to be the default,
+ * and the standing lesson applies — when a capability looks like it must be
+ * compiled in, check whether what actually varies is an input the code already
+ * needs. It grants no authority `ISOCAN_HOME_URL` does not already grant, and
+ * far less: this one is consulted once, on a machine that has never held a
+ * canvas, where that one wins over everything on every boot.
+ *
+ * **Unset in a checkout means no default**, which is the guard that matters
+ * day to day. A checkout is a developer's machine — this repo's own
+ * `npm run dev`, and every daemon the suite spawns — and pointing those at
+ * production would be this project accidentally dogfooding the home strangers
+ * are on. An EXPLICIT value still wins there, because somebody who exports it
+ * in a checkout means it, and that is how the suite proves this flip works at
+ * all (`setup-npx.test.ts`).
+ */
+async function defaultHomeUrl(): Promise<string | null> {
+  const raw = process.env.ISOCAN_DEFAULT_HOME?.trim();
+  if (raw !== undefined) return raw === "" ? null : raw;
+  return (await runningFromCheckout()) ? null : DEFAULT_HOME_URL;
+}
+
+/**
+ * **Has this machine ever held a canvas?** — the second half of who phase 14's
+ * default may be written for.
+ *
+ * Asked of the DISK and not of the daemon, deliberately: `GET /api/projects`
+ * is behind the door, and knocking on the door is what mints and stores a
+ * badge. A plain `isocan setup` on a fresh machine must stay the command that
+ * touches nothing — it creates no canvas, names nobody, and writes no
+ * `identity.json` — and `setup.test.ts` asserts exactly that. Reading a
+ * directory costs none of it.
+ *
+ * **Why "never held one" and not "has no birth default".** Somebody who has
+ * been working locally for months also has no birth default, and silently
+ * sending their next canvas to a hosted home would be the upgrade-day
+ * behaviour change `DEFAULT_HOME_URL` refuses to ship at the resolver. Their
+ * machine keeps birthing locally until they say otherwise, and `isocan home
+ * https://isocan.io` is the whole of saying so.
+ *
+ * A missing directory is the fresh case and answers true; anything unreadable
+ * answers false, which is the conservative direction — the cost of being
+ * wrong here is a canvas born in the wrong place.
+ */
+async function neverHeldACanvas(isocanHome: string): Promise<boolean> {
+  try {
+    return (await fs.readdir(paths.canvasesDir(isocanHome))).length === 0;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
 /** This copy's package root — the thing a daemon's `root` is compared against. */
 const myRoot = () => fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -2359,6 +2418,71 @@ program
                 ? `${birth} — unchanged; that is already where canvases born here go`
                 : `${birth} — unchanged. This canvas lives at ${arrival.origin} and stays ` +
                   `there; \`isocan home ${arrival.origin}\` if you want new ones born there too`;
+          }
+        }
+
+        /**
+         * **Phase 14's flip: a fresh machine is born answering to isocan.io.**
+         *
+         * The sibling of the block above, for the form with no address on it —
+         * Scene 0 rather than Scene 5. Priya runs three steps, makes a canvas
+         * in her browser a minute later, and it is at the hosted home; her
+         * laptop and her desktop show the same canvas, "because multi-device
+         * fell out before multi-user started." Without this line that canvas is
+         * trapped on one machine, and the scene's last paragraph is false.
+         *
+         * `DEFAULT_HOME_URL` carries the argument for why the default is
+         * consulted HERE and not as a fallback inside `resolveHomeUrl`. What
+         * this block adds is the second half of the same care — **whose
+         * machine may be flipped**, which is `neverHeldACanvas`, and:
+         *
+         * - **only when nothing is configured**, exactly as the arrival branch
+         *   above. A machine with a birth default keeps it; that is somebody's
+         *   answer and this is only a default.
+         * - **only for an installed copy.** A checkout is a developer's
+         *   machine — this repo's own `npm run dev`, and every daemon the suite
+         *   spawns — and pointing those at production would be this project
+         *   dogfooding somebody else's home by accident. `runningFromCheckout`
+         *   is the same question setup already asks about the CLI on PATH.
+         * - **never fatal.** `pointDaemonAtHome` refuses an address that does
+         *   not answer, which is right for a person typing `isocan home` and
+         *   wrong as the end of a first-run command: a fresh setup on a laptop
+         *   with no network must still leave a working local daemon. So the
+         *   refusal is caught and REPORTED — canvases stay local, and the line
+         *   says why — rather than taking the whole command down with it.
+         *
+         * The report is the gesture's receipt, and it names the way back in
+         * the same breath. This is the one place a person is told their next
+         * canvas is going somewhere else.
+         */
+        const fresh = !arrival && daemonUp ? await defaultHomeUrl() : null;
+        if (fresh) {
+          const health = await client.healthz(2000);
+          const configured = (await readConfig(home)).home?.trim() || null;
+          const birth = health?.home ?? configured;
+          if (!birth && (await neverHeldACanvas(home))) {
+            try {
+              await pointDaemonAtHome({
+                isocanHome: home,
+                port,
+                target: fresh,
+                configured,
+                live: health?.home ?? null,
+                force: false,
+              });
+              daemonUp = await client.health(2000);
+              report.home = fresh;
+              report.birth =
+                `new canvases here will be born at ${fresh} — ` +
+                "`isocan home --clear` if you would rather they stayed on this machine";
+            } catch (err) {
+              // Offline, or an `ISOCAN_HOME_URL` in this shell. Either way the
+              // daemon is up and local, which is a working setup — so this is
+              // a line in the report, not an exit code.
+              report.birth =
+                `canvases made here stay on this machine — could not set ${fresh} ` +
+                `as the birth default (${(err as Error).message})`;
+            }
           }
         }
 

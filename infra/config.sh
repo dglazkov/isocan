@@ -99,3 +99,35 @@ REQUEST_TIMEOUT="${ISOCAN_REQUEST_TIMEOUT:-3600}"
 # The port the container listens on. Cloud Run injects PORT into the container;
 # the entrypoint copies it to ISOCAN_PORT. 8080 is Cloud Run's default.
 CONTAINER_PORT="${ISOCAN_CONTAINER_PORT:-8080}"
+
+# ---- who may reach the service directly ----
+#
+# **The rate limit's real bypass, closed by a flag** (phase 13.7's open
+# finding, decided in phase 14). `--ingress=all` leaves the `*.run.app` URL
+# reachable AROUND the load balancer, and on that path the forwarded chain is
+# short enough that the entry `meter.ts` keys on is caller-supplied — so a
+# flooder who finds that address mints badges without limit by varying an
+# `X-Forwarded-For` it made up. `internal-and-cloud-load-balancing` makes the
+# LB the only way in, and then every request carries a chain the infrastructure
+# appended.
+#
+# The blast radius, stated because it is the whole reason this is a decision:
+# the `*.run.app` URL stops answering ENTIRELY. Health checks, `curl` against
+# the service, and 70-cloud-run.sh's own final check must all go through the
+# domain — so this may only be set on a home whose Stage B has finished, and
+# 70-cloud-run.sh checks the domain instead when it is set.
+#
+# **Dev stays open on purpose.** Its run.app URL is what several proofs from
+# phase 5 onward were measured against, and a home with no strangers on it has
+# nothing to protect from the bypass. Prod is where strangers arrive.
+INGRESS="${ISOCAN_INGRESS:-all}"
+
+# How many trailing `X-Forwarded-For` entries this home's infrastructure
+# appends — `meter.ts`'s `ISOCAN_PROXY_HOPS`, named here because an operator
+# looks in infra/ and not in a TypeScript file. Empty means the code's own
+# default of 1 (Google's external ALB appends the client address and then its
+# own, so one from the right is the client). Set it only after MEASURING the
+# real chain against this home: refusals climbing while the meter's
+# distinct-key count sits at 1 is the whole-internet-in-one-bucket signature,
+# and it is logged with every refusal for exactly that reason.
+PROXY_HOPS="${ISOCAN_PROXY_HOPS:-}"
