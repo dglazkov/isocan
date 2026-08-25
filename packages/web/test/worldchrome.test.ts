@@ -458,6 +458,15 @@ describe("the row under an item is one row", () => {
     expect(rule!.body).toMatch(/transform-origin:\s*left top/);
   });
 
+  it("clears the bottom selection outline and resize handles with ample padding", () => {
+    const rule = allRules().find((r) => r.selectors.includes(".item-under"));
+    expect(rule, ".item-under has no rule").toBeTruthy();
+    const pad = rule!.body.match(/padding-top:\s*(\d+)px/);
+    expect(pad, "no padding-top").toBeTruthy();
+    // 2px selection outline + 6px resize handle clearance requires >= 8px
+    expect(Number(pad![1])).toBeGreaterThanOrEqual(8);
+  });
+
   it("gives the row the item's SCREEN width, which is what makes it a row", () => {
     // A centre and a right edge only exist if the row knows how wide the item
     // is. Pinning it to both edges would give it the item's WORLD width, which

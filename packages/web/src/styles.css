@@ -769,7 +769,7 @@ img { height: auto; }
   position: absolute; left: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
   display: flex; align-items: center; gap: 6px;
-  padding-top: 5px; pointer-events: none; transform-origin: left top;
+  padding-top: 10px; pointer-events: none; transform-origin: left top;
 }
 /* Middle slot: centred in WHAT IS LEFT. Starts centred under the item and is
    nudged right as marks accumulate, which is the behaviour `flex: 1` gives for
