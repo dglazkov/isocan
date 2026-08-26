@@ -91,3 +91,33 @@ describe("the workbench address family", () => {
     expect(workbenchItemPath("prj_1", "itm/odd")).toBe("/p/prj_1/w/itm%2Fodd");
   });
 });
+
+/**
+ * The stage's two panes — toggles, not tabs.
+ *
+ * It shipped as Preview/Edit/Split tabs and they lasted a day: three names
+ * for the states of two switches, with a default that hid the editor. The
+ * rules that replaced them, frozen here: an editable artifact opens with
+ * BOTH panes; each collapses from its own control, which stays put as the
+ * way back; and the stage never shows nothing — the sole open pane's toggle
+ * goes inert rather than leaving a blank.
+ */
+describe("the stage's panes", () => {
+  const stage = read("../src/components/ArtifactStage.tsx");
+
+  it("defaults to both panes open", () => {
+    expect(stage).toContain("return { preview: true, edit: true };");
+  });
+
+  it("refuses the empty stage", () => {
+    expect(stage).toMatch(/if \(!next\.preview && !next\.edit\) return;/);
+  });
+
+  it("keeps the way back where the way out was", () => {
+    // Toggles with pressed state, never a tab strip: the control that
+    // collapsed a pane is the control that reopens it.
+    expect(stage).toContain("aria-pressed={showPreview}");
+    expect(stage).toContain("aria-pressed={showEdit}");
+    expect(stage).not.toMatch(/role="tablist"/);
+  });
+});

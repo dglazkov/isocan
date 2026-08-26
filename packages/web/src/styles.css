@@ -1253,20 +1253,29 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .artifact-stage-body { flex: 1; min-height: 0; display: flex; }
 .artifact-stage-body > * { flex: 1; min-width: 0; }
-/* The mode strip: part of the STAGE, so it renders in both covers — a mode
-   reachable at /w and missing at /i would be the two-products tell. */
-.stage-modes {
+/* The pane switches: part of the STAGE, so they render in both covers — a
+   control reachable at /w and missing at /i would be the two-products tell.
+   TOGGLES, not tabs: both can be on (the default), each collapses its own
+   pane, and the way back is the same button, standing where it stood. The
+   sole open pane's toggle disables — a stage showing nothing is not a
+   state. */
+.stage-panes {
   flex: none; display: flex; align-items: center; gap: 2px;
   padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--card);
 }
-.stage-mode {
+.stage-pane {
   font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
   padding: 2px 9px; border-radius: 999px; border: 1px solid transparent;
-  background: none; color: var(--ink-muted);
+  background: none; color: var(--ink-soft);
 }
-.stage-mode:hover { color: var(--ink); background: var(--chip); }
-.stage-mode.on { background: var(--chip); border-color: var(--line); color: var(--ink); }
+.stage-pane:hover { color: var(--ink); background: var(--chip); }
+.stage-pane.on { background: var(--chip); border-color: var(--line); color: var(--ink); }
+.stage-pane:disabled { cursor: default; }
 .stage-mode-hint { margin-left: auto; font-size: 10.5px; color: var(--ink-soft); }
+/* The saved version, beside the buffer — the preview pane when the editor
+   does not draft-preview the type itself. */
+.stage-saved-pane { flex: 1; min-width: 0; display: flex; border-left: 1px solid var(--line); }
+.stage-saved-pane > * { flex: 1; }
 .stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stage-editor-bar {
   flex: none; display: flex; align-items: center; gap: 8px;
