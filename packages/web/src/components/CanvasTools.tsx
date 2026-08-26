@@ -78,6 +78,10 @@ const PEN = (
  * team could invent 👀 and 🚧 and ✅ for themselves. A face makes no claim
  * about WHICH marks are in there, which is the honest amount to promise from
  * a 17px icon.
+ *
+ * Its sibling is `SMILE_PLUS` in Reactions.tsx — a face with a verb (add a
+ * mark) where this one is a face with a state. Two drawings on purpose; see
+ * the note there.
  */
 const marksGlyph = (filled: boolean) => (
   <svg

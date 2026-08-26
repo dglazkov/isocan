@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { fitInto, revealDelta, worldToScreen } from "../src/lib/viewport.ts";
+import {
+  MARKS_GUTTER,
+  MARKS_WIDTH,
+  TOPBAR_HEIGHT,
+  TRASH_WIDTH,
+  dockEdges,
+  stageInsets,
+  stageRect,
+} from "../src/lib/stage.ts";
 
 /**
  * Fitting has to aim at the part of the window the canvas actually has. The
@@ -125,3 +134,120 @@ describe("revealing items on the visible stage", () => {
   });
 });
 
+
+
+/**
+ * The stage itself, called — not a hand-rolled replica of it.
+ *
+ * The fixtures above bake the stage's shape into their own literals, which is
+ * fine for exercising `fitInto`'s math but says NOTHING about `stageRect`:
+ * when the right-gutter reservation landed, reverting it left this whole file
+ * green, because no test ever called the function the feature lives in
+ * (lesson #5 — a guard that restates the rule instead of importing it can
+ * only test itself).
+ *
+ * `stageRect`/`stageInsets` take an injectable ui/window for exactly this
+ * test: no store to stand up, no jsdom to fake.
+ */
+describe("the stage, asked directly", () => {
+  const win = { innerWidth: 1440, innerHeight: 900 };
+  const ui = (over: Partial<Parameters<typeof dockEdges>[0]> = {}) => ({
+    mainPanelOpen: false,
+    filesPanelOpen: false,
+    trashOpen: false,
+    marksOpen: false,
+    panelWidth: 320,
+    ...over,
+  });
+
+  it("reserves the rail's gutter even with nothing docked", () => {
+    // The reservation 377a9f2 added, guarded by calling the real function:
+    // the tool rail (66px deep) floats in this strip, and framing an item
+    // under it is parking it beneath chrome.
+    const stage = stageRect(ui(), win);
+    expect(stage.x).toBe(0);
+    expect(stage.x + stage.width).toBe(win.innerWidth - MARKS_GUTTER);
+  });
+
+  it("treats an open dock as the reservation, not an addition to it", () => {
+    const trash = stageRect(ui({ trashOpen: true }), win);
+    expect(trash.x + trash.width).toBe(win.innerWidth - TRASH_WIDTH);
+    const marks = stageRect(ui({ marksOpen: true }), win);
+    expect(marks.x + marks.width).toBe(win.innerWidth - MARKS_WIDTH - MARKS_GUTTER);
+  });
+
+  it("gives the left edge to an open panel", () => {
+    const stage = stageRect(ui({ mainPanelOpen: true, panelWidth: 344 }), win);
+    expect(stage.x).toBe(344);
+    expect(stage.y).toBe(TOPBAR_HEIGHT);
+  });
+
+  it("lets the rim live in the gutter that framing must not", () => {
+    // The ONE deliberate difference between the two shapes, asserted as a
+    // relationship so the shared derivation cannot fork again: insets match
+    // the rect exactly, except that with no dock open the rect reserves the
+    // gutter and the insets do not — a 6px rim floating 76px in from the
+    // edge would be a rim in space.
+    const bare = ui();
+    expect(stageInsets(bare).right).toBe(0);
+    expect(win.innerWidth - (stageRect(bare, win).x + stageRect(bare, win).width)).toBe(
+      MARKS_GUTTER,
+    );
+    for (const docked of [ui({ trashOpen: true }), ui({ marksOpen: true })]) {
+      const rect = stageRect(docked, win);
+      expect(stageInsets(docked).right).toBe(win.innerWidth - (rect.x + rect.width));
+      expect(stageInsets(docked).left).toBe(rect.x);
+    }
+  });
+
+  it("never collapses to nothing in a tiny window", () => {
+    const stage = stageRect(ui({ mainPanelOpen: true, panelWidth: 800 }), {
+      innerWidth: 820,
+      innerHeight: 200,
+    });
+    expect(stage.width).toBeGreaterThanOrEqual(160);
+    expect(stage.height).toBeGreaterThanOrEqual(160);
+  });
+});
+
+/**
+ * The narrow-stage clause of revealDelta's minimal-motion contract.
+ *
+ * The first version compared the item against `stage - 2 * margin`, so on a
+ * stage merely too narrow for FULL breathing room it declared the item
+ * unfittable and re-centred it on every jump — an item entirely on screen,
+ * moving every time you walked past it, which is the exact feeling the
+ * function exists to prevent. The margin yields; the contract does not.
+ */
+describe("revealing on a narrow stage", () => {
+  const tight = { x: 0, y: 48, width: 500, height: 852 };
+
+  it("leaves a fully visible item alone — even off-centre, even edge-tight", () => {
+    // ASYMMETRIC on purpose: a centred fixture also passes under a mutant
+    // that re-centres everything, which is the exact regression this guards.
+    const offCentre = { left: 10, top: 200, right: 470, bottom: 400 };
+    expect(revealDelta(offCentre, tight, 76)).toEqual({ dx: 0, dy: 0 });
+    const edgeTight = { left: 0, top: 200, right: 460, bottom: 400 };
+    expect(revealDelta(edgeTight, tight, 76)).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("slides an off-edge item in, to the air the stage can actually give", () => {
+    // 460 wide on a 500 stage: the 76px ask yields to (500-460)/2 = 20.
+    const item = { left: -100, top: 200, right: 360, bottom: 400 };
+    const { dx } = revealDelta(item, tight, 76);
+    expect(item.left + dx).toBe(20);
+  });
+
+  it("keeps the full margin when the stage can afford it", () => {
+    const roomy = { x: 320, y: 48, width: 1120, height: 852 };
+    const item = { left: 100, top: 200, right: 500, bottom: 400 };
+    const { dx } = revealDelta(item, roomy, 76);
+    expect(item.left + dx).toBe(roomy.x + 76);
+  });
+
+  it("reserves centring for an item genuinely wider than the stage", () => {
+    const item = { left: 100, top: 200, right: 700, bottom: 400 };
+    const { dx } = revealDelta(item, tight, 76);
+    expect(item.left + dx).toBe(tight.x + tight.width / 2 - 300);
+  });
+});

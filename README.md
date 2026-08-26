@@ -199,9 +199,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   touched first) and clicking the chip flies the reader to the item;
   `comment anchor` re-pins a thread after the fact — e.g. onto the item it
   asked for.
-- **Reactions**: hover or select an item and a row of marks appears beneath
-  it — click one to add yours, click it again to take it back, `＋` to reach
-  for another. A mark carries WHO left it, so a chip reads "3" and knows which
+- **Reactions**: select an item and a row of marks appears beneath it —
+  click one to add yours, click it again to take it back, and the smiley
+  button opens a picker (recents, groups, and a search) for everything else. A mark carries WHO left it, so a chip reads "3" and knows which
   three; yours is outlined, so agreeing with somebody is one click and never a
   guess about whether you already did.
 

@@ -769,6 +769,10 @@ img { height: auto; }
   position: absolute; left: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
   display: flex; align-items: center; gap: 6px;
+  /* 10 is derived, not felt: the selection outline is 2px and the corner
+     handles reach 6px below the item, so the row clears the outline by 8 and
+     the handles by 4. At 5px it sat against the blue border on every
+     selected item — and selected is exactly when this row is fullest. */
   padding-top: 10px; pointer-events: none; transform-origin: left top;
 }
 /* Middle slot: centred in WHAT IS LEFT. Starts centred under the item and is
@@ -939,7 +943,6 @@ img { height: auto; }
 .react-count { font-variant-numeric: tabular-nums; font-weight: 600; }
 .react-add {
   display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 11px; line-height: 1.5;
   padding: 1px; width: 22px; height: 21px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
   user-select: none; -webkit-user-select: none;
@@ -1064,18 +1067,19 @@ img { height: auto; }
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
    and a control up there would cost the name at every zoom for something you
    press twice a session. */
-/* Always the glyph, never the word.
+/* The icon always; the word when the row can afford it.
    
-   The label cost 77 screen pixels of a line that also carries the marks, the
-   `+` and the size — on a small item, or any item zoomed out, that was the
-   whole row. It earns them back by being the mark every video player and
-   window manager uses for this, so it needs no legend, and by naming itself on
-   hover (`data-tip` below) rather than in permanent ink.
+   Two forms, one decision made in `underRowSpellsItOut` (lib/chrome.ts):
+   roomy items spell "Full screen" beside the expand glyph, and a tight item
+   — or one whose worn marks have eaten the line's budget — drops to
+   `.compact`, icon only, so the row never runs off the item's edge. The
+   glyph is the mark every video player and window manager uses for this, so
+   the compact form needs no legend beyond its hover tip.
    
-   `align-self: stretch` gives it its height: an svg is replaced content and
-   ignores the `line-height` that used to size the spelled-out form, which left
-   the glyph 13px tall against 21px chips either side. The row's height is the
-   one number that is already right. */
+   `align-self: stretch` gives the compact form its height: an svg is
+   replaced content and ignores the `line-height` that sizes the spelled-out
+   form, which once left the glyph 13px tall against 21px chips either side.
+   The row's height is the one number that is already right. */
 .fullscreen-btn {
   flex: none; font: inherit; font-size: 10.5px; font-weight: 600; line-height: 1.6;
   padding: 1px 8px; align-self: stretch;
@@ -1094,10 +1098,11 @@ img { height: auto; }
   padding: 1px; width: 22px; gap: 0;
 }
 .fullscreen-btn svg { display: block; flex: none; }
-.fullscreen-btn span {
-  background: none; border: none; padding: 0; border-radius: 0;
-  color: inherit; font: inherit; white-space: nowrap;
-}
+/* The label span is NOT a chip, and that is held by SCOPE alone — `.item-hint
+   > span` styles only the strip's direct children, so nothing ever chips the
+   button's own text. A reset rule used to restate that here; a rule that
+   resets nothing is a second home for the scoping decision, and two homes is
+   how the nested-capsule bug returns. */
 /* The name, on hover and on keyboard focus. Drawn rather than left to `title`
    — the native tooltip waits about a second, appears at the pointer rather
    than at the control, and takes no styling. A button whose whole face is a

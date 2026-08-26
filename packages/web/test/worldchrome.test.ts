@@ -463,8 +463,11 @@ describe("the row under an item is one row", () => {
     expect(rule, ".item-under has no rule").toBeTruthy();
     const pad = rule!.body.match(/padding-top:\s*(\d+)px/);
     expect(pad, "no padding-top").toBeTruthy();
-    // 2px selection outline + 6px resize handle clearance requires >= 8px
+    // Bracketed, not floored (lesson #11): the 2px selection outline plus the
+    // handles' 6px reach set the floor, and past ~16 the row reads as
+    // belonging to the canvas rather than to its item.
     expect(Number(pad![1])).toBeGreaterThanOrEqual(8);
+    expect(Number(pad![1])).toBeLessThanOrEqual(16);
   });
 
   it("gives the row the item's SCREEN width, which is what makes it a row", () => {

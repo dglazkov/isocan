@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CHROME_INSET,
+  FULL_LABEL_ROOM,
   ICON_ROOM,
+  MARK_ROOM,
   MIN_NAME_ROOM,
   PIN_REACH,
   ROW_END_ROOM,
@@ -473,12 +475,36 @@ describe("the full-screen control has an icon and adapts its label to room", () 
     expect(button![0]).toContain('{spellItOut && <span>Full screen</span>}');
   });
 
-  it("decides room from FULL_LABEL_ROOM", () => {
-    expect(underRowSpellsItOut(220, 1)).toBe(true);
-    expect(underRowSpellsItOut(210, 1)).toBe(true);
-    expect(underRowSpellsItOut(200, 1)).toBe(false);
-    expect(underRowSpellsItOut(400, 0.5)).toBe(false);
-    expect(underRowSpellsItOut(500, 0.5)).toBe(true);
+  it("brackets the threshold, so it can be retuned but not lost or drifted", () => {
+    // Measured: 211px for the whole line with the labeled button (22 + 6 +
+    // 91 + 6 + 86). Below that the label overlaps its neighbours; far above
+    // it a roomy item goes to the glyph for no reason. The first version of
+    // this test froze point values instead, which said nothing when the
+    // button grew 14px under an unchanged threshold (lesson #11: bracket a
+    // tuning constant, never freeze it).
+    expect(FULL_LABEL_ROOM).toBeGreaterThanOrEqual(211);
+    expect(FULL_LABEL_ROOM).toBeLessThan(320);
+  });
+
+  it("charges the room for every worn mark", () => {
+    // The row also carries the marks. Two chips on a 215px item ran the size
+    // chip 84 measured pixels past the item's edge under a threshold that
+    // only looked at the item's width.
+    const roomy = FULL_LABEL_ROOM + 2 * MARK_ROOM;
+    expect(underRowSpellsItOut(roomy, 1, 2)).toBe(true);
+    expect(underRowSpellsItOut(roomy - 1, 1, 2)).toBe(false);
+    // The same width that spells it out bare does not with marks on.
+    expect(underRowSpellsItOut(FULL_LABEL_ROOM, 1, 0)).toBe(true);
+    expect(underRowSpellsItOut(FULL_LABEL_ROOM, 1, 1)).toBe(false);
+    // And a chip's charge is a real chip's width, not a token.
+    expect(MARK_ROOM).toBeGreaterThanOrEqual(46);
+    expect(MARK_ROOM).toBeLessThan(60);
+  });
+
+  it("measures SCREEN pixels, not world units", () => {
+    const wide = FULL_LABEL_ROOM * 2;
+    expect(underRowSpellsItOut(wide, 1, 0)).toBe(true);
+    expect(underRowSpellsItOut(wide, 0.4, 0)).toBe(false);
   });
 
   it("keeps the name for a screen reader", () => {
@@ -487,7 +513,10 @@ describe("the full-screen control has an icon and adapts its label to room", () 
 
   it("keeps the name for a pointer, and draws it rather than using `title`", () => {
     // `title` waits about a second and lands at the pointer, not the control.
-    expect(itemView).toMatch(/data-tip="Full screen/);
+    // Conditional on purpose: the labeled form's tip carries only the keys
+    // (its ink already says the name); the compact form's tip carries both.
+    expect(itemView).toMatch(/data-tip=\{spellItOut \? "Enter/);
+    expect(itemView).toMatch(/"Full screen — Enter, Esc comes back"/);
     expect(css).toMatch(/\.fullscreen-btn::after\s*\{[^}]*content:\s*attr\(data-tip\)/);
   });
 
@@ -503,12 +532,16 @@ describe("the full-screen control has an icon and adapts its label to room", () 
   });
 
   it("keeps the button face one solid color without an inner chip", () => {
-    // The label is text on the button, not a nested chip: .item-hint > span
-    // must not style .fullscreen-btn span with background or borders.
-    const btnSpan = css.match(/\.fullscreen-btn span\s*\{([^}]*)\}/);
-    expect(btnSpan, "no .fullscreen-btn span rule").toBeTruthy();
-    expect(btnSpan![1]).toMatch(/background:\s*none/);
-    expect(btnSpan![1]).toMatch(/border:\s*none/);
+    // The chip styling that once wrapped the label in a nested grey capsule
+    // is kept off by SCOPE, not by a counter-rule: `.item-hint > span` styles
+    // only the strip's own direct children, so the button's inner span is
+    // simply never a chip. One home for the rule — the un-styling reset that
+    // used to sit beside it reset nothing and invited the two to disagree.
+    expect(css).toMatch(/\.item-hint > span\s*\{/);
+    expect(css).not.toMatch(/\.item-hint span\s*\{/);
+    expect(css, "a dead reset is a second home for the scoping rule").not.toMatch(
+      /\.fullscreen-btn span\s*\{/,
+    );
   });
 });
 
@@ -530,11 +563,20 @@ describe("the reaction add button", () => {
     expect(reactionsView).toContain('viewBox="0 0 24 24"');
   });
 
-  it("styles the add reaction button as a compact icon button", () => {
+  it("styles the add button for the icon it holds, not the text it lost", () => {
     const btn = css.match(/\.react-add\s*\{([^}]*)\}/);
     expect(btn, "no .react-add rule").toBeTruthy();
-    expect(btn![1]).toMatch(/display:\s*inline-flex/);
-    expect(btn![1]).toMatch(/border-radius:\s*999px/);
+    // A fixed box, centred both ways — an svg does not size a flex row the
+    // way a glyph did.
+    expect(btn![1]).toMatch(/justify-content:\s*center/);
+    expect(btn![1]).toMatch(/width:\s*22px/);
+    expect(btn![1]).toMatch(/height:\s*21px/);
+    // The text-sizing the ＋ needed goes with the ＋: font-size and
+    // line-height on an svg-only button are dead weight that misleads the
+    // next reader about what is inside.
+    expect(btn![1]).not.toMatch(/font-size/);
+    expect(btn![1]).not.toMatch(/line-height/);
+    expect(css).toMatch(/\.react-add svg\s*\{[^}]*display:\s*block/);
   });
 });
 

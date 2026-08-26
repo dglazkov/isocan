@@ -1,26 +1,47 @@
 import { useUiStore } from "../stores/uiStore.ts";
 
-import { TRASH_WIDTH } from "../components/TrashPanel.tsx";
-import { MARKS_WIDTH } from "../components/ReactionBar.tsx";
-
-/** The gutter the marks dock floats in, from the window's right edge. */
-const MARKS_GUTTER = 76;
-
 /**
  * The part of the window the canvas actually has.
  *
  * Docked chrome covers real estate: the top bar always, a panel on the left
- * when one is open, the trash on the right. Anything that FRAMES something —
- * fit to screen, fit the selection, fly to an item, the edge rim — has to aim
- * at what is visible, or it centres the thing you asked for underneath the
- * panel you asked from.
+ * when one is open, the trash or the marks dock on the right. Anything that
+ * FRAMES something — fit to screen, fit the selection, fly to an item, the
+ * edge rim — has to aim at what is visible, or it centres the thing you asked
+ * for underneath the panel you asked from.
  *
- * It was computed three different ways before this: a `reserved` parameter on
- * one function, `window.innerWidth + PANEL_WIDTH` in another, and the radar's
- * own insets in a third. One answer, in screen pixels.
+ * It was computed three different ways before this file: a `reserved`
+ * parameter on one function, `window.innerWidth + PANEL_WIDTH` in another,
+ * and the radar's own insets in a third. One answer, in screen pixels — and
+ * the dock arithmetic is ONE function (`dockEdges`) that both public shapes
+ * read, because the day this file held two hand-copied spellings of it they
+ * immediately began to disagree about the right edge.
+ *
+ * This file also OWNS the dock widths. They used to live on the components
+ * and be imported here, which read naturally and meant the geometry module
+ * could not be imported by a test without dragging React components, the
+ * canvas store and the api module behind it. The components import their
+ * width from here instead: the stage is the one place that knows how much
+ * window each dock takes.
  */
 
 export const TOPBAR_HEIGHT = 48;
+
+/** The trash panel's docked width. `.trash-panel { width: 300px }` — the two
+ * are one number with two homes, which is why the CSS is guarded. */
+export const TRASH_WIDTH = 300;
+
+/** The marks dock's width. Must equal `.marks { width: 232px }`. */
+export const MARKS_WIDTH = 232;
+
+/**
+ * The gutter along the window's right edge that floating chrome lives in:
+ * the marks dock floats `76px` in from the edge, and the tool rail
+ * (`right: 14px; width: 52px` — 66px deep) stands inside the same strip.
+ *
+ * `stageRect` reserves it even when no dock is open, so framing never parks
+ * an item under the rail. `stageInsets` deliberately does NOT (see below).
+ */
+export const MARKS_GUTTER = 76;
 
 export interface Stage {
   x: number;
@@ -29,39 +50,58 @@ export interface Stage {
   height: number;
 }
 
-export function stageRect(): Stage {
-  const ui = useUiStore.getState();
-  const left = ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0;
-  const right = ui.trashOpen
-    ? TRASH_WIDTH
-    : ui.marksOpen
-      ? MARKS_WIDTH + MARKS_GUTTER
-      : MARKS_GUTTER;
+/** The slice of `uiStore` the stage reads — injectable so a test can hand in
+ * a state instead of standing up the store and a window. */
+export interface DockState {
+  mainPanelOpen: boolean;
+  filesPanelOpen: boolean;
+  trashOpen: boolean;
+  marksOpen: boolean;
+  panelWidth: number;
+}
+
+/**
+ * What the docks take from each side — the ONE derivation.
+ *
+ * `dockRight` is opaque chrome only: the trash panel or the marks dock.
+ * Zero when neither is open, even though the rail still floats there —
+ * whether the rail's gutter counts is the CALLER's question, and the two
+ * callers answer it differently on purpose:
+ *
+ * - `stageRect` adds the gutter, because framing an item under the rail is
+ *   parking it beneath chrome.
+ * - `stageInsets` does not, because the radar's 6px rim lives in the gutter
+ *   quite happily — a rim pushed 76px in from the edge would float in space.
+ */
+export function dockEdges(ui: DockState): { left: number; dockRight: number } {
+  return {
+    left: ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0,
+    dockRight: ui.trashOpen ? TRASH_WIDTH : ui.marksOpen ? MARKS_WIDTH + MARKS_GUTTER : 0,
+  };
+}
+
+export function stageRect(
+  ui: DockState = useUiStore.getState(),
+  win: { innerWidth: number; innerHeight: number } = window,
+): Stage {
+  const { left, dockRight } = dockEdges(ui);
+  // The gutter is a FLOOR on the right reservation, not an addition: an open
+  // dock is already deeper than it.
+  const right = Math.max(dockRight, MARKS_GUTTER);
   return {
     x: left,
     y: TOPBAR_HEIGHT,
-    width: Math.max(160, window.innerWidth - left - right),
-    height: Math.max(160, window.innerHeight - TOPBAR_HEIGHT),
+    width: Math.max(160, win.innerWidth - left - right),
+    height: Math.max(160, win.innerHeight - TOPBAR_HEIGHT),
   };
 }
 
-/** The same fact as insets, for callers that think in edges. Only chrome that
- * is FULL-BLEED and opaque counts: the tool rail, the zoom controls and the
- * minimap all float with a gutter, and a 6px rim lives in that gutter quite
- * happily. */
-export function stageInsets(): { top: number; right: number; bottom: number; left: number } {
-  const ui = useUiStore.getState();
-  const left = ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0;
-  const right = ui.trashOpen
-    ? TRASH_WIDTH
-    : ui.marksOpen
-      ? MARKS_WIDTH + MARKS_GUTTER
-      : 0;
-  return {
-    top: TOPBAR_HEIGHT,
-    right,
-    bottom: 0,
-    left,
-  };
+/** The same dock facts as edges, for callers that think in insets. Only
+ * chrome that is FULL-BLEED and opaque counts here — see `dockEdges` for why
+ * this one, unlike `stageRect`, leaves the rail's gutter out. */
+export function stageInsets(
+  ui: DockState = useUiStore.getState(),
+): { top: number; right: number; bottom: number; left: number } {
+  const { left, dockRight } = dockEdges(ui);
+  return { top: TOPBAR_HEIGHT, right: dockRight, bottom: 0, left };
 }
-

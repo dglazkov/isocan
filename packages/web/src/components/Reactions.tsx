@@ -7,7 +7,15 @@ import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { sendOp } from "../lib/api.ts";
 import { useActorNames } from "../lib/names.ts";
 
-/** Smiley with a plus in the corner — the standard icon for adding a reaction. */
+/**
+ * Smiley with a plus in the corner — the standard add-a-reaction mark.
+ *
+ * The app draws one other face: `marksGlyph` on the tool rail
+ * (CanvasTools.tsx), which is a STATE indicator — hollow when the canvas
+ * wears no marks, solid when it does — where this one is a button with a
+ * verb on it. They stay two drawings on purpose: merging them would hand one
+ * path two jobs, and the first fill-state tweak would bend the button too.
+ */
 const SMILE_PLUS = (
   <svg
     viewBox="0 0 24 24"
