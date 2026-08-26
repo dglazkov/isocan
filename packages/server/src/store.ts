@@ -212,4 +212,13 @@ export interface Store {
    * cloud backing is safe under a rolling deploy.
    */
   compactOplog(id: string, retained: LogEntry[], dropped: LogEntry[]): Promise<void>;
+
+  /**
+   * What compaction set aside, oldest first. Empty when nothing has been
+   * compacted. The write half of this pair is `compactOplog`; this is the
+   * read half, added because an archive nothing can open is not an archive —
+   * it is a delete with better manners (docs/research/2026-08-24-headlong.md,
+   * §2). Compaction and introspection operate on the same record.
+   */
+  readArchivedLog(id: string): Promise<LogEntry[]>;
 }

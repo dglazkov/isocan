@@ -364,6 +364,7 @@ if (!gate.ok && requireEmulator()) {
           "listBlobs",
           "deleteBlobs",
           "compactOplog",
+          "readArchivedLog",
         ]) {
           expect(typeof (store as unknown as Record<string, unknown>)[method]).toBe("function");
         }

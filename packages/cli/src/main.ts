@@ -92,6 +92,7 @@ import {
   renamedFilename,
   mainThread,
   newCommentId,
+  buildRecap,
   newItemId,
   newCanvasId,
   newThreadId,
@@ -5148,8 +5149,9 @@ program
   .description("Print recent operations; -f follows the live stream")
   .option("-f, --follow", "keep streaming new operations as they land")
   .option("-n, --lines <n>", "recent entries to show first (default 10)")
+  .option("--archived", "include what gc compacted — the full history, from seq 1")
   .action(
-    run(async (opts: { follow?: boolean; lines?: string }, cmd: Command) => {
+    run(async (opts: { follow?: boolean; lines?: string; archived?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       const printEntry = (entry: import("@isocan/core").LogEntry) => {
@@ -5157,14 +5159,77 @@ program
         const cause = entry.cause ? ` [${entry.cause.kind} of #${entry.cause.targetSeq}]` : "";
         console.log(`#${entry.seq}  ${entry.envelope.ts}  ${describeEntry(entry)}${cause}`);
       };
-      const all = await ctx.client.getLog(p.id, 0);
-      for (const entry of all.slice(-Number(opts.lines ?? 10))) printEntry(entry);
+      // The archive is the history gc compacted, never deleted — asking for
+      // it means asking for the WHOLE record, so without an explicit -n the
+      // default ten-line window does not apply: truncating an archive replay
+      // to its tail would be the live log again, with extra steps.
+      const archived = opts.archived ? await ctx.client.getArchivedLog(p.id) : [];
+      const all = [...archived, ...(await ctx.client.getLog(p.id, 0))];
+      const shown =
+        opts.lines !== undefined
+          ? all.slice(-Number(opts.lines))
+          : opts.archived
+            ? all
+            : all.slice(-10);
+      for (const entry of shown) printEntry(entry);
       let seq = all.length > 0 ? all[all.length - 1]!.seq : 0;
       if (!opts.follow) return;
       for (;;) {
         const entries = await ctx.client.getLog(p.id, seq, 30_000);
         for (const entry of entries) printEntry(entry);
         if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
+      }
+    }),
+  );
+
+program
+  .command("recap")
+  .description("The whole history at decaying resolution — old spans summarized, recent ops verbatim")
+  .option("-n, --recent <n>", "recent entries to keep verbatim (default 10)")
+  .action(
+    run(async (opts: { recent?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      // The full record, archive first: buildRecap's contract is "oldest
+      // first, archive then live", and the archive's count is what lets the
+      // header say how much of the story predates the live log.
+      const archived = await ctx.client.getArchivedLog(p.id);
+      const live = await ctx.client.getLog(p.id, 0);
+      const snap = await ctx.client.snapshot(p.id);
+      const recap = buildRecap([...archived, ...live], {
+        verbatim: Number(opts.recent ?? 10),
+        archived: archived.length,
+        canvas: snap.canvas,
+      });
+      if (ctx.json) return printJson(recap);
+      if (recap.total === 0) return console.log("nothing has happened here yet");
+      const day = (ts: string) => ts.slice(0, 10);
+      console.log(
+        `${recap.total} ops` +
+          (recap.archived > 0 ? ` (${recap.archived} archived)` : "") +
+          ` — summarized spans first, then the last ${recap.recent.length} verbatim`,
+      );
+      for (const w of recap.windows) {
+        const when = day(w.fromTs) === day(w.toTs) ? day(w.fromTs) : `${day(w.fromTs)}…${day(w.toTs)}`;
+        const who = w.actors
+          .slice(0, 3)
+          .map((a) => `${a.name} (${a.ops})`)
+          .join(", ");
+        // Three items titled "Acme Dashboard" is one name to a reader, not a
+        // stutter — dedupe the display names, then take three.
+        const what = [...new Set(w.items.map((i) => i.title ?? i.id))].slice(0, 3).join(", ");
+        console.log(
+          `#${w.fromSeq}–#${w.toSeq}  ${when}  ${w.count} ops` +
+            (w.comments > 0 ? `, ${w.comments} comments` : "") +
+            `  ${who}` +
+            (what ? `  on ${what}` : ""),
+        );
+      }
+      for (const entry of recap.recent) {
+        console.log(`#${entry.seq}  ${entry.envelope.ts}  ${describeEntry(entry)}`);
+      }
+      if (recap.windows.length > 0) {
+        console.log(`(any span at full resolution: isocan tail --archived — the record is all there)`);
       }
     }),
   );

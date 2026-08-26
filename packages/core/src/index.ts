@@ -8,6 +8,7 @@ export * from "./passes.ts";
 export * from "./address.ts";
 export * from "./emoji.ts";
 export * from "./reactions.ts";
+export * from "./recap.ts";
 export * from "./roster.ts";
 export * from "./claims.ts";
 export * from "./invert.ts";

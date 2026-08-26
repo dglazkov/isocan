@@ -1604,6 +1604,18 @@ export function registerRoutes(
   });
 
   /**
+   * The oplog behind the oplog: what `gc` archived. A separate route rather
+   * than a flag on the live one because the live route long-polls a moving
+   * cursor and this reads a record that only ever grows at compaction time —
+   * two access patterns, two handlers. Admission is the `onRequest` hook's,
+   * like every canvas-scoped route.
+   */
+  app.get("/api/projects/:id/oplog/archive", async (req) => {
+    const { id } = req.params as { id: string };
+    return engine.getArchivedLog(id);
+  });
+
+  /**
    * The whole home's oplog, one cursor per canvas — what `isocan wait`
    * listens on. An on-call agent hears canvases it has never opened, so the
    * long poll must be woken by ANY canvas's op, and a canvas born while it

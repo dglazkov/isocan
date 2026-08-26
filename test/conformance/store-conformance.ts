@@ -284,6 +284,30 @@ export function storeConformance(
     );
 
     test(
+      "what compaction set aside reads back — an archive nothing can open is a delete",
+      withStore(async ({ store }) => {
+        await seed(store);
+        // Before any compaction the archive is an empty answer, not an error.
+        expect(await store.readArchivedLog("prj_1")).toEqual([]);
+
+        const before = await store.load("prj_1");
+        const retained = before!.entries.filter((entry) => entry.seq === 3);
+        const dropped = before!.entries.filter((entry) => entry.seq !== 3);
+        await store.compactOplog("prj_1", retained, dropped);
+
+        // Oldest first, exactly the dropped entries: `tail --archived` and
+        // `recap` read the same record `compactOplog` wrote.
+        expect(await store.readArchivedLog("prj_1")).toEqual(dropped);
+
+        // A second compaction APPENDS — the archive accumulates history in
+        // seq order across horizons rather than holding only the last cut.
+        const remaining = (await store.load("prj_1"))!.entries;
+        await store.compactOplog("prj_1", [], remaining);
+        expect((await store.readArchivedLog("prj_1")).map((entry) => entry.seq)).toEqual([1, 2, 3]);
+      }),
+    );
+
+    test(
       "the direct-upload branch is all-or-nothing: a ticket AND a register, or neither",
       withStore(async ({ store }) => {
         await seed(store);
