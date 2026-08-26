@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Actor, CommentThread, NewComment } from "@isocan/core";
+import type { Actor, CanvasContents, CommentThread, NewComment } from "@isocan/core";
 import {
   collectItemRefCandidates,
   extractItemRefs,
@@ -87,6 +87,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
             key={thread.id}
             thread={thread}
             screen={screenOf(thread)}
+            below={hangsBelow(canvas, thread)}
             open={openThreadId === thread.id}
             unread={unreadCount(thread, seen, actor.id)}
           />
@@ -111,6 +112,26 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
 
 const GUTTER = 12; // breathing room from the window edges
 const TOOLBAR_H = 48; // popovers must clear the toolbar
+
+/**
+ * Does this pin hang below its anchor rather than above it?
+ *
+ * A pin's body sits above its point, so a thread anchored at the TOP of an
+ * item covers that item's name — which is what sent item-anchored threads to
+ * the bottom-left corner (core's `anchorOffset`). Down there the same upward
+ * body would cover the item's content instead, so a pin at or below its
+ * item's bottom edge flips: sharp corner up, body hanging into the column
+ * below, beside the marks the item wears.
+ *
+ * Asked of the OFFSET rather than of who created the thread, so a pin dragged
+ * to the bottom edge behaves like one that was born there, and the threads
+ * anchored at `{0,0}` before this existed keep pointing the way they always
+ * did rather than being silently rearranged.
+ */
+function hangsBelow(canvas: CanvasContents, thread: CommentThread): boolean {
+  const item = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
+  return item ? thread.y >= item.height : false;
+}
 
 /**
  * Screen placement for a popover hanging off a pin: capped to a height that
@@ -156,11 +177,14 @@ function usePopoverPlacement(anchor: { x: number; y: number }, dx: number, dy: n
 function ThreadPin({
   thread,
   screen,
+  below,
   open,
   unread,
 }: {
   thread: CommentThread;
   screen: { x: number; y: number };
+  /** Anchored at its item's bottom edge: hang under it — see `hangsBelow`. */
+  below: boolean;
   open: boolean;
   unread: number;
 }) {
@@ -190,7 +214,7 @@ function ThreadPin({
 
   return (
     <button
-      className={`pin${unread > 0 ? " unread" : ""}`}
+      className={`pin${below ? " below" : ""}${unread > 0 ? " unread" : ""}`}
       style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
       title={
         unread > 0

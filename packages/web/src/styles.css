@@ -688,9 +688,8 @@ img { height: auto; }
   border: 1px solid var(--line); border-radius: var(--radius); z-index: -1;
 }
 /* The version count is chrome, so it holds its size as the canvas zooms
-   (ItemView counter-scales it) and steps to the other corner when a comment
-   pin lands on this one — the pin marks a place a person chose, and it paints
-   above the world, so the badge is the one that yields. */
+   (ItemView counter-scales it). It no longer moves: see the position rule
+   below for why the corner-yielding rule was retired with the corner. */
 .version-badge {
   position: absolute; z-index: 3;
   /* Chrome, not text. It sits OUTSIDE .item-content, so the rule that makes an
@@ -701,26 +700,43 @@ img { height: auto; }
   background: var(--accent); color: var(--accent-ink);
   font-size: 10px; font-weight: 700; border-radius: 999px; padding: 3px 7px;
   line-height: 1; border: none;
-  transition: top 0.14s ease, bottom 0.14s ease;
 }
-/* Both sit along the right EDGE rather than on a corner: every corner belongs
-   to a resize handle once the item is selected.
+/* The TOP-right edge, on every item, always — one place to learn.
 
-   And both offsets are SCREEN-measured, for the reason `.item-titlebar` is:
+   It used to live at the bottom-right and step up to here whenever a comment
+   pin took that corner. Both halves of that are gone: item-anchored threads
+   land at the bottom-LEFT now (core's `anchorOffset`), so nothing contends
+   for this corner, and a count that moves is a count you hunt for. The bottom
+   edge is the item's attachment column — marks, then conversation; the top
+   edge is what the item IS, its name at one end and its version count at the
+   other.
+
+   It sits along the right EDGE rather than on the corner itself: every corner
+   belongs to a resize handle once the item is selected.
+
+   Both offsets are SCREEN-measured, for the reason `.item-titlebar` is:
    ItemView counter-scales this badge, so its SIZE is already constant on
    screen — 27.7x16 at every zoom — while these offsets were world lengths.
-   The gap below the card ran 11.93 screen px at 149% down to 1.60 at 20%, and
+   The gap past the card ran 11.93 screen px at 149% down to 1.60 at 20%, and
    `right: 14px` reached only 14*scale screen px in, so below 43% (6 > 14*s)
-   the badge slid UNDER `.resize-handle-se` and a press near it resized the
+   the badge slid UNDER the corner handle and a press near it resized the
    item instead: the handle is z-index 4 to the badge's 3, and `onPointerDown`
    returns early on `.resize-handle`.
 
-   The handles offset from the same padding box these do, so the item's border
-   cancels between them and the clearance is one subtraction: the handle
-   reaches 6 screen px inside the edge, the badge's right edge sits 14 screen
-   px in, and the 8px between them no longer depends on the zoom. At 100% this
-   changes nothing, which is the point — it is the same position, held. */
-.version-badge-se { bottom: calc(-9px / var(--scale, 1)); right: calc(14px / var(--scale, 1)); }
+   The handles offset from the same padding box this does, so the item's
+   border cancels between them and the clearance is one subtraction: the
+   handle reaches 6 screen px inside the edge, the badge's right edge sits 14
+   screen px in, and the 8px between them no longer depends on the zoom. The
+   numbers are the ones the bottom badge held, moved intact — the position
+   changed, the reasoning did not.
+
+   POSITION lives in its own class, apart from the size rule above, and that
+   split is load-bearing rather than tidy: `worldchrome.test.ts` watches the
+   position of every element inside the zoomed world and must NOT watch this
+   badge's `padding: 3px 7px`, which is screen pixels already by the
+   counter-scale. One class for what it is, one for where it sits, and only
+   the second is on that list. `-ne` names the corner it sits in; there is
+   only the one now, and if a second is ever needed the pattern is here. */
 .version-badge-ne { top: calc(-9px / var(--scale, 1)); right: calc(14px / var(--scale, 1)); }
 .version-badge:hover { background: var(--accent-hover); }
 
@@ -769,11 +785,18 @@ img { height: auto; }
   position: absolute; left: 0; top: 100%;
   user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
   display: flex; align-items: center; gap: 6px;
-  /* 10 is derived, not felt: the selection outline is 2px and the corner
-     handles reach 6px below the item, so the row clears the outline by 8 and
-     the handles by 4. At 5px it sat against the blue border on every
-     selected item — and selected is exactly when this row is fullest. */
-  padding-top: 10px; pointer-events: none; transform-origin: left top;
+  /* 8 is derived, not felt: the selection outline is 2px and the corner
+     handles reach 6px below the item, so the row clears the outline by 6 and
+     the handles by 2. At 5px it sat against the blue border on every
+     selected item — and selected is exactly when this row is fullest.
+
+     It was 10 while the version badge straddled the bottom-right edge and
+     this row had to look deliberate beside a chip hanging 9px into its lane.
+     The badge is at the top now, so the row answers to its own clearance
+     alone and sits two pixels tighter. Mirrored in `UNDER_ROW_PAD`
+     (lib/chrome.ts), which `PIN_DROP` is derived from — `worldchrome.test.ts`
+     holds the two together. */
+  padding-top: 8px; pointer-events: none; transform-origin: left top;
 }
 /* Middle slot: centred in WHAT IS LEFT. Starts centred under the item and is
    nudged right as marks accumulate, which is the behaviour `flex: 1` gives for
@@ -1416,6 +1439,21 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   cursor: pointer;
 }
 .pin:hover { border-color: var(--accent); }
+/* A thread anchored to an ITEM, which lands at its bottom-left corner (core's
+   `anchorOffset`). It hangs BELOW that corner instead of above it, so the
+   sharp corner points up at the thing the conversation is about and the pin's
+   body never covers the item's own content — which is what the old top-left
+   anchor did to the name.
+
+   The drop clears the marks row so the item's attachment column reads top to
+   bottom: marks, then conversation. 32 is `PIN_DROP` in lib/chrome.ts, where
+   it is derived from the row's padding and height rather than tuned here;
+   `worldchrome.test.ts` asserts these two agree. Both this and the row are
+   constant-size on screen, so the spacing holds at every zoom. */
+.pin.below {
+  transform: translate(-4px, 32px);
+  border-radius: 4px 999px 999px 999px;
+}
 .pin-avatar {
   width: 20px; height: 20px; border-radius: 999px; flex: none;
   background: var(--accent); color: var(--accent-ink);

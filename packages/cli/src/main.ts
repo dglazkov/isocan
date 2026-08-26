@@ -92,6 +92,7 @@ import {
   renamedFilename,
   mainThread,
   newCommentId,
+  anchorOffset,
   buildRecap,
   newItemId,
   newCanvasId,
@@ -4309,10 +4310,10 @@ comment
       if (opts.item) {
         const item = resolveItem(snapshot, opts.item);
         anchorItemId = item.id;
-        // Anchored pins store an offset from the item origin: just off the
-        // item's top-right corner.
-        x = item.width + 12;
-        y = 0;
+        // Anchored pins store an offset from the item origin, and where that
+        // lands is core's to say — one spelling, so ⇧C in the app and this
+        // command put a thread in the same place (`anchorOffset`).
+        ({ x, y } = anchorOffset(item));
       } else {
         ({ x, y } = parseXY(opts.at!));
         anchorItemId = null;
@@ -4383,9 +4384,8 @@ follows the item from now on.`,
         if (itemRef) {
           const item = resolveItem(snapshot, itemRef);
           anchorItemId = item.id;
-          // Same spot as `comment add --item`: just off the top-right corner.
-          x = item.width + 12;
-          y = 0;
+          // Same spot as `comment add --item`, from the same function.
+          ({ x, y } = anchorOffset(item));
         } else if (opts.at) {
           ({ x, y } = parseXY(opts.at));
           anchorItemId = null;

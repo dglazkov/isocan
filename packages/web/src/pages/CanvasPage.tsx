@@ -1,7 +1,13 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { WORKBENCH_ROUTE, itemPath, workbenchItemPath, workbenchPath } from "@isocan/core";
+import {
+  WORKBENCH_ROUTE,
+  anchorOffset,
+  itemPath,
+  workbenchItemPath,
+  workbenchPath,
+} from "@isocan/core";
 import {
   connectToCanvas,
   disconnect,
@@ -497,9 +503,13 @@ function CanvasSurface({
         const ids = ui.selectedItemIds;
         if (ids.length === 1) {
           e.preventDefault();
-          // Top-left of the item, in its own coordinates — where a thread
-          // anchored by the CLI lands too, so both surfaces agree.
-          ui.setPendingComment({ x: 0, y: 0, anchorItemId: ids[0]! });
+          // The item's bottom-left corner, in its own coordinates — from
+          // core's `anchorOffset`, which the CLI's `comment add --item` calls
+          // too. This line used to claim that agreement while spelling a
+          // different offset than the CLI did; now there is one spelling and
+          // the claim is checkable.
+          const item = useCanvasStore.getState().canvas?.items[ids[0]!];
+          if (item) ui.setPendingComment({ ...anchorOffset(item), anchorItemId: ids[0]! });
         }
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);

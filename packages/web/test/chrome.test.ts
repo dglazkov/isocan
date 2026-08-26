@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasContents, CommentThread, Item } from "@isocan/core";
+import type { Item } from "@isocan/core";
+import { anchorOffset } from "@isocan/core";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -8,9 +9,9 @@ import {
   ICON_ROOM,
   MARK_ROOM,
   MIN_NAME_ROOM,
-  PIN_REACH,
+  PIN_DROP,
   ROW_END_ROOM,
-  badgeCorner,
+  UNDER_ROW_PAD,
   hasRoomForChrome,
   nameFits,
   nameRoom,
@@ -36,23 +37,6 @@ const item = (x: number, y: number, width = 200, height = 150): Item => ({
   ...stamp,
 });
 
-const thread = (x: number, y: number, anchorItemId: string | null = null, main = false): CommentThread => ({
-  id: `thr_${x}_${y}`,
-  x,
-  y,
-  anchorItemId,
-  comments: [],
-  ...(main ? { main: true } : {}),
-  createdAt: "",
-  createdBy: actor,
-});
-
-const canvasWith = (threads: CommentThread[], items: Item[] = []): CanvasContents => ({
-  items: Object.fromEntries(items.map((one) => [one.id, one])),
-  threads: Object.fromEntries(threads.map((one) => [one.id, one])),
-  trash: [],
-});
-
 describe("hasRoomForChrome", () => {
   it("says yes to an item you can actually read", () => {
     expect(hasRoomForChrome(200, 150, 1)).toBe(true);
@@ -73,52 +57,6 @@ describe("hasRoomForChrome", () => {
 
   it("wants both dimensions — a wide sliver has no room either", () => {
     expect(hasRoomForChrome(400, 20, 1)).toBe(false);
-  });
-});
-
-describe("badgeCorner", () => {
-  const box = item(0, 0); // bottom-right at (200, 150)
-
-  it("is bottom-right, the same place on every item", () => {
-    expect(badgeCorner(box, canvasWith([thread(-500, -500)]), 1)).toBe("se");
-    expect(badgeCorner(item(900, 900), canvasWith([]), 1)).toBe("se");
-  });
-
-  it("leaves a pin dropped on that corner alone and goes up instead", () => {
-    expect(badgeCorner(box, canvasWith([thread(205, 154)]), 1)).toBe("ne");
-  });
-
-  it("stays put for a pin somewhere else on the item", () => {
-    // Top-right, where a pin used to displace it: the badge no longer lives
-    // there, so it has nothing to do.
-    expect(badgeCorner(box, canvasWith([thread(198, 2)]), 1)).toBe("se");
-  });
-
-  it("follows a pin that rides its anchor item", () => {
-    // The thread stores an offset; the pin is wherever the item is now.
-    const anchored = thread(198, 148, "itm_1");
-    expect(badgeCorner(box, canvasWith([anchored], [box]), 1)).toBe("ne");
-    const movedAway = { ...box, x: 900 };
-    // Same offset, item elsewhere: the pin went with it, so the corner of the
-    // ORIGINAL box is free again.
-    expect(badgeCorner(box, canvasWith([anchored], [movedAway]), 1)).toBe("se");
-  });
-
-  it("ignores the main thread, which is a panel and has no pin", () => {
-    expect(badgeCorner(box, canvasWith([thread(205, 154, null, true)]), 1)).toBe("se");
-  });
-
-  it("gives a pin more world to claim as you zoom out", () => {
-    // 60 world units below the corner: outside a 46px pin at 1:1, inside it
-    // once the zoom makes that pin worth 92 world units.
-    const nearby = canvasWith([thread(200, 150 + 60)]);
-    expect(badgeCorner(box, nearby, 1)).toBe("se");
-    expect(badgeCorner(box, nearby, 0.5)).toBe("ne");
-    expect(PIN_REACH / 0.5).toBeGreaterThan(60);
-  });
-
-  it("holds its home with no canvas to look at", () => {
-    expect(badgeCorner(box, null, 1)).toBe("se");
   });
 });
 
@@ -581,3 +519,32 @@ describe("the reaction add button", () => {
 });
 
 
+
+/**
+ * The item's bottom-left is one column — the marks it wears, then the threads
+ * anchored to it — and the two are measured in the same screen pixels so they
+ * cannot land on each other at any zoom.
+ */
+describe("the attachment column under an item", () => {
+  it("anchors an item's threads at its bottom-left corner, both surfaces", () => {
+    // The corner itself, so the spot is the same at every zoom: a nudge in
+    // world units is a different number of screen pixels at each one.
+    expect(anchorOffset(item(0, 0, 200, 150))).toEqual({ x: 0, y: 150 });
+    expect(anchorOffset(item(900, 900, 480, 320))).toEqual({ x: 0, y: 320 });
+  });
+
+  it("drops the pin clear of the marks row rather than through it", () => {
+    // Derived, not tuned: whatever the row's padding becomes, the pin still
+    // starts below the row's full height. This is the assertion that makes
+    // tightening the padding safe.
+    expect(PIN_DROP).toBeGreaterThanOrEqual(UNDER_ROW_PAD + 22);
+    // And not so far it stops reading as this item's: past the row plus its
+    // own height the pin belongs to whatever is underneath.
+    expect(PIN_DROP).toBeLessThanOrEqual(UNDER_ROW_PAD + 22 + 26);
+  });
+
+  it("clears the selection chrome the row sits under", () => {
+    // The outline is 2px and the corner handles reach 6px below the edge.
+    expect(UNDER_ROW_PAD).toBeGreaterThan(6);
+  });
+});

@@ -1,35 +1,31 @@
-import type { CanvasContents, CommentThread, Item } from "@isocan/core";
-
 /**
  * Where an item's own chrome goes, and whether there is room for it at all.
  *
  * Item chrome (the name above it, the version count) lives INSIDE the scaled
  * world, while comment pins are drawn in screen space on a layer above it. So
- * as the canvas zooms out the chrome shrinks while the pins stay pointer-sized,
- * and a pin dropped near a corner does not merely crowd the badge — it covers
- * something it also paints on top of.
+ * as the canvas zooms out the chrome shrinks while the pins stay pointer-sized.
+ * One rule follows, and it lives here so it can be reasoned about without a
+ * browser: chrome holds its size (the caller counter-scales).
  *
- * Two rules follow, and both live here so they can be reasoned about without a
- * browser: chrome holds its size (the caller counter-scales), and the badge
- * yields its corner, because a pin marks a place a person chose and the badge
- * is ours to move.
+ * **The item's two ends, and what each is for.** The TOP edge carries what the
+ * item IS — its name at the left, its version count at the right. The BOTTOM
+ * edge carries what has been DONE to it — the marks it wears, and the threads
+ * anchored to it, which now land at that corner (core's `anchorOffset`) and
+ * hang below the marks row. Reading down an item is therefore: what it is,
+ * the thing itself, what people made of it.
  *
- * The badge lives at the BOTTOM-right, and the same place on every item — a
- * count you have to hunt for is worse than one you have to learn once. Bottom
- * rather than top for two reasons: the top edge already carries the item's
- * name, and the version plies cascade down and to the right, so the count sits
- * where the stack it counts is visibly going.
+ * That split is what let the badge stop moving. It used to live at the
+ * bottom-right and YIELD that corner to any pin dropped near it — a rule with
+ * a real cost (a count that is somewhere else on some items is a count you
+ * hunt for) paid because pins and the badge wanted one corner. They no longer
+ * do: pins go to the bottom-LEFT, so the badge sits at the top-right on every
+ * item, always, and `badgeCorner` is gone rather than merely unused.
  */
-
-/** How close a pin has to be, in SCREEN pixels, to claim a corner. */
-export const PIN_REACH = 46;
 
 /** Below this an item is a speck: the plies still say there is a stack, the
  * pins still say someone spoke, and a label would be bigger than the thing. */
 const MIN_CHROME_WIDTH = 56;
 const MIN_CHROME_HEIGHT = 40;
-
-export type BadgeCorner = "se" | "ne";
 
 /**
  * The transform that holds a piece of item chrome at a constant SCREEN size.
@@ -84,6 +80,45 @@ export function underRow(width: number, scale: number): { transform: string; wid
 export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
   return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
 }
+
+/**
+ * Screen pixels between the item's bottom edge and the marks row.
+ *
+ * The floor is the selection chrome: a 2px outline, and corner handles that
+ * reach 6px below the edge. It was 10 while the version badge straddled the
+ * bottom-right edge and the row had to look deliberate beside it; the badge
+ * is at the top now, so the row sits where its own clearance says — 8, two
+ * clear of the handles.
+ *
+ * Held HERE rather than only in the stylesheet because `PIN_DROP` is derived
+ * from it, and two numbers that must not drift should not be able to.
+ * `worldchrome.test.ts` asserts the stylesheet agrees.
+ */
+export const UNDER_ROW_PAD = 8;
+
+/**
+ * The marks row's own height in screen pixels — the react button, measured on
+ * the rendered row (the same 22 `FULL_LABEL_ROOM` budgets for it).
+ */
+const MARKS_ROW_H = 22;
+
+/**
+ * How far below its anchor a pin hangs when the thread is anchored at its
+ * item's bottom-left corner — the offset core's `anchorOffset` gives every
+ * item-anchored thread.
+ *
+ * Such a pin points UP at the item it belongs to instead of hanging its body
+ * over the item's own content, and it has to clear the marks row on the way
+ * down: the bottom-left is the item's attachment column, read top to bottom
+ * as marks then conversation. Derived rather than tuned, so tightening the
+ * row's padding cannot silently put a pin through it.
+ *
+ * In SCREEN pixels because the pin is drawn in screen space and the marks row
+ * is counter-scaled to the same units — both are constant on screen, so they
+ * hold this spacing at every zoom, which is the whole reason the anchor
+ * itself is a CORNER and not a nudge in world units.
+ */
+export const PIN_DROP = UNDER_ROW_PAD + MARKS_ROW_H + 2;
 
 /**
  * Screen pixels the under-item row needs before "Full screen" is spelled out
@@ -219,36 +254,6 @@ export function nameRoom(width: number, scale: number): number {
 /** Is there enough room to say the name at all? */
 export function nameFits(width: number, scale: number): boolean {
   return titleRow(width, scale).name;
-}
-
-/** Every pin's world position — anchored pins ride their item, and the main
- * thread has no pin at all. */
-function pinPositions(canvas: CanvasContents): Array<{ x: number; y: number }> {
-  return Object.values(canvas.threads)
-    .filter((thread: CommentThread) => !thread.main)
-    .map((thread) => {
-      const anchor = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
-      return anchor ? { x: anchor.x + thread.x, y: anchor.y + thread.y } : { x: thread.x, y: thread.y };
-    });
-}
-
-/**
- * The badge's corner: bottom-right on every item, and top-right only when a pin
- * has taken the bottom one — which is rare, because people drop comments on the
- * thing they are talking about rather than under it.
- *
- * The comparison happens in world units, so the pin's screen-space footprint is
- * converted by the zoom: the same pin claims more world the further out you are.
- */
-export function badgeCorner(item: Item, canvas: CanvasContents | null, scale: number): BadgeCorner {
-  if (!canvas) return "se";
-  const reach = PIN_REACH / scale;
-  const right = item.x + item.width;
-  const bottom = item.y + item.height;
-  for (const pin of pinPositions(canvas)) {
-    if (Math.abs(pin.x - right) < reach && Math.abs(pin.y - bottom) < reach) return "ne";
-  }
-  return "se";
 }
 
 /**

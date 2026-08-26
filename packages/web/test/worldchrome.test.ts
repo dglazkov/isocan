@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { PIN_DROP, UNDER_ROW_PAD } from "../src/lib/chrome.ts";
 
 /**
  * Chrome drawn inside the zoomed world is measured in WORLD pixels.
@@ -118,18 +119,20 @@ describe("chrome inside the zoomed world", () => {
     ".item.selected",
     ".item.peeked",
     ".item-titlebar",
-    /* The two badge corners, named separately for the same reason the handles
-       are: the shared `.version-badge` rule gives the badge its size and these
-       two give it its position, and the bug was in the position.
+    /* The badge's POSITION rule — one corner now (top-right on every item),
+       where there were two while it yielded the bottom-right to comment pins.
+       Its size comes from the other `.version-badge` rule; the bug was in the
+       position, which is why the position is what this list watches.
 
-       This is the titlebar's bug in the sibling beside it, found the run after.
-       ItemView counter-scales all three of these elements; two had been moved
-       to screen units and the badge had not, so its gap below the card ran
-       11.93 screen px at 149% and 1.60 at 20% and it slid under the SE handle
-       below 43% zoom. `.version-badge` itself is deliberately NOT on this list
-       — its `padding: 3px 7px` is screen pixels already, by the counter-scale,
-       exactly as the titlebar's two ends are. */
-    ".version-badge-se",
+       This is the titlebar's bug in the sibling beside it, found the run
+       after. ItemView counter-scales both of these elements; the titlebar had
+       been moved to screen units and the badge had not, so its gap past the
+       card ran 11.93 screen px at 149% and 1.60 at 20% and it slid under the
+       corner handle below 43% zoom. The offsets survived the move to the top
+       edge unchanged, and this guard came with them. `.version-badge` itself
+       is deliberately NOT on this list — its `padding: 3px 7px` is screen
+       pixels already, by the counter-scale, exactly as the titlebar's two
+       ends are. */
     ".version-badge-ne",
   ];
 
@@ -203,10 +206,10 @@ describe("chrome inside the zoomed world", () => {
       return Number(found![1]);
     };
 
-    const badgeIn = screenPx(ownRule(".version-badge-se") ?? "", "right");
+    const badgeIn = screenPx(ownRule(".version-badge-ne") ?? "", "right");
     // The handle hangs OUTSIDE the corner, so its offset is negative and the
     // distance it reaches back inside the edge is its width plus that offset.
-    const handleOut = -screenPx(ownRule(".resize-handle-se") ?? "", "right");
+    const handleOut = -screenPx(ownRule(".resize-handle-ne") ?? "", "right");
     const handleSize = screenPx(ownRule(".resize-handle") ?? "", "width");
     const handleIn = handleSize - handleOut;
 
@@ -468,6 +471,23 @@ describe("the row under an item is one row", () => {
     // belonging to the canvas rather than to its item.
     expect(Number(pad![1])).toBeGreaterThanOrEqual(8);
     expect(Number(pad![1])).toBeLessThanOrEqual(16);
+    // And the stylesheet's number is the one `PIN_DROP` was derived from. Two
+    // copies of a length that must not drift, held together — a pin dropped
+    // from a stale reading of this padding lands in the marks row.
+    expect(Number(pad![1]), "styles.css and UNDER_ROW_PAD disagree").toBe(UNDER_ROW_PAD);
+  });
+
+  it("hangs an item-anchored pin below that row, by the derived drop", () => {
+    // `.pin.below` is a SCREEN-space element and the row is counter-scaled to
+    // the same units, so one number holds their spacing at every zoom — but
+    // only while the stylesheet's copy of it is the derived one.
+    const rule = allRules().find((r) => r.selectors.includes(".pin.below"));
+    expect(rule, ".pin.below has no rule").toBeTruthy();
+    const drop = rule!.body.match(/translate\(\s*-?[\d.]+px\s*,\s*(\d+)px\s*\)/);
+    expect(drop, "no downward translate").toBeTruthy();
+    expect(Number(drop![1]), "styles.css and PIN_DROP disagree").toBe(PIN_DROP);
+    // Down, not up: the whole point is that it stops covering the item.
+    expect(Number(drop![1])).toBeGreaterThan(0);
   });
 
   it("gives the row the item's SCREEN width, which is what makes it a row", () => {
