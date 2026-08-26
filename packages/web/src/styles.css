@@ -1152,7 +1152,7 @@ img { height: auto; }
    agent view is the reason the room exists. */
 .wb-agents.rail { width: 40px; align-items: center; padding-top: 6px; }
 .wb-fold {
-  flex: none; align-self: flex-end; margin: 4px 6px 0 0;
+  flex: none;
   font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
   width: 22px; height: 21px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
@@ -1160,18 +1160,24 @@ img { height: auto; }
 .wb-fold:hover { color: var(--ink); border-color: var(--accent); }
 .wb-agents.rail .wb-fold { align-self: center; margin: 0; }
 .wb-roster {
-  flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain;
+  /* Height is the inline style — the grab-edge under the section writes it,
+     remembered per browser. `overflow: visible` would kill the scroll, and
+     the resizer needs the RELATIVE box to hang from. */
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
   padding: 10px 12px; border-bottom: 1px solid var(--line);
 }
 .wb-roster h3 {
   margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: space-between;
 }
 .wb-quiet { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-muted); }
 /* The bound directory. A slim section between the roster and the thread —
    scrollable on its own, capped so the thread keeps its room. */
 .wb-files {
-  flex: none; max-height: 30%; overflow-y: auto; overscroll-behavior: contain;
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
   padding: 8px 12px; border-bottom: 1px solid var(--line);
 }
 .wb-files h3 {
@@ -1201,7 +1207,21 @@ button.wb-tree-file {
 .wb-tree-add:hover { color: var(--ink); border-color: var(--accent); }
 .wb-tree-add:disabled { opacity: 0.5; cursor: default; }
 .wb-quiet code { font-size: 11px; }
-.wb-row { border-radius: var(--radius); }
+.wb-row { border-radius: var(--radius); position: relative; }
+/* The hover peek: the longer trail, floated beside the row. It stands down
+   for the expanded row, which shows the record properly. */
+.wb-peek {
+  position: fixed; z-index: var(--z-popover);
+  width: 230px; max-height: 220px; overflow: hidden;
+  padding: 8px 10px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop); pointer-events: none;
+}
+.wb-section-resizer {
+  position: absolute; left: 0; right: 0; bottom: -4px; height: 8px;
+  cursor: row-resize; z-index: 1;
+}
+.wb-section-resizer:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .wb-row.open { background: var(--chip); }
 .wb-row-head {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -1317,12 +1337,16 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    and the whole strip is the button. */
 .stage-rail {
   flex: none; width: 26px; cursor: pointer;
-  display: flex; align-items: flex-start; justify-content: center;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
   padding: 10px 0; font: inherit; font-size: 10.5px; font-weight: 600;
   letter-spacing: 0.04em; text-transform: uppercase;
   border: none; background: var(--card); color: var(--ink-soft);
 }
 .stage-rail span { writing-mode: vertical-rl; }
+/* The chevron at the very foot of the strip: a second, unmissable "this
+   opens" — the label names the pane, the arrow points the way back in. */
+.stage-rail b { font-weight: 600; font-size: 12px; }
 .stage-rail:hover { color: var(--ink); background: var(--chip); }
 .stage-rail.left { border-right: 1px solid var(--line); }
 .stage-rail.right { border-left: 1px solid var(--line); }
@@ -1331,6 +1355,9 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   display: flex; flex-direction: column; border-left: 1px solid var(--line);
 }
 .stage-pane-body { flex: 1; min-height: 0; display: flex; }
+.text-edit-frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.text-edit-frame .html-view { flex: 1; }
+.text-edit-refusal { font-size: 11px; color: var(--accent-text); }
 .stage-pane-body > * { flex: 1; }
 
 .stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }

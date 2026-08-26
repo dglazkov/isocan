@@ -22,6 +22,7 @@ import { KindIcon } from "./KindIcon.tsx";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
 import { WbFiles } from "./WbFiles.tsx";
 import { goStage } from "../lib/goStage.ts";
+import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 
 /**
@@ -169,15 +170,12 @@ export function Workbench({
           </div>
         ) : (
           <div className="wb-agents" style={{ width: agentsWidth }}>
-            <button
-              className="wb-fold"
-              title="Fold the agent column to a rail"
-              aria-label="Collapse the agent column"
-              onClick={() => setRailKept(true)}
-            >
-              «
-            </button>
-            <Roster canvasId={canvasId} focused={itemId} viewer={actor.id} />
+            <Roster
+              canvasId={canvasId}
+              focused={itemId}
+              viewer={actor.id}
+              onFold={() => setRailKept(true)}
+            />
             <WbFiles canvasId={canvasId} actor={actor} />
             <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
             <PanelResizer
@@ -216,14 +214,17 @@ function Roster({
   canvasId,
   focused,
   viewer,
+  onFold,
 }: {
   canvasId: string;
   focused: string | null;
   viewer: string;
+  onFold: () => void;
 }) {
   const sessions = useCanvasStore((s) => s.sessions);
   const canvas = useCanvasStore((s) => s.canvas);
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const [rosterH, setRosterH] = useSectionHeight("isocan.wb.roster.h", 220);
   // The store filters YOUR OWN session out of presence (the facepile's
   // duplicate fix), so without this the person reading the panel appears in
   // its away half — "away" printed on the screen they are looking at. The
@@ -233,8 +234,20 @@ function Roster({
   );
 
   return (
-    <section className="wb-roster" aria-label="Agents">
-      <h3>Agents</h3>
+    <section className="wb-roster" aria-label="Agents" style={{ maxHeight: rosterH }}>
+      {/* The fold shares the header's line — a control on its own row was
+          a row of chrome buying nothing. */}
+      <h3>
+        Agents
+        <button
+          className="wb-fold"
+          title="Fold the agent column to a rail"
+          aria-label="Collapse the agent column"
+          onClick={onFold}
+        >
+          «
+        </button>
+      </h3>
       {rows.length === 0 && (
         // The two-silences empty state: the room works before anybody is in
         // it, and it says how somebody GETS in it rather than shrugging.
@@ -254,6 +267,7 @@ function Roster({
           onToggle={() => setOpenRow(openRow === row.actorId ? null : row.actorId)}
         />
       ))}
+      <SectionResizer value={rosterH} onChange={setRosterH} label="Resize the agent list" />
     </section>
   );
 }
@@ -280,6 +294,15 @@ function AgentRowView({
   focused: string | null;
   onToggle: () => void;
 }) {
+  // The peek is position:FIXED at a measured point — the roster scrolls,
+  // and a peek positioned inside it gets clipped by the scroll box (the
+  // emoji picker met the same wall and portaled; fixed escapes overflow
+  // clipping without one, since nothing above carries a transform).
+  const [peekAt, setPeekAt] = useState<{ x: number; y: number } | null>(null);
+  const enter = (e: React.PointerEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPeekAt({ x: r.right - 6, y: Math.min(r.top, window.innerHeight - 240) });
+  };
   const navigate = useNavigate();
   const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
@@ -290,7 +313,24 @@ function AgentRowView({
   // reaching them — a message waits on the thread.
   if (row.primary === null) {
     return (
-      <div className="wb-row away" title="Away — a message below waits on the thread for their next wake">
+      <div
+        className="wb-row away"
+        title="Away — a message below waits on the thread for their next wake"
+        onPointerEnter={enter}
+        onPointerLeave={() => setPeekAt(null)}
+      >
+        {peekAt && canvas && (
+          <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
+            <ul className="wb-trail">
+              {recentActivity(canvas, row.actorId, 8).map((act, i) => (
+                <li key={i}>
+                  <span className="wb-act">{describeAct(act.kind, act.subject)}</span>
+                  <em>{ago(act.at)}</em>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <span className="wb-row-head as-line">
           <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
           <span className="wb-row-name">
@@ -316,7 +356,29 @@ function AgentRowView({
   const line = session.status ?? (row.state === "working" ? "working" : null);
 
   return (
-    <div className={`wb-row${open ? " open" : ""}`}>
+    <div
+      className={`wb-row${open ? " open" : ""}`}
+      onPointerEnter={enter}
+      onPointerLeave={() => setPeekAt(null)}
+    >
+      {/* The peek: hover answers "what have they been up to" without a
+          click — the FaceCard's manners, in the room. The expanded row
+          already shows the record, so the peek stands down for it. */}
+      {peekAt && !open && canvas && (
+        <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
+          <ul className="wb-trail">
+            {recentActivity(canvas, row.actorId, 8).map((act, i) => (
+              <li key={i}>
+                <span className="wb-act">{describeAct(act.kind, act.subject)}</span>
+                <em>{ago(act.at)}</em>
+              </li>
+            ))}
+            {recentActivity(canvas, row.actorId, 1).length === 0 && (
+              <li className="wb-quiet">nothing on this canvas yet</li>
+            )}
+          </ul>
+        </div>
+      )}
       <button className="wb-row-head" onClick={onToggle} aria-expanded={open}>
         <span className="wb-dot" style={{ background: color }} aria-hidden />
         <span className="wb-row-name">

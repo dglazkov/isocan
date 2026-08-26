@@ -3,6 +3,7 @@ import type { Actor } from "@isocan/core";
 import { editableText, isDesignSystem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
+import { TextEditFrame } from "./TextEditFrame.tsx";
 
 /** The editor is its own chunk inside the cover's chunk: CodeMirror is the
  * heaviest thing the workbench owns, and a folded editor must not pay for
@@ -81,6 +82,10 @@ export function ArtifactStage({
   // The open buffer, lifted from the editor so the preview pane can render
   // it. Null while the editor is folded or the type has no draft renderer.
   const [draft, setDraft] = useState<string | null>(null);
+  // Edit-text-in-place (the WYSIWYG V0). Per item, reset on item change —
+  // and only offered on the SAVED preview: with the editor open, the buffer
+  // is the source of truth and two pens on one file is a conflict machine.
+  const [textEditing, setTextEditing] = useState(false);
 
   if (!item) {
     return (
@@ -119,6 +124,7 @@ export function ArtifactStage({
   if (!editable) return <div className="artifact-stage">{saved}</div>;
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
+  const offerTextEdit = current.mimeType === "text/html" && !panes.edit;
 
   return (
     <div className="artifact-stage">
@@ -139,47 +145,69 @@ export function ArtifactStage({
              edge the pane folded to. */
           <button className="stage-rail left" onClick={() => fold("edit")} title="Open the editor">
             <span>Edit</span>
+            <b aria-hidden>»</b>
           </button>
         )}
         {panes.preview ? (
           <div className="stage-preview-pane">
-            <div className="stage-pane-bar">
-              <span className="stage-pane-name">
-                {showDraft ? "Draft" : "Saved"}
-                <i>
-                  {showDraft
-                    ? " — renders as you type; ⌘S makes it a version"
-                    : ` — v${item.versions.length}`}
-                </i>
-              </span>
-              <span className="spacer" />
-              {panes.edit && (
-                <button
-                  className="stage-pane-fold"
-                  onClick={() => fold("preview")}
-                  title="Fold the preview away — the rail brings it back"
-                  aria-label="Collapse the preview"
-                >
-                  »
-                </button>
-              )}
-            </div>
-            <div className="stage-pane-body">
-              {showDraft ? (
-                /* The DRAFT, live: srcdoc under the same lone allow-scripts
-                   every item frame gets — an opaque origin, no cookie, no
-                   API. Local by construction; nothing leaves the tab until
-                   Save. */
-                <iframe
-                  className="html-view"
-                  sandbox="allow-scripts"
-                  srcDoc={draft ?? ""}
-                  title={`draft of ${current.filename}`}
-                />
-              ) : (
-                saved
-              )}
-            </div>
+            {textEditing && offerTextEdit ? (
+              <TextEditFrame
+                key={item.id}
+                canvasId={canvasId}
+                item={item}
+                actor={actor}
+                onDone={() => setTextEditing(false)}
+              />
+            ) : (
+              <>
+                <div className="stage-pane-bar">
+                  <span className="stage-pane-name">
+                    {showDraft ? "Draft" : "Saved"}
+                    <i>
+                      {showDraft
+                        ? " — renders as you type; ⌘S makes it a version"
+                        : ` — v${item.versions.length}`}
+                    </i>
+                  </span>
+                  <span className="spacer" />
+                  {offerTextEdit && (
+                    <button
+                      className="stage-editor-btn"
+                      onClick={() => setTextEditing(true)}
+                      title="Change the words in place — double-click any text; simple edits save as a version, anything ambiguous is refused toward the editor"
+                    >
+                      Edit text
+                    </button>
+                  )}
+                  {panes.edit && (
+                    <button
+                      className="stage-pane-fold"
+                      onClick={() => fold("preview")}
+                      title="Fold the preview away — the rail brings it back"
+                      aria-label="Collapse the preview"
+                    >
+                      »
+                    </button>
+                  )}
+                </div>
+                <div className="stage-pane-body">
+                  {showDraft ? (
+                    /* The DRAFT, live: srcdoc under the same lone allow-scripts
+                       every item frame gets — an opaque origin, no cookie, no
+                       API. Local by construction; nothing leaves the tab until
+                       Save. */
+                    <iframe
+                      className="html-view"
+                      sandbox="allow-scripts"
+                      srcDoc={draft ?? ""}
+                      title={`draft of ${current.filename}`}
+                    />
+                  ) : (
+                    saved
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <button
@@ -188,6 +216,7 @@ export function ArtifactStage({
             title="Open the preview"
           >
             <span>Preview</span>
+            <b aria-hidden>«</b>
           </button>
         )}
       </div>

@@ -143,3 +143,46 @@ describe("the editor's bar earns its buttons", () => {
     expect(editor).toMatch(/saving \|\| !dirtyRef\.current\) return;/);
   });
 });
+
+/**
+ * Edit-text-in-place: the WYSIWYG V0's two safety floors, pinned.
+ *
+ * The research doc measured the frame physics; this holds the build to
+ * them. The edit frame is `allow-same-origin` with NO scripts — same-origin
+ * is what lets our chrome reach the DOM, and dead scripts are what make
+ * same-origin acceptable before the content origin lands. Either token
+ * changing is a security event, not a style choice. And the patch path is
+ * the unique-match rule, whose own suite proves it refuses rather than
+ * guesses.
+ */
+describe("edit-text-in-place", () => {
+  const frame = read("../src/components/TextEditFrame.tsx");
+  const stage = read("../src/components/ArtifactStage.tsx");
+
+  it("freezes the page: same-origin, scripts dead, exactly", () => {
+    // Asserted on the ATTRIBUTE, not the prose — the comments discuss
+    // allow-scripts at length precisely because it must not be here.
+    expect(frame).toMatch(/sandbox="allow-same-origin"/);
+    expect(frame).not.toMatch(/sandbox="[^"]*allow-scripts/);
+  });
+
+  it("renders fetched text, never the blob URL", () => {
+    // The blob route's response-header CSP forces its own sandbox over the
+    // iframe attribute; srcdoc is the path that carries no such header.
+    expect(frame).toContain("srcDoc={source}");
+    expect(frame).not.toMatch(/src=\{blobUrl/);
+  });
+
+  it("saves through the unique-match rule and the ordinary version path", () => {
+    expect(frame).toContain("applyEdits(");
+    expect(frame).toContain("addVersionFromFile(");
+    // Refusals surface as a sentence, never as a silent partial save.
+    expect(frame).toContain("setRefusal(outcome.reason)");
+  });
+
+  it("is offered only on the saved preview, never beside an open buffer", () => {
+    // Two pens on one file is a conflict machine: with the editor pane open
+    // the buffer is the source of truth, and the affordance is withheld.
+    expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !panes\.edit;/);
+  });
+});

@@ -6,6 +6,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
+import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { goStage } from "../lib/goStage.ts";
 
 /**
@@ -42,6 +43,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   const navigate = useNavigate();
   const canvas = useCanvasStore((s) => s.canvas);
   const [tree, setTree] = useState<TreeState>({ state: "loading" });
+  const [filesH, setFilesH] = useSectionHeight("isocan.wb.files.h", 180);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   }
 
   return (
-    <section className="wb-files" aria-label="Files">
+    <section className="wb-files" aria-label="Files" style={{ maxHeight: filesH }}>
       <h3>Files</h3>
       {tree.state === "loading" && <p className="wb-quiet">Reading the tree…</p>}
       {tree.state === "none" && <p className="wb-quiet">{tree.note}</p>}
@@ -157,6 +159,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
           {tree.truncated && <li className="wb-quiet">… truncated</li>}
         </ul>
       )}
+      <SectionResizer value={filesH} onChange={setFilesH} label="Resize the file list" />
     </section>
   );
 }
