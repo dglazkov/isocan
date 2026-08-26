@@ -38,7 +38,7 @@ import { readHomes, writeHomes, type HomeAssignments } from "./homes.ts";
  * A flag would be a surface an agent could use to send a write to a home
  * nobody chose, one command at a time, with nothing written down afterwards.
  *
- * **And no new `Operation`, deliberately** — `docs/design`'s §8.1, written
+ * **And no new `Operation`, deliberately** — the design docs' rule, written
  * here because this is where the proposal would arrive. The home assignment is
  * not canvas state: no reducer produces it, a hosted home cannot state its own
  * public address (so it could never write one truthfully for a canvas born

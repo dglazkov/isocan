@@ -37,12 +37,16 @@ idempotent command; the doc stays the explanation of what each step was for.
 
 ## The multiuser build
 
-The hosted/multiuser work has its own docs, read in this order:
-[`docs/multiuser-journey.md`](docs/multiuser-journey.md) (the
-experience, ground truth), [`docs/design/`](docs/design/) (the
-mechanisms), [`docs/architecture.md`](docs/architecture.md) (the
-physical map), and [`docs/phases.md`](docs/phases.md) (the walk — its
-"where we are" line says which phase is next; start there).
+The hosted/multiuser work is one project directory,
+[`docs/projects/multiuser/`](docs/projects/multiuser/), read in this order:
+[`journey.md`](docs/projects/multiuser/journey.md) (the experience, ground
+truth), the design docs beside it (the mechanisms —
+[`identity-desk.md`](docs/projects/multiuser/identity-desk.md),
+[`innkeeper.md`](docs/projects/multiuser/innkeeper.md), and the rest),
+[`docs/architecture.md`](docs/architecture.md) (the physical map, which is the
+whole product's and not this project's), and
+[`phases.md`](docs/projects/multiuser/phases.md) (the walk — its "where we are"
+line says which phase is next; start there).
 
 ## Changelog
 
@@ -78,28 +82,42 @@ now catches it. Add to it when a bug turns out to have a shape.
 
 ## Where a document goes
 
-Two kinds, and the split is worth keeping. **Top level** (`architecture.md`,
-`phases.md`, the journeys, `evals.md`) is whole-product and spans time: the
-map, the walk, the ideal, the plan. **`docs/design/`** is one bounded
-mechanism, taken up because something above forced it — every doc there opens
-by naming the debt it discharges.
+**A project is a directory.** `docs/projects/<name>/` holds everything about
+one body of work — the ideal (`journey.md`), the walk (`phases.md`), and the
+mechanisms it forced, one bounded mechanism per file, each opening by naming
+the debt it discharges. A project with a single design has one `design.md`; a
+project with several names each for what it designs. Nothing outside the
+directory has to be edited when a project grows a doc, and reading one project
+end to end is `ls` and then reading in order.
 
-So a plan stays at the top and the mechanisms it forces land in `design/` as
-they are chosen. That is already the shape: `multiuser-journey.md` spawned
-`identity-desk.md`, `innkeeper.md` and `offline-birth.md`; `atlas-journey.md`
-spawned `convergence.md` and `content-origin.md`; `evals.md` will spawn the
-corpus report, the telemetry payload and the grader harness the same way.
+That is already the shape the docs had, spelled as directories rather than as
+a convention: `multiuser/journey.md` spawned `identity-desk.md`, `innkeeper.md`
+and `offline-birth.md`; `atlas/journey.md` spawned `convergence.md` and
+`content-origin.md`; `evals/plan.md` will spawn the corpus report, the
+telemetry payload and the grader harness the same way — and they will land
+beside it.
+
+**What stays at the top level is what belongs to no single project**:
+`architecture.md` (one physical map of one system — every project moves it, so
+it cannot live inside any of them), the guides (`development.md`,
+`new-project.md`), and the three cross-cutting records, which are indexed by
+time rather than by subject: `changelog/`, `research/`, `reviews/`.
+
+[`docs/projects/README.md`](docs/projects/README.md) is the index — what each
+project is and where it stands. Add the row when you add the directory.
 
 ## Journeys
 
-`docs/multiuser-journey.md` and `docs/atlas-journey.md` are written as scenes
-and held as the ideal: mechanism appears only where a scene forced it. Each
-ends with "what the scenes force" — the load-bearing minimum — which is the
-part to read before building anything they describe.
+`docs/projects/multiuser/journey.md` and `docs/projects/atlas/journey.md` are
+written as scenes and held as the ideal: mechanism appears only where a scene
+forced it. Each ends with "what the scenes force" — the load-bearing minimum —
+which is the part to read before building anything they describe. A project
+that begins with a journey keeps it as `journey.md`, whatever else it grows.
 
 ## Evals
 
-`docs/evals.md` is the staged plan for finding out whether isocan is any good
+`docs/projects/evals/plan.md` is the staged plan for finding out whether isocan is any
+good
 at what it exists for. The short version, if you only read one thing: the
 oplog already records more evaluation signal than most products collect on
 purpose — undo is a labelled failure, and a version stack is a preference pair

@@ -46,7 +46,7 @@ far nobody has. Stage 4's calibration problem is **not** already solved.
 
 That has a product consequence worth naming: nothing generates preference pairs
 until divergence is something people actually use, and divergence is not worth
-using while [convergence](design/convergence.md) is missing. The op is on the
+using while [convergence](../atlas/convergence.md) is missing. The op is on the
 critical path for the eval programme, not only for the canvas.
 
 **Comments are the request corpus.** What people ask agents for, in their own

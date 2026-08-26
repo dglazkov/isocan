@@ -1,7 +1,7 @@
 /**
  * **What the innkeeper owes a stranger, as data** (phase 13.7).
  *
- * [`docs/design/innkeeper.md`](../../../../docs/design/innkeeper.md) chose the
+ * [`docs/projects/multiuser/innkeeper.md`](../../../../docs/projects/multiuser/innkeeper.md) chose the
  * posture out loud — *an* innkeeper, never *the* innkeeper — and left one line
  * open under it: "who operates the default home, under what terms — a named
  * operator, a terms document, and pricing are product work this doc only
@@ -39,7 +39,7 @@ export type TermsSection = {
   /** The paragraphs, in the order a reader meets them. */
   body: readonly string[];
   /**
-   * The sentences in `docs/design/innkeeper.md` this section restates, verbatim
+   * The sentences in `docs/projects/multiuser/innkeeper.md` this section restates, verbatim
    * enough to survive the doc's line wrapping (the guard collapses whitespace
    * and strips markdown emphasis before looking). Never empty: a section with no
    * source is a claim this home made up.
@@ -57,7 +57,7 @@ export const TERMS_LEDE =
  * **The sentence phase 13 deletes.**
  *
  * Sovereignty by replica is fact today; the *one command* that moves a canvas
- * to a different home is not built. `docs/phases.md`'s phase 13 says so in its
+ * to a different home is not built. `docs/projects/multiuser/phases.md`'s phase 13 says so in its
  * own Work — "re-homing's landing also retires the sovereignty caveat phase
  * 13.7 wrote into the terms — deleting that sentence is part of this phase's
  * outcome" — so it is written as one paragraph with its own name, findable by

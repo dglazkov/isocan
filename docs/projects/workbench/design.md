@@ -371,7 +371,8 @@ and a view that reads @mentions is an injection surface pointed at every
 parked agent), presence, navigation, storage. A method is added when two real
 views need it.
 
-**Writes ride as the view's extension actor** — extensions.md's whole model:
+**Writes ride as the view's extension actor** — the [extensions
+design](../extensions/design.md)'s whole model:
 attributed (`isocan activity <view>`), revocable (the door refuses a revoked
 actor's op server-side, no host cooperation needed), visible in presence.
 Never as the viewer — the codebase already ruled on that shape
@@ -384,8 +385,8 @@ checkpoint story. (A host control that "sends the undo as the view actor" is
 broken twice over: the viewer's badge holds no claim to that actor, and
 per-actor undo is one chain per actor — two viewers would discard each
 other's tweaks.) The remaining server-side dependency is named, not assumed:
-*who stamps a view-originated op with the extension actor* is extensions.md
-stage 4 machinery — plausibly the daemon holding extension grants and
+*who stamps a view-originated op with the extension actor* is the extensions
+design's stage 4 machinery — plausibly the daemon holding extension grants and
 re-stamping after the grant check — and no view HTML executes before it and
 the content origin both exist.
 

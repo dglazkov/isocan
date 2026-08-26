@@ -379,13 +379,13 @@ replica durable.
    daemon) reconnects with the same seq-cursor gesture. (Built in phase
    10; the mechanism, and the questions it forced about retrying an op
    whose answer never came, are in
-   [design/offline-tab.md](design/offline-tab.md).)
+   [offline-tab.md](offline-tab.md).)
 
 ## Open debts
 
 - **The plane has two surfaces and only one of them works** (opened
   2026-08-24 by phase 10; designed, not chosen, in
-  [design/local-bridge.md](design/local-bridge.md)). Rule 6 below says
+  [local-bridge.md](local-bridge.md)). Rule 6 below says
   offline in the browser is the service worker's job, and phase 10 made
   that true. What the rule quietly assumes is that the browser is the
   only surface needing to survive a lost network — and on a machine
@@ -401,7 +401,7 @@ replica durable.
   was forced.
 
 - **The identity desk** (three appearances, load-bearing; now **designed**
-  in [design/identity-desk.md](design/identity-desk.md)): who may enter a
+  in [identity-desk.md](identity-desk.md)): who may enter a
   canvas URL; what credential a daemon or a cloud agent presents; how an
   actor claim is vouched across surfaces. The desk answered with the
   badge (a home-minted secret every surface carries), grants over
@@ -413,13 +413,13 @@ replica durable.
   flow. What the scenes required holds: admission is still all the door
   checks; only what "admitted" means hardened.
 - **The innkeeper** (posture now chosen in
-  [design/innkeeper.md](design/innkeeper.md)). Someone runs the home, pays
+  [innkeeper.md](innkeeper.md)). Someone runs the home, pays
   for it, answers for uptime, abuse, and privacy — and with birth-at-home,
   it holds *unshared* canvases too. That makes isocan a hosted product
   with a local-first cache, and that posture should be chosen out loud,
   not inherited.
 - **Offline birth** (designed in
-  [design/offline-birth.md](design/offline-birth.md)). A canvas created on
+  [offline-birth.md](offline-birth.md)). A canvas created on
   a plane births locally and adopts a home on first reconnect — the one
   surviving remnant of "push the store up," demoted to background repair. With no person-facing door on the
   daemon, that interval is CLI-and-agent only: a browser cannot visit a
@@ -429,7 +429,7 @@ replica durable.
   is tuning, not structure.
 - **Launch custody** (agent-on-demand itself is played — Scene 7; the
   desk's half is designed as frozen delegation in
-  [design/innkeeper.md](design/innkeeper.md)): the home
+  [innkeeper.md](innkeeper.md)): the home
   holds hooks and scoped tokens that start compute in other people's
   accounts — and it now mints passes with nobody at the keyboard: Scene 5's
   rule was credentials flowing outward from an admitted session, and the

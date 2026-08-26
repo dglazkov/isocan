@@ -45,7 +45,7 @@ import { formatDotToken, parseDotToken } from "./badge.ts";
  * sweeper: a pass that nobody redeems is a dead row, and a dead row that is
  * still in the desk is not a security problem — it is a byte. (Collecting
  * them is GC's business, and it is deliberately not built here; see the GC
- * schedule in `docs/phases.md`'s Deliberately open.)
+ * schedule in `docs/projects/multiuser/phases.md`'s Deliberately open.)
  */
 export const PASS_TTL_MS = 15 * 60 * 1000;
 

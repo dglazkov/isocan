@@ -13,7 +13,7 @@ under me continuously. `git status` at the start was two files
 untracked, including `AGENTS.md`, `README.md`, `lessons.md`, two new test files
 and `docs/new-project.md`. One of my findings was **found and closed by that
 session while I was writing it up** — recorded below rather than deleted,
-because the shape it belongs to is still open. Anything `docs/phases.md`
+because the shape it belongs to is still open. Anything `docs/projects/multiuser/phases.md`
 declares (10.3 "one daemon, many homes" is next) is in-flight, not drift.
 
 Measured at `2dc0090` plus the working tree:
@@ -53,7 +53,7 @@ Measured at `2dc0090` plus the working tree:
 | D5–D9 | Comment/doc drift rows | **All five still true** |
 
 Two of last run's three new findings were closed inside 24 hours, and
-`docs/design/convergence.md` was corrected in place with the counter-shape
+`docs/projects/atlas/convergence.md` was corrected in place with the counter-shape
 recorded. That is twice in two runs that the memory has done its job.
 
 ---
@@ -143,7 +143,7 @@ footnote:
 1. **The oplog is truth.** `architecture.md` says durability precedes
    broadcast; a malformed op is not a failed request, it is a permanent record
    that every future replay applies.
-2. **`docs/design/extensions.md:60`** — *"`does` is a slash command or an
+2. **`docs/projects/extensions/design.md:60`** — *"`does` is a slash command or an
    `Operation`"* — puts a literal `Operation` in a manifest, which is an item,
    which is user data on a canvas. The doc's whole rule is *"an extension may
    only ask for what a person could ask for"*, and that sentence is only true
@@ -214,7 +214,7 @@ Still describing the retired behaviour as current:
 | `packages/web/src/components/Minimap.tsx:33` | *"Everyone with a place to stand — an on-call session has none."* |
 | `packages/core/src/protocol.ts:89` | *"Scene 4's dimmed face with a dashed ring"* |
 | `README.md:317-322` | *"A parked agent wears a dashed ring in **every** canvas's facepile"* |
-| `docs/multiuser-journey.md:126, :219` | the ideal, so arguably legitimate — see decision 4 |
+| `docs/projects/multiuser/journey.md:126, :219` | the ideal, so arguably legitimate — see decision 4 |
 
 `Presence.tsx` is the interesting one. Its own face renderer emits exactly
 `live`/`away` plus `self`/`badged`/`followed`; there is **no dashed-ring rule
@@ -248,7 +248,7 @@ last mile differs, and it doesn't.
 
 Unchanged fix: `items.resize`, or decision 3.
 
-### A6. Judging `docs/design/extensions.md`
+### A6. Judging `docs/projects/extensions/design.md`
 
 Asked for the same way `convergence.md` and `content-origin.md` were.
 
@@ -432,7 +432,7 @@ rule inside `.world`". Worth one conversation, not a refactor.
 | --- | --- | --- | --- |
 | **D10** | `docs/architecture.md:475` — the Share dialog and grant routes are among "what the code does not have yet" | `ShareDialog.tsx`, `http.ts:786/818/876`, `main.ts:1351` — shipped in phase 7 | **Doc.** New, and in the one section whose job is accuracy about absence (A3) |
 | **D11** | `packages/core/src/kinds.ts:6-8` — kinds are shared "so the files panel and `isocan ls --kind` group the canvas the same way" | A PDF is `document` from the browser and `other` from the CLI | **Code.** New, measured (A1) |
-| **D12** | `docs/design/extensions.md:143-151` — "Nothing exists only in the web app" | The only CLI path named is `isocan add --prop role=tool`; no verb, so `surface.test.ts` cannot see it | **Doc** (a proposal, so cheap to fix now) (A6) |
+| **D12** | `docs/projects/extensions/design.md:143-151` — "Nothing exists only in the web app" | The only CLI path named is `isocan add --prop role=tool`; no verb, so `surface.test.ts` cannot see it | **Doc** (a proposal, so cheap to fix now) (A6) |
 | **D13** | `packages/web/src/components/Presence.tsx:19-22` — a third face state with a dashed ring | Two states, `live`/`away`; no dashed-ring rule for a face exists | **Doc** (the comment) (A4) |
 | D1 | `README.md:317` — a parked agent's dashed ring in every facepile | Retired with #60 (`presence.ts:10-12`), and `README.md:382` says so | **Doc.** Still true; bigger than the README (A4) |
 | D2 | `README.md:440-443` — four packages | Five workspaces; `cloudstore` appears **0** times | **Doc.** Unchanged |
@@ -541,7 +541,7 @@ guards in a row that were mutated before being believed.
    effect of shipping `fit`, `choose` or extensions.
 
 4. **Is "on call" retired, or deferred?** New. A4 found the retirement taught
-   in five places, but `docs/multiuser-journey.md:126` and `:219` — held as the
+   in five places, but `docs/projects/multiuser/journey.md:126` and `:219` — held as the
    **ideal**, per `AGENTS.md` — still describe Isaac's dashed ring appearing in
    every pile, relayed through Priya's daemon. #60 retired the implementation;
    nothing retired the scene. Either the journey gives up that beat, or the

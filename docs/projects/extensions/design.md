@@ -83,7 +83,7 @@ one might.
 ### 3. A hosted panel — a page, on the content origin
 
 When the shape genuinely is not describable, the panel is HTML in a sandboxed
-frame served from a **[content origin](content-origin.md)** — an origin that
+frame served from a **[content origin](../atlas/content-origin.md)** — an origin that
 holds no cookie, no badge and no API.
 
 That proposal was written for two other reasons (letting an interactive item

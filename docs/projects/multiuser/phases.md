@@ -1,10 +1,10 @@
 # Implementation phases
 
-The [architecture](architecture.md) is the map; this doc is the walk.
+The [architecture](../../architecture.md) is the map; this doc is the walk.
 Each phase is a **discrete amount of work that ends in a testable
 outcome** — not a theme, not a milestone: a thing that can be
 demonstrated true when the phase closes, and the demonstration is named
-up front. The [journey](multiuser-journey.md) is the acceptance suite:
+up front. The [journey](journey.md) is the acceptance suite:
 a phase that claims a scene is done only when the scene plays.
 
 **How the work runs.** Claude does all of it, and a working session is
@@ -19,7 +19,7 @@ subagent's word for it; the proofs are named up front precisely so
 review is mechanical. Work that fails review goes back down: adjust
 the instructions, respawn, re-review. When the proof holds, the
 conductor writes the Findings, moves the status line, edits the
-[map](architecture.md) if a finding redrew it, commits the phase
+[map](../../architecture.md) if a finding redrew it, commits the phase
 whole, and repeats. Phases run in order — each stands on the last;
 parallel subagents belong *inside* a phase, never across phases.
 Provisioning steps are marked **⚑ provision** and each one is asked
@@ -41,9 +41,11 @@ were written long — argument, evidence, and the blow-by-blow of the
 session that found each one — and had reached fourteen thousand words
 against five thousand of everything else. They are an index now: one
 dated line, the claim and nothing else. **The long form is not gone, it
-is in `git log -p docs/phases.md`**, thirty commits deep, and the date
-on a line is how the commit that wrote it is found. What survived the
-cut is what would change a later session's behaviour — decisions still
+is in `git log -p --follow docs/projects/multiuser/phases.md`** — `--follow`
+because this file was `docs/phases.md` until the projects layout — thirty
+commits deep, and the date on a line is how the commit that wrote it is
+found. What survived the cut is what would change a later session's
+behaviour — decisions still
 binding, debts still unpaid, and reversals where the obvious move turned
 out to be wrong. What was cut is evidence for claims nothing disputes,
 and bugs a test now guards: where a test guards it, **the test is the
@@ -66,14 +68,14 @@ Every phase also carries a **Status** line directly under its heading —
 what is missing, or `NOT STARTED`. It is there so completion is *stated*
 rather than inferred from whether Findings say "none yet": a phase can
 close without surprising anybody, and an empty Findings section must
-never be read as an untouched phase. `grep '^\*\*Status' docs/phases.md`
-is the whole roster in one screen, and `grep -n '— Open' docs/phases.md`
+never be read as an untouched phase. `grep '^\*\*Status' docs/projects/multiuser/phases.md`
+is the whole roster in one screen, and `grep -n '— Open' docs/projects/multiuser/phases.md`
 is the roster of unpaid debts — a finding's one piece of content that
 nothing else in the repo records, which is why those are marked and why
 they were compacted least. When a phase closes, its Status line
 moves in the same change as the "where we are" line — one gesture, or
 they drift. A finding that redraws
-the map edits [architecture.md](architecture.md) in the same change —
+the map edits [architecture.md](../../architecture.md) in the same change —
 the map stays true, this doc remembers why it moved. The phase *order*
 is a hypothesis, not a promise: phases may reorder as findings land,
 which is why they have names, and numbers only for today's ordering.
@@ -141,7 +143,7 @@ is how it goes wrong.
   can reach. The design — the tab reaching its local daemon through a
   same-origin bridge frame, so the agent and the browser share one
   replica — is written up in
-  [design/local-bridge.md](design/local-bridge.md) and is **deliberately
+  [local-bridge.md](local-bridge.md) and is **deliberately
   not chosen**. It is open because it trades against three things this
   project holds on purpose: the one-origin rule, "the daemon never serves
   pages to persons", and `home-link.ts`'s refusal to half-build an offline
@@ -187,7 +189,7 @@ is how it goes wrong.
 
   Nothing schedules
   garbage collection at the hosted home, on purpose;
-  [`infra/91-scheduler-gc.sh`](../infra/91-scheduler-gc.sh) creates
+  [`infra/91-scheduler-gc.sh`](../../../infra/91-scheduler-gc.sh) creates
   nothing and explains why at length. Two independent blockers: the door
   admits **badges** and Cloud Scheduler cannot hold one (a Google OIDC
   token runs through `parseBadgeToken` and parses as nothing, so the
@@ -204,7 +206,7 @@ is how it goes wrong.
   for not reclaiming them is cents at journey scale, and correctness
   does not depend on it. A home can run un-swept for a long time. It
   should not run un-swept forever, and whichever answer wins **redraws
-  the [map](architecture.md)'s GC line**, which today promises a
+  the [map](../../architecture.md)'s GC line**, which today promises a
   mechanism the code cannot perform. **Scheduled 2026-08-24:** the
   in-process timer, in phase 13.7, with `POST /api/gc`; the entry stands
   until the map's line is redrawn there. **Redrawn 2026-08-24** — see the
@@ -421,7 +423,7 @@ backing comes with it, and phase 3 shaped the seam for it in advance:**
 `claimants(actorId)`, `holdersOf(sessionKey)` and `claimsIn(canvasIds)` —
 one document read and three `array-contains` queries, against the
 `claimIds` / `claimKeys` / `admittedTo` arrays the
-[map](architecture.md) now names on the badge document. A CloudDesk that
+[map](../../architecture.md) now names on the badge document. A CloudDesk that
 does not write those three arrays on every claim and every admission
 passes the suite on a FileDesk and answers nothing in the cloud.
 
@@ -700,7 +702,7 @@ writing `config.json` and restarting the daemon so the change takes.
 fixed port with its own `ISOCAN_HOME`, because working on the web UI
 needs a local home and working on the home needs a replica, and that is
 inherent rather than a bug (the one-origin rule means a replica cannot
-serve pages — [offline-birth.md](design/offline-birth.md) already
+serve pages — [offline-birth.md](offline-birth.md) already
 accepts it). `isocan setup` finishing the walk when a home is
 configured, printing the canvas's address at the home rather than
 leaving it to be read out of a marker file. The agent guide and the
@@ -911,7 +913,7 @@ once, 2026-08-24. Dion's rig (phase 10.5) holds canvases born local
 beside work that should live at dev. Every developer wants to run prod
 isocan in one repo and dev isocan in another the moment prod exists —
 and phase 14's default-address flip is only *safe* if a shipped default
-cannot re-point existing work. And [innkeeper.md](design/innkeeper.md)'s
+cannot re-point existing work. And [innkeeper.md](innkeeper.md)'s
 second commitment — any innkeeper, a team running its own home — always
 implied a person working for two teams, which is two homes on one
 machine. All three are the same fact: **the home is a property of the
@@ -1140,7 +1142,7 @@ exercised against the real Firestore/GCS backing at the same time, which no
 vitest run touches — including the empty answer for a badge admitted to
 nothing.
 
-**Work:** What [innkeeper.md](design/innkeeper.md) obligates and no
+**Work:** What [innkeeper.md](innkeeper.md) obligates and no
 phase ever owned, due before strangers rather than after. **GC,
 chosen:** the in-process timer from Deliberately open — no scheduler, no
 credential, no new kind of caller at the door — plus `POST /api/gc`,
@@ -1308,7 +1310,7 @@ isocan.io through the release promotion, and its order returns to being
 a hypothesis — real users get a vote on whether the spark or the
 airplane matters more. Two arcs are gated on design work that is
 session-shaped rather than phase-shaped, the way identity-desk.md and
-innkeeper.md were written: `design/launch.md` and its dispatch spike
+innkeeper.md were written: `projects/launch/design.md` and its dispatch spike
 before phase 12; the completed local-bridge design, its Chrome spike,
 and the journey's missing airplane scene before phase 12.7.
 
@@ -1350,9 +1352,9 @@ pile; failure surfaced in the thread. Provisioning: a test repo with
 the workflow file and a token scoped to firing it.
 
 **Gated on a design that does not exist yet.** Frozen delegation
-([innkeeper.md](design/innkeeper.md), mechanism 11) answers "may the
+([innkeeper.md](innkeeper.md), mechanism 11) answers "may the
 home mint this?"; nothing yet answers "what happens when it fires?".
-Before this phase opens, `design/launch.md` must own the operational
+Before this phase opens, `projects/launch/design.md` must own the operational
 half: the hook contract written down rather than sloganized; how the
 home observes the failure it promises to report — its token reads
 nothing, and `workflow_dispatch` answers 204 with no run id, so
@@ -1405,7 +1407,7 @@ replaying one appends nothing.
 
 **Work:** One replica on a machine, not two: the tab reaches the local
 daemon through the same-origin bridge frame of
-[design/local-bridge.md](design/local-bridge.md) — taken up only after
+[local-bridge.md](local-bridge.md) — taken up only after
 that design is completed and its browser hypotheses measured (the
 127.0.0.1 frame carve-out, and Private Network Access, which browsers
 have been reshaping toward permission prompts; a comment that reasons

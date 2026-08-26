@@ -81,7 +81,7 @@ Also worth taking, from `addyosmani/agent-skills` (MIT):
   are *checkable* (→ slop list) versus rules about taste (→ DESIGN.md template).
 - **`obra/superpowers`** — `brainstorming` overlaps `/grill-me`;
   `subagent-driven-development` overlaps upstream's conductor protocol in
-  `docs/phases.md`; `writing-skills` is worth reading before we add built-ins.
+  `docs/projects/multiuser/phases.md`; `writing-skills` is worth reading before we add built-ins.
 
 ## Skip
 

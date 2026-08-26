@@ -5,7 +5,7 @@ opens by re-checking every finding it left, **verified rather than remembered**
 — I re-ran the greps, re-ran the suite, and where a claim was about behaviour I
 reproduced it against a live daemon and pasted what came back.
 
-**Scope note.** [`docs/phases.md`](../phases.md) is an active build by another
+**Scope note.** [`docs/projects/multiuser/phases.md`](../projects/multiuser/phases.md) is an active build by another
 session and it moved *under this review* — the tip went from `0690db8` to
 `331f8b0` mid-run, phase 9 closed and phase 10 (offline in the browser) opened,
 and three test files appeared between my first and second suite runs. Anything
@@ -346,7 +346,7 @@ down.
 
 ## The two proposals
 
-### `docs/design/convergence.md` — right problem, right to be an op, wrong shape
+### `docs/projects/atlas/convergence.md` — right problem, right to be an op, wrong shape
 
 **The gap is real** and the doc's case for it is the strongest part: divergence
 is served (`/variation` writes children carrying `parent`), vertical convergence
@@ -422,7 +422,7 @@ substring match, so it may pass vacuously. Fix that first or this lands
 undocumented and green."* That is now done; `isocan choose` will fail the build
 until the guide names it.
 
-### `docs/design/content-origin.md` — accept the reasoning; it is a boundary, not a feature
+### `docs/projects/atlas/content-origin.md` — accept the reasoning; it is a boundary, not a feature
 
 I verified every load-bearing fact and they all hold.
 `packages/web/src/components/ItemView.tsx:663` is

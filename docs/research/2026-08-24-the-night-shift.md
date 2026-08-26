@@ -29,7 +29,7 @@ Every canvas in this home, counted from the oplogs today:
 | **Deliberate version choices** (`item.setCurrentVersion`) | **2** |
 | Operations reversed by an undo | 19 |
 
-`docs/evals.md` measured the same home on 23 August and found **1** multi-child
+`docs/projects/evals/plan.md` measured the same home on 23 August and found **1** multi-child
 parent and **2** version choices. A day later divergence has gone 1 → 9 and
 convergence has gone 2 → 2. Fifteen more versions were stacked in that day and
 not one of them was chosen between.
@@ -38,7 +38,7 @@ This is the finding, and it reverses the conclusion evals.md drew. That
 document said the preference mine was empty because nobody reached for
 `/variation`. They reach for it now. **The mine is no longer empty of ore; it is
 empty of the act of choosing** — which is exactly what
-[`docs/design/convergence.md`](../design/convergence.md) predicted when it said
+[`docs/projects/atlas/convergence.md`](../projects/atlas/convergence.md) predicted when it said
 the canvas "can diverge and cannot converge… no verb in the CLI says *this one
 won*."
 
@@ -126,7 +126,7 @@ mutation-tested:
 | Bundle size | **585 kB**, over Vite's 500 kB warning — and up from 563 kB earlier today | Measured every build |
 
 Lesson #13 is worth reading twice here: `grade.mjs` "is invoked by no test, no
-npm script and no workflow; only by a sentence in `docs/evals.md` saying to run
+npm script and no workflow; only by a sentence in `docs/projects/evals/plan.md` saying to run
 it." Running `--selftest` for this write-up meant reading that sentence and
 typing the command — which is the lesson demonstrating itself.
 
@@ -276,7 +276,7 @@ Each of these is useful alone, and none requires the next — the same disciplin
 3. **The converge lane, one item wide.** One measured fix per night, landed as
    a version, with the before/after in the reply. Track the accept rate from
    the first night — it is the trust battery's first reading.
-4. **Convergence** (`docs/design/convergence.md`). Now the loop has an exit and
+4. **Convergence** (`docs/projects/atlas/convergence.md`). Now the loop has an exit and
    the diverge lane becomes possible.
 5. **The diverge lane**, scoped to starred items.
 6. **What changed while you were gone** — the since-last-session view.

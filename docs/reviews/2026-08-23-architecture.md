@@ -5,7 +5,7 @@ checked against the code rather than against the docs that describe it, and
 where a claim was checkable I ran it and pasted what came back. Nothing here
 is a refactor; every finding ends in a proposal.
 
-**Scope note.** [`docs/phases.md`](../phases.md) describes an active build —
+**Scope note.** [`docs/projects/multiuser/phases.md`](../projects/multiuser/phases.md) describes an active build —
 the hosted home on Cloud Run, phases 1–5 closed, phase 6 closed and verified,
 phase 7 next. Everything it names as not-yet-built (the service worker, the
 Share dialog, the clients' half of the large-blob upload, the admission scope

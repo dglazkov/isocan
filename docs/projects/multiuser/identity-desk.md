@@ -1,6 +1,6 @@
 # The identity desk
 
-The first of the [journey](../multiuser-journey.md)'s open debts, taken up.
+The first of the [journey](journey.md)'s open debts, taken up.
 The journey stays ground truth for the *experience*; this doc owns the
 *mechanism* — who may enter a canvas, what credential anything presents, and
 how an actor claim is vouched across surfaces. It is written as an
@@ -106,7 +106,7 @@ are a different, ephemeral thing. A badge is the desk's own word.)
 
 **The shape.** One server-side record — `{badgeId, secret, kind, createdAt,
 lastSeen, admissions, claims}`, the secret stored hashed at rest (the
-[architecture](../architecture.md)'s refinement: the desk keeps no
+[architecture](../../architecture.md)'s refinement: the desk keeps no
 secret it doesn't have to) — with two carriers for one artifact:
 browsers hold it as an HTTP-only cookie at the home origin (the one-origin
 rule means exactly one cookie jar — that decision pays again here);
@@ -520,7 +520,7 @@ surfaces do instead is say so before the click.
   it.
 
 **Since decided elsewhere:** which attesters ship first — the
-[architecture](../architecture.md) borrows Firebase Auth as the bench:
+[architecture](../../architecture.md) borrows Firebase Auth as the bench:
 magic-link email (the floor — it borrows only an inbox), Google, and
 GitHub. **Not yet decided here:** whether grants may carry roles
 (viewer/editor) — the journey never played a read-only member, so that

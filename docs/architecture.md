@@ -1,14 +1,14 @@
 # The architecture
 
-The [journey](multiuser-journey.md) is the experience; the
-[design docs](design/) are the mechanisms; this doc is the physical
-realization — what actually runs, where, on whose infrastructure. It is
+The [journey](projects/multiuser/journey.md) is the experience; the design
+docs under [`projects/`](projects/) are the mechanisms; this doc is the
+physical realization — what actually runs, where, on whose infrastructure. It is
 a **living doc with a specific contract**: the whole system is mapped
 here now, and the map changes only when reality produces something we
 didn't see coming — never because a region was left blank to fill in
 later. The record of what moved it lives in the phase findings of
-[phases.md](phases.md): a finding that redraws the map edits this doc
-in the same change.
+[the multiuser phases](projects/multiuser/phases.md): a finding that redraws
+the map edits this doc in the same change.
 
 ## Givens
 
@@ -318,7 +318,7 @@ reducer over a seq-numbered stream — and it now has the two things it was
 missing: a **disk** (IndexedDB: the confirmed canvas, its `lastSeq`, and the
 queue) and a **shell** that loads with no network. It reconnects with the
 same gesture `HomeLink` uses, `?since=<lastSeq>`, which is journey rule 6
-made physical. [design/offline-tab.md](design/offline-tab.md) is the
+made physical. [projects/multiuser/offline-tab.md](projects/multiuser/offline-tab.md) is the
 mechanism; two things about it belong on the map.
 
 **The op pipeline gained an idempotency key, and it is the envelope id.**
@@ -583,7 +583,7 @@ comes from the object store rather than from the client.
   So disaster recovery is Firestore PITR and the scheduled export, full
   stop. A replica is a live mirror, and calling it a backup would fail
   in the one direction that matters: it looks complete until the home is
-  gone. **This lands on [phases.md](phases.md)'s phase 13 too** —
+  gone. **This lands on [phases.md](projects/multiuser/phases.md)'s phase 13 too** —
   re-homing is drawn as "a thick replica offers its store to a new home
   … hello, badge, offer, replay", and the store it would offer is
   missing exactly the two things a replay needs.
@@ -591,8 +591,8 @@ comes from the object store rather than from the client.
 **A road drawn but not taken.** A machine now holds two replicas that
 cannot see each other — the tab's and the daemon's — which only matters
 when there is no network, and matters a lot then.
-[design/local-bridge.md](design/local-bridge.md) draws the alternative: the
-tab reaching its local daemon through a same-origin bridge frame, so that a
+[The local bridge](projects/multiuser/local-bridge.md) draws the alternative:
+the tab reaching its local daemon through a same-origin bridge frame, so that a
 person and their agent share one replica and one queue. It is designed and
 deliberately unchosen; if it is ever taken up, the browser replica above
 becomes the fallback for machines with no daemon rather than the only
@@ -615,7 +615,7 @@ read off the machine.
 ## Distance to the map
 
 What the code does not have yet — an inventory, not a sequence (the
-sequence is [phases.md](phases.md)):
+sequence is [phases.md](projects/multiuser/phases.md)):
 
 - The Share dialog and grant routes; registrations and the dispatch
   path.
@@ -625,7 +625,7 @@ sequence is [phases.md](phases.md)):
   and eviction story, and the `item.add` riding on it would name a
   `blobHash` that exists nowhere until the upload lands. It fails
   legibly instead, which is the only part that could not be deferred.
-  See [design/offline-tab.md](design/offline-tab.md).
+  See [projects/multiuser/offline-tab.md](projects/multiuser/offline-tab.md).
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
   uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is
@@ -687,6 +687,6 @@ together, which is the honest coupling.
 
 When reality produces something this map didn't see, the map changes
 **and** the reason is recorded as a dated finding on the phase that
-surfaced it, in [phases.md](phases.md). Things seen during mapping
+surfaced it, in [phases.md](projects/multiuser/phases.md). Things seen during mapping
 (the 32 MiB blob cap, deploy overlap) are in the map above, not there
 — the findings are only for what the map missed.

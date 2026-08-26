@@ -380,7 +380,7 @@ describe("copying the one step that is a command", () => {
   });
 
   it("falls back to a hand copy when the browser refuses", async () => {
-    // The shape of a refusal: a rejected promise. `docs/phases.md`'s standing
+    // The shape of a refusal: a rejected promise. `docs/projects/multiuser/phases.md`'s standing
     // lessons record the measured case — Chrome blocks the clipboard while
     // `visibilityState` is `hidden`.
     const refused = {

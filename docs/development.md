@@ -472,10 +472,10 @@ one local canvas for web UI development.
 | --- | --- |
 | [`AGENTS.md`](../AGENTS.md) | House rules, and the checklist that keeps the CLI and web app in sync. |
 | [`README.md`](../README.md) | What the product is and does. |
-| [`phases.md`](phases.md) | The plan for the hosted, multi-user build: phases, status, and findings. One of several tracks. |
-| [`architecture.md`](architecture.md) | What runs where. |
-| [`multiuser-journey.md`](multiuser-journey.md) | The target experience, written as scenarios. |
-| [`design/`](design/) | One mechanism per file. |
+| [`architecture.md`](architecture.md) | What runs where — one map, all projects. |
+| [`projects/`](projects/) | One directory per body of work: its journey, its phases, its designs. |
+| [`projects/multiuser/phases.md`](projects/multiuser/phases.md) | The plan for the hosted, multi-user build: phases, status, and findings. |
+| [`projects/multiuser/journey.md`](projects/multiuser/journey.md) | The target experience, written as scenarios. |
 | [`reviews/lessons.md`](reviews/lessons.md) | Failure modes this codebase has produced, with the guard for each. |
 | [`new-project.md`](new-project.md) | How to start a project on a canvas. |
 | `isocan --agent-help` | The collaboration protocol, shipped with the CLI. |

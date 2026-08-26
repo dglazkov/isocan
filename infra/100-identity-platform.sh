@@ -162,5 +162,5 @@ note "why they are words here rather than commands that would half-work."
 
 step "done"
 note "the desk reads an Identity Platform ID token and writes an ATTESTATION onto the"
-note "badge — see docs/design/identity-desk.md, 'attestations ride the badge'. Nothing"
+note "badge — see docs/projects/multiuser/identity-desk.md, 'attestations ride the badge'. Nothing"
 note "here creates an isocan account, because isocan does not have any."
