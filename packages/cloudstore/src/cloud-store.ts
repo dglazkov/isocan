@@ -631,6 +631,19 @@ export class CloudStore implements Store {
     await ref.set({ compactedThrough: Math.max(previous, horizon) }, { merge: true });
   }
 
+  /** The read half of `compactOplog`'s archive: the object is appended
+   * oldest-first, so it parses straight into log order. Absent object means
+   * nothing has ever been compacted. */
+  async readArchivedLog(id: string): Promise<LogEntry[]> {
+    const raw = await this.objects.readAll(archiveKey(id));
+    if (!raw) return [];
+    return raw
+      .toString("utf8")
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as LogEntry);
+  }
+
   // ---- internals ----
 
   private actorOverflowKey(seq: number): string {

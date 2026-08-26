@@ -350,6 +350,12 @@ export class FileStore implements Store {
     await writeFileAtomic(p.oplogFile(this.home, id), body.length > 0 ? body + "\n" : "");
   }
 
+  /** The archive is appended in compaction order and compaction always drops
+   * the oldest entries, so the file is already oldest-first. */
+  async readArchivedLog(id: string): Promise<LogEntry[]> {
+    return readJsonLines<LogEntry>(p.oplogArchiveFile(this.home, id));
+  }
+
   // ---- internals ----
 
   private async readIndex(id: string): Promise<Record<string, BlobMeta>> {

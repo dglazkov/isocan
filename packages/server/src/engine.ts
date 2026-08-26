@@ -465,6 +465,18 @@ export class Engine {
     return runtime.entries.filter((entry) => entry.seq > sinceSeq);
   }
 
+  /**
+   * What `gc` compacted away, oldest first. Straight from the backing rather
+   * than from the runtime — archived entries are exactly the ones the runtime
+   * no longer holds. `runtime()` is still called first so an unknown canvas
+   * answers "not found" here the same way it does on `getLog`, instead of an
+   * empty archive.
+   */
+  async getArchivedLog(canvasId: string): Promise<LogEntry[]> {
+    await this.runtime(canvasId);
+    return this.store.readArchivedLog(canvasId);
+  }
+
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
       // Mechanism 5's local half, and it runs on a replica exactly as it runs

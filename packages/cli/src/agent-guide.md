@@ -664,6 +664,14 @@ isocan fit <items...>                  # grow items to the size their content wa
   find out what they have been working on before you answer them, and running
   it for yourself is how you check what you actually landed last session. The
   web app shows the same list under a face in the pile, from the same reader.
+
+  For the longer view, `isocan recap` is the whole history at decaying
+  resolution: old stretches summarized to one line each (who, how many ops,
+  which items, how much conversation), the recent operations verbatim. Each
+  summarized span carries its seq range, and `isocan tail --archived` replays
+  any of it at full resolution — the history `gc` compacts is archived, never
+  deleted, and both verbs can read it. Joining a canvas with a past, run
+  `recap` once before forming an impression from `comment list` alone.
 - **The keys the human has.** `isocan shortcuts` prints every key the canvas
   answers to — the same list their `?` panel shows, from the same source. When
   somebody asks how to do a thing without a mouse, or you are telling them
@@ -855,7 +863,9 @@ make),
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
-`undo`/`redo`, `wait`, `tail -f`, `gc [--all]` (`--all`: every canvas you are
+`undo`/`redo`, `wait`, `tail -f` (`--archived`: the full history, including
+what gc compacted), `recap` (that history at decaying resolution — old spans
+summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
 `tree` (the bound directory as the daemon lists it — owner-scoped, so it
 answers only at the canvas's own machine),

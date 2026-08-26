@@ -520,6 +520,12 @@ export class DaemonClient {
     return this.request("GET", `/api/projects/${canvasId}/oplog?since=${since}${wait}`);
   }
 
+  /** What `gc` compacted out of the live log, oldest first — empty until a
+   * compaction has happened. `getLog` + this is the complete history. */
+  getArchivedLog(canvasId: string): Promise<LogEntry[]> {
+    return this.request("GET", `/api/projects/${canvasId}/oplog/archive`);
+  }
+
   /** Every canvas at once. Omit `cursors` to seed at "now"; otherwise the
    * daemon long-polls until an op lands on any canvas. */
   watchLog(request: WatchLogRequest): Promise<WatchLogResponse> {

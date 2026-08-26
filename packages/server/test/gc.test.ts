@@ -153,6 +153,31 @@ describe("blob GC", () => {
     expect((snapshot as any).canvas.items["itm_live"].x).toBe(9);
   });
 
+  it("the archive can be read back over the wire — history is archived, never unreachable", async () => {
+    await seed();
+    await op({ type: "item.move", itemId: "itm_live", x: 9, y: 9 });
+
+    // Nothing compacted yet: the archive exists as an answer, and it is empty.
+    const before = await fetch(`${base}/api/projects/prj_1/oplog/archive`, { headers: badge.headers });
+    expect(before.status).toBe(200);
+    expect(await before.json()).toEqual([]);
+
+    await gc({ keepOps: 0, graceMs: 0 });
+
+    // What compaction set aside is exactly what the route returns, in seq
+    // order — `tail --archived` and `recap` read the same record `gc` wrote.
+    const res = await fetch(`${base}/api/projects/prj_1/oplog/archive`, { headers: badge.headers });
+    expect(res.status).toBe(200);
+    const archived = (await res.json()) as Array<{ seq: number; envelope: { op: Operation } }>;
+    expect(archived.map((entry) => entry.seq)).toEqual([1, 2, 3]);
+    expect(archived[2]!.envelope.op.type).toBe("item.move");
+
+    // And the live log really did let go of them: the two reads partition the
+    // history rather than overlapping.
+    const live = await fetch(`${base}/api/projects/prj_1/oplog?since=0`, { headers: badge.headers });
+    expect(await live.json()).toEqual([]);
+  });
+
   it("keeps undo/redo pairs intact across the cut (closure over cause.targetSeq)", async () => {
     await seed(); // seqs: 1 create, 2 add
     await op({ type: "item.move", itemId: "itm_live", x: 100, y: 100 }); // 3
