@@ -11,10 +11,6 @@ import { ItemThumb } from "./ItemThumb.tsx";
  * scroll nobody reaches the end of. */
 const SHOWN_GROUPS = 5;
 
-/** How wide the bar stands, for `lib/stage.ts` — the one place that computes
- * what canvas is left visible. */
-export const MARKS_WIDTH = 232;
-
 const KEY = (canvasId: string) => `isocan.reactions.${canvasId}`;
 
 export function openReactionBar(canvasId: string, open: boolean): void {

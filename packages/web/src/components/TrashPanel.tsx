@@ -18,7 +18,6 @@ function formatBytes(bytes: number): string {
 }
 
 /** Must match .trash-panel's width in styles.css. */
-export const TRASH_WIDTH = 300;
 
 export function TrashPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.trashOpen);

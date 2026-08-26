@@ -111,46 +111,59 @@ export function fitBounds(
 }
 
 /**
- * Compute the translation offset needed to bring an item's screen rectangle
- * into view on the stage without moving the camera more than necessary.
- * An item already visible inside stage margins produces { dx: 0, dy: 0 }.
- * An item that cannot fit within the stage margins is centered in the stage.
+ * How far the camera must slide to bring an item's screen rectangle into
+ * view on the stage — and no further.
+ *
+ * The contract is MINIMAL MOTION, in tiers:
+ *
+ * 1. An item entirely inside the stage does not move the world AT ALL — not
+ *    even to give itself nicer air. Spatial navigation walks item to item,
+ *    and a camera that adjusts on every step makes the canvas feel like the
+ *    thing moving. (The first version slid anything inside the margin band,
+ *    and its successor was worse: on a narrow stage it re-centred a fully
+ *    visible item on every jump. Both violated the sentence this comment
+ *    leads with.)
+ * 2. An item off an edge slides in until it has `margin` of air — or as much
+ *    as the stage can give, when the stage is too narrow for the full ask.
+ * 3. Only an item wider or taller than the stage itself is centred.
+ *
+ * `margin` has no default on purpose: it briefly defaulted to a copy of the
+ * caller's own constant, and a number spelled twice is a number that drifts.
  */
 export function revealDelta(
   itemScreen: { left: number; top: number; right: number; bottom: number },
   stage: { x: number; y: number; width: number; height: number },
-  margin = 76,
+  margin: number,
 ): { dx: number; dy: number } {
   const itemWidth = itemScreen.right - itemScreen.left;
   const itemHeight = itemScreen.bottom - itemScreen.top;
 
-  const minX = stage.x + margin;
-  const maxX = stage.x + stage.width - margin;
-  const minY = stage.y + margin;
-  const maxY = stage.y + stage.height - margin;
-
-  const fitsX = itemWidth <= stage.width - margin * 2;
-  const fitsY = itemHeight <= stage.height - margin * 2;
+  // The air each axis can actually afford, capped at what was asked for.
+  const marginX = Math.max(0, Math.min(margin, (stage.width - itemWidth) / 2));
+  const marginY = Math.max(0, Math.min(margin, (stage.height - itemHeight) / 2));
 
   let dx = 0;
   let dy = 0;
 
-  if (!fitsX) {
+  if (itemWidth > stage.width) {
     dx = stage.x + stage.width / 2 - (itemScreen.left + itemScreen.right) / 2;
-  } else if (itemScreen.left < minX) {
-    dx = minX - itemScreen.left;
-  } else if (itemScreen.right > maxX) {
-    dx = maxX - itemScreen.right;
+  } else if (itemScreen.left >= stage.x && itemScreen.right <= stage.x + stage.width) {
+    // visible: tier 1 — stay.
+  } else if (itemScreen.left < stage.x + marginX) {
+    dx = stage.x + marginX - itemScreen.left;
+  } else {
+    dx = stage.x + stage.width - marginX - itemScreen.right;
   }
 
-  if (!fitsY) {
+  if (itemHeight > stage.height) {
     dy = stage.y + stage.height / 2 - (itemScreen.top + itemScreen.bottom) / 2;
-  } else if (itemScreen.top < minY) {
-    dy = minY - itemScreen.top;
-  } else if (itemScreen.bottom > maxY) {
-    dy = maxY - itemScreen.bottom;
+  } else if (itemScreen.top >= stage.y && itemScreen.bottom <= stage.y + stage.height) {
+    // visible: stay.
+  } else if (itemScreen.top < stage.y + marginY) {
+    dy = stage.y + marginY - itemScreen.top;
+  } else {
+    dy = stage.y + stage.height - marginY - itemScreen.bottom;
   }
 
   return { dx, dy };
 }
-

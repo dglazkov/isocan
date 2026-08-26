@@ -136,9 +136,10 @@ export function ItemView({
    * size strip and the hint strip are two rules that must clear the same row.
    */
   const reactionRow = wearing || selected;
-  // Does the under-item line have room to spell the button out beside the icon?
-  // Below this it stays icon-only so the row fits without crowding.
-  const spellItOut = underRowSpellsItOut(width, scale);
+  // Does the under-item line have room to spell the button out beside the
+  // icon? Marks count against the room — they share the line — so a marked
+  // item drops to the icon sooner instead of running the row off its edge.
+  const spellItOut = underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -564,7 +565,11 @@ export function ItemView({
                   // arrives at the pointer instead of at the button, and
                   // cannot be styled. `aria-label` still carries it for
                   // anyone not hovering anything.
-                  data-tip="Full screen — Enter, Esc comes back"
+                  // The tip repeats no ink: the labeled form already says
+                  // "Full screen", so its tip carries only the keys; the
+                  // compact form's face is a glyph, so its tip carries the
+                  // name too.
+                  data-tip={spellItOut ? "Enter — Esc comes back" : "Full screen — Enter, Esc comes back"}
                   aria-label="Full screen"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {

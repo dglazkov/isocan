@@ -125,8 +125,18 @@ export function zoomToSelection(): void {
   fitBox(boundsOfItems(useCanvasStore.getState().canvas, ids));
 }
 
-/** Breathing room to leave around an item the camera reveals (clears tool rail). */
-const REVEAL_MARGIN = 76;
+/**
+ * Breathing room to leave around a revealed item, INSIDE the stage.
+ *
+ * Pure air, nothing else: `stageRect` already excludes the docks and the tool
+ * rail's gutter, so this number owes no chrome any clearance. It was 76 for a
+ * day — raised to clear the rail while the stage still ran to the window's
+ * edge, then the rail clearance moved into `stageRect` and the margin kept
+ * its 76, which reserved the same 76px twice and made ⌘-arrow reveals park
+ * an item 152px off the right edge and 76 off the left. One quantity, one
+ * home: the stage owns chrome, the margin owns air.
+ */
+const REVEAL_MARGIN = 48;
 
 /**
  * Bring an item into view WITHOUT moving the camera more than it has to: an

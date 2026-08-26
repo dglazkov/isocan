@@ -86,15 +86,40 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
 }
 
 /**
- * Screen pixels required under an item to spell out "Full screen" next to the
- * expand icon. Below this, the button collapses to just the icon so the whole
- * row still fits without crowding marks or size chips.
+ * Screen pixels the under-item row needs before "Full screen" is spelled out
+ * beside its icon, WITH NOTHING WORN — marks are added per chip below.
+ *
+ * **Measured on the rendered row (this is the number's third life, and the
+ * first two both went wrong by skipping this step).** With the label: the
+ * react button is 22, the labeled full-screen button 91 (11px icon + 5px gap
+ * + text + padding), the size chip 86, and two 6px slot gaps — 211 for the
+ * line, plus 10 of slack. The first 210 was measured for a label-ONLY button
+ * (77px), deleted, then resurrected unchanged against a button that had
+ * grown 14px — so at the old threshold the row overflowed the item in the
+ * 210–212 band. `ICON_ROOM`'s comment, thirty lines down, already says why:
+ * a budget copied forward from the thing it used to describe is a budget
+ * that is wrong.
  */
-export const FULL_LABEL_ROOM = 210;
+export const FULL_LABEL_ROOM = 221;
 
-/** Does the row under the item have room to spell the button label out? */
-export function underRowSpellsItOut(width: number, scale: number): boolean {
-  return width * scale >= FULL_LABEL_ROOM;
+/**
+ * Screen pixels each worn mark adds to what the row must hold — a chip is
+ * 42.3 measured plus the marks row's 4px gap, rounded up so a double-digit
+ * count does not tip a row the budget said fits.
+ *
+ * This exists because the first threshold budgeted only the ITEM's width
+ * while the row's contents vary with marks: two chips on a 215px item ran
+ * the size chip 84 measured pixels past the item's right edge, with the
+ * label proudly spelled out. The room test has to charge for what the row
+ * is actually carrying. (The first value here was 43, from a chip measured
+ * at a different zoom — re-measured at rendered size the day it shipped.)
+ */
+export const MARK_ROOM = 47;
+
+/** Does the row under the item have room to spell the button label out,
+ * given how many marks the item is wearing? */
+export function underRowSpellsItOut(width: number, scale: number, marks: number): boolean {
+  return width * scale >= FULL_LABEL_ROOM + marks * MARK_ROOM;
 }
 
 
