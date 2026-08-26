@@ -5,6 +5,10 @@ proposes moving it to an origin that owns nothing, and argues that it is a
 security fix which happens to unlock a feature rather than the other way
 round.
 
+*The walk is written: [content-origin-plan.md](content-origin-plan.md)
+(26 Aug 2026), staged so that the local and hosted shapes are each stable at
+every stage boundary — functionality uneven, breakage never.*
+
 ## How it stands today
 
 `blobUrl` returns a same-origin path:
