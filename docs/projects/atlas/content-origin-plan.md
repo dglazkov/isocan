@@ -119,6 +119,16 @@ Stable place: local frames get structural isolation and storage (the atlas
 can pin things); hosted is byte-identical to today because its base is null.
 Rollback: unset one variable.
 
+*Landed 26 Aug 2026. The second listener is 4441's neighbour (4442),
+ephemeral if taken, and `contentPorts` refuses to plan one for a wide-bound
+daemon — so the hosted shape never grows a network-facing badge-less
+listener by this path. Default-ON for local homes, which moved the plan's
+"carried open question" to a decision: an origin split you must opt into is
+a fix most homes wouldn't have. `contentPort: "off"` is the escape hatch and
+a test pins that it restores today exactly. Proven live: a `localStorage`
+visit counter incremented across reloads on the content origin. No CSP on
+the content role yet — stage 3 owns that.*
+
 ## Stage 3 — the outbound control, decided on its own
 
 The origin split stops *inbound* theft — cookie, API, parent document. It

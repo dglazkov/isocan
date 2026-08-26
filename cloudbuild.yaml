@@ -54,17 +54,26 @@ steps:
       - -c
       - docker pull "${_IMAGE}:latest" || true
 
+  # The build-args carry the stamp `buildStamp()` reads (auto-upgrade phase 1).
+  # `_TAG` is main's short sha; the date is main's COMMIT date, read from the
+  # checkout's `.git` here — not the build's own clock, which would eventually
+  # tell a current CLI it is behind by measuring the two pipelines' lag. A
+  # workspace with no `.git` yields an empty date, which is explicitly fine:
+  # the sha still identifies the build, only the older/newer comparison is lost.
   - id: build
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - build
-      - --cache-from=${_IMAGE}:latest
-      - --build-arg=ISOCAN_BUILD_SHA=${_TAG}
-      - -t
-      - ${_IMAGE}:${_TAG}
-      - -t
-      - ${_IMAGE}:latest
-      - .
+      - -c
+      - |
+        BUILT_AT="$(git -C /workspace log -1 --pretty=%cI 2>/dev/null || true)"
+        docker build \
+          --cache-from="${_IMAGE}:latest" \
+          --build-arg="ISOCAN_BUILD_SHA=${_TAG}" \
+          --build-arg="ISOCAN_BUILD_DATE=$${BUILT_AT}" \
+          -t "${_IMAGE}:${_TAG}" \
+          -t "${_IMAGE}:latest" \
+          .
 
   # ---- the container's own smoke test, before anything is deployed ----
   #
