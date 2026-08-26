@@ -8,6 +8,7 @@ import type {
   Actor,
   BadgeSummary,
   CanvasAddress,
+  CanvasLinkState,
   CanvasSnapshotResponse,
   GcReport,
   GrantSubject,
@@ -101,7 +102,7 @@ import {
   siteFilename,
   siteLabel,
 } from "@isocan/core";
-import { paths, stalenessOf } from "@isocan/server";
+import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
   type HomeRecord,
@@ -149,7 +150,11 @@ const program = new Command();
 program
   .name("isocan")
   .description("Isomorphic canvas — same operations as the web app, from your terminal")
-  .version("0.1.0")
+  // Not the literal it was: `isocan --version` is the first thing anybody runs
+  // to answer "which isocan is this", and `0.1.0` answered it identically for
+  // every build ever shipped. This is THIS CLI's build — the daemon's may
+  // differ, which is what `isocan status` is for.
+  .version(describeBuild(buildStamp()))
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
   .option("--agent-help", "how to collaborate on a canvas as an agent: the whole protocol")
@@ -857,7 +862,9 @@ program
         role: roleLine(summary, daemonBase),
         pid: String(health.pid),
         since: health.startedAt,
-        version: health.version,
+        // The sha, not just `0.1.0` — every build says `0.1.0`, so the field
+        // named after the question was the one with no answer in it.
+        version: describeBuild(health),
         // Which copy is serving matters as soon as there is more than one:
         // an npx cache, a global install and a checkout all look identical
         // from the outside.
@@ -925,6 +932,79 @@ function roleLine(summary: HomeSummary, base: string): string {
   }
   if (summary.birth) parts.push(`new canvases → ${summary.birth}`);
   return parts.join("; ");
+}
+
+/**
+ * **Is this canvas's socket to its home carrying anything** — in one cell.
+ *
+ * Short by construction: the table is scanned, not read. `live` is the only
+ * word anybody needs to see, so everything else is shaped to be unmissable
+ * beside a column of them, and the sentence explaining it goes underneath
+ * (`linkTrouble`).
+ *
+ * A canvas whose home is this daemon has no link to report and gets a dash —
+ * not "down", which would be a daemon describing its own store as unreachable.
+ */
+function linkColumn(home: string | null, state: CanvasLinkState | undefined): string {
+  if (home === null) return "—";
+  if (!state) return "NOT DIALLED";
+  if (state.connected) return state.relayedAt ? `live (${state.facesRelayed} up)` : "live";
+  return state.opens === 0 ? "NEVER CONNECTED" : "reconnecting";
+}
+
+/**
+ * The sentence under the cell, or null when there is nothing wrong.
+ *
+ * It says what the silence used to hide: presence for this canvas is not
+ * moving, which on the reading end looks exactly like a canvas nobody else is
+ * on. Naming that consequence is the point — "the socket is down" is a fact
+ * about plumbing, and "nobody can see you there" is the thing somebody is
+ * actually trying to find out.
+ */
+function linkTrouble(home: string | null, state: CanvasLinkState | undefined): string | null {
+  if (home === null || state?.connected) return null;
+  const consequence =
+    "nobody at the home can see anyone here on it, and ops written there are not arriving";
+  if (!state) {
+    return (
+      `this daemon holds no link for it at ${home}; ${consequence}. ` +
+      "`isocan restart` if it does not appear within a few seconds."
+    );
+  }
+  const tries = `${state.failures} attempt${state.failures === 1 ? "" : "s"}`;
+  const why = state.lastFailure ? `, ${state.lastFailure}` : "";
+  return state.opens === 0
+    ? `its socket to ${home} has never connected (${tries}${why}); ${consequence}.`
+    : `its socket to ${home} is down (${tries}${why}), last carried at ` +
+      `${state.connectedAt}; ${consequence}.`;
+}
+
+/**
+ * **Why this roster may be shorter than the canvas** — or null when there is
+ * no reason to doubt it.
+ *
+ * `isocan who` merges two things that look identical once printed: the faces
+ * of this daemon's own clients, and the faces mirrored in from the home. If
+ * the socket carrying the second set is not up, the command prints a short,
+ * confident table of everybody local and says nothing about the rest of the
+ * canvas — which reads as *nobody else is here*, the single most misleading
+ * sentence this system can produce. It sent one agent looking for a bug in
+ * its own presence for an evening.
+ *
+ * So: when a canvas lives at a home and its link is not carrying, say so, and
+ * say it as a limit on the answer rather than as a fact about plumbing.
+ */
+async function rosterCaveat(ctx: Ctx, canvasId: string): Promise<string | null> {
+  const record = await ctx.homes().catch(() => null);
+  if (!record || record.legacy) return null;
+  const home = homeAddressOf(record, canvasId);
+  if (home === null) return null;
+  const state = record.links
+    .flatMap((link) => link.canvases ?? [])
+    .find((canvas) => canvas.canvasId === canvasId);
+  if (state?.connected) return null;
+  const why = linkTrouble(home, state);
+  return why === null ? null : `this is only who this machine can see — ${why}`;
 }
 
 /**
@@ -1087,8 +1167,27 @@ program
           titles.set(canvas.id, canvas.title);
         }
         const answering = new Map(record?.links.map((link) => [link.url, link.reachable]) ?? []);
+        /**
+         * **Whether each canvas's socket is actually carrying anything.**
+         *
+         * The column this report was missing, and the reason somebody spent an
+         * evening on it: `answering` above is the home's HTTP half, and it says
+         * yes for a home that is perfectly up while a canvas's presence goes
+         * nowhere. Writes forward over HTTP; faces ride the socket. A row that
+         * showed only the address could not tell those apart.
+         */
+        const linkStates = new Map(
+          (record?.links ?? []).flatMap((link) =>
+            (link.canvases ?? []).map((state) => [state.canvasId, state] as const),
+          ),
+        );
         const canvases = Object.entries(record?.rows ?? {})
-          .map(([id, at]) => ({ id, title: titles.get(id) ?? "(not here yet)", home: at }))
+          .map(([id, at]) => ({
+            id,
+            title: titles.get(id) ?? "(not here yet)",
+            home: at,
+            state: linkStates.get(id),
+          }))
           .sort((a, b) => a.title.localeCompare(b.title));
         if (globals.json) {
           return printJson({
@@ -1150,8 +1249,16 @@ program
                         ? "  (NOT answering — writes refused)"
                         : ""
                     }`,
+              link: linkColumn(canvas.home, canvas.state),
             })),
           );
+          // The detail under the short column. Kept out of the table because a
+          // close code and a reason are a sentence, and a sentence in a cell
+          // pads every other row out to its width.
+          for (const canvas of canvases) {
+            const why = linkTrouble(canvas.home, canvas.state);
+            if (why) console.log(`\nnote: ${canvas.id} — ${why}`);
+          }
         }
         return;
       }
@@ -4478,6 +4585,11 @@ program
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       const sessions = await ctx.client.listSessions(p.id);
+      // Said on stderr, before the answer and in both shapes: it qualifies
+      // what follows, and an agent reading `--json` off stdout needs the
+      // caveat as much as a person reading the table does.
+      const caveat = await rosterCaveat(ctx, p.id);
+      if (caveat) console.error(`note: ${caveat}`);
       if (opts.all) {
         const known = await knownNames(ctx, p, sessions);
         if (ctx.json) return printJson(known);

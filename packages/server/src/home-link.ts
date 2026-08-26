@@ -7,6 +7,7 @@ import type {
   AttestResponse,
   BadgesResponse,
   BlobUploadResponse,
+  CanvasLinkState,
   FreeNameResponse,
   GrantResponse,
   GrantsResponse,
@@ -91,6 +92,30 @@ const DEFAULT_POLL_MS = 2000;
  * coalesces roster broadcasts and for the same reason: a cursor stream would
  * otherwise put one WS frame on the wire per mouse move, per canvas. */
 const RELAY_COALESCE_MS = 40;
+
+/**
+ * **How many failed dials in a row before a canvas link says so out loud.**
+ *
+ * Not one: a socket dropping and coming back is ordinary — a home redeploying,
+ * a laptop changing networks — and a line per blip would train everybody to
+ * ignore the line. Three consecutive failures with the backoff between them is
+ * ten seconds of a canvas whose presence and incoming ops are not moving, and
+ * that is worth a sentence.
+ */
+const COMPLAIN_AFTER_FAILURES = 3;
+
+/**
+ * **How long a dial may sit unfinished before the sweep treats it as stuck.**
+ *
+ * `dial()` awaits two things before it ever reaches `new WebSocket` — the
+ * badge, and `localSeq`, which awaits the engine's writer chain. Neither is
+ * bounded by this link. A dial that never finishes leaves a link in the map
+ * with no socket and no retry timer, which every other repair path reads as
+ * "somebody is on it" — the exact shape of a canvas that is silently never
+ * connected. Past this, the sweep dials again and the older attempt is
+ * superseded (`dialSeq`).
+ */
+const DIAL_STUCK_MS = 30_000;
 
 /**
  * The home could not be reached at all.
@@ -379,6 +404,58 @@ interface CanvasLink {
   backoffMs: number;
   relay: ReturnType<typeof setTimeout> | null;
   closed: boolean;
+  /**
+   * Which dial attempt owns this link right now.
+   *
+   * `dial()` is async before it has a socket, so two attempts can be in flight
+   * at once — the sweep's stuck-dial repair is what makes that deliberate
+   * rather than accidental. The counter is how a finished attempt discovers it
+   * has been superseded and terminates the socket it just made, instead of two
+   * sockets both relaying presence for one canvas.
+   */
+  /** Has the home said hello on the socket this link is holding? Reset by
+   * each dial. A socket that closes without one was never carrying this
+   * canvas, however cleanly it upgraded — see `noteCarrying`. */
+  carried: boolean;
+  dialSeq: number;
+  /** When the attempt currently in flight started, or null between attempts.
+   * Read only by the sweep, to tell "somebody is dialling" from "somebody has
+   * been dialling for half a minute". */
+  dialledAt: number | null;
+}
+
+/**
+ * **What this daemon knows about one canvas's link to one home** — kept
+ * per canvas ID rather than on the `CanvasLink`, deliberately.
+ *
+ * A `CanvasLink` does not survive a 4404: the close handler drops it from the
+ * map and the next sweep makes a fresh one. Counting failures on the object
+ * would therefore reset the count every two seconds in exactly the case worth
+ * complaining about — a canvas the home will not serve, re-dialled forever.
+ * The history has to outlive the object it is a history of.
+ */
+interface CanvasHealth {
+  /** How many times this canvas's socket has opened, ever. Zero is the
+   * interesting number: it means presence for this canvas has never once
+   * moved, however healthy the home's HTTP side looks. */
+  opens: number;
+  connectedAt: string | null;
+  /** When a presence relay last went UP for this canvas, and how many faces
+   * it carried. Null means this daemon has never told the home who is here. */
+  relayedAt: string | null;
+  facesRelayed: number;
+  /** Consecutive failures since the last time the home answered for it. */
+  failures: number;
+  /** When the last attempt ended badly. The sweep reads it to stop re-dialling
+   * a canvas the home refuses several times a second, forever. */
+  attemptedAt: number | null;
+  /** Why the last attempt ended — a close code, or the error that stopped it
+   * before there was ever a socket. Everything on this path used to be
+   * swallowed; this is where it goes instead. */
+  lastFailure: string | null;
+  /** Has the failure above already been said out loud? Reset by an open, so a
+   * link that comes back and fails again complains again. */
+  complained: boolean;
 }
 
 export class HomeLink implements HomeConnection {
@@ -409,6 +486,13 @@ export class HomeLink implements HomeConnection {
   private stopped = false;
   private syncing: Promise<void> | null = null;
   private handshakeLog = new Map<string, HomeHandshakes>();
+  /** Per canvas, whether its socket has ever carried anything — see
+   * `CanvasHealth` for why this outlives the `CanvasLink` it describes. */
+  private health = new Map<string, CanvasHealth>();
+  /** Which (canvas, actor) faces the home has already refused to vouch for.
+   * `relay()` drops such a face on every beat; a parked agent beats every few
+   * seconds, and a line per beat would bury the one that matters. */
+  private unvouched = new Set<string>();
   /** Cuts every in-flight request to the home when the daemon shuts down, so
    * closing does not wait out a 30-second timeout on a home that has gone. */
   private aborter = new AbortController();
@@ -594,8 +678,76 @@ export class HomeLink implements HomeConnection {
     }
     for (const canvasId of wanted) {
       if (this.stopped) return;
-      if (!this.links.has(canvasId)) this.openCanvas(canvasId);
+      this.repair(canvasId);
     }
+  }
+
+  /**
+   * **One canvas, brought back to what it should be** — the sweep's third job,
+   * and the one it did not have.
+   *
+   * It used to open a socket for a canvas that had no link and stop there:
+   * `links.has(canvasId)` was read as "this canvas is fine". A map entry is
+   * not a connection, and the gap between those two sentences is where a
+   * canvas can sit for hours — a dial that hung before it ever made a socket
+   * leaves an entry with no socket, no retry timer, and nothing that will ever
+   * touch it again.
+   *
+   * **Presence is the reason this matters more than it looks.** Everything
+   * else about a home link is level-triggered: the poll re-reads the canvas
+   * set, the tail is re-requested from a seq cursor, a write is retried by its
+   * caller. The relay alone was edge-triggered — it went up when a face
+   * changed or a socket opened, and if that one send was lost or refused,
+   * nothing ever tried again. So the repair below re-states the roster on
+   * every poll for any canvas that has local faces: it is a few hundred bytes
+   * every couple of seconds, and it converts "your face never went up" from a
+   * permanent condition into a two-second one.
+   *
+   * A canvas with no local faces is deliberately left alone. An empty roster
+   * that failed to go up costs nothing — the home's own TTL and the socket's
+   * close both clear this daemon's mirror without being told.
+   */
+  private repair(canvasId: string): void {
+    const link = this.links.get(canvasId);
+    if (!link) {
+      /**
+       * **A canvas the home keeps refusing is re-dialled slowly, not every
+       * poll.** The 4404 close drops the link deliberately — "retrying forever
+       * would be a socket storm about a canvas nobody can serve" — and this
+       * sweep is what re-creates it, which quietly undid that intent: at the
+       * poll interval, forever, on a laptop left open for days.
+       *
+       * It is not abandoned, because a canvas CAN appear at a home later
+       * (offline birth adopts one, a grant arrives). It is just asked at the
+       * rate a reconnect would ask, rather than at the rate a poll runs.
+       */
+      const health = this.healthOf(canvasId);
+      if (
+        health.opens === 0 &&
+        health.failures >= COMPLAIN_AFTER_FAILURES &&
+        health.attemptedAt !== null &&
+        Date.now() - health.attemptedAt < RECONNECT_MAX_MS
+      ) {
+        return;
+      }
+      return this.openCanvas(canvasId);
+    }
+    if (link.closed) return;
+    if (link.socket?.readyState === WebSocket.OPEN) {
+      if (this.presence.localRoster(canvasId).length > 0) this.scheduleRelay(canvasId);
+      return;
+    }
+    // Not connected. Somebody is on it if a retry is armed, or if a dial is
+    // in flight and has not been in flight absurdly long.
+    if (link.retry) return;
+    if (link.dialledAt !== null && Date.now() - link.dialledAt < DIAL_STUCK_MS) return;
+    if (link.dialledAt !== null) {
+      this.noteFailure(
+        canvasId,
+        `a dial has been unfinished for over ${Math.round(DIAL_STUCK_MS / 1000)}s`,
+      );
+    }
+    void this.dial(link);
   }
 
   // ---- one canvas, one socket ----
@@ -609,6 +761,9 @@ export class HomeLink implements HomeConnection {
       backoffMs: RECONNECT_MIN_MS,
       relay: null,
       closed: false,
+      carried: false,
+      dialSeq: 0,
+      dialledAt: null,
     };
     this.links.set(canvasId, link);
     void this.dial(link);
@@ -650,24 +805,74 @@ export class HomeLink implements HomeConnection {
    */
   private async dial(link: CanvasLink): Promise<void> {
     if (this.stopped || link.closed) return;
+    // Whose attempt this is. Everything below checks it before touching the
+    // link, because the sweep may have given up on a dial that hung and
+    // started another — see `DIAL_STUCK_MS`.
+    const attempt = ++link.dialSeq;
+    link.carried = false;
+    /**
+     * **An attempt is in flight from here until it has a socket that opened,
+     * or has failed** — including while the socket is still CONNECTING.
+     *
+     * The repair below reads this as "somebody is on it". Clearing it any
+     * earlier — when the socket object exists but has not connected — would
+     * have the next poll supersede every dial two seconds in, so a home a
+     * slow network takes three seconds to reach would never connect at all.
+     */
+    link.dialledAt = Date.now();
+    const gaveUp = (why: string) => {
+      if (link.dialSeq !== attempt) return;
+      link.dialledAt = null;
+      this.noteFailure(link.canvasId, why);
+      this.reconnect(link);
+    };
     const badge = await this.ensureBadge();
-    if (!badge) return this.reconnect(link);
+    if (link.dialSeq !== attempt) return;
+    if (!badge) {
+      return gaveUp("the door did not answer, so there is no badge to dial with");
+    }
     const since = await this.localSeq(link.canvasId);
+    if (link.dialSeq !== attempt) return;
     const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
     const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}`;
     let socket: WebSocket;
     try {
       socket = new WebSocket(url, { headers: bearerHeader(badge) });
-    } catch {
-      return this.reconnect(link);
+    } catch (err) {
+      return gaveUp((err as Error).message);
+    }
+    /**
+     * **The error listener goes on FIRST — before anything can terminate this
+     * socket, and before it is even adopted.**
+     *
+     * Without a listener an abrupt death raises an unhandled `error` on the
+     * EventEmitter and takes the daemon with it, which is why `ws.ts` installs
+     * one on every accepted socket. The subtlety that cost a CI run: `ws`
+     * treats terminating a socket that is still CONNECTING as an error
+     * ("WebSocket was closed before the connection was established"), so the
+     * supersede branch below is itself a way to raise one. Attaching after the
+     * branch left a window in which the daemon could be killed by its own
+     * tidying up — and the shutdown path walks straight through it, since a
+     * closing daemon is exactly when dials are in flight with nowhere to land.
+     *
+     * The message is kept rather than discarded: the close that follows
+     * reports it, so a refused dial can say WHY instead of only that it
+     * happened.
+     */
+    let failure: string | null = null;
+    socket.on("error", (err: Error) => {
+      failure = err.message;
+    });
+    if (link.closed || link.dialSeq !== attempt) {
+      // Superseded while we were getting here. Terminate rather than adopt:
+      // two sockets on one canvas would relay presence twice and apply the
+      // tail twice.
+      socket.terminate();
+      return;
     }
     link.socket = socket;
-    // Without a listener an abrupt death raises an unhandled 'error' event on
-    // the EventEmitter and takes the daemon with it — the same reason `ws.ts`
-    // installs one on every accepted socket.
-    socket.on("error", () => {});
     socket.on("open", () => {
-      link.backoffMs = RECONNECT_MIN_MS;
+      link.dialledAt = null;
       this.scheduleRelay(link.canvasId);
     });
     socket.on("message", (data) => {
@@ -684,16 +889,36 @@ export class HomeLink implements HomeConnection {
     socket.on("close", (code) => {
       if (link.socket !== socket) return; // superseded
       link.socket = null;
+      // A socket that died before it ever opened leaves the attempt marked in
+      // flight; the retry armed below is what is on it now.
+      link.dialledAt = null;
       this.presence.mirror(link.canvasId, this.origin(), []);
       // 4404: the home says this canvas is not there. Stop dialling it — a
       // replica holding a canvas the home has never heard of is offline birth
       // (phase 13), and retrying forever would be a socket storm about a
       // canvas nobody can serve.
+      //
+      // **Recorded before the link is dropped**, because dropping it is
+      // exactly what made this case invisible: the next sweep builds a fresh
+      // `CanvasLink` with a fresh count, so a canvas the home refuses forever
+      // looked like a first attempt every two seconds. `health` outlives the
+      // link precisely so this one can be counted.
       if (code === WS_NO_CANVAS) {
+        this.noteFailure(
+          link.canvasId,
+          `the home says it has no canvas ${link.canvasId} (${WS_NO_CANVAS})`,
+        );
         link.closed = true;
         this.links.delete(link.canvasId);
         return;
       }
+      this.noteFailure(
+        link.canvasId,
+        failure ??
+          (link.carried
+            ? `the socket closed (${code})`
+            : `the socket closed before the home said hello (${code})`),
+      );
       this.reconnect(link);
     });
   }
@@ -732,10 +957,12 @@ export class HomeLink implements HomeConnection {
     const { canvasId } = link;
     switch (message.type) {
       case "resumed":
+        this.carrying(link);
         this.hello({ canvasId, type: "resumed", since, lastSeq: message.lastSeq });
         await this.engine.mergeRemoteIdentity(message.colors, message.names);
         return;
       case "snapshot":
+        this.carrying(link);
         this.hello({ canvasId, type: "snapshot", since, lastSeq: message.lastSeq });
         await this.engine.adoptRemoteSnapshot(canvasId, message);
         await this.engine.mergeRemoteIdentity(message.colors, message.names);
@@ -772,6 +999,14 @@ export class HomeLink implements HomeConnection {
     }
   }
 
+  /** This socket is carrying its canvas — the home has answered for it. */
+  private carrying(link: CanvasLink): void {
+    if (link.carried) return;
+    link.carried = true;
+    link.backoffMs = RECONNECT_MIN_MS;
+    this.noteCarrying(link.canvasId);
+  }
+
   private hello(hello: HomeHello): void {
     const log = this.handshakeLog.get(hello.canvasId) ?? {
       resumed: 0,
@@ -789,6 +1024,106 @@ export class HomeLink implements HomeConnection {
    * not. */
   handshakes(canvasId: string): HomeHandshakes {
     return this.handshakeLog.get(canvasId) ?? { resumed: 0, snapshots: 0, last: null };
+  }
+
+  // ---- is this canvas's socket actually carrying anything ----
+
+  private healthOf(canvasId: string): CanvasHealth {
+    let health = this.health.get(canvasId);
+    if (!health) {
+      health = {
+        opens: 0,
+        connectedAt: null,
+        relayedAt: null,
+        facesRelayed: 0,
+        failures: 0,
+        attemptedAt: null,
+        lastFailure: null,
+        complained: false,
+      };
+      this.health.set(canvasId, health);
+    }
+    return health;
+  }
+
+  /**
+   * **The home said hello for this canvas**, which is the first moment it is
+   * true that this link carries anything.
+   *
+   * Not the socket's `open` event, and the difference is the whole of a real
+   * failure mode: a home that has never heard of a canvas ACCEPTS the upgrade
+   * and then closes with 4404. Counting that as a success reset the failure
+   * count on every attempt, so a canvas being refused several times a second
+   * forever reported itself as healthy — a link in perfect health that had
+   * never once carried a face.
+   *
+   * If it had complained, say that it came back: a line that announces trouble
+   * and never announces the end of it is how a log teaches people to distrust
+   * it.
+   */
+  private noteCarrying(canvasId: string): void {
+    const health = this.healthOf(canvasId);
+    health.opens += 1;
+    health.connectedAt = new Date().toISOString();
+    health.failures = 0;
+    health.lastFailure = null;
+    if (health.complained) {
+      health.complained = false;
+      console.error(`[isocan] ${this.homeUrl} is carrying ${canvasId} again`);
+    }
+  }
+
+  /**
+   * An attempt ended without a working socket.
+   *
+   * **The one place this path is no longer silent.** Every failure here used
+   * to be discarded — the `error` listener is empty by necessity (an
+   * unhandled one takes the daemon down), `reconnect` backs off without a
+   * word, and a 4404 close drops the link for the next sweep to re-make. A
+   * canvas could be re-dialled every two seconds for an hour and the only
+   * evidence anywhere was a face that never appeared on somebody else's
+   * screen.
+   */
+  private noteFailure(canvasId: string, why: string): void {
+    const health = this.healthOf(canvasId);
+    health.failures += 1;
+    health.attemptedAt = Date.now();
+    health.lastFailure = why;
+    if (health.complained || health.failures < COMPLAIN_AFTER_FAILURES) return;
+    health.complained = true;
+    console.error(
+      `[isocan] ${this.homeUrl} has not carried ${canvasId} for ${health.failures} attempts ` +
+        `(${why}) — ${
+          health.opens === 0 ? "it has never connected, so nobody here" : "nobody here"
+        } is visible on that canvas, and ops written there are not arriving. ` +
+        "`isocan home` shows this per canvas.",
+    );
+  }
+
+  /** Per canvas, for `GET /api/homes`. Every canvas this link is holding OR
+   * has ever held: a canvas whose link was dropped by a 4404 is exactly the
+   * one somebody is trying to ask about. */
+  canvasStates(): CanvasLinkState[] {
+    const ids = new Set([...this.links.keys(), ...this.health.keys()]);
+    return [...ids]
+      .sort()
+      .map((canvasId) => {
+        const health = this.healthOf(canvasId);
+        const link = this.links.get(canvasId);
+        return {
+          canvasId,
+          // Upgraded AND answered for. A socket the home is about to refuse is
+          // open for a few milliseconds; reporting that as connected would put
+          // the word "live" next to the exact canvas somebody is asking about.
+          connected: link?.socket?.readyState === WebSocket.OPEN && link.carried,
+          opens: health.opens,
+          connectedAt: health.connectedAt,
+          relayedAt: health.relayedAt,
+          facesRelayed: health.facesRelayed,
+          failures: health.failures,
+          lastFailure: health.lastFailure,
+        };
+      });
   }
 
   private resync(link: CanvasLink): void {
@@ -831,12 +1166,40 @@ export class HomeLink implements HomeConnection {
       // take the rest of the roster down with it.
       const ok = await this.ensureClaim(session.actor).then(
         () => true,
-        () => false,
+        (err: unknown) => {
+          /**
+           * **Said once per face, because it is otherwise perfectly silent.**
+           *
+           * The home DROPS a relayed session whose actor its `requireActor`
+           * refuses, and drops it without a word (`ws.ts`'s `continue`). This
+           * end used to be just as quiet: the rejection was folded into a
+           * `false` and the face left out. So an agent could sit on a canvas,
+           * beating every few seconds, watching its own local roster show it
+           * present, while every beat was thrown away at the far end and
+           * nothing anywhere said so.
+           */
+          const key = `${link.canvasId}\u0000${session.actor.id}`;
+          if (!this.unvouched.has(key)) {
+            this.unvouched.add(key);
+            console.error(
+              `[isocan] ${this.homeUrl} will not vouch for ${session.actor.name} ` +
+                `(${session.actor.id}): ${(err as Error).message} — their face stays off ` +
+                `${link.canvasId} until it does`,
+            );
+          }
+          return false;
+        },
       );
-      if (ok) vouched.push(session);
+      if (ok) {
+        this.unvouched.delete(`${link.canvasId}\u0000${session.actor.id}`);
+        vouched.push(session);
+      }
     }
     if (socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({ type: "presence-relay", sessions: vouched }));
+    const health = this.healthOf(link.canvasId);
+    health.relayedAt = new Date().toISOString();
+    health.facesRelayed = vouched.length;
   }
 
   // ---- the badge, and the claims that ride on it ----

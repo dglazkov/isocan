@@ -989,9 +989,18 @@ export function registerRoutes(
     return {
       birth: options.birthHome ?? null,
       canvases,
+      /**
+       * `reachable` is the HTTP half — whether the last poll of this home was
+       * answered. `canvases` is the half it cannot speak for: writes forward
+       * over HTTP, but **presence rides only on the per-canvas socket**, so a
+       * reachable home and a canvas whose face never leaves the machine are
+       * not a contradiction. Reporting only the first is what let a broken
+       * canvas link look identical to a quiet canvas.
+       */
       links: (options.homes?.links() ?? []).map((link) => ({
         url: link.homeUrl,
         reachable: link.answering,
+        canvases: link.canvasStates(),
       })),
     } satisfies HomesResponse;
   });

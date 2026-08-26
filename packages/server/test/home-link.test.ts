@@ -10,6 +10,7 @@ import type {
   Operation,
   PresenceSession,
   Canvas,
+  HomesResponse,
 } from "@isocan/core";
 import {
   grantRoute,
@@ -18,6 +19,8 @@ import {
   PASS_REDEEM_ROUTE,
   passesRoute,
   canvasesRoute,
+  HOMES_ROUTE,
+  WS_NO_CANVAS,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { bearerHeader, readBadge } from "../src/badge-store.ts";
@@ -779,5 +782,99 @@ describe("blobs follow the ops that name them", () => {
     });
     expect(fromB.status).toBe(200);
     expect(await fromB.text()).toBe(bytes.toString());
+  }, 20_000);
+});
+
+/**
+ * **Whether a canvas's socket is carrying anything, and what happens when it
+ * is not.**
+ *
+ * The failure this guards against is not a crash and does not appear in any
+ * log: writes forward over HTTP and presence rides the per-canvas socket, so a
+ * canvas can be born at a reachable home, take every op, serve its URL, and
+ * have a roster that never leaves the machine. On the reading end that is
+ * indistinguishable from a canvas nobody else is on — which is exactly how it
+ * was met in the wild, as an agent that could see itself on a canvas nobody
+ * else could see it on, with `isocan home` reporting the home as reachable
+ * throughout.
+ */
+describe("the link a canvas actually has to its home", () => {
+  const homesOf = (node: Node) => get<HomesResponse>(node, HOMES_ROUTE);
+  const stateOf = async (node: Node, canvasId: string) =>
+    (await homesOf(node)).links
+      .flatMap((link) => link.canvases)
+      .find((canvas) => canvas.canvasId === canvasId);
+
+  it("says the socket is live, and when it last put a face up", async () => {
+    await birthAtA();
+    await post(A, `/api/projects/${CANVAS}/sessions`, { actor: priya, label: "at the keyboard" });
+    await until(
+      () => roster(H),
+      (list) => list.some((s) => s.actor.id === priya.id),
+      "Priya's face at the home",
+    );
+
+    const state = await until(
+      () => stateOf(A, CANVAS),
+      (found) => found?.relayedAt !== null,
+      "A to report a relay",
+    );
+    expect(state).toMatchObject({ canvasId: CANVAS, connected: true, failures: 0 });
+    expect(state!.opens).toBeGreaterThan(0);
+    expect(state!.facesRelayed).toBe(1);
+  }, 20_000);
+
+  /**
+   * **The one edge-triggered thing in a level-triggered system, made level.**
+   *
+   * A relay used to go up when a face changed or a socket opened, and never
+   * otherwise. So a single lost or refused send — a home that restarted, a
+   * beat that arrived while an actor was briefly unvouched — took a face down
+   * for good, and the only cure anybody found was restarting the daemon.
+   *
+   * Nothing is touched on A here: no session, no cursor, no reconnect. The
+   * face has to come back because the sweep re-states the roster, or not at
+   * all.
+   */
+  it("puts a face back after the home loses it, with nothing changing here", async () => {
+    await birthAtA();
+    const session = (await (
+      await post(A, `/api/projects/${CANVAS}/sessions`, { actor: priya })
+    ).json()) as { sessionId: string };
+    await until(
+      () => roster(H),
+      (list) => list.some((s) => s.sessionId === session.sessionId),
+      "Priya's face at the home",
+    );
+
+    // The home drops it — the shape of every way a relay can be lost.
+    H.daemon.presence.endActorSessions(priya.id);
+    expect(await roster(H)).not.toContainEqual(
+      expect.objectContaining({ sessionId: session.sessionId }),
+    );
+
+    await until(
+      () => roster(H),
+      (list) => list.some((s) => s.sessionId === session.sessionId),
+      "the face to come back on its own",
+    );
+  }, 20_000);
+
+  /**
+   * A canvas this machine has a row for and the home has never heard of: the
+   * 4404 close. The link is dropped and the next sweep makes a new one, which
+   * is correct and was completely silent — a fresh `CanvasLink` counts from
+   * zero, so an endless two-second retry looked like a first attempt forever.
+   * The count outlives the link precisely so this can be reported.
+   */
+  it("reports a canvas whose socket has never connected, and why", async () => {
+    await A.daemon.homes.bind("prj_ghost", H.base);
+    const state = await until(
+      () => stateOf(A, "prj_ghost"),
+      (found) => (found?.failures ?? 0) >= 2,
+      "A to report repeated failures",
+    );
+    expect(state).toMatchObject({ connected: false, opens: 0, relayedAt: null });
+    expect(state!.lastFailure).toContain(String(WS_NO_CANVAS));
   }, 20_000);
 });

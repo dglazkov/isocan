@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
-import type { Actor, MetaPatch, Canvas } from "@isocan/core";
+import type { Actor, HomesResponse, MetaPatch, Canvas } from "@isocan/core";
 import { DEFAULT_PORT, newCanvasId } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
@@ -91,8 +91,10 @@ export interface Ctx {
 export interface HomeRecord {
   /** Where a canvas born here, naming nothing, goes. */
   birth: string | null;
-  /** Every home this daemon dials, and whether its last poll was answered. */
-  links: { url: string; reachable: boolean | null }[];
+  /** Every home this daemon dials, whether its last poll was answered, and —
+   * the half the poll cannot speak for — whether each canvas's own socket is
+   * carrying anything. See `CanvasLinkState`. */
+  links: HomesResponse["links"];
   /** This canvas's row: an address, `null` for "here", `undefined` for "no row
    * — this machine has never recorded anything about that canvas". */
   rowFor(canvasId: string): string | null | undefined;

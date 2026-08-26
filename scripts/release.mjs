@@ -58,11 +58,23 @@ export const PREPARATION_KEYS = [
  * no longer declares. Dependencies stay — a git install resolves the root
  * package's deps, and that is how the CLI gets commander, fastify and tsx.
  */
-export function releaseManifest(pkg, sourceCommit = "") {
+export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
   const { workspaces, scripts, ...rest } = pkg;
   const built = sourceCommit ? ` from ${sourceCommit}` : "";
   return {
     ...rest,
+    /**
+     * **What an installed copy knows about itself.** The tree npm hands out has
+     * no `.git`, so without this a daemon on somebody's laptop cannot say which
+     * build it is — and `version` cannot help, because every build says
+     * `0.1.0`. `buildStamp()` reads exactly this key.
+     *
+     * Namespaced rather than spread as top-level fields: npm owns that
+     * namespace, and a `commit` key of its own would one day silently win.
+     */
+    ...(sourceCommit || builtAt
+      ? { isocan: { ...(sourceCommit ? { commit: sourceCommit } : {}), ...(builtAt ? { builtAt } : {}) } }
+      : {}),
     "//": `GENERATED BRANCH — \`npm run release\` builds it${built} on main; develop there, not here. No \`workspaces\` and no scripts, deliberately: npm's git installer treats either as "needs preparation", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.`,
   };
 }
@@ -129,7 +141,11 @@ async function main() {
     const manifest = path.join(tmp, "package.json");
     await fs.writeFile(
       manifest,
-      JSON.stringify(releaseManifest(pkg, head.slice(0, 7)), null, 2) + "\n",
+      JSON.stringify(
+        releaseManifest(pkg, head.slice(0, 7), git("log", "-1", "--pretty=%cI", head)),
+        null,
+        2,
+      ) + "\n",
     );
     const blob = git("hash-object", "-w", "--path", "package.json", manifest, { env });
     git("update-index", "--add", "--cacheinfo", `100644,${blob},package.json`, { env });
