@@ -12,6 +12,8 @@ import {
   renamedFilename,
 } from "@isocan/core";
 import { sendOp, blobUrl } from "../lib/api.ts";
+import { contentBase } from "../lib/contentBase.ts";
+import { itemFrame } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 import { DesignSystemView } from "./DesignSystemView.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -776,11 +778,16 @@ export function VersionContent({
     return <BrowserView blobUrl={url} reloadToken={reloadToken} />;
   }
   if (mimeType === "text/html") {
-    // Security boundary: allow-scripts WITHOUT allow-same-origin gives the
-    // document an opaque origin — it cannot reach the daemon API, this app's
-    // DOM, or its storage. The blob response additionally carries
-    // `CSP: sandbox` and nosniff.
-    return <iframe className="html-view" src={url} sandbox="allow-scripts" title={filename} />;
+    // Security boundary: src and sandbox are built as a pair by `itemFrame`,
+    // the one place allowed to decide them together (content-origin plan,
+    // invariant 2). With no content origin that pair is allow-scripts alone —
+    // an opaque origin that cannot reach the daemon API, this app's DOM, or
+    // its storage. The blob response additionally carries `CSP: sandbox` and
+    // nosniff.
+    const frame = itemFrame(contentBase(), canvasId, blobHash);
+    return (
+      <iframe className="html-view" src={frame.src} sandbox={frame.sandbox} title={filename} />
+    );
   }
   return (
     <div className="file-view">

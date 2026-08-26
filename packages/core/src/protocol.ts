@@ -765,6 +765,25 @@ export interface JoinCanvasResponse {
  */
 export const HOMES_ROUTE = "/api/homes";
 
+/**
+ * **`GET /api/serving` — how this home serves, advertised to the app.**
+ *
+ * The first (and so far only) fact it carries: the content origin's base URL,
+ * or null when no content origin exists — which is every home until the
+ * content-origin plan's stage 2 (`docs/projects/atlas/content-origin-plan.md`).
+ * The app treats an absent, null, or failed answer identically: frames stay
+ * on the app origin under today's sandbox. The advertisement is derived from
+ * the listener the daemon actually started, never from configuration alone,
+ * so a base that is advertised is a base that answers.
+ */
+export const SERVING_ROUTE = "/api/serving";
+
+export interface ServingResponse {
+  /** Origin (scheme://host[:port], no trailing slash) serving item content,
+   * or null: content is served from the app's own origin, as it always was. */
+  contentBase: string | null;
+}
+
 export interface HomesResponse {
   /** Where a canvas born here, naming nothing, would be born. Null: here. */
   birth: string | null;

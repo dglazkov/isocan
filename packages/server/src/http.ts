@@ -58,6 +58,7 @@ import {
   AMBIGUOUS_HOME,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  SERVING_ROUTE,
   staleClientRefusal,
   STALE_CLIENT_STATUS,
   CANVASES_REACH_PARAM,
@@ -101,6 +102,7 @@ import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
+import { registerContentRoutes } from "./content.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -180,8 +182,6 @@ export const STATIC_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".ico": "image/x-icon",
 };
-
-const CACHE_BLOB = "private, immutable, max-age=31536000";
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
  * so `canvasId ∈ admissions` is re-asked on all of them, including the ones
@@ -271,6 +271,14 @@ export interface RouteOptions {
    * it holds, which is every daemon a test constructs without one.
    */
   homes?: HomeLinks | null;
+  /**
+   * The content origin's base URL, or null/absent when none exists — which
+   * is every daemon at stage 1 of the content-origin plan. The daemon sets
+   * this from the content listener it actually started (stage 2), never from
+   * configuration alone: an advertised base is a base that answers. It is
+   * what `GET /api/serving` reports and nothing else reads it.
+   */
+  contentBase?: string | null;
   /**
    * **The attester this home has borrowed**, or null when it has borrowed
    * none — which is every local daemon and is not a defect.
@@ -853,6 +861,11 @@ export function registerRoutes(
   /** Current names, for clients rendering words somebody wrote under a name
    * they no longer use — the canvases page paints them too. */
   app.get("/api/names", async () => engine.actorNames());
+
+  /** How this home serves — today, only whether a content origin exists.
+   * See `SERVING_ROUTE` in core for the contract and `content.ts` for the
+   * role it advertises. */
+  app.get(SERVING_ROUTE, async () => ({ contentBase: options.contentBase ?? null }));
 
   // ---- slash commands: the work a message can ask for ----
 
@@ -1925,71 +1938,22 @@ export function registerRoutes(
     return reply.status(404).send({ error: "no such file in the bound directory", code: "no-file" });
   });
 
-  app.get("/api/projects/:id/blobs/:hash", async (req, reply) => {
-    const { id, hash } = req.params as { id: string; hash: string };
-    await engine.getSnapshot(id);
-    const meta = await store.blobMeta(id, hash);
-    /**
-     * Bytes this replica has never held, read straight from the home.
-     *
-     * The ops replicate; the blobs they name do not follow on their own. So a
-     * replica that applied somebody else's `item.add` knows the hash and has
-     * nothing under it — and an item that renders as a broken version on the
-     * one machine an agent's hands can reach is not a replica, it is a list of
-     * hashes. The bytes are streamed through rather than mirrored to disk: a
-     * read is not the moment to decide what this machine should keep, and
-     * content addressing means the copy that arrives with the next upload is
-     * the same copy either way.
-     *
-     * Range requests go up with the request, so seeking a video does not drag
-     * the whole object across twice.
-     */
-    const blobHome = options.homes?.for(id) ?? null;
-    if (!meta && blobHome) {
-      const range = parseRange(req.headers.range, Number.MAX_SAFE_INTEGER);
-      const remote = await blobHome.openBlob(
-        id,
-        hash,
-        range && range !== "unsatisfiable" ? range : undefined,
-      );
-      if (!remote) return reply.status(404).send({ error: "blob not found" });
-      return reply
-        .header("Content-Type", remote.mimeType)
-        .header("Content-Security-Policy", "sandbox allow-scripts")
-        .header("X-Content-Type-Options", "nosniff")
-        .header("Cache-Control", CACHE_BLOB)
-        .send(remote.stream);
-    }
-    if (!meta) return reply.status(404).send({ error: "blob not found" });
-
-    // Defense in depth for HTML blobs: even outside the app's sandboxed
-    // iframe, a directly-opened blob document is sandboxed and can't reach
-    // the daemon API with an origin.
-    reply
-      .header("Content-Type", meta.mimeType)
-      .header("Content-Security-Policy", "sandbox allow-scripts")
-      .header("X-Content-Type-Options", "nosniff")
-      .header("Cache-Control", CACHE_BLOB)
-      // Said unconditionally, so a player knows it may seek BEFORE it asks.
-      .header("Accept-Ranges", "bytes");
-
-    const range = parseRange(req.headers.range, meta.size);
-    if (range === "unsatisfiable") {
-      return reply.status(416).header("Content-Range", `bytes */${meta.size}`).send();
-    }
-    if (range) {
-      const stream = await store.openBlob(id, hash, range);
-      if (!stream) return reply.status(404).send({ error: "blob not found" });
-      return reply
-        .status(206)
-        .header("Content-Range", `bytes ${range.start}-${range.end}/${meta.size}`)
-        .header("Content-Length", String(range.end - range.start + 1))
-        .send(stream);
-    }
-    const stream = await store.openBlob(id, hash);
-    if (!stream) return reply.status(404).send({ error: "blob not found" });
-    return reply.header("Content-Length", String(meta.size)).send(stream);
-  });
+  /**
+   * The blob GET lives in `content.ts` now — the content role, mounted here
+   * on the app origin exactly as the inline route always was (the door's
+   * `onRequest` hook above still gates it, unchanged). Stage 2 of the
+   * content-origin plan mounts the same function on a second loopback
+   * listener; the extraction is the seam, not a behavior change.
+   *
+   * The CSP passed here is defense in depth for HTML blobs on THIS origin:
+   * even outside the app's sandboxed iframe, a directly-opened blob document
+   * is sandboxed and can't reach the daemon API with an origin.
+   */
+  registerContentRoutes(
+    app,
+    { engine, store, homes: options.homes ?? null },
+    { csp: "sandbox allow-scripts" },
+  );
 
   /**
    * **`GET /__/auth/action` — a Firebase-shaped path, answered by isocan.**
@@ -2202,28 +2166,6 @@ function badUploadRequest(request: Partial<BlobUploadRequest> | undefined): stri
  * bad Range must be treated as absent), which is why a garbled header gets
  * the whole blob rather than a 416.
  */
-function parseRange(
-  header: string | undefined,
-  size: number,
-): { start: number; end: number } | "unsatisfiable" | null {
-  if (typeof header !== "string") return null;
-  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (!match) return null;
-  const [, rawStart, rawEnd] = match;
-  if (rawStart === "" && rawEnd === "") return null;
-  if (rawStart === "") {
-    // A suffix range: the LAST n bytes. `bytes=-0` asks for nothing.
-    const wanted = Number(rawEnd);
-    if (wanted === 0) return "unsatisfiable";
-    return { start: Math.max(0, size - wanted), end: size - 1 };
-  }
-  const start = Number(rawStart);
-  if (start >= size) return "unsatisfiable";
-  const end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
-  if (end < start) return "unsatisfiable";
-  return { start, end };
-}
-
 /** The canvas id out of a path segment. A malformed percent escape is not
  * worth a 500 from a hook: it is not a canvas id either way, and the route
  * behind it will say so. */

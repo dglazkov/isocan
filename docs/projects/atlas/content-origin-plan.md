@@ -82,6 +82,19 @@ All plumbing, zero behavior change. Both shapes ship this identical to today.
 
 Stable place: nothing observable moved; the seam and its tests exist.
 
+*Landed 26 Aug 2026, with one refinement over the sketch above: instead of
+two URL spellings (`apiBlobUrl`/`frameBlobUrl`), there is ONE URL spelling —
+`blobUrl`, unchanged, badged, used by every chrome read — and one frame
+builder, `web/src/lib/frame.ts`'s `itemFrame`, the only code allowed to
+decide a frame's src and sandbox together. That makes invariants 2 and 3 the
+same seam: the builder is the sole consumer of the content base, so a chrome
+read *cannot* wander to the content origin and a frame *cannot* pair an
+app-origin src with `allow-same-origin`. Server side: `server/src/content.ts`
+is the role (route table enumerated by `content.test.ts`), the app origin
+mounts it behind the existing door hook, `GET /api/serving` advertises
+`contentBase: null`, and the pre-extraction blob suite passes untouched —
+which is invariant 1's witness.*
+
 ## Stage 2 — the local half
 
 - The local daemon starts a second loopback listener (default `port+1`,
