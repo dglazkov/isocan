@@ -7,19 +7,29 @@
  * One rule follows, and it lives here so it can be reasoned about without a
  * browser: chrome holds its size (the caller counter-scales).
  *
- * **The item's two ends, and what each is for.** The TOP edge carries what the
- * item IS — its name at the left, its version count at the right. The BOTTOM
- * edge carries what has been DONE to it — the marks it wears, and the threads
- * anchored to it, which now land at that corner (core's `anchorOffset`) and
- * hang below the marks row. Reading down an item is therefore: what it is,
- * the thing itself, what people made of it.
+ * **Where each thing sits, and why there.** The item's own facts ride the TOP
+ * edge — its name at the left, its version count INSET at the right. What
+ * people wore on it (the marks) sits under the bottom-left. What people SAID
+ * about it hangs off the top-right CORNER, outside the item entirely, which
+ * is where `anchorOffset` in core puts an anchored thread and why that
+ * function is in core rather than here: the CLI anchors threads too.
  *
- * That split is what let the badge stop moving. It used to live at the
+ * That last one moved twice in a day and the middle position is the useful
+ * lesson. Threads used to anchor at the top-LEFT, where a pin's upward body
+ * covered the very name it was about. The first fix sent them to the
+ * bottom-left, under the marks — which cleared the name and looked wrong,
+ * because a mark and a thread are unlike things (one is worn on the item, one
+ * is said about it) and stacking them in one corner read as a single pile.
+ * Outside the top-right corner they touch nothing: not the title, not the
+ * content, not the marks.
+ *
+ * It is also what let the badge stop moving. The badge used to live at the
  * bottom-right and YIELD that corner to any pin dropped near it — a rule with
  * a real cost (a count that is somewhere else on some items is a count you
  * hunt for) paid because pins and the badge wanted one corner. They no longer
- * do: pins go to the bottom-LEFT, so the badge sits at the top-right on every
- * item, always, and `badgeCorner` is gone rather than merely unused.
+ * do, and not by luck: the badge is INSET 14px along the top edge while a
+ * corner pin is nudged OUTSIDE it, so they share an end of one edge without
+ * sharing any pixels. `badgeCorner` is gone rather than merely unused.
  */
 
 /** Below this an item is a speck: the plies still say there is a stack, the
@@ -85,40 +95,37 @@ export function hasRoomForChrome(width: number, height: number, scale: number): 
  * Screen pixels between the item's bottom edge and the marks row.
  *
  * The floor is the selection chrome: a 2px outline, and corner handles that
- * reach 6px below the edge. It was 10 while the version badge straddled the
- * bottom-right edge and the row had to look deliberate beside it; the badge
- * is at the top now, so the row sits where its own clearance says — 8, two
- * clear of the handles.
+ * reach 6px below the item, so this clears the outline by 6 and the handles
+ * by 2. It was 10 while the version badge straddled the bottom-right edge and
+ * the row had to look deliberate beside a chip hanging into its lane; the
+ * badge is at the top now, so the row answers to its own clearance alone.
  *
- * Held HERE rather than only in the stylesheet because `PIN_DROP` is derived
- * from it, and two numbers that must not drift should not be able to.
- * `worldchrome.test.ts` asserts the stylesheet agrees.
+ * Held HERE as well as in the stylesheet because the clearance argument is
+ * the same one `PIN_NUDGE` makes on the other corner, and an argument that
+ * lives in one file can be checked. `worldchrome.test.ts` asserts the
+ * stylesheet agrees.
  */
 export const UNDER_ROW_PAD = 8;
 
 /**
- * The marks row's own height in screen pixels — the react button, measured on
- * the rendered row (the same 22 `FULL_LABEL_ROOM` budgets for it).
- */
-const MARKS_ROW_H = 22;
-
-/**
- * How far below its anchor a pin hangs when the thread is anchored at its
- * item's bottom-left corner — the offset core's `anchorOffset` gives every
- * item-anchored thread.
+ * How far OUTSIDE its item's right edge a pin anchored to that item's
+ * top-right corner sits (`anchorOffset` in core).
  *
- * Such a pin points UP at the item it belongs to instead of hanging its body
- * over the item's own content, and it has to clear the marks row on the way
- * down: the bottom-left is the item's attachment column, read top to bottom
- * as marks then conversation. Derived rather than tuned, so tightening the
- * row's padding cannot silently put a pin through it.
+ * It exists for the reason the badge's 14px inset does, at the same corner
+ * from the other side: **every corner belongs to a resize handle once the
+ * item is selected.** The handle is 12 screen px centred on the corner, so it
+ * reaches 6px outside the edge; a pin drawn at the corner with the ordinary
+ * pin offset would put its body over that 6px and take the press, because
+ * pins paint above the world. Nudged out past the handle's reach, the two
+ * never contend — and the pin's sharp corner still points back at the item.
  *
- * In SCREEN pixels because the pin is drawn in screen space and the marks row
- * is counter-scaled to the same units — both are constant on screen, so they
- * hold this spacing at every zoom, which is the whole reason the anchor
- * itself is a CORNER and not a nudge in world units.
+ * SCREEN pixels, like the handle's own reach, so the clearance is one
+ * subtraction that holds at every zoom rather than a world length that shrinks
+ * into the handle as you zoom out (the bug `.version-badge` and
+ * `.item-titlebar` each had to unlearn). It is why `anchorOffset` names the
+ * bare corner: the offset says WHICH corner, this says how clear of it.
  */
-export const PIN_DROP = UNDER_ROW_PAD + MARKS_ROW_H + 2;
+export const PIN_NUDGE = 8;
 
 /**
  * Screen pixels the under-item row needs before "Full screen" is spelled out

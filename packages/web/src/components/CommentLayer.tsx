@@ -87,7 +87,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
             key={thread.id}
             thread={thread}
             screen={screenOf(thread)}
-            below={hangsBelow(canvas, thread)}
+            corner={atCorner(canvas, thread)}
             open={openThreadId === thread.id}
             unread={unreadCount(thread, seen, actor.id)}
           />
@@ -114,23 +114,23 @@ const GUTTER = 12; // breathing room from the window edges
 const TOOLBAR_H = 48; // popovers must clear the toolbar
 
 /**
- * Does this pin hang below its anchor rather than above it?
+ * Is this pin sitting at its item's top-right corner — the place
+ * `anchorOffset` in core puts every thread anchored to an item?
  *
- * A pin's body sits above its point, so a thread anchored at the TOP of an
- * item covers that item's name — which is what sent item-anchored threads to
- * the bottom-left corner (core's `anchorOffset`). Down there the same upward
- * body would cover the item's content instead, so a pin at or below its
- * item's bottom edge flips: sharp corner up, body hanging into the column
- * below, beside the marks the item wears.
+ * Such a pin steps out past the corner so it never takes the resize handle's
+ * press (`PIN_NUDGE`, and `.pin.corner` in the stylesheet). Everything else —
+ * a pin dropped on open canvas, or placed by hand somewhere on an item in
+ * comment mode — keeps the ordinary offset, because it is marking a spot
+ * somebody chose and moving it would be answering a different question.
  *
- * Asked of the OFFSET rather than of who created the thread, so a pin dragged
- * to the bottom edge behaves like one that was born there, and the threads
- * anchored at `{0,0}` before this existed keep pointing the way they always
- * did rather than being silently rearranged.
+ * Asked of the OFFSET rather than of how the thread was made, so a pin
+ * dragged onto that corner behaves like one born there, and threads anchored
+ * elsewhere before this existed keep pointing where they always did rather
+ * than being silently rearranged.
  */
-function hangsBelow(canvas: CanvasContents, thread: CommentThread): boolean {
+function atCorner(canvas: CanvasContents, thread: CommentThread): boolean {
   const item = thread.anchorItemId ? canvas.items[thread.anchorItemId] : undefined;
-  return item ? thread.y >= item.height : false;
+  return item ? thread.x >= item.width && thread.y <= 0 : false;
 }
 
 /**
@@ -177,14 +177,14 @@ function usePopoverPlacement(anchor: { x: number; y: number }, dx: number, dy: n
 function ThreadPin({
   thread,
   screen,
-  below,
+  corner,
   open,
   unread,
 }: {
   thread: CommentThread;
   screen: { x: number; y: number };
-  /** Anchored at its item's bottom edge: hang under it — see `hangsBelow`. */
-  below: boolean;
+  /** At its item's top-right corner: step clear of it — see `atCorner`. */
+  corner: boolean;
   open: boolean;
   unread: number;
 }) {
@@ -214,7 +214,7 @@ function ThreadPin({
 
   return (
     <button
-      className={`pin${below ? " below" : ""}${unread > 0 ? " unread" : ""}`}
+      className={`pin${corner ? " corner" : ""}${unread > 0 ? " unread" : ""}`}
       style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
       title={
         unread > 0

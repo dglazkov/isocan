@@ -9,7 +9,7 @@ import {
   ICON_ROOM,
   MARK_ROOM,
   MIN_NAME_ROOM,
-  PIN_DROP,
+  PIN_NUDGE,
   ROW_END_ROOM,
   UNDER_ROW_PAD,
   hasRoomForChrome,
@@ -521,29 +521,31 @@ describe("the reaction add button", () => {
 
 
 /**
- * The item's bottom-left is one column — the marks it wears, then the threads
- * anchored to it — and the two are measured in the same screen pixels so they
- * cannot land on each other at any zoom.
+ * The two ends of the top edge, shared without touching: the version count is
+ * INSET along it, an anchored thread hangs OUTSIDE the corner past it.
  */
-describe("the attachment column under an item", () => {
-  it("anchors an item's threads at its bottom-left corner, both surfaces", () => {
+describe("where an item's chrome and its conversation sit", () => {
+  it("anchors an item's threads at its top-right CORNER, both surfaces", () => {
     // The corner itself, so the spot is the same at every zoom: a nudge in
-    // world units is a different number of screen pixels at each one.
-    expect(anchorOffset(item(0, 0, 200, 150))).toEqual({ x: 0, y: 150 });
-    expect(anchorOffset(item(900, 900, 480, 320))).toEqual({ x: 0, y: 320 });
+    // world units (the CLI's old `width + 12`) is a different number of
+    // screen pixels at each one. How far clear of the corner the pin sits is
+    // PIN_NUDGE's job, in screen pixels, where the handle's reach is measured.
+    expect(anchorOffset(item(0, 0, 200, 150))).toEqual({ x: 200, y: 0 });
+    expect(anchorOffset(item(900, 900, 480, 320))).toEqual({ x: 480, y: 0 });
   });
 
-  it("drops the pin clear of the marks row rather than through it", () => {
-    // Derived, not tuned: whatever the row's padding becomes, the pin still
-    // starts below the row's full height. This is the assertion that makes
-    // tightening the padding safe.
-    expect(PIN_DROP).toBeGreaterThanOrEqual(UNDER_ROW_PAD + 22);
-    // And not so far it stops reading as this item's: past the row plus its
-    // own height the pin belongs to whatever is underneath.
-    expect(PIN_DROP).toBeLessThanOrEqual(UNDER_ROW_PAD + 22 + 26);
+  it("steps the pin clear of the corner handle rather than onto it", () => {
+    // The handle is 12 screen px centred on the corner, so it reaches 6px
+    // outside the edge — and it is BELOW the pin in paint order, so an
+    // overlap is a press the pin swallows. Stated as the inequality, so
+    // moving either number is allowed and closing the gap is not.
+    const handleReach = 6;
+    expect(PIN_NUDGE).toBeGreaterThan(handleReach);
+    // And not so far out that it stops reading as this item's thread.
+    expect(PIN_NUDGE).toBeLessThanOrEqual(24);
   });
 
-  it("clears the selection chrome the row sits under", () => {
+  it("keeps the marks row clear of the selection chrome it sits under", () => {
     // The outline is 2px and the corner handles reach 6px below the edge.
     expect(UNDER_ROW_PAD).toBeGreaterThan(6);
   });

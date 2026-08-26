@@ -1439,20 +1439,22 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   cursor: pointer;
 }
 .pin:hover { border-color: var(--accent); }
-/* A thread anchored to an ITEM, which lands at its bottom-left corner (core's
-   `anchorOffset`). It hangs BELOW that corner instead of above it, so the
-   sharp corner points up at the thing the conversation is about and the pin's
-   body never covers the item's own content — which is what the old top-left
-   anchor did to the name.
+/* A thread anchored to an ITEM, which lands just off its top-right corner
+   (core's `anchorOffset`). The pin keeps its ordinary shape — body above the
+   point, sharp corner at the bottom-left pointing back down at the item — and
+   only steps OUT past the corner.
 
-   The drop clears the marks row so the item's attachment column reads top to
-   bottom: marks, then conversation. 32 is `PIN_DROP` in lib/chrome.ts, where
-   it is derived from the row's padding and height rather than tuned here;
-   `worldchrome.test.ts` asserts these two agree. Both this and the row are
-   constant-size on screen, so the spacing holds at every zoom. */
-.pin.below {
-  transform: translate(-4px, 32px);
-  border-radius: 4px 999px 999px 999px;
+   That step is the whole rule: every corner belongs to a resize handle once
+   the item is selected, the handle reaches 6 screen px outside the edge, and
+   a pin painted over it would take the press (pins are drawn above the world).
+   8 is `PIN_NUDGE` in lib/chrome.ts, where the clearance is argued beside the
+   badge's matching inset on the same edge; `worldchrome.test.ts` asserts these
+   two agree and that the gap survives.
+
+   Screen pixels, like the handle's own reach, so one subtraction holds the
+   clearance at every zoom. */
+.pin.corner {
+  transform: translate(8px, -22px);
 }
 .pin-avatar {
   width: 20px; height: 20px; border-radius: 999px; flex: none;
