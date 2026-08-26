@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildStamp, describeBuild, stalenessOf, type BuildStamp } from "../src/build.ts";
 
@@ -54,12 +57,26 @@ describe("build stamp", () => {
    * what actually identifies a build — and what a person comparing two
    * machines, or an agent asked what it is running, needs.
    */
-  it("names the commit it was built from", () => {
+  it("names the commit it was built from — where the checkout can say", () => {
     const stamp = buildStamp();
     // A checkout reads `.git`; an install reads the manifest the release
-    // branch stamps. This suite runs in the first, so it must be there.
-    expect(stamp.commit).toMatch(/^[0-9a-f]{7}$/);
-    expect(describeBuild(stamp)).toContain(stamp.commit!);
+    // branch stamps. But not every checkout CAN say: on reftable
+    // (`extensions.refStorage = reftable`) the refs are binary tables and
+    // `gitHead`'s documented answer is null — this repo's own dev machine is
+    // that shape, which is how the first version of this test was caught
+    // asserting a promise the feature cannot keep. The guard is shape-aware
+    // rather than weakened: a readable checkout must name the sha, and a
+    // reftable one must say nothing rather than something wrong.
+    const reftable = existsSync(
+      path.join(fileURLToPath(new URL("../../..", import.meta.url)), ".git", "reftable"),
+    );
+    if (reftable) {
+      expect(stamp.commit).toBeNull();
+      expect(describeBuild(stamp)).toBe(stamp.version);
+    } else {
+      expect(stamp.commit).toMatch(/^[0-9a-f]{7}$/);
+      expect(describeBuild(stamp)).toContain(stamp.commit!);
+    }
   });
 
   it("says which build a daemon is running when the two shas disagree", () => {

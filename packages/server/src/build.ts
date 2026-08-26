@@ -118,10 +118,19 @@ export function buildStamp(): BuildStamp {
  * health route with it, and the health route is how anything finds out whether
  * a daemon is alive at all.
  *
- * The three shapes it has to survive are the three this repo actually meets: a
- * plain clone, a WORKTREE (where `.git` is a file naming the real directory —
- * agents here work in worktrees), and a repo whose refs have been packed by
- * `git gc`, where `refs/heads/main` is not a file at all.
+ * The four shapes it has to survive are the four this repo actually meets: a
+ * plain clone; a WORKTREE (where `.git` is a file naming the real directory —
+ * agents here work in worktrees); a repo whose refs have been packed by
+ * `git gc`, where `refs/heads/main` is one line of one file; and a repo on
+ * REFTABLE (`extensions.refStorage = reftable` — this repo's own dev machine
+ * is one), where refs are binary tables under `.git/reftable` and `HEAD` is
+ * a compatibility stub reading `ref: refs/heads/.invalid`, put there so
+ * hand-readers like this one fail safely instead of plausibly. For that
+ * shape the honest answer really is null: parsing reftable by hand is a
+ * binary-format dependency this best-effort stamp does not want, and
+ * shelling out to `git` at daemon boot is a failure surface it deliberately
+ * does not have. The stub is matched EXPLICITLY below so nobody reading a
+ * log ever chases `.invalid` as a corrupt branch name.
  */
 function gitHead(): { commit: string; committedAt: string | null } | null {
   try {
@@ -133,6 +142,8 @@ function gitHead(): { commit: string; committedAt: string | null } | null {
       dir = path.resolve(root, pointer);
     }
     const head = readFileSync(path.join(dir, "HEAD"), "utf8").trim();
+    // Reftable's stub: refs live in binary tables this reader will not parse.
+    if (head === "ref: refs/heads/.invalid") return null;
     const ref = head.match(/^ref:\s*(.+)$/)?.[1]?.trim();
     // Detached HEAD names the sha outright.
     let sha = ref ? null : head;
