@@ -47,6 +47,26 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
+  /**
+   * The drop overlay dies of silence, never of bookkeeping.
+   *
+   * It used to be cleared by `dragleave` — but only when the event's target
+   * was the viewport itself, and dragleave fires on whichever CHILD the
+   * pointer was last over. Leave the window over an item, Esc a drag, or
+   * release over a panel or the browser chrome, and the equality failed and
+   * the full-screen "Drop to add" overlay stood forever, over a drag nobody
+   * was making. There is no bookkeeping of enter/leave pairs that survives
+   * every way a drag can end — the browser does not promise the pairs — so
+   * the overlay is kept alive by the one signal that IS promised: `dragover`
+   * fires every ~350ms while a drag is over the window, even stationary.
+   * When it stops arriving, the drag is over, whatever ended it.
+   */
+  const droppingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragAlive = () => {
+    setDropping(true);
+    if (droppingTimer.current) clearTimeout(droppingTimer.current);
+    droppingTimer.current = setTimeout(() => setDropping(false), 700);
+  };
   const [panning, setPanning] = useState(false);
   // The tool to restore when a momentary Space-grab ends (null when not held).
   const spacePrevTool = useRef<Tool | null>(null);
@@ -482,6 +502,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
 
   async function onDrop(e: React.DragEvent) {
     e.preventDefault();
+    if (droppingTimer.current) clearTimeout(droppingTimer.current);
     setDropping(false);
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
@@ -540,10 +561,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       onPointerLeave={() => publishCursor(null)}
       onDragOver={(e) => {
         e.preventDefault();
-        setDropping(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.target === ref.current) setDropping(false);
+        dragAlive();
       }}
       onDrop={onDrop}
     >
