@@ -32,6 +32,7 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
+  ServingResponse,
   SlashCommand,
 } from "@isocan/core";
 import {
@@ -48,6 +49,7 @@ import {
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
+  SERVING_ROUTE,
 } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
 import { askTheDoor, bearerHeader, paths, readBadge, writeBadge } from "@isocan/server";
@@ -484,6 +486,11 @@ export class DaemonClient {
 
   snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
     return this.request("GET", `/api/projects/${canvasId}/canvas`);
+  }
+
+  /** How this home serves — today, only whether a content origin exists. */
+  serving(): Promise<ServingResponse> {
+    return this.request("GET", SERVING_ROUTE);
   }
 
   /** The name each actor goes by now. A snapshot already carries this; it is

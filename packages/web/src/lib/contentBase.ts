@@ -1,14 +1,22 @@
+import { getServing } from "./api.ts";
+
 /**
- * The content origin's base URL, as this tab knows it — the app half of the
- * seam cut in stage 1 of `docs/projects/atlas/content-origin-plan.md`.
+ * The content origin's base URL, as this tab knows it — the app half of
+ * stages 1–2 of `docs/projects/atlas/content-origin-plan.md`.
  *
- * Nothing sets it yet: stage 2 wires a boot-time fetch of `GET /api/serving`
- * (the daemon advertises only a listener it actually started) through
- * `adoptContentBase`. Until then — and forever on a home with no content
- * origin, and whenever the fetch fails — the answer is null, and null means
- * exactly today's behavior: frames on the app origin, `allow-scripts` alone.
- * The fallback IS the current behavior, which is what makes every stage of
- * the plan stable on both shapes.
+ * `loadContentBase` asks `GET /api/serving` once, at boot, beside the color
+ * and name loads — and the daemon advertises only a listener it actually
+ * started. On a home with no content origin, and whenever the fetch fails
+ * (a hosted home, an older daemon, a tab with no badge yet), the answer is
+ * null, and null means exactly today's behavior: frames on the app origin,
+ * `allow-scripts` alone. The fallback IS the current behavior, which is what
+ * makes every stage of the plan stable on both shapes.
+ *
+ * A plain module variable rather than a store: the fetch resolves in the
+ * time it takes the app to open a socket and load a snapshot, so every frame
+ * that can render an item was mounted after the answer arrived. A frame from
+ * the losing side of that race renders on the app origin — today's frame —
+ * and corrects itself on its next mount.
  */
 
 let base: string | null = null;
@@ -19,4 +27,12 @@ export function contentBase(): string | null {
 
 export function adoptContentBase(next: string | null): void {
   base = next;
+}
+
+export async function loadContentBase(): Promise<void> {
+  try {
+    adoptContentBase((await getServing()).contentBase ?? null);
+  } catch {
+    adoptContentBase(null);
+  }
 }

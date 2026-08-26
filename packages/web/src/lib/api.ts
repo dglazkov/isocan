@@ -22,6 +22,7 @@ import type {
   Canvas,
   ActorNames,
   RedeemPassResponse,
+  ServingResponse,
   SlashCommand,
 } from "@isocan/core";
 import {
@@ -39,6 +40,7 @@ import {
   PASS_REDEEM_ROUTE,
   passesRoute,
   canvasesRoute,
+  SERVING_ROUTE,
 } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
@@ -557,4 +559,9 @@ export function runGc(canvasId: string, options: GcRequest = {}): Promise<GcRepo
 
 export function blobUrl(canvasId: string, blobHash: string): string {
   return `/api/projects/${canvasId}/blobs/${blobHash}`;
+}
+
+/** How this home serves — today, only whether a content origin exists. */
+export function getServing(): Promise<ServingResponse> {
+  return request("GET", SERVING_ROUTE);
 }
