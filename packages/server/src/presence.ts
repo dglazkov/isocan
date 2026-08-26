@@ -145,7 +145,13 @@ export class PresenceHub {
    * clients and every face mirrored in from a connection. */
   roster(canvasId: string): PresenceSession[] {
     const here = [...(this.rooms.get(canvasId)?.values() ?? [])];
-    return here.map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
+    // `via` is DERIVED here rather than passed through: the field means "as
+    // this daemon sees it", and a value that travelled in from the sender
+    // would be that daemon's answer wearing this one's voice.
+    return here.map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => ({
+      ...session,
+      via: origin,
+    }));
   }
 
   /**
@@ -159,7 +165,7 @@ export class PresenceHub {
     const here = [...(this.rooms.get(canvasId)?.values() ?? [])];
     return here
       .filter((session) => session.origin === null)
-      .map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => session);
+      .map(({ lastSeenMs, statusSticky, onThreadAt, origin, via, ...session }) => session);
   }
 
   /**
@@ -196,8 +202,13 @@ export class PresenceHub {
       // local one is the truer of the two — it is where the beats arrive.
       if (existing && existing.origin === null) continue;
       const before = existing ? JSON.stringify(stripped(existing)) : null;
+      // `via` is dropped rather than carried: it is the SENDER's answer to
+      // "which side is this on", and holding it here would have this daemon
+      // repeat somebody else's perspective as its own. `roster()` derives it
+      // fresh from `origin` below.
+      const { via: _theirs, ...incoming } = session;
       const next: SessionState = {
-        ...session,
+        ...incoming,
         origin,
         lastSeenMs: Date.now(),
         statusSticky: false,
@@ -290,7 +301,7 @@ export class PresenceHub {
 /** A session as it goes over the wire — the private bookkeeping dropped, so
  * two of them can be compared for "did anything a client would see change". */
 function stripped(session: SessionState): PresenceSession {
-  const { lastSeenMs, statusSticky, onThreadAt, origin, ...rest } = session;
+  const { lastSeenMs, statusSticky, onThreadAt, origin, via, ...rest } = session;
   // `lastSeen` moves on every beat and would make every mirror a change.
   return { ...rest, lastSeen: "" };
 }

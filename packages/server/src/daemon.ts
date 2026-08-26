@@ -150,6 +150,15 @@ export interface Daemon {
    * importantly, what a link did NOT do.
    */
   homes: HomeLinks;
+  /**
+   * The ephemeral plane, exposed for the same reason `homes` is: the questions
+   * worth asking about presence are about what a daemon did NOT do. A test can
+   * take a mirrored face down here — a dropped relay, a home that restarted —
+   * and then assert that the replica puts it back with nothing having changed
+   * on its own side, which is the whole of the level-triggered repair and is
+   * not observable from outside.
+   */
+  presence: PresenceHub;
   close: () => Promise<void>;
 }
 
@@ -446,7 +455,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     await store.close();
   };
 
-  return { app, engine, store, desk, port, birthHome, homes, close };
+  return { app, engine, store, desk, presence, port, birthHome, homes, close };
 }
 
 // ---------- stale daemons ----------

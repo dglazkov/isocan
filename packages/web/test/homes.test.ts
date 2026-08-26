@@ -85,7 +85,7 @@ describe("where a canvas lives, as the app reads it", () => {
       prj_acme: null,
       prj_widget: "https://dev.isocan.io",
     },
-    links: [{ url: "https://dev.isocan.io", reachable: true }],
+    links: [{ url: "https://dev.isocan.io", reachable: true, canvases: [] }],
   };
 
   it("a null row is here — this daemon is that canvas's home", () => {

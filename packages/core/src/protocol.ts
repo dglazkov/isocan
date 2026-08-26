@@ -142,6 +142,24 @@ export interface PresenceSession {
    */
   onThread: string | null;
   lastSeen: string;
+  /**
+   * **Which side of the wire this face is on**, as the daemon answering the
+   * question sees it: `null` for its own client, or the connection key it was
+   * mirrored in through (`home:<url>`).
+   *
+   * Derived per read rather than stored, so it always means "relative to
+   * whoever is telling you". A face that is local at the home is mirrored at
+   * every replica, and both answers are correct where they are given.
+   *
+   * It exists because a roster with nobody from the home in it has two very
+   * different causes — nobody else is on the canvas, or this machine's socket
+   * to the home is not carrying anything — and they printed identically. A
+   * reader that can see no face came from the home can say which.
+   *
+   * Optional on the wire: it is a report, and nothing constructs a session
+   * FROM it.
+   */
+  via?: string | null;
 }
 
 export type PresenceActivity =
@@ -744,7 +762,39 @@ export interface HomesResponse {
   /** Every home this daemon is dialling. `reachable` is null until the first
    * poll has been answered — the daemon reports what it last observed rather
    * than probing per request, because `isocan status` asks this often. */
-  links: { url: string; reachable: boolean | null }[];
+  links: { url: string; reachable: boolean | null; canvases: CanvasLinkState[] }[];
+}
+
+/**
+ * **Whether one canvas's socket to its home is actually carrying anything.**
+ *
+ * The question `reachable` above cannot answer, and the reason this type
+ * exists. A home's reachability is measured on the HTTP poll, and writes are
+ * forwarded over HTTP too — so a canvas can be born at a reachable home, take
+ * every op it is given, serve its URL, and still have no live socket. Presence
+ * rides ONLY on that socket. When it is not up, a face never leaves the
+ * machine, the roster on this side looks like a canvas nobody else is on, and
+ * before this type there was no way to tell that from an empty room.
+ *
+ * `opens: 0` is the sharpest field here: presence for this canvas has never
+ * once moved.
+ */
+export interface CanvasLinkState {
+  canvasId: string;
+  /** The socket is open right now. */
+  connected: boolean;
+  /** How many times it has opened, ever — see above. */
+  opens: number;
+  connectedAt: string | null;
+  /** When this daemon last told the home who is here, and how many faces it
+   * named. Null: never. */
+  relayedAt: string | null;
+  facesRelayed: number;
+  /** Consecutive failed attempts since the last open. */
+  failures: number;
+  /** How the last attempt ended: a close code, or the error that stopped it
+   * before there was a socket at all. */
+  lastFailure: string | null;
 }
 
 export interface ApiError {
