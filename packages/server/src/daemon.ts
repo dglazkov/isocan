@@ -16,6 +16,7 @@ import { resolveHomeUrl } from "./config.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
+import { contentPorts, registerContentRoutes } from "./content.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -39,6 +40,14 @@ export interface DaemonOptions {
    * trust off by itself.
    */
   host?: string;
+  /**
+   * The content listener's port: a number pins it, `0` asks for an ephemeral
+   * one, `"off"` disables it. Absent, `ISOCAN_CONTENT_PORT` is read, and
+   * unset means the default plan — the main port's neighbour, then ephemeral
+   * (`contentPorts` in content.ts carries the rules, including the hard one:
+   * a wide-bound daemon never gets a content listener at all).
+   */
+  contentPort?: number | "off";
   /**
    * **Where a canvas born on this machine, naming nothing, is born** —
    * `https://isocan.io`. Absent (the default, and every daemon in this repo
@@ -135,6 +144,10 @@ export interface Daemon {
    * replicates through the store, the desk's ledgers never leave. */
   desk: Desk;
   port: number;
+  /** The content origin this daemon actually stands behind — what
+   * `GET /api/serving` advertises — or null when no content listener bound
+   * (disabled, wide-bound, or every candidate port refused). */
+  contentBase: string | null;
   /** Where a canvas born here, naming nothing, is born — or null when it stays
    * here. Recorded rather than merely acted on: a daemon that cannot say what
    * it would do next would be a daemon nothing could ask. */
@@ -350,13 +363,55 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     forceCloseConnections: true,
     logger: serverLogging(),
   });
-  registerRoutes(app, engine, store, desk, presence, {
+  // One object, held: the content base is written onto it AFTER the content
+  // listener stands (below), and the `/api/serving` route reads it at request
+  // time — the advertisement is derived from a listener that exists, never
+  // from configuration alone (content-origin plan, stage 2).
+  const routeOptions = {
     birthHome,
     homes,
     auth,
+    contentBase: null as string | null,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
-  });
+  };
+  registerRoutes(app, engine, store, desk, presence, routeOptions);
   await app.listen({ port, host });
+
+  /**
+   * **The content origin's local half** (content-origin plan, stage 2): a
+   * second loopback listener serving the content role and nothing else.
+   * Badge-less on purpose, and acceptable for the tree's three facts —
+   * loopback-bound, single-user home, hash-addressed — and `contentPorts`
+   * refuses to plan any listener at all when this daemon is bound wide.
+   *
+   * No CSP on its responses yet: the app origin's `sandbox allow-scripts`
+   * header would re-impose the opaque origin and defeat the storage the
+   * split grants; what the content role should send instead is stage 3's
+   * decision, made on measurement.
+   *
+   * A candidate port that will not bind degrades the ADDRESS (next
+   * candidate, ephemeral last), never the split — and if nothing binds, the
+   * daemon serves exactly as it did before stage 2: base null, frames on the
+   * app origin. Failure here must never take the daemon down with it.
+   */
+  const bound = app.server.address();
+  const mainPort = typeof bound === "object" && bound ? bound.port : port;
+  const contentEnv =
+    options.contentPort !== undefined ? String(options.contentPort) : process.env.ISOCAN_CONTENT_PORT;
+  let contentApp: FastifyInstance | null = null;
+  for (const candidate of contentPorts(host, contentEnv, mainPort)) {
+    const attempt = Fastify({ forceCloseConnections: true, logger: serverLogging() });
+    registerContentRoutes(attempt, { engine, store, homes }, { csp: null });
+    try {
+      await attempt.listen({ port: candidate, host: "127.0.0.1" });
+      contentApp = attempt;
+      const at = attempt.server.address();
+      routeOptions.contentBase = `http://127.0.0.1:${typeof at === "object" && at ? at.port : candidate}`;
+      break;
+    } catch {
+      await attempt.close().catch(() => {});
+    }
+  }
   // Dialling starts only once we are serving: the first thing that arrives
   // down a canvas socket is written through the engine, and an engine whose
   // daemon is still coming up is a race for no benefit.
@@ -415,6 +470,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // where `homeLink.close()` used to be, for the same reason.
     await homes.close();
     closeWebSockets();
+    // The content listener holds no writers — its whole route table is a
+    // read — so it closes beside the main app with nothing to drain.
+    if (contentApp) await contentApp.close();
     await app.close();
     /**
      * The writer, drained — and this is a shutdown GUARANTEE, not tidiness.
@@ -455,7 +513,18 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     await store.close();
   };
 
-  return { app, engine, store, desk, presence, port, birthHome, homes, close };
+  return {
+    app,
+    engine,
+    store,
+    desk,
+    presence,
+    port,
+    birthHome,
+    homes,
+    contentBase: routeOptions.contentBase,
+    close,
+  };
 }
 
 // ---------- stale daemons ----------

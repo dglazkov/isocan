@@ -50,6 +50,13 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
   });
 });
 
+describe("stage 2: the tab learns the base at boot", () => {
+  it("main.tsx asks beside the color and name loads, fire-and-forget", () => {
+    const source = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+    expect(source).toContain("void loadContentBase()");
+  });
+});
+
 describe("invariant 1: unconfigured means today", () => {
   it("the tab starts with no content base, and adopt is reversible", () => {
     // Module state starts null — nothing sets it until stage 2's boot fetch —

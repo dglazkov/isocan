@@ -10,6 +10,7 @@ import { reclaimIdentity } from "./lib/identity.ts";
 import { initTheme } from "./lib/theme.ts";
 import { loadActorColors } from "./lib/colors.ts";
 import { loadActorNames } from "./lib/names.ts";
+import { loadContentBase } from "./lib/contentBase.ts";
 import "./styles.css";
 
 initTheme();
@@ -30,6 +31,9 @@ registerShell();
 // Faces are painted before any canvas is open; the WS snapshot refreshes this.
 void loadActorColors();
 void loadActorNames();
+// And where item content serves from — null (today's frames) until and
+// unless this home advertises a content origin. See lib/contentBase.ts.
+void loadContentBase();
 
 /**
  * A tab that arrived on `…/p/<id>#<pass>` starts spending it HERE, outside

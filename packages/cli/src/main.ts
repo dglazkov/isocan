@@ -872,6 +872,15 @@ program
         // an npx cache, a global install and a checkout all look identical
         // from the outside.
         running: health.root ?? "(a build too old to say)",
+        // Whether item content serves from its own origin (content-origin
+        // plan, stage 2). Best-effort: a daemon older than the route just
+        // doesn't get the line.
+        ...(await new DaemonClient(daemonBase, paths.isocanHome())
+          .serving()
+          .then((s) => ({
+            "content origin": s.contentBase ?? "none — item content serves from the app origin",
+          }))
+          .catch(() => ({}))),
         ...(stale ? { stale: `${why} — \`isocan restart\`` } : {}),
       });
     }),

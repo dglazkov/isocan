@@ -74,6 +74,39 @@ export function isContentRequest(
   return bare === contentHost.toLowerCase();
 }
 
+/**
+ * Which ports the local content listener should try, in order — or none.
+ *
+ * None when the daemon is bound wide: `ISOCAN_BIND=0.0.0.0` is the hosted
+ * shape, where the content origin is a Host header on the same `$PORT`
+ * (stage 4), never a second listener — and a second listener that bound wide
+ * by accident would serve badge-less blobs to the network, which is the one
+ * misconfiguration this function exists to make unreachable.
+ *
+ * `ISOCAN_CONTENT_PORT` pins a port, `0` asks for an ephemeral one, and
+ * `off` disables the listener. Unset — every local daemon — tries the main
+ * port's neighbour first (4441 → 4442, stable across restarts so a tab's
+ * frames survive a daemon bounce) and falls back to ephemeral, because a
+ * neighbour that happens to be taken must degrade the ADDRESS, never the
+ * origin split. An unparseable value disables rather than guesses.
+ */
+export function contentPorts(
+  host: string,
+  envValue: string | undefined,
+  mainPort: number,
+): number[] {
+  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!loopback) return [];
+  if (envValue !== undefined) {
+    const raw = envValue.trim().toLowerCase();
+    if (raw === "off" || raw === "") return [];
+    const pinned = Number(raw);
+    if (!Number.isInteger(pinned) || pinned < 0 || pinned > 65535) return [];
+    return [pinned];
+  }
+  return mainPort > 0 && mainPort < 65535 ? [mainPort + 1, 0] : [0];
+}
+
 const CACHE_BLOB = "private, immutable, max-age=31536000";
 
 /** Register the content role's routes — all of them, which is one. */
