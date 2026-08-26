@@ -24,6 +24,7 @@ import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
+import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
  * A lazy chunk, and that is a budget rather than a style: the main bundle is
@@ -503,13 +504,25 @@ function CanvasSurface({
         const ids = ui.selectedItemIds;
         if (ids.length === 1) {
           e.preventDefault();
-          // The item's bottom-left corner, in its own coordinates — from
-          // core's `anchorOffset`, which the CLI's `comment add --item` calls
-          // too. This line used to claim that agreement while spelling a
-          // different offset than the CLI did; now there is one spelling and
-          // the claim is checkable.
-          const item = useCanvasStore.getState().canvas?.items[ids[0]!];
-          if (item) ui.setPendingComment({ ...anchorOffset(item), anchorItemId: ids[0]! });
+          const canvas = useCanvasStore.getState().canvas;
+          const item = canvas?.items[ids[0]!];
+          if (canvas && item) {
+            /**
+             * **One item, one conversation.** ⇧C on an item that already has
+             * a thread OPENS it rather than starting a second one — press it
+             * twice and you are adding to what is there, which is what the
+             * second press meant. It used to mint a new thread at the
+             * identical corner every time, stacking pins exactly on top of
+             * each other until the older ones were unreachable.
+             *
+             * The place is core's `anchorOffset`, which the CLI's
+             * `comment add --item` calls too. This line used to CLAIM that
+             * agreement while spelling a different offset than the CLI did.
+             */
+            const existing = itemThread(canvas, ids[0]!);
+            if (existing) ui.setOpenThread(existing.id);
+            else ui.setPendingComment({ ...anchorOffset(item), anchorItemId: ids[0]! });
+          }
         }
       } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         ui.setCommentMode(!ui.commentMode);
