@@ -189,7 +189,38 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
   return <Panel canvasId={canvasId} actor={actor} />;
 }
 
-function Panel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+/**
+ * The thread itself, exported for the workbench: ONE channel, two frames.
+ *
+ * The workbench renders the main thread through this exact component rather
+ * than a copy — the design doc's hardest one-liner ("never a copy") — so the
+ * composer, the mention roster, the chips and the unread store cannot drift
+ * between the two views. `docked` is the only difference the frame makes:
+ * the canvas dock brings its resizer and its stored width; the workbench
+ * column sizes it with its grid, and read-marking waits for engagement
+ * (below) instead of firing on mount.
+ */
+export function MainThreadBody({
+  canvasId,
+  actor,
+  docked = true,
+}: {
+  canvasId: string;
+  actor: Actor;
+  docked?: boolean;
+}) {
+  return <Panel canvasId={canvasId} actor={actor} docked={docked} />;
+}
+
+function Panel({
+  canvasId,
+  actor,
+  docked = true,
+}: {
+  canvasId: string;
+  actor: Actor;
+  docked?: boolean;
+}) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
   const selected = useUiStore((s) => s.selectedItemIds);
@@ -210,10 +241,15 @@ function Panel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   );
 
   // Open is read — including messages landing while you are looking at it.
+  // But only for the DOCKED frame, where opening the panel was a deliberate
+  // gesture. The workbench column is permanently open: marking on mount
+  // there would clear the badge for messages nobody saw while staring at
+  // the stage, so it marks on engagement instead (the pointer handler on
+  // the root, below).
   const commentCount = thread?.comments.length ?? 0;
   useEffect(() => {
-    if (thread) markRead(thread.id);
-  }, [thread?.id, commentCount]);
+    if (docked && thread) markRead(thread.id);
+  }, [docked, thread?.id, commentCount]);
 
   // Chat scroll: pinned to the newest message as they arrive.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -235,10 +271,14 @@ function Panel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   return (
     <div
       className="main-panel"
-      style={{ width: panelWidth }}
-      onPointerDown={(e) => e.stopPropagation()}
+      style={docked ? { width: panelWidth } : undefined}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        // Engagement IS reading, in the undocked frame.
+        if (!docked && thread) markRead(thread.id);
+      }}
     >
-      <PanelResizer />
+      {docked && <PanelResizer />}
       <header>
         <span className="main-glyph">✳</span>
         <b>Main thread</b>

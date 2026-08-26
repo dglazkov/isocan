@@ -163,6 +163,14 @@ think is the last.
    is no home-wide listening; if the human wants you on a different canvas,
    they will say so, and `--canvas <ref>` is how you reach it.
 
+**Blocked on the human?** Say so in a way the system can see: start a comment
+with `/ask` — `isocan comment reply <thread> "/ask blue header or green?"` —
+and park. An unanswered `/ask` is a derived state, not a flag: the workbench
+pins your row to the top marked "asked", and `isocan who` shows `blocked`,
+until somebody OTHER than you replies in that thread. It clears on the
+answer, never on being seen — so ask real questions, in the thread the work
+is in, and amend your own ask freely (your own replies keep it open).
+
 **Going home** is not a step, it is an interruption: run `isocan session end`
 when the human has told you the collaboration is over, and only then. Nothing
 else ends it — not an empty comment list, not a finished task, not a `wait`
@@ -849,6 +857,10 @@ the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
 `undo`/`redo`, `wait`, `tail -f`, `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
+`tree` (the bound directory as the daemon lists it — owner-scoped, so it
+answers only at the canvas's own machine),
+`present <item>` (a main-thread comment carrying the workbench address —
+inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),

@@ -19,6 +19,7 @@ function session(
     cursor: null,
     selection: [],
     status: null,
+    statusSource: null,
     activity: null,
     onThread: null,
     lastSeen: new Date(0).toISOString(),

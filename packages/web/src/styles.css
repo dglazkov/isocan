@@ -1126,6 +1126,270 @@ img { height: auto; }
 }
 .fullscreen-btn:active { transform: translateY(0.5px); }
 
+/* ---------- the workbench ---------- */
+/* The agent room: a cover over the canvas, FullScreen's architecture with a
+   second column. Same z as full screen — the two are the same kind of thing
+   (a route-driven cover) and can never be up at once, so they share the
+   layer rather than inventing an ordering between covers that cannot meet. */
+.workbench {
+  position: fixed; inset: 0; z-index: var(--z-fullscreen);
+  background: var(--ground);
+  display: flex; flex-direction: column;
+}
+.wb-body {
+  flex: 1; min-height: 0;
+  display: flex;
+}
+/* The agent column: roster above, the one main thread below. A fixed V1
+   grid on purpose — resizers and collapse arrive with the second person who
+   asks, on the panels.ts patterns (design doc, "the frame"). */
+.wb-agents {
+  flex: none; position: relative;
+  min-height: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--line); background: var(--card);
+}
+/* Folded: the reopen affordance and nothing else. Never fully removed — the
+   agent view is the reason the room exists. */
+.wb-agents.rail { width: 40px; align-items: center; padding-top: 6px; }
+.wb-fold {
+  flex: none;
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.wb-fold:hover { color: var(--ink); border-color: var(--accent); }
+.wb-agents.rail .wb-fold { align-self: center; margin: 0; }
+.wb-roster {
+  /* Height is the inline style — the grab-edge under the section writes it,
+     remembered per browser. `overflow: visible` would kill the scroll, and
+     the resizer needs the RELATIVE box to hang from. */
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.wb-roster h3 {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.wb-quiet { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-muted); }
+/* The bound directory. A slim section between the roster and the thread —
+   scrollable on its own, capped so the thread keeps its room. */
+.wb-files {
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+}
+.wb-files h3 {
+  margin: 0 0 6px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+}
+.wb-tree { margin: 0; padding: 0; list-style: none; font-size: 11.5px; }
+.wb-tree li { display: flex; align-items: center; min-width: 0; line-height: 1.7; }
+.wb-tree-dir { color: var(--ink-soft); }
+.wb-tree-file {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+  color: var(--ink-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+button.wb-tree-file {
+  font: inherit; padding: 0; border: none; background: none; cursor: pointer;
+  text-align: left;
+}
+/* Already shared: the file is an item, and the row is a door to its stage. */
+.wb-tree-file.on-canvas { color: var(--ink); }
+.wb-tree-file.on-canvas:hover { color: var(--accent-text); }
+.wb-tree-add {
+  flex: none; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer;
+  padding: 0 5px; border-radius: 999px;
+  border: 1px solid var(--line-soft); background: none; color: var(--ink-soft);
+}
+.wb-tree-add:hover { color: var(--ink); border-color: var(--accent); }
+.wb-tree-add:disabled { opacity: 0.5; cursor: default; }
+.wb-quiet code { font-size: 11px; }
+.wb-row { border-radius: var(--radius); position: relative; }
+/* The hover peek: the longer trail, floated beside the row. It stands down
+   for the expanded row, which shows the record properly. */
+.wb-peek {
+  position: fixed; z-index: var(--z-popover);
+  width: 230px; max-height: 220px; overflow: hidden;
+  padding: 8px 10px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop); pointer-events: none;
+}
+.wb-section-resizer {
+  position: absolute; left: 0; right: 0; bottom: -4px; height: 8px;
+  cursor: row-resize; z-index: 1;
+}
+.wb-section-resizer:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.wb-row.open { background: var(--chip); }
+.wb-row-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+  padding: 6px 8px; border: none; background: none; border-radius: var(--radius);
+  color: var(--ink);
+}
+.wb-row-head:hover { background: var(--chip); }
+.wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+/* Away: the ring without the fill — remembered, not present. */
+.wb-dot.hollow { background: none; border: 1.5px solid; }
+.wb-row-head.as-line { cursor: default; }
+/* Derived states, worn as quiet chips beside the name. These exist only
+   because statusSource crosses the wire now — a badge synthesized by
+   string-matching status copy is banned by name in the design doc. */
+.wb-state {
+  font-style: normal; font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); color: var(--ink-muted); border: 1px solid var(--line-soft);
+}
+.wb-state.blocked { color: var(--accent-text); border-color: var(--accent); }
+.wb-row-name { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.wb-row-name b { font-weight: 600; }
+.wb-row-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+/* The agent's own words, verbatim — never a classified badge (the design doc
+   bans string-matching lifecycle copy into semantics until statusSource is
+   on the wire). */
+.wb-row-line {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-align: right;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-row-line em { font-style: normal; color: var(--ink-soft); }
+.wb-row-detail { padding: 2px 8px 10px 24px; display: grid; gap: 8px; justify-items: start; }
+.wb-watch {
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 1px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.wb-watch:hover { color: var(--ink); border-color: var(--accent); }
+/* The watching chip, in the workbench bar rather than floating: the bar is
+   where this cover says what state it is in. */
+.follow-banner.wb { position: static; transform: none; margin-left: 8px; }
+.wb-answering {
+  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+}
+.wb-answering q { quotes: "\201C" "\201D"; }
+.wb-thumb {
+  display: grid; gap: 4px; justify-items: start;
+  font: inherit; font-size: 11px; color: var(--ink-muted);
+  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+}
+.wb-thumb:hover span { color: var(--ink); }
+.wb-trail { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.wb-trail li {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-trail em { font-style: normal; color: var(--ink-soft); flex: none; }
+.wb-act {
+  font: inherit; padding: 0; border: none; background: none; text-align: left;
+  color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.wb-act { cursor: pointer; }
+button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
+/* The main thread, undocked: the SAME component the canvas docks left, sized
+   by this grid instead of by its stored width. Only geometry changes hands
+   here — behavior differences live behind the component's own `docked` prop,
+   never in CSS. */
+.workbench .main-panel {
+  /* static, so the base rule's z-index never applies — no override needed */
+  position: static; width: auto; flex: 1; min-height: 0;
+  border-right: none; box-shadow: none;
+}
+.wb-stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.wb-stage > * { flex: 1; }
+.wb-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.wb-empty p {
+  max-width: 40ch; margin: 0; font-size: 12.5px; line-height: 1.6;
+  color: var(--ink-muted); text-align: center;
+}
+.wb-empty code { font-size: 11.5px; }
+
+/* ---------- the stage's modes and editor ---------- */
+.artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.artifact-stage-body { flex: 1; min-height: 0; display: flex; }
+.artifact-stage-body > * { flex: 1; min-width: 0; }
+/* One header per pane, no third bar. The stage grew a strip of toggles above
+   two panes that each already had a header — three layers of chrome before
+   content — and shed it the next day: each pane's own bar carries its
+   controls AND its fold, and a folded pane leaves a rail on its edge whose
+   whole face is the way back. */
+.stage-pane-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 11.5px; color: var(--ink-muted);
+}
+.stage-pane-bar .spacer { flex: 1; }
+.stage-pane-name { font-weight: 600; color: var(--ink); }
+.stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.stage-pane-fold {
+  flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.stage-pane-fold:hover { color: var(--ink); border-color: var(--accent); }
+/* A folded pane, still standing at its edge: the label reads down the strip
+   and the whole strip is the button. */
+.stage-rail {
+  flex: none; width: 26px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
+  padding: 10px 0; font: inherit; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  border: none; background: var(--card); color: var(--ink-soft);
+}
+.stage-rail span { writing-mode: vertical-rl; }
+/* The chevron at the very foot of the strip: a second, unmissable "this
+   opens" — the label names the pane, the arrow points the way back in. */
+.stage-rail b { font-weight: 600; font-size: 12px; }
+.stage-rail:hover { color: var(--ink); background: var(--chip); }
+.stage-rail.left { border-right: 1px solid var(--line); }
+.stage-rail.right { border-left: 1px solid var(--line); }
+.stage-preview-pane {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; border-left: 1px solid var(--line);
+}
+.stage-pane-body { flex: 1; min-height: 0; display: flex; }
+.text-edit-frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.text-edit-frame .html-view { flex: 1; }
+.text-edit-refusal { font-size: 11px; color: var(--accent-text); }
+.stage-pane-body > * { flex: 1; }
+
+.stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.stage-editor-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 11.5px; color: var(--ink-muted);
+}
+.stage-editor-bar .spacer { flex: 1; }
+.stage-editor-file { font-weight: 600; color: var(--ink); }
+.stage-editor-note { color: var(--accent-text); }
+.stage-editor-dirty {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); border: 1px solid var(--line-soft);
+}
+.stage-editor-btn {
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+.stage-editor-btn:hover { border-color: var(--accent); }
+.stage-editor-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stage-editor-btn:disabled { opacity: 0.6; cursor: default; }
+.stage-editor-body { flex: 1; min-height: 0; display: flex; }
+.stage-editor-cm { flex: 1; min-width: 0; overflow: auto; }
+.stage-editor-cm .cm-editor { height: 100%; background: var(--ground); color: var(--ink); }
+.stage-editor-cm .cm-editor.cm-focused { outline: none; }
+.stage-editor-cm .cm-gutters { background: var(--card); color: var(--ink-soft); border-right: 1px solid var(--line-soft); }
+.stage-editor-cm .cm-activeLine { background: var(--chip); }
+.stage-editor-cm .cm-activeLineGutter { background: var(--chip); }
+
 /* ---------- version fan-out ---------- */
 .fan-card {
   position: absolute; z-index: 3; background: var(--card); border: 1px solid var(--line);

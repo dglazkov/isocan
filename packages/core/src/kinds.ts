@@ -52,3 +52,21 @@ export function itemKind(item: Item): ItemKind {
   if (mime.startsWith("text/") || mime === "application/pdf") return "document";
   return "other";
 }
+
+/**
+ * Can this content be edited as TEXT — the question the stage's Edit mode
+ * asks before offering itself. A png simply has no Edit tab, rather than an
+ * empty box.
+ *
+ * In core because both surfaces answer it: the web editor gates its mode on
+ * this, and `isocan edit` opens the same set in $EDITOR. Deliberately by
+ * mime, not by kind — a "screen" is text/html (editable) but an "image" that
+ * is image/svg+xml is text too, and the kind vocabulary rounds that away.
+ */
+export function editableText(mimeType: string): boolean {
+  return (
+    mimeType.startsWith("text/") ||
+    mimeType === "application/json" ||
+    mimeType === "image/svg+xml"
+  );
+}

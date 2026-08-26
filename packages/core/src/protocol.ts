@@ -122,6 +122,19 @@ export interface PresenceSession {
   cursor: { x: number; y: number } | null;
   selection: string[];
   status: string | null;
+  /**
+   * Who is speaking when `status` is set — the same tri-state the update
+   * side has always carried (below), now surviving the trip. It used to be
+   * folded into a private daemon boolean on arrival, which left a client
+   * unable to tell a PARKED agent (`wait`'s lifecycle status) from a WORKING
+   * one except by string-matching the wait copy — a lie waiting for the day
+   * the copy changed. Null exactly when `status` is null.
+   *
+   * Self-asserted like every presence field: it is UX honesty, not a trust
+   * boundary. The trustworthy row facts remain the vouched actor id, the
+   * server-chosen color, `lastSeen`, and attributed ops.
+   */
+  statusSource: "explicit" | "lifecycle" | "inferred" | null;
   /** "Busy here" — anchored to an item OR a freestanding point. Clients
    * render the motion locally; the daemon only stores the fact. Cleared by
    * explicit cursor commands and by any piggybacked op (working resolves
@@ -751,6 +764,25 @@ export interface JoinCanvasResponse {
  * come here.
  */
 export const HOMES_ROUTE = "/api/homes";
+
+/**
+ * **`GET /api/serving` — how this home serves, advertised to the app.**
+ *
+ * The first (and so far only) fact it carries: the content origin's base URL,
+ * or null when no content origin exists — which is every home until the
+ * content-origin plan's stage 2 (`docs/projects/atlas/content-origin-plan.md`).
+ * The app treats an absent, null, or failed answer identically: frames stay
+ * on the app origin under today's sandbox. The advertisement is derived from
+ * the listener the daemon actually started, never from configuration alone,
+ * so a base that is advertised is a base that answers.
+ */
+export const SERVING_ROUTE = "/api/serving";
+
+export interface ServingResponse {
+  /** Origin (scheme://host[:port], no trailing slash) serving item content,
+   * or null: content is served from the app's own origin, as it always was. */
+  contentBase: string | null;
+}
 
 export interface HomesResponse {
   /** Where a canvas born here, naming nothing, would be born. Null: here. */

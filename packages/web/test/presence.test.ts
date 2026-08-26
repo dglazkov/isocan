@@ -13,6 +13,7 @@ function session(overrides: Partial<PresenceSession>): PresenceSession {
     cursor: null,
     selection: [],
     status: null,
+    statusSource: null,
     activity: null,
     onThread: null,
     lastSeen: new Date().toISOString(),

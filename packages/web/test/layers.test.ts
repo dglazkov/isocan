@@ -92,10 +92,15 @@ describe("the layer scale", () => {
   it("puts what a click opens above what is docked", () => {
     // The reported bug: the bar OWNS its popovers, so the bar is what has to
     // outrank the docks. Reading the popover's own z-index proves nothing.
+    // By EXACT selector, not first-substring-match: `.workbench .main-panel`
+    // contains `.main-panel`, and the day it was added the old regex read
+    // that scoped override — which has no z-index, being static — and called
+    // the dock broken. Lesson #16's shape: an existence check any relative
+    // can satisfy.
     const layerOf = (selector: string): string => {
-      const rule = css.match(new RegExp(`\\${selector}\\s*\\{[^}]*\\}`, "s"));
+      const rule = rules().find((r) => selectorsOf(r).includes(selector) && r.at.length === 0);
       expect(rule, `${selector} has no rule`).toBeTruthy();
-      const z = rule![0].match(/z-index:\s*([^;]+);/);
+      const z = rule!.body.match(/z-index:\s*([^;]+);/);
       expect(z, `${selector} has no z-index`).toBeTruthy();
       return z![1]!.trim();
     };

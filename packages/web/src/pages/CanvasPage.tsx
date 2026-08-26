@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { itemPath } from "@isocan/core";
+import { WORKBENCH_ROUTE, itemPath, workbenchItemPath, workbenchPath } from "@isocan/core";
 import {
   connectToCanvas,
   disconnect,
@@ -12,12 +12,21 @@ import {
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
 import { applyLocalEcho } from "../stores/canvasStore.ts";
-import { centerOn, fitBounds, fitInto, itemsBounds } from "../lib/viewport.ts";
+import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
+
+/**
+ * A lazy chunk, and that is a budget rather than a style: the main bundle is
+ * past its 600KB warning, and the canvas path must pay nothing for a view it
+ * has not flipped to.
+ */
+const Workbench = lazy(() =>
+  import("../components/Workbench.tsx").then((m) => ({ default: m.Workbench })),
+);
 import { FullScreen } from "../components/FullScreen.tsx";
 import { CommandBar } from "../components/CommandBar.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
@@ -102,7 +111,19 @@ function CanvasSurface({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const { canvasId, itemId } = useParams<{ canvasId: string; itemId?: string }>();
+  // `itemId` is full screen's; `wbItemId` is the workbench's. Two names on
+  // purpose — both cover routes mount THIS element, and useParams merges
+  // whatever the matched pattern captured, so a shared name could not say
+  // which cover is up (address.ts, WORKBENCH_ROUTE).
+  const { canvasId, itemId, wbItemId } = useParams<{
+    canvasId: string;
+    itemId?: string;
+    wbItemId?: string;
+  }>();
+  // Unconditional hook call, then the ||: the match must not sit behind a
+  // short-circuit or the hook order changes with the route.
+  const wbRootMatch = useMatch(WORKBENCH_ROUTE);
+  const onWorkbench = wbItemId !== undefined || wbRootMatch !== null;
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -174,12 +195,23 @@ function CanvasSurface({
         ui.setFollow(null); // they left, or lost their place — nothing to watch
         return;
       }
-      const width = window.innerWidth + (ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0);
-      const target = centerOn(ui.viewport, locus.x, locus.y, width, window.innerHeight);
+      // Centre the locus in the STAGE, not the window. `centerOn` aims at
+      // width/2, so handing it twice the stage's centre lands the point at
+      // the centre of what is actually visible — the same arithmetic the old
+      // `innerWidth + panelWidth` hack did for the left panel only, now from
+      // the one derivation that also knows the docks and the rail gutter.
+      const stage = stageRect();
+      const target = centerOn(
+        ui.viewport,
+        locus.x,
+        locus.y,
+        stage.x * 2 + stage.width,
+        stage.y * 2 + stage.height,
+      );
       const dx = target.tx - ui.viewport.tx;
       const dy = target.ty - ui.viewport.ty;
       const dist = Math.hypot(dx, dy); // screen px — tx/ty live in screen space
-      const wake = Math.min(width, window.innerHeight) * 0.22;
+      const wake = Math.min(stage.width, stage.height) * 0.22;
       if (!chasing && dist > wake) chasing = true;
       if (chasing) {
         if (dist < 1) chasing = false;
@@ -312,7 +344,7 @@ function CanvasSurface({
       // shortcut that fired under here would act on the exact thing being
       // looked at (Delete deleted it). Only what crossesCover says may pass;
       // Esc is the cover's own, bound in capture phase.
-      if (itemId && !crossesCover(e)) return;
+      if ((itemId || onWorkbench) && !crossesCover(e)) return;
       // ⌘K is global — the lane to your emissary opens from anywhere, even
       // mid-typing in another field.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -395,6 +427,14 @@ function CanvasSurface({
         // looking at, so Back leaves it and the link is sendable.
         e.preventDefault();
         navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
+      } else if (e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        // W flips to the workbench — the agent room. A navigation for Enter's
+        // reason, and it carries a single selection along as the stage's
+        // focus, the one thing the flip transfers (design doc: one-way, at
+        // the boundary only).
+        e.preventDefault();
+        const one = ui.selectedItemIds.length === 1 ? ui.selectedItemIds[0]! : null;
+        navigate(one ? workbenchItemPath(canvasId!, one) : workbenchPath(canvasId!));
       } else if (e.key === "Escape") {
         // Watching is the outermost mode: Esc hands the camera back first.
         if (ui.renamingItemId) ui.setRenaming(null);
@@ -481,7 +521,7 @@ function CanvasSurface({
     // itemId is a dependency because the handler closes over it: without it,
     // the listener registered on the canvas route keeps a stale undefined
     // forever and the cover gate never turns on.
-  }, [canvasId, actor, itemId]);
+  }, [canvasId, actor, itemId, onWorkbench]);
 
   if (!canvasId) return null;
 
@@ -519,7 +559,13 @@ function CanvasSurface({
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
     <div className={`canvas-page${panelResizing ? " resizing-panel" : ""}`}>
-      <CanvasViewport canvasId={canvasId} actor={actor} />
+      {/* Covered, the canvas keeps its state and stops its paint:
+          `visibility` preserves layout and the stores keep replaying, so Esc
+          lands at the zoom you left without the covered surface spending
+          frames nobody can see. */}
+      <div style={{ visibility: itemId || onWorkbench ? "hidden" : "visible" }}>
+        <CanvasViewport canvasId={canvasId} actor={actor} />
+      </div>
       <CommandBar canvasId={canvasId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {outdated && (
@@ -549,7 +595,15 @@ function CanvasSurface({
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see
           FullScreen.tsx for why that distinction is the whole design. */}
-      {itemId && <FullScreen canvasId={canvasId} itemId={itemId} />}
+      {itemId && <FullScreen canvasId={canvasId} itemId={itemId} actor={actor} />}
+      {/* The other cover: same architecture, different room. Lazy, so the
+          canvas path never pays for it; Suspense falls back to nothing for
+          the frame the chunk takes. */}
+      {onWorkbench && (
+        <Suspense fallback={null}>
+          <Workbench canvasId={canvasId} itemId={wbItemId ?? null} actor={actor} />
+        </Suspense>
+      )}
     </div>
   );
 }

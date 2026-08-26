@@ -341,3 +341,46 @@ describe("presence over the daemon", () => {
     expect(roster.map((s) => s.kind)).toEqual(["cli"]);
   });
 });
+
+/**
+ * `statusSource` survives the trip — the workbench design's one protocol
+ * field, and the fix for a fold that made the tri-state unreadable.
+ *
+ * The daemon used to collapse the source into a private "sticky" boolean on
+ * arrival, so no client could tell a PARKED agent (wait's lifecycle status)
+ * from a WORKING one except by string-matching the wait copy. The source is
+ * stored and served now; the sticky rule — words said out loud are not
+ * displaced by derived narration — derives from it instead of shadowing it.
+ */
+describe("statusSource on the roster", () => {
+  const kenny = { id: "usr_k", name: "Kenny" };
+
+  it("serves the source beside the status, and null beside no status", () => {
+    const hub = new PresenceHub(1000);
+    const s = hub.createSession("prj", kenny, "cli");
+    expect(hub.roster("prj")[0]!.statusSource).toBeNull();
+    hub.touch("prj", s.sessionId, { status: "waiting for you…", statusSource: "lifecycle" });
+    expect(hub.roster("prj")[0]!.statusSource).toBe("lifecycle");
+    hub.touch("prj", s.sessionId, { status: null, statusSource: "lifecycle" });
+    expect(hub.roster("prj")[0]!.status).toBeNull();
+    expect(hub.roster("prj")[0]!.statusSource).toBeNull();
+    hub.close();
+  });
+
+  it("keeps the sticky rule: inferred narration does not displace said words", () => {
+    const hub = new PresenceHub(1000);
+    const s = hub.createSession("prj", kenny, "cli");
+    hub.touch("prj", s.sessionId, { status: "tokens first, then spacing", statusSource: "explicit" });
+    hub.touch("prj", s.sessionId, { status: "editing landing.html…", statusSource: "inferred" });
+    const [state] = hub.roster("prj");
+    expect(state!.status).toBe("tokens first, then spacing");
+    expect(state!.statusSource).toBe("explicit");
+    // …but a lifecycle turn outranks everything, exactly as before.
+    hub.touch("prj", s.sessionId, { status: "waiting for you…", statusSource: "lifecycle" });
+    expect(hub.roster("prj")[0]!.statusSource).toBe("lifecycle");
+    // And once the standing status is lifecycle, narration may speak again.
+    hub.touch("prj", s.sessionId, { status: "reading your comment…", statusSource: "inferred" });
+    expect(hub.roster("prj")[0]!.status).toBe("reading your comment…");
+    hub.close();
+  });
+});

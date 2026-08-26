@@ -1,10 +1,17 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { canvasPath, isDesignSystem, itemUrl } from "@isocan/core";
+import type { Actor } from "@isocan/core";
+import { canvasPath, itemPath, itemUrl } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
-import { VersionContent } from "./ItemView.tsx";
+import { useUiStore } from "../stores/uiStore.ts";
+import { ArtifactStage } from "./ArtifactStage.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
+import { findNextItem, type Direction } from "../lib/spatialnav.ts";
+import { revealItem } from "../lib/zoomactions.ts";
+import { isTyping } from "../lib/keys.ts";
+
+const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 /**
  * One item, filling the screen, live.
@@ -29,10 +36,17 @@ import { iconKindFor } from "../lib/kinds.ts";
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
-export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: string }) {
+export function FullScreen({
+  canvasId,
+  itemId,
+  actor,
+}: {
+  canvasId: string;
+  itemId: string;
+  actor: Actor;
+}) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
-  const loaded = useCanvasStore((s) => s.canvas !== null);
 
   const back = () => navigate(canvasPath(canvasId));
 
@@ -42,41 +56,45 @@ export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: str
   // the item's own content may be focused and may stop the event on its way
   // up — a page in a frame is somebody else's code and it does not know about
   // our way home.
+  //
+  // ⌘-arrows are the cover's too: the same walk the canvas answers with ⌘←→↑↓
+  // — findNextItem, one home — but the destination stays full screen, so a row
+  // of screens becomes a slideshow you steer. Each press is a NAVIGATION like
+  // the Enter that got you here: the address bar holds the screen you are on,
+  // and Back retraces your steps. The selection and the camera underneath
+  // follow along, so Esc drops you at the screen you ended on, not the one you
+  // started from.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      back();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        back();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && DIRECTIONS.has(e.key)) {
+        // ⌘← in a text field is "start of line" — that field's business.
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation(); // the canvas page would only have to drop it anyway
+        const canvas = useCanvasStore.getState().canvas;
+        const current = canvas?.items[itemId];
+        if (!canvas || !current) return;
+        const next = findNextItem(current, Object.values(canvas.items), e.key as Direction);
+        if (!next) return; // the edge of the canvas: stay put rather than wrap
+        useUiStore.getState().select(next.id);
+        revealItem(next.id);
+        navigate(itemPath(canvasId, next.id));
+      }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
-  // An address for an item this canvas does not have. Somebody's link is old,
-  // or the item was deleted while they were looking at it — say which, and
-  // give them the door rather than a blank screen. (Phase 7's finding: this
-  // system's default answer to a wrong address is a cheerful one.)
-  if (!item) {
-    return (
-      <div className="fullscreen">
-        <div className="fullscreen-bar">
-          <button className="fullscreen-back" onClick={back}>
-            ← Canvas
-          </button>
-        </div>
-        <div className="page-note">
-          {loaded
-            ? "That item is not on this canvas any more — it may have been deleted."
-            : "Finding that item…"}
-        </div>
-      </div>
-    );
-  }
-
-  const current =
-    item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
-
+  // The stage answers for the item — found, missing, or still loading — so
+  // full screen and the workbench cannot drift apart about what an item looks
+  // like (see ArtifactStage). The bar renders either way: the way back must
+  // not depend on the item existing.
   return (
     <div className="fullscreen">
       <div className="fullscreen-bar">
@@ -85,34 +103,30 @@ export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: str
         <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
           ← Canvas
         </button>
-        <span className="fullscreen-title">
-          <KindIcon className="kind-icon" kind={iconKindFor(item)} />
-          <b>{item.title}</b>
-          <i>{current.filename}</i>
-        </span>
-        {/* The address of this exact view. Copying it is the feature the route
-            bought: a link to one screen, not to a canvas with a note about
-            which screen to look at. */}
-        <button
-          className="fullscreen-copy"
-          title="Copy a link to this screen"
-          onClick={() => {
-            void navigator.clipboard?.writeText(itemUrl(location.origin, canvasId, item.id));
-          }}
-        >
-          Copy link
-        </button>
+        {item && (
+          <span className="fullscreen-title">
+            <KindIcon className="kind-icon" kind={iconKindFor(item)} />
+            <b>{item.title}</b>
+            <i>{item.versions.find((v) => v.id === item.currentVersionId)?.filename}</i>
+          </span>
+        )}
+        {item && (
+          /* The address of this exact view. Copying it is the feature the
+             route bought: a link to one screen, not to a canvas with a note
+             about which screen to look at. */
+          <button
+            className="fullscreen-copy"
+            title="Copy a link to this screen"
+            onClick={() => {
+              void navigator.clipboard?.writeText(itemUrl(location.origin, canvasId, item.id));
+            }}
+          >
+            Copy link
+          </button>
+        )}
       </div>
       <div className="fullscreen-stage">
-        <VersionContent
-          canvasId={canvasId}
-          blobHash={current.blobHash}
-          mimeType={current.mimeType}
-          filename={current.filename}
-          entered={true}
-          designSystem={isDesignSystem(item)}
-          reloadToken={0}
-        />
+        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} />
       </div>
     </div>
   );

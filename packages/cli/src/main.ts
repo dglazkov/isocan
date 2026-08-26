@@ -44,7 +44,9 @@ import {
   actorNameIn,
   canvasUrl,
   itemUrl,
+  sessionState,
   urlWithPass,
+  workbenchUrl,
   canvasUrlWithPass,
   parseCanvasAddress,
   setupCommand,
@@ -1595,8 +1597,12 @@ program
     "Open the canvas in your browser — as you, with a one-use pass the browser keeps. " +
       "Name an item and it opens full screen",
   )
+  .option(
+    "--workbench",
+    "open the workbench — the agent room — instead; with an item, it is on the stage",
+  )
   .action(
-    run(async (ref: string | undefined, _opts: unknown, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { workbench?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // Full screen is a ROUTE, which is the whole reason the CLI can take
       // part in it at all: there is no op to send — what somebody is looking
@@ -1620,7 +1626,14 @@ program
       // the daemon forwarding: that is where the badge lives that the browser's
       // redemption will be judged against.)
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
-      const url = item ? itemUrl(origin, canvas.id, item.id) : canvasUrl(origin, canvas.id);
+      // The workbench is the same kind of thing full screen is — a cover
+      // route — so the flag only changes which address gets built. An agent
+      // that wants a person watching the agent room hands them this.
+      const url = opts.workbench
+        ? workbenchUrl(origin, canvas.id, item?.id)
+        : item
+          ? itemUrl(origin, canvas.id, item.id)
+          : canvasUrl(origin, canvas.id);
       const token = await browserPass(ctx, canvas.id);
       // The pass goes on the END of whichever address was built — canvas or
       // item — because a fragment is only a fragment if nothing follows it.
@@ -3210,6 +3223,76 @@ program
   );
 
 program
+  .command("present <item>")
+  .description("Present a view to the room: a main-thread comment carrying the workbench address")
+  .option("--say <note>", "a sentence about why, ahead of the address")
+  .action(
+    run(async (ref: string, opts: { say?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      // A COMMENT, deliberately — an ephemeral "look here" channel was
+      // designed for the workbench and rejected in review: everything it did,
+      // a comment does better. Durable, attributed, it wakes the room (a
+      // main-thread comment summons every parked agent), and "why did my tab
+      // end up looking at X" has an answer in the record. The workbench and
+      // the canvas both render the address as a link a person clicks — or
+      // does not, which is the other half of the design: attention is
+      // invited, never taken.
+      const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
+      const address = workbenchUrl(origin, p.id, item.id);
+      const body = opts.say ? `${opts.say} — ${address}` : address;
+      const main = mainThread(snapshot.canvas);
+      if (main) {
+        const comment = await newComment(ctx, p.id, snapshot, body);
+        await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id, address });
+        console.log(`on the main thread: ${body}`);
+      } else {
+        // No main thread: the comment lands ON the item instead — a pin on
+        // the thing itself is the next most honest place to say "look here".
+        const threadId = newThreadId();
+        const comment = await newComment(ctx, p.id, snapshot, body);
+        await sendOp(ctx, p.id, {
+          type: "thread.create",
+          threadId,
+          x: item.width + 12,
+          y: 0,
+          anchorItemId: item.id,
+          comment,
+        });
+        if (ctx.json) return printJson({ threadId, commentId: comment.id, address });
+        console.log(`pinned to ${item.id}: ${body}`);
+      }
+    }),
+  );
+
+program
+  .command("tree")
+  .description("The directory bound to this canvas, as its home daemon lists it")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      // Owner-scoped by the daemon (loopback, local-home, bound) — this verb
+      // only ASKS; the refusal names the remedy. The listing already hides
+      // dotfiles, secret shapes and noise directories, so what prints is
+      // what the workbench's files pane shows: one derivation, two surfaces.
+      const { roots } = await ctx.client.getTree(p.id);
+      if (ctx.json) return printJson(roots);
+      for (const root of roots) {
+        console.log(root.root);
+        for (const entry of root.entries) {
+          const depth = entry.path.split("/").length - 1;
+          const name = entry.path.split("/").pop()!;
+          console.log(`${"  ".repeat(depth + 1)}${name}${entry.kind === "dir" ? "/" : ""}`);
+        }
+        if (root.truncated) console.log("  … truncated — the tree is larger than a listing");
+      }
+    }),
+  );
+
+program
   .command("ls")
   .description("List items on the canvas")
   .option("--kind <kind>", `only this kind: ${ITEM_KINDS.join(", ")}`)
@@ -4585,6 +4668,10 @@ program
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       const sessions = await ctx.client.listSessions(p.id);
+      // For the STATE column: blocked derives from open asks, which live in
+      // threads — one snapshot, so the column and the workbench roster answer
+      // from the same canvas the same way (core/roster.ts, one derivation).
+      const { canvas } = await ctx.client.snapshot(p.id);
       // Said on stderr, before the answer and in both shapes: it qualifies
       // what follows, and an agent reading `--json` off stdout needs the
       // caveat as much as a person reading the table does.
@@ -4605,6 +4692,11 @@ program
           // one terminal are two `cli` rows, and telling them apart is the
           // reason a person opens this table at all.
           kind: s.harness ?? s.kind,
+          // Derived, never asserted: blocked (an unanswered /ask), working,
+          // parked (wait's lifecycle status, readable now that statusSource
+          // crosses the wire), quiet, here. The workbench renders the same
+          // states from the same function.
+          state: sessionState(s, canvas, Date.now()),
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: describeActivity(s.activity),

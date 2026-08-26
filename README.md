@@ -185,6 +185,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   middle of the screen; the camera pans only as far as it must, so an item
   already on screen never moves the world.
 - **Nudging**: arrow keys move the selection a world unit at a time, `⇧` ten.
+- **The workbench (`W`)**: the same canvas flipped to the agent room — every
+  agent with a live session in one roster (its status in its own words,
+  expandable to what it is answering and what it last made), the main thread
+  beside them, and one item on a stage. It is a route (`/w`, `/w/<item>`), so
+  `isocan open --workbench [item]` hands somebody the exact view; Esc steps
+  back out one level at a time, onto the canvas exactly where you left it.
   A held key is one gesture — the items track the key, and one `items.move` is
   written when you stop, so it is one line in the log and one undo.
 - **Comments**: threads pinned to the canvas or anchored to items (pins follow
@@ -449,7 +455,12 @@ isocan merge <drawings...>             # several drawings into one, exactly
 isocan shortcuts                       # every key the canvas answers to
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
                                        # this dir's canvas
-isocan tail [-f]                       # print/stream the operation log
+isocan tail [-f] [--archived]          # print/stream the operation log
+                                       # (--archived: reach back through what
+                                       # gc compacted — the full history)
+isocan recap [-n N]                    # that history at decaying resolution:
+                                       # old spans summarized to a line each,
+                                       # the last N ops verbatim
 ```
 
 Items and threads resolve by id, id prefix, or title prefix. `--json`
@@ -487,7 +498,9 @@ stored in the log — undo/redo replay stored inverses, never re-derive them.
 Storage is reclaimed by `isocan gc` (or the trash panel's "Reclaim storage"):
 it compacts the oplog to an undo horizon (default: the last 500 ops, kept
 pair-complete so redo never dangles; dropped entries go to
-`oplog-archive.jsonl`), then sweeps blobs unreachable from live items, the
+`oplog-archive.jsonl`, which `tail --archived` and `recap` still read —
+compacted history is archived, never lost to the product), then sweeps blobs
+unreachable from live items, the
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
 
