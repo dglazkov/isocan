@@ -9,7 +9,7 @@
  * on the same answer — `"select-it"`, which is the page saying "the text is
  * right there, take it by hand" rather than a button that quietly did nothing.
  *
- * The measured reason this is not decorative is in `docs/phases.md`'s standing
+ * The measured reason this is not decorative is in `docs/projects/multiuser/phases.md`'s standing
  * lessons: **Chrome blocks the clipboard while `visibilityState` is
  * `hidden`** — phase 8/10's finding, and exactly the state a backgrounded or
  * automated tab is in. Nothing else here asserts anything about a browser;

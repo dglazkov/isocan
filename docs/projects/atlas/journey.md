@@ -3,7 +3,7 @@
 Understanding a system you did not write, on a canvas, with an agent — and
 keeping that understanding current as the system moves.
 
-Written in the same form as [the multiuser journey](multiuser-journey.md):
+Written in the same form as [the multiuser journey](../multiuser/journey.md):
 scenes first, mechanism only where a scene forces one. The scenes use
 [`inkboard/system-atlas`](https://github.com/inkboard/system-atlas) (MIT), a
 skill that renders one data file as an explorable isometric map plus a text
@@ -167,11 +167,11 @@ Two atlases, side by side, at the same zoom, both explorable. The argument
 happens on the thread between them. When it settles, one of them wins.
 
 **And this is where the journey stops working** — see
-[convergence](design/convergence.md), which takes this up. isocan can diverge — that is
+[convergence](convergence.md), which takes this up. isocan can diverge — that is
 `/variation`, and it is good — but it has no operation for *this one won*. The
 version stack converges inside one item (`item.setCurrentVersion`); nothing
 converges siblings back into the thing they came from. The
-[market survey](research/2026-08-23-agents-on-the-canvas.md) reached the same
+[market survey](../../research/2026-08-23-agents-on-the-canvas.md) reached the same
 gap from an entirely different direction on the same day.
 
 ## What the scenes force (the load-bearing minimum)
@@ -205,7 +205,7 @@ Four things are genuinely forced, smallest first.
   without `allow-same-origin`.~~ **Taken up**, and the answer is not to widen
   the sandbox: item content is served from the app's own origin and the badge
   is a cookie, so `allow-same-origin` would let any item call the API as you.
-  See [the content origin](design/content-origin.md) — move the content, not
+  See [the content origin](content-origin.md) — move the content, not
   the flag.
 - **A thread can be pinned to the atlas, not to a box inside it.** The atlas is
   one item; isocan cannot anchor a comment at `ingest.parser`. Closing this

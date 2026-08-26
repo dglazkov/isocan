@@ -1,7 +1,7 @@
 # The offline tab
 
-The debt this discharges is the [journey](../multiuser-journey.md)'s rule 6,
-which [phases.md](../phases.md) turns into phase 10: *"People enter through
+The debt this discharges is the [journey](journey.md)'s rule 6,
+which [phases.md](phases.md) turns into phase 10: *"People enter through
 one origin, always … offline in the browser is the service worker's job —
 cached shell, durable browser replica, queued ops — so per-viewer state has
 exactly one home, and every replica (tab or daemon) reconnects with the same

@@ -1290,7 +1290,7 @@ export function registerRoutes(
       return reply.status(400).send({
         error:
           "this home has borrowed no attester, so there is nothing here to verify a sign-in " +
-          "against. Sharing works by link; see docs/design/identity-desk.md.",
+          "against. Sharing works by link; see docs/projects/multiuser/identity-desk.md.",
         code: NO_ATTESTER,
       });
     }

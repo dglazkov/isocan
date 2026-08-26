@@ -75,7 +75,7 @@ in it to steal.
 ## What it buys
 
 *(A third reason arrived after this was written: it is what makes a hosted
-extension panel possible at all. See [extensions.md](extensions.md) — a panel
+extension panel possible at all. See [extensions.md](../extensions/design.md) — a panel
 on the app's origin can read the badge cookie and act as the user, so without
 a content origin that tier does not exist. This proposal is load-bearing for
 three separate things now, which is the strongest argument for doing it.)*
@@ -84,7 +84,7 @@ three separate things now, which is the strongest argument for doing it.)*
 - **The isolation stops depending on an attribute.** Even a misconfigured
   sandbox on the content origin reaches nothing.
 - **Interactive items get storage.** An explorable page — the
-  [atlas](../atlas-journey.md) is the case in hand — can remember what you
+  [atlas](journey.md) is the case in hand — can remember what you
   pinned. Nothing has to know about isocan for this to work, which is the test
   of whether it is the right fix.
 - **The hosted split is decided before it is urgent**, rather than during the

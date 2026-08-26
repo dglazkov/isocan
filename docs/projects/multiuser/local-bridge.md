@@ -1,6 +1,6 @@
 # The local bridge: one replica on a machine, not two
 
-**The debt this discharges.** The [journey](../multiuser-journey.md)'s rule 6
+**The debt this discharges.** The [journey](journey.md)'s rule 6
 says people enter through one origin, always — the local daemon serves ops to
 CLIs, never pages to persons — and that *"offline in the browser is the
 service worker's job"*. Phase 10 built exactly that and it works. But the

@@ -11,7 +11,7 @@ import { TermsPage } from "../src/pages/TermsPage.tsx";
 /**
  * **The innkeeper's obligations, guarded** (phase 13.7).
  *
- * `docs/design/innkeeper.md` names what running a home obliges; `docs/phases.md`
+ * `docs/projects/multiuser/innkeeper.md` names what running a home obliges; `docs/projects/multiuser/phases.md`
  * makes the terms page the proof that those obligations were said out loud to a
  * stranger. Two different things can go wrong here and they need two different
  * checks, because only one of them is visible to somebody editing this package:
@@ -44,13 +44,13 @@ import { TermsPage } from "../src/pages/TermsPage.tsx";
 const REPO = fileURLToPath(new URL("../../..", import.meta.url));
 
 /**
- * `docs/design/innkeeper.md`, flattened enough that a sentence quoted out of it
+ * `docs/projects/multiuser/innkeeper.md`, flattened enough that a sentence quoted out of it
  * survives its line wrapping and its markdown: emphasis and code ticks removed,
  * every run of whitespace collapsed. It is deliberately NOT lowercased — a
  * quote that has drifted in case has drifted.
  */
 function innkeeperDoc(): string {
-  return readFileSync(path.join(REPO, "docs/design/innkeeper.md"), "utf8")
+  return readFileSync(path.join(REPO, "docs/projects/multiuser/innkeeper.md"), "utf8")
     .replace(/[`*_]/g, "")
     .replace(/\s+/g, " ");
 }

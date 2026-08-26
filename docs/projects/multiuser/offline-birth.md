@@ -1,6 +1,6 @@
 # Offline birth
 
-The third of the [journey](../multiuser-journey.md)'s open debts, taken
+The third of the [journey](journey.md)'s open debts, taken
 up: a canvas created on a plane births locally and adopts a home on
 first reconnect. Small, but it owns three questions the other docs lean
 on — what the marker promises, what adoption *is*, and what

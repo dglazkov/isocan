@@ -1,6 +1,6 @@
 # The innkeeper
 
-The second of the [journey](../multiuser-journey.md)'s open debts, taken
+The second of the [journey](journey.md)'s open debts, taken
 up. Someone runs the home, pays for it, and answers for uptime, abuse,
 and privacy — and with birth-at-home it holds *unshared* canvases too.
 The journey said this posture "should be chosen out loud, not inherited";
@@ -184,7 +184,7 @@ sequenceDiagram
   obligates.
 - **Encryption at rest and key custody** for the desk's ledgers —
   implementation of the two-ledger rule, not a change to it; since
-  answered in the [architecture](../architecture.md): the ledger
+  answered in the [architecture](../../architecture.md): the ledger
   store's own encryption at rest beneath, the launch tokens
   additionally KMS-wrapped, badge secrets stored only hashed.
 - **Quotas and rate limits** — tuning; the door and GC already give the

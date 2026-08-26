@@ -2,7 +2,7 @@
 /**
  * Deterministic graders for a screen.
  *
- * Stage 2 of docs/evals.md, and the argument there is the whole design of this
+ * Stage 2 of docs/projects/evals/plan.md, and the argument there is the whole design of this
  * file: most eval work reaches for a model's opinion because its outputs are
  * prose, and ours are not. A screen has a contrast ratio, a DOM, an image with
  * a real aspect ratio, and controls that either have accessible names or do

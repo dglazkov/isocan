@@ -4,7 +4,7 @@ import { TERMS, TERMS_HISTORY, TERMS_LEDE } from "../lib/terms.ts";
 /**
  * **The innkeeper's obligations, at the innkeeper's own address** (phase 13.7).
  *
- * `docs/design/innkeeper.md` chose the posture — *an* innkeeper, never *the*
+ * `docs/projects/multiuser/innkeeper.md` chose the posture — *an* innkeeper, never *the*
  * innkeeper — and left one line open beneath it: a named operator and a terms
  * document. This is that document, and it is a face of the origin for the same
  * reason the front page is (`lib/faces.ts`): the subject is what THIS home can

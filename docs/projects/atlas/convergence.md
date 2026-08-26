@@ -5,8 +5,8 @@ as siblings; nothing brings the winner home. This proposes the operation that
 does, and argues for the shape that keeps the losers.
 
 Two independent lines of work reached this gap on the same day: the
-[market survey](../research/2026-08-23-agents-on-the-canvas.md), looking at
-what the category shipped, and the [atlas journey](../atlas-journey.md), whose
+[market survey](../../research/2026-08-23-agents-on-the-canvas.md), looking at
+what the category shipped, and the [atlas journey](journey.md), whose
 Scene 8 cannot be finished without it. That agreement is most of the case for
 building it.
 
@@ -89,7 +89,7 @@ added and restore the retired children.
 **An earlier version of this section said the pieces already existed** —
 `item.removeVersion`, `item.restoreVersion` and `items.restore` — and called
 that a sign the seam was left open on purpose. The
-[architecture review](../reviews/2026-08-24-architecture.md) checked, and it is
+[architecture review](../../reviews/2026-08-24-architecture.md) checked, and it is
 not: `invert.ts` returns `Operation | null`, **one** operation, so an inverse
 cannot be three of them. Adopting needs a new internal op that undoes the whole
 act in one step, the way `items.delete` has one.
@@ -125,7 +125,7 @@ Per the house rule, before this is done:
 - **Web**: a "Keep this" action on a variation, wherever the fan-out is.
 - **Agent guide**: a verb agents are not told about does not exist, and
   `surface.test.ts` will fail the build until it is there — though note the
-  [architecture review](../reviews/2026-08-23-architecture.md) found that check
+  [architecture review](../../reviews/2026-08-23-architecture.md) found that check
   is a substring match, so it may pass vacuously. Fix that first or this lands
   undocumented and green.
 

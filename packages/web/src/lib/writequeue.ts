@@ -116,7 +116,7 @@ export function foldQueue(
  *
  * - **Home-scoped ops** (`canvasId: null` — `project.create`, `actor.claim`,
  *   `actor.setColor`). A canvas born with no network is offline BIRTH, which
- *   is a whole design of its own (`docs/design/offline-birth.md`) and phase
+ *   is a whole design of its own (`docs/projects/multiuser/offline-birth.md`) and phase
  *   13's work: it needs a promise written at birth, an adoption path from seq
  *   1, and a first-writer rule for twins. Half-building it inside a browser
  *   queue is exactly the almost-working machinery that doc exists to prevent.

@@ -282,7 +282,7 @@ permutations"*. Keep them all, index them well. Nobody's instinct, in either
 domain, is to record that a decision was made.
 
 That is mild support for the awkward half of
-[`docs/design/convergence.md`](../design/convergence.md): folding the *losing*
+[`docs/projects/atlas/convergence.md`](../projects/atlas/convergence.md): folding the *losing*
 siblings into the parent's version stack rather than trashing them is not a
 sentimental choice, it is the same instinct the token world has already
 committed to — with the difference that isocan would also record which one won,
@@ -336,7 +336,7 @@ Why this one:
 - It is **testable against an external authority** rather than against our
   taste: the official JSON Schema, the reference exporter, and 74 files nobody
   here wrote. That is what `docs/research/`'s own rule asks for and what
-  [`docs/evals.md`](../evals.md) Stage 2 is built on — this is another
+  [`docs/projects/evals/plan.md`](../projects/evals/plan.md) Stage 2 is built on — this is another
   deterministic grader, over the design system instead of over a screen.
 - It makes the thing isocan is **alone in shipping** — a design system rendered
   as itself, live, on the canvas beside what it governs — stop tripping over
