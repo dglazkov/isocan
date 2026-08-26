@@ -595,7 +595,7 @@ function CanvasSurface({
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see
           FullScreen.tsx for why that distinction is the whole design. */}
-      {itemId && <FullScreen canvasId={canvasId} itemId={itemId} />}
+      {itemId && <FullScreen canvasId={canvasId} itemId={itemId} actor={actor} />}
       {/* The other cover: same architecture, different room. Lazy, so the
           canvas path never pays for it; Suspense falls back to nothing for
           the frame the chunk takes. */}

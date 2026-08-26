@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, recentActivity, workbenchItemPath, workbenchPath, workbenchUrl } from "@isocan/core";
+import {
+  canvasPath,
+  recentActivity,
+  roster,
+  answeringExcerpt,
+  workbenchItemPath,
+  workbenchPath,
+  workbenchUrl,
+  type AgentRow,
+} from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { WB_AGENTS_MIN_WIDTH, useUiStore } from "../stores/uiStore.ts";
+import { PanelResizer } from "./PanelResizer.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor } from "../lib/presence.ts";
-import { agentRows, answeringExcerpt, type AgentRow } from "../lib/roster.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
 import { ItemThumb } from "./ItemThumb.tsx";
 import { KindIcon } from "./KindIcon.tsx";
@@ -30,6 +40,18 @@ import { iconKindFor } from "../lib/kinds.ts";
  * operations, which is the design doc's headline finding and this file's
  * standing constraint (`workbench.test.ts` holds it).
  */
+/** The collapse is remembered per canvas, on the `panels.ts` ethic: somebody
+ * who folded the room away wants it folded tomorrow too. */
+const RAIL_KEY = (canvasId: string) => `isocan.wb.agents.${canvasId}`;
+
+function readRail(canvasId: string): boolean {
+  try {
+    return localStorage.getItem(RAIL_KEY(canvasId)) === "rail";
+  } catch {
+    return false;
+  }
+}
+
 export function Workbench({
   canvasId,
   itemId,
@@ -41,6 +63,16 @@ export function Workbench({
 }) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
+  const agentsWidth = useUiStore((s) => s.wbAgentsWidth);
+  const [rail, setRail] = useState(() => readRail(canvasId));
+  const setRailKept = (folded: boolean) => {
+    setRail(folded);
+    try {
+      localStorage.setItem(RAIL_KEY(canvasId), folded ? "rail" : "open");
+    } catch {
+      // Storage denied: the fold holds for this session and no longer.
+    }
+  };
 
   const back = () => navigate(canvasPath(canvasId));
 
@@ -84,13 +116,45 @@ export function Workbench({
         </button>
       </div>
       <div className="wb-body">
-        <div className="wb-agents">
-          <Roster canvasId={canvasId} focused={itemId} />
-          <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
-        </div>
+        {/* Collapsible to a RAIL, never removed: the agent view is the reason
+            this room exists (design doc, "the frame"). The rail keeps the
+            reopen affordance and nothing else. */}
+        {rail ? (
+          <div className="wb-agents rail">
+            <button
+              className="wb-fold"
+              title="Show the agents and the thread"
+              aria-label="Expand the agent column"
+              onClick={() => setRailKept(false)}
+            >
+              »
+            </button>
+          </div>
+        ) : (
+          <div className="wb-agents" style={{ width: agentsWidth }}>
+            <button
+              className="wb-fold"
+              title="Fold the agent column to a rail"
+              aria-label="Collapse the agent column"
+              onClick={() => setRailKept(true)}
+            >
+              «
+            </button>
+            <Roster canvasId={canvasId} focused={itemId} viewer={actor.id} />
+            <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
+            <PanelResizer
+              value={agentsWidth}
+              onChange={(w) => useUiStore.getState().setWbAgentsWidth(w)}
+              resetTo={WB_AGENTS_MIN_WIDTH}
+              min={WB_AGENTS_MIN_WIDTH}
+              max={window.innerWidth - 360}
+              label="Resize the agent column"
+            />
+          </div>
+        )}
         <div className="wb-stage">
           {itemId ? (
-            <ArtifactStage canvasId={canvasId} itemId={itemId} />
+            <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} />
           ) : (
             <div className="wb-empty">
               <p>
@@ -110,10 +174,25 @@ export function Workbench({
  * first. Expandable rows are the whole point — the collapsed row answers
  * "who, and doing what"; the expanded one shows the record.
  */
-function Roster({ canvasId, focused }: { canvasId: string; focused: string | null }) {
+function Roster({
+  canvasId,
+  focused,
+  viewer,
+}: {
+  canvasId: string;
+  focused: string | null;
+  viewer: string;
+}) {
   const sessions = useCanvasStore((s) => s.sessions);
+  const canvas = useCanvasStore((s) => s.canvas);
   const [openRow, setOpenRow] = useState<string | null>(null);
-  const rows = agentRows(sessions);
+  // The store filters YOUR OWN session out of presence (the facepile's
+  // duplicate fix), so without this the person reading the panel appears in
+  // its away half — "away" printed on the screen they are looking at. The
+  // viewer is never away.
+  const rows = roster(sessions, canvas, Date.now()).filter(
+    (row) => !(row.state === "away" && row.actorId === viewer),
+  );
 
   return (
     <section className="wb-roster" aria-label="Agents">
@@ -166,18 +245,37 @@ function AgentRowView({
   const navigate = useNavigate();
   const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
+  const color = actorColorIn(colors, row.actorId);
+
+  // An away row is memory, not presence: nothing live to expand, so it is a
+  // line, not a disclosure. The affordance it carries is the truth about
+  // reaching them — a message waits on the thread.
+  if (row.primary === null) {
+    return (
+      <div className="wb-row away" title="Away — a message below waits on the thread for their next wake">
+        <span className="wb-row-head as-line">
+          <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
+          <span className="wb-row-name">
+            <b>{row.name}</b>
+            <i>away</i>
+          </span>
+          <span className="wb-row-line">
+            {row.lastAct && `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`}
+          </span>
+        </span>
+      </div>
+    );
+  }
+
   const session = row.primary;
   const quiet = quietFor(session);
   const workingOn =
     session.activity && "itemId" in session.activity ? session.activity.itemId : null;
-  const color = actorColorIn(colors, row.actorId);
 
-  // The status line, VERBATIM. Classifying it (a PARKED badge, a semantic
-  // pill) needs `statusSource` on the wire, which is not there yet — and
-  // string-matching the wait copy to fake one is the lie the design doc bans
-  // by name. The string an agent asserted, plus how long ago it was seen, is
-  // honest today.
-  const line = session.status ?? (row.working ? "working" : null);
+  // The status line stays VERBATIM — the agent's own words. What changed
+  // since V1 is that `statusSource` crosses the wire, so the STATE beside it
+  // (parked, blocked) is derived rather than string-matched.
+  const line = session.status ?? (row.state === "working" ? "working" : null);
 
   return (
     <div className={`wb-row${open ? " open" : ""}`}>
@@ -186,6 +284,16 @@ function AgentRowView({
         <span className="wb-row-name">
           <b>{row.name}</b>
           <i>{row.harness ?? "terminal"}</i>
+          {row.state === "blocked" && (
+            <em className="wb-state blocked" title="Asked a question nobody has answered — it clears on the answer, not on being seen">
+              asked
+            </em>
+          )}
+          {row.state === "parked" && (
+            <em className="wb-state parked" title="Parked on isocan wait — a message below lands now">
+              parked
+            </em>
+          )}
         </span>
         <span className="wb-row-line">
           {line ?? "here"}

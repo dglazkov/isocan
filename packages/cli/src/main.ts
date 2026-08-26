@@ -44,6 +44,7 @@ import {
   actorNameIn,
   canvasUrl,
   itemUrl,
+  sessionState,
   urlWithPass,
   workbenchUrl,
   canvasUrlWithPass,
@@ -4597,6 +4598,10 @@ program
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       const sessions = await ctx.client.listSessions(p.id);
+      // For the STATE column: blocked derives from open asks, which live in
+      // threads — one snapshot, so the column and the workbench roster answer
+      // from the same canvas the same way (core/roster.ts, one derivation).
+      const { canvas } = await ctx.client.snapshot(p.id);
       // Said on stderr, before the answer and in both shapes: it qualifies
       // what follows, and an agent reading `--json` off stdout needs the
       // caveat as much as a person reading the table does.
@@ -4617,6 +4622,11 @@ program
           // one terminal are two `cli` rows, and telling them apart is the
           // reason a person opens this table at all.
           kind: s.harness ?? s.kind,
+          // Derived, never asserted: blocked (an unanswered /ask), working,
+          // parked (wait's lifecycle status, readable now that statusSource
+          // crosses the wire), quiet, here. The workbench renders the same
+          // states from the same function.
+          state: sessionState(s, canvas, Date.now()),
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: describeActivity(s.activity),

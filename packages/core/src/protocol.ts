@@ -122,6 +122,19 @@ export interface PresenceSession {
   cursor: { x: number; y: number } | null;
   selection: string[];
   status: string | null;
+  /**
+   * Who is speaking when `status` is set — the same tri-state the update
+   * side has always carried (below), now surviving the trip. It used to be
+   * folded into a private daemon boolean on arrival, which left a client
+   * unable to tell a PARKED agent (`wait`'s lifecycle status) from a WORKING
+   * one except by string-matching the wait copy — a lie waiting for the day
+   * the copy changed. Null exactly when `status` is null.
+   *
+   * Self-asserted like every presence field: it is UX honesty, not a trust
+   * boundary. The trustworthy row facts remain the vouched actor id, the
+   * server-chosen color, `lastSeen`, and attributed ops.
+   */
+  statusSource: "explicit" | "lifecycle" | "inferred" | null;
   /** "Busy here" — anchored to an item OR a freestanding point. Clients
    * render the motion locally; the daemon only stores the fact. Cleared by
    * explicit cursor commands and by any piggybacked op (working resolves

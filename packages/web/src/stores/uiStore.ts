@@ -153,6 +153,10 @@ interface UiStore {
   /** How wide the docked left panel is, in screen pixels. */
   panelWidth: number;
   setPanelWidth: (width: number) => void;
+  /** The workbench's agent column — same rules as `panelWidth`, its own
+   * key: the two views are sized for different jobs. */
+  wbAgentsWidth: number;
+  setWbAgentsWidth: (width: number) => void;
   /** True only while the edge is being dragged — see `setPanelResizing`. */
   panelResizing: boolean;
   setPanelResizing: (resizing: boolean) => void;
@@ -161,6 +165,9 @@ interface UiStore {
 const INK_KEY = "isocan.ink";
 const MINIMAP_KEY = "isocan.minimap";
 const PANEL_WIDTH_KEY = "isocan.panelWidth";
+const WB_AGENTS_WIDTH_KEY = "isocan.wb.agents.width";
+/** The workbench agent column's floor — V1's fixed grid, now the reset. */
+export const WB_AGENTS_MIN_WIDTH = 340;
 
 /**
  * How wide the docked left panel is, and how wide it may be.
@@ -221,6 +228,25 @@ function writePanelWidth(width: number): void {
     localStorage.setItem(PANEL_WIDTH_KEY, String(width));
   } catch {
     // Storage denied: the width holds for this session and no longer.
+  }
+}
+
+/** The workbench column: same discipline as the dock's width — clamp on the
+ * way in AND out, floor on nonsense, ceiling from the window (so the stage
+ * keeps `CANVAS_MIN`'s worth of room), survive a denied store. */
+export function clampWbAgentsWidth(width: number, windowWidth: number): number {
+  const wanted = Math.round(width);
+  if (!Number.isFinite(wanted)) return WB_AGENTS_MIN_WIDTH;
+  return Math.min(Math.max(wanted, WB_AGENTS_MIN_WIDTH), maxPanelWidth(windowWidth));
+}
+
+function readWbAgentsWidth(): number {
+  try {
+    const raw = Number(localStorage.getItem(WB_AGENTS_WIDTH_KEY));
+    if (!Number.isFinite(raw) || raw <= 0) return WB_AGENTS_MIN_WIDTH;
+    return clampWbAgentsWidth(raw, typeof window === "undefined" ? 1280 : window.innerWidth);
+  } catch {
+    return WB_AGENTS_MIN_WIDTH;
   }
 }
 
@@ -378,6 +404,16 @@ export const useUiStore = create<UiStore>((set) => {
       const panelWidth = clampPanelWidth(width, window.innerWidth);
       writePanelWidth(panelWidth);
       set({ panelWidth });
+    },
+    wbAgentsWidth: readWbAgentsWidth(),
+    setWbAgentsWidth: (width) => {
+      const wbAgentsWidth = clampWbAgentsWidth(width, window.innerWidth);
+      try {
+        localStorage.setItem(WB_AGENTS_WIDTH_KEY, String(wbAgentsWidth));
+      } catch {
+        // Storage denied: the width holds for this session and no longer.
+      }
+      set({ wbAgentsWidth });
     },
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);

@@ -1,4 +1,7 @@
 import type { CanvasContents, PresenceSession } from "@isocan/core";
+import { QUIET_AFTER_MS } from "@isocan/core";
+
+export { QUIET_AFTER_MS };
 import { threadWorldPos } from "./viewport.ts";
 
 /**
@@ -8,9 +11,6 @@ import { threadWorldPos } from "./viewport.ts";
  * Only agent (CLI) sessions get this treatment: a still human mouse is just
  * a still mouse.
  */
-/** Above `wait`'s ≤30s heartbeat, so a parked agent never flickers quiet. */
-export const QUIET_AFTER_MS = 35_000;
-
 /** "40s" / "3m" since the session last touched the daemon, or null while it
  * is fresh (or not an agent). */
 export function quietFor(

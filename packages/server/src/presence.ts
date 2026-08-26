@@ -32,10 +32,7 @@ interface SessionState extends PresenceSession {
    */
   origin: string | null;
   lastSeenMs: number;
-  /** The status was said out loud (`session say`), not derived — inferred
-   * narration must not displace it. Cleared when working resolves into a
-   * posted comment. */
-  statusSticky: boolean;
+
   /** When `onThread` was taken up. Server-side only: it exists to date a
    * cancellation against, not to be rendered. */
   onThreadAt: string | null;
@@ -148,7 +145,7 @@ export class PresenceHub {
     // `via` is DERIVED here rather than passed through: the field means "as
     // this daemon sees it", and a value that travelled in from the sender
     // would be that daemon's answer wearing this one's voice.
-    return here.map(({ lastSeenMs, statusSticky, onThreadAt, origin, ...session }) => ({
+    return here.map(({ lastSeenMs, onThreadAt, origin, ...session }) => ({
       ...session,
       via: origin,
     }));
@@ -165,7 +162,7 @@ export class PresenceHub {
     const here = [...(this.rooms.get(canvasId)?.values() ?? [])];
     return here
       .filter((session) => session.origin === null)
-      .map(({ lastSeenMs, statusSticky, onThreadAt, origin, via, ...session }) => session);
+      .map(({ lastSeenMs, onThreadAt, origin, via, ...session }) => session);
   }
 
   /**
@@ -211,7 +208,7 @@ export class PresenceHub {
         ...incoming,
         origin,
         lastSeenMs: Date.now(),
-        statusSticky: false,
+        statusSource: null,
         onThreadAt: existing?.onThreadAt ?? null,
       };
       room.set(sessionId, next);
@@ -301,7 +298,7 @@ export class PresenceHub {
 /** A session as it goes over the wire — the private bookkeeping dropped, so
  * two of them can be compared for "did anything a client would see change". */
 function stripped(session: SessionState): PresenceSession {
-  const { lastSeenMs, statusSticky, onThreadAt, origin, via, ...rest } = session;
+  const { lastSeenMs, onThreadAt, origin, via, ...rest } = session;
   // `lastSeen` moves on every beat and would make every mirror a change.
   return { ...rest, lastSeen: "" };
 }
@@ -326,7 +323,7 @@ function blankSession(
     onThreadAt: null,
     lastSeen: new Date().toISOString(),
     lastSeenMs: Date.now(),
-    statusSticky: false,
+    statusSource: null,
   };
 }
 
@@ -349,11 +346,16 @@ function patchSession(
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.status !== undefined) {
     // Words the actor said outrank narration the system derived; lifecycle
-    // turns (parking, waking, a posted comment) outrank everything.
+    // turns (parking, waking, a posted comment) outrank everything. The
+    // "sticky" question — may inferred narration displace what stands? — is
+    // answered from the stored SOURCE now rather than from a private
+    // boolean, because the source rides the roster (protocol.ts) and a fact
+    // a client renders must not have a second, foldier spelling here.
     const source = patch.statusSource ?? "explicit";
-    if (source !== "inferred" || !session.statusSticky) {
+    const sticky = session.statusSource === "explicit" && session.status !== null;
+    if (source !== "inferred" || !sticky) {
       session.status = patch.status;
-      session.statusSticky = source === "explicit" && patch.status !== null;
+      session.statusSource = patch.status === null ? null : source;
     }
   }
   if (patch.activity !== undefined) session.activity = patch.activity;

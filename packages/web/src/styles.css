@@ -1138,15 +1138,27 @@ img { height: auto; }
 }
 .wb-body {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 340px 1fr;
+  display: flex;
 }
 /* The agent column: roster above, the one main thread below. A fixed V1
    grid on purpose — resizers and collapse arrive with the second person who
    asks, on the panels.ts patterns (design doc, "the frame"). */
 .wb-agents {
+  flex: none; position: relative;
   min-height: 0; display: flex; flex-direction: column;
   border-right: 1px solid var(--line); background: var(--card);
 }
+/* Folded: the reopen affordance and nothing else. Never fully removed — the
+   agent view is the reason the room exists. */
+.wb-agents.rail { width: 40px; align-items: center; padding-top: 6px; }
+.wb-fold {
+  flex: none; align-self: flex-end; margin: 4px 6px 0 0;
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.wb-fold:hover { color: var(--ink); border-color: var(--accent); }
+.wb-agents.rail .wb-fold { align-self: center; margin: 0; }
 .wb-roster {
   flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain;
   padding: 10px 12px; border-bottom: 1px solid var(--line);
@@ -1167,6 +1179,19 @@ img { height: auto; }
 }
 .wb-row-head:hover { background: var(--chip); }
 .wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+/* Away: the ring without the fill — remembered, not present. */
+.wb-dot.hollow { background: none; border: 1.5px solid; }
+.wb-row-head.as-line { cursor: default; }
+/* Derived states, worn as quiet chips beside the name. These exist only
+   because statusSource crosses the wire now — a badge synthesized by
+   string-matching status copy is banned by name in the design doc. */
+.wb-state {
+  font-style: normal; font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); color: var(--ink-muted); border: 1px solid var(--line-soft);
+}
+.wb-state.blocked { color: var(--accent-text); border-color: var(--accent); }
 .wb-row-name { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .wb-row-name b { font-weight: 600; }
 .wb-row-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
@@ -1212,7 +1237,7 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   position: static; width: auto; flex: 1; min-height: 0;
   border-right: none; box-shadow: none;
 }
-.wb-stage { min-width: 0; min-height: 0; display: flex; }
+.wb-stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .wb-stage > * { flex: 1; }
 .wb-empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
@@ -1223,6 +1248,57 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   color: var(--ink-muted); text-align: center;
 }
 .wb-empty code { font-size: 11.5px; }
+
+/* ---------- the stage's modes and editor ---------- */
+.artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.artifact-stage-body { flex: 1; min-height: 0; display: flex; }
+.artifact-stage-body > * { flex: 1; min-width: 0; }
+/* The mode strip: part of the STAGE, so it renders in both covers — a mode
+   reachable at /w and missing at /i would be the two-products tell. */
+.stage-modes {
+  flex: none; display: flex; align-items: center; gap: 2px;
+  padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--card);
+}
+.stage-mode {
+  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid transparent;
+  background: none; color: var(--ink-muted);
+}
+.stage-mode:hover { color: var(--ink); background: var(--chip); }
+.stage-mode.on { background: var(--chip); border-color: var(--line); color: var(--ink); }
+.stage-mode-hint { margin-left: auto; font-size: 10.5px; color: var(--ink-soft); }
+.stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.stage-editor-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 11.5px; color: var(--ink-muted);
+}
+.stage-editor-bar .spacer { flex: 1; }
+.stage-editor-file { font-weight: 600; color: var(--ink); }
+.stage-editor-note { color: var(--accent-text); }
+.stage-editor-dirty {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); border: 1px solid var(--line-soft);
+}
+.stage-editor-btn {
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+.stage-editor-btn:hover { border-color: var(--accent); }
+.stage-editor-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stage-editor-btn:disabled { opacity: 0.6; cursor: default; }
+.stage-editor-body { flex: 1; min-height: 0; display: flex; }
+.stage-editor-cm { flex: 1; min-width: 0; overflow: auto; }
+.stage-editor-cm .cm-editor { height: 100%; background: var(--ground); color: var(--ink); }
+.stage-editor-cm .cm-editor.cm-focused { outline: none; }
+.stage-editor-cm .cm-gutters { background: var(--card); color: var(--ink-soft); border-right: 1px solid var(--line-soft); }
+.stage-editor-cm .cm-activeLine { background: var(--chip); }
+.stage-editor-cm .cm-activeLineGutter { background: var(--chip); }
+/* The draft, beside the buffer. It wears `.html-view` for its ground and its
+   fill — it IS one, of the draft — and this class only seams it in. */
+.stage-editor-preview { flex: 1; min-width: 0; border-left: 1px solid var(--line); }
 
 /* ---------- version fan-out ---------- */
 .fan-card {

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import type { Actor } from "@isocan/core";
 import { canvasPath, itemPath, itemUrl } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -35,7 +36,15 @@ const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowR
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
-export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: string }) {
+export function FullScreen({
+  canvasId,
+  itemId,
+  actor,
+}: {
+  canvasId: string;
+  itemId: string;
+  actor: Actor;
+}) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
 
@@ -117,7 +126,7 @@ export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: str
         )}
       </div>
       <div className="fullscreen-stage">
-        <ArtifactStage canvasId={canvasId} itemId={itemId} />
+        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} />
       </div>
     </div>
   );
