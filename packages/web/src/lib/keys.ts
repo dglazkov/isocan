@@ -44,7 +44,9 @@ export function isTyping(target: EventTarget | KeyTarget | null | undefined): bo
  *
  * Only ⌘K crosses — the lane to your emissary is deliberately open from
  * anywhere. Esc is not decided here: a cover owns its own way home, bound in
- * capture phase so it answers before the canvas could. Everything else —
+ * capture phase so it answers before the canvas could. ⌘-arrows are the same
+ * shape — full screen answers them itself (the next screen that way, still
+ * full screen), in capture, so they never reach this gate. Everything else —
  * arrows, undo, zoom, tools, Delete — waits for the canvas to be visible.
  *
  * Takes a plain object as well as a real event, so the rule can be tested

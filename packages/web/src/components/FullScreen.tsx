@@ -1,10 +1,16 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { canvasPath, isDesignSystem, itemUrl } from "@isocan/core";
+import { canvasPath, isDesignSystem, itemPath, itemUrl } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
+import { findNextItem, type Direction } from "../lib/spatialnav.ts";
+import { revealItem } from "../lib/zoomactions.ts";
+import { isTyping } from "../lib/keys.ts";
+
+const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 /**
  * One item, filling the screen, live.
@@ -42,12 +48,36 @@ export function FullScreen({ canvasId, itemId }: { canvasId: string; itemId: str
   // the item's own content may be focused and may stop the event on its way
   // up — a page in a frame is somebody else's code and it does not know about
   // our way home.
+  //
+  // ⌘-arrows are the cover's too: the same walk the canvas answers with ⌘←→↑↓
+  // — findNextItem, one home — but the destination stays full screen, so a row
+  // of screens becomes a slideshow you steer. Each press is a NAVIGATION like
+  // the Enter that got you here: the address bar holds the screen you are on,
+  // and Back retraces your steps. The selection and the camera underneath
+  // follow along, so Esc drops you at the screen you ended on, not the one you
+  // started from.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      back();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        back();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && DIRECTIONS.has(e.key)) {
+        // ⌘← in a text field is "start of line" — that field's business.
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation(); // the canvas page would only have to drop it anyway
+        const canvas = useCanvasStore.getState().canvas;
+        const current = canvas?.items[itemId];
+        if (!canvas || !current) return;
+        const next = findNextItem(current, Object.values(canvas.items), e.key as Direction);
+        if (!next) return; // the edge of the canvas: stay put rather than wrap
+        useUiStore.getState().select(next.id);
+        revealItem(next.id);
+        navigate(itemPath(canvasId, next.id));
+      }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

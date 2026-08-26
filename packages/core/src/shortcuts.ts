@@ -46,7 +46,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["F", "⇧2"], does: "Fit the selection", group: "Moving around", note: "With nothing selected, fits everything" },
   { keys: ["⌘0", "0", "⇧1"], does: "Fit everything", group: "Moving around" },
   { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
-  { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it" },
+  { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
 
   // ---- Items ----
