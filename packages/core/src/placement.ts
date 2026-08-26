@@ -20,33 +20,38 @@ export const PLACEMENT_CLEARANCE = 12;
 const MAX_RINGS = 14;
 
 /**
- * **Where a thread anchored to an item lands** — the item's BOTTOM-LEFT
- * corner, as an offset from its origin.
+ * **Where a thread anchored to an item lands** — just off its TOP-RIGHT
+ * corner, as an offset from the item's origin.
  *
  * In core because both surfaces must agree, and until this existed they did
  * not: `⇧C` in the app anchored at `{0, 0}` under a comment claiming "where a
  * thread anchored by the CLI lands too, so both surfaces agree", while
- * `isocan comment add --item` had always used `{width + 12, 0}` — off the
- * top-right. One canvas, two answers, and a comment asserting the opposite.
- * One function now, called by both.
+ * `isocan comment add --item` had always used `{width + 12, 0}` — the same
+ * corner, but a nudge past it in WORLD units, which is a different number of
+ * screen pixels at every zoom. One function now, called by both, and the
+ * corner ITSELF: a corner is the same place at every zoom, and the pin's own
+ * clearance is screen-measured where it belongs (`PIN_NUDGE` in the app).
  *
- * Bottom-left rather than top-left because the top edge is the NAME's: a pin
- * hangs its body above its anchor point, so a thread anchored at the origin
- * covered the item's own title with the conversation about it. The bottom-left
- * is where the item's other attachments already live — the marks row — so an
- * anchored thread joins them instead of fighting the label.
+ * Not the top-left, which is the NAME's end of that edge — a pin's body sits
+ * above its point, so a thread anchored at the origin covered the item's own
+ * title with the conversation about it. Not the bottom-left either, which was
+ * the first move away from the title and looked wrong for a reason worth
+ * writing down: the bottom-left is where the item's MARKS live, and a pin
+ * hanging under them turned one corner into a stack of two unlike things —
+ * a mark is a reaction worn on the item, a thread is a conversation about it.
+ * They read as one pile.
  *
- * The corner itself, not a nudge off it: a corner is the same place at every
- * zoom, while an offset in world units is a different number of screen pixels
- * at each one (the mistake `.item-titlebar` and `.version-badge` each had to
- * unlearn). What separates the pin from the marks row is the pin's own
- * constant-size drop, which is screen-measured — see `PIN_DROP` in the app.
+ * So the ends divide by kind rather than by ownership: the item's own facts
+ * live on the top edge (name at the left, version count at the right), what
+ * people *wore* on it sits under the bottom-left, and what people *said*
+ * about it hangs off the top-right corner, outside the item, where it covers
+ * neither the title nor the content nor the marks.
  */
 export function anchorOffset(item: { width: number; height: number }): {
   x: number;
   y: number;
 } {
-  return { x: 0, y: item.height };
+  return { x: item.width, y: 0 };
 }
 
 /** Anything already taking up room — an item, or one just placed this pass. */

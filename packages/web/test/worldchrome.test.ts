@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PIN_DROP, UNDER_ROW_PAD } from "../src/lib/chrome.ts";
+import { PIN_NUDGE, UNDER_ROW_PAD } from "../src/lib/chrome.ts";
 
 /**
  * Chrome drawn inside the zoomed world is measured in WORLD pixels.
@@ -477,17 +477,29 @@ describe("the row under an item is one row", () => {
     expect(Number(pad![1]), "styles.css and UNDER_ROW_PAD disagree").toBe(UNDER_ROW_PAD);
   });
 
-  it("hangs an item-anchored pin below that row, by the derived drop", () => {
-    // `.pin.below` is a SCREEN-space element and the row is counter-scaled to
-    // the same units, so one number holds their spacing at every zoom — but
-    // only while the stylesheet's copy of it is the derived one.
-    const rule = allRules().find((r) => r.selectors.includes(".pin.below"));
-    expect(rule, ".pin.below has no rule").toBeTruthy();
-    const drop = rule!.body.match(/translate\(\s*-?[\d.]+px\s*,\s*(\d+)px\s*\)/);
-    expect(drop, "no downward translate").toBeTruthy();
-    expect(Number(drop![1]), "styles.css and PIN_DROP disagree").toBe(PIN_DROP);
-    // Down, not up: the whole point is that it stops covering the item.
-    expect(Number(drop![1])).toBeGreaterThan(0);
+  it("steps an item-anchored pin outside the corner handle it shares a corner with", () => {
+    // The badge's inset and this nudge are the same argument at the same
+    // corner from opposite sides — the badge sits INSIDE the edge past the
+    // handle, the pin OUTSIDE it past the handle, and neither may creep back.
+    const rule = allRules().find((r) => r.selectors.includes(".pin.corner"));
+    expect(rule, ".pin.corner has no rule").toBeTruthy();
+    const out = rule!.body.match(/translate\(\s*(-?[\d.]+)px/);
+    expect(out, "no horizontal translate").toBeTruthy();
+    expect(Number(out![1]), "styles.css and PIN_NUDGE disagree").toBe(PIN_NUDGE);
+
+    // Measured against the handle's own reach, read from the stylesheet: the
+    // handle is centred on the corner, so it reaches half its width outside.
+    const px = (body: string, prop: string) =>
+      Number(
+        body.match(
+          new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*calc\\(\\s*(-?[\\d.]+)px\\s*/\\s*var\\(--scale`),
+        )![1],
+      );
+    const reach = -px(ownRule(".resize-handle-ne") ?? "", "right");
+    expect(
+      Number(out![1]),
+      `the pin steps out ${out![1]}px and the handle reaches ${reach}px out — the pin swallows the resize press`,
+    ).toBeGreaterThan(reach);
   });
 
   it("gives the row the item's SCREEN width, which is what makes it a row", () => {
