@@ -8,6 +8,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { goStage } from "../lib/goStage.ts";
+import { ItemPeek } from "./ItemThumb.tsx";
 
 /**
  * The bound directory, listed — the workbench's files pane.
@@ -45,6 +46,11 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   const [tree, setTree] = useState<TreeState>({ state: "loading" });
   const [filesH, setFilesH] = useSectionHeight("isocan.wb.files.h", 180);
   const [adding, setAdding] = useState<string | null>(null);
+  // The row under the pointer, when it IS an item — hovering a filename peeks
+  // the thing itself, the same card the canvas files panel and the edge radar
+  // open, at a position measured on entry (the roster's peek pattern:
+  // position-fixed via the portal, so the section's scroll box cannot clip it).
+  const [peek, setPeek] = useState<{ itemId: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -137,6 +143,11 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
                     className="wb-tree-file on-canvas"
                     title="On the canvas — open it on the stage"
                     onClick={() => goStage(navigate, workbenchItemPath(canvasId, itemId))}
+                    onPointerEnter={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setPeek({ itemId, x: r.right + 10, y: r.top });
+                    }}
+                    onPointerLeave={() => setPeek(null)}
                   >
                     {name}
                   </button>
@@ -160,6 +171,15 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
         </ul>
       )}
       <SectionResizer value={filesH} onChange={setFilesH} label="Resize the file list" />
+      {peek && (
+        <ItemPeek
+          canvasId={canvasId}
+          itemId={peek.itemId}
+          // Clamped so the card is readable off a row near the window's foot;
+          // it opens to the row's right, clear of the rail.
+          style={{ left: peek.x, top: Math.min(Math.max(peek.y, 12), window.innerHeight - 240) }}
+        />
+      )}
     </section>
   );
 }
