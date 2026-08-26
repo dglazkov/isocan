@@ -1253,29 +1253,45 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .artifact-stage-body { flex: 1; min-height: 0; display: flex; }
 .artifact-stage-body > * { flex: 1; min-width: 0; }
-/* The pane switches: part of the STAGE, so they render in both covers — a
-   control reachable at /w and missing at /i would be the two-products tell.
-   TOGGLES, not tabs: both can be on (the default), each collapses its own
-   pane, and the way back is the same button, standing where it stood. The
-   sole open pane's toggle disables — a stage showing nothing is not a
-   state. */
-.stage-panes {
-  flex: none; display: flex; align-items: center; gap: 2px;
-  padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--card);
+/* One header per pane, no third bar. The stage grew a strip of toggles above
+   two panes that each already had a header — three layers of chrome before
+   content — and shed it the next day: each pane's own bar carries its
+   controls AND its fold, and a folded pane leaves a rail on its edge whose
+   whole face is the way back. */
+.stage-pane-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 11.5px; color: var(--ink-muted);
 }
-.stage-pane {
-  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
-  padding: 2px 9px; border-radius: 999px; border: 1px solid transparent;
-  background: none; color: var(--ink-soft);
+.stage-pane-bar .spacer { flex: 1; }
+.stage-pane-name { font-weight: 600; color: var(--ink); }
+.stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.stage-pane-fold {
+  flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
 }
-.stage-pane:hover { color: var(--ink); background: var(--chip); }
-.stage-pane.on { background: var(--chip); border-color: var(--line); color: var(--ink); }
-.stage-pane:disabled { cursor: default; }
-.stage-mode-hint { margin-left: auto; font-size: 10.5px; color: var(--ink-soft); }
-/* The saved version, beside the buffer — the preview pane when the editor
-   does not draft-preview the type itself. */
-.stage-saved-pane { flex: 1; min-width: 0; display: flex; border-left: 1px solid var(--line); }
-.stage-saved-pane > * { flex: 1; }
+.stage-pane-fold:hover { color: var(--ink); border-color: var(--accent); }
+/* A folded pane, still standing at its edge: the label reads down the strip
+   and the whole strip is the button. */
+.stage-rail {
+  flex: none; width: 26px; cursor: pointer;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 10px 0; font: inherit; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  border: none; background: var(--card); color: var(--ink-soft);
+}
+.stage-rail span { writing-mode: vertical-rl; }
+.stage-rail:hover { color: var(--ink); background: var(--chip); }
+.stage-rail.left { border-right: 1px solid var(--line); }
+.stage-rail.right { border-left: 1px solid var(--line); }
+.stage-preview-pane {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; border-left: 1px solid var(--line);
+}
+.stage-pane-body { flex: 1; min-height: 0; display: flex; }
+.stage-pane-body > * { flex: 1; }
+
 .stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stage-editor-bar {
   flex: none; display: flex; align-items: center; gap: 8px;
@@ -1305,9 +1321,6 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .stage-editor-cm .cm-gutters { background: var(--card); color: var(--ink-soft); border-right: 1px solid var(--line-soft); }
 .stage-editor-cm .cm-activeLine { background: var(--chip); }
 .stage-editor-cm .cm-activeLineGutter { background: var(--chip); }
-/* The draft, beside the buffer. It wears `.html-view` for its ground and its
-   fill — it IS one, of the draft — and this class only seams it in. */
-.stage-editor-preview { flex: 1; min-width: 0; border-left: 1px solid var(--line); }
 
 /* ---------- version fan-out ---------- */
 .fan-card {

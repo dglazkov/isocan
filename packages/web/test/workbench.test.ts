@@ -39,13 +39,7 @@ describe("the workbench writes only where the design says it may", () => {
     expect(ops).toEqual(["item.addVersion"]);
   });
 
-  it("keeps the draft preview sandboxed to the one flag item frames get", () => {
-    // srcdoc inherits nothing: `allow-scripts` alone is an opaque origin —
-    // no cookie, no API, nothing to exfiltrate to (content-origin.md). Any
-    // second token here is the loosening that doc exists to prevent.
-    expect(editor).toMatch(/sandbox="allow-scripts"/);
-    expect(editor).not.toMatch(/allow-same-origin/);
-  });
+
 
   it("renders the main thread through the shared component, never a copy", () => {
     expect(workbench).toContain("MainThreadBody");
@@ -104,20 +98,36 @@ describe("the workbench address family", () => {
  */
 describe("the stage's panes", () => {
   const stage = read("../src/components/ArtifactStage.tsx");
+  const editor = read("../src/components/StageEditor.tsx");
 
   it("defaults to both panes open", () => {
     expect(stage).toContain("return { preview: true, edit: true };");
   });
 
-  it("refuses the empty stage", () => {
+  it("makes the empty stage unreachable, not merely refused", () => {
+    // The sole open pane carries NO fold control: the editor's fold arrives
+    // only while the preview is open, and the preview's only while the
+    // editor is. The guard in fold() is the belt; this is the door.
+    expect(stage).toMatch(/onFold=\{panes\.preview \? \(\) => fold\("edit"\) : undefined\}/);
+    expect(stage).toMatch(/\{panes\.edit && \(\s*<button\s+className="stage-pane-fold"/);
     expect(stage).toMatch(/if \(!next\.preview && !next\.edit\) return;/);
   });
 
-  it("keeps the way back where the way out was", () => {
-    // Toggles with pressed state, never a tab strip: the control that
-    // collapsed a pane is the control that reopens it.
-    expect(stage).toContain("aria-pressed={showPreview}");
-    expect(stage).toContain("aria-pressed={showEdit}");
-    expect(stage).not.toMatch(/role="tablist"/);
+  it("folds into rails whose whole face is the way back", () => {
+    // No third bar of toggles: each pane's own header carries its fold, and
+    // a folded pane leaves an edge rail that reopens it from where it stood.
+    expect(stage).toContain('className="stage-rail left"');
+    expect(stage).toContain('className="stage-rail right"');
+    expect(stage).not.toContain("stage-panes");
+    expect(editor).toContain('className="stage-pane-fold"');
+  });
+
+  it("names what the preview is showing — draft and saved are different claims", () => {
+    expect(stage).toMatch(/\{showDraft \? "Draft" : "Saved"\}/);
+  });
+
+  it("keeps the draft preview sandboxed to the one flag item frames get", () => {
+    expect(stage).toMatch(/sandbox="allow-scripts"/);
+    expect(stage).not.toMatch(/allow-same-origin/);
   });
 });

@@ -54,13 +54,18 @@ export function StageEditor({
   canvasId,
   item,
   actor,
-  split,
+  onDraft,
+  onFold,
 }: {
   canvasId: string;
   item: Item;
   actor: Actor;
-  /** Side-by-side with a live preview of the DRAFT (text/html only). */
-  split: boolean;
+  /** The open buffer, lifted to the stage so ITS preview pane can render
+   * the draft — the editor owns the text, never the layout beside it. */
+  onDraft: (doc: string | null) => void;
+  /** Fold this pane away — absent when it is the sole pane open, which is
+   * how the stage's never-empty rule is made unreachable. */
+  onFold?: (() => void) | undefined;
 }) {
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const host = useRef<HTMLDivElement>(null);
@@ -71,7 +76,9 @@ export function StageEditor({
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [draftPreview, setDraftPreview] = useState<string | null>(null);
+  // The lift is debounced: an iframe srcdoc resets on every change, and a
+  // preview that reloads per keystroke reads as flicker, not liveness.
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Somebody else's version landed while the buffer is open. Rendered as a
   // quiet note — the stack keeps both; there is nothing to resolve.
@@ -117,7 +124,8 @@ export function StageEditor({
               if (!update.docChanged) return;
               const doc = update.state.doc.toString();
               setDirty(true);
-              setDraftPreview((prev) => (prev === null ? prev : doc));
+              if (draftTimer.current) clearTimeout(draftTimer.current);
+              draftTimer.current = setTimeout(() => onDraft(doc), 250);
               try {
                 localStorage.setItem(key, doc);
               } catch {
@@ -129,21 +137,18 @@ export function StageEditor({
       });
       setDirty(restored !== null);
       setLoaded(true);
-      if (split) setDraftPreview(opening);
+      onDraft(opening);
     })();
     return () => {
       live = false;
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+      onDraft(null); // the buffer leaves with the pane — a stale draft is a lie
       view.current?.destroy();
       view.current = null;
     };
     // Remount per item; the buffer belongs to the item it opened for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, item.id]);
-
-  useEffect(() => {
-    if (split && view.current) setDraftPreview(view.current.state.doc.toString());
-    if (!split) setDraftPreview(null);
-  }, [split]);
 
   async function save() {
     const doc = view.current?.state.doc.toString();
@@ -192,12 +197,13 @@ export function StageEditor({
         changes: { from: 0, to: view.current.state.doc.length, insert: text },
       });
       baseVersion.current = current.id;
+      onDraft(text);
       setDirty(false);
     })();
   }
 
   return (
-    <div className={`stage-editor${split ? " split" : ""}`}>
+    <div className="stage-editor">
       <div className="stage-editor-bar">
         <span className="stage-editor-file">{current.filename}</span>
         {landedUnder && (
@@ -218,20 +224,19 @@ export function StageEditor({
         >
           {saving ? "Saving…" : "Save version"}
         </button>
+        {onFold && (
+          <button
+            className="stage-pane-fold"
+            onClick={onFold}
+            title="Fold the editor away — the rail brings it back"
+            aria-label="Collapse the editor"
+          >
+            «
+          </button>
+        )}
       </div>
       <div className="stage-editor-body">
         <div ref={host} className="stage-editor-cm" />
-        {split && draftPreview !== null && current.mimeType === "text/html" && (
-          /* The DRAFT, live: srcdoc under the same lone allow-scripts the
-             item view uses — an opaque origin, no cookie, no API. Local by
-             construction; nothing leaves the tab until Save. */
-          <iframe
-            className="html-view stage-editor-preview"
-            sandbox="allow-scripts"
-            srcDoc={draftPreview}
-            title={`draft of ${current.filename}`}
-          />
-        )}
       </div>
     </div>
   );
