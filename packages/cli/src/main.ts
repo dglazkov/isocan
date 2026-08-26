@@ -102,7 +102,7 @@ import {
   siteFilename,
   siteLabel,
 } from "@isocan/core";
-import { paths, stalenessOf } from "@isocan/server";
+import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
   type HomeRecord,
@@ -150,7 +150,11 @@ const program = new Command();
 program
   .name("isocan")
   .description("Isomorphic canvas — same operations as the web app, from your terminal")
-  .version("0.1.0")
+  // Not the literal it was: `isocan --version` is the first thing anybody runs
+  // to answer "which isocan is this", and `0.1.0` answered it identically for
+  // every build ever shipped. This is THIS CLI's build — the daemon's may
+  // differ, which is what `isocan status` is for.
+  .version(describeBuild(buildStamp()))
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
   .option("--agent-help", "how to collaborate on a canvas as an agent: the whole protocol")
@@ -858,7 +862,9 @@ program
         role: roleLine(summary, daemonBase),
         pid: String(health.pid),
         since: health.startedAt,
-        version: health.version,
+        // The sha, not just `0.1.0` — every build says `0.1.0`, so the field
+        // named after the question was the one with no answer in it.
+        version: describeBuild(health),
         // Which copy is serving matters as soon as there is more than one:
         // an npx cache, a global install and a checkout all look identical
         // from the outside.

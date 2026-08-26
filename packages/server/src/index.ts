@@ -29,6 +29,6 @@ export type { HomeLinksOptions } from "./home-links.ts";
 export { homesRecorded, readHomes, writeHomes } from "./homes.ts";
 export type { HomeAssignments } from "./homes.ts";
 export { HOME_HEADER } from "./http.ts";
-export { buildStamp, stalenessOf } from "./build.ts";
+export { buildStamp, describeBuild, stalenessOf } from "./build.ts";
 export type { BuildStamp } from "./build.ts";
 export * as paths from "./paths.ts";
