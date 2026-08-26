@@ -28,8 +28,8 @@ import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
+import { DRAG_SLOP } from "../lib/gesture.ts";
 
-const DRAG_SLOP = 4;
 /** Two presses this close together are one double-press. */
 const DOUBLE_PRESS_MS = 450;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same

@@ -19,6 +19,7 @@ import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
 import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { submitOnCmdEnter } from "../lib/submit.ts";
+import { pastSlop } from "../lib/gesture.ts";
 import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
@@ -86,6 +87,8 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
           <ThreadPin
             key={thread.id}
             thread={thread}
+            canvasId={canvasId}
+            actor={actor}
             screen={screenOf(thread)}
             corner={atCorner(canvas, thread)}
             open={openThreadId === thread.id}
@@ -134,6 +137,29 @@ function atCorner(canvas: CanvasContents, thread: CommentThread): boolean {
 }
 
 /**
+ * **The conversation about this item**, if it has one — what ⇧C opens instead
+ * of starting a second.
+ *
+ * An item's thread is not a pin that happens to be near it: it is the item's
+ * own conversation, at the item's own corner, and there is one. Pressing ⇧C
+ * twice used to mint a second thread at the identical spot, so the two pins
+ * stacked exactly and the older one became unreachable — a place to lose a
+ * comment, which is the worst thing a comment can be.
+ *
+ * The corner-anchored one wins when several exist, because that is the one ⇧C
+ * and `isocan comment add --item` both put there; a thread anchored somewhere
+ * else on the item (dropped in comment mode, aimed at a particular spot) is
+ * about that spot and is left alone. Oldest first among equals, so the answer
+ * does not change as people talk.
+ */
+export function itemThread(canvas: CanvasContents, itemId: string): CommentThread | null {
+  const mine = Object.values(canvas.threads)
+    .filter((thread) => !thread.main && thread.anchorItemId === itemId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return mine.find((thread) => atCorner(canvas, thread)) ?? mine[0] ?? null;
+}
+
+/**
  * Screen placement for a popover hanging off a pin: capped to a height that
  * fits between the toolbar and the bottom gutter (long threads scroll inside),
  * flipped to the pin's other side when it would run off the right edge, and
@@ -176,12 +202,16 @@ function usePopoverPlacement(anchor: { x: number; y: number }, dx: number, dy: n
 
 function ThreadPin({
   thread,
+  canvasId,
+  actor,
   screen,
   corner,
   open,
   unread,
 }: {
   thread: CommentThread;
+  canvasId: string;
+  actor: Actor;
   screen: { x: number; y: number };
   /** At its item's top-right corner: step clear of it — see `atCorner`. */
   corner: boolean;
@@ -212,17 +242,99 @@ function ThreadPin({
   const overflow = authors.length - shown.length;
   const newest = thread.comments[thread.comments.length - 1]!;
 
+  /**
+   * **Dragging a pin that marks a PLACE.**
+   *
+   * A free pin is somebody pointing at a spot on the canvas, and a spot can
+   * turn out to be the wrong one — so it moves, by the plain drag every other
+   * object here answers to rather than behind a modifier. The modifier was
+   * considered and declined: what it would prevent is four pixels of pointer
+   * travel, `thread.setAnchor` carries a real inverse so ⌘Z already puts a
+   * slip back, and a gesture you have to be told about is worse than a
+   * mistake you can undo.
+   *
+   * **A pin anchored to an ITEM does not move at all**, and that is the point
+   * of it: it sits at that item's corner because it is the conversation about
+   * that item, ⇧C and `isocan comment add --item` both put it there, and a
+   * fixed address is what lets ⇧C reopen it instead of minting another. It
+   * already rides the item when the item is dragged, which is the only moving
+   * it should do.
+   */
+  const movable = !thread.anchorItemId;
+  const scale = useUiStore((s) => s.viewport.scale);
+  const from = useRef<{ x: number; y: number } | null>(null);
+  const dragged = useRef(false);
+  const [nudge, setNudge] = useState<{ dx: number; dy: number } | null>(null);
+
+  function onPointerDown(e: React.PointerEvent) {
+    e.stopPropagation(); // the canvas below must not start a selection box
+    if (!movable || e.button !== 0) return;
+    from.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const start = from.current;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!dragged.current && !pastSlop(dx, dy)) return;
+    dragged.current = true;
+    setNudge({ dx, dy });
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    const start = from.current;
+    from.current = null;
+    setNudge(null);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    if (!start || !dragged.current) return;
+    // Screen travel becomes world travel by the zoom — the pin is drawn in
+    // screen space, but where it POINTS is a world fact and that is what the
+    // op carries. `dragged` stays true until the click handler eats the click
+    // this release is about to fire.
+    const dx = (e.clientX - start.x) / scale;
+    const dy = (e.clientY - start.y) / scale;
+    void sendOp(canvasId, actor, {
+      type: "thread.setAnchor",
+      threadId: thread.id,
+      anchorItemId: null,
+      x: thread.x + dx,
+      y: thread.y + dy,
+    });
+  }
+
+  const said =
+    unread > 0
+      ? `${unread} new from ${actorNameIn(names, newest.author)} — ${newest.body.slice(0, 60)}`
+      : `${authors.map((author) => actorNameIn(names, author)).join(", ")} — ${first.body.slice(0, 60)}`;
+
   return (
     <button
       className={`pin${corner ? " corner" : ""}${unread > 0 ? " unread" : ""}`}
-      style={{ left: screen.x, top: screen.y, pointerEvents: "auto" }}
-      title={
-        unread > 0
-          ? `${unread} new from ${actorNameIn(names, newest.author)} — ${newest.body.slice(0, 60)}`
-          : `${authors.map((author) => actorNameIn(names, author)).join(", ")} — ${first.body.slice(0, 60)}`
-      }
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={() => useUiStore.getState().setOpenThread(open ? null : thread.id)}
+      style={{
+        left: screen.x + (nudge?.dx ?? 0),
+        top: screen.y + (nudge?.dy ?? 0),
+        pointerEvents: "auto",
+      }}
+      // Anchored pins say what they are instead of offering a move they will
+      // refuse: this one belongs to its item and rides it.
+      title={movable ? `${said} · drag to move` : `${said} · pinned to this item`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={(e) => {
+        // A press that travelled was a move, not a click on the thing — the
+        // same bargain every draggable object here makes (`lib/gesture.ts`).
+        if (dragged.current) {
+          dragged.current = false;
+          e.preventDefault();
+          return;
+        }
+        useUiStore.getState().setOpenThread(open ? null : thread.id);
+      }}
     >
       {shown.map((author) => (
         <span
