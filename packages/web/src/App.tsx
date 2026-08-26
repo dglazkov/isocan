@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { CANVAS_ROUTE, ITEM_ROUTE } from "@isocan/core";
+import { CANVAS_ROUTE, ITEM_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";
@@ -79,6 +79,11 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
                 sibling route element would tear all of that down and rebuild
                 it. */}
             <Route path={ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            {/* The workbench — the same element again, for the same reason:
+                both covers live over a canvas that must not be torn down by
+                flipping to them. */}
+            <Route path={WORKBENCH_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            <Route path={WORKBENCH_ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
             {/* The catch-all, and it is required rather than tidy. The daemon's
                 SPA fallback answers every path with the app shell and a 200, so
                 without a route here a mistyped or doc-shaped share link renders

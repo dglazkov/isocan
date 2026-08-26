@@ -75,7 +75,13 @@ describe("the handler is wired through the rule", () => {
   });
 
   it("gates on the cover route before anything else — ⌘K's branch included", () => {
-    const gate = effect.search(/if\s*\(itemId\s*&&\s*!crossesCover\(e\)\)\s*return/);
+    // BOTH covers: full screen's itemId and the workbench. The workbench
+    // shipped second, and the design doc's instruction was to extend this
+    // gate rather than grow a second policy in the handler — so the guard
+    // asserts the one gate names the pair.
+    const gate = effect.search(
+      /if\s*\(\(itemId \|\| onWorkbench\)\s*&&\s*!crossesCover\(e\)\)\s*return/,
+    );
     expect(gate, "no route gate in onKeyDown").toBeGreaterThan(-1);
     // FIRST, not merely present: a gate that lets one dispatch run before it
     // is half a gate. The rule itself decides what crosses, so nothing in the
@@ -91,6 +97,7 @@ describe("the handler is wired through the rule", () => {
     // The handler closes over itemId from useParams. Without it in the
     // dependency array, the listener registered on the canvas route keeps a
     // stale undefined forever — and the gate never turns on.
-    expect(effect).toMatch(/\}, \[canvasId, actor, itemId\]\);$/);
+    // onWorkbench rides the same array for the same reason itemId does.
+    expect(effect).toMatch(/\}, \[canvasId, actor, itemId, onWorkbench\]\);$/);
   });
 });

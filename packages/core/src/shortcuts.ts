@@ -45,6 +45,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["⌘+", "⌘−"], does: "Zoom in and out", group: "Moving around", note: "The canvas, never the browser" },
   { keys: ["F", "⇧2"], does: "Fit the selection", group: "Moving around", note: "With nothing selected, fits everything" },
   { keys: ["⌘0", "0", "⇧1"], does: "Fit everything", group: "Moving around" },
+  { keys: ["W"], does: "Workbench — the agent room", group: "Moving around", note: "Who is here to work and what each is doing, the main thread beside them, and one item on a stage. A single selection comes along as the stage's focus; Esc steps back out" },
   { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },

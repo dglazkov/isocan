@@ -45,6 +45,7 @@ import {
   canvasUrl,
   itemUrl,
   urlWithPass,
+  workbenchUrl,
   canvasUrlWithPass,
   parseCanvasAddress,
   setupCommand,
@@ -1595,8 +1596,12 @@ program
     "Open the canvas in your browser — as you, with a one-use pass the browser keeps. " +
       "Name an item and it opens full screen",
   )
+  .option(
+    "--workbench",
+    "open the workbench — the agent room — instead; with an item, it is on the stage",
+  )
   .action(
-    run(async (ref: string | undefined, _opts: unknown, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { workbench?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // Full screen is a ROUTE, which is the whole reason the CLI can take
       // part in it at all: there is no op to send — what somebody is looking
@@ -1620,7 +1625,14 @@ program
       // the daemon forwarding: that is where the badge lives that the browser's
       // redemption will be judged against.)
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
-      const url = item ? itemUrl(origin, canvas.id, item.id) : canvasUrl(origin, canvas.id);
+      // The workbench is the same kind of thing full screen is — a cover
+      // route — so the flag only changes which address gets built. An agent
+      // that wants a person watching the agent room hands them this.
+      const url = opts.workbench
+        ? workbenchUrl(origin, canvas.id, item?.id)
+        : item
+          ? itemUrl(origin, canvas.id, item.id)
+          : canvasUrl(origin, canvas.id);
       const token = await browserPass(ctx, canvas.id);
       // The pass goes on the END of whichever address was built — canvas or
       // item — because a fragment is only a fragment if nothing follows it.

@@ -69,6 +69,45 @@ export function itemUrl(origin: string, canvasId: string, itemId: string): strin
 }
 
 /**
+ * **The workbench: the same canvas, flipped to the agent room.**
+ *
+ * A second projection of the canvas — the agent roster, the main thread, and
+ * one artifact on a stage — and a ROUTE for every reason full screen is one
+ * (see `ITEM_PATH_SEGMENT` above): what you are looking at is not a mutation,
+ * but it has to be addressable or only the person at the keyboard could ever
+ * reach it. `isocan open --workbench` hands somebody this exact view; Esc
+ * pops one level, `/w/<item>` → `/w` → the canvas.
+ *
+ * The router's item segment is named `wbItemId`, not `itemId`, and that is
+ * load-bearing rather than fussy: both cover routes mount the same
+ * `CanvasPage` element, and `useParams` merges whatever the matched pattern
+ * captured — one shared name would make "full screen or workbench?"
+ * unanswerable from the params alone.
+ *
+ * `w` for the reason `i` and `p` are letters: short, and spelled once.
+ */
+export const WORKBENCH_PATH_SEGMENT = "w";
+
+export const WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
+export const WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
+
+/** The workbench with nothing focused — the agent room itself. */
+export function workbenchPath(canvasId: string): string {
+  return `${canvasPath(canvasId)}/${WORKBENCH_PATH_SEGMENT}`;
+}
+
+/** The workbench with one artifact on the stage. */
+export function workbenchItemPath(canvasId: string, itemId: string): string {
+  return `${workbenchPath(canvasId)}/${encodeURIComponent(itemId)}`;
+}
+
+/** The whole address of a workbench view: origin + path, item optional. */
+export function workbenchUrl(origin: string, canvasId: string, itemId?: string): string {
+  const path = itemId ? workbenchItemPath(canvasId, itemId) : workbenchPath(canvasId);
+  return `${origin.replace(/\/+$/, "")}${path}`;
+}
+
+/**
  * The whole invitation: origin + path.
  *
  * `origin` is whatever the caller is standing at — the home's address for a

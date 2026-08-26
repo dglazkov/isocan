@@ -1126,6 +1126,104 @@ img { height: auto; }
 }
 .fullscreen-btn:active { transform: translateY(0.5px); }
 
+/* ---------- the workbench ---------- */
+/* The agent room: a cover over the canvas, FullScreen's architecture with a
+   second column. Same z as full screen — the two are the same kind of thing
+   (a route-driven cover) and can never be up at once, so they share the
+   layer rather than inventing an ordering between covers that cannot meet. */
+.workbench {
+  position: fixed; inset: 0; z-index: var(--z-fullscreen);
+  background: var(--ground);
+  display: flex; flex-direction: column;
+}
+.wb-body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 340px 1fr;
+}
+/* The agent column: roster above, the one main thread below. A fixed V1
+   grid on purpose — resizers and collapse arrive with the second person who
+   asks, on the panels.ts patterns (design doc, "the frame"). */
+.wb-agents {
+  min-height: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--line); background: var(--card);
+}
+.wb-roster {
+  flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.wb-roster h3 {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+}
+.wb-quiet { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-muted); }
+.wb-quiet code { font-size: 11px; }
+.wb-row { border-radius: var(--radius); }
+.wb-row.open { background: var(--chip); }
+.wb-row-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+  padding: 6px 8px; border: none; background: none; border-radius: var(--radius);
+  color: var(--ink);
+}
+.wb-row-head:hover { background: var(--chip); }
+.wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+.wb-row-name { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.wb-row-name b { font-weight: 600; }
+.wb-row-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+/* The agent's own words, verbatim — never a classified badge (the design doc
+   bans string-matching lifecycle copy into semantics until statusSource is
+   on the wire). */
+.wb-row-line {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-align: right;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-row-line em { font-style: normal; color: var(--ink-soft); }
+.wb-row-detail { padding: 2px 8px 10px 24px; display: grid; gap: 8px; }
+.wb-answering {
+  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+}
+.wb-answering q { quotes: "\201C" "\201D"; }
+.wb-thumb {
+  display: grid; gap: 4px; justify-items: start;
+  font: inherit; font-size: 11px; color: var(--ink-muted);
+  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+}
+.wb-thumb:hover span { color: var(--ink); }
+.wb-trail { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.wb-trail li {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-trail em { font-style: normal; color: var(--ink-soft); flex: none; }
+.wb-act {
+  font: inherit; padding: 0; border: none; background: none; text-align: left;
+  color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.wb-act { cursor: pointer; }
+button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
+/* The main thread, undocked: the SAME component the canvas docks left, sized
+   by this grid instead of by its stored width. Only geometry changes hands
+   here — behavior differences live behind the component's own `docked` prop,
+   never in CSS. */
+.workbench .main-panel {
+  /* static, so the base rule's z-index never applies — no override needed */
+  position: static; width: auto; flex: 1; min-height: 0;
+  border-right: none; box-shadow: none;
+}
+.wb-stage { min-width: 0; min-height: 0; display: flex; }
+.wb-stage > * { flex: 1; }
+.wb-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.wb-empty p {
+  max-width: 40ch; margin: 0; font-size: 12.5px; line-height: 1.6;
+  color: var(--ink-muted); text-align: center;
+}
+.wb-empty code { font-size: 11.5px; }
+
 /* ---------- version fan-out ---------- */
 .fan-card {
   position: absolute; z-index: 3; background: var(--card); border: 1px solid var(--line);
