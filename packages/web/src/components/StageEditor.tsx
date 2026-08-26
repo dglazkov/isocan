@@ -74,7 +74,14 @@ export function StageEditor({
   // a version landing while you type must not re-key your draft.
   const baseVersion = useRef(current.id);
   const [loaded, setLoaded] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirtyState] = useState(false);
+  // The keymap's closure is created once; it reads the ref, the bar reads
+  // the state — one setter keeps the two from drifting.
+  const dirtyRef = useRef(false);
+  const setDirty = (d: boolean) => {
+    dirtyRef.current = d;
+    setDirtyState(d);
+  };
   const [saving, setSaving] = useState(false);
   // The lift is debounced: an iframe srcdoc resets on every change, and a
   // preview that reloads per keystroke reads as flicker, not liveness.
@@ -152,7 +159,9 @@ export function StageEditor({
 
   async function save() {
     const doc = view.current?.state.doc.toString();
-    if (doc === undefined || saving) return;
+    // A clean buffer has nothing to say: the habitual ⌘S must not mint an
+    // identical version, and the buttons for it are not even shown.
+    if (doc === undefined || saving || !dirtyRef.current) return;
     setSaving(true);
     try {
       const upload = await uploadBlob(
@@ -212,18 +221,29 @@ export function StageEditor({
           </span>
         )}
         <span className="spacer" />
-        {dirty && <span className="stage-editor-dirty">draft</span>}
-        <button className="stage-editor-btn" onClick={revert} title="Back to the saved version — clears the draft">
-          Revert
-        </button>
-        <button
-          className="stage-editor-btn primary"
-          onClick={() => void save()}
-          disabled={saving || !loaded}
-          title="Save as a new version (⌘S) — it stacks; S fans the history"
-        >
-          {saving ? "Saving…" : "Save version"}
-        </button>
+        {/* Nothing to save, nothing offered: the controls appear with the
+            first change and leave with the save — a Save button over a clean
+            buffer is a question with no answer. */}
+        {dirty && (
+          <>
+            <span className="stage-editor-dirty">draft</span>
+            <button
+              className="stage-editor-btn"
+              onClick={revert}
+              title="Back to the saved version — clears the draft"
+            >
+              Revert
+            </button>
+            <button
+              className="stage-editor-btn primary"
+              onClick={() => void save()}
+              disabled={saving || !loaded}
+              title="Save as a new version (⌘S) — it stacks; S fans the history"
+            >
+              {saving ? "Saving…" : "Save version"}
+            </button>
+          </>
+        )}
         {onFold && (
           <button
             className="stage-pane-fold"

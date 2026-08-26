@@ -65,6 +65,8 @@ import {
   UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
+import { isocanHome } from "./paths.ts";
+import { boundDirs, readBound, readTree } from "./tree.ts";
 import {
   attestersOf,
   attesterRefusal,
@@ -1844,6 +1846,83 @@ export function registerRoutes(
     const problem = badUploadRequest(request);
     if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
     return engine.registerBlob(id, request as BlobUploadRequest);
+  });
+
+  /**
+   * The bound directory, read-only — the workbench's file tree, and the ONE
+   * seam where the product serves the real disk rather than the canvas.
+   *
+   * **Owner-scoped, and deliberately NOT the admissions door.** Every canvas
+   * is born with a link grant; a tree behind that door would hand anyone
+   * with the link a listing of the owner's working directory, `.env`
+   * included (the workbench security review's hardest line). The gate is:
+   * this daemon bound to loopback, the peer ON loopback, and the canvas
+   * living HERE — which on a loopback daemon is the owner at their own
+   * machine, because a guest is remote by construction. A hosted home fails
+   * all three and has no `dirs.json` anyway; it refuses with the same
+   * sentence a canvas with no binding gets.
+   *
+   * The listing is not the content: `/tree` names files, `/tree/file` hands
+   * one file's bytes to the owner's own browser so a person can ADD it to
+   * the canvas through the ordinary upload + `item.add` path — content
+   * enters the shared surface only by that explicit act. Nothing here
+   * writes, and `tree.ts` jails and denies independently of this gate.
+   */
+  const treeGate = async (
+    canvasId: string,
+    req: { ip: string },
+    reply: { status: (code: number) => { send: (body: unknown) => unknown } },
+  ): Promise<string[] | null> => {
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    if (!loopbackBound(app) || !local || (options.homes?.homeOf(canvasId) ?? null) !== null) {
+      reply.status(404).send({
+        error:
+          "this canvas's files live with its home daemon, on its owner's machine — " +
+          "the tree is served only there, only locally",
+        code: "no-directory",
+      });
+      return null;
+    }
+    const dirs = await boundDirs(isocanHome(), canvasId);
+    if (dirs.length === 0) {
+      reply.status(404).send({
+        error: "no directory is bound to this canvas on this machine (isocan use <canvas>)",
+        code: "no-directory",
+      });
+      return null;
+    }
+    return dirs;
+  };
+
+  app.get("/api/projects/:id/tree", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id); // unknown canvas answers as it always does
+    const dirs = await treeGate(id, req, reply);
+    if (!dirs) return reply;
+    const roots = [];
+    for (const dir of dirs) roots.push(await readTree(dir));
+    return { roots };
+  });
+
+  app.get("/api/projects/:id/tree/file", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    const dirs = await treeGate(id, req, reply);
+    if (!dirs) return reply;
+    const rel = (req.query as { path?: string }).path;
+    if (!rel) return reply.status(400).send({ error: "path?", code: "bad-op" });
+    for (const dir of dirs) {
+      const bytes = await readBound(dir, rel);
+      if (bytes !== null) {
+        // Octet-stream on purpose: the browser hands it to the upload path,
+        // never renders it — a served page here would be a second content
+        // origin problem.
+        return reply.header("Content-Type", "application/octet-stream").send(bytes);
+      }
+    }
+    // One sentence for every refusal — absent, jailed, denied, oversize —
+    // because which rule refused is what a probe would love to learn.
+    return reply.status(404).send({ error: "no such file in the bound directory", code: "no-file" });
   });
 
   app.get("/api/projects/:id/blobs/:hash", async (req, reply) => {

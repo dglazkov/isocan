@@ -857,6 +857,10 @@ the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
 `undo`/`redo`, `wait`, `tail -f`, `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
+`tree` (the bound directory as the daemon lists it — owner-scoped, so it
+answers only at the canvas's own machine),
+`present <item>` (a main-thread comment carrying the workbench address —
+inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,
 `share`, `pass` (a credential for another MACHINE — never post it, never
 commit it; `share`'s address is what you hand a person),

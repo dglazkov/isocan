@@ -131,3 +131,15 @@ describe("the stage's panes", () => {
     expect(stage).not.toMatch(/allow-same-origin/);
   });
 });
+
+describe("the editor's bar earns its buttons", () => {
+  const editor = read("../src/components/StageEditor.tsx");
+
+  it("offers Save and Revert only over a dirty buffer", () => {
+    // A Save button over a clean buffer is a question with no answer — and
+    // the habitual ⌘S must not mint an identical version either, so the
+    // guard is in save() as well as in the render.
+    expect(editor).toMatch(/\{dirty && \(/);
+    expect(editor).toMatch(/saving \|\| !dirtyRef\.current\) return;/);
+  });
+});

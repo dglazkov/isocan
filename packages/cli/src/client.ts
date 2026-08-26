@@ -509,6 +509,12 @@ export class DaemonClient {
 
   /** With waitMs, the daemon long-polls: holds until an entry lands past
    * `since` or the window closes (empty array). */
+  /** The bound directory's listing — owner-scoped, answered only by the
+   * canvas's own local daemon (`tree.ts` has the rules). */
+  getTree(canvasId: string): Promise<{ roots: Array<{ root: string; entries: Array<{ path: string; kind: "file" | "dir"; size: number }>; truncated: boolean }> }> {
+    return this.request("GET", `/api/projects/${canvasId}/tree`);
+  }
+
   getLog(canvasId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
     const wait = waitMs !== undefined ? `&waitMs=${waitMs}` : "";
     return this.request("GET", `/api/projects/${canvasId}/oplog?since=${since}${wait}`);

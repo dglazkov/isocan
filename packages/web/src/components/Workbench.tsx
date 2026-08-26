@@ -20,6 +20,8 @@ import { ArtifactStage } from "./ArtifactStage.tsx";
 import { ItemThumb } from "./ItemThumb.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
+import { WbFiles } from "./WbFiles.tsx";
+import { goStage } from "../lib/goStage.ts";
 import { iconKindFor } from "../lib/kinds.ts";
 
 /**
@@ -64,6 +66,28 @@ export function Workbench({
   const navigate = useNavigate();
   const item = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
   const agentsWidth = useUiStore((s) => s.wbAgentsWidth);
+  const followSessionId = useUiStore((s) => s.followSessionId);
+  const followed = useCanvasStore((s) =>
+    followSessionId ? (s.sessions.find((x) => x.sessionId === followSessionId) ?? null) : null,
+  );
+
+  /**
+   * Workbench follow: the stage tracks what the watched agent's locus names.
+   *
+   * The grabbing-the-wheel rule, written before the loop (the design doc's
+   * 4.5): follow navigates with REPLACE — Back is yours, never a replay of
+   * the agent's afternoon — and any navigation you make yourself clears it
+   * (every stage-bound click in this file goes through `goStage`). Esc stops
+   * the watch before it pops a level, because the ladder takes transient
+   * chrome first and a follow is exactly that.
+   */
+  useEffect(() => {
+    const locus =
+      followed?.activity && "itemId" in followed.activity ? followed.activity.itemId : null;
+    if (locus && locus !== itemId) {
+      navigate(workbenchItemPath(canvasId, locus), { replace: true });
+    }
+  }, [canvasId, itemId, followed, navigate]);
   const [rail, setRail] = useState(() => readRail(canvasId));
   const setRailKept = (folded: boolean) => {
     setRail(folded);
@@ -84,6 +108,10 @@ export function Workbench({
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
+      if (useUiStore.getState().followSessionId) {
+        useUiStore.getState().setFollow(null);
+        return;
+      }
       if (itemId) navigate(workbenchPath(canvasId));
       else back();
     }
@@ -102,6 +130,15 @@ export function Workbench({
             <KindIcon className="kind-icon" kind={iconKindFor(item)} />
             <b>{item.title}</b>
           </span>
+        )}
+        {followed && (
+          <button
+            className="follow-banner wb"
+            onClick={() => useUiStore.getState().setFollow(null)}
+            title="Stop watching (Esc)"
+          >
+            Watching {followed.label ?? followed.actor.name} — Esc to stop
+          </button>
         )}
         <button
           className="fullscreen-copy"
@@ -141,6 +178,7 @@ export function Workbench({
               «
             </button>
             <Roster canvasId={canvasId} focused={itemId} viewer={actor.id} />
+            <WbFiles canvasId={canvasId} actor={actor} />
             <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
             <PanelResizer
               value={agentsWidth}
@@ -302,6 +340,13 @@ function AgentRowView({
       </button>
       {open && canvas && (
         <div className="wb-row-detail">
+          <button
+            className="wb-watch"
+            onClick={() => useUiStore.getState().setFollow(session.sessionId)}
+            title="The stage follows what they work on — Esc, or any click of your own, stops it"
+          >
+            Watch
+          </button>
           {(() => {
             const answering = answeringExcerpt(canvas, session);
             return answering ? (
@@ -314,7 +359,7 @@ function AgentRowView({
             <button
               className="wb-thumb"
               title={`Put ${canvas.items[workingOn]!.title} on the stage`}
-              onClick={() => navigate(workbenchItemPath(canvasId, workingOn))}
+              onClick={() => goStage(navigate, workbenchItemPath(canvasId, workingOn))}
             >
               <ItemThumb canvasId={canvasId} itemId={workingOn} width={200} height={92} />
               <span>{canvas.items[workingOn]!.title}</span>
@@ -326,7 +371,7 @@ function AgentRowView({
                 {act.itemId && canvas.items[act.itemId] ? (
                   <button
                     className={`wb-act${focused === act.itemId ? " here" : ""}`}
-                    onClick={() => navigate(workbenchItemPath(canvasId, act.itemId!))}
+                    onClick={() => goStage(navigate, workbenchItemPath(canvasId, act.itemId!))}
                   >
                     {describeAct(act.kind, act.subject)}
                   </button>
