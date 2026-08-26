@@ -12,7 +12,7 @@ import {
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
 import { applyLocalEcho } from "../stores/canvasStore.ts";
-import { centerOn, fitBounds, fitInto, itemsBounds } from "../lib/viewport.ts";
+import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
@@ -174,12 +174,23 @@ function CanvasSurface({
         ui.setFollow(null); // they left, or lost their place — nothing to watch
         return;
       }
-      const width = window.innerWidth + (ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0);
-      const target = centerOn(ui.viewport, locus.x, locus.y, width, window.innerHeight);
+      // Centre the locus in the STAGE, not the window. `centerOn` aims at
+      // width/2, so handing it twice the stage's centre lands the point at
+      // the centre of what is actually visible — the same arithmetic the old
+      // `innerWidth + panelWidth` hack did for the left panel only, now from
+      // the one derivation that also knows the docks and the rail gutter.
+      const stage = stageRect();
+      const target = centerOn(
+        ui.viewport,
+        locus.x,
+        locus.y,
+        stage.x * 2 + stage.width,
+        stage.y * 2 + stage.height,
+      );
       const dx = target.tx - ui.viewport.tx;
       const dy = target.ty - ui.viewport.ty;
       const dist = Math.hypot(dx, dy); // screen px — tx/ty live in screen space
-      const wake = Math.min(width, window.innerHeight) * 0.22;
+      const wake = Math.min(stage.width, stage.height) * 0.22;
       if (!chasing && dist > wake) chasing = true;
       if (chasing) {
         if (dist < 1) chasing = false;
