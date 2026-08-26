@@ -20,7 +20,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { badgeCorner, counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
@@ -97,10 +97,6 @@ export function ItemView({
   // The rule lives in lib/chrome.ts so a test can reach it without a browser —
   // there is no floor, and chrome.test.ts is where that is held.
   const row = titleRow(width, scale);
-  const corner = useCanvasStore((s) => badgeCorner(item, s.canvas, scale));
-  // Same rule as the badge, applied to the star: a pin marks a place a person
-  // chose, so the chrome is what moves. Here that means the other end of the
-  // name row rather than another corner.
   const kind = iconKindFor(item);
   const isBrowser = current.mimeType === BROWSER_MIME;
   // What the strip under the item says right now. The rule lives in
@@ -415,8 +411,8 @@ export function ItemView({
       {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
       {item.versions.length > 1 && roomy && (
         <button
-          className={`version-badge version-badge-${corner}`}
-          style={{ ...chrome, transformOrigin: corner === "se" ? "bottom right" : "top right" }}
+          className="version-badge version-badge-ne"
+          style={{ ...chrome, transformOrigin: "top right" }}
           title={`${item.versions.length} versions — show them (S)`}
           onClick={(e) => {
             e.stopPropagation();

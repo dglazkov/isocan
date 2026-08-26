@@ -19,6 +19,36 @@ export const PLACEMENT_CLEARANCE = 12;
 /** How far the search will look before giving up and going round the side. */
 const MAX_RINGS = 14;
 
+/**
+ * **Where a thread anchored to an item lands** — the item's BOTTOM-LEFT
+ * corner, as an offset from its origin.
+ *
+ * In core because both surfaces must agree, and until this existed they did
+ * not: `⇧C` in the app anchored at `{0, 0}` under a comment claiming "where a
+ * thread anchored by the CLI lands too, so both surfaces agree", while
+ * `isocan comment add --item` had always used `{width + 12, 0}` — off the
+ * top-right. One canvas, two answers, and a comment asserting the opposite.
+ * One function now, called by both.
+ *
+ * Bottom-left rather than top-left because the top edge is the NAME's: a pin
+ * hangs its body above its anchor point, so a thread anchored at the origin
+ * covered the item's own title with the conversation about it. The bottom-left
+ * is where the item's other attachments already live — the marks row — so an
+ * anchored thread joins them instead of fighting the label.
+ *
+ * The corner itself, not a nudge off it: a corner is the same place at every
+ * zoom, while an offset in world units is a different number of screen pixels
+ * at each one (the mistake `.item-titlebar` and `.version-badge` each had to
+ * unlearn). What separates the pin from the marks row is the pin's own
+ * constant-size drop, which is screen-measured — see `PIN_DROP` in the app.
+ */
+export function anchorOffset(item: { width: number; height: number }): {
+  x: number;
+  y: number;
+} {
+  return { x: 0, y: item.height };
+}
+
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 
