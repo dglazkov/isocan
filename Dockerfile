@@ -125,10 +125,16 @@ ENV ISOCAN_HOME=/tmp/isocan
 # See the header: this is the flag that makes the container reachable.
 ENV ISOCAN_BIND=0.0.0.0
 
-# The build stamp `/healthz` reports. Passed by cloudbuild.yaml; "unknown" when
-# somebody builds by hand, which is honest.
+# The build stamp `/healthz` reports, read by `buildStamp()` (auto-upgrade
+# phase 1). Passed by cloudbuild.yaml; "unknown" when somebody builds by hand,
+# which is honest — `plausibleSha` maps it to null rather than reporting a
+# word as a commit. ISOCAN_BUILD_DATE is main's commit date, best-effort: the
+# sha identifies the build, and this only adds the older/newer comparison, so
+# an empty value simply omits the date rather than failing anything.
 ARG ISOCAN_BUILD_SHA=unknown
 ENV ISOCAN_BUILD_SHA=${ISOCAN_BUILD_SHA}
+ARG ISOCAN_BUILD_DATE=
+ENV ISOCAN_BUILD_DATE=${ISOCAN_BUILD_DATE}
 
 WORKDIR /app
 # The whole tree in one COPY, on purpose: npm's workspace links under

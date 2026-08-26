@@ -97,7 +97,18 @@ passes" is not a measurement when the claim is about a real machine.
 
 ## Phase 1 — The home that can report which build it is ⚑ promote
 
-**Status: NOT STARTED**
+**Status: BUILT 26 Aug 2026 — code and image plumbing landed; the ⚑ promote
+proof on isocan.io is the user's to take.** `buildStamp()` reads a third
+source between the manifest and `.git` — `ISOCAN_BUILD_SHA`, gated by
+`plausibleSha` so `unknown`, `e2e-…`, empty and any non-hex map to null
+rather than being reported as a commit. Precedence is manifest → env → `.git`,
+each reached only when the ones before it cannot say. The Dockerfile now
+carries `ISOCAN_BUILD_DATE` too (main's commit date, read from `.git` in the
+`build` cloudbuild step, empty-and-absent when the workspace has none). Unit
+proof landed (`plausibleSha` over every not-a-commit the image can hold);
+live env-path proof taken locally (a daemon given `ISOCAN_BUILD_SHA=deadbee…`
+reports `deadbee`). Remaining: the dev/prod `/api/healthz` measurement, which
+needs the image to build and deploy — the ⚑ promote half.
 
 **Work:** `buildStamp()` learns a third source. Today it reads the release
 manifest and `.git`, and a container has neither: `.dockerignore` excludes

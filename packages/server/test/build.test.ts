@@ -2,7 +2,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildStamp, describeBuild, stalenessOf, type BuildStamp } from "../src/build.ts";
+import {
+  buildStamp,
+  describeBuild,
+  plausibleSha,
+  stalenessOf,
+  type BuildStamp,
+} from "../src/build.ts";
 
 /** A stamp with the fields a test does not care about filled in. */
 const stampOf = (over: Partial<BuildStamp>): BuildStamp => ({
@@ -127,5 +133,32 @@ describe("build stamp", () => {
     const verdict = stalenessOf({ startedAt: "2026-08-16T09:00:00.000Z" });
     expect(verdict.stale).toBe(true);
     expect(verdict.why).toContain("predates");
+  });
+});
+
+/**
+ * Auto-upgrade phase 1: the container's stamp is a build-arg, so the gate
+ * that turns it into an identity is the whole feature. The image defaults the
+ * arg to a word; a word is not a commit, and reporting one as if it were is
+ * the false-success the project's standing lessons name.
+ */
+describe("the build-arg gate (plausibleSha)", () => {
+  it("passes a real sha through, shortened to release.mjs's seven", () => {
+    expect(plausibleSha("a1b2c3d4e5f6")).toBe("a1b2c3d");
+    expect(plausibleSha("abc1234")).toBe("abc1234");
+    // A 40-char sha is the git default; seven is the stamp's shape.
+    expect(plausibleSha("0".repeat(40))).toBe("0000000");
+  });
+
+  it("maps every not-a-commit the image can hold to null", () => {
+    // The Dockerfile's default, local-e2e's tag, empty and unset — the exact
+    // values the design enumerates as 'this copy cannot say'.
+    expect(plausibleSha("unknown")).toBe(null);
+    expect(plausibleSha("e2e-1724692800")).toBe(null);
+    expect(plausibleSha("")).toBe(null);
+    expect(plausibleSha(undefined)).toBe(null);
+    // A tag ref is not a sha either; only hex passes.
+    expect(plausibleSha("v0.1.0")).toBe(null);
+    expect(plausibleSha("main")).toBe(null);
   });
 });

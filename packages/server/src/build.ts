@@ -96,18 +96,41 @@ export function buildStamp(): BuildStamp {
       // Missing witness: the others still date this copy.
     }
   }
-  // The manifest first: on an install it is the only source, and on a checkout
-  // that somehow has both, a stamped manifest is a deliberate statement while
-  // `.git/HEAD` is wherever the working tree happens to be pointed.
-  const head = stamped.commit ? null : gitHead();
+  // Precedence: manifest, then environment, then `.git`. A stamped manifest
+  // is a deliberate statement (`release.mjs` wrote it); an environment
+  // variable is what a container's build-arg happened to hold (the image has
+  // no `.git` — `.dockerignore` excludes it — and is not built from the
+  // release branch, so env is its only source); `.git` is a checkout reading
+  // its own working tree. Only reach for the next source when the ones before
+  // it cannot say (auto-upgrade phase 1).
+  const envSha = plausibleSha(process.env.ISOCAN_BUILD_SHA);
+  const envBuiltAt = envSha ? (process.env.ISOCAN_BUILD_DATE || null) : null;
+  const head = stamped.commit || envSha ? null : gitHead();
   cached = {
     version,
     root,
     codeAt: new Date(newest).toISOString(),
-    commit: stamped.commit ?? head?.commit ?? null,
-    builtAt: stamped.builtAt ?? head?.committedAt ?? null,
+    commit: stamped.commit ?? envSha ?? head?.commit ?? null,
+    builtAt: stamped.builtAt ?? envBuiltAt ?? head?.committedAt ?? null,
   };
   return cached;
+}
+
+/**
+ * A build-arg's value, but only when it is a commit — otherwise null.
+ *
+ * `ISOCAN_BUILD_SHA` defaults to the literal `unknown` for a hand-built image
+ * and to `e2e-<timestamp>` under `infra/local-e2e.sh`. Reporting either as an
+ * identity is the false-success the auto-upgrade lessons name ("an oracle
+ * that cannot answer must produce no verdict"): a copy that cannot say which
+ * commit it is says null, never a word pretending to be a sha. The shape is
+ * `release.mjs`'s own — a seven-plus-character hex — so `unknown`, `e2e-…`,
+ * empty and unset all fall through to null together.
+ */
+export function plausibleSha(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const value = raw.trim();
+  return /^[0-9a-f]{7,40}$/.test(value) ? value.slice(0, 7) : null;
 }
 
 /**
