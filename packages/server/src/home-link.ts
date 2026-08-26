@@ -841,6 +841,28 @@ export class HomeLink implements HomeConnection {
     } catch (err) {
       return gaveUp((err as Error).message);
     }
+    /**
+     * **The error listener goes on FIRST — before anything can terminate this
+     * socket, and before it is even adopted.**
+     *
+     * Without a listener an abrupt death raises an unhandled `error` on the
+     * EventEmitter and takes the daemon with it, which is why `ws.ts` installs
+     * one on every accepted socket. The subtlety that cost a CI run: `ws`
+     * treats terminating a socket that is still CONNECTING as an error
+     * ("WebSocket was closed before the connection was established"), so the
+     * supersede branch below is itself a way to raise one. Attaching after the
+     * branch left a window in which the daemon could be killed by its own
+     * tidying up — and the shutdown path walks straight through it, since a
+     * closing daemon is exactly when dials are in flight with nowhere to land.
+     *
+     * The message is kept rather than discarded: the close that follows
+     * reports it, so a refused dial can say WHY instead of only that it
+     * happened.
+     */
+    let failure: string | null = null;
+    socket.on("error", (err: Error) => {
+      failure = err.message;
+    });
     if (link.closed || link.dialSeq !== attempt) {
       // Superseded while we were getting here. Terminate rather than adopt:
       // two sockets on one canvas would relay presence twice and apply the
@@ -849,15 +871,6 @@ export class HomeLink implements HomeConnection {
       return;
     }
     link.socket = socket;
-    // Without a listener an abrupt death raises an unhandled 'error' event on
-    // the EventEmitter and takes the daemon with it — the same reason `ws.ts`
-    // installs one on every accepted socket. The message is kept rather than
-    // discarded: the close that follows reports it, so a refused dial can say
-    // WHY instead of only that it happened.
-    let failure: string | null = null;
-    socket.on("error", (err: Error) => {
-      failure = err.message;
-    });
     socket.on("open", () => {
       link.dialledAt = null;
       this.scheduleRelay(link.canvasId);
