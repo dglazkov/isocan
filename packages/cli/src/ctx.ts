@@ -14,7 +14,7 @@ import {
   recordDir,
   writeMarker,
   type DirBinding,
-} from "./binding.ts";
+} from "@isocan/server";
 
 export interface Ctx {
   client: DaemonClient;

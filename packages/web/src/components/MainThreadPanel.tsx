@@ -287,7 +287,7 @@ function Panel({
             than the thing people do in it. Name and hint, the pattern the
             stage's panes already use. */}
         <b>Chat</b>
-        <i className="main-hint">everyone here, agents included</i>
+        <i className="main-hint" title="Everything posted here reaches every collaborator, agents included, with no @-mention needed — which is what makes it different from a comment pinned to one thing.">everyone here, agents included</i>
         <span className="spacer" />
         {thread && (
           <button
@@ -295,7 +295,7 @@ function Panel({
             title="This conversation goes back to being a pin on the canvas, where it was anchored"
             onClick={() => sendOp(canvasId, actor, { type: "thread.setMain", threadId: null })}
           >
-            back to the canvas
+            back to canvas
           </button>
         )}
         <button

@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
-import { markerFile } from "../src/binding.ts";
+import { markerFile } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 
 /**

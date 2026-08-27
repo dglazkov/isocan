@@ -121,7 +121,7 @@ import {
   resolveCanvas,
   writeConfig,
 } from "./ctx.ts";
-import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "./binding.ts";
+import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "@isocan/server";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
@@ -3290,7 +3290,13 @@ program
       // only ASKS; the refusal names the remedy. The listing already hides
       // dotfiles, secret shapes and noise directories, so what prints is
       // what the workbench's files pane shows: one derivation, two surfaces.
-      const { roots } = await ctx.client.getTree(p.id);
+      // The daemon states the fact; a terminal's remedy is a command, so
+      // this surface is the one that names it (the app offers a field).
+      const { roots } = await ctx.client.getTree(p.id).catch((err: Error) => {
+        throw /no directory is bound/.test(err.message)
+          ? new Error(`${err.message} — \`isocan use ${p.id}\` binds this one`)
+          : err;
+      });
       if (ctx.json) return printJson(roots);
       for (const root of roots) {
         console.log(root.root);
