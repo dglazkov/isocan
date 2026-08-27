@@ -132,10 +132,33 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   return (
     <section
       className="wb-files"
-      aria-label="Files"
+      aria-label="Files in the directory bound to this canvas"
       style={{ maxHeight: browsing ? Math.max(filesH, 340) : filesH }}
     >
-      <h3>Files</h3>
+      {/**
+       * **The header names the DIRECTORY, not the idea of files.**
+       *
+       * It said "Files", and so does the canvas's own panel three feet away
+       * — which lists every item ON THE CANVAS. Two panels, one word, two
+       * different sets, and the failure is silent: a canvas holding ten
+       * screens beside a repo holding one `index.html` shows one file here
+       * and looks broken. It was reported as exactly that.
+       *
+       * So this says which folder it is showing, with the full path on
+       * hover, and a quiet "on disk" to draw the line the word could not.
+       * Unbound, there is no folder to name and the plain word is right —
+       * the bind affordance underneath explains the rest.
+       */}
+      <h3>
+        {tree.state === "ready" ? (
+          <>
+            <span title={tree.root}>{tree.root.split("/").filter(Boolean).pop()}/</span>
+            <i className="wb-files-hint">on disk</i>
+          </>
+        ) : (
+          "Files"
+        )}
+      </h3>
       {tree.state === "loading" && <p className="wb-quiet">Reading the tree…</p>}
       {tree.state === "none" && <BindDirectory canvasId={canvasId} note={tree.note} onBound={reload} onBrowsing={setBrowsing} />}
       {tree.state === "ready" && (
