@@ -3233,9 +3233,30 @@ button.mt-card:hover { border-color: var(--accent); }
    second wording of a note brought the same card back for the same reason,
    so it takes the same hairline. */
 .item.textnode .ply { background: transparent; border-color: var(--line-soft); }
+/* The mark that stands in for words too small to be words. Quiet on purpose:
+   at the zoom where these appear there may be dozens, and their job is to say
+   "text lives here" while the canvas is read as a whole — not to compete with
+   the screens they annotate. Its size is set per node, in world units that
+   resolve to a bounded number of SCREEN pixels. */
+.text-mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+  font-weight: 700; line-height: 1;
+  /* Quiet by TOKEN, not by opacity: `dimmed.test.ts` refuses faded text
+     because a contrast decision hidden behind an alpha is one no colour
+     test can see. `--ink-soft` is the same voice the section eyebrows use,
+     which is exactly the loudness this wants. */
+  color: var(--ink-soft);
+  user-select: none;
+}
 .item.textnode .md-view {
   padding: 4px 6px;
-  font-size: 16px;
+  /* Both supplied per node by `ItemView` — the ladder step's world size and
+     the chosen face's stack — so the look stays here and only the two values
+     that vary per node come from the item. The fallbacks are the defaults an
+     older node (which carries neither property) renders with. */
+  font-size: var(--text-size, 16px);
+  font-family: var(--text-face, inherit);
   line-height: 1.5;
   color: var(--ink);
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
@@ -3248,6 +3269,32 @@ button.mt-card:hover { border-color: var(--accent); }
    outline — the base `.item.selected` outline does that and is left alone. */
 
 .text-composer { position: absolute; z-index: 6; }
+/* The step and face controls, counter-scaled so they stay a usable size at
+   any zoom — the same move the item titlebar makes, for the same reason: the
+   words are canvas content and scale, the controls are chrome and must not. */
+.text-style-bar {
+  position: absolute; bottom: 100%; left: 0; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px; border-radius: 7px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  transform: scale(calc(1 / var(--scale, 1))); transform-origin: bottom left;
+}
+.text-style-gap { width: 1px; height: 16px; margin: 0 4px; background: var(--line); }
+/* One class for what both buttons ARE, and a second only for what the face
+   button differs in — the `.resize-handle` pattern the sheet already uses,
+   and what `oneblock` is asking for when it refuses a class declared twice. */
+.text-style-btn {
+  min-width: 22px; height: 22px; padding: 0 5px;
+  border: none; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--ink-muted);
+  font-size: 11px; font-weight: 700; line-height: 1;
+}
+.text-style-btn:hover { background: var(--chip); color: var(--ink); }
+.text-style-btn.on { background: var(--accent); color: var(--accent-ink); }
+/* The face buttons show their own face, so they are set in it and want the
+   weight prose is set in rather than a label's bold. */
+.text-style-face { font-weight: 500; font-size: 12px; }
 .text-composer textarea {
   display: block;
   width: 100%;

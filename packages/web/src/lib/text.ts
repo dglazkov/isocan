@@ -1,12 +1,16 @@
 import type { Actor, Placement } from "@isocan/core";
 import {
+  TEXT_FACE_PROP,
   TEXT_FILENAME,
   TEXT_MIME,
   TEXT_PROPERTIES,
+  TEXT_STYLE_PROP,
   newItemId,
   newVersionId,
   textBox,
   textTitle,
+  type TextFace,
+  type TextStyle,
 } from "@isocan/core";
 import { sendOp, uploadBlob } from "./api.ts";
 
@@ -27,11 +31,13 @@ export async function addTextNode(
    *  estimate in `textBox` exists for the CLI, which has nothing to measure
    *  with; the app should not use a guess when it has the real thing. */
   measured?: { width: number; height: number },
+  style: TextStyle = "body",
+  face: TextFace = "sans",
 ): Promise<string> {
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
   const itemId = newItemId();
-  const box = measured ?? textBox(body);
+  const box = measured ?? textBox(body, style);
   await sendOp(canvasId, actor, {
     type: "item.add",
     itemId,
@@ -46,7 +52,14 @@ export async function addTextNode(
     height: box.height,
     placement,
     title: textTitle(body),
-    properties: TEXT_PROPERTIES,
+    // The defaults are written as ABSENCE, not as "body"/"sans": a node that
+    // says nothing renders the same as every node made before the ladder
+    // existed, and there is exactly one spelling of the default.
+    properties: {
+      ...TEXT_PROPERTIES,
+      ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
+      ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+    },
   });
   return itemId;
 }
@@ -76,6 +89,8 @@ export async function reviseTextNode(
   measured?: { width: number; height: number },
   /** True when the composer measured taller than the item currently is. */
   grew = false,
+  style: TextStyle = "body",
+  face: TextFace = "sans",
 ): Promise<void> {
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
@@ -93,7 +108,20 @@ export async function reviseTextNode(
   await sendOp(canvasId, actor, {
     type: "item.update",
     itemId,
-    patch: { title: textTitle(body) },
+    patch: {
+      title: textTitle(body),
+      // Restyling to a default must REMOVE the property rather than write
+      // the word "body" — otherwise there are two spellings of the same node
+      // and only one of them matches what the CLI writes.
+      properties: {
+        ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
+        ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+      },
+      removeProperties: [
+        ...(style === "body" ? [TEXT_STYLE_PROP] : []),
+        ...(face === "sans" ? [TEXT_FACE_PROP] : []),
+      ],
+    },
   });
   if (measured && grew) {
     await sendOp(canvasId, actor, {

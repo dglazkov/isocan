@@ -140,3 +140,27 @@ describe("every VersionContent site says whether it is a text node", () => {
     }
   });
 });
+
+/**
+ * **The style controls are part of the composer, not "away" from it.**
+ *
+ * Click-outside is what commits a text node, and the first version of it
+ * asked whether the press landed inside the TEXTAREA. The step and face
+ * buttons sit in the same box but not in the textarea, so choosing a size
+ * counted as clicking away: the composer committed at the OLD style and
+ * closed, which made the one control that changes how the words look
+ * impossible to use on them. Caught by using it, so it gets a guard.
+ */
+describe("choosing a size does not dismiss the composer", () => {
+  it("tests the whole composer for the click-outside, not just the textarea", () => {
+    const src = readFileSync(
+      fileURLToPath(new URL("../src/components/TextComposer.tsx", import.meta.url)),
+      "utf8",
+    );
+    const effect = src.slice(src.indexOf("function onDown"), src.indexOf("document.addEventListener"));
+    expect(effect, "the outside test must use the composer box").toContain("box.current");
+    expect(effect, "testing the textarea alone makes the toolbar unusable").not.toContain(
+      "area.current",
+    );
+  });
+});

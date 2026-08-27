@@ -145,9 +145,22 @@ describe("every token used is a token defined", () => {
 
   it("defines every token the stylesheet reads", () => {
     // `--scale` and `--work-color` are set inline by React (ItemView, the
-    // viewport), never in this file, so they are named here as the two
+    // viewport), never in this file, so they are named here as the
     // deliberate exceptions rather than being silently tolerated by the regex.
-    const setInJs = new Set(["--scale", "--work-color", "--who", "--mention-color"]);
+    //
+    // `--text-size` and `--text-face` join them: a text node's ladder step
+    // and face are ITEM PROPERTIES, so their values come from the canvas and
+    // cannot be declared in a stylesheet. Both are read with a fallback —
+    // `var(--text-size, 16px)` — which is what an older node carrying neither
+    // property renders with, so the declaration never drops.
+    const setInJs = new Set([
+      "--scale",
+      "--work-color",
+      "--who",
+      "--mention-color",
+      "--text-size",
+      "--text-face",
+    ]);
     const known = defined(rules);
     const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));
     expect(

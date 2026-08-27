@@ -350,7 +350,16 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       e.preventDefault();
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
-      ui.setPendingText({ x: Math.round(world.x), y: Math.round(world.y), itemId: null, body: "" });
+      ui.setPendingText({
+        x: Math.round(world.x),
+        y: Math.round(world.y),
+        itemId: null,
+        body: "",
+        // A new node opens at the step and face you last used. Labelling six
+        // clusters means choosing "title" once, not six times.
+        style: ui.lastTextStyle,
+        face: ui.lastTextFace,
+      });
       ui.setActiveTool("select");
       return;
     }

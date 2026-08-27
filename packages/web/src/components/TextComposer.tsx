@@ -1,6 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
-import { TEXT_SIZE, TEXT_WIDTH } from "@isocan/core";
+import {
+  TEXT_FACES,
+  TEXT_FACE_STACK,
+  TEXT_SIZE,
+  TEXT_STYLES,
+  TEXT_STYLE_SIZE,
+  TEXT_WIDTH,
+  textBox,
+  type TextFace,
+  type TextStyle,
+} from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice } from "../stores/canvasStore.ts";
 import { addTextNode, reviseTextNode, textCommit } from "../lib/text.ts";
@@ -24,6 +34,8 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   const setPendingText = useUiStore((s) => s.setPendingText);
   const [body, setBody] = useState(pending?.body ?? "");
   const area = useRef<HTMLTextAreaElement | null>(null);
+  // The WHOLE composer, toolbar included — see the click-outside effect.
+  const box = useRef<HTMLDivElement | null>(null);
   // Committing is reachable from two paths that can both fire for one act —
   // ⌘Enter moves focus, which is also a blur. Without this the same words
   // land twice, as two items.
@@ -74,7 +86,11 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   useEffect(() => {
     if (!pending) return;
     function onDown(e: PointerEvent) {
-      const el = area.current;
+      // Outside the COMPOSER, not outside the textarea. The step and face
+      // buttons sit in the same box and are not "away" — testing only the
+      // textarea made choosing a size commit and close, so the one control
+      // that changes how the words look could never be used on them.
+      const el = box.current;
       if (el && e.target instanceof Node && el.contains(e.target)) return;
       void commitRef.current();
     }
@@ -85,7 +101,32 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
 
   if (!pending) return null;
 
-  const width = pending.width ?? TEXT_WIDTH;
+  const style = pending.style;
+  const face = pending.face;
+  const size = TEXT_STYLE_SIZE[style];
+  // A new node's column widens with the step (`textBox`); an existing one
+  // keeps the box it already has, because restyling must not silently move
+  // the furniture around it.
+  const width = pending.width ?? textBox("", style).width;
+
+  /** Change the step or face mid-sentence, without losing the sentence. */
+  function restyle(next: { style?: TextStyle; face?: TextFace }) {
+    const ui = useUiStore.getState();
+    const at = ui.pendingText;
+    if (!at) return;
+    const style2 = next.style ?? at.style;
+    const face2 = next.face ?? at.face;
+    ui.setPendingText({
+      ...at,
+      style: style2,
+      face: face2,
+      body,
+      // A NEW node's column follows its step; an existing one keeps its box.
+      ...(at.itemId ? {} : { width: textBox("", style2).width }),
+    });
+    ui.setLastText(style2, face2);
+    area.current?.focus();
+  }
 
   async function commit() {
     if (done.current) return;
@@ -104,9 +145,17 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     try {
       if (at.itemId) {
         const grew = measured.height > (at.height ?? 0);
-        await reviseTextNode(canvasId, actor, at.itemId, words, measured, grew);
+        await reviseTextNode(canvasId, actor, at.itemId, words, measured, grew, at.style, at.face);
       } else {
-        await addTextNode(canvasId, actor, words, { x: at.x, y: at.y }, measured);
+        await addTextNode(
+          canvasId,
+          actor,
+          words,
+          { x: at.x, y: at.y },
+          measured,
+          at.style,
+          at.face,
+        );
       }
     } catch (err) {
       // The words are gone from the screen by now, so say what they were:
@@ -118,9 +167,42 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   commitRef.current = commit;
 
   return (
-    <div className="text-composer" style={{ left: pending.x, top: pending.y, width }}>
+    <div
+      className="text-composer"
+      ref={box}
+      style={{ left: pending.x, top: pending.y, width }}
+    >
+      {/* The controls sit WITH the words, not on the selection, because size
+          and face are things you decide while writing — and because the
+          composer already renders at the size it will commit at, so the
+          choice is previewed by the thing you are typing into. */}
+      <div className="text-style-bar" onPointerDown={(e) => e.preventDefault()}>
+        {TEXT_STYLES.map((s) => (
+          <button
+            key={s}
+            className={`text-style-btn text-style-step${s === style ? " on" : ""}`}
+            title={`${s} — readable down to ${Math.ceil((8 / TEXT_STYLE_SIZE[s]) * 100)}% zoom`}
+            onClick={() => restyle({ style: s })}
+          >
+            {s[0]!.toUpperCase()}
+          </button>
+        ))}
+        <span className="text-style-gap" />
+        {TEXT_FACES.map((f) => (
+          <button
+            key={f}
+            className={`text-style-btn text-style-face${f === face ? " on" : ""}`}
+            style={{ fontFamily: TEXT_FACE_STACK[f] }}
+            title={f}
+            onClick={() => restyle({ face: f })}
+          >
+            Aa
+          </button>
+        ))}
+      </div>
       <textarea
         ref={area}
+        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face] }}
         value={body}
         placeholder="Type…"
         spellCheck
