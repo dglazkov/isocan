@@ -619,3 +619,50 @@ describe("the Chat and the comments say which they are", () => {
     );
   });
 });
+
+/**
+ * **The editor wears the app's clothes.** CodeMirror shipped stock — its own
+ * greys, its own blue, its own gutter — and read as a component sitting in
+ * the product rather than part of it.
+ */
+describe("the editor's theme", () => {
+  const cm = readFileSync(new URL("../src/lib/cmtheme.ts", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+  it("colours syntax from tokens, never from literals", () => {
+    // A hex here would be a colour that cannot follow the theme, in the one
+    // file the stylesheet's own guards do not watch.
+    expect(cm).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(cm).toMatch(/var\(--syn-/);
+  });
+
+  it("keeps syntax off the SEMANTIC tokens", () => {
+    // `--good` for a string and `--danger` for a tag would read right and
+    // mean wrong: those say "this went well" and "this is a problem"
+    // everywhere else in the product, and a tag name is neither. `--danger`
+    // appears exactly once, on `invalid`, which IS a problem.
+    expect(cm).not.toContain("var(--good)");
+    expect(cm).not.toContain("var(--running)");
+    expect((cm.match(/var\(--danger\)/g) ?? []).length).toBe(1);
+    expect(cm).toMatch(/t\.invalid\][^}]*var\(--danger\)/);
+  });
+
+  it("defines every syntax token in BOTH themes", () => {
+    // A token defined once is a colour that is right on one ground and
+    // whatever it happens to be on the other.
+    const used = [...cm.matchAll(/var\((--syn-[a-z]+)\)/g)].map((m) => m[1]!);
+    expect(used.length).toBeGreaterThan(5);
+    for (const token of new Set(used)) {
+      const declared = (css.match(new RegExp(`${token}:`, "g")) ?? []).length;
+      expect(declared, `${token} is not declared twice (light and dark)`).toBe(2);
+    }
+  });
+
+  it("scopes the chrome to the stage's editor, not to every CodeMirror", () => {
+    // A bare `.cm-editor` rule would reach into any other editor this app
+    // mounts later.
+    const bare = [...css.matchAll(/^\.cm-[\w-]+/gm)];
+    expect(bare, "a .cm- rule outside .stage-editor-cm").toEqual([]);
+    expect(css).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
+  });
+});
