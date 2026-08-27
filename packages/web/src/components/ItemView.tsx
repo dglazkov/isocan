@@ -11,13 +11,13 @@ import {
   parseUriList,
   renamedFilename,
 } from "@isocan/core";
-import { sendOp, blobUrl } from "../lib/api.ts";
+import { blobUrl } from "../lib/api.ts";
 import { contentBase } from "../lib/contentBase.ts";
 import { itemFrame } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 import { DesignSystemView } from "./DesignSystemView.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
-import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
@@ -283,8 +283,7 @@ export function ItemView({
         // Fold the final position into the replica BEFORE dropping the drag
         // override — otherwise the item flashes at its old position until the
         // WS echo lands.
-        applyLocalEcho(op, actor);
-        void sendOp(canvasId, actor, op);
+        void sendEchoed(canvasId, actor, op);
       }
       state.setDrag(null);
     }
@@ -330,8 +329,7 @@ export function ItemView({
           width: final.width,
           height: final.height,
         } as const;
-        applyLocalEcho(resizeOp, actor);
-        void sendOp(canvasId, actor, resizeOp);
+        void sendEchoed(canvasId, actor, resizeOp);
         // Corners other than SE shift the origin.
         if (final.dx !== 0 || final.dy !== 0) {
           const moveOp = {
@@ -340,8 +338,7 @@ export function ItemView({
             x: Math.round(item.x + final.dx),
             y: Math.round(item.y + final.dy),
           } as const;
-          applyLocalEcho(moveOp, actor);
-          void sendOp(canvasId, actor, moveOp);
+          void sendEchoed(canvasId, actor, moveOp);
         }
       }
       state.setResize(null);
@@ -384,8 +381,7 @@ export function ItemView({
       patch: { title },
       ...(filename && filename !== current.filename ? { filename } : {}),
     } as const;
-    applyLocalEcho(op, actor);
-    void sendOp(canvasId, actor, op);
+    void sendEchoed(canvasId, actor, op);
   }
 
   return (

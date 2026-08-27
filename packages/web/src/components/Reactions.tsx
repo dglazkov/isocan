@@ -1,10 +1,9 @@
 import { useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { hasReacted, reactionsOf } from "@isocan/core";
-import { applyLocalEcho, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
-import { sendOp } from "../lib/api.ts";
 import { useActorNames } from "../lib/names.ts";
 
 /**
@@ -93,8 +92,7 @@ export function Reactions({
       emoji,
       on: !hasReacted(item, emoji, actor.id),
     } as const;
-    applyLocalEcho(op, actor);
-    void sendOp(canvasId, actor, op);
+    void sendEchoed(canvasId, actor, op);
     // Only ADDING a mark is a reach worth remembering. Taking yours back is
     // the opposite gesture, and promoting it would put the thing you just
     // rejected at the front of the list next time.
