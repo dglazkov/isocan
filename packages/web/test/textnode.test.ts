@@ -164,3 +164,40 @@ describe("choosing a size does not dismiss the composer", () => {
     );
   });
 });
+
+/**
+ * **The box has to re-measure when the TYPE changes, not only the words.**
+ *
+ * Reported from a screenshot: switching to a bigger step left the composer at
+ * the old height and clipped the text, while still being far too wide. Two
+ * causes, both here. The height came from the textarea's own `scrollHeight`
+ * in an effect watching only `[body, key]`, so changing the step never
+ * re-ran it. And the column scaled with the type, so a title got four times
+ * the width for the same three words.
+ *
+ * Both are answered by measuring a mirror that carries the same typography,
+ * which is only correct if it re-measures whenever the typography changes.
+ */
+describe("the composer box fits the type, not just the text", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/components/TextComposer.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("re-measures when the step or the face changes", () => {
+    const effect = src.slice(src.indexOf("const mirror = useRef"));
+    const deps = effect.slice(effect.indexOf("}, ["), effect.indexOf("]", effect.indexOf("}, [")));
+    for (const dep of ["body", "style", "face"]) {
+      expect(deps, `changing ${dep} changes the box, so it must re-measure`).toContain(dep);
+    }
+  });
+
+  it("commits the box it measured, so nothing moves when it lands", () => {
+    // The composer renders at the size it will commit at. If the committed
+    // height were computed some other way, the node would jump at the moment
+    // of landing — which is the one thing this tool must never do.
+    const commit = src.slice(src.indexOf("const measured"), src.indexOf("try {"));
+    expect(commit).toContain("fit.width");
+    expect(commit).toContain("fit.height");
+  });
+});

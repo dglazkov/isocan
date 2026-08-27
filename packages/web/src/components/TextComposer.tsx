@@ -3,11 +3,12 @@ import type { Actor } from "@isocan/core";
 import {
   TEXT_FACES,
   TEXT_FACE_STACK,
+  TEXT_COLUMN,
+  TEXT_FACE_SCALE,
   TEXT_SIZE,
   TEXT_STYLES,
   TEXT_STYLE_SIZE,
   TEXT_WIDTH,
-  textBox,
   type TextFace,
   type TextStyle,
 } from "@isocan/core";
@@ -64,13 +65,36 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     el.setSelectionRange(el.value.length, el.value.length);
   }, [key]);
 
-  // Grow with the words: the box the person types in is the box that commits.
+  /**
+   * **Measure the words, do not guess at them.**
+   *
+   * The box has to fit two things that both change: the step (a title is four
+   * times the type) and the face (Caveat is not the width of a UI sans). The
+   * first version grew the textarea's height from its own `scrollHeight` and
+   * watched only `[body, key]` — so switching from body to title left the box
+   * at the old height and clipped the words, which is what was reported.
+   *
+   * A hidden mirror carrying the SAME typography answers both questions at
+   * once. `width: max-content` up to the column gives a three-word title a
+   * three-word box instead of the full column, and its height is the exact
+   * height those words wrap to. What is measured is what commits, so nothing
+   * moves at the moment it lands.
+   */
+  // Read above the early return, because the measuring effect below is a
+  // hook and hooks cannot sit under one (React #310, learned the hard way in
+  // ArtifactStage). The defaults are only ever used on the render where
+  // there is no composer, and that render draws nothing.
+  const style = pending?.style ?? "body";
+  const face = pending?.face ?? "sans";
+  const mirror = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState({ width: TEXT_WIDTH, height: TEXT_SIZE * 2 });
   useLayoutEffect(() => {
-    const el = area.current;
+    const el = mirror.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [body, key]);
+    // A floor, so an empty composer is still a thing you can see and click.
+    const width = Math.max(TEXT_STYLE_SIZE[style] * 6, Math.ceil(el.offsetWidth));
+    setFit({ width: Math.min(TEXT_COLUMN[style], width), height: Math.ceil(el.offsetHeight) });
+  }, [body, key, style, face]);
 
   /**
    * Clicking away commits — and it has to be a POINTER listener, not `blur`.
@@ -101,13 +125,9 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
 
   if (!pending) return null;
 
-  const style = pending.style;
-  const face = pending.face;
-  const size = TEXT_STYLE_SIZE[style];
-  // A new node's column widens with the step (`textBox`); an existing one
-  // keeps the box it already has, because restyling must not silently move
-  // the furniture around it.
-  const width = pending.width ?? textBox("", style).width;
+  // `hand` is drawn larger to hold the ladder's promise — see TEXT_FACE_SCALE.
+  const size = Math.round(TEXT_STYLE_SIZE[style] * TEXT_FACE_SCALE[face]);
+  const width = fit.width;
 
   /** Change the step or face mid-sentence, without losing the sentence. */
   function restyle(next: { style?: TextStyle; face?: TextFace }) {
@@ -122,7 +142,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
       face: face2,
       body,
       // A NEW node's column follows its step; an existing one keeps its box.
-      ...(at.itemId ? {} : { width: textBox("", style2).width }),
+      ...(at.itemId ? {} : { width: TEXT_COLUMN[style2] }),
     });
     ui.setLastText(style2, face2);
     area.current?.focus();
@@ -138,10 +158,9 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     const decision = textCommit(body, at.body, at.itemId !== null);
     if (decision.do === "nothing") return;
     const words = decision.body;
-    const measured = {
-      width,
-      height: Math.max(TEXT_SIZE * 2, Math.round(area.current?.scrollHeight ?? TEXT_SIZE * 2)),
-    };
+    // What was measured IS what commits — the mirror rendered these words at
+    // this step and this face, so the node lands the shape it looked.
+    const measured = { width: fit.width, height: fit.height };
     try {
       if (at.itemId) {
         const grew = measured.height > (at.height ?? 0);
@@ -200,9 +219,23 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           </button>
         ))}
       </div>
+      {/* The mirror: same type, same wrapping, no ink. `aria-hidden` because
+          it is the words a second time and a reader does not need them. */}
+      <div
+        ref={mirror}
+        className="text-composer-mirror"
+        aria-hidden
+        style={{
+          fontSize: size,
+          fontFamily: TEXT_FACE_STACK[face],
+          maxWidth: TEXT_COLUMN[style],
+        }}
+      >
+        {body === "" ? "Type…" : body}
+      </div>
       <textarea
         ref={area}
-        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face] }}
+        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face], height: fit.height }}
         value={body}
         placeholder="Type…"
         spellCheck

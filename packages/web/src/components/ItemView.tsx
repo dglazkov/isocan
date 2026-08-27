@@ -12,10 +12,10 @@ import {
   isDrawingItem,
   isTextItem,
   textFaceOf,
+  textDrawSize,
   textIsLegible,
   textStyleOf,
   textMarkSize,
-  textSizeOf,
   TEXT_FACE_STACK,
   parseUriList,
   renamedFilename,
@@ -131,7 +131,11 @@ export function ItemView({
   // The words' world size, and whether they are still words at this zoom.
   // Below the cut a node draws ONE mark instead of forty shapes of grey
   // smear — see `textIsLegible` in core for why 5px and not a fade.
-  const textSize = isText ? textSizeOf(item) : 0;
+  // The DRAWN size, which is the ladder step adjusted for the face — `hand`
+  // has a small x-height and is drawn larger so a step still means the zoom
+  // the control promised. The composer measures with the same number, so the
+  // node lands the shape it looked while being typed.
+  const textSize = isText ? textDrawSize(item) : 0;
   const textLegible = !isText || textIsLegible(textSize, scale);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.

@@ -266,8 +266,9 @@ So label a CLUSTER with `--style title` and it is still legible in the
 whole-board view where the notes beside it have become marks. That is the
 whole point of having both — put the orientation in the big text.
 
-`--face sans|mono|serif` picks the voice. Reach for `mono` when the words
-are a command or a path, which yours often are.
+`--face sans|mono|serif|hand` picks the voice. Reach for `mono` when the
+words are a command or a path, which yours often are, and `hand` when you
+are scribbling on the board rather than labelling it.
 
 Markdown lines start with `-` and so do options, so a bullet given as an
 argument needs `--` first. For anything with more than one line in it, pipe it:

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
 import {
+  TEXT_COLUMN,
   TEXT_FACES,
   TEXT_FACE_STACK,
   TEXT_KIND,
@@ -148,10 +149,18 @@ describe("the size ladder", () => {
     expect(floor("display", 0.0625)).toBeGreaterThanOrEqual(8);
   });
 
-  it("widens the box with the words, so a title does not wrap every three of them", () => {
+  it("widens the column gently, because big text is labels and small text is prose", () => {
+    // The first cut scaled the column WITH the size, which gave a title four
+    // times the width and a display eight — a 2560-wide box holding three
+    // words, which is what this asserts against. Each step is wider than the
+    // one below, and every one of them is far narrower than proportional.
+    const widths = TEXT_STYLES.map((s) => TEXT_COLUMN[s]);
+    for (let i = 1; i < widths.length; i++) {
+      expect(widths[i]).toBeGreaterThan(widths[i - 1]!);
+      expect(widths[i], "the column must not scale with the type").toBeLessThan(widths[i - 1]! * 2);
+    }
     const body = textBox("a sentence that runs on for a little while", "body");
     const title = textBox("a sentence that runs on for a little while", "title");
-    expect(title.width).toBe(body.width * 4);
     expect(title.height).toBeGreaterThan(body.height);
   });
 });
@@ -164,10 +173,16 @@ describe("the faces", () => {
     // resolves locally renders one person's canvas differently from another's.
     for (const face of TEXT_FACES) {
       const stack = TEXT_FACE_STACK[face];
+      // Every stack ends in a generic family, so there is always something to
+      // draw with — including offline, and including `hand`, whose named face
+      // is fetched (see `index.html`) and may simply not arrive.
       expect(stack, `${face} must name a generic family to fall back on`).toMatch(
-        /(sans-serif|monospace|serif)\s*$/,
+        /(sans-serif|monospace|serif|cursive)\s*$/,
       );
-      expect(stack, `${face} must not fetch a font`).not.toMatch(/url\(|http/);
+      // A stack never carries a URL. `hand`'s file is linked from the document
+      // — one place, reviewable, with its costs written beside it — rather
+      // than smuggled into a font stack where nobody would look for it.
+      expect(stack, `${face} must not fetch a font itself`).not.toMatch(/url\(|http/);
     }
   });
 
