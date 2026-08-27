@@ -144,7 +144,12 @@ export function StageEditor({
       });
       setDirty(restored !== null);
       setLoaded(true);
-      onDraft(opening);
+      // A RESTORED draft is a draft and the preview should render it; a
+      // buffer freshly loaded from the saved file is not one, and saying so
+      // made the preview claim "Draft" on every open before anybody typed a
+      // character. `setDirty` above already draws that line — this is the
+      // same line, said to the pane beside us.
+      onDraft(restored);
     })();
     return () => {
       live = false;
