@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { textCommit } from "../src/lib/text.ts";
 import { rules, selectorsOf, withoutComments } from "./cssrules.ts";
@@ -78,5 +80,32 @@ describe("a text node wears no card", () => {
       .join(";");
     expect(decls, "a text node with two versions grows a white card without this").not.toBe("");
     expect(decls).toMatch(/background:\s*transparent/);
+  });
+});
+
+/**
+ * **Two words that must not be the same word.**
+ *
+ * The canvas's Files panel lists everything ON THE CANVAS. The workbench's
+ * section lists what is in the DIRECTORY bound to it on this machine. They
+ * are different sets, they disagree constantly (a canvas of twelve screens
+ * beside a repo holding one `index.html`), and when both were called "Files"
+ * the disagreement was reported as a bug in the app — twice.
+ *
+ * Bound, the section names the folder. Unbound it has no folder to name, and
+ * that is the state this guards: the fallback must not be the canvas panel's
+ * word.
+ */
+describe("the workbench directory section is not the canvas Files panel", () => {
+  it("never falls back to the canvas panel's word", () => {
+    const src = readFileSync(
+      fileURLToPath(new URL("../src/components/WbFiles.tsx", import.meta.url)),
+      "utf8",
+    );
+    // The rendered fallback, not the prose around it: comments in this file
+    // discuss the collision at length and must stay free to say the word.
+    const header = src.slice(src.indexOf("<h3>"), src.indexOf("</h3>"));
+    expect(header).not.toMatch(/"Files"/);
+    expect(header).toMatch(/"Directory"/);
   });
 });

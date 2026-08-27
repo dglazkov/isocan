@@ -172,8 +172,14 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
        *
        * So this says which folder it is showing, with the full path on
        * hover, and a quiet "on disk" to draw the line the word could not.
-       * Unbound, there is no folder to name and the plain word is right —
-       * the bind affordance underneath explains the rest.
+       *
+       * UNBOUND there is no folder to name, and the fallback used to be the
+       * plain word "Files" — which is the collision again, in the one state
+       * where it does the most damage: a canvas with twelve items showing a
+       * section called FILES that is empty. "Directory" names the thing that
+       * is missing (a folder on this machine) rather than the thing that is
+       * not (the canvas's items), so the empty state reads as "nothing is
+       * bound yet" instead of "your files are gone".
        */}
       <h3>
         {tree.state === "ready" ? (
@@ -182,7 +188,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
             <i className="wb-files-hint">on disk</i>
           </>
         ) : (
-          "Files"
+          "Directory"
         )}
       </h3>
       {tree.state === "loading" && <p className="wb-quiet">Reading the tree…</p>}
