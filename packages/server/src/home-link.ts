@@ -265,6 +265,19 @@ export interface HomeConnection {
     data: Buffer,
     meta: { mimeType: string; filename: string },
   ): Promise<BlobUploadResponse>;
+  /**
+   * Does the home hold these bytes? A HEAD — no body, no stream to drain.
+   *
+   * The question nothing could ask before, which is why bytes could fall
+   * behind the ops that name them and stay behind forever: a teammate saw the
+   * item and "blob not found" underneath it, and no command on either machine
+   * could tell you that was the shape of the problem.
+   *
+   * Null means the home could not be reached — deliberately not `false`,
+   * because "it is not there" and "I could not ask" are different answers and
+   * only one of them means push.
+   */
+  hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
   /** Bytes this replica has never seen, read straight from the home. Null when
    * the home does not have them either. */
   openBlob(
@@ -1534,6 +1547,22 @@ export class HomeLink implements HomeConnection {
       throw new HomeRefusedError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     }
     return json as BlobUploadResponse;
+  }
+
+  async hasBlob(canvasId: string, blobHash: string): Promise<boolean | null> {
+    const badge = await this.ensureBadge();
+    if (!badge) return null;
+    try {
+      const res = await this.fetchHome(`/api/projects/${canvasId}/blobs/${blobHash}`, {
+        method: "HEAD",
+        headers: { ...bearerHeader(badge) },
+      });
+      if (res.status === 404) return false;
+      if (!res.ok) return null; // a refusal is not an answer about the bytes
+      return true;
+    } catch {
+      return null;
+    }
   }
 
   /** Bytes this replica has never held, streamed from the home. What makes an

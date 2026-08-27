@@ -99,8 +99,38 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * home`'s reachability report, and `Engine.preferredName`'s upward question,
    * which is the whole of phase 7.5's scope-mismatch fix.
    */
-  async start(): Promise<void> {
+  /**
+   * **Read the routing table. Dial nothing.**
+   *
+   * Split out of `start()` because the two halves want opposite timing, and
+   * bundling them cost real bytes. Dialling must wait until the daemon is
+   * serving — the first thing down a canvas socket is written through the
+   * engine. But the TABLE must be loaded before the daemon answers anything,
+   * because `homeOf` is how every write decides where it goes.
+   *
+   * While it was unloaded, every canvas looked homeless. `Engine.putBlob`
+   * reads exactly this to decide whether to push bytes up
+   * (`if (home) await home.putBlob(...)`), so an upload landing in that
+   * window skipped the home SILENTLY while its `item.addVersion` replicated
+   * normally — a teammate got the item, its title and its version, with no
+   * bytes behind it and a "blob not found" where the screen should be. It
+   * never repairs itself, because nothing ever notices.
+   *
+   * The window was small — between `listen` and this line — but the clients
+   * most likely to be inside it are precisely the ones that reconnect the
+   * instant the port opens: a parked agent resuming its lap, a browser tab
+   * retrying. On a machine whose daemon restarts often (a dev watcher will
+   * do it on every save) that is not a rare shape at all.
+   */
+  async load(): Promise<void> {
     this.rows = await readHomes(this.options.home);
+  }
+
+  async start(): Promise<void> {
+    // Idempotent: `load()` has normally run before the daemon began serving,
+    // and re-reading here keeps this method whole for anything that calls it
+    // on its own.
+    await this.load();
     const addresses = new Set<string>();
     for (const value of Object.values(this.rows)) if (value !== null) addresses.add(value);
     if (this.birthHome !== null) addresses.add(this.birthHome);
