@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { paths } from "@isocan/server";
+import * as paths from "./paths.ts";
 
 /**
  * A directory and its canvas (#60).
@@ -61,7 +61,7 @@ export interface DirBinding extends DirMarker {
 
 export const markerFile = (dir: string) => path.join(dir, ".isocan", "project.json");
 
-async function readMarker(dir: string): Promise<DirMarker | null> {
+export async function readMarker(dir: string): Promise<DirMarker | null> {
   try {
     const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as MarkerFile;
     // `projectId` is what is on disk; `canvasId` is accepted so a marker written

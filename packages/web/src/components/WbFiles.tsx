@@ -52,6 +52,10 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   // position-fixed via the portal, so the section's scroll box cannot clip it).
   const [peek, setPeek] = useState<{ itemId: string; x: number; y: number } | null>(null);
 
+  // Bumped when a directory is bound, so the pane re-reads without a reload.
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = () => setReloadToken((n) => n + 1);
+
   useEffect(() => {
     let live = true;
     void (async () => {
@@ -85,7 +89,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
     return () => {
       live = false;
     };
-  }, [canvasId]);
+  }, [canvasId, reloadToken]);
 
   // File → item, by the item's CURRENT filename. First match wins; two items
   // sharing a filename is a canvas question, not this pane's.
@@ -127,7 +131,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
     <section className="wb-files" aria-label="Files" style={{ maxHeight: filesH }}>
       <h3>Files</h3>
       {tree.state === "loading" && <p className="wb-quiet">Reading the tree…</p>}
-      {tree.state === "none" && <p className="wb-quiet">{tree.note}</p>}
+      {tree.state === "none" && <BindDirectory canvasId={canvasId} note={tree.note} onBound={reload} />}
       {tree.state === "ready" && (
         <ul className="wb-tree">
           {tree.entries.map((entry) => {
@@ -181,5 +185,106 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
         />
       )}
     </section>
+  );
+}
+
+/**
+ * **Attaching a directory, without a terminal.**
+ *
+ * The pane used to end here with a sentence naming a command — "no directory
+ * is bound to this canvas on this machine (isocan use <canvas>)" — which is a
+ * dead end that tells you to leave.
+ *
+ * A path typed rather than picked, and that is the finding rather than a
+ * shortcut: a directory chosen through the File System Access API arrives as
+ * a handle that exposes `kind` and `name` and NEVER a path, by design, so it
+ * cannot be written into the roster and cannot become a binding the CLI or an
+ * agent can see. The daemon is the only party that can name a directory, so
+ * the browser asks and the daemon does — through the same functions
+ * `isocan use` calls. See `docs/research/2026-08-26-attaching-a-directory.md`.
+ *
+ * Every refusal from that route is its own sentence and is shown verbatim: a
+ * path that is not there, a file where a directory belongs, a directory that
+ * already belongs to another canvas. Being told "no" without being told which
+ * "no" is how a person ends up guessing at their own filesystem.
+ */
+function BindDirectory({
+  canvasId,
+  note,
+  onBound,
+}: {
+  canvasId: string;
+  note: string;
+  onBound: () => void;
+}) {
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  // Only the owner's own machine can bind at all, and the daemon says so with
+  // this code — there is nothing to offer a person looking at somebody else's
+  // canvas but the explanation.
+  const canBind = !note.includes("live with its home daemon");
+
+  async function bind() {
+    if (busy || path.trim() === "") return;
+    setBusy(true);
+    setRefusal(null);
+    try {
+      const res = await fetch(`/api/projects/${canvasId}/bind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { error?: string; root?: string }
+        | null;
+      if (!res.ok) {
+        setRefusal(body?.error ?? "that directory could not be bound");
+        return;
+      }
+      setPath("");
+      onBound();
+    } catch {
+      setRefusal("the daemon did not answer");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="wb-bind">
+      <p className="wb-quiet">{note}</p>
+      {canBind && (
+        <>
+          <div className="wb-bind-row">
+            <input
+              className="text-input"
+              placeholder="/path/to/your/project"
+              aria-label="Directory to bind to this canvas"
+              value={path}
+              disabled={busy}
+              onChange={(e) => setPath(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation(); // canvas shortcuts are not for this field
+                if (e.key === "Enter") void bind();
+                if (e.key === "Escape") setPath("");
+              }}
+            />
+            <button className="btn" disabled={busy || path.trim() === ""} onClick={() => void bind()}>
+              {busy ? "…" : "Attach"}
+            </button>
+          </div>
+          {refusal ? (
+            <p className="wb-bind-refusal">{refusal}</p>
+          ) : (
+            <p className="wb-quiet">
+              The folder this canvas is about — a repo binds at its root. Same as
+              <code> isocan use</code>, so the CLI and your agents see it too.
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }

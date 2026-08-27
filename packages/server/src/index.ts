@@ -32,3 +32,19 @@ export { HOME_HEADER } from "./http.ts";
 export { buildStamp, describeBuild, stalenessOf } from "./build.ts";
 export type { BuildStamp } from "./build.ts";
 export * as paths from "./paths.ts";
+/**
+ * Binding: which directory a canvas means on this machine. It lived in the
+ * CLI until the app needed to bind without one — the daemon is the only party
+ * that can name a directory, so the primitives belong beside the filesystem
+ * and both surfaces call them (`docs/research/2026-08-26-attaching-a-directory.md`).
+ */
+export {
+  bindableRoot,
+  dirsOf,
+  findBinding,
+  markerFile,
+  readMarker,
+  recordDir,
+  writeMarker,
+} from "./binding.ts";
+export type { DirBinding, DirMarker } from "./binding.ts";

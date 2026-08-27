@@ -1,4 +1,5 @@
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -103,6 +104,7 @@ import { buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import { registerContentRoutes } from "./content.ts";
+import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -1911,13 +1913,108 @@ export function registerRoutes(
     const dirs = await boundDirs(isocanHome(), canvasId);
     if (dirs.length === 0) {
       reply.status(404).send({
-        error: "no directory is bound to this canvas on this machine (isocan use <canvas>)",
+        // The fact, and only the fact. It used to append "(isocan use
+        // <canvas>)" — a remedy that reads as a dead end in the app, which
+        // now offers the binding itself, and which each surface is better
+        // placed to word for its own reader anyway.
+        error: "no directory is bound to this canvas on this machine",
         code: "no-directory",
       });
       return null;
     }
     return dirs;
   };
+
+  /**
+   * **Bind a directory to this canvas, without a terminal** — what
+   * `isocan use` does, asked for by the app
+   * (`docs/research/2026-08-26-attaching-a-directory.md`).
+   *
+   * The browser cannot do this itself, and not for want of an API: a
+   * `FileSystemHandle` exposes `kind` and `name` and never a path, by
+   * design, so a directory picked in a page cannot be written into
+   * `dirs.json` and cannot become a binding the CLI or an agent can see.
+   * The daemon is the only party that can name a directory. So the browser
+   * asks and this does it, through the very same functions the CLI calls —
+   * one binding, two surfaces.
+   *
+   * **Every refusal is its own sentence**, deliberately unlike the tree's
+   * single-sentence jail: this route is owner-scoped and loopback-only, the
+   * caller is the person who typed the path, and "which rule refused me" is
+   * exactly what they need to fix it. A path that is not there says so.
+   */
+  app.post("/api/projects/:id/bind", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    // Same gate as the tree, and for the same reason: this is the owner's own
+    // machine speaking to itself about its own disk.
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    if (!loopbackBound(app) || !local || (options.homes?.homeOf(id) ?? null) !== null) {
+      return reply.status(404).send({
+        error:
+          "a directory can only be bound on the machine this canvas lives on, and only locally",
+        code: "no-directory",
+      });
+    }
+    const asked = (req.body as { path?: string } | undefined)?.path;
+    if (typeof asked !== "string" || asked.trim() === "") {
+      return reply.status(400).send({ error: "which directory? give a path", code: "bad-op" });
+    }
+    // `~` is what a person types; nothing else expands it for them here.
+    const home = isocanHome();
+    const typed = asked.trim();
+    const wanted = path.resolve(
+      typed.startsWith("~") ? path.join(os.homedir(), typed.slice(1)) : typed,
+    );
+
+    const found = await fs.stat(wanted).catch(() => null);
+    if (!found) {
+      return reply.status(404).send({
+        error: `there is nothing at ${wanted}`,
+        code: "no-such-dir",
+      });
+    }
+    if (!found.isDirectory()) {
+      return reply.status(400).send({
+        error: `${wanted} is a file — bind the directory that holds it`,
+        code: "not-a-dir",
+      });
+    }
+    // The git toplevel when there is one, exactly as `isocan use` chooses it:
+    // the canvas is about the project rather than the checkout, so a marker
+    // resolves the same from every subdirectory and every worktree.
+    const root = await bindableRoot(wanted, home);
+    if (!root) {
+      return reply.status(400).send({
+        error:
+          `${wanted} cannot hold a binding — a home directory would claim every canvas under it`,
+        code: "unbindable",
+      });
+    }
+    // Already spoken for. The CLI overwrites here; a click is a cheaper
+    // gesture than a typed command, so a mistake is cheaper to make and this
+    // refuses instead — except when the marker already names THIS canvas,
+    // which is the adoption case: a cloned repo carries its marker, and all
+    // that is missing on this machine is the roster row.
+    const existing = await readMarker(root);
+    if (existing && existing.canvasId !== id) {
+      return reply.status(409).send({
+        error: `${root} already belongs to ${existing.title ?? existing.canvasId} — unbind it there first`,
+        code: "bound-elsewhere",
+      });
+    }
+    const livesAt = options.homes?.homeOf(id) ?? null;
+    const canvas = (await engine.getSnapshot(id)).project;
+    const file = existing
+      ? markerFile(root)
+      : await writeMarker(root, {
+          canvasId: id,
+          title: canvas.title,
+          ...(livesAt ? { home: livesAt } : {}),
+        });
+    await recordDir(home, root, id);
+    return { root, marker: file, adopted: Boolean(existing) };
+  });
 
   app.get("/api/projects/:id/tree", async (req, reply) => {
     const { id } = req.params as { id: string };

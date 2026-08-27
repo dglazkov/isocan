@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canvasUrl, INSTALL_SPEC } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
-import { markerFile } from "../src/binding.ts";
+import { markerFile } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
 
 /**
