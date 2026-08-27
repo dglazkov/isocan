@@ -21,6 +21,10 @@ the daemon runs authoritatively and the web client runs against its replica.
 The CLI and the web app cannot diverge, because they speak the same vocabulary
 to the same engine.
 
+**New here?** [`docs/how-to.md`](docs/how-to.md) is the five-minute version:
+add the skill, tell your agent "use isocan", and work with it on a canvas.
+What follows is the developer's route into the same thing.
+
 ## Quick start
 
 From any directory, one command — no npm publishing involved, the repo *is*
