@@ -3103,3 +3103,38 @@ button.mt-card:hover { border-color: var(--accent); }
    "Files" could not — this pane is a folder on disk, while the canvas's own
    Files panel lists what is on the canvas. Same pattern as the Chat header. */
 .wb-files-hint { font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 10.5px; margin-left: 6px; }
+
+/* **This item is a file.** Only backed items wear one — an untracked item is
+   the default and the common case (a view run up to answer "let me see"), so
+   silence is the right signal for it.
+
+   A small square, because a file is a squarer idea than a dot, and it sits in
+   the title row beside the kind icon: what this item IS, then where it LIVES.
+   Drift is the state worth catching from across a canvas, so it is the only
+   one that takes a colour; the rest are quiet. */
+.file-mark {
+  flex: none; width: 7px; height: 7px; border-radius: 2px;
+  border: 1px solid var(--ink-soft); background: none;
+}
+/* Written: solid, the way a filled checkbox reads. */
+.file-mark.written { background: var(--ink-soft); border-color: var(--ink-soft); }
+/* Absent: hollow — it has a place and has not been put there. */
+.file-mark.absent { background: none; }
+/* Drifted: the disk and the canvas disagree, and saving would overwrite
+   somebody's work. The one state that should catch an eye. */
+.file-mark.drifted { background: var(--warn); border-color: var(--warn); }
+/* Unbound: no directory on this machine at all. Barely there — it is not a
+   problem with the item, it is the absence of a question. */
+.file-mark.unbound { opacity: 0.4; }
+/* The one stage button that is about to overwrite somebody's work. Warn, not
+   danger: the file is not lost, it is about to be replaced by a version the
+   canvas can still show — and `--danger` is reserved for what cannot be
+   undone. */
+.stage-editor-btn.warn { border-color: var(--warn); color: var(--warn); }
+
+/* The editor's slot: the pane plus the seam between it and the preview. It is
+   `relative` so `.panel-resizer` — which hangs off a positioned parent's right
+   edge — lands on the border the preview draws, rather than needing a second
+   kind of resizer for a second kind of edge. */
+.stage-editor-slot { flex: 1; min-width: 0; display: flex; position: relative; }
+.stage-editor-slot > .stage-editor { flex: 1; min-width: 0; }

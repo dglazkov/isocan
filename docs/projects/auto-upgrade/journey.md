@@ -7,6 +7,24 @@ that claims a scene is done only when the scene plays. Unlike the
 design, this document was written after [`design.md`](design.md). Writing it
 still surfaced design gaps; they are listed at the end.
 
+How to read a scene: each one opens with the claim it exists to establish,
+in italics. The narrative plays that claim out. Where a scene carries hard
+assertions, they close it as **What must hold** — the list a phase review
+checks.
+
+The scenes are ordered by when their phases ship, not by mode. The notice
+(phases 1–2) comes before the unattended upgrade (phases 3–4), and `notify`
+mode remains supported after `auto` becomes the managed default — so a
+machine that is weeks stale after phase 4 is one running only phases 1–2, a
+checkout, or a machine where someone chose `notify`.
+
+A **managed install** is one the upgrade machinery owns: each build in its
+own `builds/<sha>` directory, with a `current` symlink pointing at the one
+in use. The front door's `npm i -g` produces it — the shim adopts the
+global install into this layout. Only a managed install upgrades itself; a
+checkout is never modified (Scene 4), and an on-demand install is recreated
+fresh each summons (Scene 7).
+
 The cast is the multiuser cast. Auto-upgrade is not a feature these people
 use directly. It is what keeps their scenes working as the code changes
 underneath them.
@@ -26,18 +44,22 @@ underneath them.
 - **The conductor** — the developer machine, which runs a checkout of the
   repo. Auto-upgrade never modifies it.
 
-## Scene 0 — The notice
+## Scene 0 — A stale CLI says so, once
 
-No human runs an isocan command in this scene. Priya pasted the setup line
-into a terminal once, three weeks ago. Her surface is the browser, which
-updates on every reload. Isaac operates the CLI, and the release branch has
-moved forty times since setup.
+*A CLI that has fallen behind its home produces a notice: once per verdict,
+in a form an agent can act on, and silent when there is no verdict.*
 
-Timing note: after phase 4, `auto` is the default for managed installs
-(Scene 1), so a machine that is thirteen days stale is either running only
-phases 1–2, a checkout, or a machine where someone chose `notify`. The
-notice scene comes first because phases 1–2 ship it first, and because
-notify mode remains supported.
+Three weeks after Priya pasted the setup line, her copy is forty commits
+behind the home she works against. She hasn't opened a terminal since; her
+surface is the browser, which updates on every reload. Isaac operates the
+CLI.
+
+Priya is this scene's first player, not its permanent one. Her copy can
+drift like this only before phase 3 adopts it into the managed layout;
+after phase 4, `auto` closes the gap on her machine before it grows. The
+scene itself never retires — it is the standing contract for every machine
+that only watches: a checkout, or a machine where someone chose `notify`.
+Replay it there.
 
 The notice has two forms, one per reader:
 
@@ -57,30 +79,28 @@ to a person. When Isaac sees the notice, he reports it to Priya. He does not
 run `isocan upgrade` on his own judgment; an agent that upgrades itself in
 notify mode has re-implemented auto mode without its controls.
 
-The notice has three defined silences:
+**What must hold:**
 
-- Offline: the field is absent and no line prints. An unreachable oracle
-  produces no verdict — never "you are current."
-- A home that cannot report its build (a pre-phase-1 image): the same. No
-  verdict.
-- Repetition: the notice prints once per verdict, not once per command and
-  not once per daemon. If the home moves again under the same daemon, the
-  new sha pair gets one new notice.
+- The `--json`/wake field carries both shas, both dates, and the source
+  home; the stderr line is one line.
+- The notice states facts and names commands; it does not instruct.
+- In notify mode, the upgrade decision belongs to a person. An agent does
+  not act on the notice alone.
+- Offline produces no verdict and no notice — never "you are current."
+- A home that cannot report its build (a pre-phase-1 image) also produces
+  no verdict.
+- The notice prints once per verdict — keyed on the sha pair, not per
+  command and not per daemon. A new sha pair gets one new notice.
 
-## Scene 1 — The unattended upgrade
+## Scene 1 — The upgrade happens while nobody watches
 
-Priya configures nothing. `auto` is the default for managed installs, for
-three reasons:
+*On a managed install, upgrades are unattended by default: installed aside,
+smoke-tested, flipped at an idle seam, and reported in the next wake.*
 
-- In notify mode, an upgrade on her machine takes four steps: the notice
-  appears, Isaac reports it, Priya approves, and Isaac runs the command.
-  Three hand-offs guard a decision she already delegated when the setup line
-  chose its own version.
-- The browser set the precedent: every reload is an upgrade nobody approved.
-- Safety does not come from the mode. It comes from the smoke test, the kept
-  builds, and the pin.
-
-`notify` remains available for anyone who wants to hold the decision.
+Priya configures nothing. `auto` is the default for managed installs;
+safety comes from the smoke test, the kept builds, and the pin — not from a
+human in the loop. `notify` remains available for anyone who wants to hold
+the decision.
 
 Overnight, the home moves twice. Isaac is parked in `isocan wait`, and
 parked is idle, so the machinery installs the new build into
@@ -98,27 +118,41 @@ The wake also tells Isaac to re-read `agent-guide.md`, because the guide
 ships inside the build and may have changed. The next command Isaac runs
 resolves through `current` to the new build.
 
-The upgrade summary matters: an upgrade that reports what changed is one
-people leave enabled. One that changes things silently gets turned off.
+**What must hold:**
 
-## Scene 2 — The refused build
+- Upgrades apply only at idle seams; no flip moves a running process.
+- The wake reports what changed — sha, commit count, a notable subject
+  line — because an upgrade that reports what changed is one people leave
+  enabled, and one that changes things silently gets turned off.
+- A wake that upgraded the agent tells it to re-read `agent-guide.md`.
+- The next command after the flip runs the new build.
+
+## Scene 2 — A broken build never reaches PATH
+
+*A build that fails the smoke test is refused: `current` does not move, the
+refusal is reported, and the next release installs normally.*
 
 Thursday's release is broken in a way CI missed. Priya's machine installs it
 into `builds/`, starts it on an ephemeral port, and asks `/healthz` for its
-sha. The candidate fails. The results:
-
-- `current` still points at the working build. The broken build never
-  reached PATH.
-- The next `isocan status` reports that a build was tried and why it was
-  refused.
-- The next check retries. Friday's release installs normally.
+sha. The candidate fails.
 
 The refusal reaches a person the same way the notice does: Isaac reports it,
 or Priya reads it in a transcript. "Not silent" means the refusal can reach
-a person, not that it interrupts one. A failed upgrade must always be
-reported and must never break anything: it is a directory nothing points at.
+a person, not that it interrupts one.
 
-## Scene 3 — Rollback
+**What must hold:**
+
+- `current` still points at the working build; the broken build never
+  reached PATH. A failed upgrade is a directory nothing points at.
+- The next `isocan status` reports that a build was tried and why it was
+  refused. A refused build is always reported.
+- The next check retries. Friday's release installs normally.
+
+## Scene 3 — Recovery is two memorable commands on a suspect build
+
+*When a regression escapes the smoke test, a human recovers with two simple
+commands — and rollback must work even though it runs on the build it rolls
+back.*
 
 The next week, a regression gets past the smoke test. This is the one scene
 where a human runs the CLI, because the code under her agent is what she
@@ -131,35 +165,44 @@ from. Priya opens a terminal:
 - `isocan upgrade --pin 04279b2` holds the machine there while she files the
   issue with both shas in it.
 
-These two commands have special requirements. They are the only commands
-humans run, so they must be simple and memorable. And `--rollback` executes
-on the suspect build itself, so it must stay minimal: read a directory, flip
-a symlink.
+**What must hold:**
 
-A pinned machine still receives notices. A pin without notices is a machine
-everyone forgot.
+- These are the only commands humans run, so they must be simple and
+  memorable.
+- `--rollback` executes on the suspect build itself, so it must stay
+  minimal: read a directory, flip a symlink.
+- A pinned machine still receives notices — otherwise it is a machine
+  everyone forgot.
 
-## Scene 4 — The checkout
+## Scene 4 — A checkout is notified, never modified
+
+*Auto-upgrade applies only to managed installs; a checkout gets the notice
+and nothing else.*
 
 The conductor's machine has a dirty working tree when the home moves. It
 receives the notice, which names the copy it refers to ("the checkout at
-…"). Nothing else happens: no stash, no pull, no merge. Auto-upgrade applies
-only to managed installs; a checkout is never modified, regardless of
+…"). Nothing else happens: no stash, no pull, no merge — regardless of
 settings. `--channel main` changes what the checkout is compared against,
 not this rule.
 
 Even here, an agent types the commands — the conductor model has Claude
 doing the work. The human's part in this scene is the dirty tree.
 
-## Scene 5 — Someone else's machine
+## Scene 5 — A home is a distribution channel
+
+*Whoever works at a home runs what the home runs. The design does not hide
+this; it makes it visible and controllable, per machine.*
 
 Multiuser Scene 5 installed the CLI on Jordan's machine. Tonight, Priya
 merges to main, CI cuts a release, and Jordan's machine upgrades while she
-sleeps.
+sleeps. Jordan did not choose that build. She chose the home.
 
-Jordan did not choose that build. She chose the home, and a home is a
-distribution channel: whoever works at a home runs what the home runs. The
-design does not hide this; it makes it visible and controllable:
+Running code from `release` unattended on Jordan's machine is a trust
+decision. It is acceptable today because one innkeeper runs the project and
+Jordan knows them. The "Deliberately open" list in `phases.md` records where
+this acceptance ends.
+
+**What must hold:**
 
 - Nico's next wake reports what changed and which home the verdict came
   from.
@@ -169,38 +212,36 @@ design does not hide this; it makes it visible and controllable:
   setting, `isocan status` must show the current setting, so a person can
   verify it.
 
-Running code from `release` unattended on Jordan's machine is a trust
-decision. It is acceptable today because one innkeeper runs the project and
-Jordan knows them. The "Deliberately open" list in `phases.md` records where
-this acceptance ends.
+## Scene 6 — The fleet follows the home, even backward
 
-## Scene 6 — The pinned home
+*The oracle question is "does my copy disagree with my home," not "is there
+newer code on GitHub" — so rolling the home back holds the fleet, with no
+prompt to move forward.*
 
 The newest build misbehaves in production, and the innkeeper rolls the
 home's image back one step. Nothing else is needed: every CLI compares
-itself to its home, so the fleet holds. Nothing prompts anyone to move
-forward, because the oracle question is "does my copy disagree with my
-home," not "is there newer code on GitHub."
+itself to its home, so the fleet holds.
 
-A CLI that is now ahead of its home reports the disagreement. It never
-downgrades itself; downgrades happen only from `builds/`, on a person's
-command.
+**What must hold:**
 
-On a machine with several homes, the verdict names which home it came from,
-so two homes at two builds is a reportable state, not a loop of conflicting
-upgrades.
+- A CLI now ahead of its home reports the disagreement. It never downgrades
+  itself; downgrades happen only from `builds/`, on a person's command.
+- On a machine with several homes, the verdict names which home it came
+  from — two homes at two builds is a reportable state, not a loop of
+  conflicting upgrades.
 
 ## Scene 7 — The agent with no version
 
-Sonia never upgrades. Each summons boots a sandbox, installs the CLI from
-the release tip, does the work, and exits. On-demand agents get this
-project's outcome from their lifecycle: the freshest fleet member is the one
-that does not exist between summonses.
+*On-demand agents get this project's outcome from their lifecycle: the
+freshest fleet member is the one that does not exist between summonses. But
+"fresh" must be verified.*
 
-One requirement carries over: "fresh" must be verified. npx's cache can
-serve a stale copy while reporting otherwise (#48), which is why
-`transientDir()` exists. A reborn agent on a stale cache is Scene 0's bug in
-a new place.
+Sonia never upgrades. Each summons boots a sandbox, installs the CLI from
+the release tip, does the work, and exits.
+
+One requirement carries over: npx's cache can serve a stale copy while
+reporting otherwise (#48), which is why `transientDir()` exists. A reborn
+agent on a stale cache is Scene 0's bug in a new place.
 
 ## The seats
 
@@ -235,9 +276,14 @@ column.
 6. npm can fetch only the release tip, so the swap installs only when the
    tip matches the verdict, and otherwise reports "not yet."
 7. `auto` is the managed install's default; `notify` is for working copies
-   and for anyone who wants to hold the decision. A notify default would ask
-   the least-watched machines to act on a notice their operator may not act
-   on.
+   and for anyone who wants to hold the decision. Three reasons: a notify
+   default asks the least-watched machines to act on a notice their
+   operator may not act on; in notify mode an upgrade on Priya's machine
+   takes four steps (notice, report, approval, command) to guard a decision
+   she already delegated when the setup line chose its own version; and the
+   browser set the precedent — every reload is an upgrade nobody approved.
+   Safety comes from the smoke test, the kept builds, and the pin, not from
+   the mode.
 8. The controls ship with auto mode, not after it: `off`/`notify`/`auto`,
    pin, rollback, `ISOCAN_NO_UPGRADE=1` — per machine, and visible in
    `status`, because agents often set them on a person's behalf.

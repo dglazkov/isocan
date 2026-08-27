@@ -4,7 +4,16 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MAX_READ_BYTES, boundDirs, listable, pickList, readBound, readTree } from "../src/tree.ts";
+import { createHash } from "node:crypto";
+import {
+  MAX_READ_BYTES,
+  boundDirs,
+  listable,
+  pickList,
+  readBound,
+  readTree,
+  writeBound,
+} from "../src/tree.ts";
 
 /**
  * The one seam where the product touches the real disk, tested the way the
@@ -253,5 +262,94 @@ describe("pickList", () => {
     const listing = await pickList(root, sandbox);
     expect(listing?.entries.find((e) => e.name === "taken")?.bound).toBe(true);
     expect(listing?.entries.find((e) => e.name === "free")?.bound).toBe(false);
+  });
+});
+
+/**
+ * **The write jail.** This module opened with "Nothing here writes"; now it
+ * does, and a bad write destroys work where a bad read leaks a listing. So
+ * every rule gets a case that fails without it, and the dangerous inputs are
+ * the ones that reach outside the root or through a link.
+ */
+describe("writeBound", () => {
+  const hashOf = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+  const bytes = Buffer.from("<h1>hi</h1>");
+
+  it("writes a fresh file, making the directories on the way", async () => {
+    const out = await writeBound(root, "src/views/a.html", bytes, [], hashOf);
+    expect(out.ok).toBe(true);
+    expect(await fs.readFile(path.join(root, "src/views/a.html"), "utf8")).toBe("<h1>hi</h1>");
+  });
+
+  it("updates a file this canvas wrote, current version or an older one", async () => {
+    await fs.writeFile(path.join(root, "b.html"), "old");
+    const old = hashOf(Buffer.from("old"));
+    // The disk holds a version this item has held: the canvas is the author,
+    // so bringing it up to date is safe.
+    expect((await writeBound(root, "b.html", bytes, [old, hashOf(bytes)], hashOf)).ok).toBe(true);
+    expect(await fs.readFile(path.join(root, "b.html"), "utf8")).toBe("<h1>hi</h1>");
+  });
+
+  it("REFUSES a file this canvas never wrote, and says what it found", async () => {
+    await fs.writeFile(path.join(root, "c.html"), "somebody else's work");
+    const out = await writeBound(root, "c.html", bytes, [hashOf(bytes)], hashOf);
+    expect(out.ok).toBe(false);
+    expect(out.refusal).toBe("drifted");
+    expect(out.found).toBe(hashOf(Buffer.from("somebody else's work")));
+    // And it is still theirs.
+    expect(await fs.readFile(path.join(root, "c.html"), "utf8")).toBe("somebody else's work");
+  });
+
+  it("refuses to leave the root, however the path is spelled", async () => {
+    for (const escape of ["../outside.html", "a/../../outside.html", "/etc/passwd"]) {
+      const out = await writeBound(root, escape, bytes, [], hashOf);
+      expect(out.ok, escape).toBe(false);
+      expect(out.refusal).toBe("outside-root");
+    }
+  });
+
+  it("refuses dotfiles and secret shapes, at every segment", async () => {
+    // The rule that decides what may be SEEN decides what may be WRITTEN, so
+    // a path can never reach `.git/config`, `.env` or `.ssh/`.
+    for (const bad of [".env", ".git/config", "src/.ssh/key", "id_rsa"]) {
+      const out = await writeBound(root, bad, bytes, [], hashOf);
+      expect(out.ok, bad).toBe(false);
+      expect(out.refusal).toBe("not-listable");
+    }
+  });
+
+  it("refuses a symlinked DIRECTORY on the way — the classic escape", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-outside-"));
+    await fs.symlink(outside, path.join(root, "link"));
+    const out = await writeBound(root, "link/pwned.html", bytes, [], hashOf);
+    expect(out.ok).toBe(false);
+    expect(out.refusal).toBe("symlink");
+    // Nothing was written out there.
+    expect(await fs.readdir(outside)).toEqual([]);
+    await fs.rm(outside, { recursive: true, force: true });
+  });
+
+  it("refuses a symlinked FILE as the destination", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-outside2-"));
+    const target = path.join(outside, "target.txt");
+    await fs.writeFile(target, "theirs");
+    await fs.symlink(target, path.join(root, "d.html"));
+    const out = await writeBound(root, "d.html", bytes, [], hashOf);
+    expect(out.ok).toBe(false);
+    expect(out.refusal).toBe("symlink");
+    expect(await fs.readFile(target, "utf8")).toBe("theirs");
+    await fs.rm(outside, { recursive: true, force: true });
+  });
+
+  it("refuses to write over a directory", async () => {
+    await fs.mkdir(path.join(root, "adir"), { recursive: true });
+    const out = await writeBound(root, "adir", bytes, [], hashOf);
+    expect(out.ok).toBe(false);
+    expect(out.refusal).toBe("unwritable");
+  });
+
+  it("refuses an empty path", async () => {
+    expect((await writeBound(root, "", bytes, [], hashOf)).refusal).toBe("outside-root");
+    expect((await writeBound(root, ".", bytes, [], hashOf)).refusal).toBe("outside-root");
   });
 });

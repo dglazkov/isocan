@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>isocan</title>
+    <!-- One SVG rather than a pile of PNGs: it is sharp at every size a tab
+         bar asks for, it carries its own dark-mode rule, and it is 1KB. The
+         `.ico` fallback older Safari would want is deliberately not here —
+         nothing in this app has ever been built for a browser that old, and
+         an icon nobody can regenerate is worse than a letter. -->
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <script>
       // Resolve the theme before first paint so there is no flash of the wrong
       // one. Kept in sync afterwards by src/lib/theme.ts (same storage key).
@@ -19,8 +25,8 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-w72SVGxJ.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-LmDaecD3.css">
+    <script type="module" crossorigin src="/assets/index-BbeaPo5o.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Ccfei0iu.css">
   </head>
   <body>
     <div id="root"></div>

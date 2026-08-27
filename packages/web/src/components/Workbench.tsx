@@ -190,7 +190,7 @@ export function Workbench({
         )}
         <div className="wb-stage">
           {itemId ? (
-            <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} />
+            <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="workbench" />
           ) : (
             <div className="wb-empty">
               <p>

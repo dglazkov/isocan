@@ -26,6 +26,7 @@ export * from "./elapsed.ts";
 export * from "./layout.ts";
 export * from "./drawing.ts";
 export * from "./annotation.ts";
+export * from "./backing.ts";
 export * from "./activity.ts";
 export * from "./lineage.ts";
 export * from "./commands.ts";

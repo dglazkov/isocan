@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item, Operation } from "@isocan/core";
 import {
+  backingOf,
   isDesignSystem,
   BROWSER_MIME,
   annotationsOf,
@@ -24,6 +25,7 @@ import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
+import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
@@ -98,6 +100,10 @@ export function ItemView({
   // there is no floor, and chrome.test.ts is where that is held.
   const row = titleRow(width, scale);
   const kind = iconKindFor(item);
+  // Where this item belongs on disk, and what this machine's disk says —
+  // the canvas fact and the per-machine one, kept apart by `backingOf`.
+  const disk = useCanvasStore((s) => s.backing);
+  const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
   const isBrowser = current.mimeType === BROWSER_MIME;
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
@@ -449,6 +455,16 @@ export function ItemView({
             is worse than no mark. It is not a button: the kind is derived from
             the file and there is nothing to set. */}
         {row.icon && <KindIcon className="kind-icon" kind={kind} />}
+        {/**
+         * **This item is a file**, and whether the disk agrees
+         * (`docs/projects/workbench/files-on-disk.md`).
+         *
+         * Only tracked items wear anything: an untracked item is the default
+         * and the common case — a view run up to answer "let me see" — so
+         * silence is the right signal for it. Drift is the state worth
+         * catching from across a canvas, so it is the one that colours.
+         */}
+        {backing && <span className={`file-mark ${backing.state}`} title={fileMarkTip(backing)} />}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : row.name ? (

@@ -522,6 +522,21 @@ export class DaemonClient {
     return this.request("GET", `/api/projects/${canvasId}/tree`);
   }
 
+  /** Write an item's current version out to the directory bound here — the
+   * other direction from `＋` (`docs/projects/workbench/files-on-disk.md`). */
+  writeItem(
+    canvasId: string,
+    itemId: string,
+    force = false,
+  ): Promise<{ root: string; path: string; wrote: string }> {
+    return this.request("POST", `/api/projects/${canvasId}/write`, { itemId, force });
+  }
+
+  /** What this machine's disk says about the canvas's tracked items. */
+  getBacking(canvasId: string): Promise<{ bound: boolean; onDisk: Record<string, string> }> {
+    return this.request("GET", `/api/projects/${canvasId}/backing`);
+  }
+
   getLog(canvasId: string, since: number, waitMs?: number): Promise<LogEntry[]> {
     const wait = waitMs !== undefined ? `&waitMs=${waitMs}` : "";
     return this.request("GET", `/api/projects/${canvasId}/oplog?since=${since}${wait}`);

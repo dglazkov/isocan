@@ -180,12 +180,80 @@ describe("edit-text-in-place", () => {
     expect(frame).toContain("setRefusal(outcome.reason)");
   });
 
+  it("opens what each COVER is for, and remembers them apart", () => {
+    // Enter is "look at this thing big" — the preview, editor a rail away.
+    // W is "work on this thing" — both. One shared preference could not say
+    // that: whichever cover you used last decided what the other opened.
+    expect(stage).toMatch(/fullscreen: \{ preview: true, edit: false \}/);
+    expect(stage).toMatch(/workbench: \{ preview: true, edit: true \}/);
+    // Two keys, so folding in one cover does not fold the other.
+    expect(stage).toMatch(/fullscreen: "isocan\.stage\.panes\.fullscreen"/);
+    expect(stage).toMatch(/workbench: "isocan\.stage\.panes\.workbench"/);
+    // And each cover says which it is, rather than the stage guessing.
+    const full = readFileSync(new URL("../src/components/FullScreen.tsx", import.meta.url), "utf8");
+    const bench = readFileSync(new URL("../src/components/Workbench.tsx", import.meta.url), "utf8");
+    expect(full).toContain('surface="fullscreen"');
+    expect(bench).toContain('surface="workbench"');
+  });
+
   it("is offered on the saved preview, whichever panes are open", () => {
     // It used to require the editor pane to be FOLDED. The rule behind that
     // was right — two pens on one file is a conflict machine — but both
     // panes open is the DEFAULT, so the precondition hid the feature in the
     // layout almost everybody has. Offered against the saved file instead.
     expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !showDraft;/);
+  });
+
+  it("calls every hook BEFORE the stage's early returns", () => {
+    // React counts hooks per render, and this component returns early when
+    // the item is not loaded yet. A hook below that line is fine on every
+    // render you get by clicking around inside the app — and blanks the page
+    // the moment somebody opens a full-screen item URL cold, which is
+    // exactly how it was found (error #310, a white screen).
+    const firstReturn = stage.search(/^\s*if \(!item\) \{/m);
+    expect(firstReturn, "the early return moved — re-point this guard").toBeGreaterThan(0);
+    const after = stage.slice(firstReturn);
+    // The component's own body only; the helpers below it have their own.
+    const body = after.slice(0, after.indexOf("\nfunction "));
+    for (const hook of ["useState(", "useEffect(", "useRef(", "useCanvasStore("]) {
+      expect(body.includes(hook), `${hook} is called after an early return`).toBe(false);
+    }
+  });
+
+  it("makes the seam between the panes a handle, reusing the panel's own", () => {
+    // `PanelResizer` is the docked panel's edge, generalized when the
+    // workbench grew one; this is its third caller rather than a second
+    // kind of resizer for a second kind of edge.
+    expect(stage).toContain("<PanelResizer");
+    expect(stage).toContain('className="stage-editor-slot"');
+  });
+
+  it("stores the split as a FRACTION, not a width", () => {
+    // A width is one answer to a question that keeps changing: the left
+    // panel is draggable and the window resizes, so a width chosen at
+    // 1600px is most of the stage at 900.
+    expect(stage).toMatch(/split \* 100}%/);
+    expect(stage).toContain("const next = clamped / width;");
+  });
+
+  it("clamps in the OWNER, so neither pane can be squeezed to nothing", () => {
+    // The resizer only reports; whoever owns the value decides what is
+    // legal. Its own doc comment says so, and this holds it to that.
+    expect(stage).toContain("Math.min(Math.max(px, PANE_MIN), width - PANE_MIN)");
+  });
+
+  it("offers the seam only when there are two panes to divide", () => {
+    // A folded pane leaves a rail, and a rail is not a seam.
+    expect(stage).toMatch(/\{panes\.preview && \(\s*<PanelResizer/);
+  });
+
+  it("measures the stage rather than peeking a ref during render", () => {
+    // A ref read during render is null on the first one, so the handle
+    // opened believing the stage was 0 wide and the first drag slammed the
+    // editor to its floor. Observing also keeps it honest as the left panel
+    // is dragged and the window resized.
+    expect(stage).toContain("new ResizeObserver(measure)");
+    expect(stage).not.toContain("body.current?.clientWidth");
   });
 
   it("keeps one pen by taking the stage, not by hiding the door", () => {
@@ -203,5 +271,66 @@ describe("edit-text-in-place", () => {
     // `showDraft` is true exactly when the editor has unsaved text, and the
     // preview is showing THAT rather than the saved file.
     expect(stage).toMatch(/showDraft = panes\.edit && draft !== null/);
+  });
+});
+
+/**
+ * **Items backed by files** (`docs/projects/workbench/files-on-disk.md`) —
+ * the app half. The canvas fact and the per-machine one must stay apart, and
+ * the write must never be offered where it cannot happen.
+ */
+describe("the file mark and the save", () => {
+  const item = readFileSync(new URL("../src/components/ItemView.tsx", import.meta.url), "utf8");
+  const stage = readFileSync(
+    new URL("../src/components/ArtifactStage.tsx", import.meta.url),
+    "utf8",
+  );
+  const store = readFileSync(
+    new URL("../src/stores/canvasStore.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("marks only items that HAVE a place on disk", () => {
+    // An untracked item is the default and the common case — a view run up
+    // to answer "let me see" — so silence is its signal.
+    expect(item).toContain("{backing && <span className={`file-mark ${backing.state}`}");
+    expect(item).toContain("backingOf(item, disk.bound, ");
+  });
+
+  it("keeps the per-machine answer out of the canvas state", () => {
+    // `backing` is one browser's answer about one daemon's disk. Replicating
+    // or persisting it would carry a machine's fact to a machine where it is
+    // false — which is the mistake the whole design is shaped to avoid.
+    expect(store).toContain("backing: { bound: false, onDisk: {} }");
+    // Not in the replica that gets written down, and not on the wire.
+    const persist = store.slice(store.indexOf("function persist("), store.indexOf("function persist(") + 700);
+    expect(persist).not.toContain("backing");
+  });
+
+  it("offers the write only where there is a disk to write to", () => {
+    // A hosted canvas, or a machine without the checkout, is `unbound` — the
+    // button must not be there at all rather than there and refusing.
+    expect(stage).toContain('backing && backing.state !== "unbound"');
+  });
+
+  it("makes overwriting a drifted file a second, deliberate press", () => {
+    // The first press is refused by the daemon; the second says `force`.
+    // Two presses rather than a confirm dialog keeps the decision in the
+    // same place as the gesture.
+    expect(stage).toContain("onClick={() => void save(drifted)}");
+    expect(stage).toMatch(/Overwrite file/);
+    expect(stage).toMatch(/changed on disk outside the canvas/);
+  });
+
+  it("re-asks the disk after writing, so the marks stop lying", () => {
+    expect(stage).toContain("await loadBacking(canvasId)");
+  });
+
+  it("has ＋ say where the file it just carried came from", () => {
+    // Closes the round trip: without this the canvas had no idea where an
+    // added file came from, so it could never be put back.
+    const files = readFileSync(new URL("../src/components/WbFiles.tsx", import.meta.url), "utf8");
+    expect(files).toContain("[FILE_PROP]: where");
+    expect(files).toContain("cleanFilePath(entry.path)");
   });
 });

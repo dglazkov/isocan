@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -41,6 +42,7 @@ import {
   decodeFilename,
   DOOR_ROUTE,
   FILENAME_HEADER,
+  fileOf,
   FREE_NAME_ROUTE,
   grantSubjectRefusal,
   CANVAS_PATH_PREFIX,
@@ -68,7 +70,7 @@ import {
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
-import { boundDirs, pickList, readBound, readTree } from "./tree.ts";
+import { boundDirs, hashBound, pickList, readBound, readTree, writeBound } from "./tree.ts";
 import {
   attestersOf,
   attesterRefusal,
@@ -2041,6 +2043,92 @@ export function registerRoutes(
         });
     await recordDir(home, root, id);
     return { root, marker: file, adopted: Boolean(existing) };
+  });
+
+  /**
+   * **Write an item out to the directory bound here** — the other direction
+   * from `＋` (`docs/projects/workbench/files-on-disk.md`).
+   *
+   * Gated exactly like the tree, no weaker: a canvas link must never reach
+   * somebody's disk. The jail is `writeBound`'s, which is `readBound`'s plus
+   * the rules a WRITE needs — parent directories only where every segment is
+   * listable, and drift refused rather than overwritten, because a bad read
+   * leaks a listing and a bad write destroys work.
+   */
+  app.post("/api/projects/:id/write", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const snapshot = await engine.getSnapshot(id);
+    const dirs = await treeGate(id, req, reply);
+    if (!dirs) return reply;
+    const { itemId, force } = (req.body ?? {}) as { itemId?: string; force?: boolean };
+    const item = itemId ? snapshot.canvas.items[itemId] : undefined;
+    if (!item) return reply.status(404).send({ error: "no such item", code: "no-item" });
+    const rel = fileOf(item);
+    if (!rel) {
+      return reply.status(400).send({
+        error: `${item.title} is not backed by a file — give it one first`,
+        code: "not-tracked",
+      });
+    }
+    const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+    if (!current) return reply.status(400).send({ error: "that item has no version", code: "bad-op" });
+    const stream = await store.openBlob(id, current.blobHash);
+    if (!stream) return reply.status(404).send({ error: "those bytes are not here", code: "no-blob" });
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk as Buffer));
+    const bytes = Buffer.concat(chunks);
+
+    // The first bound root, as the tree's read already does. A canvas bound
+    // to several directories on one machine is worktrees or clones, and
+    // which one a write means is a question nobody has asked yet.
+    const root = dirs[0]!;
+    const hashOf = (data: Buffer) => createHash("sha256").update(data).digest("hex");
+    // Everything this item has ever been. A file matching any of them was
+    // written by this canvas and is safe to update; one matching none of
+    // them is somebody else's work, and `force` is a person saying so.
+    const ours = force
+      ? [(await hashBound(root, rel, hashOf)) ?? ""]
+      : item.versions.map((v) => v.blobHash);
+    const result = await writeBound(root, rel, bytes, ours, hashOf);
+    if (!result.ok) {
+      const sentence: Record<string, string> = {
+        "outside-root": `${rel} is outside the directory bound to this canvas`,
+        "not-listable": `${rel} names something this canvas may not write — dotfiles and secret shapes are refused`,
+        symlink: `${rel} passes through a symlink, which is never followed`,
+        drifted: `${rel} has changed on disk since it was last written — save again to overwrite it`,
+        unwritable: `${rel} could not be written`,
+      };
+      return reply
+        .status(result.refusal === "drifted" ? 409 : 400)
+        .send({ error: sentence[result.refusal ?? "unwritable"], code: result.refusal });
+    }
+    return { root, path: rel, wrote: current.blobHash };
+  });
+
+  /**
+   * **What this machine's disk says about the canvas's tracked items** — the
+   * derived half of `backingOf`, which the app and `isocan ls` both render.
+   * Same gate; a listing of hashes is still a listing.
+   */
+  app.get("/api/projects/:id/backing", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const snapshot = await engine.getSnapshot(id);
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    const bound =
+      loopbackBound(app) && local && (options.homes?.homeOf(id) ?? null) === null
+        ? await boundDirs(isocanHome(), id)
+        : [];
+    const hashOf = (data: Buffer) => createHash("sha256").update(data).digest("hex");
+    const onDisk: Record<string, string> = {};
+    if (bound.length > 0) {
+      for (const item of Object.values(snapshot.canvas.items)) {
+        const rel = fileOf(item);
+        if (!rel || onDisk[rel] !== undefined) continue;
+        const hash = await hashBound(bound[0]!, rel, hashOf);
+        if (hash !== null) onDisk[rel] = hash;
+      }
+    }
+    return { bound: bound.length > 0, onDisk };
   });
 
   app.get("/api/projects/:id/tree", async (req, reply) => {

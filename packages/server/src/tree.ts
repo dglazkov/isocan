@@ -250,3 +250,117 @@ export async function pickList(home: string, at: string | null): Promise<PickLis
   entries.sort((a, b) => a.name.localeCompare(b.name));
   return { dir: real, up: real === ceiling ? null : path.dirname(real), entries };
 }
+
+/**
+ * **Writing an item out** — the other direction, and the first time this
+ * module does anything but read (`docs/projects/workbench/files-on-disk.md`).
+ *
+ * This file opens with "Nothing here writes." That stops being true, so the
+ * rules get stricter rather than looser: a bad READ leaks a listing, a bad
+ * WRITE destroys somebody's work. Every rule above still applies — the path
+ * is jailed to the root on its RESOLVED form so `..` and a symlink spelling
+ * cannot walk out, no segment may be a dotfile or a secret shape, and no
+ * segment may be a symlink — plus two this direction needs:
+ *
+ * - **Parent directories are created only where every segment is listable**,
+ *   so a path cannot conjure `.hidden/` on its way to a file.
+ * - **Drift is refused, not overwritten**, and the version stack is what
+ *   makes that answerable without storing anything. The caller passes every
+ *   hash this item has ever held (`ours`); if the file on disk matches one of
+ *   them, the canvas wrote it — current, or an older version the disk is
+ *   simply behind — and updating it is safe. If it matches NONE of them,
+ *   somebody edited it outside the canvas, and a silent overwrite would eat
+ *   their work. No "last written" bookkeeping, no extra per-machine state:
+ *   the stack already is the record of everything this item has been.
+ *
+ * Every refusal is a `WriteRefusal` rather than a throw, because the caller
+ * has to tell a person which rule stopped them.
+ */
+export type WriteRefusal =
+  | "outside-root"
+  | "not-listable"
+  | "symlink"
+  | "drifted"
+  | "unwritable";
+
+export interface WriteResult {
+  ok: boolean;
+  refusal?: WriteRefusal;
+  /** What was actually on disk when we looked — for the drift message. */
+  found?: string | null;
+}
+
+/**
+ * Write `bytes` to `<root>/<rel>`, refusing anything the jail forbids.
+ *
+ * `hashOf` computes a content hash the same way the store does, so "does the
+ * disk match the canvas" is one comparison rather than two conventions.
+ */
+export async function writeBound(
+  root: string,
+  rel: string,
+  bytes: Buffer,
+  ours: readonly string[],
+  hashOf: (bytes: Buffer) => string,
+): Promise<WriteResult> {
+  const normalized = path.normalize(rel);
+  // `normalize("")` and `normalize(".")` are both "." — the root itself,
+  // which is not a file. Named here rather than left to the dotfile rule
+  // below, which would refuse it for the wrong reason and say so.
+  if (normalized === "." || path.isAbsolute(normalized) || normalized.split(path.sep).includes("..")) {
+    return { ok: false, refusal: "outside-root" };
+  }
+  const segments = normalized.split(path.sep).filter(Boolean);
+  if (segments.length === 0) return { ok: false, refusal: "outside-root" };
+  // Every segment on the way, by the same rule that decides what may be SEEN.
+  for (const [index, segment] of segments.entries()) {
+    if (!listable(segment, index === segments.length - 1 ? "file" : "dir")) {
+      return { ok: false, refusal: "not-listable" };
+    }
+  }
+  const full = path.join(root, normalized);
+  // The redundant belt `readBound` keeps, for the same reason: `normalize`
+  // and the `..` check above should make this unreachable, and a jail with
+  // one lock is a jail with one bug.
+  if (!full.startsWith(root + path.sep)) return { ok: false, refusal: "outside-root" };
+
+  // No segment may be a symlink — the classic escape, checked with `lstat`
+  // so a link reports as a link rather than as what it points at. Walked
+  // from the root down, because a link anywhere on the way is the escape.
+  let walked = root;
+  for (const segment of segments.slice(0, -1)) {
+    walked = path.join(walked, segment);
+    const stat = await fs.lstat(walked).catch(() => null);
+    if (stat === null) continue; // does not exist yet: it will be created
+    if (stat.isSymbolicLink()) return { ok: false, refusal: "symlink" };
+    if (!stat.isDirectory()) return { ok: false, refusal: "unwritable" };
+  }
+  const existing = await fs.lstat(full).catch(() => null);
+  if (existing?.isSymbolicLink()) return { ok: false, refusal: "symlink" };
+  if (existing && !existing.isFile()) return { ok: false, refusal: "unwritable" };
+
+  // Drift: what is there is not anything this canvas ever wrote.
+  const found = existing ? hashOf(await fs.readFile(full)) : null;
+  if (found !== null && !ours.includes(found)) {
+    return { ok: false, refusal: "drifted", found };
+  }
+
+  try {
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, bytes);
+  } catch {
+    return { ok: false, refusal: "unwritable" };
+  }
+  return { ok: true };
+}
+
+/** The content hash of a file inside the jail, or null when it is not there —
+ * what `backingOf` needs to say whether the disk matches the canvas. */
+export async function hashBound(
+  root: string,
+  rel: string,
+  hashOf: (bytes: Buffer) => string,
+): Promise<string | null> {
+  const bytes = await readBound(root, rel);
+  return bytes === null ? null : hashOf(bytes);
+}
