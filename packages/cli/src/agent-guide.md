@@ -202,14 +202,49 @@ event forwarding, not something to paper over with a detached supervisor.
 - **Exit 2 means nothing came.** It is the quiet half of a conversation, not
   the end of one: park again. Never invent work out of a timeout, and never
   read one as permission to leave.
-- **One waiter, ever.** Two parked processes race for the same wake and one of
-  them will be doing invisible work. Start the next `wait` only after the work
-  is done and the receipt is posted.
+- **One waiter per NAME.** Two parked processes speaking as the same actor
+  race for the same wake, and one of them does invisible work. Start your own
+  next `wait` only after the work is done and the receipt is posted. (Two
+  parked processes with two different names is a different thing entirely —
+  see below, and it is allowed.)
+- **The daemon is allowed to die under you.** A park survives a restart: it
+  retries, starts the daemon again if nobody else has, and resumes at the
+  same cursor, so nothing that landed meanwhile is missed. If it has been
+  gone a few seconds you get one line on stderr saying so. You do not need a
+  supervisor loop around `wait`, and you should not write one.
 - **Handle the wake in the turn it arrives.** The JSON names the thread that
   woke you — read it, do the work, reply.
 - **If a turn is interrupted, re-read before acting.** An old `wait` payload
   is not a queue. `isocan comment list` and `isocan tail` are the truth; match
   on comment/operation ids so you don't answer the same comment twice.
+
+## More than one of you
+
+A name is not a machine — it is a **session key**. Whatever the harness
+exports (`ISOCAN_SESSION_ID`, or your harness's own variable) decides which
+actor a command speaks as, so two processes on one machine with two different
+session keys are two collaborators: two names, two cursors, two parks, two
+undo histories. The canvas cannot tell them from two people on two laptops,
+because there is nothing to tell.
+
+That is how you do several things at once. One agent per concern, each with
+its own name and its own park:
+
+```sh
+ISOCAN_SESSION_ID=scout  isocan identity --name Scout  --session
+ISOCAN_SESSION_ID=scribe isocan identity --name Scribe --session
+# then each process runs its own lap, parking on its own `isocan wait`
+```
+
+Both wake on the same summons in the Chat, and each answers as itself. What
+you must NOT do is share one name across two processes — that is the "one
+waiter per name" rule above, and it is the only way this goes wrong.
+
+Two things worth knowing before you fan out. **Say who is doing what**, in
+the Chat, before you start: three cursors appearing with no explanation is
+alarming rather than impressive. And **fan out for work that is genuinely
+separate** — two agents editing the same item is a merge nobody asked for,
+while two agents on two screens is the thing this canvas is for.
 
 ## The Chat
 
