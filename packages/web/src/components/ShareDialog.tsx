@@ -295,7 +295,11 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
               value={who}
               onChange={(e) => setWho(e.target.value)}
             />
-            <button className="btn" type="submit" disabled={busy || !who.trim()}>
+            {/* The action this form exists for, so it wears the accent — and
+                for the same reason as the reply button: disabled is an
+                opacity, and grey-on-grey cannot say which of the two states
+                it is in. */}
+            <button className="btn primary" type="submit" disabled={busy || !who.trim()}>
               Invite
             </button>
           </form>
