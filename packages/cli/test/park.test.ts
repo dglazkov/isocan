@@ -117,3 +117,47 @@ describe("parking through a daemon restart", () => {
     expect(out.stderr).toMatch(/no canvas|not found|unknown/i);
   }, 30_000);
 });
+
+it("brings its daemon back when nobody else will", async () => {
+  /**
+   * The other half of the same bug, and the one the first fix created.
+   *
+   * Retrying a severed connection stopped the park EXITING on a restart.
+   * But if nothing else happened to run a command, nothing started the
+   * daemon again — so the agent sat in a silent retry loop, looking parked
+   * on the canvas and hearing nothing. That is the original failure wearing
+   * a calmer face, and worse to debug: the version before it at least said
+   * `error: fetch failed` out loud.
+   *
+   * So a park starts the daemon it lost, the way every other verb in this
+   * CLI already does. This stops it and then does nothing at all — no
+   * command, no restart — and the park has to be the thing that heals it.
+   */
+  const parked = cli(["wait", "--timeout", "25"]);
+  let out = "";
+  parked.stdout!.on("data", (c) => (out += c));
+  parked.stderr!.on("data", (c) => (out += c));
+
+  for (let tries = 0; tries < 40; tries++) {
+    const up = await run(["status", "--json"]);
+    if (up.code === 0 && up.stdout.includes('"pid"')) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  await run(["stop"]);
+
+  // Nobody asks for anything. The only process with an interest in that
+  // daemon is the park itself.
+  let revived = false;
+  for (let tries = 0; tries < 40; tries++) {
+    await new Promise((r) => setTimeout(r, 250));
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`).catch(() => null);
+    if (res?.ok) {
+      revived = true;
+      break;
+    }
+  }
+  expect(revived, `the park never restarted its daemon:\n${out}`).toBe(true);
+
+  parked.kill();
+}, 60_000);

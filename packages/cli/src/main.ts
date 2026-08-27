@@ -5263,6 +5263,10 @@ command or reply. No \`session start\` needed after a wake.`,
         return false;
       };
 
+      // Null while the daemon is answering; the moment it stopped, otherwise.
+      let offlineSince: number | null = null;
+      let complained = false;
+
       try {
         await say("waiting for you…");
 
@@ -5306,12 +5310,50 @@ command or reply. No \`session start\` needed after a wake.`,
           let batch;
           try {
             batch = await ctx.client.watchLog({ cursors, waitMs: window, only: [p.id] });
+            // Back after a gap: say so, and put presence back. The daemon that
+            // went away took the session with it, so the canvas has been
+            // showing nothing where this agent should be.
+            if (offlineSince !== null) {
+              const gap = Math.round((Date.now() - offlineSince) / 1000);
+              console.error(`wait: daemon back after ${gap}s — still parked, nothing missed`);
+              offlineSince = null;
+              await say("waiting for you…");
+            }
           } catch (err) {
             // The daemon ANSWERING with a refusal is a different thing
             // entirely and must not be retried into a loop — an `ApiError`
             // means somebody was there to say no. Only a connection that
             // never got an answer is a blip.
             if (err instanceof ApiError) throw err;
+            /**
+             * **A park that outlives its daemon brings it back.**
+             *
+             * Retrying a dead socket forever was half a fix. It stopped the
+             * park exiting on a restart, which was the reported bug — but if
+             * nothing else happened to run a command, nothing ever started
+             * the daemon again, and the agent sat in a silent loop looking
+             * parked while hearing nothing. Which is the same failure as
+             * before wearing a calmer face, and harder to notice: the first
+             * version at least said `error: fetch failed`.
+             *
+             * Every other verb in this CLI auto-starts the daemon it needs.
+             * A park is the one command that runs for minutes with no daemon
+             * of its own to lean on, so it is the one that most needs to.
+             * `ensureDaemon` no-ops when something is already answering, so
+             * this costs a health check per retry and nothing else.
+             */
+            if (offlineSince === null) offlineSince = Date.now();
+            await ctx.client.ensureDaemon().catch(() => {});
+            // …and say it out loud, once, after long enough that a restart
+            // is not worth mentioning. Silence is what made this look like a
+            // healthy park; three seconds of it is a fact worth one line.
+            if (!complained && Date.now() - offlineSince > 3000) {
+              complained = true;
+              console.error(
+                "wait: the daemon stopped answering — retrying, and starting it if it is gone. " +
+                  "Still parked; nothing that lands meanwhile is missed.",
+              );
+            }
             await new Promise((r) => setTimeout(r, 400));
             continue;
           }
