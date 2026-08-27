@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Actor } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
-import { actorColor } from "../lib/colors.ts";
+import { useActorColor } from "../lib/colors.ts";
 import { actorName } from "../lib/names.ts";
 import { ownCursorFits } from "../lib/owncursor.ts";
 
@@ -101,7 +101,19 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   }, [shown]);
 
   if (!shown) return null;
-  const color = actorColor(actor.id);
+  /**
+   * The SUBSCRIPTION, not the one-shot read.
+   *
+   * This was `actorColor(actor.id)`, which reads `getState()` once — so the
+   * cursor kept whatever colour it happened to be painted with and only
+   * changed on a reload. Picking a colour is a thing you do to watch it
+   * happen; the one place it must be live is the pointer under your hand.
+   *
+   * Both spellings exist on purpose (`lib/colors.ts`): the imperative one is
+   * for a stroke's ink and for building a style string, where a hook cannot
+   * go. Inside a component it is always the wrong one.
+   */
+  const color = useActorColor(actor.id);
   return (
     <div className="own-cursor" ref={ref} aria-hidden style={{ opacity: 0 }}>
       <svg width="18" height="20" viewBox="0 0 18 20">
