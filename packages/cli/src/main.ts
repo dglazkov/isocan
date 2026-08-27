@@ -3213,6 +3213,56 @@ program
     ),
   );
 
+/**
+ * **Do the bytes agree with the ops?**
+ *
+ * An item replicates; the bytes it names do not follow on their own — they
+ * are pushed by hand when the item is made. Anything that stops that push
+ * leaves a teammate holding the item, its title and its version, with "blob
+ * not found" where the screen should be, and it never heals, because nothing
+ * ever looks.
+ *
+ * It was reported that way and could not be answered from either machine:
+ * a local read is served from the local copy, so the one question that
+ * mattered — are the bytes AT THE HOME — had no way to be asked. The fix was
+ * a hand re-upload and the confirmation was somebody else's reload, which is
+ * a guess that happened to work.
+ */
+program
+  .command("blobs")
+  .description("Check that this canvas's bytes reached its home — and send the ones that did not")
+  .option("--push", "upload the blobs the home is missing")
+  .action(
+    run(async (opts: { push?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p } = await canvasAndSnapshot(ctx);
+      const report = await ctx.client.reconcileBlobs(p.id, opts.push === true);
+      if (ctx.json) return printJson(report);
+      if (report.home === null) {
+        console.log("this canvas lives here — its bytes are already where they belong");
+        return;
+      }
+      console.log(`home     ${report.home}`);
+      console.log(`checked  ${report.checked} blob${report.checked === 1 ? "" : "s"}`);
+      if (report.unknown.length > 0) {
+        // Never counted as missing and never pushed: a home that cannot be
+        // reached has not said these are absent.
+        console.log(`unknown  ${report.unknown.length} — the home did not answer about these`);
+      }
+      if (report.missing.length === 0) {
+        console.log("missing  none — every blob this canvas names is at its home");
+        return;
+      }
+      console.log(`missing  ${report.missing.length}`);
+      for (const hash of report.missing) console.log(`         ${hash}`);
+      if (report.pushed.length > 0) {
+        console.log(`pushed   ${report.pushed.length} — re-check to confirm they landed`);
+      } else {
+        console.log("         `isocan blobs --push` sends them");
+      }
+    }),
+  );
+
 program
   .command("text [words...]")
   .description("Type words onto the canvas as a text node — chromeless, editable, and a real .md")

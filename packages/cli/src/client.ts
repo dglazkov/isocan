@@ -562,6 +562,21 @@ export class DaemonClient {
     return this.request("POST", `/api/projects/${canvasId}/redo`, { actor });
   }
 
+  /** Ask whether the home holds every blob this canvas names, and optionally
+   *  send the ones it does not. */
+  reconcileBlobs(
+    canvasId: string,
+    push: boolean,
+  ): Promise<{
+    home: string | null;
+    checked: number;
+    missing: string[];
+    pushed: string[];
+    unknown: string[];
+  }> {
+    return this.request("POST", `/api/projects/${canvasId}/blobs/reconcile`, { push });
+  }
+
   gc(canvasId: string, request: GcRequest): Promise<GcReport> {
     return this.request("POST", `/api/projects/${canvasId}/gc`, request);
   }

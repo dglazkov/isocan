@@ -421,6 +421,31 @@ decide. Run it when they ask, and say on the thread that you did. Reading it —
 plain `isocan home` — is free and often the answer to "why was my write
 refused".
 
+## When a teammate sees the item but not the picture
+
+An item replicates; the BYTES it names do not follow on their own. They are
+pushed to the home when the item is made, and if anything stops that push —
+a home that was down for a second, a daemon restarted mid-upload — the op
+still travels and the bytes do not. The symptom belongs to somebody else:
+they open the canvas, see the item with its title and version, and get
+`blob not found` where the screen should be. Your side looks perfect,
+because your side reads its own copy.
+
+So do not diagnose it by asking whether it looks right to you. Ask:
+
+```sh
+isocan blobs           # are this canvas's bytes at its home?
+isocan blobs --push    # send the ones that are not
+isocan blobs           # confirm — a repair you did not re-check is a guess
+```
+
+`unknown` is not `missing`: it means the home could not be reached, so
+nothing was established and nothing was pushed. Run it again when the home
+is answering.
+
+Worth running whenever you have uploaded a lot to a canvas whose home is
+elsewhere, and any time somebody says a screen will not open.
+
 ## Sharing a canvas
 
 `isocan share` is who may enter, and it is the same endpoint the Share button
@@ -990,6 +1015,8 @@ the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 what gc compacted), `recap` (that history at decaying resolution — old spans
 summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
+`blobs [--push]` (are this canvas's bytes at its home — and send the ones
+that are not; the answer when a teammate sees an item and no picture),
 `text <words…>` (words straight onto the canvas as a chromeless node —
 `--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
 and `save` back it like anything else),

@@ -375,6 +375,16 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
+  /**
+   * **Where every canvas lives, known BEFORE the first request is answered.**
+   *
+   * Reading the table is not dialling — see `HomeLinks.load`. Dialling still
+   * happens after `listen`, for the reason stated there. But an unloaded
+   * table makes every canvas look like this daemon's own, and a write that
+   * believes that pushes its bytes nowhere while its op replicates: the
+   * teammate gets the item and a "blob not found" behind it, permanently.
+   */
+  await homes.load();
   await app.listen({ port, host });
 
   /**

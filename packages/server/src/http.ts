@@ -1780,6 +1780,21 @@ export function registerRoutes(
     return { ended: presence.endActorSessions(actorId, kind) };
   });
 
+  /**
+   * **Do the bytes agree with the ops?** — and make them, when asked.
+   *
+   * Canvas-scoped, so the `onRequest` admission hook covers it: a badge can
+   * only reconcile a canvas it was let into. Reading is the default and
+   * writing is opt-in (`push`), because "tell me what is wrong" and "change
+   * something" are different asks and a diagnostic that repairs by surprise
+   * is not one.
+   */
+  app.post("/api/projects/:id/blobs/reconcile", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { push?: boolean };
+    return engine.reconcileBlobs(id, { push: body.push === true });
+  });
+
   app.post("/api/projects/:id/gc", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;

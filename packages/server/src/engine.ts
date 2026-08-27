@@ -824,6 +824,71 @@ export class Engine {
   }
 
   /**
+   * **Are the bytes where the ops that name them went — and if not, send them.**
+   *
+   * A blob is not an Operation, so it does not replicate; `putBlob` pushes it
+   * to the home by hand. Anything that makes that push not happen — the
+   * routing table not yet read, a home that was down for the one second it
+   * mattered, a process killed mid-upload — leaves the op replicated and the
+   * bytes behind, forever, in silence. A teammate gets the item, its title
+   * and its version number, and "blob not found" where the screen should be.
+   *
+   * It was reported exactly that way, and neither machine could answer the
+   * only question that mattered — *are the bytes at the home?* — so the fix
+   * was a hand re-upload and the confirmation was somebody else's reload.
+   * That is not a repair, it is a guess that happened to work.
+   *
+   * This asks, per blob, and pushes the missing ones when told to. It is
+   * deliberately NOT an Operation: nothing about the canvas changes. It is
+   * two copies of the same content-addressed bytes being made to agree, which
+   * is why it is safe to run at any time and safe to run twice.
+   */
+  reconcileBlobs(
+    canvasId: string,
+    options: { push: boolean },
+  ): Promise<{
+    home: string | null;
+    checked: number;
+    missing: string[];
+    pushed: string[];
+    unknown: string[];
+  }> {
+    return this.enqueue(async () => {
+      const home = this.homes?.for(canvasId) ?? null;
+      // No home is not a problem to report: this daemon IS where the bytes
+      // live, and there is nothing for them to be behind.
+      if (!home) return { home: null, checked: 0, missing: [], pushed: [], unknown: [] };
+      const listing = await this.store.listBlobs(canvasId);
+      const missing: string[] = [];
+      const pushed: string[] = [];
+      // "I could not ask" is not "it is not there", and must never be
+      // answered by uploading — a home that is down would otherwise have
+      // every blob on the canvas pushed at it the moment it came back.
+      const unknown: string[] = [];
+      for (const blob of listing) {
+        const there = await home.hasBlob(canvasId, blob.hash);
+        if (there === null) {
+          unknown.push(blob.hash);
+          continue;
+        }
+        if (there) continue;
+        missing.push(blob.hash);
+        if (!options.push) continue;
+        const stream = await this.store.openBlob(canvasId, blob.hash);
+        if (!stream) continue; // gone locally too; nothing here to send
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(chunk as Buffer);
+        await home.putBlob(canvasId, Buffer.concat(chunks), {
+          mimeType: blob.meta.mimeType,
+          filename: blob.meta.filename,
+        });
+        pushed.push(blob.hash);
+      }
+      return { home: home.homeUrl, checked: listing.length, missing, pushed, unknown };
+    });
+  }
+
+  /**
    * Somewhere to put bytes this daemon must not receive, or null when the
    * backing has no such thing (every file home). Deliberately NOT on the
    * single-writer chain: it reads one blob record and mints a URL, writing
