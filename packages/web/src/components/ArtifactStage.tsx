@@ -124,7 +124,45 @@ export function ArtifactStage({
   if (!editable) return <div className="artifact-stage">{saved}</div>;
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
-  const offerTextEdit = current.mimeType === "text/html" && !panes.edit;
+  /**
+   * **Offered whenever the preview is showing the SAVED file** — editor pane
+   * open or folded.
+   *
+   * It used to require the editor to be FOLDED, on a rule that was right and
+   * a precondition that was invisible: two pens on one file is a conflict
+   * machine, so the affordance was withheld beside an open buffer. But both
+   * panes are open by DEFAULT, so the default layout hid the feature
+   * completely — the way to discover editing was to fold the editor first,
+   * which nobody does looking for a way to edit.
+   *
+   * The rule is kept and moved into the GESTURE instead: entering in-place
+   * mode takes the whole stage for the duration (below), so there is still
+   * exactly one pen — the editor is not beside you, it is behind you, and it
+   * comes back untouched when you are done. And when the buffer IS dirty the
+   * preview is showing that draft rather than the saved file, so this is
+   * false and nothing is offered: you already have a pen in your hand.
+   */
+  const offerTextEdit = current.mimeType === "text/html" && !showDraft;
+
+  /**
+   * In-place editing takes the whole stage rather than half of it, and
+   * deliberately does NOT fold the editor pane: folding writes the layout
+   * preference (`writePanes`), and a temporary mode must not rewrite how
+   * somebody has decided to work. The panes come back exactly as they were.
+   */
+  if (textEditing && offerTextEdit) {
+    return (
+      <div className="artifact-stage">
+        <TextEditFrame
+          key={item.id}
+          canvasId={canvasId}
+          item={item}
+          actor={actor}
+          onDone={() => setTextEditing(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="artifact-stage">
@@ -150,15 +188,7 @@ export function ArtifactStage({
         )}
         {panes.preview ? (
           <div className="stage-preview-pane">
-            {textEditing && offerTextEdit ? (
-              <TextEditFrame
-                key={item.id}
-                canvasId={canvasId}
-                item={item}
-                actor={actor}
-                onDone={() => setTextEditing(false)}
-              />
-            ) : (
+            {
               <>
                 <div className="stage-pane-bar">
                   <span className="stage-pane-name">
@@ -207,7 +237,7 @@ export function ArtifactStage({
                   )}
                 </div>
               </>
-            )}
+            }
           </div>
         ) : (
           <button

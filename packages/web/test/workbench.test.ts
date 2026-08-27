@@ -180,9 +180,28 @@ describe("edit-text-in-place", () => {
     expect(frame).toContain("setRefusal(outcome.reason)");
   });
 
-  it("is offered only on the saved preview, never beside an open buffer", () => {
-    // Two pens on one file is a conflict machine: with the editor pane open
-    // the buffer is the source of truth, and the affordance is withheld.
-    expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !panes\.edit;/);
+  it("is offered on the saved preview, whichever panes are open", () => {
+    // It used to require the editor pane to be FOLDED. The rule behind that
+    // was right — two pens on one file is a conflict machine — but both
+    // panes open is the DEFAULT, so the precondition hid the feature in the
+    // layout almost everybody has. Offered against the saved file instead.
+    expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !showDraft;/);
+  });
+
+  it("keeps one pen by taking the stage, not by hiding the door", () => {
+    // The mode owns the whole stage for its duration, so the editor is
+    // behind you rather than beside you — same guarantee, discoverable.
+    expect(stage).toMatch(/if \(textEditing && offerTextEdit\) \{/);
+    // And it must not fold the editor to get there: folding is persisted
+    // (`writePanes`), and a temporary mode may not rewrite how somebody has
+    // decided to work.
+    const mode = stage.slice(stage.indexOf("if (textEditing && offerTextEdit)"));
+    expect(mode.slice(0, 600)).not.toContain("fold(");
+  });
+
+  it("withholds it while a draft is open — that pen is already in hand", () => {
+    // `showDraft` is true exactly when the editor has unsaved text, and the
+    // preview is showing THAT rather than the saved file.
+    expect(stage).toMatch(/showDraft = panes\.edit && draft !== null/);
   });
 });
