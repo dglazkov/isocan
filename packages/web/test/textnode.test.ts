@@ -109,3 +109,34 @@ describe("the workbench directory section is not the canvas Files panel", () => 
     expect(header).toMatch(/"Directory"/);
   });
 });
+
+/**
+ * **Every renderer of a text node honours its line breaks, or none should.**
+ *
+ * `breaks` is a prop, so it is a thing a new call site can forget — and the
+ * failure is quiet and split-brained: the canvas shows the note the way it
+ * was typed while full screen runs the lines together, which reads as the
+ * app having lost the text rather than as a missing flag. That is exactly
+ * what happened the first time; the canvas got it and the stage did not.
+ */
+describe("every VersionContent site says whether it is a text node", () => {
+  const sites = [
+    "../src/components/ItemView.tsx",
+    "../src/components/ArtifactStage.tsx",
+    "../src/components/ItemThumb.tsx",
+    "../src/components/VersionFanOut.tsx",
+  ];
+
+  it("passes textNode wherever VersionContent is mounted", () => {
+    for (const site of sites) {
+      const src = readFileSync(fileURLToPath(new URL(site, import.meta.url)), "utf8");
+      const mounts = src.split("<VersionContent").slice(1);
+      expect(mounts.length, `${site} no longer mounts VersionContent`).toBeGreaterThan(0);
+      for (const mount of mounts) {
+        // The props of this one element, up to its close.
+        const props = mount.slice(0, mount.indexOf("/>"));
+        expect(props, `${site} mounts VersionContent without textNode`).toContain("textNode=");
+      }
+    }
+  });
+});

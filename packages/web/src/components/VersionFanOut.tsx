@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
+import { isTextItem } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -73,6 +74,7 @@ export function VersionFanOut({
                 mimeType={version.mimeType}
                 filename={version.filename}
                 entered={false}
+                textNode={isTextItem(item)}
               />
             </div>
           </div>
