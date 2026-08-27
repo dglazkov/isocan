@@ -204,6 +204,22 @@ describe("edit-text-in-place", () => {
     expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !showDraft;/);
   });
 
+  it("calls every hook BEFORE the stage's early returns", () => {
+    // React counts hooks per render, and this component returns early when
+    // the item is not loaded yet. A hook below that line is fine on every
+    // render you get by clicking around inside the app — and blanks the page
+    // the moment somebody opens a full-screen item URL cold, which is
+    // exactly how it was found (error #310, a white screen).
+    const firstReturn = stage.search(/^\s*if \(!item\) \{/m);
+    expect(firstReturn, "the early return moved — re-point this guard").toBeGreaterThan(0);
+    const after = stage.slice(firstReturn);
+    // The component's own body only; the helpers below it have their own.
+    const body = after.slice(0, after.indexOf("\nfunction "));
+    for (const hook of ["useState(", "useEffect(", "useRef(", "useCanvasStore("]) {
+      expect(body.includes(hook), `${hook} is called after an early return`).toBe(false);
+    }
+  });
+
   it("makes the seam between the panes a handle, reusing the panel's own", () => {
     // `PanelResizer` is the docked panel's edge, generalized when the
     // workbench grew one; this is its third caller rather than a second

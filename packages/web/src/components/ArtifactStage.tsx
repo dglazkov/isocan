@@ -176,6 +176,16 @@ export function ArtifactStage({
   // and only offered on the SAVED preview: with the editor open, the buffer
   // is the source of truth and two pens on one file is a conflict machine.
   const [textEditing, setTextEditing] = useState(false);
+  /**
+   * **Every hook above the early returns**, and this one taught the rule the
+   * hard way: it sat beside the `showDraft` it feeds, which is below `if
+   * (!item)`. That is fine on every render where the canvas is already
+   * loaded — which is every render you get by clicking around inside the app
+   * — and breaks the moment somebody opens a full-screen item URL COLD: the
+   * first render has no item, returns early with fewer hooks, the snapshot
+   * lands, and React counts a different number. A blank page and error #310.
+   */
+  const disk = useCanvasStore((s) => s.backing);
 
   if (!item) {
     return (
@@ -189,6 +199,8 @@ export function ArtifactStage({
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const editable = editableText(current.mimeType);
+  // Not a hook — a derivation, so it may live where it is used.
+  const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
 
   const fold = (which: keyof Panes) => {
     const next = { ...panes, [which]: !panes[which] };
@@ -213,8 +225,6 @@ export function ArtifactStage({
   // put away, so it gets the whole stage without ceremony.
   if (!editable) return <div className="artifact-stage">{saved}</div>;
 
-  const disk = useCanvasStore((s) => s.backing);
-  const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
    * **Offered whenever the preview is showing the SAVED file** — editor pane

@@ -25,6 +25,7 @@ import { sessionLocus } from "../lib/presence.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
+import { pageTitle } from "../lib/title.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -135,6 +136,9 @@ function CanvasSurface({
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const canvas = useCanvasStore((s) => s.canvas);
+  // The canvas's own title, for the tab. Subscribed separately from the
+  // contents so a rename repaints the tab and an item move does not.
+  const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
@@ -277,14 +281,28 @@ function CanvasSurface({
     };
   }, [connection]);
 
-  // Unread comments reach a backgrounded tab through its title.
+  /**
+   * The tab says which canvas, which place, and what is unread.
+   *
+   * It said "isocan" everywhere, which is the least useful thing a tab can
+   * say to somebody holding six of them — and a canvas, its workbench and a
+   * screen full-size are three addresses you keep at once. The rule is in
+   * `lib/title.ts`, where a test can hold it; the unread count that used to
+   * be this effect's whole job is now one part of it.
+   */
   useEffect(() => {
     const count = canvas ? unreadThreads(canvas, seen, actor.id).length : 0;
-    document.title = count > 0 ? `(${count}) isocan` : "isocan";
+    const staged = itemId ?? wbItemId ?? null;
+    document.title = pageTitle({
+      canvas: canvasTitle,
+      cover: onWorkbench ? "workbench" : staged ? "item" : null,
+      item: staged ? (canvas?.items[staged]?.title ?? null) : null,
+      unread: count,
+    });
     return () => {
-      document.title = "isocan";
+      document.title = pageTitle({});
     };
-  }, [canvas, seen, actor.id]);
+  }, [canvas, canvasTitle, seen, actor.id, itemId, wbItemId, onWorkbench]);
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
