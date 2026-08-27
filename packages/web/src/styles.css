@@ -502,6 +502,14 @@ img { height: auto; }
   background: var(--panel); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
 }
+/* Nothing in the bar breaks its own label in half.
+   Under width pressure a flex row shrinks its children, and a button whose
+   text wraps is unreadable long before it is unclickable — "+ Site" has been
+   doing it, and the Workbench link made it worse by adding one more thing
+   that must fit. The bar has exactly one element that may give, and it is
+   the canvas name: it already ellipsizes, which is the honest way to lose
+   characters. */
+.toolbar .btn { flex: none; white-space: nowrap; }
 .canvas-name { position: relative; min-width: 0; display: flex; }
 .canvas-name .title {
   font-weight: 600; font-size: 14px; margin-right: 6px;
@@ -1720,7 +1728,22 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   display: flex; align-items: center; gap: 7px; flex: none;
   padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
 }
-.main-panel header b { font-size: 12.5px; }
+/* **One spelling for the panel's name, on every surface it appears.**
+
+   It was Title Case here and UPPERCASE in the workbench, because the same
+   panel is a floating panel on the canvas and a docked section there. That
+   is defensible and it is still wrong: the panel does not change its name
+   when it changes shape, and a person moving between the two surfaces
+   watches the word flicker — which was reported twice.
+
+   The CASE is what unifies; the SIZE deliberately does not. Matching the
+   workbench's 10.5px here would make this header byte-identical to
+   `.files-group` — the DRAWINGS / SCREENS eyebrows inside this very panel —
+   and a title indistinguishable from the things it is a title for is not a
+   hierarchy. So it keeps the panel's own 12.5px and sits a clear level
+   above them, while the docked copy stays small enough to read as a section
+   of a column. */
+.main-panel header b { font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase; }
 .main-panel header .spacer { flex: 1; }
 .main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 /* The panel's one-line "what is this" — the same name-then-quiet-hint pattern
@@ -2156,7 +2179,7 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; gap: 7px; flex: none;
   padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
 }
-.files-panel header b { font-size: 12.5px; }
+.files-panel header b { font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase; }
 .files-panel header .spacer { flex: 1; }
 .files-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 .files-count {

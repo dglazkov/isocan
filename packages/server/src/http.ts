@@ -2557,6 +2557,31 @@ function registerPages(
      * somebody adds fails the build instead of shipping a cheerful default.
      */
     reply.type(types[path.extname(file)] ?? "application/octet-stream");
+    /**
+     * **What may be remembered, and what must be asked for again.**
+     *
+     * Neither of these headers was sent at all, which does not mean "do not
+     * cache" — with no `Cache-Control` and no validator, a browser applies
+     * its own heuristic, and Chrome duly held on to `index.html`. That is the
+     * worst possible file to guess about: it is the one that NAMES the hashed
+     * bundles, so a stale copy pins a person to the whole previous build.
+     * Reported as exactly that — a deploy landed, the page was reloaded, and
+     * nothing had changed, because the reload re-read a cached entry point
+     * pointing at last build's assets.
+     *
+     * So the standard pairing, and it is a pairing rather than one rule:
+     *
+     * - **`/assets/*` is immutable for a year.** Vite puts a content hash in
+     *   every filename there, so the name changes whenever the bytes do. That
+     *   is precisely the condition under which `immutable` is safe, and it is
+     *   what makes the other half affordable.
+     * - **Everything else revalidates.** `index.html` must, for the reason
+     *   above. The rest of `public/` rides along rather than earning its own
+     *   case: it is a favicon and a screenshot, and a few KB re-fetched is a
+     *   cheaper mistake than a third caching rule nobody remembers.
+     */
+    const hashed = file.startsWith(path.join(dist, "assets") + path.sep);
+    reply.header("Cache-Control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
     return reply.send(createReadStream(file));
   };
 
