@@ -8,6 +8,7 @@ import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   CONTENT_BLOB_ROUTE,
+  CONTENT_CSP,
   contentPorts,
   isContentRequest,
   registerContentRoutes,
@@ -145,7 +146,45 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(contentBase).toBe(daemon.contentBase);
   });
 
-  it("the content origin serves bytes badge-less, and without the app origin's CSP", async () => {
+  it("carries a policy that lets a screen render and remember, but not talk", async () => {
+    // Stage 3, chosen by measuring 76 real screens: 48 run inline scripts,
+    // 28 load Google Fonts, ZERO use fetch/XHR/WebSocket/iframes/forms or a
+    // remote script or image. So: everything that renders, nothing that
+    // talks. Each clause below is one of those findings.
+    expect(CONTENT_CSP).toContain("default-src 'none'");
+    expect(CONTENT_CSP).toContain("script-src 'unsafe-inline'"); // 48 of 76
+    expect(CONTENT_CSP).toContain("https://fonts.googleapis.com"); // the only host
+    expect(CONTENT_CSP).toContain("https://fonts.gstatic.com");
+    // The exfiltration channels, closed — and an image URL is exfiltration
+    // with extra steps, so images are data:/blob: only.
+    expect(CONTENT_CSP).toContain("connect-src 'none'");
+    expect(CONTENT_CSP).toContain("form-action 'none'");
+    expect(CONTENT_CSP).toMatch(/img-src data: blob:/);
+    expect(CONTENT_CSP).not.toMatch(/img-src[^;]*https:/);
+    // **Never a sandbox directive.** A response-header sandbox intersects
+    // with the iframe's and re-imposes the opaque origin, which would take
+    // away the storage this whole origin exists to grant.
+    expect(CONTENT_CSP, "a sandbox here would undo stage 2").not.toContain("sandbox");
+  });
+
+  it("serves that policy from the listener, not just from a constant", async () => {
+    const up = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "c.html", ...badge.headers },
+      body: "<h1>hi</h1>",
+    });
+    const { blobHash } = (await up.json()) as { blobHash: string };
+    const res = await fetch(`${daemon.contentBase}/api/projects/prj_1/blobs/${blobHash}`);
+    expect(res.headers.get("content-security-policy")).toBe(CONTENT_CSP);
+    // And the APP origin keeps its own, unchanged: the two origins carry
+    // different headers because they are different places.
+    const app = await fetch(`${base}/api/projects/prj_1/blobs/${blobHash}`, {
+      headers: badge.headers,
+    });
+    expect(app.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
+  });
+
+  it("the content origin serves bytes badge-less, with its own policy", async () => {
     const up = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",
       headers: { "Content-Type": "text/html", "X-Isocan-Filename": "b.html", ...badge.headers },
@@ -160,8 +199,8 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(await res.text()).toBe("<h1>frame me</h1>");
     // The response-header sandbox stays on the APP origin only: here it
     // would re-impose the opaque origin and defeat the storage the split
-    // grants. What this origin should send instead is stage 3's decision.
-    expect(res.headers.get("content-security-policy")).toBe(null);
+    // grants. Stage 3 chose what this origin sends instead.
+    expect(res.headers.get("content-security-policy")).not.toContain("sandbox");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   });
 

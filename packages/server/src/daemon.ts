@@ -16,7 +16,7 @@ import { resolveHomeUrl } from "./config.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
-import { contentPorts, registerContentRoutes } from "./content.ts";
+import { CONTENT_CSP, contentPorts, registerContentRoutes } from "./content.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -401,7 +401,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   let contentApp: FastifyInstance | null = null;
   for (const candidate of contentPorts(host, contentEnv, mainPort)) {
     const attempt = Fastify({ forceCloseConnections: true, logger: serverLogging() });
-    registerContentRoutes(attempt, { engine, store, homes }, { csp: null });
+    registerContentRoutes(attempt, { engine, store, homes }, { csp: CONTENT_CSP });
     try {
       await attempt.listen({ port: candidate, host: "127.0.0.1" });
       contentApp = attempt;
