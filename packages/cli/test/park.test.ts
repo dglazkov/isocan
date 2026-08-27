@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stopDaemons } from "@isocan/server";
+import { harnessVars } from "../src/harness.ts";
 import { reservePort } from "../../../test/ports.ts";
 
 /**
@@ -29,9 +30,20 @@ let work: string;
 let port: number;
 
 function cli(args: string[]): ReturnType<typeof spawn> {
+  // A session of this test's own, and none of the ambient ones.
+  //
+  // `identity --session` needs a session to attach to, which it reads from
+  // the environment — `ISOCAN_SESSION_ID` or a known harness's variable
+  // (`harness.ts`). Inheriting whatever the runner happens to export means
+  // the test passes on the laptop of anybody whose terminal is inside an
+  // agent harness and fails everywhere else, which is exactly how it went:
+  // green here under CLAUDE_CODE_SESSION_ID, red on CI, which exports none
+  // of them. So it declares its own and clears the rest.
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const name of harnessVars) delete env[name];
   return spawn(process.execPath, [cliBin, ...args], {
     cwd: work,
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
+    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: String(port), ISOCAN_SESSION_ID: "s-park" },
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
