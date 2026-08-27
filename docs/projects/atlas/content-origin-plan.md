@@ -145,6 +145,25 @@ items, so the control matters most on the hosted shape — which is another
 reason it must be decided before stage 4c, and recorded where the blob-route
 comment keeps its ledger.
 
+*Landed 27 Aug 2026, and the measurement was decisive. 76 HTML blobs,
+15.5MB of real agent-written screens: 48 run an inline `<script>`, 28 load a
+remote stylesheet — **every one of them Google Fonts** — 14 use
+`localStorage`, and **zero** use a remote script, `fetch`, XHR, WebSocket,
+an `<iframe>`, a `<form>`, a remote image or `eval`. The only hosts
+referenced anywhere were `fonts.googleapis.com` and `fonts.gstatic.com`
+(`www.w3.org` is an SVG namespace, not a request). So the policy is
+everything that renders, nothing that talks: `default-src 'none'` with
+inline script and style allowed, Google Fonts as the one remote allowance,
+images and media confined to `data:`/`blob:` (an image URL is exfiltration
+with extra steps), and `connect-src 'none'` — free today, by the
+measurement, and the main channel. No `sandbox` directive, ever: it would
+re-impose the opaque origin and take back stage 2's storage. Verified live
+on the content origin: the counter still incremented (inline script and
+storage intact), a Google Font stylesheet loaded, and both `fetch` and an
+image beacon to an external host were blocked. The residual hole is
+recorded rather than papered over — a page can still navigate ITSELF to an
+attacker URL, which no portable CSP directive stops.*
+
 ## Stage 4 — the hosted half, in dependency order
 
 Three sub-decisions; the hosted home stays at today's behavior until **all

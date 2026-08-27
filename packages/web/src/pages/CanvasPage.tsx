@@ -184,6 +184,27 @@ function CanvasSurface({
     }
   }, [canvas]);
 
+  /**
+   * **The item on the stage is what you are pointing at.**
+   *
+   * The Chat's composer attaches the SELECTION as chips — "the chips ARE the
+   * selection", so there is one answer to what a message is about rather than
+   * two that can disagree. Staging an item did not select it, so whether the
+   * thing you were looking at got attached depended on how you arrived:
+   * clicking it on the canvas and pressing Enter attached it, opening it from
+   * the files pane or with `isocan open --workbench` did not. Same screen,
+   * two behaviours.
+   *
+   * Selecting it keeps the one answer and makes it the true one. Leaving a
+   * cover does not deselect: the item you were just working on is a
+   * reasonable thing to still have in hand back on the canvas, and it is what
+   * clicking it would have left you with anyway.
+   */
+  const staged = itemId ?? wbItemId ?? null;
+  useEffect(() => {
+    if (staged) useUiStore.getState().select(staged);
+  }, [staged]);
+
   // Watch mode (#39): the camera chases the followed session's locus so the
   // agent's work is always on screen. Rest-and-chase, not a hard tether:
   // hold still while they putter near center, glide after them once they

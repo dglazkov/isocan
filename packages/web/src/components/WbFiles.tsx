@@ -51,6 +51,8 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   // open, at a position measured on entry (the roster's peek pattern:
   // position-fixed via the portal, so the section's scroll box cannot clip it).
   const [peek, setPeek] = useState<{ itemId: string; x: number; y: number } | null>(null);
+  // See `BindDirectory` — a picker inside a clamped section is a keyhole.
+  const [browsing, setBrowsing] = useState(false);
 
   // Bumped when a directory is bound, so the pane re-reads without a reload.
   const [reloadToken, setReloadToken] = useState(0);
@@ -128,10 +130,14 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
   }
 
   return (
-    <section className="wb-files" aria-label="Files" style={{ maxHeight: filesH }}>
+    <section
+      className="wb-files"
+      aria-label="Files"
+      style={{ maxHeight: browsing ? Math.max(filesH, 340) : filesH }}
+    >
       <h3>Files</h3>
       {tree.state === "loading" && <p className="wb-quiet">Reading the tree…</p>}
-      {tree.state === "none" && <BindDirectory canvasId={canvasId} note={tree.note} onBound={reload} />}
+      {tree.state === "none" && <BindDirectory canvasId={canvasId} note={tree.note} onBound={reload} onBrowsing={setBrowsing} />}
       {tree.state === "ready" && (
         <ul className="wb-tree">
           {tree.entries.map((entry) => {
@@ -212,14 +218,25 @@ function BindDirectory({
   canvasId,
   note,
   onBound,
+  onBrowsing,
 }: {
   canvasId: string;
   note: string;
   onBound: () => void;
+  /** Browsing needs more room than the clamped section gives. */
+  onBrowsing: (open: boolean) => void;
 }) {
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [browsing, setBrowsing] = useState(false);
+  // The files section is height-clamped and draggable; a picker opened inside
+  // it would be a three-row window onto a filesystem. Browsing asks the
+  // section for room and gives it back on close — the person's own dragged
+  // height is untouched.
+  useEffect(() => {
+    onBrowsing(browsing);
+  }, [browsing, onBrowsing]);
 
   // Only the owner's own machine can bind at all, and the daemon says so with
   // this code — there is nothing to offer a person looking at somebody else's
@@ -271,10 +288,36 @@ function BindDirectory({
                 if (e.key === "Escape") setPath("");
               }}
             />
+            {/* For everyone who does not have the path in their head. It fills
+                the field rather than binding on the spot, so the gesture ends
+                where the typed one does — you can see what you picked before
+                it becomes a fact. */}
+            <button
+              className="btn"
+              title="Browse for it"
+              aria-label="Browse for a directory"
+              onClick={() => setBrowsing((open) => !open)}
+            >
+              …
+            </button>
             <button className="btn" disabled={busy || path.trim() === ""} onClick={() => void bind()}>
               {busy ? "…" : "Attach"}
             </button>
           </div>
+          {browsing && (
+            <Picker
+              canvasId={canvasId}
+              at={path.trim() || null}
+              // Picking ends the gesture: the filled field and a live Attach
+              // are the clear end state, and an open picker under them
+              // competes with the button for the next click. One press
+              // reopens it if the choice was wrong.
+              onPick={(picked) => {
+                setPath(picked);
+                setBrowsing(false);
+              }}
+            />
+          )}
           {refusal ? (
             <p className="wb-bind-refusal">{refusal}</p>
           ) : (
@@ -285,6 +328,114 @@ function BindDirectory({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * **Browsing for the directory**, one level at a time, from `$HOME` down.
+ *
+ * It fills the field rather than binding: picking and committing stay two
+ * gestures, so what you chose is visible as a path before it becomes a fact —
+ * and the typed route and the browsed route end in exactly the same place.
+ *
+ * Directory names only, and that is the daemon's rule rather than this
+ * component's taste (`pickList` in server/tree.ts): this is the first
+ * enumeration surface the daemon has, so it lists no files, never recurses,
+ * and cannot leave `$HOME`. A directory already bound to something is shown
+ * as such instead of being offered and then refused.
+ */
+/** The last of a path, with an ellipsis for what was cut — see the call. */
+function tailOf(dir: string, keep = 34): string {
+  return dir.length <= keep ? dir : `…${dir.slice(dir.length - keep + 1)}`;
+}
+
+function Picker({
+  canvasId,
+  at,
+  onPick,
+}: {
+  canvasId: string;
+  at: string | null;
+  onPick: (path: string) => void;
+}) {
+  const [listing, setListing] = useState<{
+    dir: string;
+    up: string | null;
+    entries: Array<{ name: string; path: string; bound: boolean }>;
+  } | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  // What the picker is showing, which follows what you click — NOT the field,
+  // or every keystroke would re-list a directory you are halfway through
+  // typing. The field seeds it once, when the picker opens.
+  const [where, setWhere] = useState<string | null>(at);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const url = where ? `?at=${encodeURIComponent(where)}` : "";
+      const res = await fetch(`/api/projects/${canvasId}/pick${url}`);
+      if (!live) return;
+      if (!res.ok) {
+        setNote("there is nothing to list here");
+        setListing(null);
+        return;
+      }
+      setNote(null);
+      setListing(await res.json());
+    })();
+    return () => {
+      live = false;
+    };
+  }, [canvasId, where]);
+
+  if (note) return <p className="wb-bind-refusal">{note}</p>;
+  if (!listing) return <p className="wb-quiet">Looking…</p>;
+  return (
+    <div className="wb-pick">
+      <div className="wb-pick-at" title={listing.dir}>
+        {listing.up && (
+          <button className="wb-pick-btn wb-pick-up" onClick={() => setWhere(listing.up)} title="Up one">
+            ↑
+          </button>
+        )}
+        {/* Clipped HERE rather than in CSS. `text-overflow` only ever eats the
+            tail, and the usual `direction: rtl` workaround reorders the
+            neutral characters at a string's edges — a path rendered as
+            "Users/dalmaer/" with its leading slash moved to the far end,
+            which is what it did. The tail is the part that says where you
+            are, so the head is what goes. */}
+        <span>{tailOf(listing.dir)}</span>
+      </div>
+      <ul className="wb-pick-list">
+        {listing.entries.length === 0 && <li className="wb-quiet">nothing to show here</li>}
+        {listing.entries.map((entry) => (
+          <li key={entry.path}>
+            {/* One click goes IN; the ✓ takes it. A folder you can enter and
+                a folder you can choose are the same folder, so both live on
+                the row rather than behind a mode. */}
+            <button className="wb-pick-btn wb-pick-in" onClick={() => setWhere(entry.path)}>
+              {entry.name}/
+            </button>
+            {entry.bound ? (
+              <span className="wb-pick-bound" title="Already bound to a canvas">
+                bound
+              </span>
+            ) : (
+              <button
+                className="wb-pick-btn wb-pick-take"
+                title={`Use ${entry.path}`}
+                onClick={() => onPick(entry.path)}
+              >
+                ✓
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button className="wb-pick-btn wb-pick-take here" onClick={() => onPick(listing.dir)}>
+        Use this folder
+      </button>
     </div>
   );
 }

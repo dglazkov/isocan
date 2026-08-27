@@ -107,6 +107,66 @@ export function contentPorts(
   return mainPort > 0 && mainPort < 65535 ? [mainPort + 1, 0] : [0];
 }
 
+/**
+ * **What a page on the content origin may reach for** — stage 3 of
+ * `docs/projects/atlas/content-origin-plan.md`, chosen by measuring rather
+ * than guessing.
+ *
+ * The origin split stopped INBOUND theft: a page there has no cookie, no
+ * badge and no API to call, which is what made `allow-same-origin` safe to
+ * grant. It did nothing about OUTBOUND — a scripted page can still compute
+ * something and send it somewhere. That is this header's whole job, and its
+ * cost is real: a policy too tight silently breaks screens agents write.
+ *
+ * **So it was measured.** 76 HTML blobs across this machine's canvases,
+ * 15.5MB of real agent-written screens (2026-08-27):
+ *
+ * | what | files |
+ * | --- | --- |
+ * | inline `<script>` | 48 |
+ * | remote stylesheet | 28 — **every one of them Google Fonts** |
+ * | `localStorage` | 14 |
+ * | remote `<script src>`, `fetch`, XHR, WebSocket, `<iframe>`, `<form>`, remote `<img>`, `eval` | **0** |
+ *
+ * The only hosts referenced at all were `fonts.googleapis.com`,
+ * `fonts.gstatic.com` — and `www.w3.org`, which is an SVG namespace and not
+ * a request. These pages are self-contained; they render and they remember,
+ * and they do not phone anywhere.
+ *
+ * So: everything that renders, nothing that talks. `connect-src 'none'`
+ * closes fetch, XHR, WebSocket and `sendBeacon` — free today, by the
+ * measurement, and the main exfiltration channel. Images and media are
+ * limited to `data:`/`blob:` because an image URL is exfiltration with extra
+ * steps. Fonts are the one remote allowance, because they are the one remote
+ * thing anybody actually used.
+ *
+ * **NO `sandbox` directive here**, and that is load-bearing: a
+ * response-header sandbox intersects with the iframe's and re-imposes the
+ * opaque origin, which would take away the storage this whole origin exists
+ * to grant. The app origin keeps its own `sandbox allow-scripts` header; the
+ * content origin must never carry one.
+ *
+ * **What it does not close, stated so nobody assumes otherwise:** a page can
+ * still navigate ITSELF — `location = "https://…?" + secret` — and no
+ * portable CSP directive stops that (`navigate-to` never shipped broadly).
+ * Inside a sandboxed frame it cannot take the top window with it, so the
+ * blast radius is the frame; the leak is still a leak. Closing it needs a
+ * different mechanism than a header.
+ */
+export const CONTENT_CSP = [
+  "default-src 'none'",
+  // 48 of 76 screens run an inline script; none load a remote one.
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com data:",
+  "img-src data: blob:",
+  "media-src data: blob:",
+  // The exfiltration channel, closed. Zero screens used it.
+  "connect-src 'none'",
+  "form-action 'none'",
+  "base-uri 'none'",
+].join("; ");
+
 const CACHE_BLOB = "private, immutable, max-age=31536000";
 
 /** Register the content role's routes — all of them, which is one. */

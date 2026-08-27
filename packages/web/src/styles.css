@@ -2965,3 +2965,35 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The refusal wears the app's warning ink rather than the quiet grey the
    explanation uses: it is the one line here that is about something you did. */
 .wb-bind-refusal { margin: 0; color: var(--danger, var(--accent-text)); font-size: 11.5px; line-height: 1.5; }
+
+/* The picker: one level of directories, opened under the Attach row. It is a
+   list rather than a tree because the daemon serves one level at a time —
+   enumerating a disk recursively is the thing `pickList` deliberately will
+   not do, and a UI that implied otherwise would be promising it. */
+.wb-pick { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--chip); }
+.wb-pick-at { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-muted); }
+/* The path can be long and the panel narrow; the tail is the part that says
+   where you are, so the HEAD is what gets clipped. */
+/* Clipped in JS (`tailOf`), not here: `text-overflow` only eats the tail, and
+   the `direction: rtl` workaround for clipping the head reorders the neutral
+   characters at a string's edges — it rendered "/Users/dalmaer" as
+   "Users/dalmaer/". This just keeps it on one line. */
+.wb-pick-at span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+/* The shared face, on a class of its own — `.resize-handle`'s pattern, and
+   for its reason: a class that appears in two rules is where a lost scope
+   hides (`oneblock.test.ts`), so the common half gets its own name in the
+   markup rather than a comma. */
+.wb-pick-btn {
+  font: inherit; font-size: 11.5px; cursor: pointer; border-radius: 6px;
+  border: 1px solid transparent; background: none; color: var(--ink); padding: 1px 5px;
+}
+.wb-pick-btn:hover { background: var(--card); border-color: var(--line); }
+.wb-pick-up { flex: none; border-color: var(--line-soft); }
+.wb-pick-list { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
+.wb-pick-list li { display: flex; align-items: center; gap: 4px; }
+.wb-pick-in { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-pick-take { flex: none; color: var(--accent-text); }
+.wb-pick-take.here { align-self: flex-start; border-color: var(--line-soft); }
+/* Already spoken for: said rather than offered, so nobody picks it and meets
+   a refusal a click later. */
+.wb-pick-bound { flex: none; font-size: 10px; color: var(--ink-soft); }
