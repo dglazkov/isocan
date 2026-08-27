@@ -180,6 +180,22 @@ describe("edit-text-in-place", () => {
     expect(frame).toContain("setRefusal(outcome.reason)");
   });
 
+  it("opens what each COVER is for, and remembers them apart", () => {
+    // Enter is "look at this thing big" — the preview, editor a rail away.
+    // W is "work on this thing" — both. One shared preference could not say
+    // that: whichever cover you used last decided what the other opened.
+    expect(stage).toMatch(/fullscreen: \{ preview: true, edit: false \}/);
+    expect(stage).toMatch(/workbench: \{ preview: true, edit: true \}/);
+    // Two keys, so folding in one cover does not fold the other.
+    expect(stage).toMatch(/fullscreen: "isocan\.stage\.panes\.fullscreen"/);
+    expect(stage).toMatch(/workbench: "isocan\.stage\.panes\.workbench"/);
+    // And each cover says which it is, rather than the stage guessing.
+    const full = readFileSync(new URL("../src/components/FullScreen.tsx", import.meta.url), "utf8");
+    const bench = readFileSync(new URL("../src/components/Workbench.tsx", import.meta.url), "utf8");
+    expect(full).toContain('surface="fullscreen"');
+    expect(bench).toContain('surface="workbench"');
+  });
+
   it("is offered on the saved preview, whichever panes are open", () => {
     // It used to require the editor pane to be FOLDED. The rule behind that
     // was right — two pens on one file is a conflict machine — but both

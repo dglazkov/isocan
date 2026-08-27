@@ -43,23 +43,46 @@ const StageEditor = lazy(() =>
 
 type Panes = { preview: boolean; edit: boolean };
 
-const PANES_KEY = "isocan.stage.panes";
+/**
+ * **Which cover this stage is under — and it decides what opens.**
+ *
+ * The two addresses ask different questions. Full screen (Enter) is *look at
+ * this thing big*: the preview alone, with the editor a rail away. The
+ * workbench (W) is *work on this thing*: both panes, because that is the
+ * room you flipped to in order to change something.
+ *
+ * One shared preference could not say that — it made Enter and W open the
+ * same way, so whichever you used last decided what the other did. Two keys,
+ * two defaults, and each cover remembers its own folding.
+ */
+export type Surface = "fullscreen" | "workbench";
 
-function readPanes(): Panes {
+const PANES_KEY: Record<Surface, string> = {
+  fullscreen: "isocan.stage.panes.fullscreen",
+  workbench: "isocan.stage.panes.workbench",
+};
+
+const DEFAULT_PANES: Record<Surface, Panes> = {
+  fullscreen: { preview: true, edit: false },
+  workbench: { preview: true, edit: true },
+};
+
+function readPanes(surface: Surface): Panes {
   try {
-    const raw = localStorage.getItem(PANES_KEY);
+    const raw = localStorage.getItem(PANES_KEY[surface]);
     if (raw === "preview") return { preview: true, edit: false };
     if (raw === "edit") return { preview: false, edit: true };
+    if (raw === "both") return { preview: true, edit: true };
   } catch {
     // Storage denied: the default stands.
   }
-  return { preview: true, edit: true };
+  return DEFAULT_PANES[surface];
 }
 
-function writePanes(panes: Panes): void {
+function writePanes(surface: Surface, panes: Panes): void {
   try {
     localStorage.setItem(
-      PANES_KEY,
+      PANES_KEY[surface],
       panes.preview && panes.edit ? "both" : panes.preview ? "preview" : "edit",
     );
   } catch {
@@ -71,14 +94,18 @@ export function ArtifactStage({
   canvasId,
   itemId,
   actor,
+  surface,
 }: {
   canvasId: string;
   itemId: string;
   actor: Actor;
+  /** Which cover is up — it decides what opens and where the fold is
+   *  remembered. See `Surface`. */
+  surface: Surface;
 }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
   const loaded = useCanvasStore((s) => s.canvas !== null);
-  const [panes, setPanes] = useState<Panes>(readPanes);
+  const [panes, setPanes] = useState<Panes>(() => readPanes(surface));
   // The open buffer, lifted from the editor so the preview pane can render
   // it. Null while the editor is folded or the type has no draft renderer.
   const [draft, setDraft] = useState<string | null>(null);
@@ -104,7 +131,7 @@ export function ArtifactStage({
     const next = { ...panes, [which]: !panes[which] };
     if (!next.preview && !next.edit) return; // unreachable: the sole pane has no fold control
     setPanes(next);
-    writePanes(next);
+    writePanes(surface, next);
   };
 
   const saved = (

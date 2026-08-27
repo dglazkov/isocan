@@ -126,7 +126,7 @@ export function FullScreen({
         )}
       </div>
       <div className="fullscreen-stage">
-        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} />
+        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />
       </div>
     </div>
   );
