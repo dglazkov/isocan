@@ -204,6 +204,42 @@ describe("edit-text-in-place", () => {
     expect(stage).toMatch(/offerTextEdit = current\.mimeType === "text\/html" && !showDraft;/);
   });
 
+  it("makes the seam between the panes a handle, reusing the panel's own", () => {
+    // `PanelResizer` is the docked panel's edge, generalized when the
+    // workbench grew one; this is its third caller rather than a second
+    // kind of resizer for a second kind of edge.
+    expect(stage).toContain("<PanelResizer");
+    expect(stage).toContain('className="stage-editor-slot"');
+  });
+
+  it("stores the split as a FRACTION, not a width", () => {
+    // A width is one answer to a question that keeps changing: the left
+    // panel is draggable and the window resizes, so a width chosen at
+    // 1600px is most of the stage at 900.
+    expect(stage).toMatch(/split \* 100}%/);
+    expect(stage).toContain("const next = clamped / width;");
+  });
+
+  it("clamps in the OWNER, so neither pane can be squeezed to nothing", () => {
+    // The resizer only reports; whoever owns the value decides what is
+    // legal. Its own doc comment says so, and this holds it to that.
+    expect(stage).toContain("Math.min(Math.max(px, PANE_MIN), width - PANE_MIN)");
+  });
+
+  it("offers the seam only when there are two panes to divide", () => {
+    // A folded pane leaves a rail, and a rail is not a seam.
+    expect(stage).toMatch(/\{panes\.preview && \(\s*<PanelResizer/);
+  });
+
+  it("measures the stage rather than peeking a ref during render", () => {
+    // A ref read during render is null on the first one, so the handle
+    // opened believing the stage was 0 wide and the first drag slammed the
+    // editor to its floor. Observing also keeps it honest as the left panel
+    // is dragged and the window resized.
+    expect(stage).toContain("new ResizeObserver(measure)");
+    expect(stage).not.toContain("body.current?.clientWidth");
+  });
+
   it("keeps one pen by taking the stage, not by hiding the door", () => {
     // The mode owns the whole stage for its duration, so the editor is
     // behind you rather than beside you — same guarantee, discoverable.

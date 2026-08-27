@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
 import { backingOf, editableText, isDesignSystem } from "@isocan/core";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
+import { PanelResizer } from "./PanelResizer.tsx";
 
 /** The editor is its own chunk inside the cover's chunk: CodeMirror is the
  * heaviest thing the workbench owns, and a folded editor must not pay for
@@ -68,6 +69,46 @@ const DEFAULT_PANES: Record<Surface, Panes> = {
   workbench: { preview: true, edit: true },
 };
 
+/**
+ * **How wide the editor is when both panes are open**, as a FRACTION of the
+ * stage rather than a pixel width.
+ *
+ * Pixels would be one answer to a question that keeps changing: the left
+ * panel is draggable, the window resizes, and a width chosen at 1600px is
+ * most of the stage at 900. A fraction survives all of it — the same reason
+ * the viewport stores a scale rather than a zoom in pixels.
+ *
+ * One key for both covers, unlike the panes: which panes OPEN is about what
+ * you came to do, and Enter and W genuinely differ there. How wide you like
+ * your editor is not — it is a preference about proportion, and having to
+ * set it twice would be the annoyance, not the feature.
+ */
+const SPLIT_KEY = "isocan.stage.split";
+
+/** Neither pane may be squeezed below this, in screen pixels. */
+const PANE_MIN = 200;
+
+function readSplit(): number | null {
+  try {
+    const raw = Number(localStorage.getItem(SPLIT_KEY));
+    // A stored 0 or 1 would be a folded pane wearing a split's clothes, and
+    // folding has its own control; anything unparseable is "never dragged".
+    if (Number.isFinite(raw) && raw > 0.05 && raw < 0.95) return raw;
+  } catch {
+    // Storage denied: the default stands.
+  }
+  return null;
+}
+
+function writeSplit(fraction: number | null): void {
+  try {
+    if (fraction === null) localStorage.removeItem(SPLIT_KEY);
+    else localStorage.setItem(SPLIT_KEY, String(fraction));
+  } catch {
+    // The choice holds for this session and no longer.
+  }
+}
+
 function readPanes(surface: Surface): Panes {
   try {
     const raw = localStorage.getItem(PANES_KEY[surface]);
@@ -107,6 +148,27 @@ export function ArtifactStage({
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
   const loaded = useCanvasStore((s) => s.canvas !== null);
   const [panes, setPanes] = useState<Panes>(() => readPanes(surface));
+  const [split, setSplit] = useState<number | null>(readSplit);
+  /**
+   * The width the split is a fraction OF, tracked rather than peeked at.
+   *
+   * A ref read during render was the first attempt and it is null on the
+   * first one, so the resizer opened believing the stage was 0 wide and the
+   * first drag slammed the editor to its floor. Observing it also keeps the
+   * handle honest as the left panel is dragged and the window resized, which
+   * a value captured once could not.
+   */
+  const body = useRef<HTMLDivElement>(null);
+  const [bodyWidth, setBodyWidth] = useState(0);
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const measure = () => setBodyWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [panes.edit, panes.preview]);
   // The open buffer, lifted from the editor so the preview pane can render
   // it. Null while the editor is folded or the type has no draft renderer.
   const [draft, setDraft] = useState<string | null>(null);
@@ -196,18 +258,56 @@ export function ArtifactStage({
 
   return (
     <div className="artifact-stage">
-      <div className="artifact-stage-body">
+      <div className="artifact-stage-body" ref={body}>
         {panes.edit ? (
-          <Suspense fallback={<div className="page-note">Opening the editor…</div>}>
-            <StageEditor
-              key={item.id}
-              canvasId={canvasId}
-              item={item}
-              actor={actor}
-              onDraft={setDraft}
-              onFold={panes.preview ? () => fold("edit") : undefined}
-            />
-          </Suspense>
+          /**
+           * A slot around the editor, so the seam between the panes can be a
+           * HANDLE. `PanelResizer` is the docked panel's own edge, reused
+           * whole — it was generalized the day the workbench grew a draggable
+           * edge, and this is the third caller. It hangs off this slot's right
+           * edge, straddling the border the preview pane draws, so the strip
+           * you point at is the line you are about to move.
+           *
+           * Only when there are two panes to divide: a folded pane leaves a
+           * rail, and a rail is not a seam.
+           */
+          <div
+            className="stage-editor-slot"
+            style={split !== null && panes.preview ? { flex: "none", width: `${split * 100}%` } : undefined}
+          >
+            <Suspense fallback={<div className="page-note">Opening the editor…</div>}>
+              <StageEditor
+                key={item.id}
+                canvasId={canvasId}
+                item={item}
+                actor={actor}
+                onDraft={setDraft}
+                onFold={panes.preview ? () => fold("edit") : undefined}
+              />
+            </Suspense>
+            {panes.preview && (
+              <PanelResizer
+                label="Resize the editor and preview"
+                value={Math.round((split ?? 0.5) * bodyWidth)}
+                min={PANE_MIN}
+                max={Math.max(PANE_MIN, bodyWidth - PANE_MIN)}
+                // Home and a double-click go back to an even split, which is
+                // where the stage started and what somebody who dragged too
+                // far is trying to find again.
+                resetTo={Math.round(bodyWidth / 2)}
+                onChange={(px) => {
+                  const width = bodyWidth;
+                  if (width <= PANE_MIN * 2) return; // nothing to divide
+                  // The owner clamps; the resizer only reports. Neither pane
+                  // may be squeezed to nothing, whatever the pointer does.
+                  const clamped = Math.min(Math.max(px, PANE_MIN), width - PANE_MIN);
+                  const next = clamped / width;
+                  setSplit(next);
+                  writeSplit(next);
+                }}
+              />
+            )}
+          </div>
         ) : (
           /* The folded editor's rail: its whole face is the way back, on the
              edge the pane folded to. */

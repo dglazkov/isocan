@@ -3131,3 +3131,10 @@ button.mt-card:hover { border-color: var(--accent); }
    canvas can still show — and `--danger` is reserved for what cannot be
    undone. */
 .stage-editor-btn.warn { border-color: var(--warn); color: var(--warn); }
+
+/* The editor's slot: the pane plus the seam between it and the preview. It is
+   `relative` so `.panel-resizer` — which hangs off a positioned parent's right
+   edge — lands on the border the preview draws, rather than needing a second
+   kind of resizer for a second kind of edge. */
+.stage-editor-slot { flex: 1; min-width: 0; display: flex; position: relative; }
+.stage-editor-slot > .stage-editor { flex: 1; min-width: 0; }
