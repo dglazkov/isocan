@@ -18,6 +18,7 @@
     "@isocan/core": "*",
     "@lezer/highlight": "^1.2.3",
     "codemirror": "^6.0.2",
+    "parse5": "^8.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.3",
