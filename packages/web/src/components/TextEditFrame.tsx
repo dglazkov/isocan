@@ -71,15 +71,56 @@ export function TextEditFrame({
       if (!doc) return;
       const theDoc = doc; // narrowed for the closures below
 
+      /**
+       * Which text node this is, counted in document order over the whole
+       * document — the one number this frame and parse5 can both compute,
+       * and what lets a save splice by POSITION instead of searching for a
+       * string (`lib/textPatch.ts` carries the argument).
+       *
+       * A plain walk, not an index cached at mount: `plaintext-only` editing
+       * can split a node, and the count has to be of the tree as it is when
+       * the edit is committed.
+       */
+      function ordinalOf(node: Text): number {
+        const walker = theDoc.createTreeWalker(theDoc, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        while (walker.nextNode()) {
+          if (walker.currentNode === node) return seen;
+          seen++;
+        }
+        return -1;
+      }
+
+      /**
+       * The text node this edit ended up in.
+       *
+       * Engines usually mutate the node in place under `plaintext-only`, and
+       * sometimes REPLACE it — select-all-then-type does, which is how this
+       * was found: the original node detaches and a fresh one takes its
+       * place. The element is the stable thing (we are the ones who made it
+       * editable), so when the node we started with is gone, its parent's
+       * first text child is the node the person actually edited.
+       */
+      function landedIn(node: Text, parent: HTMLElement): Text | null {
+        if (node.isConnected) return node;
+        const walker = theDoc.createTreeWalker(parent, NodeFilter.SHOW_TEXT);
+        return (walker.nextNode() as Text | null) ?? null;
+      }
+
       function commit(node: Text, parent: HTMLElement, original: string) {
         parent.removeAttribute("contenteditable");
-        // Engines usually mutate the text node in place under plaintext-only
-        // editing; if one replaced it, the parent's text is the fallback.
-        const next = node.isConnected ? (node.data ?? "") : (parent.textContent ?? "");
-        if (next !== original) {
-          setRefusal(null);
-          setPending((p) => foldEdit(p, { from: original, to: next }));
+        const live = landedIn(node, parent);
+        const next = live ? (live.data ?? "") : (parent.textContent ?? "");
+        if (next === original) return;
+        const ordinal = live ? ordinalOf(live) : -1;
+        if (ordinal < 0) {
+          // Nothing left to point at: the element was emptied entirely, so
+          // there is no node whose place in the file we could name.
+          setRefusal("that edit could not be placed in the file — try it again");
+          return;
         }
+        setRefusal(null);
+        setPending((p) => foldEdit(p, { ordinal, from: original, to: next }));
       }
 
       function onDblClick(e: MouseEvent) {
@@ -144,13 +185,13 @@ export function TextEditFrame({
 
   async function save() {
     if (source === null || saving) return;
-    const outcome = applyEdits(source, pendingRef.current);
-    if (!outcome.ok) {
-      setRefusal(outcome.reason);
-      return;
-    }
     setSaving(true);
     try {
+      const outcome = await applyEdits(source, pendingRef.current);
+      if (!outcome.ok) {
+        setRefusal(outcome.reason);
+        return;
+      }
       await addVersionFromFile(
         canvasId,
         actor,
