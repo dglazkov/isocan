@@ -80,6 +80,20 @@ describe("the layer scale", () => {
     expect(all.length, "no z-index declarations found — the parser is wrong").toBeGreaterThan(10);
     const raw = all.filter(({ value }) => {
       if (value.includes("var(--z-")) return false;
+      /**
+       * `auto` is the one value that DECLINES a layer rather than claiming
+       * one, so it cannot meet another component and this scale has nothing
+       * to say about it. It is not a loophole — it is how a rule sheds a
+       * layer an earlier rule gave it, and there is exactly one thing in
+       * this app that needs to: a FLEX ITEM. A flex item with a z-index
+       * other than `auto` creates a stacking context and paints as if it
+       * were positioned, `position: static` notwithstanding — so the chat
+       * panel, reused inside the workbench's agent column, carried the
+       * docked layer it has over the canvas and painted over that column's
+       * resize handle. The handle's line stopped at the chat and the edge
+       * could not be grabbed below it.
+       */
+      if (value === "auto") return false;
       const n = Number(value);
       return !Number.isFinite(n) || Math.abs(n) >= LOCAL_MAX;
     });
@@ -87,6 +101,24 @@ describe("the layer scale", () => {
       raw,
       `these z-indexes are outside the scale — use var(--z-…) from :root, or keep it under ${LOCAL_MAX} if it is local to one component`,
     ).toEqual([]);
+  });
+
+  it("makes the chat DECLINE the docked layer inside the workbench", () => {
+    // The one place `auto` is load-bearing, and the bug it fixes was
+    // reported rather than caught: a flex item with a z-index other than
+    // `auto` creates a stacking context and paints as if positioned, so the
+    // chat panel carried the docked layer it has over the canvas into the
+    // agent column and covered that column's resize handle. The handle's
+    // line ran down the agents and files sections and STOPPED at the chat.
+    const found = rules().find(
+      (r) => selectorsOf(r).includes(".workbench .main-panel") && r.at.length === 0,
+    );
+    expect(found, "the workbench's chat override is gone").toBeTruthy();
+    const rule = found!.body;
+    expect(rule).toMatch(/z-index:\s*auto/);
+    // `position: static` is NOT enough on its own — that is exactly what the
+    // comment here used to claim, and it is only true of a non-flex element.
+    expect(rule).toMatch(/position:\s*static/);
   });
 
   it("puts what a click opens above what is docked", () => {
