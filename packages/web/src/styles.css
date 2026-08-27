@@ -502,16 +502,16 @@ img { height: auto; }
   background: var(--panel); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(4px);
 }
-.toolbar .canvas-name { position: relative; min-width: 0; display: flex; }
-.toolbar .title {
+.canvas-name { position: relative; min-width: 0; display: flex; }
+.canvas-name .title {
   font-weight: 600; font-size: 14px; margin-right: 6px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 40vw;
   padding: 4px 6px; border: 1px solid transparent; border-radius: 6px;
   background: transparent; color: inherit; text-align: left;
 }
-.toolbar .title:hover:enabled { background: var(--chip); border-color: var(--chip-line); }
-.toolbar .title:disabled { cursor: default; }
+.canvas-name .title:hover:enabled { background: var(--chip); border-color: var(--chip-line); }
+.canvas-name .title:disabled { cursor: default; }
 /* The rename popover hangs under the name it renames. */
 .canvas-popover {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: var(--z-popover);
@@ -522,12 +522,12 @@ img { height: auto; }
 .toolbar .home { color: var(--ink-muted); text-decoration: none; font-size: 16px; padding: 4px 6px; border-radius: 6px; }
 .toolbar .home:hover { background: var(--chip); }
 .toolbar .spacer { flex: 1; }
-.toolbar .conn { font-size: 11px; color: var(--ink-muted); }
-.toolbar .conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
-.toolbar .conn.reconnecting::before { content: "●"; color: var(--warn); margin-right: 4px; }
+.conn { font-size: 11px; color: var(--ink-muted); }
+.conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
+.conn.reconnecting::before { content: "●"; color: var(--warn); margin-right: 4px; }
 /* Offline is a state a person works in, so it gets a dot like the others
    rather than reading as an error. The bar above says what it costs. */
-.toolbar .conn.offline::before { content: "●"; color: var(--warn); margin-right: 4px; }
+.conn.offline::before { content: "●"; color: var(--warn); margin-right: 4px; }
 
 /* ---------- items ---------- */
 .item {
@@ -1106,13 +1106,19 @@ img { height: auto; }
   padding: 6px 11px; border-radius: 7px; cursor: pointer;
   border: 1px solid var(--line); background: var(--chip); color: var(--ink);
 }
-.fullscreen-copy {
-  flex: none; font: inherit; font-size: 12px; line-height: 1;
-  padding: 6px 11px; border-radius: 7px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--chip); color: var(--ink-muted);
-}
-.fullscreen-back:hover,
-.fullscreen-copy:hover { border-color: var(--accent); color: var(--accent-text); }
+.fullscreen-back:hover { border-color: var(--accent); color: var(--accent-text); }
+/* The canvas's way IN, and the mirror of `← Canvas`. It sits apart from the
+   `Chat | Files` pills on purpose — those toggle a dock and can both be off,
+   this navigates and one view is always true, so wearing their shape would
+   promise their rules. */
+.wb-enter { text-decoration: none; }
+/* The persistent zone, wherever it is: the canvas's own bar spaces its
+   children with the same gap, so these need nothing of their own beyond
+   refusing to be squeezed by the item title beside them. */
+.fullscreen-bar .canvas-name { flex: none; }
+/* The item title takes the slack; the spacer before the presence group is
+   what keeps that group pinned right when there is no item at all. */
+.fullscreen-bar .spacer { flex: 1; }
 /* The item itself, and everything left over is its. */
 .fullscreen-stage { flex: 1; min-height: 0; position: relative; overflow: auto; }
 .fullscreen-stage > * { width: 100%; height: 100%; }

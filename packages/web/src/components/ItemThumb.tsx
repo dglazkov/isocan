@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { itemKind } from "@isocan/core";
+import { itemKind, isTextItem } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -59,6 +59,7 @@ export function ItemThumb({
           mimeType={current.mimeType}
           filename={current.filename}
           entered={false}
+          textNode={isTextItem(item)}
         />
       </span>
     </span>

@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, itemPath, itemUrl } from "@isocan/core";
+import { canvasPath, itemPath } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
 import { KindIcon } from "./KindIcon.tsx";
+import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { revealItem } from "../lib/zoomactions.ts";
@@ -40,10 +41,12 @@ export function FullScreen({
   canvasId,
   itemId,
   actor,
+  onIdentity,
 }: {
   canvasId: string;
   itemId: string;
   actor: Actor;
+  onIdentity: (actor: Actor | null) => void;
 }) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
@@ -103,6 +106,7 @@ export function FullScreen({
         <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
           ← Canvas
         </button>
+        <CanvasTitle actor={actor} />
         {item && (
           <span className="fullscreen-title">
             <KindIcon className="kind-icon" kind={iconKindFor(item)} />
@@ -110,20 +114,13 @@ export function FullScreen({
             <i>{item.versions.find((v) => v.id === item.currentVersionId)?.filename}</i>
           </span>
         )}
-        {item && (
-          /* The address of this exact view. Copying it is the feature the
-             route bought: a link to one screen, not to a canvas with a note
-             about which screen to look at. */
-          <button
-            className="fullscreen-copy"
-            title="Copy a link to this screen"
-            onClick={() => {
-              void navigator.clipboard?.writeText(itemUrl(location.origin, canvasId, item.id));
-            }}
-          >
-            Copy link
-          </button>
-        )}
+        <span className="spacer" />
+        {/* No "Copy link" button: the address bar already holds the address of
+            this exact view — that IS what the route bought — and a button that
+            re-copies what the browser is already showing is chrome earning
+            nothing. What belongs here instead is what this view had been
+            throwing away: which canvas you are in, and who is in it. */}
+        <CanvasPresence actor={actor} onIdentity={onIdentity} />
       </div>
       <div className="fullscreen-stage">
         <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />

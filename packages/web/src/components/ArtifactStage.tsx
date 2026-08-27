@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
-import { backingOf, editableText, isDesignSystem } from "@isocan/core";
+import { backingOf, editableText, isDesignSystem, isTextItem } from "@isocan/core";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
@@ -217,6 +217,7 @@ export function ArtifactStage({
       filename={current.filename}
       entered={true}
       designSystem={isDesignSystem(item)}
+      textNode={isTextItem(item)}
       reloadToken={0}
     />
   );

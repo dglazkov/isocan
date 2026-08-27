@@ -50,7 +50,14 @@ describe("the workbench writes only where the design says it may", () => {
     // address.test.ts sweeps the whole source for hand-spelled paths; this
     // asserts the positive half — the workbench actually imports the
     // builders it navigates with.
-    for (const name of ["workbenchPath", "workbenchItemPath", "workbenchUrl"]) {
+    //
+    // `workbenchUrl` — the ABSOLUTE form — used to be on this list, because
+    // the bar had a "Copy link" button that wrote one to the clipboard. That
+    // button is gone: the address bar is already showing the address of this
+    // exact view, so re-copying it was chrome earning nothing. The builder
+    // is not dead, it is just not the web's any more — the CLI still prints
+    // absolute URLs, because a terminal has no address bar to read one from.
+    for (const name of ["workbenchPath", "workbenchItemPath"]) {
       expect(workbench).toContain(name);
     }
   });

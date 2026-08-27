@@ -8,9 +8,9 @@ import {
   answeringExcerpt,
   workbenchItemPath,
   workbenchPath,
-  workbenchUrl,
   type AgentRow,
 } from "@isocan/core";
+import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { WB_AGENTS_MIN_WIDTH, useUiStore } from "../stores/uiStore.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
@@ -59,10 +59,12 @@ export function Workbench({
   canvasId,
   itemId,
   actor,
+  onIdentity,
 }: {
   canvasId: string;
   itemId: string | null;
   actor: Actor;
+  onIdentity: (actor: Actor | null) => void;
 }) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
@@ -126,6 +128,7 @@ export function Workbench({
         <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
           ← Canvas
         </button>
+        <CanvasTitle actor={actor} />
         {item && (
           <span className="fullscreen-title">
             <KindIcon className="kind-icon" kind={iconKindFor(item)} />
@@ -141,17 +144,13 @@ export function Workbench({
             Watching {followed.label ?? followed.actor.name} — Esc to stop
           </button>
         )}
-        <button
-          className="fullscreen-copy"
-          title="Copy a link to this view"
-          onClick={() => {
-            void navigator.clipboard?.writeText(
-              workbenchUrl(location.origin, canvasId, itemId ?? undefined),
-            );
-          }}
-        >
-          Copy link
-        </button>
+        <span className="spacer" />
+        {/* No "Copy link": the address bar is already showing the address of
+            this exact view. What this bar had been throwing away is worth far
+            more — which canvas you are in, whether you are live, and everyone
+            else's faces. Losing the pile on the way into the room where the
+            agents are was the worst of it. */}
+        <CanvasPresence actor={actor} onIdentity={onIdentity} />
       </div>
       <div className="wb-body">
         {/* Collapsible to a RAIL, never removed: the agent view is the reason
