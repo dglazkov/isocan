@@ -27,11 +27,16 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: NOT STARTED.** Nothing in this project is built.
+**Where we are: PHASE 1 DONE (27 Aug 2026), phases 2–4 not started.**
+isocan.io can now say which commit it is running — the defect this project
+was built on top of is fixed in production, and the proof is in phase 1's
+status below. Nothing else here is built.
 
-**Phase 1 is four lines of code and one build-arg.** It fixes a defect that
-exists in production today and depends on nothing else in this document. It is
-worth doing regardless of what happens to the other phases.
+Phase 1 was four lines of code and one build-arg, and it was worth doing
+regardless of what happens to the rest: it fixed a live production defect and
+depended on nothing else in this document. **Phase 2 is the natural next
+step** and its test rig now exists, because two daemons on one laptop can be
+given two different shas.
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
@@ -97,8 +102,20 @@ passes" is not a measurement when the claim is about a real machine.
 
 ## Phase 1 — The home that can report which build it is ⚑ promote
 
-**Status: BUILT 26 Aug 2026 — code and image plumbing landed; the ⚑ promote
-proof on isocan.io is the user's to take.** `buildStamp()` reads a third
+**Status: DONE 27 Aug 2026 — proof taken on isocan.io.**
+
+```
+$ curl -s https://isocan.io/api/healthz
+{"ok":true,…,"commit":"d7c886d","builtAt":"2026-08-27T08:19:41-06:00"}
+$ git rev-parse --short prod
+d7c886d
+```
+
+The field this whole project depends on was empty in production when the
+phase was written (`"commit":null`, measured 2026-08-25) and now answers,
+matching the tag that deployed it. The image's `ARG ISOCAN_BUILD_SHA` was
+passed, stored in ENV, and read by nobody; it is read now. **What was
+built:** `buildStamp()` reads a third
 source between the manifest and `.git` — `ISOCAN_BUILD_SHA`, gated by
 `plausibleSha` so `unknown`, `e2e-…`, empty and any non-hex map to null
 rather than being reported as a commit. Precedence is manifest → env → `.git`,
@@ -107,8 +124,12 @@ carries `ISOCAN_BUILD_DATE` too (main's commit date, read from `.git` in the
 `build` cloudbuild step, empty-and-absent when the workspace has none). Unit
 proof landed (`plausibleSha` over every not-a-commit the image can hold);
 live env-path proof taken locally (a daemon given `ISOCAN_BUILD_SHA=deadbee…`
-reports `deadbee`). Remaining: the dev/prod `/api/healthz` measurement, which
-needs the image to build and deploy — the ⚑ promote half.
+reports `deadbee`), and the hosted measurement above closes it.
+
+**This phase is also phase 2's test rig, and that is now real**: two daemons
+on one laptop can be given two different shas, so "a CLI that disagrees with
+its home" is an ordinary vitest fixture rather than something needing two
+machines.
 
 **Work:** `buildStamp()` learns a third source. Today it reads the release
 manifest and `.git`, and a container has neither: `.dockerignore` excludes
