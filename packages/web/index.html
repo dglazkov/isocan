@@ -10,6 +10,34 @@
          nothing in this app has ever been built for a browser that old, and
          an icon nobody can regenerate is worse than a letter. -->
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- **The one webfont, and the one place this app fetches from anybody
+         else.** Handwriting is the single face that cannot come from the
+         system stack: CSS `cursive` resolves to Comic Sans on Windows and to
+         Snell Roundhand — formal calligraphy — on macOS, which are opposite
+         tones, so unlike sans/serif/mono the INTENT does not survive the trip.
+         It is ship a file or do not offer it.
+
+         This is deliberately the CDN and deliberately temporary. It is here so
+         the handwriting face can be swapped for another in one line while we
+         find out which one actually feels right on a canvas; vendoring a
+         binary is a thing to do once, after that choice is settled. When it
+         is, this link becomes a `@font-face` over a file in `public/` and the
+         two costs below go away.
+
+         What it costs until then, recorded rather than glossed:
+         - **Offline, `hand` is not handwriting.** A local daemon works with
+           the network down; this face does not, and falls back to the split
+           `cursive` above.
+         - **It tells Google who is looking.** Every viewer's IP and referer
+           reach fonts.gstatic.com, which for a local-first tool is a real if
+           small regression.
+         `display=swap` so nothing ever waits on it to paint. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap"
+    />
     <script>
       // Resolve the theme before first paint so there is no flash of the wrong
       // one. Kept in sync afterwards by src/lib/theme.ts (same storage key).

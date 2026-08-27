@@ -3295,6 +3295,17 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The face buttons show their own face, so they are set in it and want the
    weight prose is set in rather than a label's bold. */
 .text-style-face { font-weight: 500; font-size: 12px; }
+/* The mirror measures; it never shows. Same padding, wrapping and border box
+   as the textarea beside it, or it would measure a different shape than the
+   one being typed in. `max-content` up to the column is what gives a short
+   label a short box instead of the full column. */
+.text-composer-mirror {
+  position: absolute; visibility: hidden; pointer-events: none;
+  top: 0; left: 0; width: max-content;
+  padding: 4px 6px; border: 1px solid transparent;
+  box-sizing: border-box;
+  line-height: 1.5; white-space: pre-wrap; overflow-wrap: break-word;
+}
 .text-composer textarea {
   display: block;
   width: 100%;
@@ -3310,4 +3321,5 @@ button.mt-card:hover { border-color: var(--accent); }
   resize: none;
   overflow: hidden;
   outline: none;
+  white-space: pre-wrap; overflow-wrap: break-word;
 }

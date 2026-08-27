@@ -92,35 +92,73 @@ export function textSizeOf(item: Item): number {
 }
 
 /**
- * **The faces, and why there are only three of them — all from the system.**
+ * **The faces — a closed set, each meaning something rather than offering a
+ * taste.**
  *
- * This repo already tried a webfont and threw it out: a display face from
- * `fonts.googleapis.com` on the critical path is exactly what the cached
- * shell exists to avoid, and it does not render offline. A canvas on
- * `127.0.0.1` must not need somebody else's server to look right.
+ * The set is closed because text is a SHARED fact: an item, versioned, in the
+ * oplog, whose box was measured on whichever machine typed it. A face that
+ * resolves against whatever fonts a person happens to have installed renders
+ * one collaborator's canvas differently from another's, and overflows its own
+ * box for whoever is missing it. So every member is either a stack that
+ * exists everywhere, or a file this app is responsible for.
  *
- * There is a second reason that applies only here. Text is a SHARED fact —
- * an item, versioned, in the oplog — and its box was measured on whichever
- * machine typed it. A face that resolves against locally installed fonts
- * makes the canvas render differently for different people, and overflow its
- * own box for the ones missing the font. So the set is closed, and every
- * member of it is a stack that exists everywhere.
- *
- * Three, each meaning something rather than offering a taste:
  * - `sans` — the app's own voice; a note that belongs to the interface.
  * - `mono` — commands, paths, logs. Agent-written notes are full of them,
  *   and a whole node of mono reads as machine output at a glance.
  * - `serif` — prose and quotes. Against a canvas of machine-made screens it
  *   reads as *somebody wrote this*, which nothing else here says.
+ * - `hand` — scribbling on the board, which is what a canvas is for.
+ *
+ * **`hand` is the exception, and it is one deliberately.** The stylesheet
+ * records this repo throwing a webfont out, and that decision stands where it
+ * was made: on the front page's critical path, for a display face that size
+ * and weight could have done instead. This is a different case in every
+ * particular — it is content inside items rather than the first paint a
+ * stranger sees, it is `display=swap` so nothing waits on it, and there is no
+ * system stack that could do the job. CSS `cursive` resolves to Comic Sans on
+ * Windows and Snell Roundhand — formal calligraphy — on macOS: opposite
+ * tones, so unlike the other three the INTENT does not survive the trip.
+ *
+ * It is served from Google Fonts FOR NOW (see `index.html`), which buys the
+ * ability to swap the face in one line while we learn which handwriting
+ * actually feels right on a canvas. The two costs are real and written down
+ * there rather than glossed: offline it is not handwriting, and it tells
+ * Google who is looking. Self-hosting the winner removes both and is the
+ * intended end state.
  */
-export const TEXT_FACES = ["sans", "mono", "serif"] as const;
+export const TEXT_FACES = ["sans", "mono", "serif", "hand"] as const;
 export type TextFace = (typeof TEXT_FACES)[number];
 
 export const TEXT_FACE_STACK: Record<TextFace, string> = {
   sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
   serif: 'ui-serif, Georgia, "Times New Roman", serif',
+  // The fallbacks are what a reader sees offline, or before the swap lands.
+  // They are the split `cursive` argued about above: not the same tone as
+  // each other, but both nearer to handwriting than the sans would be.
+  hand: 'Caveat, "Bradley Hand", "Segoe Print", cursive',
 };
+
+/**
+ * How much bigger a face has to be drawn to hold the ladder's promise.
+ *
+ * The ladder says a step is readable down to a named zoom, and that promise
+ * is about the SIZE OF A LETTER, not the number in the CSS. Caveat has a much
+ * smaller x-height than a UI sans, so `hand` at 16 reads like sans at 13 and
+ * would quietly sit a rung lower than the control claims. Multiplying it back
+ * up keeps every step meaning what the tooltip says it means, on every face.
+ */
+export const TEXT_FACE_SCALE: Record<TextFace, number> = {
+  sans: 1,
+  mono: 1,
+  serif: 1,
+  hand: 1.25,
+};
+
+/** The world-unit size to actually draw this node's words at. */
+export function textDrawSize(item: Item): number {
+  return Math.round(textSizeOf(item) * TEXT_FACE_SCALE[textFaceOf(item)]);
+}
 
 export const TEXT_FACE_PROP = "textFace";
 
@@ -215,12 +253,31 @@ export function textTitle(body: string): string {
  * exists so that a node made from the CLI — where there is nothing to measure
  * with — lands at a size somebody can read rather than at a default square.
  */
+/**
+ * **How wide a column each step wraps in, and why it is not proportional.**
+ *
+ * The first cut scaled the column with the size, so a title got four times
+ * the width and a display eight — a box 2560 units wide holding three words.
+ * That is the wrong model, because it assumes every step is used for the same
+ * KIND of text. They are not: small text is paragraphs, big text is labels.
+ * So the character count per line falls as the size rises — roughly 40
+ * characters at body, about 14 at display — and the column grows gently
+ * rather than in step with the type.
+ *
+ * This is only ever the MAXIMUM. What actually commits is the width the words
+ * turned out to need, measured, so a three-word title gets a three-word box.
+ */
+export const TEXT_COLUMN: Record<TextStyle, number> = {
+  body: TEXT_WIDTH,
+  heading: 480,
+  title: 640,
+  display: 880,
+};
+
 export function textBox(body: string, style: TextStyle = "body"): { width: number; height: number } {
   const size = TEXT_STYLE_SIZE[style];
   const lines = body.split("\n");
-  // The box grows with the step: bigger words need a wider column to hold the
-  // same sentence, or a title wraps every three words.
-  const width = Math.round(TEXT_WIDTH * (size / TEXT_SIZE));
+  const width = TEXT_COLUMN[style];
   // Roughly two characters per em at this size; the wrap is what the app will
   // do, so the guess only has to be close.
   const perLine = Math.max(1, Math.floor(width / (size * 0.5)));
