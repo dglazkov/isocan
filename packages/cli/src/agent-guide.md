@@ -227,6 +227,35 @@ made in the Chat in the Chat, and keep item-specific critique on the item's
 own anchored comment — which `⇧C` and `comment add --item` both put at that
 item's top-right corner, one per item.
 
+## Words on the canvas
+
+`isocan text "…"` puts words down as a **text node**: no card, no filename on
+its face, editable by anyone who clicks it. Use it for the things that are
+about the canvas rather than on it — a heading over a row of screens, a
+caveat beside a mock, the question you want answered next to the thing it is
+about.
+
+It is an ordinary markdown item underneath, so nothing is special-cased: it
+versions when edited, `#Title` points at it, `isocan get` hands back a `.md`,
+and if it turns out to belong in the repo, `set --file` and `save` write it
+there like anything else.
+
+Prefer it over a comment when the words should be VISIBLE on the canvas
+rather than folded into a pin — a label is not a conversation. Prefer a
+comment when you are talking TO somebody.
+
+The human has the same tool: `T`, then click the canvas and type. So a heading
+you put down can be re-worded by them without asking you, and one they put
+down is yours to read with `isocan get`. Double-clicking a node re-opens its
+words, which lands as a new version like every other edit.
+
+Markdown lines start with `-` and so do options, so a bullet given as an
+argument needs `--` first. For anything with more than one line in it, pipe it:
+
+```sh
+printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
+```
+
 ## Screens that become files
 
 Most of what you make on a canvas should stay on the canvas. Somebody asks to
@@ -905,6 +934,9 @@ the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 what gc compacted), `recap` (that history at decaying resolution — old spans
 summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
+`text <words…>` (words straight onto the canvas as a chromeless node —
+`--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
+and `save` back it like anything else),
 `tree` (the bound directory as the daemon lists it — owner-scoped, so it
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens

@@ -10,10 +10,11 @@ import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts"
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
  * default (click + marquee); Hand pans on drag (also momentary while Space is
- * held); Pen draws freehand ink that settles into an item; Comment drops pins. The active tool is the
+ * held); Pen draws freehand ink that settles into an item; Text puts words
+ * straight onto the canvas; Comment drops pins. The active tool is the
  * store's `activeTool`; each answers to a letter — Select=V, Hand=H, Zoom=Z,
- * Pen=P, Comment=C — and Esc returns to Select. (Version fan-out, once on V,
- * lives on an item's version badge.)
+ * Pen=P, Text=T, Comment=C — and Esc returns to Select. (Version fan-out,
+ * once on V, lives on an item's version badge.)
  *
  * Below a divider, the upload button opens a file picker to bring files onto
  * the canvas — moved here from the top bar to match the Figma tool rail idiom.
@@ -111,11 +112,21 @@ const UPLOAD = (
   </svg>
 );
 
+/* A capital T on a baseline — the same mark the kind icon uses, because it
+   names the same thing from the other end: this makes them, that lists them. */
+const TEXT = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <path d="M3.5 4h9" />
+    <path d="M8 4v8.5" />
+  </svg>
+);
+
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
   { tool: "zoom", label: "Zoom", hint: "Zoom — Z (tap to latch, hold to zoom a region)", icon: ZOOM },
   { tool: "pen", label: "Pen", hint: "Pen — P (draw in your color; ink lands as an item a moment after you lift)", icon: PEN },
+  { tool: "text", label: "Text", hint: "Text — T (click the canvas and type)", icon: TEXT },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 

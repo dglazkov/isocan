@@ -96,6 +96,11 @@ import {
   buildRecap,
   cleanFilePath,
   FILE_PROP,
+  TEXT_FILENAME,
+  TEXT_MIME,
+  TEXT_PROPERTIES,
+  textBox,
+  textTitle,
   fileOf,
   newItemId,
   newCanvasId,
@@ -3185,6 +3190,96 @@ program
   );
 
 program
+  .command("text [words...]")
+  .description("Type words onto the canvas as a text node — chromeless, editable, and a real .md")
+  // Markdown starts lines with `-`, and so do options, so a bullet typed as
+  // an argument is read as a flag. `--` is the shell's own answer to that and
+  // works today; `-f -` is the better door for anything with more than one
+  // line in it, since arguments join with spaces the way `echo` does.
+  .addHelpText(
+    "after",
+    "\nMulti-line markdown goes in on stdin, where nothing has to be escaped:\n" +
+      "  printf '## Standup\\n- shipped\\n' | isocan text -f -\n" +
+      "Words are joined with spaces, so a bullet given as an argument needs `--`\n" +
+      "first: isocan text -- '- shipped'\n",
+  )
+  .option("--at <x,y>", "place at world coordinates")
+  .option("--anchor <item>", "place to the left of this item")
+  .option("--size <WxH>", "display size (default: measured from the words)")
+  .option("--title <title>", "what it is called (default: its first line)")
+  .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
+  .action(
+    run(
+      async (
+        words: string[],
+        opts: { at?: string; anchor?: string; size?: string; title?: string; file?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+        /**
+         * The same thing the web app's Text tool makes: an ordinary
+         * `item.add` whose blob is markdown, marked `kind=text` so both
+         * clients draw it as words on the canvas rather than as a card
+         * (core/textnode.ts). No new op, and stripping the property leaves an
+         * ordinary markdown item rather than something broken.
+         *
+         * Words as a rest argument so `isocan text ship on friday` works
+         * without quoting, which is how anybody types it the first time;
+         * `--file -` is the door for a paragraph an agent has already
+         * composed, where shell quoting is the enemy.
+         */
+        const body =
+          opts.file !== undefined
+            ? (opts.file === "-"
+                ? await new Promise<string>((resolve, reject) => {
+                    let text = "";
+                    process.stdin.setEncoding("utf8");
+                    process.stdin.on("data", (chunk) => (text += chunk));
+                    process.stdin.on("end", () => resolve(text));
+                    process.stdin.on("error", reject);
+                  })
+                : await fs.readFile(opts.file, "utf8"))
+            : words.join(" ");
+        if (body.trim() === "") {
+          throw new Error("nothing to say — pass words, or --file <path> (or `-` for stdin)");
+        }
+        await narrate(ctx, p.id, { status: `writing ${truncate(textTitle(body), 24)}…` });
+        const upload = await ctx.client.uploadBlob(
+          p.id,
+          Buffer.from(body, "utf8"),
+          TEXT_MIME,
+          TEXT_FILENAME,
+        );
+        // Measured from the words when nobody said otherwise: a note that
+        // lands in a default card is a note somebody has to resize before
+        // they can read it.
+        const { width, height } = sizeFor(opts.size, textBox(body));
+        const itemId = newItemId();
+        const result = await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: {
+            id: newVersionId(),
+            blobHash: upload.blobHash,
+            mimeType: TEXT_MIME,
+            filename: TEXT_FILENAME,
+            size: upload.size,
+          },
+          width,
+          height,
+          placement: placementFor(snapshot, opts),
+          title: opts.title ?? textTitle(body),
+          properties: TEXT_PROPERTIES,
+        });
+        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        if (ctx.json) return printJson({ itemId, placement: placed, title: opts.title ?? textTitle(body) });
+        console.log(`wrote ${itemId} ("${textTitle(body)}") at ${placed.x},${placed.y}`);
+      },
+    ),
+  );
+
+program
   .command("browse <url>")
   .description(
     "Project a live site onto the canvas as a mini-browser item — point it at the localhost dev server you're building",
@@ -5141,7 +5236,41 @@ command or reply. No \`session start\` needed after a wake.`,
             return;
           }
           const window = Math.max(1, Math.min(30_000, remaining === Infinity ? 30_000 : remaining));
-          const batch = await ctx.client.watchLog({ cursors, waitMs: window, only: [p.id] });
+          /**
+           * **A daemon that goes away mid-park is not the end of the park.**
+           *
+           * This is a LONG-POLL against the local daemon — always, even for a
+           * canvas whose home is elsewhere, because the CLI's one address is
+           * `127.0.0.1`. So anything that restarts that daemon severs the
+           * connection under a parked agent: `isocan restart`, an upgrade, a
+           * laptop waking up. Before this, the fetch rejected and the whole
+           * command exited 1 with `error: fetch failed` — an agent that had
+           * done nothing wrong, told nothing useful, and dropped out of a
+           * session it was supposed to be holding. Found the hard way: a
+           * developer restarting a daemon all afternoon knocked every parked
+           * agent off, and one of them wrote its own retry loop to survive.
+           *
+           * A connection-level failure is therefore a PAUSE, not an end. The
+           * cursors are unchanged, so nothing is missed on the way back —
+           * `watchLog` resumes exactly where it was, and the ops written while
+           * the daemon was down are still in the log to be read.
+           *
+           * The deadline is still the deadline: retrying cannot outlive the
+           * `--timeout` the caller asked for, so a daemon that never comes
+           * back still ends the park on time rather than hanging forever.
+           */
+          let batch;
+          try {
+            batch = await ctx.client.watchLog({ cursors, waitMs: window, only: [p.id] });
+          } catch (err) {
+            // The daemon ANSWERING with a refusal is a different thing
+            // entirely and must not be retried into a loop — an `ApiError`
+            // means somebody was there to say no. Only a connection that
+            // never got an answer is a blip.
+            if (err instanceof ApiError) throw err;
+            await new Promise((r) => setTimeout(r, 400));
+            continue;
+          }
           cursors = batch.cursors;
           const snaps = new Map<string, Promise<CanvasSnapshotResponse>>();
           const snapOf = (canvasId: string) => () => {

@@ -452,6 +452,11 @@ img { height: auto; }
 .canvas-viewport.pen { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3.2 20.8l1.5-4.3L15.2 6l2.8 2.8L7.5 19.3z' fill='%23ffffff' stroke='%2323262b' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M16.3 4.9l1.3-1.3a1.5 1.5 0 0 1 2.1 0l0.7 0.7a1.5 1.5 0 0 1 0 2.1l-1.3 1.3z' fill='%2323262b'/%3E%3Ccircle cx='3.2' cy='20.8' r='0.9' fill='%2323262b'/%3E%3C/svg%3E") 3 21, crosshair; }
 .canvas-viewport.pen .item,
 .canvas-viewport.pen .item-titlebar { cursor: inherit; }
+/* The Text tool aims with a text caret, which is the one cursor every
+   surface already uses to mean "words go here". */
+.canvas-viewport.text-tool { cursor: text; }
+.canvas-viewport.text-tool .item,
+.canvas-viewport.text-tool .item-titlebar { cursor: inherit; }
 
 /* Wet ink: strokes drawn but not yet placed. It lives inside .world, and
    InkLayer sizes it (and its viewBox) to the ink's world bounding box, so its
@@ -3175,3 +3180,58 @@ button.mt-card:hover { border-color: var(--accent); }
    beside a section label is the same mismatch one element along. */
 .workbench .main-panel header .main-glyph { font-size: 10.5px; }
 .workbench .main-panel header .main-hint { font-size: 10.5px; }
+
+/* ---- Text nodes: words typed straight onto the canvas ------------------
+   A text node wears no card, for the same reason ink doesn't (`.item.ink`
+   above): the words ARE the item, and a border around a sentence somebody
+   typed onto a canvas is a border around their sentence.
+
+   The composer and the committed node MUST share every type metric below —
+   size, line height, family, padding, width. That is what makes the tool
+   feel like typing on the canvas rather than typing into a box that later
+   puts something on the canvas: nothing moves at the moment it commits. The
+   shared metrics come from `core/textnode.ts` (TEXT_SIZE, TEXT_WIDTH), which
+   is also what the CLI sizes its guess with. */
+.item.textnode {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.item.textnode .item-content { border-radius: var(--radius); background: transparent; }
+/* The version ply — the sheet that peeks out from under an item with more
+   than one version — is a white card, which is exactly the card a text node
+   is not supposed to have. Ink solved this first (`.item.ink .ply`); the
+   second wording of a note brought the same card back for the same reason,
+   so it takes the same hairline. */
+.item.textnode .ply { background: transparent; border-color: var(--line-soft); }
+.item.textnode .md-view {
+  padding: 4px 6px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  /* Words on a canvas are read, not scrolled: a node that outgrew its box
+     should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
+  overflow: hidden;
+}
+.item.textnode .md-view p:first-child { margin-top: 0; }
+.item.textnode .md-view p:last-child { margin-bottom: 0; }
+/* Selected words still need their box shown, since there is no card to
+   outline — the base `.item.selected` outline does that and is left alone. */
+
+.text-composer { position: absolute; z-index: 6; }
+.text-composer textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}

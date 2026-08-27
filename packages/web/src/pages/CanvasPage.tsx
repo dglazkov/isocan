@@ -489,6 +489,7 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         if (ui.renamingItemId) ui.setRenaming(null);
         else if (ui.followSessionId) ui.setFollow(null);
+        else if (ui.pendingText) ui.setPendingText(null);
         else if (ui.pendingComment) ui.setPendingComment(null);
         else if (ui.openThreadId) ui.setOpenThread(null);
         else if (ui.commentMode) ui.setCommentMode(false);
@@ -517,6 +518,8 @@ function CanvasSurface({
         ui.setActiveTool("select"); // V is Select, the way every canvas has it
       } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
+      } else if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) {
+        ui.setActiveTool(ui.activeTool === "text" ? "select" : "text");
       } else if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey) {
         // Focus: fill the screen with what you are looking at. With nothing
         // selected there is only one honest reading of "focus" — everything.

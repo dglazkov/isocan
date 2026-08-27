@@ -10,10 +10,12 @@
 
 import { BROWSER_MIME } from "./browseritem.ts";
 import { isDrawingItem } from "./drawing.ts";
+import { isTextItem } from "./textnode.ts";
 import type { Item } from "./model.ts";
 
 export type ItemKind =
   | "drawing"
+  | "text"
   | "screen"
   | "image"
   | "video"
@@ -24,6 +26,7 @@ export type ItemKind =
 /** In the order a list should show them: what you made, then what you brought. */
 export const ITEM_KINDS: readonly ItemKind[] = [
   "drawing",
+  "text",
   "screen",
   "image",
   "video",
@@ -34,6 +37,13 @@ export const ITEM_KINDS: readonly ItemKind[] = [
 
 export function itemKind(item: Item): ItemKind {
   if (isDrawingItem(item)) return "drawing";
+  // Words typed onto the canvas, beside ink drawn onto it — both are things
+  // somebody MADE here rather than brought, and both are marked by
+  // `properties.kind` rather than by their blob, because the blob is a
+  // perfectly ordinary `.md` and an `.svg`. It sits above the mime tests for
+  // that reason: a text node is markdown, and "document" is what markdown
+  // somebody UPLOADED is.
+  if (isTextItem(item)) return "text";
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   const mime = current?.mimeType ?? "";
   if (mime === BROWSER_MIME) return "site";

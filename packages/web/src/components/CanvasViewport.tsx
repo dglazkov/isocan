@@ -10,6 +10,7 @@ import { addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { isTyping } from "../lib/keys.ts";
+import { TextComposer } from "./TextComposer.tsx";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
@@ -337,6 +338,23 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       return;
     }
 
+    // The Text tool: click open canvas and a composer opens there. It is one
+    // click and out — like the Comment tool, the mode ends when it has been
+    // used, because the next thing somebody wants after typing is to move
+    // what they typed.
+    if (isBackground && activeTool === "text" && e.button === 0 && !wantsPan) {
+      // The press must NOT do its default focusing, or the browser moves
+      // focus to the canvas a beat after the composer mounts and asks for it
+      // — the composer blurs on the same gesture that opened it, commits
+      // nothing, and closes. It looks exactly like the tool doing nothing.
+      e.preventDefault();
+      const ui = useUiStore.getState();
+      const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      ui.setPendingText({ x: Math.round(world.x), y: Math.round(world.y), itemId: null, body: "" });
+      ui.setActiveTool("select");
+      return;
+    }
+
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
@@ -546,7 +564,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
       style={{
@@ -586,6 +604,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
           <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
         )}
         <InkLayer />
+        <TextComposer canvasId={canvasId} actor={actor} />
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
       <CursorLayer />
