@@ -52,6 +52,16 @@ const PATHS: Record<IconKind, React.ReactNode> = {
       <path {...S} d="M9.5 14.5 6 13l-2 5 5-2Z" />
     </>
   ),
+  // A capital T on a baseline — the mark every tool that lets you type on a
+  // surface uses, so it needs no legend. Not a page with lines on it: that is
+  // `document`, and the whole distinction here is that a text node is words
+  // WITHOUT a page under them.
+  text: (
+    <>
+      <path {...S} d="M5 5h14" />
+      <path {...S} d="M12 5v14" />
+    </>
+  ),
   // devices — a design. One monitor on a stand rather than the monitor-plus-
   // phone pair the name suggests: at 13px two devices are two smudges, and
   // the pair says "responsive" where this only has to say "a screen".

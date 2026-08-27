@@ -25,6 +25,7 @@ export * from "./touches.ts";
 export * from "./elapsed.ts";
 export * from "./layout.ts";
 export * from "./drawing.ts";
+export * from "./textnode.ts";
 export * from "./annotation.ts";
 export * from "./backing.ts";
 export * from "./activity.ts";

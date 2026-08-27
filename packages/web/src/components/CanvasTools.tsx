@@ -111,6 +111,18 @@ const UPLOAD = (
   </svg>
 );
 
+/* A capital T on a baseline — the same mark the kind icon uses, because it
+   names the same thing from the other end: this makes them, that lists them.
+   Not in `TOOLS` yet: the rail entry lands with the click-and-type gesture
+   that makes it do something, and a button that does nothing is worse than
+   no button. `isocan text` already makes the nodes it will make. */
+const TEXT = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <path d="M3.5 4h9" />
+    <path d="M8 4v8.5" />
+  </svg>
+);
+
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },

@@ -4,7 +4,7 @@ import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 
 /** The pointer tools on the right rail. */
-export type Tool = "select" | "hand" | "comment" | "zoom" | "pen";
+export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
 
 export interface DragState {
   /** Every item riding this gesture — the whole selection for a group drag. */

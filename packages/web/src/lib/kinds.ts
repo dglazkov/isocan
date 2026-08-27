@@ -27,6 +27,7 @@ export type IconKind = ItemKind | "design-system";
 
 export const KIND_LABEL: Record<ItemKind, string> = {
   drawing: "Drawings",
+  text: "Text",
   screen: "Screens",
   image: "Images",
   video: "Video",
@@ -39,6 +40,7 @@ export const KIND_LABEL: Record<ItemKind, string> = {
 export const ICON_NOUN: Record<IconKind, string> = {
   "design-system": "design system",
   drawing: "drawing",
+  text: "text",
   screen: "screen",
   image: "image",
   video: "video",
