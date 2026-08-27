@@ -451,14 +451,14 @@ function ThreadPopover({
       <div className="thread-actions">
         <button
           className="promote"
-          title="Dock this thread as the canvas's main thread — agents always wake on it"
+          title="This conversation becomes the canvas's Chat: docked on the left, heard by every agent without an @-mention. A canvas has one Chat, so whichever conversation holds it now goes back to being a pin."
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
             openMainPanel(canvasId, true);
             await sendOp(canvasId, actor, { type: "thread.setMain", threadId: thread.id });
           }}
         >
-          Make main
+          Make this the Chat
         </button>
         <button
           onClick={async () => {
@@ -466,7 +466,7 @@ function ThreadPopover({
             await sendOp(canvasId, actor, { type: "thread.delete", threadId: thread.id });
           }}
         >
-          Delete thread
+          Delete comment
         </button>
       </div>
     </div>

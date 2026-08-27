@@ -208,8 +208,9 @@ The system:
              brings any older one back to the top
   comment    threads pinned to an item (--item) or a spot (--at x,y); write
              @Name to address someone, \`comment anchor\` to re-pin a thread.
-             One thread may be \`comment main\`: the docked agent↔user channel —
-             \`wait\` always wakes on comments landing there
+             One thread may be \`comment main\`: the canvas's Chat, as the
+             web app calls it — docked rather than pinned, and \`wait\` always
+             wakes on comments landing there
   undo       per-actor: \`isocan undo\` reverts YOUR last change, never a
              collaborator's
   trash      deleted items are recoverable until \`trash empty --force\`

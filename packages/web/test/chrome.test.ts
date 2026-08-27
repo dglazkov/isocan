@@ -569,3 +569,53 @@ describe("where an item's chrome and its conversation sit", () => {
     expect(UNDER_ROW_PAD).toBeGreaterThan(6);
   });
 });
+
+/**
+ * **Two kinds of conversation, two words.** The canvas has one Chat (docked,
+ * everyone including agents, no @-mention) and any number of comments (pinned
+ * to a thing, about that thing). The words used to be "Main" on the button and
+ * "Main thread" in the panel it opened — two labels for one panel, both naming
+ * the SLOT rather than the thing people do in it, and neither telling anybody
+ * how it differs from the pins scattered over the canvas.
+ */
+describe("the Chat and the comments say which they are", () => {
+  const read = (file: string) =>
+    readFileSync(new URL(`../src/components/${file}`, import.meta.url), "utf8");
+
+  it("gives the button and the panel it opens the SAME word", () => {
+    expect(read("CreateActions.tsx")).toMatch(/shelf-glyph">✳<\/span> Chat/);
+    expect(read("MainThreadPanel.tsx")).toContain("<b>Chat</b>");
+    // The old pair, gone from both: a label naming the slot taught nobody
+    // what the panel was for.
+    expect(read("CreateActions.tsx")).not.toMatch(/<\/span> Main\b/);
+    expect(read("MainThreadPanel.tsx")).not.toContain("<b>Main thread</b>");
+  });
+
+  it("says what the promotion does to the Chat that is already there", () => {
+    // `thread.setMain` demotes the current one — a canvas has a single slot,
+    // so promoting is also a demotion, and the button that hides that is
+    // the button somebody loses a conversation to.
+    const layer = read("CommentLayer.tsx");
+    expect(layer).toContain("Make this the Chat");
+    expect(layer).toMatch(/goes back to being a pin/);
+    expect(layer).not.toContain("Make main");
+  });
+
+  it("names the thing a pin holds a comment, on the button that deletes one", () => {
+    expect(read("CommentLayer.tsx")).toContain("Delete comment");
+  });
+
+  it("keeps the CLI and the guide on the same word as the app", () => {
+    // The op stays `thread.setMain` — the wire is the machine's vocabulary
+    // and renaming it would break every installed CLI. What must agree is
+    // what a PERSON is told, on both surfaces.
+    const guide = readFileSync(
+      new URL("../../cli/src/agent-guide.md", import.meta.url),
+      "utf8",
+    );
+    expect(guide).toContain("## The Chat");
+    expect(guide, "an agent reading this must know both names for one thing").toMatch(
+      /calls it the Chat.*thread flagged `main`/s,
+    );
+  });
+});

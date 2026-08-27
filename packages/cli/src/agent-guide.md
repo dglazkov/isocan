@@ -211,15 +211,21 @@ event forwarding, not something to paper over with a detached supervisor.
   is not a queue. `isocan comment list` and `isocan tail` are the truth; match
   on comment/operation ids so you don't answer the same comment twice.
 
-## The main thread
+## The Chat
 
-One thread per canvas may be designated "main" (`isocan comment main` shows
-it; `comment main <thread>` designates). It is the user's direct channel to
-you: in the web app it renders as a docked chat panel, everything posted
-there wakes your `wait` with no @-mention needed, and `#Title` references in
-it render as cards that fly the reader to the item. Treat it as the primary
-conversation — reply to main-thread asks in the main thread, and keep
-item-specific critique on the item's own anchored threads.
+**The web app calls it the Chat**; on the wire and in this CLI it is the
+thread flagged `main`, and the two are the same object — one thread per
+canvas, designated with `isocan comment main <thread>` (`comment main` alone
+shows which). It is the canvas's own conversation and the user's direct
+channel to you: it renders as a docked panel rather than a pin, everything
+posted there wakes your `wait` with no @-mention needed, and `#Title`
+references in it render as cards that fly the reader to the item.
+
+The distinction worth holding, because the words now carry it: **the Chat is
+the canvas's conversation; a comment is pinned to a thing.** Reply to asks
+made in the Chat in the Chat, and keep item-specific critique on the item's
+own anchored comment — which `⇧C` and `comment add --item` both put at that
+item's top-right corner, one per item.
 
 ## When a canvas's home is somewhere else
 
