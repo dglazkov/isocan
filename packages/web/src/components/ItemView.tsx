@@ -11,6 +11,12 @@ import {
   isAnnotation,
   isDrawingItem,
   isTextItem,
+  textFaceOf,
+  textIsLegible,
+  textStyleOf,
+  textMarkSize,
+  textSizeOf,
+  TEXT_FACE_STACK,
   parseUriList,
   renamedFilename,
 } from "@isocan/core";
@@ -122,6 +128,11 @@ export function ItemView({
   // node IS its words, so a card around them would be a card around a
   // sentence somebody typed onto a canvas.
   const isText = isTextItem(item);
+  // The words' world size, and whether they are still words at this zoom.
+  // Below the cut a node draws ONE mark instead of forty shapes of grey
+  // smear — see `textIsLegible` in core for why 5px and not a fade.
+  const textSize = isText ? textSizeOf(item) : 0;
+  const textLegible = !isText || textIsLegible(textSize, scale);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -379,7 +390,17 @@ export function ItemView({
       setNotice("Could not read that text to edit it.");
       return;
     }
-    ui.setPendingText({ x: item.x, y: item.y, itemId: item.id, body, width, height });
+    // Editing opens on what the node IS, not on what you last typed.
+    ui.setPendingText({
+      x: item.x,
+      y: item.y,
+      itemId: item.id,
+      body,
+      width,
+      height,
+      style: textStyleOf(item),
+      face: textFaceOf(item),
+    });
   }
 
   function onDoubleClick() {
@@ -441,6 +462,12 @@ export function ItemView({
           : {}),
         ...(worker
           ? ({ "--work-color": actorColorIn(colors, worker.actorId) } as React.CSSProperties)
+          : {}),
+        ...(isText
+          ? ({
+              "--text-size": `${textSize}px`,
+              "--text-face": TEXT_FACE_STACK[textFaceOf(item)],
+            } as React.CSSProperties)
           : {}),
       }}
       onPointerDown={onPointerDown}
@@ -539,6 +566,25 @@ export function ItemView({
         )}
       </div>
       <div className={`item-content${entered ? "" : " inert"}`}>
+        {/**
+         * Too far away to read: draw the mark, not the words.
+         *
+         * The node keeps its box — its place and footprint on the canvas are
+         * still true — and what changes is that forty illegible shapes become
+         * one legible one. The mark is sized never to exceed the node it
+         * stands for (`textMarkSize`), because a glyph bigger than its own
+         * node would misdescribe the canvas, and at the zoom where dozens of
+         * nodes are marks that is the same smear in a different hat.
+         */}
+        {isText && !textLegible ? (
+          <span
+            className="text-mark"
+            aria-label={item.title}
+            style={{ fontSize: `${textMarkSize(width, height, scale) / scale}px` }}
+          >
+            T
+          </span>
+        ) : (
         <VersionContent
           canvasId={canvasId}
           blobHash={current.blobHash}
@@ -549,6 +595,7 @@ export function ItemView({
           textNode={isText}
           reloadToken={reloadToken}
         />
+        )}
 
         {worker && <div className="work-sheen" />}
       </div>

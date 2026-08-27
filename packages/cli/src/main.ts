@@ -96,9 +96,13 @@ import {
   buildRecap,
   cleanFilePath,
   FILE_PROP,
+  TEXT_FACES,
+  TEXT_FACE_PROP,
   TEXT_FILENAME,
   TEXT_MIME,
   TEXT_PROPERTIES,
+  TEXT_STYLES,
+  TEXT_STYLE_PROP,
   textBox,
   textTitle,
   fileOf,
@@ -3089,6 +3093,26 @@ function placementFor(
   return leftmost ? { anchorItemId: leftmost.id } : { x: 0, y: 0 };
 }
 
+/**
+ * One of a closed set, or a refusal that says what the set is.
+ *
+ * A typo must not silently become the default: `--style headin` quietly
+ * rendering body text is a person believing they set something they did not,
+ * and they will only find out by squinting at a canvas from far away — which
+ * is the exact thing the ladder exists to fix.
+ */
+function pickOne<T extends string>(
+  flag: string,
+  value: string | undefined,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  if (value === undefined) return fallback;
+  const found = allowed.find((a) => a === value.toLowerCase());
+  if (!found) throw new Error(`--${flag} must be one of: ${allowed.join(", ")} — got: ${value}`);
+  return found;
+}
+
 /** --size WxH, or the given default. */
 function sizeFor(
   size: string | undefined,
@@ -3208,11 +3232,21 @@ program
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
+  .option("--style <step>", "body | heading | title | display — how far out it stays readable")
+  .option("--face <face>", "sans | mono | serif")
   .action(
     run(
       async (
         words: string[],
-        opts: { at?: string; anchor?: string; size?: string; title?: string; file?: string },
+        opts: {
+          at?: string;
+          anchor?: string;
+          size?: string;
+          title?: string;
+          file?: string;
+          style?: string;
+          face?: string;
+        },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -3254,7 +3288,11 @@ program
         // Measured from the words when nobody said otherwise: a note that
         // lands in a default card is a note somebody has to resize before
         // they can read it.
-        const { width, height } = sizeFor(opts.size, textBox(body));
+        // The ladder step decides the world size of the words and the column
+        // they wrap in; `--size` still overrides the box outright.
+        const style = pickOne("style", opts.style, TEXT_STYLES, "body");
+        const face = pickOne("face", opts.face, TEXT_FACES, "sans");
+        const { width, height } = sizeFor(opts.size, textBox(body, style));
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -3270,7 +3308,13 @@ program
           height,
           placement: placementFor(snapshot, opts),
           title: opts.title ?? textTitle(body),
-          properties: TEXT_PROPERTIES,
+          // Defaults are written as ABSENCE, so a plain `isocan text` makes
+          // the byte-identical item the web's plain Text tool makes.
+          properties: {
+            ...TEXT_PROPERTIES,
+            ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
+            ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+          },
         });
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
         if (ctx.json) return printJson({ itemId, placement: placed, title: opts.title ?? textTitle(body) });

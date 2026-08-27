@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { InkPoint, InkStroke } from "@isocan/core";
+import type { InkPoint, InkStroke, TextFace, TextStyle } from "@isocan/core";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 
@@ -45,6 +45,10 @@ export interface PendingText {
   /** The box to open at, when editing an existing node. */
   width?: number;
   height?: number;
+  /** The ladder step and face being typed in. Local until the node commits,
+   *  so choosing a size shows you the size before it is everyone's. */
+  style: TextStyle;
+  face: TextFace;
 }
 
 export interface PendingComment {
@@ -82,6 +86,10 @@ interface UiStore {
    * business, and it becomes everyone's the moment it commits as an item.
    * `itemId` null = a new node at (x, y); set = editing that one in place. */
   pendingText: PendingText | null;
+  /** The step and face the next new text node opens with — this client's
+   *  memory of what you were last writing in, never a canvas fact. */
+  lastTextStyle: TextStyle;
+  lastTextFace: TextFace;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
@@ -147,6 +155,7 @@ interface UiStore {
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
   setPendingText: (pending: PendingText | null) => void;
+  setLastText: (style: TextStyle, face: TextFace) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -329,6 +338,8 @@ export const useUiStore = create<UiStore>((set) => {
     openThreadId: null,
     pendingComment: null,
     pendingText: null,
+    lastTextStyle: "body",
+    lastTextFace: "sans",
     sketch: [],
     sketchError: null,
     penSession: false,
@@ -374,6 +385,7 @@ export const useUiStore = create<UiStore>((set) => {
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setPendingText: (pendingText) => set({ pendingText }),
+    setLastText: (lastTextStyle, lastTextFace) => set({ lastTextStyle, lastTextFace }),
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),
     setHelpOpen: (helpOpen) => set({ helpOpen }),

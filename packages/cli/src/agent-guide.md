@@ -249,6 +249,26 @@ you put down can be re-worded by them without asking you, and one they put
 down is yours to read with `isocan get`. Double-clicking a node re-opens its
 words, which lands as a new version like every other edit.
 
+**Size is how far out it stays readable, not decoration.** A text node's size
+is in world units, so it shrinks with the canvas: default text is a grey
+smear by 25% zoom, and below 5 screen pixels the canvas stops drawing it at
+all and shows a `T` mark instead. The ladder doubles, so each step survives
+twice as far out:
+
+| `--style` | readable to |
+|---|---|
+| `body` (default) | 50% |
+| `heading` | 25% |
+| `title` | 12% |
+| `display` | 6% |
+
+So label a CLUSTER with `--style title` and it is still legible in the
+whole-board view where the notes beside it have become marks. That is the
+whole point of having both — put the orientation in the big text.
+
+`--face sans|mono|serif` picks the voice. Reach for `mono` when the words
+are a command or a path, which yours often are.
+
 Markdown lines start with `-` and so do options, so a bullet given as an
 argument needs `--` first. For anything with more than one line in it, pipe it:
 
