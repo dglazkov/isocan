@@ -3192,6 +3192,17 @@ program
 program
   .command("text [words...]")
   .description("Type words onto the canvas as a text node — chromeless, editable, and a real .md")
+  // Markdown starts lines with `-`, and so do options, so a bullet typed as
+  // an argument is read as a flag. `--` is the shell's own answer to that and
+  // works today; `-f -` is the better door for anything with more than one
+  // line in it, since arguments join with spaces the way `echo` does.
+  .addHelpText(
+    "after",
+    "\nMulti-line markdown goes in on stdin, where nothing has to be escaped:\n" +
+      "  printf '## Standup\\n- shipped\\n' | isocan text -f -\n" +
+      "Words are joined with spaces, so a bullet given as an argument needs `--`\n" +
+      "first: isocan text -- '- shipped'\n",
+  )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--size <WxH>", "display size (default: measured from the words)")

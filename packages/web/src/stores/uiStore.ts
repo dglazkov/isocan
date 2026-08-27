@@ -33,6 +33,20 @@ export interface ResizeState {
   dy: number;
 }
 
+/** A text node being typed — before it exists, or while it is re-worded. */
+export interface PendingText {
+  /** World coordinates of the node's top-left. */
+  x: number;
+  y: number;
+  /** The node being re-worded, or null for one that does not exist yet. */
+  itemId: string | null;
+  /** What it says now, so an edit opens on the words rather than on nothing. */
+  body: string;
+  /** The box to open at, when editing an existing node. */
+  width?: number;
+  height?: number;
+}
+
 export interface PendingComment {
   /** World coordinates of the click. */
   x: number;
@@ -63,6 +77,11 @@ interface UiStore {
   renamingItemId: string | null;
   openThreadId: string | null;
   pendingComment: PendingComment | null;
+  /** Where the Text tool is about to put words, or the node whose words are
+   * being re-typed. Local by design: an unfinished sentence is nobody else's
+   * business, and it becomes everyone's the moment it commits as an item.
+   * `itemId` null = a new node at (x, y); set = editing that one in place. */
+  pendingText: PendingText | null;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
@@ -127,6 +146,7 @@ interface UiStore {
   setRenaming: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
+  setPendingText: (pending: PendingText | null) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -308,6 +328,7 @@ export const useUiStore = create<UiStore>((set) => {
     renamingItemId: null,
     openThreadId: null,
     pendingComment: null,
+    pendingText: null,
     sketch: [],
     sketchError: null,
     penSession: false,
@@ -352,6 +373,7 @@ export const useUiStore = create<UiStore>((set) => {
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
+    setPendingText: (pendingText) => set({ pendingText }),
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),
     setHelpOpen: (helpOpen) => set({ helpOpen }),

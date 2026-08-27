@@ -244,6 +244,18 @@ Prefer it over a comment when the words should be VISIBLE on the canvas
 rather than folded into a pin — a label is not a conversation. Prefer a
 comment when you are talking TO somebody.
 
+The human has the same tool: `T`, then click the canvas and type. So a heading
+you put down can be re-worded by them without asking you, and one they put
+down is yours to read with `isocan get`. Double-clicking a node re-opens its
+words, which lands as a new version like every other edit.
+
+Markdown lines start with `-` and so do options, so a bullet given as an
+argument needs `--` first. For anything with more than one line in it, pipe it:
+
+```sh
+printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
+```
+
 ## Screens that become files
 
 Most of what you make on a canvas should stay on the canvas. Somebody asks to

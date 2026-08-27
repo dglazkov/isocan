@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import type { Actor, Item, Operation } from "@isocan/core";
 import {
   backingOf,
@@ -9,6 +10,7 @@ import {
   annotationsOf,
   isAnnotation,
   isDrawingItem,
+  isTextItem,
   parseUriList,
   renamedFilename,
 } from "@isocan/core";
@@ -18,7 +20,7 @@ import { itemFrame } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 import { DesignSystemView } from "./DesignSystemView.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
@@ -116,6 +118,10 @@ export function ItemView({
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
   const isInk = isDrawingItem(item);
+  // Words wear no chrome either, and for the same reason ink doesn't: a text
+  // node IS its words, so a card around them would be a card around a
+  // sentence somebody typed onto a canvas.
+  const isText = isTextItem(item);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -353,6 +359,29 @@ export function ItemView({
     handle.addEventListener("pointerup", onUp);
   }
 
+  /**
+   * Re-open the words of a text node for typing.
+   *
+   * The body is fetched from the blob rather than kept in state: what a node
+   * says is whatever its CURRENT version says, and that can have been changed
+   * a second ago by an agent at a terminal. Reading it at the moment of the
+   * edit is the only version of this that cannot open on stale words.
+   */
+  async function openTextEditor() {
+    const ui = useUiStore.getState();
+    let body = "";
+    try {
+      const res = await fetch(blobUrl(canvasId, current.blobHash), { credentials: "include" });
+      if (res.ok) body = await res.text();
+    } catch {
+      // An unreachable daemon should not open an empty composer over words
+      // that still exist — that turns a network blip into a wipe.
+      setNotice("Could not read that text to edit it.");
+      return;
+    }
+    ui.setPendingText({ x: item.x, y: item.y, itemId: item.id, body, width, height });
+  }
+
   function onDoubleClick() {
     const ui = useUiStore.getState();
     // Two quick dots from the Pen are ink, not a request to enter the item.
@@ -360,6 +389,14 @@ export function ItemView({
     // The pointer capture above hands us the label's double-click too; naming
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
+    // A text node has nothing to step INSIDE of — the words are the whole of
+    // it — so the same gesture that enters a document re-opens the composer
+    // on what it says. Editing lands as `item.addVersion`, so every wording
+    // is kept and the CLI sees the change like any other.
+    if (isText) {
+      void openTextEditor();
+      return;
+    }
     ui.setEntered(item.id);
     // The double-click that entered the item is also the browser's
     // select-the-paragraph gesture, and the content stops being
@@ -392,7 +429,7 @@ export function ItemView({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,
@@ -509,6 +546,7 @@ export function ItemView({
           filename={current.filename}
           entered={entered}
           designSystem={isDesignSystem(item)}
+          textNode={isText}
           reloadToken={reloadToken}
         />
 
@@ -757,6 +795,7 @@ export function VersionContent({
   entered,
   reloadToken = 0,
   designSystem,
+  textNode,
 }: {
   canvasId: string;
   blobHash: string;
@@ -765,6 +804,9 @@ export function VersionContent({
   entered: boolean;
   /** Bumped by the titlebar's ⟳ to remount a browser item's iframe. */
   reloadToken?: number;
+  /** A text node: markdown typed onto the canvas, whose newlines are meant
+   *  (see `MarkdownView`). */
+  textNode?: boolean;
   /** `role=design-system`: draw the tokens as the things they describe rather
    *  than as the text that declares them. */
   designSystem?: boolean;
@@ -774,7 +816,7 @@ export function VersionContent({
     return <DesignSystemView url={url} />;
   }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
-    return <MarkdownView url={url} plain={mimeType === "text/plain"} />;
+    return <MarkdownView url={url} plain={mimeType === "text/plain"} breaks={textNode === true} />;
   }
   if (mimeType.startsWith("image/")) {
     return <img className="img-view" src={url} alt={filename} draggable={false} />;
@@ -850,7 +892,17 @@ function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: n
   );
 }
 
-function MarkdownView({ url, plain }: { url: string; plain: boolean }) {
+/**
+ * `breaks`: a newline is a line break.
+ *
+ * Markdown's own rule — a single newline is a space, and a break needs two
+ * trailing spaces — is a rule about DOCUMENTS, where paragraphs reflow. A
+ * text node is not a document; it is words somebody typed into a box on a
+ * canvas and watched wrap where they put them. Swallowing those breaks means
+ * what commits is not what they typed, which is the one thing this tool must
+ * never do. (Chat and comment bodies made the same call long before this.)
+ */
+function MarkdownView({ url, plain, breaks }: { url: string; plain: boolean; breaks?: boolean }) {
   const [load, setLoad] = useState<TextLoad>(() => {
     const cached = peekBlobText(url);
     return cached === undefined ? null : { text: cached };
@@ -872,7 +924,9 @@ function MarkdownView({ url, plain }: { url: string; plain: boolean }) {
   return (
     <div className="md-view">
       {/* GFM: tables, strikethrough, task lists, autolinks */}
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{load.text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}>
+        {load.text}
+      </ReactMarkdown>
     </div>
   );
 }
