@@ -27,11 +27,16 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: NOT STARTED.** Nothing in this project is built.
+**Where we are: PHASE 1 DONE (27 Aug 2026), phases 2–4 not started.**
+isocan.io can now say which commit it is running — the defect this project
+was built on top of is fixed in production, and the proof is in phase 1's
+status below. Nothing else here is built.
 
-**Phase 1 is four lines of code and one build-arg.** It fixes a defect that
-exists in production today and depends on nothing else in this document. It is
-worth doing regardless of what happens to the other phases.
+Phase 1 was four lines of code and one build-arg, and it was worth doing
+regardless of what happens to the rest: it fixed a live production defect and
+depended on nothing else in this document. **Phase 2 is the natural next
+step** and its test rig now exists, because two daemons on one laptop can be
+given two different shas.
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
