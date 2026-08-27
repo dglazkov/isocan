@@ -1130,15 +1130,27 @@ img { height: auto; }
    — the native tooltip waits about a second, appears at the pointer rather
    than at the control, and takes no styling. A button whose whole face is a
    glyph has to be able to say what it is promptly, or the glyph is a guess.
-   
-   Inert, and above the button: it must not become the thing the pointer is
+
+   **BELOW the button, and in the row's own grey.** It used to open upward in
+   a solid dark pill, and both halves were wrong in the same way: this strip
+   sits under the item, so upward is INTO the item — the tip landed over the
+   artifact it was describing, and it could not even do that cleanly, because
+   `.item` is its own stacking context (deliberately, so an item's internals
+   never paint over its neighbours) and no z-index inside this strip can lift
+   a tip out of it. Downward is empty canvas, which is the one direction with
+   nothing to fight.
+
+   And the pill: a dark capsule beside the pale `1280 × 900` chip read as a
+   foreign object landing on the row rather than as the row speaking. Same
+   chip as its neighbour — `.item-hint > span`'s exact recipe — so the row has
+   one voice. Inert either way: it must never become the thing the pointer is
    over on its way to the control it describes. */
 .fullscreen-btn::after {
   content: attr(data-tip);
-  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
-  background: var(--ink); color: var(--ground);
-  font-size: 10.5px; font-weight: 500; line-height: 1.5;
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--chip); border: 1px solid var(--line-soft); color: var(--ink-muted);
+  font-size: 10.5px; line-height: 1.6;
   opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
 }
 .fullscreen-btn:hover::after,

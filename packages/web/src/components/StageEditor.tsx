@@ -9,8 +9,8 @@ import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
-import { applyLocalEcho } from "../stores/canvasStore.ts";
-import { blobUrl, sendOp, uploadBlob } from "../lib/api.ts";
+import { sendEchoed } from "../stores/canvasStore.ts";
+import { blobUrl, uploadBlob } from "../lib/api.ts";
 
 /**
  * The stage's Edit mode: the artifact's text, and ⌘S lands a VERSION.
@@ -177,8 +177,7 @@ export function StageEditor({
         size: upload.size,
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
-      applyLocalEcho(op, actor);
-      await sendOp(canvasId, actor, op);
+      await sendEchoed(canvasId, actor, op);
       try {
         localStorage.removeItem(draftKey(canvasId, item.id, baseVersion.current));
       } catch {

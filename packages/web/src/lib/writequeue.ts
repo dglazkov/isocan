@@ -39,6 +39,25 @@ export interface QueuedWrite extends StoredWrite {
   /** The home would not take it. The optimistic effect is dropped and the
    * person is told — see `canvasStore`'s refusal banner. */
   refused?: { message: string; code?: string };
+  /**
+   * **Sent, and waiting for the history that carries it.**
+   *
+   * The gesture commits people make — dropping a dragged item, letting go of
+   * a resize, wearing a mark — are posted the instant they happen, so calling
+   * them "not synced" for the length of a round trip would be a lie. But they
+   * still have to be FOLDED, because rule 3 above is about the view and the
+   * view is recomputed from `confirmed + queue` every time anything lands: a
+   * commit that is only written into the view is erased by the next op to
+   * arrive from anyone, and the item rewinds to where it was until its own op
+   * comes down the socket. That is the flinch rule 3 exists to prevent,
+   * arriving through the one door that was not using the queue.
+   *
+   * So: folded like any other write, never counted as unsynced, never
+   * re-posted by a flush, and retired by `seq` exactly like the rest. If the
+   * post fails the flag comes off and it becomes ordinary offline work, which
+   * is the moment "not synced" starts being true.
+   */
+  inflight?: boolean;
 }
 
 /** What a refusal is shown as. */
@@ -52,14 +71,15 @@ export interface RefusedWrite {
 
 /** Writes still waiting for the home: not yet answered, not refused. */
 export function pendingWrites(queue: QueuedWrite[]): QueuedWrite[] {
-  return queue.filter((write) => write.seq === undefined && !write.refused);
+  return queue.filter((write) => write.seq === undefined && !write.refused && !write.inflight);
 }
 
 /** How many changes a person is carrying that the home has not got. The
  * number in the banner, and it deliberately counts sent-but-unconfirmed too:
  * until the tail says so, they are still only in this tab. */
 export function unsyncedCount(queue: QueuedWrite[]): number {
-  return queue.filter((write) => !write.refused).length;
+  // An in-flight commit is on its way to the home, not stranded here.
+  return queue.filter((write) => !write.refused && !write.inflight).length;
 }
 
 /**
@@ -133,4 +153,18 @@ export function queueable(canvasId: string | null, openCanvasId: string | null):
 /** Mint the queue's record of one gesture. */
 export function newWrite(opId: string, actor: Actor, op: Operation): QueuedWrite {
   return { opId, actor, op, at: Date.now() };
+}
+
+/**
+ * A restored queue, made honest again.
+ *
+ * `inflight` means "posted, waiting for the tail" — a claim only the tab that
+ * posted it can make. A tab that reloaded cannot know whether the post landed,
+ * so every stored in-flight write becomes ordinary pending work and is posted
+ * again; the idempotency key makes that a no-op at the home if it already
+ * arrived. Without this a stored in-flight write would fold forever and never
+ * retire, because nothing would ever give it a seq.
+ */
+export function adopt(queue: QueuedWrite[]): QueuedWrite[] {
+  return queue.map(({ inflight: _inflight, ...write }) => write);
 }

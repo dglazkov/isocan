@@ -17,7 +17,7 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
-import { applyLocalEcho } from "../stores/canvasStore.ts";
+import { applyLocalEcho, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
@@ -343,7 +343,7 @@ function CanvasSurface({
         .map((id) => canvas.items[id])
         .filter((item) => item !== undefined)
         .map((item) => ({ itemId: item.id, x: Math.round(item.x), y: Math.round(item.y) }));
-      if (moves.length > 0) void sendOp(canvasId!, actor, moveOp(moves));
+      if (moves.length > 0) void sendEchoed(canvasId!, actor, moveOp(moves));
     }
     function onKeyDown(e: KeyboardEvent) {
       // A cover route hides the canvas but keeps its selection — Enter

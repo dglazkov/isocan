@@ -569,3 +569,111 @@ describe("what it presents when it comes back", () => {
     expect(FakeSocket.opened.length).toBe(dialled + 1);
   });
 });
+
+/**
+ * **The flinch, and the rule it breaks.** `writequeue.ts` rule 3: a write
+ * retires when the home's HISTORY reaches it, never when the POST is answered
+ * — because the view is recomputed from `confirmed + queue` on every landing,
+ * so anything held outside both is erased by the next op to arrive from
+ * anybody. Gesture commits used to be held exactly there (`applyLocalEcho`
+ * wrote the view and joined no queue), and the symptom was a dropped item
+ * rewinding to where it came from and snapping forward again.
+ */
+describe("a gesture commit stays put until its own history carries it", () => {
+  it("survives somebody else's op landing before its own comes down", async () => {
+    const { useCanvasStore, sendEchoed } = await store();
+    await connected(2);
+    seqs = [4]; // the home takes the move and puts it at seq 4
+
+    // The drop: posted at once, and shown at once.
+    const commit = sendEchoed("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 99, y: 99 });
+    await settle();
+    expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(99);
+    await commit;
+
+    // Jordan's op lands FIRST — the window this used to break in.
+    FakeSocket.last.deliver({
+      type: "op-applied",
+      entry: entry({ type: "item.move", itemId: "itm_1", x: 5, y: 60 }, 3, jordan),
+    });
+    await settle();
+
+    // The item does NOT rewind to where it was dragged from. Jordan moved it
+    // too, and the home has not ordered our commit yet — but this tab's own
+    // gesture is still folded on top, which is what a person must see.
+    expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(99);
+    // The truth underneath is Jordan's, untouched by the fold.
+    expect(useCanvasStore.getState().confirmed!.canvas.items["itm_1"]!.x).toBe(5);
+  });
+
+  it("is not counted as unsynced work, and is never posted twice", async () => {
+    const { useCanvasStore, unsynced } = await store();
+    await connected(2);
+    seqs = [3];
+    const before = posted.length;
+
+    await (await store()).sendEchoed("prj_1", priya, {
+      type: "item.move",
+      itemId: "itm_1",
+      x: 42,
+      y: 42,
+    });
+    await settle();
+
+    // Posted once, and "0 changes not synced" — it is in flight, not stranded.
+    expect(posted.length).toBe(before + 1);
+    expect(unsynced()).toBe(0);
+    expect(useCanvasStore.getState().connection).toBe("live");
+
+    // A flush must not send it again: the idempotency key would make that
+    // harmless at the home, but a second POST is still a bug here.
+    vi.advanceTimersByTime(60_000);
+    await settle();
+    expect(posted.length).toBe(before + 1);
+  });
+
+  it("retires only when the tail reaches it, and the view never dips", async () => {
+    const { useCanvasStore } = await store();
+    await connected(2);
+    seqs = [3];
+
+    await (await store()).sendEchoed("prj_1", priya, {
+      type: "item.move",
+      itemId: "itm_1",
+      x: 77,
+      y: 88,
+    });
+    await settle();
+    expect(useCanvasStore.getState().queue.length).toBe(1);
+
+    // Its own history arrives: the fold retires and the confirmed state has
+    // it, so the rendered position is the same before and after — no dip.
+    FakeSocket.last.deliver({
+      type: "op-applied",
+      entry: entry({ type: "item.move", itemId: "itm_1", x: 77, y: 88 }, 3, priya),
+    });
+    await settle();
+    expect(useCanvasStore.getState().queue.length).toBe(0);
+    expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(77);
+    expect(useCanvasStore.getState().confirmed!.canvas.items["itm_1"]!.x).toBe(77);
+  });
+
+  it("becomes ordinary offline work when the home never answers", async () => {
+    const { useCanvasStore, unsynced } = await store();
+    await connected(2);
+    await goOffline();
+
+    await (await store()).sendEchoed("prj_1", priya, {
+      type: "item.move",
+      itemId: "itm_1",
+      x: 12,
+      y: 12,
+    });
+    await settle();
+
+    // Still shown, and now honestly counted: nobody has it but this tab.
+    expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(12);
+    expect(unsynced()).toBe(1);
+    expect(useCanvasStore.getState().connection).toBe("offline");
+  });
+});

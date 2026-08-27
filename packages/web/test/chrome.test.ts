@@ -463,10 +463,29 @@ describe("the full-screen control has an icon and adapts its label to room", () 
   });
 
   it("keeps the tooltip out of the pointer's way", () => {
-    // It sits above the button a person is travelling toward; if it caught
-    // events it would become the thing under the pointer.
+    // If it caught events it would become the thing under the pointer on the
+    // way to the control it describes.
     const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/);
     expect(tip![1]).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("opens the tooltip DOWNWARD, away from the item it describes", () => {
+    // This strip hangs under the item, so upward is into the artifact — and
+    // `.item` is its own stacking context, so a tip that opens up cannot even
+    // be lifted clear of what it covers. Down is the empty canvas.
+    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/)![1];
+    expect(tip).toMatch(/top:\s*calc\(100% \+/);
+    expect(tip, "upward puts the tip over the item").not.toMatch(/bottom:\s*calc\(100% \+/);
+  });
+
+  it("wears the same chip as the readout beside it, not a foreign pill", () => {
+    // One row, one voice: a solid dark capsule next to the pale size chip
+    // read as something that had landed on the row rather than as the row
+    // speaking. Same three tokens the neighbouring chip uses.
+    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/)![1];
+    expect(tip).toMatch(/background:\s*var\(--chip\)/);
+    expect(tip).toMatch(/color:\s*var\(--ink-muted\)/);
+    expect(tip).toMatch(/border:\s*1px solid var\(--line-soft\)/);
   });
 
   it("keeps the button face one solid color without an inner chip", () => {

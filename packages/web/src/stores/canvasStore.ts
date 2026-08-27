@@ -13,8 +13,8 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { applyOperation, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
-import { ApiError, CLIENT_ID, knockOnDoor, postOp } from "../lib/api.ts";
+import { applyOperation, newOpId, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
+import { ApiError, CLIENT_ID, homeAnswered, knockOnDoor, postOp, sendOp } from "../lib/api.ts";
 import {
   flushReplicaWrites,
   forgetReplica,
@@ -23,6 +23,7 @@ import {
   type StoredReplica,
 } from "../lib/replica.ts";
 import {
+  adopt,
   foldQueue,
   newWrite,
   pendingWrites,
@@ -370,24 +371,85 @@ function flushPresence(): void {
 }
 
 /**
- * Optimistically fold a gesture's final op into the replica, so releasing a
- * drag doesn't render the pre-gesture position for the frames until the WS
- * echo lands. Only used for absolute-valued gesture commits (move/resize):
- * the echo re-applies the same values idempotently and owns the lastSeq
- * bookkeeping (which this deliberately does not touch — the echo must still
- * pass the gap check). Any divergence is corrected by the echo or the next
- * snapshot.
+ * **A gesture commit: shown at once, and it stays shown.**
  *
- * **Left writing the VIEW rather than joining phase 10's queue, deliberately.**
- * It is not the same thing: a queued write is work the home has not been told
- * about, and this is work the home was told about a millisecond ago and will
- * confirm within a frame. Putting it in the queue would put it in the "N
- * changes not synced" count for the length of a round trip, which is a lie in
- * the other direction. The cost of leaving it here is bounded and visible: if
- * somebody ELSE's op lands in the same few milliseconds, `confirm` re-folds
- * the view from the confirmed state and this echo is gone for one frame until
- * its own echo arrives. Absolute-valued ops, one frame, and only when two
- * writes collide inside a round trip.
+ * Dropping a drag, letting go of a resize, wearing a mark — the op is posted
+ * the instant the gesture ends, and the person must see the result now rather
+ * than after a round trip. This puts it in the QUEUE as an in-flight write and
+ * posts it, which is the only arrangement that keeps it on screen.
+ *
+ * **The version before this wrote the view directly and did not use the
+ * queue.** Its comment argued the case and named the cost — "if somebody
+ * ELSE's op lands in the same few milliseconds, `confirm` re-folds the view
+ * from the confirmed state and this echo is gone for one frame" — and the
+ * argument was right about the mechanism and wrong about the size. The view is
+ * recomputed from `confirmed + queue` on EVERY landing, the echo is in
+ * neither, and the gap is not a frame: it runs until this op's own entry comes
+ * down the socket. So a canvas with a second person on it, or an agent
+ * working, rewound the item you had just dropped back to where it came from
+ * and then snapped it forward again — the visible flinch that `writequeue.ts`
+ * rule 3 exists to prevent, arriving through the one door that was not using
+ * the queue.
+ *
+ * The objection that kept it out of the queue is answered rather than
+ * ignored: a write posted a millisecond ago is not "unsynced", and marking it
+ * so would be a lie in the other direction. `inflight` is what makes both true
+ * at once — folded like every other write, invisible to the unsynced count,
+ * never re-posted by a flush, retired by `seq` like the rest.
+ */
+export async function sendEchoed(canvasId: string, actor: Actor, op: Operation): Promise<void> {
+  const { confirmed } = useCanvasStore.getState();
+  // No confirmed state means no queue to join — nothing has been folded yet.
+  if (!confirmed) {
+    await sendOp(canvasId, actor, op);
+    return;
+  }
+  const opId = newOpId();
+  const write: QueuedWrite = { ...newWrite(opId, actor, op), inflight: true };
+  useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
+  render();
+  persist();
+  try {
+    const answer = await postOp(canvasId, actor, op, opId);
+    // Marked, not removed — it retires when the tail reaches its seq, so the
+    // view never rewinds between the answer and the history that carries it.
+    useCanvasStore.setState({
+      queue: useCanvasStore
+        .getState()
+        .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq } : other)),
+    });
+    persist();
+  } catch (err) {
+    if (err instanceof ApiError && homeAnswered(err)) {
+      // The home said no to something the person already saw happen.
+      refuse(write, err);
+      render();
+      persist();
+      return;
+    }
+    // The home never answered. It stops being in-flight and starts being
+    // work this tab is holding — which is the moment "not synced" is true.
+    useCanvasStore.setState({
+      queue: useCanvasStore
+        .getState()
+        .queue.map((other) => (other.opId === opId ? { ...other, inflight: false } : other)),
+      connection: "offline",
+    });
+    render();
+    persist();
+  }
+}
+
+/**
+ * Fold an op into the VIEW only, sending nothing.
+ *
+ * The one caller is the arrow-key nudge, and it is the one gesture that
+ * cannot use `sendEchoed`: it re-echoes an absolute position on every
+ * keypress and posts once when the keys stop, so that a held arrow is one op
+ * and one undo step rather than thirty. Its exposure to the rewind above is
+ * bounded by that flush (a third of a second) and self-corrects on the next
+ * press; the commit it finally makes goes through `sendEchoed` like every
+ * other.
  */
 export function applyLocalEcho(op: Operation, actor: Actor): void {
   const { project, canvas } = useCanvasStore.getState();
@@ -464,7 +526,10 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
   if (currentProjectId !== canvasId) return; // navigated away mid-read
   if (stored && useCanvasStore.getState().confirmed === null) {
     const confirmed = { project: stored.project, canvas: stored.canvas };
-    const queue = stored.queue as QueuedWrite[];
+    // `adopt`: a stored write cannot still be this tab's in-flight post — the
+    // tab that posted it is gone. They become ordinary pending work and go up
+    // again, which the idempotency key makes free if they already landed.
+    const queue = adopt(stored.queue as QueuedWrite[]);
     const view = foldQueue(confirmed, queue);
     useCanvasStore.setState({
       confirmed,
