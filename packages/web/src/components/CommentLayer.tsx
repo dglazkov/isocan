@@ -444,7 +444,14 @@ function ThreadPopover({
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />
-        <button className="btn" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim()}>
+        {/* `primary`, like the Chat's send and like this thread's own opening
+            comment two hundred lines below — the odd one out was HERE.
+            `.btn:disabled` is a 45% opacity, so a plain grey button reads
+            almost the same enabled as disabled: the send that was ready to
+            go looked like the one that was not, and people stopped believing
+            they could press it. The accent makes the two states different
+            colours rather than two shades of the same one. */}
+        <button className="btn primary" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim()}>
           ↑
         </button>
       </form>
