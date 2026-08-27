@@ -3098,3 +3098,8 @@ button.mt-card:hover { border-color: var(--accent); }
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* The files section names its directory; the hint draws the line the word
+   "Files" could not — this pane is a folder on disk, while the canvas's own
+   Files panel lists what is on the canvas. Same pattern as the Chat header. */
+.wb-files-hint { font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 10.5px; margin-left: 6px; }

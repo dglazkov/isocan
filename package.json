@@ -7,7 +7,7 @@
   "bin": {
     "isocan": "packages/cli/bin/isocan.js"
   },
-  "//": "GENERATED BRANCH — `npm run release` builds it from 5fa099f on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
+  "//": "GENERATED BRANCH — `npm run release` builds it from d7df572 on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
   "dependencies": {
     "commander": "^13.1.0",
     "fastify": "^5.2.1",
@@ -21,7 +21,7 @@
     "vitest": "^3.0.5"
   },
   "isocan": {
-    "commit": "5fa099f",
-    "builtAt": "2026-08-27T08:35:46-06:00"
+    "commit": "d7df572",
+    "builtAt": "2026-08-27T08:51:39-06:00"
   }
 }
