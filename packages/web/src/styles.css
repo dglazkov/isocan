@@ -1355,8 +1355,21 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    here — behavior differences live behind the component's own `docked` prop,
    never in CSS. */
 .workbench .main-panel {
-  /* static, so the base rule's z-index never applies — no override needed */
-  position: static; width: auto; flex: 1; min-height: 0;
+  /**
+   * `z-index: auto` is LOAD-BEARING, and the comment that used to sit here
+   * said the opposite: "static, so the base rule's z-index never applies".
+   * That is true of an ordinary static element and false of a FLEX ITEM — a
+   * flex item with a z-index other than `auto` creates a stacking context and
+   * paints as if it were positioned, which this is, being a child of the
+   * agent column's flex box.
+   *
+   * So the panel kept the docked layer (25) it has no business claiming here
+   * and painted over the column's own resize handle (5). The visible symptom
+   * was exact and strange enough to report: the handle's blue line ran down
+   * the agents and files sections and STOPPED at the chat, and the edge could
+   * not be grabbed below that line — the pointer was landing on the chat.
+   */
+  position: static; z-index: auto; width: auto; flex: 1; min-height: 0;
   border-right: none; box-shadow: none;
 }
 .wb-stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
@@ -3138,3 +3151,27 @@ button.mt-card:hover { border-color: var(--accent); }
    kind of resizer for a second kind of edge. */
 .stage-editor-slot { flex: 1; min-width: 0; display: flex; position: relative; }
 .stage-editor-slot > .stage-editor { flex: 1; min-width: 0; }
+
+/* **The chat is a SECTION inside the workbench's column, not a panel.**
+   Docked over the canvas it is a floating panel and wears a panel's title —
+   12.5px, bold, full ink — which is right there and wrong here: in the agent
+   column it stands directly under AGENTS and the directory, and a heading
+   three sizes larger and two shades darker than its neighbours reads as a
+   different kind of thing rather than the third section it is.
+
+   Same treatment as `.wb-roster h3`, deliberately duplicated rather than
+   shared: those are `h3`s in a rail and this is a `b` in a panel header, and
+   a selector list spanning both would be one rule pretending two different
+   elements are the same element. The values are what agree, not the code. */
+.workbench .main-panel header {
+  padding: 10px 14px 6px;
+  border-bottom: none;
+}
+.workbench .main-panel header b {
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+}
+/* The glyph and the hint come down with it — a mark sized for a panel title
+   beside a section label is the same mismatch one element along. */
+.workbench .main-panel header .main-glyph { font-size: 10.5px; }
+.workbench .main-panel header .main-hint { font-size: 10.5px; }
