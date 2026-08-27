@@ -1673,6 +1673,13 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .main-panel header b { font-size: 12.5px; }
 .main-panel header .spacer { flex: 1; }
 .main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
+/* The panel's one-line "what is this" — the same name-then-quiet-hint pattern
+   the stage's pane headers use (`.stage-pane-name i`), because it answers the
+   same question in the same place. It carries the distinction that the panel's
+   empty state used to carry alone: this is where everyone is, agents included,
+   as opposed to a comment pinned to one thing. Once there are messages the
+   empty state is gone and this is the only thing still saying it. */
+.main-hint { font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 11.5px; }
 .main-detach, .main-close {
   background: none; border: none; color: var(--ink-soft); font-size: 11px; padding: 2px 4px;
 }

@@ -281,15 +281,21 @@ function Panel({
       {docked && <PanelResizer />}
       <header>
         <span className="main-glyph">✳</span>
-        <b>Main thread</b>
+        {/* The same word the button that opens it says. It read "Main
+            thread" under a button that said "Main" — two labels for one panel,
+            and both naming the SLOT (there is one, it is the main one) rather
+            than the thing people do in it. Name and hint, the pattern the
+            stage's panes already use. */}
+        <b>Chat</b>
+        <i className="main-hint">everyone here, agents included</i>
         <span className="spacer" />
         {thread && (
           <button
             className="main-detach"
-            title="Demote back to a canvas pin"
+            title="This conversation goes back to being a pin on the canvas, where it was anchored"
             onClick={() => sendOp(canvasId, actor, { type: "thread.setMain", threadId: null })}
           >
-            detach
+            back to the canvas
           </button>
         )}
         <button
@@ -311,9 +317,11 @@ function Panel({
         <div className="main-msgs">
           {!thread && (
             <div className="main-empty">
-              The canvas's direct channel. Everything here reaches every
-              collaborator — agents included, no @-mention needed. Items you
-              #-reference show up as cards.
+              The canvas's own conversation: everything here reaches every
+              collaborator, agents included, with no @-mention needed. That is
+              what makes it different from a comment, which is pinned to one
+              thing and is about that thing. Items you #-reference show up as
+              cards.
             </div>
           )}
           {thread?.comments.map((comment) => (
@@ -378,7 +386,7 @@ function Panel({
           // before you type; the chips above already say what it is about.
           // (No "@name to target" tail: it needs 285px in a 236px field, and
           // a hint that ellipsises is worse than no hint. ⌘K and ? carry it.)
-          placeholder="Broadcast message to agents"
+          placeholder="Message the canvas — agents hear this"
           grow
           value={draft}
           onChange={setDraft}

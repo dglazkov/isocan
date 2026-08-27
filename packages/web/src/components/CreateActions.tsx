@@ -102,10 +102,10 @@ export function PanelSwitch({ canvasId, actor }: { canvasId: string; actor: Acto
       <button
         className={`btn${mainOpen ? " active" : ""}`}
         aria-pressed={mainOpen}
-        title="Main thread — the canvas's direct channel"
+        title="Chat — the canvas's conversation, and the one agents always hear"
         onClick={() => openMainPanel(canvasId, !mainOpen)}
       >
-        <span className="shelf-glyph">✳</span> Main
+        <span className="shelf-glyph">✳</span> Chat
         {unread > 0 && <span className="shelf-badge">{unread}</span>}
       </button>
       <button
