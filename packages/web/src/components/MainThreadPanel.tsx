@@ -386,7 +386,7 @@ function Panel({
           // before you type; the chips above already say what it is about.
           // (No "@name to target" tail: it needs 285px in a 236px field, and
           // a hint that ellipsises is worse than no hint. ⌘K and ? carry it.)
-          placeholder="Message the canvas — agents hear this"
+          placeholder="Message everyone — agents included"
           grow
           value={draft}
           onChange={setDraft}

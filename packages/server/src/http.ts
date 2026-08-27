@@ -68,7 +68,7 @@ import {
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
-import { boundDirs, readBound, readTree } from "./tree.ts";
+import { boundDirs, pickList, readBound, readTree } from "./tree.ts";
 import {
   attestersOf,
   attesterRefusal,
@@ -1943,6 +1943,33 @@ export function registerRoutes(
    * caller is the person who typed the path, and "which rule refused me" is
    * exactly what they need to fix it. A path that is not there says so.
    */
+  /**
+   * **Directories to pick from** — the picker behind the app's Attach field.
+   * One level, directory names only, jailed to `$HOME` (`pickList`), and
+   * gated exactly like the bind it feeds: this daemon, this machine, loopback.
+   */
+  app.get("/api/projects/:id/pick", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    if (!loopbackBound(app) || !local || (options.homes?.homeOf(id) ?? null) !== null) {
+      return reply.status(404).send({
+        error: "directories can only be browsed on the machine this canvas lives on",
+        code: "no-directory",
+      });
+    }
+    const at = (req.query as { at?: string }).at ?? null;
+    const listing = await pickList(isocanHome(), at);
+    // One sentence for every refusal here, unlike the bind route's: this one
+    // enumerates, so "which rule refused" would describe the shape of a disk
+    // the caller cannot see. Absent, outside the jail, a symlink, a file —
+    // all of them are "there is nothing to list here".
+    if (!listing) {
+      return reply.status(404).send({ error: "there is nothing to list here", code: "no-directory" });
+    }
+    return listing;
+  });
+
   app.post("/api/projects/:id/bind", async (req, reply) => {
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id);

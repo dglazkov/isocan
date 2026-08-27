@@ -175,3 +175,78 @@ export async function readBound(root: string, rel: string): Promise<Buffer | nul
     return null;
   }
 }
+
+/**
+ * **Directories you could bind, one level at a time** — what the app's
+ * picker walks (`docs/research/2026-08-26-attaching-a-directory.md`).
+ *
+ * This is deliberately THINNER than everything above it, because it is
+ * deliberately WIDER: `readTree` lists inside a directory somebody already
+ * bound, and this lists directories nobody has bound to anything. That is the
+ * first enumeration surface this daemon has ever had, so it is cut to the
+ * bone — names of DIRECTORIES only, one level, never file names, never bytes,
+ * never a recursive walk that would turn a picker into a map of the disk.
+ *
+ * The jail is the same shape as `readBound`'s and it holds the same way:
+ * every path is resolved and checked against `$HOME`, `..` cannot leave
+ * because the check is on the RESOLVED path rather than on the spelling, and
+ * symlinks are not followed at all (`lstat`, not `stat`) — a link inside the
+ * jail pointing out of it is the classic escape.
+ *
+ * `$HOME` is the ceiling. Above it lies every other account on the machine
+ * and the system itself, and nothing up there is a project.
+ */
+export interface PickEntry {
+  name: string;
+  /** Absolute, so the app can hand it straight back to the bind route. */
+  path: string;
+  /** Already bound to some canvas — the picker says so rather than letting
+   *  somebody pick it and meet a refusal. */
+  bound: boolean;
+}
+
+export interface PickListing {
+  /** The directory being listed, absolute and resolved. */
+  dir: string;
+  /** Its parent, or null at `$HOME` — the ceiling, so there is no way up
+   *  past it and the app can hide the affordance rather than offer a step
+   *  that will be refused. */
+  up: string | null;
+  entries: PickEntry[];
+}
+
+const MAX_PICK_ENTRIES = 400;
+
+export async function pickList(home: string, at: string | null): Promise<PickListing | null> {
+  const os = await import("node:os");
+  const ceiling = await fs.realpath(os.homedir()).catch(() => os.homedir());
+  const wanted = at ? path.resolve(at) : ceiling;
+  const real = await fs.realpath(wanted).catch(() => null);
+  // Not there, or a symlink we will not chase: the same answer either way.
+  if (real === null) return null;
+  // Inside `$HOME` or `$HOME` itself, checked on the RESOLVED path so `..`
+  // and a symlink spelling cannot walk out.
+  if (real !== ceiling && !real.startsWith(ceiling + path.sep)) return null;
+  const stat = await fs.lstat(real).catch(() => null);
+  if (!stat?.isDirectory()) return null;
+
+  let bound: Record<string, string> = {};
+  try {
+    bound = JSON.parse(readFileSync(dirsFile(home), "utf8")) as Record<string, string>;
+  } catch {
+    // No roster yet: nothing is bound, which is a listing, not an error.
+  }
+
+  const entries: PickEntry[] = [];
+  for (const entry of await fs.readdir(real, { withFileTypes: true }).catch(() => [])) {
+    // Directories only, and `isDirectory` on a Dirent is `lstat`-shaped —
+    // a symlink reports as a link, not as what it points at.
+    if (!entry.isDirectory()) continue;
+    if (!listable(entry.name, "dir")) continue;
+    const full = path.join(real, entry.name);
+    entries.push({ name: entry.name, path: full, bound: bound[full] !== undefined });
+    if (entries.length >= MAX_PICK_ENTRIES) break;
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  return { dir: real, up: real === ceiling ? null : path.dirname(real), entries };
+}

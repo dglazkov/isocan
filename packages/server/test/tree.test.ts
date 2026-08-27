@@ -4,7 +4,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MAX_READ_BYTES, boundDirs, listable, readBound, readTree } from "../src/tree.ts";
+import { MAX_READ_BYTES, boundDirs, listable, pickList, readBound, readTree } from "../src/tree.ts";
 
 /**
  * The one seam where the product touches the real disk, tested the way the
@@ -165,5 +165,93 @@ describe("listable, the one spelling of the rule", () => {
     expect(listable("node_modules", "file")).toBe(true); // a FILE by that name is just a file
     expect(listable("server.key", "file")).toBe(false);
     expect(listable("ordinary.ts", "file")).toBe(true);
+  });
+});
+
+/**
+ * **The picker's jail.** `readTree` lists inside a directory somebody bound;
+ * this lists directories nobody has bound to anything, which is the first
+ * enumeration surface this daemon has ever had. So it is shaken the way the
+ * tree's jail was: every refusal gets a case that fails without it.
+ */
+describe("pickList", () => {
+  // The jail's ceiling is `$HOME`, so the fixture has to live under it — a
+  // mkdtemp in the system temp dir is outside and is (correctly) refused,
+  // which is how these two were written wrong the first time.
+  let sandbox: string;
+
+  beforeEach(async () => {
+    sandbox = path.join(os.homedir(), `isocan-picktest-${process.pid}-${Date.now()}`);
+    await fs.mkdir(sandbox, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(sandbox, { recursive: true, force: true });
+  });
+
+  it("lists directories, and only directories", async () => {
+    await fs.mkdir(path.join(sandbox, "alpha"), { recursive: true });
+    await fs.mkdir(path.join(sandbox, "beta"), { recursive: true });
+    await fs.writeFile(path.join(sandbox, "a-file.md"), "x");
+    const listing = await pickList(root, sandbox);
+    expect(listing?.entries.map((e) => e.name)).toEqual(["alpha", "beta"]);
+  });
+
+  it("hides what the tree hides — dotfiles and noise", async () => {
+    await fs.mkdir(path.join(sandbox, ".ssh"), { recursive: true });
+    await fs.mkdir(path.join(sandbox, "node_modules"), { recursive: true });
+    await fs.mkdir(path.join(sandbox, "src"), { recursive: true });
+    const listing = await pickList(root, sandbox);
+    expect(listing?.entries.map((e) => e.name)).toEqual(["src"]);
+  });
+
+  it("refuses to leave $HOME, however the path is spelled", async () => {
+    // The check is on the RESOLVED path, so `..` cannot walk out by spelling.
+    expect(await pickList(root, "/etc")).toBeNull();
+    expect(await pickList(root, path.join(os.homedir(), "..", "..", "etc"))).toBeNull();
+    expect(await pickList(root, "/")).toBeNull();
+    // And the system temp dir, which is where every other fixture here lives:
+    // outside is outside, however ordinary the directory is.
+    expect(await pickList(root, root)).toBeNull();
+  });
+
+  it("does not follow a symlink out of the jail", async () => {
+    // The classic escape: a link inside, pointing out. `realpath` resolves it
+    // and the jail check then sees where it actually goes.
+    const inside = path.join(sandbox, "escape");
+    await fs.symlink("/etc", inside);
+    expect(await pickList(root, inside)).toBeNull();
+    // It is not offered as an entry either — `isDirectory()` on a Dirent is
+    // lstat-shaped, so a link reports as a link.
+    const listing = await pickList(root, sandbox);
+    expect(listing?.entries.map((e) => e.name)).toEqual([]);
+  });
+
+  it("stops at $HOME rather than offering a step above it", async () => {
+    const listing = await pickList(root, os.homedir());
+    expect(listing).not.toBeNull();
+    // `up: null` is what lets the app hide the affordance instead of showing
+    // one that would be refused.
+    expect(listing!.up).toBe(null);
+  });
+
+  it("answers nothing for a file, and for a path that is not there", async () => {
+    await fs.writeFile(path.join(sandbox, "notes.md"), "x");
+    expect(await pickList(root, path.join(sandbox, "notes.md"))).toBeNull();
+    expect(await pickList(root, path.join(sandbox, "nowhere"))).toBeNull();
+  });
+
+  it("says which directories are already bound, rather than offering them", async () => {
+    const taken = path.join(sandbox, "taken");
+    await fs.mkdir(taken, { recursive: true });
+    await fs.mkdir(path.join(sandbox, "free"), { recursive: true });
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(
+      path.join(root, "dirs.json"),
+      JSON.stringify({ [taken]: "prj_somewhere" }),
+    );
+    const listing = await pickList(root, sandbox);
+    expect(listing?.entries.find((e) => e.name === "taken")?.bound).toBe(true);
+    expect(listing?.entries.find((e) => e.name === "free")?.bound).toBe(false);
   });
 });
