@@ -9,6 +9,7 @@ import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
+import { isocanSyntax } from "../lib/cmtheme.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { blobUrl, uploadBlob } from "../lib/api.ts";
 
@@ -115,6 +116,10 @@ export function StageEditor({
           doc: opening,
           extensions: [
             basicSetup,
+            // After `basicSetup`, which brings CodeMirror's own default
+            // highlight style with it: the later highlighter wins, so this
+            // needs no surgery on the setup bundle.
+            isocanSyntax,
             languageFor(current.mimeType, current.filename),
             EditorView.lineWrapping,
             keymap.of([

@@ -72,6 +72,20 @@
   /* Snapping feedback: blue says "aligned to this line", purple says "these
      two gaps are equal". */
   --guide-spacing: #8b46e0;
+  /* **Syntax.** Its own small palette, not the semantic tokens: `--good` for
+     a string and `--danger` for a tag would read right and mean wrong —
+     those say "this went well" and "this is a problem" everywhere else, and
+     a tag name is neither. Measured against `--card`, which is the only
+     ground the editor is ever drawn on. */
+  --syn-comment: #6b7280;
+  --syn-keyword: #7130c3;
+  --syn-string: #197c4b;
+  --syn-number: #9a5300;
+  --syn-tag: #a52f28;
+  --syn-attr: #1f3fd0;
+  --syn-fn: #0f5f8a;
+  --syn-type: #7130c3;
+  --syn-punct: #646d76;
 }
 
 /* Dark: a graphite ground under the same dot grid, slate cards, a brighter
@@ -110,6 +124,18 @@
   --accent-ink: #ffffff;
   --accent-text: #8fa8ff;
   --danger: #f26a60;
+  /* The same nine, lifted for `--card` at #1b1e23. Not the light values
+     dimmed: a hue that carries on white goes muddy on graphite, so each one
+     is chosen against the ground it actually lands on. */
+  --syn-comment: #7c8590;
+  --syn-keyword: #c9a4ff;
+  --syn-string: #7fd39a;
+  --syn-number: #e3b341;
+  --syn-tag: #f0938c;
+  --syn-attr: #8fa8ff;
+  --syn-fn: #6fc7e8;
+  --syn-type: #c9a4ff;
+  --syn-punct: #99a1ad;
   --warn: #d99a3a;
   /* Lifted on graphite for the reason `--focus` is: the light green is far too
      dark on this ground. This one measures 9.16 on `--ground`, 7.98 on
@@ -2997,3 +3023,78 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Already spoken for: said rather than offered, so nobody picks it and meets
    a refusal a click later. */
 .wb-pick-bound { flex: none; font-size: 10px; color: var(--ink-soft); }
+
+/* ---------- the editor's chrome ----------
+   CodeMirror shipped stock: its own greys, its own blue, its own gutter — a
+   component sitting IN the app rather than part of it. The chrome is here,
+   beside every other surface and reading the same tokens, so it flips with
+   the theme for free; the syntax colours are `lib/cmtheme.ts`, because a
+   mapping from grammar tags to colour is not something a stylesheet can say.
+
+   Every rule is scoped under `.stage-editor-cm` on purpose: CodeMirror is
+   also mounted elsewhere in this app's future, and a bare `.cm-editor` rule
+   would reach into any of them. */
+.stage-editor-cm .cm-editor {
+  height: 100%;
+  background: var(--card);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+/* The pane already frames itself; a second ring inside it is noise. */
+.stage-editor-cm .cm-editor.cm-focused { outline: none; }
+.stage-editor-cm .cm-scroller {
+  font-family: inherit;
+  line-height: 1.55;
+}
+.stage-editor-cm .cm-content { padding: 8px 0; caret-color: var(--accent-text); }
+/* The gutter is not the page: it recedes to the chip grey the rest of the
+   app uses for "this is a rail, not content", with the same hairline. */
+.stage-editor-cm .cm-gutters {
+  background: var(--chip);
+  color: var(--ink-soft);
+  border-right: 1px solid var(--line);
+}
+.stage-editor-cm .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 10px; }
+/* Where you are. A wash rather than a fill — the accent at 8% is the same
+   "you are here" this app paints everywhere else. */
+.stage-editor-cm .cm-activeLine { background: var(--accent-wash); }
+.stage-editor-cm .cm-activeLineGutter { background: var(--accent-wash); color: var(--ink-muted); }
+.stage-editor-cm .cm-cursor { border-left-color: var(--accent-text); border-left-width: 2px; }
+/* Selection: CodeMirror draws its own layer when the editor has focus and
+   leaves the native one otherwise, so both are said. */
+.stage-editor-cm .cm-selectionBackground { background: var(--accent-glow); }
+.stage-editor-cm .cm-focused .cm-selectionBackground { background: var(--accent-glow); }
+.stage-editor-cm .cm-content ::selection { background: var(--accent-glow); }
+/* The pair you are inside, and the one that has no partner. */
+.stage-editor-cm .cm-matchingBracket {
+  background: var(--chip-hover);
+  outline: 1px solid var(--line);
+  color: inherit;
+}
+.stage-editor-cm .cm-nonmatchingBracket { color: var(--danger); background: none; }
+/* Search, fold marks and the autocomplete list, all pulled onto the app's
+   surfaces so a panel opening inside the editor is not a different product. */
+.stage-editor-cm .cm-panels {
+  background: var(--card);
+  color: var(--ink);
+  border-top: 1px solid var(--line);
+}
+.stage-editor-cm .cm-searchMatch { background: var(--accent-wash); outline: 1px solid var(--accent-glow); }
+.stage-editor-cm .cm-searchMatch-selected { background: var(--accent-glow); }
+.stage-editor-cm .cm-foldPlaceholder {
+  background: var(--chip);
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+.stage-editor-cm .cm-tooltip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+}
+.stage-editor-cm .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
