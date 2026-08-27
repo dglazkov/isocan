@@ -94,6 +94,9 @@ import {
   newCommentId,
   anchorOffset,
   buildRecap,
+  cleanFilePath,
+  FILE_PROP,
+  fileOf,
   newItemId,
   newCanvasId,
   newThreadId,
@@ -3280,6 +3283,40 @@ program
   );
 
 program
+  .command("save <items...>")
+  .description("Write backed items out to the directory bound to this canvas")
+  .option("--force", "overwrite a file that changed on disk outside the canvas")
+  .action(
+    run(async (refs: string[], opts: { force?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      /**
+       * The other direction from `＋`, and a GESTURE rather than a sync:
+       * nothing watches, nothing writes on its own. An agent that has just
+       * made a screen decides whether it is a file — `isocan set <item>
+       * --file <path>` says where it belongs, this takes it there.
+       *
+       * The daemon owns every refusal (the jail, and drift), because the
+       * daemon is the one with the filesystem. This verb only asks.
+       */
+      const written: string[] = [];
+      for (const ref of refs) {
+        const item = resolveItem(snapshot, ref);
+        const where = fileOf(item);
+        if (!where) {
+          throw new Error(
+            `"${item.title}" is not backed by a file — \`isocan set ${item.id} --file <path>\` first`,
+          );
+        }
+        const out = await ctx.client.writeItem(p.id, item.id, opts.force ?? false);
+        written.push(`${item.title} → ${out.path}`);
+      }
+      if (ctx.json) return printJson({ written });
+      for (const line of written) console.log(line);
+    }),
+  );
+
+program
   .command("tree")
   .description("The directory bound to this canvas, as its home daemon lists it")
   .action(
@@ -3752,6 +3789,10 @@ program
   .option("--rm-prop <key>", "remove a property (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
   .option("--size <WxH>", "resize, e.g. 480x360")
   .option(
+    "--file <path>",
+    "back this item with a file at <path>, relative to the bound directory (--file '' unbacks it)",
+  )
+  .option(
     "--keep-filename",
     "rename the item but leave the file under its old name (default: the file follows the title)",
   )
@@ -3766,6 +3807,7 @@ program
           rmProp: string[];
           size?: string;
           keepFilename?: boolean;
+          file?: string;
         },
         cmd: Command,
       ) => {
@@ -3773,6 +3815,30 @@ program
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
         const patch = metaPatch(opts);
+        /**
+         * **Where this item belongs on disk** — a canvas fact, so it rides
+         * as a property on the same op every other property rides
+         * (`docs/projects/workbench/files-on-disk.md`). `--file ''` unbacks
+         * it: the item stays, it simply stops claiming a place.
+         *
+         * Nothing is written here. Backing an item says where it goes;
+         * `isocan save` is the gesture that takes it there, and keeping the
+         * two apart is the whole point — an agent decides for itself whether
+         * a screen it just made is a file.
+         */
+        if (opts.file !== undefined) {
+          if (opts.file.trim() === "") {
+            patch.removeProperties = [...(patch.removeProperties ?? []), FILE_PROP];
+          } else {
+            const clean = cleanFilePath(opts.file);
+            if (!clean) {
+              throw new Error(
+                `${opts.file} is not a path this canvas can name — relative to the bound directory, no dot segments`,
+              );
+            }
+            patch.properties = { ...(patch.properties ?? {}), [FILE_PROP]: clean };
+          }
+        }
         let did = false;
         if (Object.keys(patch).length > 0) {
           // Renaming an item renames its file — the same act the web app

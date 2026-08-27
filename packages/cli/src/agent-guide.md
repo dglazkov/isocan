@@ -227,6 +227,38 @@ made in the Chat in the Chat, and keep item-specific critique on the item's
 own anchored comment — which `⇧C` and `comment add --item` both put at that
 item's top-right corner, one per item.
 
+## Screens that become files
+
+Most of what you make on a canvas should stay on the canvas. Somebody asks to
+see a view, you build it, they look at it — it never needed to be a file, and
+making it one leaves litter in a repo somebody else has to clean up.
+
+Some of it should not. A screen that is a new part of the system somebody is
+building wants to be a file in their tree, where their editor, their build and
+their git can all reach it. **That is your call to make, per item, and it is
+two steps on purpose:**
+
+```sh
+isocan set <item> --file src/views/start.html   # where it belongs
+isocan save <item>                              # take it there
+```
+
+The first is a canvas fact — it replicates, it travels to a teammate who
+clones the repo, and it costs nothing if the file is never written. The second
+touches a real filesystem, and only ever on the machine the canvas lives on.
+`--file ''` takes the backing off again; the item stays exactly where it is.
+
+**Ask before you back something.** A path in somebody's repo is theirs, not
+the canvas's, and "I made you a file" is a surprise nobody asked for. Backing
+a screen you were asked to build for a real project is ordinary; backing every
+sketch you run up is noise.
+
+**What the daemon will refuse, so you can say why:** a path outside the bound
+directory, a dotfile or a secret-shaped name at any segment, anything reached
+through a symlink — and a file that changed on disk since anything the canvas
+ever wrote there. That last one is somebody editing outside the canvas, and
+overwriting it needs `--force`, which means you should ask first.
+
 ## When a canvas's home is somewhere else
 
 **The home is a property of the canvas, not of this machine.** One daemon can
@@ -875,6 +907,8 @@ summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
 `tree` (the bound directory as the daemon lists it — owner-scoped, so it
 answers only at the canvas's own machine),
+`save <items...>` (write backed items out to that directory — see **Screens
+that become files**; `--force` overwrites one that changed on disk),
 `present <item>` (a main-thread comment carrying the workbench address —
 inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,

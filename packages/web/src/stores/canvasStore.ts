@@ -110,6 +110,17 @@ interface CanvasStore {
    * registry. A comment carries the name its author wore when they wrote it;
    * this is what we show instead. See lib/names.ts. */
   actorNames: ActorNames;
+  /**
+   * **What THIS MACHINE's disk says about the canvas's backed items** —
+   * the derived half of `backingOf` (`docs/projects/workbench/files-on-disk.md`).
+   *
+   * Never replicated and never persisted: bindings are per-machine, so this
+   * is one browser's answer about one daemon's disk and would be a lie
+   * anywhere else. `bound: false` is the honest resting state — a hosted
+   * canvas, or a machine without the checkout — and is why "no directory
+   * here" never reads as "somebody deleted your file".
+   */
+  backing: { bound: boolean; onDisk: Record<string, string> };
   /** The slash-command menu, from the daemon. Null = not asked yet; the
    * built-ins stand in until it lands (lib/commands.ts). */
   commands: SlashCommand[] | null;
@@ -134,6 +145,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   sessions: [],
   actorColors: {},
   actorNames: {},
+  backing: { bound: false, onDisk: {} },
   commands: null,
 }));
 
@@ -451,6 +463,25 @@ export async function sendEchoed(canvasId: string, actor: Actor, op: Operation):
  * press; the commit it finally makes goes through `sendEchoed` like every
  * other.
  */
+/**
+ * Ask this machine's daemon what its disk says about the canvas's backed
+ * items. Called when a canvas opens and after a save, because those are the
+ * two moments the answer can change; nothing polls, and nothing watches the
+ * filesystem — the same "every crossing is a gesture" line `＋` draws.
+ */
+export async function loadBacking(canvasId: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/projects/${canvasId}/backing`);
+    if (!res.ok) return;
+    const backing = (await res.json()) as { bound: boolean; onDisk: Record<string, string> };
+    // Only if this is still the canvas we are on: a fast flip between two
+    // canvases would otherwise leave one machine's answer on the other.
+    if (useCanvasStore.getState().canvasId === canvasId) useCanvasStore.setState({ backing });
+  } catch {
+    // No answer is `bound: false`, which is already the resting state.
+  }
+}
+
 export function applyLocalEcho(op: Operation, actor: Actor): void {
   const { project, canvas } = useCanvasStore.getState();
   if (!project || !canvas) return;

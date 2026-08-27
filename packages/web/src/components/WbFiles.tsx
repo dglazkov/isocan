@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { workbenchItemPath } from "@isocan/core";
+import { FILE_PROP, cleanFilePath, workbenchItemPath } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
+import { sendOp } from "../lib/api.ts";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { goStage } from "../lib/goStage.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
@@ -123,7 +124,32 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
         [new File([bytes], name)],
         screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2),
       );
-      if (ids[0]) goStage(navigate, workbenchItemPath(canvasId, ids[0]));
+      if (ids[0]) {
+        /**
+         * **The item that just arrived IS that file**, so it says so.
+         *
+         * This closes the round trip that was open in one direction: `＋`
+         * carried a file onto the canvas and the canvas then had no idea
+         * where it came from, so `isocan save` could not put it back. The
+         * path is the canvas's fact about the item (`FILE_PROP`,
+         * `docs/projects/workbench/files-on-disk.md`) and rides the same
+         * `item.update` every other property does.
+         *
+         * A separate op rather than part of the add: `addFiles` is the
+         * shared upload path every drop and paste uses, and threading a
+         * property through it would put a workbench concern in everybody's
+         * gesture.
+         */
+        const where = cleanFilePath(entry.path);
+        if (where) {
+          void sendOp(canvasId, actor, {
+            type: "item.update",
+            itemId: ids[0],
+            patch: { properties: { [FILE_PROP]: where } },
+          });
+        }
+        goStage(navigate, workbenchItemPath(canvasId, ids[0]));
+      }
     } finally {
       setAdding(null);
     }

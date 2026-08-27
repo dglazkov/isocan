@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from "react";
 import type { Actor } from "@isocan/core";
-import { editableText, isDesignSystem } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import type { Backing } from "@isocan/core";
+import { backingOf, editableText, isDesignSystem } from "@isocan/core";
+import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
 
@@ -150,6 +151,8 @@ export function ArtifactStage({
   // put away, so it gets the whole stage without ceremony.
   if (!editable) return <div className="artifact-stage">{saved}</div>;
 
+  const disk = useCanvasStore((s) => s.backing);
+  const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
    * **Offered whenever the preview is showing the SAVED file** — editor pane
@@ -227,6 +230,20 @@ export function ArtifactStage({
                     </i>
                   </span>
                   <span className="spacer" />
+                  {/**
+                   * **Write this item out to the directory bound here** — the
+                   * other direction from `＋`
+                   * (`docs/projects/workbench/files-on-disk.md`).
+                   *
+                   * Offered only for an item that HAS a place on disk and a
+                   * machine that has the directory: an untracked item has
+                   * nowhere to go, and a hosted canvas has no disk. The
+                   * daemon owns every refusal (the jail, and drift); this
+                   * only asks, and repeats what it is told.
+                   */}
+                  {backing && backing.state !== "unbound" && (
+                    <SaveToDisk canvasId={canvasId} itemId={item.id} backing={backing} />
+                  )}
                   {offerTextEdit && (
                     <button
                       className="stage-editor-btn"
@@ -278,5 +295,69 @@ export function ArtifactStage({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The button, and the two sentences it needs.
+ *
+ * `absent` is an ordinary write. `drifted` means the file changed outside the
+ * canvas since anything this item has ever held — so the first press is
+ * refused by the daemon and the second, which says `force`, is a person
+ * deciding to overwrite somebody's work. Making that two presses rather than
+ * a confirm dialog keeps the decision in the same place as the gesture.
+ */
+function SaveToDisk({
+  canvasId,
+  itemId,
+  backing,
+}: {
+  canvasId: string;
+  itemId: string;
+  backing: Backing;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+
+  async function save(force: boolean) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${canvasId}/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, force }),
+      });
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setRefused(res.ok ? null : (body?.error ?? "that could not be written"));
+      // The disk just changed; ask it again so every mark on the canvas
+      // stops saying what used to be true.
+      await loadBacking(canvasId);
+    } catch {
+      setRefused("the daemon did not answer");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const drifted = backing.state === "drifted";
+  return (
+    <>
+      {refused && <span className="text-edit-refusal">{refused}</span>}
+      <button
+        className={`stage-editor-btn${drifted ? " warn" : ""}`}
+        disabled={busy || backing.state === "written"}
+        title={
+          backing.state === "written"
+            ? `${backing.path} is up to date`
+            : drifted
+              ? `${backing.path} changed on disk outside the canvas — this overwrites it`
+              : `Write this item to ${backing.path}`
+        }
+        onClick={() => void save(drifted)}
+      >
+        {busy ? "…" : backing.state === "written" ? "Saved to disk" : drifted ? "Overwrite file" : "Save to disk"}
+      </button>
+    </>
   );
 }

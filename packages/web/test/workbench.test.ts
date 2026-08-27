@@ -221,3 +221,64 @@ describe("edit-text-in-place", () => {
     expect(stage).toMatch(/showDraft = panes\.edit && draft !== null/);
   });
 });
+
+/**
+ * **Items backed by files** (`docs/projects/workbench/files-on-disk.md`) —
+ * the app half. The canvas fact and the per-machine one must stay apart, and
+ * the write must never be offered where it cannot happen.
+ */
+describe("the file mark and the save", () => {
+  const item = readFileSync(new URL("../src/components/ItemView.tsx", import.meta.url), "utf8");
+  const stage = readFileSync(
+    new URL("../src/components/ArtifactStage.tsx", import.meta.url),
+    "utf8",
+  );
+  const store = readFileSync(
+    new URL("../src/stores/canvasStore.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("marks only items that HAVE a place on disk", () => {
+    // An untracked item is the default and the common case — a view run up
+    // to answer "let me see" — so silence is its signal.
+    expect(item).toContain("{backing && <span className={`file-mark ${backing.state}`}");
+    expect(item).toContain("backingOf(item, disk.bound, ");
+  });
+
+  it("keeps the per-machine answer out of the canvas state", () => {
+    // `backing` is one browser's answer about one daemon's disk. Replicating
+    // or persisting it would carry a machine's fact to a machine where it is
+    // false — which is the mistake the whole design is shaped to avoid.
+    expect(store).toContain("backing: { bound: false, onDisk: {} }");
+    // Not in the replica that gets written down, and not on the wire.
+    const persist = store.slice(store.indexOf("function persist("), store.indexOf("function persist(") + 700);
+    expect(persist).not.toContain("backing");
+  });
+
+  it("offers the write only where there is a disk to write to", () => {
+    // A hosted canvas, or a machine without the checkout, is `unbound` — the
+    // button must not be there at all rather than there and refusing.
+    expect(stage).toContain('backing && backing.state !== "unbound"');
+  });
+
+  it("makes overwriting a drifted file a second, deliberate press", () => {
+    // The first press is refused by the daemon; the second says `force`.
+    // Two presses rather than a confirm dialog keeps the decision in the
+    // same place as the gesture.
+    expect(stage).toContain("onClick={() => void save(drifted)}");
+    expect(stage).toMatch(/Overwrite file/);
+    expect(stage).toMatch(/changed on disk outside the canvas/);
+  });
+
+  it("re-asks the disk after writing, so the marks stop lying", () => {
+    expect(stage).toContain("await loadBacking(canvasId)");
+  });
+
+  it("has ＋ say where the file it just carried came from", () => {
+    // Closes the round trip: without this the canvas had no idea where an
+    // added file came from, so it could never be put back.
+    const files = readFileSync(new URL("../src/components/WbFiles.tsx", import.meta.url), "utf8");
+    expect(files).toContain("[FILE_PROP]: where");
+    expect(files).toContain("cleanFilePath(entry.path)");
+  });
+});

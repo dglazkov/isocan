@@ -11,6 +11,7 @@ import {
 import {
   connectToCanvas,
   disconnect,
+  loadBacking,
   publishSelection,
   setPresenceActor,
   useCanvasStore,
@@ -156,6 +157,9 @@ function CanvasSurface({
     didFit.current = false;
     restoreReactionBar(canvasId);
     connectToCanvas(canvasId, actorRef.current);
+    // What this machine's disk says about the canvas's backed items. Asked
+    // once, here, because nothing watches a filesystem — see `loadBacking`.
+    void loadBacking(canvasId);
     return disconnect;
   }, [canvasId]);
 
