@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Item } from "@isocan/core";
 import { spotInView } from "../src/lib/spot.ts";
@@ -92,5 +94,45 @@ describe("placing something you asked for where you can see it", () => {
     // answer, or the item lands behind the Chat.
     const shifted = spotInView(VP, [], 200, 100, { ...BOX, left: 400 });
     expect(shifted.x).toBeGreaterThan(spotInView(VP, [], 200, 100, BOX).x);
+  });
+});
+
+/**
+ * **Dropped files land where you dropped them.**
+ *
+ * Reported: images dropped on the canvas "often show up off screen and you
+ * have to go hunt for them". `addFiles` sent every file with the SAME
+ * placement, so a drop of five asked for five items at one point — and the
+ * daemon keeps items off each other by searching outward in rings of the
+ * item's own size, which for a 480x360 photo puts the third ring most of a
+ * screen away. The drop scattered.
+ *
+ * Asking for ground that is actually free gives the ring search nothing to
+ * do, so the files stay where they were put.
+ */
+describe("a drop of several files", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/lib/upload.ts", import.meta.url)),
+    "utf8",
+  );
+  const addFiles = src.slice(src.indexOf("export async function addFiles"), src.indexOf("export async function addBrowserItem"));
+
+  it("asks for a different spot per file, not one spot for all", () => {
+    // The exact shape that broke it: `placement` passed straight through to
+    // every op in the loop.
+    expect(addFiles, "every file at one point is a scatter, not a drop").toMatch(
+      /placement: at\b/,
+    );
+    expect(addFiles).not.toMatch(/\n\s+placement,\n/);
+  });
+
+  it("keeps an anchored placement anchored", () => {
+    // "Beside that item" is a relationship, and turning it into coordinates
+    // would silently drop it — so only coordinate placements spread.
+    expect(addFiles).toMatch(/"x" in placement/);
+  });
+
+  it("is one gesture, so one undo takes the whole drop back", () => {
+    expect(addFiles).toMatch(/newGroupId\(\)/);
   });
 });

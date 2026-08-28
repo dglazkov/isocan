@@ -8,6 +8,7 @@ import {
   annotationProperties,
   drawingSvg,
   inkBounds,
+  newGroupId,
   newItemId,
   newVersionId,
   normalizeSiteUrl,
@@ -19,6 +20,9 @@ import { sendOp, uploadBlob } from "./api.ts";
 import { mimeTypeOf } from "./mime.ts";
 
 const MAX_INITIAL_WIDTH = 480;
+/** Between files dropped together — the canvas's own placement gap, so a row
+ *  of dropped images sits the way the daemon would have spaced them. */
+const FILE_GAP = 40;
 
 /** Measure an image/video's natural size, capped; fall back to defaults. */
 async function measure(file: File, mimeType: string): Promise<{ width: number; height: number }> {
@@ -56,11 +60,39 @@ export async function addFiles(
   files: File[],
   placement: Placement,
 ): Promise<string[]> {
+  // One drop is one act: however many files, one ⌘Z takes them back.
+  const group = newGroupId();
+  /**
+   * **Laid out in a row, not stacked on one point.**
+   *
+   * Every file used to be sent with the SAME placement, which meant a drop of
+   * five images asked for five items at one spot. The daemon keeps items off
+   * each other by searching outward in rings of the item's own size, so for a
+   * 480x360 photo the third ring is most of a screen away: the drop scattered,
+   * and the things you dropped were somewhere you had to go and find. Reported
+   * exactly that way.
+   *
+   * Placing them side by side asks for ground that is actually free, so the
+   * ring search has nothing to do and they land where they were put — which is
+   * also what a person means by dropping several things at once.
+   *
+   * An anchored placement (the rail button with one item selected) keeps its
+   * anchor: "beside that item" is a relationship, and turning it into
+   * coordinates would silently drop it. Those still stack, and the daemon's
+   * ring search is the right answer there because no better one was asked for.
+   */
   const ids: string[] = [];
+  const spread = "x" in placement;
+  let offsetX = 0;
   for (const file of files) {
     const mimeType = mimeTypeOf(file);
     const upload = await uploadBlob(canvasId, file, file.name);
     const { width, height } = await measure(file, mimeType);
+
+    const at: Placement = spread
+      ? { x: (placement as { x: number }).x + offsetX, y: (placement as { y: number }).y }
+      : placement;
+    offsetX += width + FILE_GAP;
 
     const itemId = newItemId();
     await sendOp(canvasId, actor, {
@@ -75,8 +107,8 @@ export async function addFiles(
       },
       width,
       height,
-      placement,
-    });
+      placement: at,
+    }, group);
     ids.push(itemId);
   }
   return ids;

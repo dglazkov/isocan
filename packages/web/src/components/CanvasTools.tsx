@@ -2,7 +2,8 @@ import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { BROWSER_SIZE, addBrowserItem, addFiles } from "../lib/upload.ts";
-import { spotInView } from "../lib/spot.ts";
+import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
+import { glideToBox } from "../lib/zoomactions.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -179,8 +180,17 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       setNotice(err instanceof Error ? err.message : "That file could not be added.");
       return [] as string[];
     });
-    const last = ids[ids.length - 1];
-    if (last) useUiStore.getState().select(last);
+    if (ids.length > 0) {
+      useUiStore.getState().setSelection(ids);
+      const canvas = useCanvasStore.getState().canvas;
+      const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
+      revealIfOffscreen(
+        useUiStore.getState().viewport,
+        landed as Parameters<typeof revealIfOffscreen>[1],
+        placeableArea(),
+        glideToBox,
+      );
+    }
   }
 
   return (
@@ -256,22 +266,6 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       />
     </div>
   );
-}
-
-/**
- * Where on screen an item may land: the window, less the chrome that would
- * cover it. The dock is measured rather than assumed, because it is a panel
- * somebody opened at a width they chose.
- */
-function placeableArea() {
-  const dock = document.querySelector(".main-panel, .files-panel");
-  const left = dock ? Math.ceil(dock.getBoundingClientRect().right) + 16 : 24;
-  return {
-    left,
-    top: 64, // under the top bar
-    right: window.innerWidth - 84, // clear of the tool rail
-    bottom: window.innerHeight - 24,
-  };
 }
 
 /**
