@@ -2566,7 +2566,7 @@ program
               live: health?.home ?? null,
               force: false,
             });
-            daemonUp = await client.health(2000);
+            daemonUp = await client.awaitHealth();
             report.home = arrival.origin;
             report.birth =
               `new canvases here will be born at ${arrival.origin} — ` +
@@ -2630,7 +2630,7 @@ program
                 live: health?.home ?? null,
                 force: false,
               });
-              daemonUp = await client.health(2000);
+              daemonUp = await client.awaitHealth();
               report.home = fresh;
               report.birth =
                 `new canvases here will be born at ${fresh} — ` +
@@ -2667,6 +2667,26 @@ program
          *
          * A pass-less address is a real and supported form; see below.
          */
+        /**
+         * **A pass that was not redeemed is a failure, and must say so.**
+         *
+         * This branch used to be silent when `daemonUp` was false: the pass
+         * went unspent, no identity was written, nobody was admitted, and
+         * the command exited 0 reporting everything else it had managed. A
+         * person pasted a line out of a chat window, was told it worked, and
+         * was not on the canvas.
+         *
+         * The probe that decided it is fixed above — it waits now instead of
+         * asking once. This is the other half: if the daemon is genuinely not
+         * there, the one thing the address was FOR did not happen, and
+         * saying so is the whole difference between a setup that failed and a
+         * setup that lied.
+         */
+        if (arrival?.pass && !daemonUp) {
+          report.identity =
+            "NOT redeemed — the daemon did not come up, so this pass is unspent and this " +
+            "machine is not admitted. Run `isocan setup` again with the same address.";
+        }
         if (arrival?.pass && daemonUp) {
           const answer = await client.redeemPass(arrival.pass, arrival.origin);
           if (!answer.actor) {

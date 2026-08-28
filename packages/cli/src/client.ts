@@ -229,6 +229,35 @@ export class DaemonClient {
     return (await this.healthz(timeoutMs)) !== null;
   }
 
+  /**
+   * **Wait for a daemon that is coming back, rather than asking once.**
+   *
+   * `health()` is a single probe, and a single probe is the right question
+   * for "is anything there right now". It is the WRONG question after
+   * something restarted the daemon, because the honest answer for the next
+   * second or two is "not yet" — and a caller that treats that as "no" goes
+   * on to skip whatever it was going to do.
+   *
+   * `isocan setup` did exactly that: it restarted the daemon to point it at a
+   * home, asked once with a 2s budget, and on a busy machine got `false` — so
+   * it skipped redeeming the pass, wrote no identity, admitted nobody, and
+   * exited 0. Found through a flaky test that was a witness rather than a
+   * nuisance.
+   *
+   * Polls to a deadline, the way `ensureDaemon`'s own startup loop does, and
+   * deliberately starts nothing: this is for a daemon that already exists and
+   * is on its way up, and spawning a second one to race it is how a restart
+   * becomes two daemons fighting for a port.
+   */
+  async awaitHealth(deadlineMs = 10_000): Promise<boolean> {
+    const deadline = Date.now() + deadlineMs;
+    for (;;) {
+      if (await this.health(1000)) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+
   /** The daemon's own account of itself — pid, when it started, and which
    * copy of isocan it is running. Null when nothing answers.
    *
@@ -261,9 +290,29 @@ export class DaemonClient {
       stdio: ["ignore", log, log],
       env: { ...process.env, ISOCAN_PORT: port, ISOCAN_HOME: this.home },
     }).unref();
-    const deadline = Date.now() + 5000;
+    /**
+     * **How long to wait for a daemon that is starting.**
+     *
+     * It was five seconds, and five seconds is a guess about a machine. On a
+     * busy laptop — a test suite running, a build, several agents — a daemon
+     * takes longer than that to answer, and every caller of this reads the
+     * throw as "there is no daemon" and goes on to do less.
+     *
+     * `isocan setup` was the worst of them: it gates the whole command on
+     * this, so a slow start meant no home written, no pass redeemed, nobody
+     * admitted — and exit 0. Found through a test that was flaky because the
+     * product was fragile, which is the useful kind of flaky.
+     *
+     * Costs nothing when a daemon is already there: `health()` answers on the
+     * first pass and this loop never runs a second time. What it lengthens is
+     * only the wait for one that is genuinely on its way, and the case it
+     * makes slower — no daemon at all, ever — still fails, with the log path,
+     * which is the trade this repo makes everywhere: a slow failure beats a
+     * cheerful wrong answer.
+     */
+    const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
-      if (await this.health(500)) return;
+      if (await this.health(1000)) return;
       await new Promise((r) => setTimeout(r, 150));
     }
     throw new Error(`daemon did not come up on ${this.base} — see ${paths.daemonLogFile(this.home)}`);
