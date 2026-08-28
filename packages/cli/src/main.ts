@@ -3376,7 +3376,7 @@ program
 program
   .command("browse <url>")
   .description(
-    "Project a live site onto the canvas as a mini-browser item — point it at the localhost dev server you're building",
+    "Put a live site onto the canvas as a mini-browser item — point it at the localhost dev server you're building",
   )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")

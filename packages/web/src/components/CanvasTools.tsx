@@ -125,11 +125,13 @@ const TEXT = (
 /* The mark a live site already wears everywhere else (`KindIcon`'s `site`):
    the tool that makes them and the icon that lists them are the same shape,
    which is the only way somebody learns what this button produces without
-   pressing it. */
+   pressing it. Both changed together — see `KindIcon` for why it is a browser
+   window and not the play button it used to be. */
 const SITE = (
   <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="m10 8.5 5.5 3.5L10 15.5Z" />
+    <path d="M3 5h18v14H3z" />
+    <path d="M3 9h18" />
+    <path d="M6 7h.01M8.5 7h.01" />
   </svg>
 );
 
@@ -273,7 +275,13 @@ function placeableArea() {
 }
 
 /**
- * **Project a live site onto the canvas.**
+ * **Put a live site onto the canvas.**
+ *
+ * Not "Project", which was the first label and is a word this product has
+ * already spent: `project.create` is the op that makes a CANVAS, ids are
+ * `prj_`, and the config calls one `defaultProjectId`. A button reading
+ * "Project" inside the thing isocan calls a project is a collision with the
+ * domain's own noun, not merely an ambiguous verb.
  *
  * A press, a URL, done — the same shape as Upload beside it, which is why it
  * is a popover and not a placement tool. The hard part of this interaction is
@@ -316,8 +324,8 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
     <div className="create-site">
       <button
         className={`tool-btn${open ? " active" : ""}`}
-        title="Project a live site — point it at your localhost dev server"
-        aria-label="Project a live site"
+        title="Add a live site — point it at your localhost dev server"
+        aria-label="Add a live site"
         aria-pressed={open}
         onClick={() => {
           setOpen(!open);
@@ -341,10 +349,13 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
               if (e.key === "Escape") setOpen(false);
             }}
           />
-          {/* "Project", not "Canvas": a button says what pressing it does, and
-              the old label was a noun that read like a destination. */}
+          {/* "Add site" — the noun the rest of the app uses for what you get
+              (`KindIcon`'s `site`, `isocan ls --kind site`, the Files group),
+              so the button names its own result. It said "Canvas" first, which
+              was a destination where a verb belongs, and then "Project", which
+              is what isocan calls a canvas. */}
           <button className="btn primary" type="submit" disabled={!url.trim()}>
-            Project
+            Add site
           </button>
           {error && <div className="site-error">{error}</div>}
         </form>

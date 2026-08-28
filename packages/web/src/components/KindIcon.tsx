@@ -88,11 +88,25 @@ const PATHS: Record<IconKind, React.ReactNode> = {
       <path {...S} d="m14 11 7-4v10l-7-4Z" />
     </>
   ),
-  // play_circle — a live site: the prototype that is actually running.
+  /**
+   * A browser window — a title bar over a page.
+   *
+   * It was `play_circle`, chosen to say "the prototype that is actually
+   * running". But a play triangle means PRESS ME TO START, and these are
+   * already running: nothing here is waiting to be played. Reported as
+   * exactly that about the tool that makes them.
+   *
+   * Not a globe either, which would say "the web": what these usually point
+   * at is `localhost:5173`, and a globe on a dev server is wrong in the one
+   * case the feature exists for. A browser window is literally what lands on
+   * the canvas — a frame with somebody's page live inside it — and the title
+   * bar is what tells it apart from `screen`, which is a monitor.
+   */
   site: (
     <>
-      <circle cx="12" cy="12" r="9" {...S} />
-      <path {...S} d="m10 8.5 5.5 3.5L10 15.5Z" />
+      <path {...S} d="M3 5h18v14H3z" />
+      <path {...S} d="M3 9h18" />
+      <path {...S} d="M6 7h.01M8.5 7h.01" />
     </>
   ),
   // article — prose. A sheet with lines of text on it.
