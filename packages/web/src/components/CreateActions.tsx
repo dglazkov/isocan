@@ -10,76 +10,16 @@ import { openFilesPanel } from "./FilesPanel.tsx";
 import { unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
 
 /**
- * The content actions, now docked in the top bar: bring things onto the canvas
- * (a live Site) and open the Main thread — the direct channel to your emissary.
- * File upload has moved to the right tool rail (CanvasTools).
+ * **What is left here is a panel switch, and that is the whole point.**
+ *
+ * This file held the "content actions" docked in the top bar. Upload went to
+ * the tool rail first; `＋ Site` followed it, for the reason stated a few
+ * lines below about its old neighbours — an action makes something and is
+ * over, a toggle says what you are looking at and stays put — and because
+ * "bring something onto the canvas" is one category with one home. The top
+ * bar is now navigation, identity and lookups, with nothing in it that makes
+ * an item.
  */
-export function CreateActions({ canvasId, actor }: { canvasId: string; actor: Actor }) {
-  const [siteOpen, setSiteOpen] = useState(false);
-  const [siteUrl, setSiteUrl] = useState("");
-  const [siteError, setSiteError] = useState<string | null>(null);
-
-  // A single selected item anchors placement (left of it); otherwise the
-  // viewport center.
-  function createPlacement(): Placement {
-    const { selectedItemIds, viewport } = useUiStore.getState();
-    return selectedItemIds.length === 1
-      ? { anchorItemId: selectedItemIds[0]! }
-      : screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2);
-  }
-
-  async function onProjectSite(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const itemId = await addBrowserItem(canvasId, actor, siteUrl, createPlacement());
-      setSiteOpen(false);
-      setSiteUrl("");
-      setSiteError(null);
-      useUiStore.getState().select(itemId);
-    } catch (err) {
-      setSiteError((err as Error).message);
-    }
-  }
-
-  return (
-    <>
-      <div className="create-site">
-        <button
-          className={`btn${siteOpen ? " active" : ""}`}
-          title="Project a live site — point it at your localhost dev server"
-          onClick={() => {
-            setSiteOpen(!siteOpen);
-            setSiteError(null);
-          }}
-        >
-          ＋ Site
-        </button>
-        {siteOpen && (
-          <form className="site-popover" onSubmit={onProjectSite}>
-            <input
-              className="text-input"
-              autoFocus
-              placeholder="localhost:5173"
-              value={siteUrl}
-              onChange={(e) => {
-                setSiteUrl(e.target.value);
-                setSiteError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setSiteOpen(false);
-              }}
-            />
-            <button className="btn primary" type="submit" disabled={!siteUrl.trim()}>
-              Canvas
-            </button>
-            {siteError && <div className="site-error">{siteError}</div>}
-          </form>
-        )}
-      </div>
-    </>
-  );
-}
-
 /**
  * Which panel the left dock is showing — and it can only be showing one, so
  * the two read as one control with two settings rather than as two buttons

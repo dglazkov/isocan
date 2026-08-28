@@ -2229,15 +2229,19 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The active half owns the seam it shares with its neighbour. */
 .panel-switch .btn.active { position: relative; z-index: 1; }
 /* "＋ Site": ask for the address right below the button that asked. */
+/* Opens to the LEFT of its button, because its button now lives on the right
+   rail: hanging down-and-left from the top bar put it on screen, and the same
+   rule on the rail puts it off the edge. Aligned to the button's own row so
+   the field appears beside the thing you pressed. */
 .site-popover {
-  position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-popover);
+  position: absolute; top: 0; right: calc(100% + 8px); z-index: var(--z-popover);
   display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop); white-space: nowrap;
 }
 .site-popover .text-input { width: 220px; }
 .site-error {
-  position: absolute; top: calc(100% + 4px); left: 10px;
+  position: absolute; top: calc(100% + 4px); right: 10px;
   font-size: 10.5px; color: var(--danger); white-space: nowrap;
 }
 .shelf-glyph { color: var(--accent); }
