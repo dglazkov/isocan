@@ -34,6 +34,45 @@
          the font — `Caveat-OFL.txt` sits beside it and is served from the
          same directory. Copyright 2014 The Caveat Project Authors. -->
     <style>
+      /* **The interface face, served from here for the same reason Caveat is.**
+
+         The app shipped with `system-ui` and nothing else — no scale, no
+         weights, no tracking. That renders as SF Pro on a Mac, Segoe on
+         Windows and Roboto on Linux: three different products, none of them
+         chosen, and every measurement in the design (a 48px strip, a 320px
+         rail, a label that must not wrap) taken against a face that changes
+         under it.
+
+         Inter is the deliberate answer. It was drawn for interface text at
+         exactly the sizes this app lives at, its figures line up in columns,
+         and it holds together at the 11px the micro-labels use, which is
+         where system stacks diverge most.
+
+         SELF-HOSTED, not a CDN link, and not a choice worth re-litigating:
+         isocan runs against a daemon on localhost and must work with no
+         network at all. A font that arrives over the wire is a font that is
+         missing exactly when somebody is working on a plane. It also means no
+         third party is told who is looking at a canvas.
+
+         One file: the latin subset is a VARIABLE font, so every weight from
+         400 to 700 is the same 48KB rather than four downloads.
+         `font-display: swap` so nothing ever waits on it, and the stack below
+         is what renders in the moment before it lands — system-ui first,
+         because the old look is a better flash than a serif.
+
+         SIL Open Font License 1.1, same as Caveat: `Inter-OFL.txt` sits
+         beside it and is served from the same directory. Copyright 2016 The
+         Inter Project Authors. */
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url("/fonts/inter-latin.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+          U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+          U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
       @font-face {
         font-family: "Caveat";
         font-style: normal;

@@ -158,7 +158,11 @@
 html, body, #root { height: 100%; }
 body {
   margin: 0;
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Inter sets a touch wide at interface sizes — this is the tracking its
+     own designer specifies for 14px, and without it the chrome reads
+     looser than the design it is copied from. */
+  letter-spacing: -0.006em;
   color: var(--ink);
   background: var(--ground);
   overscroll-behavior: none;
@@ -1774,7 +1778,14 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    hierarchy. So it keeps the panel's own 12.5px and sits a clear level
    above them, while the docked copy stays small enough to read as a section
    of a column. */
-.main-panel header b { font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+/* **Sentence case, not CAPS.** These read "Chat" and "Files" — the words
+   people use for them, the words the rail's own buttons use, and the words
+   the design mocks use. They were uppercased in CSS, which made the panel
+   shout its own name at a volume nothing else on screen uses, and made the
+   header disagree with the button that opened it three inches away. Reported
+   three times before it was believed, which is its own lesson: a casing
+   difference is not cosmetic when it is the same word twice. */
+.main-panel header b { font-size: 13px; letter-spacing: -0.01em; }
 .main-panel header .spacer { flex: 1; }
 .main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 /* The panel's one-line "what is this" — the same name-then-quiet-hint pattern
@@ -2205,7 +2216,7 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; gap: 7px; flex: none;
   padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
 }
-.files-panel header b { font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+.files-panel header b { font-size: 13px; letter-spacing: -0.01em; }
 .files-panel header .spacer { flex: 1; }
 .files-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 .files-count {
