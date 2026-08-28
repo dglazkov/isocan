@@ -1,7 +1,8 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { addFiles } from "../lib/upload.ts";
+import { BROWSER_SIZE, addBrowserItem, addFiles } from "../lib/upload.ts";
+import { spotInView } from "../lib/spot.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -121,6 +122,17 @@ const TEXT = (
   </svg>
 );
 
+/* The mark a live site already wears everywhere else (`KindIcon`'s `site`):
+   the tool that makes them and the icon that lists them are the same shape,
+   which is the only way somebody learns what this button produces without
+   pressing it. */
+const SITE = (
+  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="m10 8.5 5.5 3.5L10 15.5Z" />
+  </svg>
+);
+
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
   { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
@@ -227,6 +239,11 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       >
         {UPLOAD}
       </button>
+      {/* Beside Upload, and that pairing is the argument: both bring onto the
+          canvas something that was not drawn here — one from the disk, one
+          from a URL. It sat in the top bar among navigation and identity,
+          which is why it never read as belonging to anything. */}
+      <ProjectSite canvasId={canvasId} actor={actor} />
       <input
         ref={fileInput}
         type="file"
@@ -235,6 +252,103 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         onChange={onPick}
         accept=".md,.markdown,.txt,.html,.htm,image/*,video/*"
       />
+    </div>
+  );
+}
+
+/**
+ * Where on screen an item may land: the window, less the chrome that would
+ * cover it. The dock is measured rather than assumed, because it is a panel
+ * somebody opened at a width they chose.
+ */
+function placeableArea() {
+  const dock = document.querySelector(".main-panel, .files-panel");
+  const left = dock ? Math.ceil(dock.getBoundingClientRect().right) + 16 : 24;
+  return {
+    left,
+    top: 64, // under the top bar
+    right: window.innerWidth - 84, // clear of the tool rail
+    bottom: window.innerHeight - 24,
+  };
+}
+
+/**
+ * **Project a live site onto the canvas.**
+ *
+ * A press, a URL, done — the same shape as Upload beside it, which is why it
+ * is a popover and not a placement tool. The hard part of this interaction is
+ * the address; where it goes you will decide by dragging, the way you do with
+ * anything 800x600. (The drawing tools place on click because for ink and
+ * words the POSITION is the input. Here it is not.)
+ */
+function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const canvas = useCanvasStore((s) => s.canvas);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      // Somewhere clear AND somewhere you can see — `spotInView`. The daemon
+      // already keeps items off each other, but it cannot know where the
+      // viewport is, and its search rings are the item's own size: for a
+      // site that is a screenful per step, so a nudged one lands off the
+      // edge and reads as nothing having happened.
+      const at = spotInView(
+        useUiStore.getState().viewport,
+        Object.values(canvas?.items ?? {}),
+        BROWSER_SIZE.width,
+        BROWSER_SIZE.height,
+        placeableArea(),
+      );
+      const itemId = await addBrowserItem(canvasId, actor, url, at);
+      setOpen(false);
+      setUrl("");
+      setError(null);
+      useUiStore.getState().select(itemId);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <div className="create-site">
+      <button
+        className={`tool-btn${open ? " active" : ""}`}
+        title="Project a live site — point it at your localhost dev server"
+        aria-label="Project a live site"
+        aria-pressed={open}
+        onClick={() => {
+          setOpen(!open);
+          setError(null);
+        }}
+      >
+        {SITE}
+      </button>
+      {open && (
+        <form className="site-popover" onSubmit={submit}>
+          <input
+            className="text-input"
+            autoFocus
+            placeholder="localhost:5173"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setOpen(false);
+            }}
+          />
+          {/* "Project", not "Canvas": a button says what pressing it does, and
+              the old label was a noun that read like a destination. */}
+          <button className="btn primary" type="submit" disabled={!url.trim()}>
+            Project
+          </button>
+          {error && <div className="site-error">{error}</div>}
+        </form>
+      )}
     </div>
   );
 }

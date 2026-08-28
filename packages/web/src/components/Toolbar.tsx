@@ -9,7 +9,7 @@ import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
-import { CreateActions, PanelSwitch } from "./CreateActions.tsx";
+import { PanelSwitch } from "./CreateActions.tsx";
 import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
 
 /**
@@ -66,10 +66,10 @@ export function Toolbar({
           ⌗ Workbench
         </Link>
       )}
-      {/* RIGHT: things you DO, and things you look up. An action makes
-          something and is over; it does not belong beside a toggle that stays
-          where you put it. */}
-      {canvas && <CreateActions canvasId={canvas.id} actor={actor} />}
+      {/* RIGHT: things you look up, and the way out. Nothing here MAKES an
+          item any more — the two that did (upload, then Site) both went to
+          the tool rail, which is where a canvas keeps the things that put
+          content on it. */}
       <button
         className={`btn${trashOpen ? " active" : ""}`}
         onClick={() => useUiStore.getState().setTrashOpen(!trashOpen)}
