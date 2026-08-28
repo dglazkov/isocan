@@ -8,7 +8,7 @@ import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
-import { stageRect } from "../lib/stage.ts";
+import { railSpan, stageRect } from "../lib/stage.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
@@ -457,7 +457,7 @@ function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
           // Beside the panel, centred on the card, never off the window it is
           // meant to be read on — the files panel's peek, in the other panel.
           style={{
-            left: panelWidth + 10,
+            left: railSpan(panelWidth) + 10,
             top: Math.min(Math.max(peekTop, 110), window.innerHeight - 110),
             transform: "translateY(-50%)",
           }}

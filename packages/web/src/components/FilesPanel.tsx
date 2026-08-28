@@ -13,6 +13,7 @@ import { ItemThumb } from "./ItemThumb.tsx";
 import { openPanel } from "../lib/panels.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { postToMain } from "../lib/mainthread.ts";
+import { railSpan } from "../lib/stage.ts";
 
 /**
  * The files on this canvas, docked like the main thread — because every item
@@ -240,7 +241,7 @@ function FileCard({ canvasId, row, top }: { canvasId: string; row: Row; top: num
   // panel, and inside a panel's stacking context no z-index can lift it over
   // chrome that outranks the panel.
   return createPortal(
-    <div className="hover-card file-card" style={{ left: panelWidth + 10, top: clamped }}>
+    <div className="hover-card file-card" style={{ left: railSpan(panelWidth) + 10, top: clamped }}>
       <ItemThumb canvasId={canvasId} itemId={row.item.id} />
       <div className="file-card-text">
         <b>{row.item.title}</b>
