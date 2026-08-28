@@ -37,6 +37,27 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   const tool = useUiStore((s) => s.activeTool);
   const commentMode = useUiStore((s) => s.commentMode);
   const ref = useRef<HTMLDivElement>(null);
+  /**
+   * The SUBSCRIPTION, not the one-shot read — and ABOVE the early return,
+   * with the other hooks, which is the whole reason it is up here rather than
+   * beside the JSX that uses it.
+   *
+   * This was `actorColor(actor.id)`, which reads `getState()` once — so the
+   * cursor kept whatever colour it happened to be painted with and only
+   * changed on a reload. Picking a colour is a thing you do to watch it
+   * happen; the one place it must be live is the pointer under your hand.
+   *
+   * Swapping that call for this one left it where it had been sitting, below
+   * `if (!shown) return null` — legal for a plain function, fatal for a hook.
+   * Select ran three hooks and Pen ran two, so picking up the Pen took the
+   * whole app down with React #300. A hook cannot sit behind a condition,
+   * and "it was fine before" is not a defence when the call changed kind.
+   *
+   * Both spellings exist on purpose (`lib/colors.ts`): the imperative one is
+   * for a stroke's ink and for building a style string, where a hook cannot
+   * go. Inside a component it is always the wrong one.
+   */
+  const color = useActorColor(actor.id);
   const shown = tool === "select" && !commentMode;
 
   useEffect(() => {
@@ -101,19 +122,6 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   }, [shown]);
 
   if (!shown) return null;
-  /**
-   * The SUBSCRIPTION, not the one-shot read.
-   *
-   * This was `actorColor(actor.id)`, which reads `getState()` once — so the
-   * cursor kept whatever colour it happened to be painted with and only
-   * changed on a reload. Picking a colour is a thing you do to watch it
-   * happen; the one place it must be live is the pointer under your hand.
-   *
-   * Both spellings exist on purpose (`lib/colors.ts`): the imperative one is
-   * for a stroke's ink and for building a style string, where a hook cannot
-   * go. Inside a component it is always the wrong one.
-   */
-  const color = useActorColor(actor.id);
   return (
     <div className="own-cursor" ref={ref} aria-hidden style={{ opacity: 0 }}>
       <svg width="18" height="20" viewBox="0 0 18 20">
