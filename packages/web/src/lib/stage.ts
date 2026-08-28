@@ -86,6 +86,20 @@ export function railSpan(panelWidth: number): number {
   return RAIL_INSET + panelWidth;
 }
 
+/**
+ * The dock state as it stands right now, copied out of the store.
+ *
+ * Lives here rather than at the call site because this is the file that
+ * decides what dock state MEANS: `railpan` needs a before-and-after pair to
+ * measure a pan against, and a snapshot assembled somewhere else is a second
+ * place that has to be updated when a dock is added.
+ */
+export function dockStateNow(): DockState {
+  const { mainPanelOpen, filesPanelOpen, trashOpen, marksOpen, panelWidth } =
+    useUiStore.getState();
+  return { mainPanelOpen, filesPanelOpen, trashOpen, marksOpen, panelWidth };
+}
+
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {
   return {
     left: ui.mainPanelOpen || ui.filesPanelOpen ? railSpan(ui.panelWidth) : 0,
