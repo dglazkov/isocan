@@ -3386,3 +3386,42 @@ button.mt-card:hover { border-color: var(--accent); }
   outline: none;
   white-space: pre-wrap; overflow-wrap: break-word;
 }
+
+/* ---- the right-click menu ----------------------------------------------
+   Screen space, above everything, and deliberately plain: a menu is read in
+   the half-second before a click, so it earns nothing from decoration. The
+   frosted ground is the one the app already uses for floating chrome
+   (`--panel`, already paired with a blur in four other places), so this adds
+   no token. */
+.context-menu {
+  position: fixed; z-index: var(--z-dialog);
+  min-width: 208px; padding: 5px;
+  background: var(--panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.context-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; padding: 6px 9px; border: none; border-radius: 6px;
+  background: transparent; color: var(--ink);
+  font: inherit; font-size: 12.5px; line-height: 1.2; text-align: left;
+  cursor: pointer;
+}
+.context-item:hover:enabled { background: var(--chip-hover); }
+/* Dimmed, not removed: a menu whose shape changes between one open and the
+   next is a menu you cannot learn. */
+.context-item:disabled { opacity: 0.4; cursor: default; }
+.context-item.danger { color: var(--danger); }
+.context-item kbd {
+  font: inherit; font-size: 11px; color: var(--ink-soft);
+  /* The accelerator is a label, not a key you press here. */
+  background: none; border: none; padding: 0;
+}
+/* A rule, and a heading only when the separator carries a word. */
+.context-sep {
+  margin: 4px 2px; border-top: 1px solid var(--line-soft);
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.context-sep:empty { margin: 4px 6px; }
