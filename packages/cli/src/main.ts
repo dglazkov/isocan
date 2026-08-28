@@ -98,6 +98,7 @@ import {
   FILE_PROP,
   copyProperties,
   duplicatePlacements,
+  newGroupId,
   needsDesignSystem,
   TEXT_FACES,
   TEXT_FACE_PROP,
@@ -412,7 +413,7 @@ function itemCenter(item: Item): { x: number; y: number } {
   return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 }
 
-async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation) {
+async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: string) {
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
   const session = await readSessionFile(ctx.home, ctx.actor.id);
@@ -420,7 +421,7 @@ async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation) {
     session && canvasId !== null && session.canvasId === canvasId
       ? session.sessionId
       : undefined;
-  return ctx.client.sendOp(canvasId, ctx.actor, op, clientId);
+  return ctx.client.sendOp(canvasId, ctx.actor, op, clientId, undefined, group);
 }
 
 /** Resolve an item by exact id, id prefix, or title prefix. */
@@ -3327,6 +3328,9 @@ program
         sources,
         opts.at ? parseXY(opts.at) : undefined,
       );
+      // One copy is one act: eight items land as eight ops under one id, and
+      // one ⌘Z takes them all back. See `LogEntry.group`.
+      const group = newGroupId();
       const made: string[] = [];
       for (const { item, x, y } of placements) {
         const version = item.versions.find((v) => v.id === item.currentVersionId);
@@ -3356,7 +3360,7 @@ program
           title: item.title,
           ...(item.description ? { description: item.description } : {}),
           properties: copyProperties(item, { sameCanvas }),
-        });
+        }, group);
         made.push(itemId);
       }
       if (ctx.json) return printJson({ items: made, canvasId: target.id });

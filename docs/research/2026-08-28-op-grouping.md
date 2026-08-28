@@ -1,6 +1,10 @@
 # One gesture, one undo — grouping in the oplog
 
-**28 August 2026**
+**28 August 2026.** **Built the same day**, as recommended below and before
+the mind map. `LogEntry.group` is the field; `UndoStacks.nextUndoGroup` and
+`nextRedoGroup` are where a stack of seqs became a stack of gestures; paste,
+a text edit and `isocan copy` are the three callers. The three plural ops
+stayed plural — this was not a migration.
 
 The question: **should the oplog be able to say that several operations were
 one act?** Raised after hitting the same edge three times in a day, and

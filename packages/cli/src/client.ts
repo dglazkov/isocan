@@ -357,6 +357,10 @@ export class DaemonClient {
     op: Operation,
     clientId?: string,
     home?: string,
+    /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under one
+     *  id are undone together, so `isocan copy` writing eight items is one
+     *  ⌘Z on the screen watching it. */
+    group?: string,
   ): Promise<PostOpResponse> {
     return this.request("POST", "/api/ops", {
       canvasId,
@@ -364,6 +368,7 @@ export class DaemonClient {
       op,
       ...(clientId !== undefined ? { clientId } : {}),
       ...(home !== undefined ? { home } : {}),
+      ...(group !== undefined ? { group } : {}),
     });
   }
 

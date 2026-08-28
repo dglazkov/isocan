@@ -13,6 +13,9 @@ export const newVersionId = () => newId("ver");
 export const newThreadId = () => newId("thr");
 export const newCommentId = () => newId("cmt");
 export const newOpId = () => newId("op");
+/** A gesture's name — see `LogEntry.group`. One per act, however many ops
+ *  the act turns out to write. */
+export const newGroupId = () => newId("grp");
 /**
  * Is this something this codebase would have minted as an op id?
  *

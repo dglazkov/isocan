@@ -1,5 +1,11 @@
 import type { Actor, Item } from "@isocan/core";
-import { copyProperties, duplicatePlacements, newItemId, newVersionId } from "@isocan/core";
+import {
+  copyProperties,
+  duplicatePlacements,
+  newGroupId,
+  newItemId,
+  newVersionId,
+} from "@isocan/core";
 import { blobUrl, sendOp, uploadBlob } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 
@@ -39,6 +45,9 @@ export async function pasteInto(
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return [];
   const sameCanvas = clipboard.canvasId === canvasId;
+  // One paste is one act, so one ⌘Z takes it back — however many items it
+  // turns out to be. See `LogEntry.group`.
+  const group = newGroupId();
   // The arrangement is placed against the canvas being pasted INTO — the
   // group keeps its shape, and finds ground that is clear here.
   const placements = duplicatePlacements(canvas, clipboard.items, want);
@@ -63,7 +72,10 @@ export async function pasteInto(
       blobHash = up.blobHash;
     }
     const itemId = newItemId();
-    await sendOp(canvasId, actor, {
+    await sendOp(
+      canvasId,
+      actor,
+      {
       type: "item.add",
       itemId,
       version: {
@@ -79,7 +91,9 @@ export async function pasteInto(
       title: item.title,
       ...(item.description ? { description: item.description } : {}),
       properties: copyProperties(item, { sameCanvas }),
-    });
+      },
+      group,
+    );
     made.push(itemId);
   }
   return made;
