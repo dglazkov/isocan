@@ -52,6 +52,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   useEffect(() => {
     setBody(pending?.body ?? "");
     done.current = false;
+    // `key` is the dependency ON PURPOSE and `pending.body` must NOT be one:
+    // the body is what the person is typing, and re-running this on it would
+    // reset the field back to the opening text under their hands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   useLayoutEffect(() => {
@@ -63,6 +67,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // is where somebody who wants to add a sentence is going. Select-all would
     // put one keystroke between them and losing the lot.
     el.setSelectionRange(el.value.length, el.value.length);
+    // Keyed on the composer's identity: focus and caret placement belong to
+    // OPENING one. Re-running per keystroke would drag the caret to the end
+    // every time somebody edited in the middle of a line.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   /**
@@ -121,6 +129,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // Capture, because the canvas stops these on the way down.
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);
+    // Installed once per composer by design — the freshness this needs comes
+    // through `commitRef`, which exists precisely so the listener commits the
+    // LATEST words instead of the ones it saw when it subscribed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   if (!pending) return null;

@@ -298,6 +298,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", onBlur);
     };
+    // `armSettle` is redeclared every render, so listing it would tear these
+    // three window listeners down and rebuild them on every frame of a pan.
+    // It is safe to omit because it closes over nothing that goes stale: the
+    // pen's held-ness is a ref, and the canvas and actor are fixed for the
+    // life of the route.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A stroke in progress postpones the settle; lifting the pen starts the
