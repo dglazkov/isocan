@@ -597,7 +597,10 @@ describe("the Chat and the comments say which they are", () => {
     // the button somebody loses a conversation to.
     const layer = read("CommentLayer.tsx");
     expect(layer).toContain("Make this the Chat");
-    expect(layer).toMatch(/goes back to being a pin/);
+    // "goes BACK to" was the false half: a Chat born with `main: true` has
+    // never been a pin, so there is nowhere for it to go back to.
+    expect(layer).toMatch(/becomes a pin on the canvas instead/);
+    expect(layer, "it was never necessarily there before").not.toMatch(/goes back to being a pin/);
     expect(layer).not.toContain("Make main");
   });
 
@@ -623,6 +626,32 @@ describe("the Chat and the comments say which they are", () => {
     );
     expect(panel, "and it must say the conversation is still there").toMatch(
       /pin on the canvas now/,
+    );
+    /**
+     * **The button may not claim the Chat came from the canvas.**
+     *
+     * `thread.create` takes `main: true` — the panel uses it on a virgin
+     * canvas — so a Chat is often born as the Chat and has never been
+     * anchored to anything. The button said "back to canvas" and the tooltip
+     * said "where it was anchored", and on the canvas this was reported from,
+     * the create op reads `{"main": true, "anchorItemId": null}`: both claims
+     * were false for that thread.
+     */
+    // Against the CODE, not the commentary: this component's own comment
+    // quotes the wording it replaced in order to explain it, exactly as
+    // `livecolor.test.ts` had to allow for.
+    const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code, "a born-main Chat has no canvas to go back to").not.toContain("back to canvas");
+    expect(code).not.toContain("where it was anchored");
+    expect(panel, "the demote mirrors the promote's wording").toContain("make it a pin");
+    /**
+     * And it must SHOW where the pin went. A demoted Chat lands at the
+     * thread's own coordinates — for a born-main thread, the centre of the
+     * view its first message was typed in, which can be days and screens
+     * away. Naming a place the person cannot see is not telling them.
+     */
+    expect(panel, "reveal the pin, do not merely assert it exists").toMatch(
+      /revealIfOffscreen\(/,
     );
     // The keystroke comes from `SHORTCUTS` via `keyFor`, never a literal: a
     // notice that promises a key the app does not listen for is worse than
