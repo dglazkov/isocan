@@ -86,7 +86,7 @@ export async function addFiles(
 export const BROWSER_SIZE = { width: 800, height: 600 };
 
 /**
- * Project a live site onto the canvas (#40): an ordinary item whose blob is
+ * Put a live site onto the canvas (#40): an ordinary item whose blob is
  * a text/uri-list naming the URL. Throws on a URL that isn't http(s).
  */
 export async function addBrowserItem(
