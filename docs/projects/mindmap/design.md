@@ -80,10 +80,26 @@ The first draft's best point was that a mind map should be a file. It then
 made a mistake in the other direction: it proposed *storing* an outline.
 
 With the map on the canvas, the outline is **derived on demand** — walk the
-tree, print the indentation. `isocan map show` renders it; `isocan map save`
-writes it where a file is wanted. Because it is a projection rather than a
-copy, it cannot drift, which a stored outline would have done the moment
-somebody dragged a node.
+tree, print it. `isocan map show` renders it; `isocan map save` writes it
+where a file is wanted. Because it is a projection rather than a copy, it
+cannot drift, which a stored outline would have done the moment somebody
+dragged a node.
+
+Worth one refinement over plain indentation: in a terminal, box-drawing
+characters make a tree readable at a glance where whitespace does not —
+
+```
+Lake house
+├── Booking
+│   ├── Checkout day is exclusive
+│   └── Timezone is the browser's, and that is a bug
+└── The four screens are islands
+```
+
+— and the terminal is where agents read. It is tens of lines, not a
+dependency: the ASCII component libraries that do this (`mdx-graphs`, looked
+at 28 Aug) ship React for a shadcn project and render nothing interactive,
+which is the wrong half of this feature twice over.
 
 So the requirement is met, and met better, by the option the first draft
 rejected.
