@@ -286,6 +286,31 @@ Follow is off by default, throttled, and **suppressed entirely during a pan or
 a drag** — a canvas that moves under a dragging hand is the worst bug this
 feature can produce.
 
+**4a landed 28 Aug 2026.**
+
+`laneFor` went into CORE, not `web/lib` as sketched. What a message made is a
+fact about the canvas, not about a panel: `isocan comment` can print the same
+lane the app draws, and the alternative is two derivations that agree until
+they don't — which is the one thing the isomorphism law exists to prevent.
+
+**The rule gained an upper bound the sketch did not have, and is wrong
+without it.** "In the message's `items`, by the same author, at or after the
+message" also needs *before that author's next message in the thread*. With
+only a lower bound, the first message that ever mentioned an item claims every
+version made afterwards, so a long thread grows arrows pointing at work a
+later message did. A message owns what its author did between it and their
+next word — and the bound is the AUTHOR's next word, not the thread's, so a
+person saying "thanks" does not end what an agent is still doing.
+
+Ten tests, each one a way to draw an arrow at work the message did not do.
+
+**The chip is not a duplicate of the card below it, though it looks like one
+today.** The card reads `v${versions.length}` — the item as it is NOW. The
+chip reads what this message MADE, which stops changing when the author moves
+on. They coincide only while the message produced the latest version; on an
+item worked since, the card says v7 and the chip still says v2. Verified live
+on a real canvas: `→ Lane probe v2`, "Kenny took this to v2 here".
+
 ## Phase 5 — Item chrome sheds its box
 
 Spec §5. Last, as the spec says, and for the reason it gives: it touches the

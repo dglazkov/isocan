@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Actor, Item } from "@isocan/core";
-import { keyFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
+import { keyFor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -10,7 +10,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
-import { glideToBox } from "../lib/zoomactions.ts";
+import { glideToBox, revealItem } from "../lib/zoomactions.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
@@ -214,6 +214,66 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
  * column sizes it with its grid, and read-marking waits for engagement
  * (below) instead of firing on mount.
  */
+/**
+ * **What this message produced**, as against what it merely pointed at.
+ *
+ * The cards below list every item the message #-referenced. This row is the
+ * narrower claim the cards cannot make: these ones did not exist, or did not
+ * exist in this version, until the author said this. That is the sentence
+ * isocan has been able to write since versions were added and has never
+ * written down.
+ *
+ * `laneFor` lives in core, not here, because it is a fact about the canvas
+ * rather than about this panel — `isocan comment` can print the same lane the
+ * app draws, and the alternative is two derivations that agree until they
+ * don't.
+ *
+ * Clicking flies to the item, which is the entire point of an arrow: an arrow
+ * you cannot follow is punctuation.
+ *
+ * **It is not a duplicate of the card below it, even when it looks like one.**
+ * The card says what the item IS — `v${versions.length}`, the top of the
+ * stack right now. The chip says what this message MADE, which is a fact
+ * about the past and stops changing the moment the author moves on. They
+ * coincide only while the message produced the latest version; on any item
+ * that has been worked since, the card reads v7 and the chip still reads v2,
+ * which is the whole reason the chip is worth its row.
+ */
+function LaneChips({
+  canvas,
+  thread,
+  comment,
+}: {
+  canvas: CanvasContents;
+  thread: CommentThread;
+  comment: Comment;
+}) {
+  const made = laneFor(canvas, thread, comment);
+  if (made.length === 0) return null;
+  return (
+    <div className="lane-row">
+      {made.map((entry) => (
+        <button
+          key={entry.itemId}
+          className="lane-chip"
+          title={
+            entry.born
+              ? `${comment.author.name} made this here`
+              : `${comment.author.name} took this to v${entry.version} here`
+          }
+          onClick={() => revealItem(entry.itemId)}
+        >
+          <span className="lane-arrow" aria-hidden>
+            →
+          </span>
+          <span className="lane-name">{entry.title}</span>
+          <span className="lane-v">v{entry.version}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function MainThreadBody({
   canvasId,
   actor,
@@ -419,6 +479,7 @@ function Panel({
                   {withoutCommand(comment.body)}
                 </ReactMarkdown>
               </div>
+              {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
               {(comment.items ?? [])
                 .filter((id, i, all) => all.indexOf(id) === i)
                 .map((itemId) => (

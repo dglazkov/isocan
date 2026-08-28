@@ -2007,6 +2007,27 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow-wrap: anywhere;
 }
 
+/* ---------- the lane ----------
+
+   What a message MADE, under the message that made it. The claim is narrow on
+   purpose, so the row is quiet: it appears only when there is something true
+   to say, and a thread of ordinary conversation shows none at all. A marker
+   that appeared on every message would be furniture. */
+.lane-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lane-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  max-width: 100%; padding: 2px 8px 2px 6px;
+  font-size: 11px; line-height: 1.5;
+  color: var(--ink-muted); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.lane-chip:hover { border-color: var(--accent); color: var(--ink); }
+.lane-arrow { color: var(--accent-text); font-size: 12px; line-height: 1; }
+.lane-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The version is the fact that makes the chip worth more than the card above
+   it, so it does not fade into the title beside it. */
+.lane-v { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
 /* ---------- the rail, shut ----------
 
    48px, inset and floating like the open rail, because it IS the rail: the
