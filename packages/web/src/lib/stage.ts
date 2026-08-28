@@ -82,6 +82,20 @@ export interface DockState {
  * floating changes where the strip starts, not that there is one.
  */
 export const RAIL_INSET = 20;
+
+/**
+ * The rail when it is SHUT is not nothing — it is a 48px strip carrying the
+ * unread count and the agents who are working. It floats over the canvas
+ * exactly as the open rail does, so it takes a strip in exactly the same way,
+ * and framing must refuse to park an item under it for the same reason.
+ *
+ * This is why `dockEdges` is the one derivation and the pan reads it rather
+ * than measuring the rail itself: adding the strip changed what "the rail
+ * takes" by 272px in every case at once, and framing, the stage rect, the
+ * minimap, the hover cards and the phase-2 pan all followed from this line.
+ */
+export const STRIP_WIDTH = 48;
+
 export function railSpan(panelWidth: number): number {
   return RAIL_INSET + panelWidth;
 }
@@ -102,7 +116,7 @@ export function dockStateNow(): DockState {
 
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {
   return {
-    left: ui.mainPanelOpen || ui.filesPanelOpen ? railSpan(ui.panelWidth) : 0,
+    left: railSpan(ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : STRIP_WIDTH),
     dockRight: ui.trashOpen ? TRASH_WIDTH : ui.marksOpen ? MARKS_WIDTH + MARKS_GUTTER : 0,
   };
 }

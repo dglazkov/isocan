@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { railPan } from "../src/lib/railpan.ts";
-import { RAIL_INSET, railSpan } from "../src/lib/stage.ts";
+import { RAIL_INSET, STRIP_WIDTH, railSpan } from "../src/lib/stage.ts";
 
 /**
  * **The camera moves on the person's behalf here, which is why every case is
@@ -26,18 +26,22 @@ const dock = (over: Partial<Parameters<typeof railPan>[0]> = {}) => ({
 });
 
 describe("opening the rail pans the canvas by what the rail takes", () => {
-  it("pans right by the whole strip when the Chat opens", () => {
+  it("pans right by the ground the rail gains when the Chat opens", () => {
     const dx = railPan(dock(), dock({ mainPanelOpen: true }));
-    expect(dx).toBe(railSpan(320));
-    // The INSET is part of it. Panning by the bare panel width would leave
-    // what you were reading 20px under the rail's left edge — which is the
-    // same off-by-the-inset that put the minimap on the panel's corner.
-    expect(dx).toBe(320 + RAIL_INSET);
+    // NOT the whole rail: the shut rail is a 48px strip, not nothing, so
+    // opening it only takes the DIFFERENCE. Panning by the full width would
+    // overshoot by 48 and throw what you were reading past the far edge.
+    expect(dx).toBe(railSpan(320) - railSpan(STRIP_WIDTH));
+    // The inset cancels, because both the open rail and the shut strip are
+    // inset by it — which is only true while that stays so, and is asserted
+    // here rather than assumed so that changing one inset fails loudly.
+    expect(dx).toBe(320 - STRIP_WIDTH);
+    expect(RAIL_INSET).toBeGreaterThan(0);
   });
 
   it("gives exactly that pan back when it closes", () => {
     const open = dock({ mainPanelOpen: true });
-    expect(railPan(open, dock())).toBe(-railSpan(320));
+    expect(railPan(open, dock())).toBe(-(320 - STRIP_WIDTH));
     // There and back is zero: a person who opens and closes the Chat is
     // looking at precisely what they were looking at before, not 40px off.
     expect(railPan(dock(), open) + railPan(open, dock())).toBe(0);

@@ -48,6 +48,8 @@ import { findNextItem, nearestToPoint, type Direction } from "../lib/spatialnav.
 import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/TrashPanel.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
+import { RailStrip } from "../components/RailStrip.tsx";
+import { openPanel } from "../lib/panels.ts";
 import { FilesPanel } from "../components/FilesPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
@@ -442,6 +444,28 @@ function CanvasSurface({
         ui.setCommandBarOpen(!ui.commandBarOpen);
         return;
       }
+      /**
+       * ⌘J toggles the rail — and the click on the strip is the primary way,
+       * not the fallback.
+       *
+       * Whether a browser hands this combination to a page could NOT be
+       * verified where this was built: the harness delivers no key events to
+       * the page at all, so a plain `j` never arrived either and the test was
+       * inconclusive rather than negative. That is recorded in the phases doc
+       * as an open item.
+       *
+       * The design does not rest on the answer. Every browser that keeps ⌘J
+       * for its own downloads panel costs a keyboard convenience and nothing
+       * else, because the strip is a button and clicking it does the same job.
+       * A shortcut is allowed to be unavailable; a feature reachable ONLY by
+       * a shortcut a browser might eat is not.
+       */
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j" && canvasId) {
+        e.preventDefault();
+        const ui = useUiStore.getState();
+        openPanel(canvasId, ui.mainPanelOpen || ui.filesPanelOpen ? null : "main");
+        return;
+      }
       // ⌘+/⌘− zoom the canvas, not the browser viewport. ⌘0 → zoom-to-fit.
       // Placed before the input-field guard so they fire globally (like ⌘K).
       if ((e.metaKey || e.ctrlKey) && (e.key === "=" || e.key === "+")) {
@@ -695,6 +719,7 @@ function CanvasSurface({
       <ZoomControls canvasId={canvasId} actor={actor} />
       <Minimap />
       <TrashPanel canvasId={canvasId} actor={actor} />
+      <RailStrip canvasId={canvasId} actor={actor} />
       <MainThreadPanel canvasId={canvasId} actor={actor} />
       <FilesPanel canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />

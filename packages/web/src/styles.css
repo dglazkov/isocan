@@ -2007,6 +2007,68 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow-wrap: anywhere;
 }
 
+/* ---------- the rail, shut ----------
+
+   48px, inset and floating like the open rail, because it IS the rail: the
+   two are one surface in two states, and a strip clamped to the edge beside a
+   floating panel would read as two different pieces of furniture.
+
+   Its width is `STRIP_WIDTH` in stage.ts. That number is load-bearing —
+   framing, the stage rect and the phase-2 pan all derive from it — so it is
+   spelled there and this rule follows it, not the other way round. */
+.rail-strip {
+  position: absolute; top: 62px; left: 20px;
+  width: 48px; z-index: var(--z-dock);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 8px 0;
+  background: var(--panel); backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  box-shadow: var(--shadow-pop);
+}
+.strip-chat {
+  position: relative;
+  width: 34px; height: 34px; flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--chip);
+  /* `--accent-text`, not `--accent`: the fill accent is 2.5:1 on graphite, so
+     a glyph painted in it is unreadable in dark. The older ✳ in the panel
+     header is on that guard's grandfathered list; a new one has no excuse to
+     join it. */
+  color: var(--accent-text);
+}
+.strip-chat:hover { border-color: var(--accent); }
+.strip-glyph { font-size: 15px; line-height: 1; }
+/* The count sits ON the button rather than beside it: the strip is 48px wide
+   and a number in its own column would have nowhere to go. */
+.strip-unread {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink); background: var(--accent);
+  /* A pill, not the corner token: it is round because it is a count in a
+     capsule, and `8px` here happens to equal `--radius` while meaning
+     something else entirely. */
+  border-radius: 999px;
+}
+.strip-sep { width: 20px; height: 1px; background: var(--line-soft); flex: none; }
+.strip-face {
+  width: 28px; height: 28px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%; border: none;
+  color: var(--accent-ink); font-size: 11px; font-weight: 700;
+  /* The ring lives in a shadow, not a border: a border would resize the face
+     and the strip would jitter every time an agent started working. */
+  box-shadow: 0 0 0 2px var(--panel);
+}
+/* Working and blocked are the two states worth interrupting for, and they are
+   `sessionState`'s words — the same reader `isocan who` prints from. Parked,
+   quiet and here get no ring: a ring that is always on says nothing. */
+.strip-face.is-working { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.strip-face.is-blocked { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--warn); }
+
 /* ---------- minimap ---------- */
 /* Bottom-left, clearing the right-edge tool rail and zoom cluster. */
 /* The minimap folds into its corner. The dock is the anchor both states share:

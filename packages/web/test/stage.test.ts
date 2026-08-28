@@ -8,6 +8,7 @@ import { railSpan,
   dockEdges,
   stageInsets,
   stageRect,
+  STRIP_WIDTH,
 } from "../src/lib/stage.ts";
 
 /**
@@ -164,8 +165,12 @@ describe("the stage, asked directly", () => {
     // The reservation 377a9f2 added, guarded by calling the real function:
     // the tool rail (66px deep) floats in this strip, and framing an item
     // under it is parking it beneath chrome.
+    //
+    // The LEFT edge stopped being zero when the shut rail became a 48px strip
+    // rather than nothing: it still floats over the canvas, so it still takes
+    // a strip, and an item framed at 0 would sit under the agent faces.
     const stage = stageRect(ui(), win);
-    expect(stage.x).toBe(0);
+    expect(stage.x).toBe(railSpan(STRIP_WIDTH));
     expect(stage.x + stage.width).toBe(win.innerWidth - MARKS_GUTTER);
   });
 
