@@ -652,7 +652,7 @@ function CanvasSurface({
       <Minimap />
       <TrashPanel canvasId={canvasId} actor={actor} />
       <MainThreadPanel canvasId={canvasId} actor={actor} />
-      <FilesPanel canvasId={canvasId} />
+      <FilesPanel canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all

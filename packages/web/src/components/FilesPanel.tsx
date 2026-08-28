@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CanvasContents, Item } from "@isocan/core";
-import { ITEM_KINDS, itemKind, type ItemKind } from "@isocan/core";
+import type { Actor, CanvasContents, Item } from "@isocan/core";
+import { ITEM_KINDS, itemKind, needsDesignSystem, type ItemKind } from "@isocan/core";
 import { KIND_LABEL, iconKindFor } from "../lib/kinds.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { KindIcon } from "./KindIcon.tsx";
@@ -12,6 +12,7 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
 import { openPanel } from "../lib/panels.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { postToMain } from "../lib/mainthread.ts";
 
 /**
  * The files on this canvas, docked like the main thread — because every item
@@ -70,7 +71,65 @@ function rowsOf(canvas: CanvasContents, filter: string): Array<[ItemKind, Row[]]
   );
 }
 
-export function FilesPanel({ canvasId }: { canvasId: string }) {
+/**
+ * **The canvas noticing that it has designs and no written style.**
+ *
+ * "Read the design system before you build a screen" has been in the agent
+ * guide all along, and a norm in a document is a rule somebody has to
+ * remember. Nothing ever said it at the moment it mattered.
+ *
+ * It is a NOTICE and not a gate, and that is the argument rather than
+ * timidity. A system written before anything exists is made of adjectives;
+ * the good ones are derived from what was actually built, which is why
+ * `/design-system` reads the screens rather than inventing a style. And by
+ * the second screen the decision has already been made — screen two either
+ * copied screen one, so the system exists unwritten, or it did not, and the
+ * canvas has begun to drift. The useful moment is not a gate before the work
+ * but a prompt to capture what the work already decided.
+ *
+ * It sits in Files, above the screens it is about, so it is read where the
+ * evidence is. And the action is to ASK, because this surface cannot do it:
+ * deriving a system from screens is an agent's job, and the main thread is
+ * the channel every parked agent already hears.
+ */
+function NoDesignSystem({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const canvas = useCanvasStore((s) => s.canvas);
+  const [asked, setAsked] = useState(false);
+  const screens = useMemo(
+    () => (canvas ? Object.values(canvas.items).filter((i) => itemKind(i) === "screen").length : 0),
+    [canvas],
+  );
+  if (!canvas || !needsDesignSystem(canvas, screens)) return null;
+  return (
+    <div className="files-nudge">
+      <b>
+        {screens} screens, no design system
+      </b>
+      <p>
+        The second one already made choices nobody wrote down. One can be derived from
+        what these screens do rather than invented.
+      </p>
+      <button
+        className="btn primary"
+        disabled={asked}
+        onClick={() => {
+          setAsked(true);
+          void postToMain(
+            canvasId,
+            actor,
+            "This canvas has screens and no design system. Please derive one from the " +
+              "screens already here — what they actually do, not a style you invented — " +
+              "and say what you found and what you had to decide.",
+          );
+        }}
+      >
+        {asked ? "Asked — an agent will pick it up" : "Ask for one"}
+      </button>
+    </div>
+  );
+}
+
+export function FilesPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.filesPanelOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -122,6 +181,7 @@ export function FilesPanel({ canvasId }: { canvasId: string }) {
         }}
       />
       <div className="files-scroll">
+        <NoDesignSystem canvasId={canvasId} actor={actor} />
         {groups.length === 0 && (
           <div className="files-empty">{total === 0 ? "Nothing on this canvas yet." : "No matches."}</div>
         )}

@@ -96,6 +96,7 @@ import {
   buildRecap,
   cleanFilePath,
   FILE_PROP,
+  needsDesignSystem,
   TEXT_FACES,
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -3113,6 +3114,41 @@ function pickOne<T extends string>(
   return found;
 }
 
+/**
+ * **Say it at the moment it matters, not in a document.**
+ *
+ * The agent guide has always said to read the design system before building a
+ * screen. A norm in a guide is a rule somebody has to remember, and an agent
+ * that has just uploaded its second screen is exactly who has not.
+ *
+ * So the canvas says so, once, where the work happened — after the screen
+ * lands, never instead of it. It does not refuse and it does not ask a
+ * question: the screen is already made, and by the second one the choices are
+ * already made too. What is missing is only the writing down, and the honest
+ * version of that is derived from these screens rather than invented.
+ *
+ * On stderr, so a caller parsing stdout is unaffected, and silent under
+ * `--json` for the same reason. Best-effort throughout — a canvas that cannot
+ * be read is not a reason to fail an upload that already succeeded.
+ */
+async function noteMissingDesignSystem(ctx: Ctx, canvasId: string): Promise<void> {
+  if (ctx.json) return;
+  try {
+    const snapshot = await ctx.client.snapshot(canvasId);
+    const screens = Object.values(snapshot.canvas.items).filter(
+      (item) => itemKind(item) === "screen",
+    ).length;
+    if (!needsDesignSystem(snapshot.canvas, screens)) return;
+    console.error(
+      `note: ${screens} screens here and no design system. ` +
+        "`/design-system` derives one from what these screens already do; " +
+        "`isocan design set <file>` writes one you have.",
+    );
+  } catch {
+    // Noticing is a courtesy. It must never be the reason a command fails.
+  }
+}
+
 /** --size WxH, or the given default. */
 function sizeFor(
   size: string | undefined,
@@ -3209,6 +3245,7 @@ program
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
         if (ctx.json) return printJson({ itemId, placement: placed });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
+        await noteMissingDesignSystem(ctx, p.id);
       },
     ),
   );
