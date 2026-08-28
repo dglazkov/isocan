@@ -328,7 +328,41 @@ export function dismissRefusals(): void {
 
 /** Say something that could not be done, once. */
 export function setNotice(notice: string | null): void {
+  flashTimer = clearFlash(flashTimer);
   useCanvasStore.setState({ notice });
+}
+
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+function clearFlash(timer: ReturnType<typeof setTimeout> | null) {
+  if (timer) clearTimeout(timer);
+  return null;
+}
+
+/**
+ * A notice that takes itself away.
+ *
+ * Every other caller of `setNotice` is reporting a PROBLEM — a file that
+ * could not be added, text that could not be read — and a problem waits until
+ * somebody has seen it. A confirmation is the opposite: "Copied 2 items" is
+ * worth a moment and worth nothing after it, and left in the bar it becomes a
+ * message about a failure that never happened, with an ✕ to dismiss.
+ *
+ * Same bar on purpose, though. It is already `role="status"` and
+ * `aria-live="polite"`, which is exactly right for a confirmation and is
+ * announced to a screen reader — and its own comment says it exists so a
+ * small fact does not become an interruption. What was wrong was only that
+ * it stayed.
+ *
+ * The timer never clears a LATER message: whatever arrives next owns the bar,
+ * and this only takes back what it put there.
+ */
+export function flashNotice(notice: string, ms = 2500): void {
+  flashTimer = clearFlash(flashTimer);
+  useCanvasStore.setState({ notice });
+  flashTimer = setTimeout(() => {
+    flashTimer = null;
+    if (useCanvasStore.getState().notice === notice) useCanvasStore.setState({ notice: null });
+  }, ms);
 }
 
 // ---- presence publishing (throttled, trailing-edge) ----
