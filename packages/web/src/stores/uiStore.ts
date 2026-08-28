@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { InkPoint, InkStroke, TextFace, TextStyle } from "@isocan/core";
+import type { Clipboard } from "../lib/clipboard.ts";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 
@@ -86,6 +87,10 @@ interface UiStore {
    * business, and it becomes everyone's the moment it commits as an item.
    * `itemId` null = a new node at (x, y); set = editing that one in place. */
   pendingText: PendingText | null;
+  /** Copied items, held by the app rather than by the system clipboard — see
+   *  `lib/clipboard.ts` for why. Survives navigating to another canvas in
+   *  this tab, which is what makes pasting across canvases work. */
+  clipboard: Clipboard | null;
   /** The step and face the next new text node opens with — this client's
    *  memory of what you were last writing in, never a canvas fact. */
   lastTextStyle: TextStyle;
@@ -155,6 +160,7 @@ interface UiStore {
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
   setPendingText: (pending: PendingText | null) => void;
+  setClipboard: (clipboard: Clipboard | null) => void;
   setLastText: (style: TextStyle, face: TextFace) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
@@ -338,6 +344,7 @@ export const useUiStore = create<UiStore>((set) => {
     openThreadId: null,
     pendingComment: null,
     pendingText: null,
+    clipboard: null,
     lastTextStyle: "body",
     lastTextFace: "sans",
     sketch: [],
@@ -385,6 +392,7 @@ export const useUiStore = create<UiStore>((set) => {
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setPendingText: (pendingText) => set({ pendingText }),
+    setClipboard: (clipboard) => set({ clipboard }),
     setLastText: (lastTextStyle, lastTextFace) => set({ lastTextStyle, lastTextFace }),
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),

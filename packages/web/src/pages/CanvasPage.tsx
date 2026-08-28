@@ -17,8 +17,9 @@ import {
   useCanvasStore,
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { pasteInto } from "../lib/clipboard.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
-import { applyLocalEcho, sendEchoed } from "../stores/canvasStore.ts";
+import { applyLocalEcho, sendEchoed, setNotice } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
@@ -397,6 +398,37 @@ function CanvasSurface({
       if ((itemId || onWorkbench) && !crossesCover(e)) return;
       // ⌘K is global — the lane to your emissary opens from anywhere, even
       // mid-typing in another field.
+      /**
+       * ⌘C / ⌘V — and the paste works on a DIFFERENT canvas, which is the
+       * point. The clipboard is the app's own (`lib/clipboard.ts`), so it
+       * survives navigating from one canvas to another in this tab.
+       *
+       * Only when nothing is being typed into: a ⌘C in the Chat composer is
+       * the browser's, copying the words somebody selected, and stealing it
+       * would be the app breaking the one shortcut everybody knows.
+       */
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && !isTyping(e.target)) {
+        const ui = useUiStore.getState();
+        const picked = ui.selectedItemIds
+          .map((id) => canvas?.items[id])
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+        if (picked.length === 0) return; // nothing selected: leave ⌘C alone
+        e.preventDefault();
+        ui.setClipboard({ canvasId: canvasId!, items: picked });
+        setNotice(`Copied ${picked.length} item${picked.length === 1 ? "" : "s"}`);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && !isTyping(e.target)) {
+        const held = useUiStore.getState().clipboard;
+        if (!held || held.items.length === 0) return;
+        e.preventDefault();
+        void pasteInto(held, canvasId!, actor).then((made) => {
+          // Select what just arrived: a paste you cannot see the result of is
+          // a paste you have to go looking for.
+          if (made.length > 0) useUiStore.getState().setSelection(made);
+        });
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         const ui = useUiStore.getState();
