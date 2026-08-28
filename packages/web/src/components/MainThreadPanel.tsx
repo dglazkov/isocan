@@ -7,8 +7,10 @@ import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { centerOn } from "../lib/viewport.ts";
+import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
+import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
+import { glideToBox } from "../lib/zoomactions.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
@@ -171,6 +173,10 @@ export function openMainPanel(canvasId: string, open: boolean): void {
    not actually listen for. */
 const undoKey = keyFor("Undo and redo") ?? "⌘Z";
 
+/* A pin is a small round mark, not a box — this is the span the reveal treats
+   it as so that "is it on screen" has something to measure. */
+const PIN_SIZE = 28;
+
 export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
@@ -300,9 +306,50 @@ function Panel({
         {thread && (
           <button
             className="main-detach"
-            title="This conversation goes back to being a pin on the canvas, where it was anchored"
+            /**
+             * **It was never necessarily on the canvas.**
+             *
+             * This said "back to canvas", and the tooltip said "where it was
+             * anchored" — both of which assume the Chat used to be a pin that
+             * somebody promoted. A Chat can equally be BORN as the Chat:
+             * `thread.create` takes `main: true`, which is what the panel
+             * does on a virgin canvas, and such a thread has never been
+             * anchored to anything. Told it was going "back" somewhere it had
+             * never been, on a canvas with 36 messages in it, a person reads
+             * a button that has lost their conversation.
+             *
+             * "Make it a pin" is true either way, and mirrors the promote
+             * button's "Make this the Chat" on the other side of the same op.
+             */
+            title="This conversation stops being the Chat and becomes an ordinary pin on the canvas. Nothing is deleted, and it can be made the Chat again."
             onClick={() => {
+              /**
+               * **Show where it went, do not just claim it went somewhere.**
+               *
+               * The pin lands at the thread's own coordinates, and for a Chat
+               * born as the Chat those are the centre of whatever view the
+               * FIRST message was typed in — which on this canvas was nine
+               * days and one other person ago. So the honest failure is not
+               * that the conversation is lost, it is that the pin can be two
+               * screens away with nothing on screen changing except the panel
+               * emptying.
+               *
+               * Same safety net dropped files got, and conditional for the
+               * same reason: if the pin is already in front of you, the
+               * camera does not move. Silent in the common case, handled in
+               * the surprising one.
+               */
+              const canvas = useCanvasStore.getState().canvas;
+              const at = canvas && thread ? threadWorldPos(canvas, thread) : null;
               sendOp(canvasId, actor, { type: "thread.setMain", threadId: null });
+              if (at) {
+                revealIfOffscreen(
+                  useUiStore.getState().viewport,
+                  [{ x: at.x, y: at.y, width: PIN_SIZE, height: PIN_SIZE }],
+                  placeableArea(),
+                  glideToBox,
+                );
+              }
               // **Say what just happened, and how to take it back.**
               //
               // This button empties the Chat panel in one click, sits beside
@@ -318,12 +365,12 @@ function Panel({
               // protect the rare accidental one, and it still would not have
               // said the conversation survived.
               flashNotice(
-                `Chat is a pin on the canvas now — ${undoKey} brings it back.`,
+                `This is a pin on the canvas now — ${undoKey} makes it the Chat again.`,
                 6000,
               );
             }}
           >
-            back to canvas
+            make it a pin
           </button>
         )}
         <button

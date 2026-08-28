@@ -458,7 +458,7 @@ function ThreadPopover({
       <div className="thread-actions">
         <button
           className="promote"
-          title="This conversation becomes the canvas's Chat: docked on the left, heard by every agent without an @-mention. A canvas has one Chat, so whichever conversation holds it now goes back to being a pin."
+          title="This conversation becomes the canvas's Chat: docked on the left, heard by every agent without an @-mention. A canvas has one Chat, so whichever conversation holds it now becomes a pin on the canvas instead — nothing is deleted."
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
             openMainPanel(canvasId, true);

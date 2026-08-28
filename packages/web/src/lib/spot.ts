@@ -120,7 +120,10 @@ export function placeableArea() {
  */
 export function revealIfOffscreen(
   viewport: Viewport,
-  items: readonly Item[],
+  /** Anything with a box. It was `Item[]`, and widened when a demoted Chat
+   * needed the same safety net: a comment pin is not an item, and the four
+   * numbers are all this ever read. */
+  items: readonly { x: number; y: number; width: number; height: number }[],
   within: ScreenBox,
   glide: (box: { minX: number; minY: number; maxX: number; maxY: number }) => void,
 ): void {
