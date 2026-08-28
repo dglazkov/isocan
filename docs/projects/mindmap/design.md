@@ -1,148 +1,129 @@
-# Mind maps — riffing that the rest of the work can read
+# Mind maps — a real graph on the canvas
 
 **28 August 2026.** Asked for as: riff with an agent, get mind maps that are
-**files on the system** and that become **context and memory for other work on
-the canvas**.
+**files on the system** and that become **context and memory for other work**.
+Revised the same day, after a second requirement: **click and move nodes, with
+the arrow links updating** — and an agent that can be told "I am researching
+opening a bar for Spurs fans" and go build the map.
 
-The three requirements are not decoration on a diagram feature. They are the
-whole design, and taken seriously they rule out the obvious implementation.
+The first draft of this doc recommended against a real graph. That was wrong,
+and the correction is worth recording precisely, because the mistake was in
+the sizing rather than in the reasoning.
 
-## The fact that decides it: this canvas has no edges
+## What the first draft got wrong
 
-There is no connector, no arrow, no link between items as a canvas fact. The
-op vocabulary has none, and that is not an oversight — nothing has needed one.
-What relationships exist are narrow and specific:
+It weighed the graph option as *"nodes are canvas items and edges are a new op
+type"* and rejected it as a permanent addition to a vocabulary this codebase
+spends carefully. Both halves of that framing were wrong.
 
-- `#Title` references **inside a comment body**, resolved at authoring time
-  against visible items and stored structurally as ids (`itemrefs.ts`).
-- `annotates` — ink that is ABOUT an item (`annotation.ts`).
-- A thread anchored to an item.
+**The nodes already exist.** A text node is an item: positioned, titled,
+versioned, undoable, draggable by `item.move`, file-backable, and rendered
+chromeless. Everything a mind-map node needs, shipped. The delta was never
+"build a graph" — it was "add edges".
 
-So a mind map has two possible shapes here, and they are not close.
+**And the edges need no new op type either.** `lineage.ts` already carries
+`parent=<itemId>` on an item's properties, written by `item.add` and undone by
+undo. A mind map's edges are exactly that shape: a child pointing at a parent.
+Properties are `Record<string, string>`, so one id per node is a natural fit.
 
-**A. The map is one item.** Its blob is a text outline; a view draws it as a
-map, exactly as `DesignSystemView` draws a DESIGN.md as swatches and type
-rather than as the text that declares them.
+So the real cost of a graph is a property and a renderer, not a vocabulary
+change. The first draft argued against something more expensive than what is
+actually being asked for.
 
-**B. Nodes are canvas items; edges are a new op type.** The canvas itself
-becomes the map.
+## What genuinely changed the answer
 
-## Why A, and it is the requirements that choose it
+Direct manipulation. **Drag a node, and the arrows follow.**
 
-B is the version people picture, and it is wrong for all three of the things
-that were actually asked for.
+That is not a rendering nicety over an outline — it is structural. For a
+dragged node to stay where it was dropped, the position must be a canvas fact,
+which means the node must be an item. No amount of effort on an outline view
+gets there: an outline has no coordinates to write back to, and inventing them
+inside the file makes the file a layout format that a person editing it in an
+editor will corrupt without noticing.
 
-- **"Files on the system."** One item is one file — `set --file`, `isocan
-  save`, and the item is on disk with the backing states already built. A
-  graph of items is not a file, and making it one means inventing an export
-  format, which is a file nobody edits and a synchronisation problem forever.
-- **"Riff with an agent."** An agent revising an outline is the highest-
-  bandwidth thing a language model does. An agent emitting a dozen `item.add`
-  and `edge.add` ops to restructure a map is the same thought expressed in the
-  clumsiest available form, and it is not reviewable — you cannot read a diff
-  of it.
-- **"Context and memory for other work."** Something an agent reads before it
-  builds is a document. Reading one markdown file is one command;
-  reconstructing a graph from the item table and an edge index is a small
-  program, on both surfaces, forever.
+That requirement was not in the first ask, and it is decisive.
 
-And B costs a new op type — a permanent addition to the vocabulary both
-surfaces must know, which is the one thing this codebase spends most carefully.
+## The shape
 
-A costs nothing: an ordinary `item.add` with a property. Versioning, undo,
-replay, GC, replication, the workbench's source-and-preview split, `#Title`
-references pointing INTO it — all of it already works.
+- **A node is a text item.** `kind=text`, which already renders chromeless and
+  already carries a size ladder and a face. A map node is a text node that
+  points at a parent.
+- **An edge is a property on the child**, distinct from `parent`. NOT `parent`
+  itself: `lineage` means *made from* — three variations of a screen, a spec
+  written from a sketch — and a topic hierarchy is a different relationship.
+  Overloading it would make `isocan lineage` report map structure as
+  provenance, which is a lie that would be believed.
+- **A map is a set.** A forty-node map is forty items, and they appear in
+  Files, in `ls`, in counts, and placement runs on each. So a node also
+  carries the map it belongs to, and the canvas can then treat one map as one
+  thing — show it, hide it, move it, delete it.
+- **The arrows are drawn, not stored.** An edge holds two ids; the line is
+  derived from wherever the two items are right now. That is what makes the
+  links update as you drag, and it means there is no edge geometry to keep in
+  sync with anything.
 
-## The format: a markdown outline, not mermaid
+Zero new op types. `item.add` with properties, `item.move`, `item.update`.
 
-The map is an indented list.
+## A tree, and cross-links argued separately
 
-```markdown
-# Lake house
+A property holds one id, so this is a tree — which is what a mind map is.
 
-- Booking
-  - Checkout day is exclusive
-  - Timezone is the browser's, and that is a bug
-- Identity
-  - Anyone can type any name — trust-the-family, or owners edit?
-- The four screens are islands
-```
+Genuine many-to-many links with their own labels want an edge that has its own
+identity, so it can be deleted and undone on its own. That is a real thing to
+want and it is a different feature: argue it when a tree has demonstrably not
+been enough, with the cases that proved it, rather than building the general
+version first because it sounds more capable.
 
-Mermaid's `mindmap` is purpose-built and was the other candidate. The outline
-wins on the grounds this repo already uses to pick DESIGN.md's format — adopt
-what a person would have written anyway:
+## The file, which comes back as a projection
 
-- It **degrades perfectly**. A client that knows nothing about mind maps
-  renders a nested list, which is still the map. Mermaid degrades to a code
-  block.
-- It **diffs**. A riff is a sequence of revisions somebody has to be able to
-  review; indented prose diffs line by line and mermaid does not.
-- It is **writable by hand** in the same file, in any editor, with no tool.
-- It needs **no renderer dependency**, which matters here specifically: the
-  repo has already thrown out one third-party dependency on the critical path
-  (the webfont) and has no mermaid today.
+The first draft's best point was that a mind map should be a file. It then
+made a mistake in the other direction: it proposed *storing* an outline.
 
-Layout stays out of the file at first. If dragging nodes is wanted later,
-positions belong in YAML front matter — the same split DESIGN.md already
-makes, where the front matter is normative and the body is the content.
+With the map on the canvas, the outline is **derived on demand** — walk the
+tree, print the indentation. `isocan map show` renders it; `isocan map save`
+writes it where a file is wanted. Because it is a projection rather than a
+copy, it cannot drift, which a stored outline would have done the moment
+somebody dragged a node.
 
-## What makes it a mind map and not a note
+So the requirement is met, and met better, by the option the first draft
+rejected.
 
-One property, the way everything else here marks a role:
+## What this costs, said plainly
 
-    properties: { role: "mind-map" }
+- **Forty items where there was one.** Files, `ls`, counts and trash all see
+  them. The `map` property is what keeps that manageable, and it is the real
+  new work here.
+- **Undo is per-op.** An agent building a map from one sentence writes dozens
+  of ops, and `⌘Z` walks back through them one at a time. This is the same gap
+  a text-node edit hit (two ops, two undos), and a map makes it loud. The
+  honest fix is grouping in the oplog, which would pay for itself across every
+  multi-op gesture — worth its own argument, and not something to invent
+  inside this feature.
+- **Layout.** An agent producing thirty nodes must place them somewhere
+  legible. `fit.ts` already grows items and settles them without collisions,
+  and `spotInView` already picks a spot you can see; a radial or layered tree
+  layout is new, and it is the piece most likely to look bad first.
 
-`role=design-system` already exists and is the proven pattern — an item the
-canvas treats as a document ABOUT the work rather than a piece of it, found by
-`designSystem(canvas)`, rendered as itself, and named in the agent guide as
-something to read first. A mind map is the same kind of thing with a different
-subject, and unlike a design system a canvas may have several.
+## The acceptance test
 
-## Riffing, in the machinery that already exists
+> "I am researching opening a bar for Spurs fans."
 
-- **The conversation is the Chat.** Everything posted there wakes every parked
-  agent with no @-mention. That is where riffing happens; no new channel.
-- **Each revision is a version.** `item.addVersion`, so the version stack IS
-  the history of the riff, and the version fan-out already walks it. Undo is
-  the op vocabulary's own. Nothing to build.
-- **The rendering is a view**, on the same seam `DesignSystemView` uses: the
-  workbench shows the outline in the editor pane and the map in the preview
-  pane, side by side, with the splitter. The toggle is not a feature to add —
-  it is what every editable item already gets.
+The agent creates a root and a few branches — location, licensing, the
+supporter's club, match-day logistics — and children under them. On the
+canvas: real nodes, arrows, draggable, rearrangeable by hand. Later, another
+agent asked about the licensing question reads the map as context. And
+`isocan map show` prints the outline for anything that wants text.
 
-## Memory: how it reaches other work
-
-This is the requirement that is easy to nod at and hard to honour, and the
-answer is the one the design system arrived at the hard way: **a norm in a
-guide is a rule somebody has to remember.**
-
-1. `isocan maps` / `isocan map show` prints the outline, so an agent about to
-   build reads it in one command.
-2. The agent guide says to read it, as it already says for the design system.
-3. The canvas NOTICES — the mechanism `needsDesignSystem` just established.
-   The interesting trigger is not "no map exists"; a canvas does not owe
-   anybody a mind map. It is **staleness**: a map whose last version predates
-   a lot of subsequent work is a map that no longer describes the canvas, and
-   saying so is more useful than asking for one to exist.
-
-## What this is not
-
-Not a diagramming tool. There are no arbitrary edges, no crossing links, no
-boxes-and-lines canvas — an outline is a tree, and a mind map is a tree. The
-day somebody genuinely needs a graph, that is shape B, it needs an op type,
-and it should be argued for on its own rather than smuggled in as "mind maps
-should really have cross-links".
+Every step of that is items, properties and moves.
 
 ## The walk
 
-1. **The item and the outline** — `role=mind-map`, `isocan map set/show`, and
-   the guide entry. Useful immediately: it is a file, it versions, agents can
-   read and rewrite it, and it renders as markdown before any map view exists.
-2. **The map view** — draw the outline as a tree, on `DesignSystemView`'s
-   seam. This is where it stops being a list.
-3. **Memory** — the staleness noticing, and `#Title` references from map nodes
-   to the items they are about, which is the thing that makes a map part of
-   the canvas rather than a document sitting on it.
+1. **Nodes and edges** — the map and edge properties, `isocan map add/link`,
+   and lines drawn between items. Draggable from the first day, because
+   dragging is `item.move` and already works.
+2. **A map is one thing** — the set: show, hide, move, delete as a unit.
+3. **Layout** — an agent-built map that lands legible rather than in a pile.
+4. **The projection** — `map show` / `map save`, and the map as context for
+   other work, which is where this meets `docs/projects/context/`.
 
-Stage 1 is worth having on its own, which is the test of whether the walk is
-honest.
+Stage 1 is a graph you can drag, which is the thing that was asked for.
