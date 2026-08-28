@@ -249,6 +249,9 @@ function Panel({
   const commentCount = thread?.comments.length ?? 0;
   useEffect(() => {
     if (docked && thread) markRead(thread.id);
+    // Identity and count, not the object — see the same narrowing in
+    // CommandBar. A fresh snapshot per op would re-mark on unrelated traffic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docked, thread?.id, commentCount]);
 
   // Chat scroll: pinned to the newest message as they arrive.

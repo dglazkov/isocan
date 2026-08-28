@@ -629,6 +629,11 @@ function CanvasSurface({
     // itemId is a dependency because the handler closes over it: without it,
     // the listener registered on the canvas route keeps a stale undefined
     // forever and the cover gate never turns on.
+    //
+    // `navigate` is deliberately NOT one. Its identity changes as the router's
+    // location does, and this effect's cleanup flushes a pending nudge — so
+    // depending on it would flush mid-gesture every time the URL moved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, actor, itemId, onWorkbench]);
 
   if (!canvasId) return null;

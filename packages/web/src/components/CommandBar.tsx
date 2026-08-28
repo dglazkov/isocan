@@ -56,6 +56,10 @@ export function CommandBar({ canvasId, actor }: { canvasId: string; actor: Actor
   // Opening the bar is reading the channel — clear its unread, like the panel.
   useEffect(() => {
     if (open && thread) markRead(thread.id);
+    // The thread's IDENTITY and its length, not the object: a new snapshot
+    // arrives on every op on the canvas, and depending on the object would
+    // re-mark the channel read on traffic that has nothing to do with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, thread?.id, thread?.comments.length]);
 
   if (!open || !canvas) return null;
