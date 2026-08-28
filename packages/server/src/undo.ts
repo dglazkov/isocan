@@ -21,6 +21,14 @@ export class UndoStacks {
   private byActor = new Map<string, ActorStacks>();
   /** targetSeq → seq of the undo entry that reversed it. */
   private undoneBy = new Map<number, number>();
+  /**
+   * seq → the gesture it was part of, for the entries that named one.
+   *
+   * A group is what makes one ⌘Z reverse one ACT rather than one operation:
+   * a paste of eight items writes eight `item.add`s, and undoing them one at
+   * a time is undoing something nobody did. See `LogEntry.group`.
+   */
+  private groupOf = new Map<number, string>();
 
   static rebuild(entries: LogEntry[]): UndoStacks {
     const stacks = new UndoStacks();
@@ -58,6 +66,7 @@ export class UndoStacks {
       // branches survive; if theirs became inapplicable, the skip policy
       // handles it at redo time.
       stacks.redo = [];
+      if (entry.group !== undefined) this.groupOf.set(entry.seq, entry.group);
       if (entry.inverse !== null) stacks.undo.push(entry.seq);
     }
   }
@@ -66,6 +75,65 @@ export class UndoStacks {
   nextUndoTarget(actorId: string): number | null {
     const { undo } = this.stacksFor(actorId);
     return undo.length > 0 ? undo[undo.length - 1]! : null;
+  }
+
+  /**
+   * **Every seq one ⌘Z should reverse** — newest first, which is the order
+   * they must be undone in.
+   *
+   * One entry unless the top of the stack named a gesture, in which case it
+   * is the run of entries at the top that share it. A RUN, deliberately, and
+   * not every member found anywhere: taking the contiguous top is what stops
+   * an undo reaching past an unrelated op that happens to sit between two
+   * members. Nothing writes such a sequence today — a gesture's ops are
+   * written together — but a rule that cannot reach past its neighbour needs
+   * nobody to keep that true.
+   *
+   * Another actor's ops are not in this stack at all, so their interleaving
+   * cannot break a group. That falls out of the stacks being per-actor and is
+   * the reason this stays simple.
+   */
+  nextUndoGroup(actorId: string): number[] {
+    const { undo } = this.stacksFor(actorId);
+    if (undo.length === 0) return [];
+    const top = undo[undo.length - 1]!;
+    const group = this.groupOf.get(top);
+    if (group === undefined) return [top];
+    const members: number[] = [];
+    for (let i = undo.length - 1; i >= 0; i--) {
+      if (this.groupOf.get(undo[i]!) !== group) break;
+      members.push(undo[i]!);
+    }
+    return members;
+  }
+
+  /** The same question for redo: the group at the top of the redo stack,
+   *  oldest first — the order they were originally written, which is the
+   *  order that re-does them. */
+  nextRedoGroup(actorId: string): { targetSeq: number; undoSeq: number }[] {
+    const { redo } = this.stacksFor(actorId);
+    if (redo.length === 0) return [];
+    const top = redo[redo.length - 1]!;
+    const group = this.groupOf.get(top);
+    const seqs: number[] = [];
+    if (group === undefined) {
+      seqs.push(top);
+    } else {
+      for (let i = redo.length - 1; i >= 0; i--) {
+        if (this.groupOf.get(redo[i]!) !== group) break;
+        seqs.push(redo[i]!);
+      }
+      // Undone newest-first, so the redo stack holds them newest-last; put
+      // them back in the order they were written.
+      seqs.reverse();
+    }
+    const out: { targetSeq: number; undoSeq: number }[] = [];
+    for (const targetSeq of seqs) {
+      const undoSeq = this.undoneBy.get(targetSeq);
+      if (undoSeq === undefined) return out;
+      out.push({ targetSeq, undoSeq });
+    }
+    return out;
   }
 
   /** For this actor's next redo: the original entry to re-do, plus the undo

@@ -379,6 +379,10 @@ export function staleClientRefusal(
 export interface PostOpRequest {
   /** null only for project.create and actor.claim. */
   canvasId: string | null;
+  /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under the
+   *  same id are undone and redone as one act. Minted by the client, because
+   *  a group is an intent no daemon can infer. */
+  group?: string;
   /** Who is speaking. Optional for actor.claim only — a claim RESOLVES who
    * is speaking, and the response envelope carries the answer. */
   actor?: Actor;

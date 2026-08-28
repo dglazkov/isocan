@@ -294,6 +294,27 @@ export interface LogEntry {
   inverse: Operation | null;
   /** Present when this entry was produced by undo/redo of another entry. */
   cause?: { kind: "undo" | "redo"; targetSeq: number };
+  /**
+   * **One gesture, one undo.** Ops written together under the same id are
+   * undone and redone together.
+   *
+   * Not a transaction, and the difference matters: if the fifth op of eight
+   * fails, the four that landed are real, everybody can see them, and undo
+   * has to handle exactly that. This says *these were one act*, and nothing
+   * about whether all of them arrived. Atomicity would mean rolling back a
+   * distributed write across a replica and a home, which is an enormously
+   * larger promise than any gesture here needs.
+   *
+   * The CLIENT decides, because a group is an intent — "paste these eight",
+   * "re-word this note and its title" — and no daemon can infer it. Absent
+   * means a group of one, which is exactly what every entry written before
+   * this existed already is, so old logs need no migration.
+   *
+   * `docs/research/2026-08-28-op-grouping.md` is the argument, including why
+   * time-based coalescing was rejected: it guesses, and correctness that
+   * varies with the speed of the writer is not correctness.
+   */
+  group?: string;
   /** Seq of the undo entry that reversed this one. Derived bookkeeping —
    * reconstructed from `cause` on load; never rewritten into the log file. */
   undoneBy?: number;

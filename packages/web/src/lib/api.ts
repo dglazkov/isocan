@@ -192,8 +192,16 @@ export function postOp(
   actor: Actor,
   op: Operation,
   opId: string,
+  group?: string,
 ): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { canvasId, actor, clientId: CLIENT_ID, opId, op });
+  return request("POST", "/api/ops", {
+    canvasId,
+    actor,
+    clientId: CLIENT_ID,
+    opId,
+    op,
+    ...(group !== undefined ? { group } : {}),
+  });
 }
 
 /**
@@ -252,10 +260,15 @@ export async function sendOp(
   canvasId: string | null,
   actor: Actor,
   op: Operation,
+  /** **One gesture, one undo.** Ops sent under the same id are undone
+   *  together — see `LogEntry.group`. A gesture that writes one op needs
+   *  nothing here; a paste, or an edit that changes words and title, passes
+   *  the same id for every op it writes. */
+  group?: string,
 ): Promise<PostOpResponse | null> {
   const opId = newOpId();
   try {
-    return await postOp(canvasId, actor, op, opId);
+    return await postOp(canvasId, actor, op, opId, group);
   } catch (err) {
     if (homeAnswered(err)) throw err;
     if (queueWrite?.(canvasId, actor, op, opId)) return null;

@@ -119,6 +119,9 @@ export interface SubmitRequest {
    * `PostOpRequest.opId` in core for what it is for, and `alreadyWritten`
    * below for what the engine does with it. */
   opId?: string;
+  /** **One gesture, one undo** — see `LogEntry.group`. Carried through to the
+   *  entry, and read by `UndoStacks` when deciding what one ⌘Z reverses. */
+  group?: string;
   /**
    * **Where this canvas is being born** — meaningful for `project.create`
    * alone, and refused by the route on anything else (phase 10.3).
@@ -941,17 +944,41 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
+      /**
+       * **One ⌘Z reverses one GESTURE**, which is usually one op and is
+       * sometimes eight — see `LogEntry.group`.
+       *
+       * The loop below is unchanged in every particular except that it may
+       * run more than once: each member is inverted against the state it
+       * actually meets, each lands as its own entry with its own `cause`, and
+       * a member whose inverse no longer applies is discarded exactly as a
+       * lone op would be. Newest first, because that is the only order in
+       * which a sequence of inverses is correct.
+       *
+       * The LAST entry written is returned, which keeps this method's shape:
+       * every op reaches clients by the ordinary broadcast, so the return
+       * value is a receipt rather than the payload.
+       */
+      let written: LogEntry | null = null;
       for (;;) {
-        const targetSeq = runtime.undo.nextUndoTarget(actor.id);
-        if (targetSeq === null) throw new NothingToUndoError("undo", actor.name);
+        const group = runtime.undo.nextUndoGroup(actor.id);
+        if (group.length === 0) {
+          if (written !== null) return written;
+          throw new NothingToUndoError("undo", actor.name);
+        }
+        const targetSeq = group[0]!;
         const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
         const op = repairInverse(runtime.state, target.inverse!);
         if (op !== null) {
           try {
-            return await this.applyAndPersist(
+            written = await this.applyAndPersist(
               { canvasId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "undo", targetSeq },
             );
+            // A lone op is done; a gesture keeps going until its members run
+            // out, which `nextUndoGroup` reports by no longer naming them.
+            if (group.length === 1) return written;
+            continue;
           } catch (err) {
             if (!(err instanceof OpValidationError)) throw err;
           }
@@ -978,18 +1005,27 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
+      // The mirror of `undo` above, member for member: a gesture redone is a
+      // gesture, and in the order it was originally written.
+      let redone: LogEntry | null = null;
       for (;;) {
-        const next = runtime.undo.nextRedoTarget(actor.id);
-        if (next === null) throw new NothingToUndoError("redo", actor.name);
+        const group = runtime.undo.nextRedoGroup(actor.id);
+        if (group.length === 0) {
+          if (redone !== null) return redone;
+          throw new NothingToUndoError("redo", actor.name);
+        }
+        const next = group[0]!;
         const target = runtime.entries.find((entry) => entry.seq === next.targetSeq)!;
         const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
         const op = repairInverse(runtime.state, redoOpFor(target, undoEntry));
         if (op !== null) {
           try {
-            return await this.applyAndPersist(
+            redone = await this.applyAndPersist(
               { canvasId, actor, op, badgeId, ...(clientId !== undefined ? { clientId } : {}) },
               { kind: "redo", targetSeq: next.targetSeq },
             );
+            if (group.length === 1) return redone;
+            continue;
           } catch (err) {
             if (!(err instanceof OpValidationError)) throw err;
           }
@@ -1799,6 +1835,7 @@ export class Engine {
       envelope,
       inverse,
       ...(cause !== undefined ? { cause } : {}),
+      ...(request.group !== undefined ? { group: request.group } : {}),
     };
 
     await this.appendOrFence(canvasId, entry);

@@ -5,6 +5,7 @@ import {
   TEXT_MIME,
   TEXT_PROPERTIES,
   TEXT_STYLE_PROP,
+  newGroupId,
   newItemId,
   newVersionId,
   textBox,
@@ -70,12 +71,12 @@ export async function addTextNode(
  * title moves with the words — a note is its words, so a stale title would
  * be a lie in `ls` and in every `#chip` pointing here.
  *
- * The honest cost, named rather than hidden: an edit is TWO ops, so it is two
- * undo steps. There is no compound op in the vocabulary and this is not
- * reason enough to invent one — a new op type is a new thing both surfaces
- * must know, forever, to save one keypress. If edits ever want to be atomic,
- * the fix is a general grouping in the oplog, which would pay for itself
- * across every multi-op gesture rather than just this one.
+ * An edit is TWO ops — the words, then the title — and it used to be two undo
+ * steps. The note here said so, and said the fix was "a general grouping in
+ * the oplog, which would pay for itself across every multi-op gesture rather
+ * than just this one" rather than a new op type invented to save one
+ * keypress. That grouping exists now (`LogEntry.group`), so both ops go under
+ * one id and one ⌘Z takes the edit back.
  *
  * The box is only corrected when the words actually outgrew it. A note that
  * gets a word shorter does not need the canvas rearranging under it, and
@@ -92,20 +93,30 @@ export async function reviseTextNode(
   style: TextStyle = "body",
   face: TextFace = "sans",
 ): Promise<void> {
+  // One edit, one undo: the version, the title and any resize are one act.
+  const group = newGroupId();
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
-  await sendOp(canvasId, actor, {
-    type: "item.addVersion",
-    itemId,
-    version: {
-      id: newVersionId(),
-      blobHash: upload.blobHash,
-      mimeType: TEXT_MIME,
-      filename: TEXT_FILENAME,
-      size: upload.size,
+  await sendOp(
+    canvasId,
+    actor,
+    {
+      type: "item.addVersion",
+      itemId,
+      version: {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType: TEXT_MIME,
+        filename: TEXT_FILENAME,
+        size: upload.size,
+      },
     },
-  });
-  await sendOp(canvasId, actor, {
+    group,
+  );
+  await sendOp(
+    canvasId,
+    actor,
+    {
     type: "item.update",
     itemId,
     patch: {
@@ -122,14 +133,16 @@ export async function reviseTextNode(
         ...(face === "sans" ? [TEXT_FACE_PROP] : []),
       ],
     },
-  });
+    },
+    group,
+  );
   if (measured && grew) {
-    await sendOp(canvasId, actor, {
-      type: "item.resize",
-      itemId,
-      width: measured.width,
-      height: measured.height,
-    });
+    await sendOp(
+      canvasId,
+      actor,
+      { type: "item.resize", itemId, width: measured.width, height: measured.height },
+      group,
+    );
   }
 }
 
