@@ -5,7 +5,8 @@ screens, a rationale (`The thinking`), and an implementation spec for two of
 them. This is the order to build it in, and what each step has to be true
 before the next one starts.
 
-**Where we are: phase 0 answered (28 Aug 2026), nothing built.** The three
+**Where we are: phase 0 answered and phase 1 landed (28 Aug 2026), with one
+acceptance item outstanding — see phase 1.** The three
 questions took an afternoon and would have cost a week if answered by
 building.
 
@@ -98,6 +99,38 @@ acceptance — **panning and zooming with the rail open is measured and
 acceptable on the slowest machine that matters.** If blur over a live canvas
 costs too much, that is discovered here, cheaply, before three phases are
 built on top of it.
+
+**Landed 28 Aug 2026, with one acceptance item OUTSTANDING.**
+
+Chat and Files share one `.dock-panel` frame — they had byte-identical rules
+written twice, and restyling one would have left the other clamped to the
+edge. `--panel` and a blur, no new colour token, as §6 asked. `railSpan`
+carries the 20px inset into `dockEdges`, so framing still refuses to park an
+item under the rail.
+
+Contrast measured on the composited ground rather than eyeballed, both
+themes, all four inks:
+
+| | light | dark |
+|---|---|---|
+| `--ink` | 15.14 | 14.50 |
+| `--ink-muted` | 5.25 | 5.62 |
+| `--ink-soft` | 5.14 | 5.40 |
+| `--accent-text` | 7.81 | 7.74 |
+
+**The blur is still unmeasured under motion.** The browser pane this was
+built in pauses `requestAnimationFrame` while it is hidden, so frame timing
+during a pan could not be taken, and a number that was not measured must not
+be reported as one. What was done instead is to spend less than the design
+asked for — `blur(12px) saturate(1.2)` rather than 20px/1.3 — and to note
+that four other surfaces already blur without complaint. **This is the item
+to close before phase 2**, on a real machine, by hand.
+
+**Known interim inconsistency:** the trash and marks panels dock to the RIGHT
+edge and are unchanged, so they are still flush while the left rail floats.
+Mirroring the arithmetic on `dockRight` is not phase 1's job and those two
+surfaces are folded into the `···` handle in phase 6 regardless. Recorded so
+it reads as a staging decision rather than an oversight.
 
 ## Phase 2 — Opening the rail pans the canvas
 

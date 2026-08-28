@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fitInto, revealDelta, worldToScreen } from "../src/lib/viewport.ts";
-import {
+import { railSpan,
   MARKS_GUTTER,
   MARKS_WIDTH,
   TOPBAR_HEIGHT,
@@ -176,9 +176,15 @@ describe("the stage, asked directly", () => {
     expect(marks.x + marks.width).toBe(win.innerWidth - MARKS_WIDTH - MARKS_GUTTER);
   });
 
-  it("gives the left edge to an open panel", () => {
+  it("gives the left edge to an open panel, INSET AND ALL", () => {
+    // The panel floats: it sits 20px off the edge, so the strip it denies the
+    // canvas is its width plus that gap. Framing at exactly `panelWidth`
+    // would park an item 20px under the rail's left edge — visible, and
+    // wrong, which is the whole reason `railSpan` exists rather than the bare
+    // width being used in two places.
     const stage = stageRect(ui({ mainPanelOpen: true, panelWidth: 344 }), win);
-    expect(stage.x).toBe(344);
+    expect(stage.x).toBe(railSpan(344));
+    expect(stage.x).toBe(364);
     expect(stage.y).toBe(TOPBAR_HEIGHT);
   });
 
