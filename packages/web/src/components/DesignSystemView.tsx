@@ -3,7 +3,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DesignDoc, DesignTypography } from "@isocan/core";
 import { bySeverity, checkDesign, parseDesign, parseHex, resolveToken } from "@isocan/core";
-import { lengthPx, readableInk } from "../lib/designview.ts";
+import {
+  componentCss,
+  componentShape,
+  lengthPx,
+  readableInk,
+  type ComponentShape,
+} from "../lib/designview.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 
 /**
@@ -236,6 +242,49 @@ function Corners({ doc }: { doc: DesignDoc }) {
   );
 }
 
+/**
+ * One component, as the thing it is.
+ *
+ * The label inside it is the component's own name rather than "Button" or
+ * lorem: a design system's `button-danger` should look like the danger button
+ * when you look at it, and inventing copy for it would be putting words in
+ * the system's mouth.
+ */
+function ComponentPreview({
+  shape,
+  css,
+}: {
+  shape: ComponentShape;
+  css: Record<string, string>;
+}) {
+  const style = css as React.CSSProperties;
+  if (shape === "input") {
+    // An input says it is one by having a caret's worth of room and a rule
+    // under nothing — drawn, not typed into: this is a picture of a field.
+    return (
+      <span className="ds-pv ds-pv-input" style={style}>
+        <i className="ds-pv-caret" />
+      </span>
+    );
+  }
+  if (shape === "card") {
+    // A card is mostly its surface, so it is shown with something on it —
+    // two rules standing for content, in the card's own ink.
+    return (
+      <span className="ds-pv ds-pv-card" style={style}>
+        <i className="ds-pv-line" />
+        <i className="ds-pv-line short" />
+      </span>
+    );
+  }
+  const cls = shape === "chip" ? "ds-pv ds-pv-chip" : shape === "button" ? "ds-pv ds-pv-button" : "ds-pv ds-pv-block";
+  return (
+    <span className={cls} style={style}>
+      Aa
+    </span>
+  );
+}
+
 function Components({ doc }: { doc: DesignDoc }) {
   const parts = Object.entries(doc.tokens.components ?? {});
   if (parts.length === 0) return null;
@@ -246,6 +295,22 @@ function Components({ doc }: { doc: DesignDoc }) {
         {parts.map(([name, props]) => (
           <div className="ds-component" key={name}>
             <b>{name}</b>
+            {/**
+             * The component, drawn with its own tokens — then its values.
+             *
+             * Both, not one. Everything else in this view already draws the
+             * token AS the thing it describes; components alone stayed a
+             * property list, which is the difference between reading a
+             * specification and seeing a design system. But the list is not
+             * decoration either: this is a spec, and somebody has to be able
+             * to copy the number. So the preview is an addition to it.
+             */}
+            <div className="ds-preview">
+              <ComponentPreview
+                shape={componentShape(name)}
+                css={componentCss((v) => resolveToken(doc.tokens, v), props)}
+              />
+            </div>
             <dl>
               {Object.entries(props).map(([k, v]) => {
                 // `{colors.primary}` resolved through the same helper the CLI
