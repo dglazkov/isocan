@@ -311,6 +311,41 @@ on. They coincide only while the message produced the latest version; on an
 item worked since, the card says v7 and the chip still says v2. Verified live
 on a real canvas: `→ Lane probe v2`, "Kenny took this to v2 here".
 
+**4b: the tether landed 28 Aug 2026. Follow did NOT — see below.**
+
+Every rule in `tether.ts` is a reason not to draw, because the costs are
+asymmetric: a missing tether costs a nicety, and one pointing at the wrong
+thing costs the reader's trust in every other tether on the canvas, including
+the correct ones.
+
+**The run is measured from where the line becomes VISIBLE, not from the chip.**
+This is the rule the sketch did not have and the feature is broken without it.
+The chip sits inside the rail, so the first stretch of every tether is behind
+the panel it starts in — measuring from the chip measures mostly invisible
+line, and makes the limit depend on the rail's WIDTH. At 320px the band where
+a tether is allowed is 200px deep; drag the rail to 448 and it shrinks to 76,
+and then to nothing. Somebody who widened a panel would have silently switched
+the feature off with no way to connect the two. Found by testing on a canvas
+whose rail had been widened by an earlier experiment.
+
+`panning` was lifted from `CanvasViewport`'s local state into the store, which
+is what makes the suppression real: a pan changes the viewport every frame and
+this measures live DOM rectangles, so leaving it on forces a layout per frame
+for a drawing that is only glanced at.
+
+Verified live: `144,705 → 486,648`, emerging from behind the rail to the item.
+Three refusals were also confirmed live rather than only in tests — an item
+off screen, an item behind the rail, and a 372px rise — each of which looked
+like a broken feature until the numbers said otherwise.
+
+**Follow is not built.** It is the "⇅ follow" toggle in the mock: the camera
+tracking the lane as messages arrive. Everything above is drawing; follow
+MOVES THE CANVAS on the person's behalf, which puts it in the same class as
+phase 2 and deserves the same treatment — its own pass, with the pan/drag
+suppression and the throttle designed rather than bolted on. Shipping a
+half-considered version of the one feature whose worst failure is "the canvas
+moved under my hand" would be the wrong trade.
+
 ## Phase 5 — Item chrome sheds its box
 
 Spec §5. Last, as the spec says, and for the reason it gives: it touches the

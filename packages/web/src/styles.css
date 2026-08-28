@@ -2028,6 +2028,19 @@ button.mt-card:hover { border-color: var(--accent); }
    it, so it does not fade into the title beside it. */
 .lane-v { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
 
+/* The tether layer: screen space, over the canvas and UNDER every panel, so a
+   line can never be drawn across the message that owns it. Untouchable — it
+   is a drawing about other things, and catching a click would make the canvas
+   beneath it unreachable in a band nobody can see. */
+.lane-tethers {
+  position: fixed; inset: 0; pointer-events: none;
+  z-index: var(--z-canvas); overflow: visible;
+}
+.lane-tether {
+  stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4;
+  opacity: 0.55;
+}
+
 /* ---------- the rail, shut ----------
 
    48px, inset and floating like the open rail, because it IS the rail: the

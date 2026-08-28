@@ -19,6 +19,7 @@ import { canvasMenu, itemMenu } from "../lib/menuentries.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
+import { LaneTethers } from "./LaneTethers.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 import { InkLayer, SketchBar } from "./InkLayer.tsx";
@@ -75,7 +76,14 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
     droppingTimer.current = setTimeout(() => setDropping(false), 700);
   };
-  const [panning, setPanning] = useState(false);
+  // Mirrored into the store as well as kept locally: the lane tethers stop
+  // measuring while the canvas is moving, and only the store crosses
+  // components. Local state stays because the class name is applied here.
+  const [panning, setPanningLocal] = useState(false);
+  const setPanning = (on: boolean) => {
+    setPanningLocal(on);
+    useUiStore.getState().setPanning(on);
+  };
   // The tool to restore when a momentary Space-grab ends (null when not held).
   const spacePrevTool = useRef<Tool | null>(null);
   // Zoom tool via Z: the tool it interrupted (to restore on a hold-release),
@@ -678,6 +686,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         <TextComposer canvasId={canvasId} actor={actor} />
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
+      <LaneTethers />
       <CursorLayer />
       <MarqueeRect />
       <GuideLines />

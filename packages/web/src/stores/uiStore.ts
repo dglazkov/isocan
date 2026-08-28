@@ -200,6 +200,9 @@ interface UiStore {
   /** True only while the edge is being dragged — see `setPanelResizing`. */
   panelResizing: boolean;
   setPanelResizing: (resizing: boolean) => void;
+  /** The canvas is being dragged under the hand. */
+  panning: boolean;
+  setPanning: (panning: boolean) => void;
 }
 
 const INK_KEY = "isocan.ink";
@@ -368,6 +371,7 @@ export const useUiStore = create<UiStore>((set) => {
     minimapOpen: readFlag(MINIMAP_KEY, true),
     panelWidth: readPanelWidth(),
     panelResizing: false,
+    panning: false,
     filesPanelOpen: false,
     marksOpen: false,
     peekedItemId: null,
@@ -446,6 +450,16 @@ export const useUiStore = create<UiStore>((set) => {
      * after you stop. This flag is how the stylesheet tells those two apart.
      */
     setPanelResizing: (panelResizing) => set({ panelResizing }),
+    /**
+     * Whether the canvas is being dragged under the hand right now.
+     *
+     * It was local state in `CanvasViewport`, which was fine while nothing
+     * outside that component needed to know. The lane tethers do: they are
+     * measured from live DOM rectangles, and a pan changes the viewport every
+     * frame, so leaving them on would force a layout per frame for a drawing
+     * that is only ever glanced at.
+     */
+    setPanning: (panning) => set({ panning }),
     setPanelWidth: (width) => {
       // Clamped HERE rather than at the drag, so every caller gets the same
       // answer: the keyboard resize, a restored value, and a pointer that

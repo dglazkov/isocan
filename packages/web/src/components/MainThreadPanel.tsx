@@ -256,6 +256,7 @@ function LaneChips({
         <button
           key={entry.itemId}
           className="lane-chip"
+          data-item={entry.itemId}
           title={
             entry.born
               ? `${comment.author.name} made this here`
