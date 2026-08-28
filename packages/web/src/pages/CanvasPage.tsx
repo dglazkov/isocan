@@ -19,7 +19,7 @@ import {
 import { useUiStore } from "../stores/uiStore.ts";
 import { pasteInto } from "../lib/clipboard.ts";
 import { redo, sendOp, undo } from "../lib/api.ts";
-import { applyLocalEcho, sendEchoed, setNotice } from "../stores/canvasStore.ts";
+import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { sessionLocus } from "../lib/presence.ts";
@@ -409,13 +409,20 @@ function CanvasSurface({
        */
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && !isTyping(e.target)) {
         const ui = useUiStore.getState();
+        // From the STORE, not the closure. This effect's deps are
+        // `[canvasId, actor, itemId, onWorkbench]`, so a `canvas` captured
+        // here is the value from before the canvas loaded — null — and every
+        // lookup silently misses. ⌘C then did nothing at all, which is how
+        // it was reported. Every other handler in this file already reads
+        // `getState()` for exactly this reason.
+        const live = useCanvasStore.getState().canvas;
         const picked = ui.selectedItemIds
-          .map((id) => canvas?.items[id])
+          .map((id) => live?.items[id])
           .filter((item): item is NonNullable<typeof item> => Boolean(item));
         if (picked.length === 0) return; // nothing selected: leave ⌘C alone
         e.preventDefault();
         ui.setClipboard({ canvasId: canvasId!, items: picked });
-        setNotice(`Copied ${picked.length} item${picked.length === 1 ? "" : "s"}`);
+        flashNotice(`Copied ${picked.length} item${picked.length === 1 ? "" : "s"}`);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && !isTyping(e.target)) {
