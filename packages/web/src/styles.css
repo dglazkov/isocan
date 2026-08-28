@@ -69,6 +69,12 @@
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   --radius: 8px;
+  /* **Roundness says how permanent a thing is.** Floating chrome is the most
+     ephemeral thing on screen and wears the largest radius; the work itself
+     keeps `--radius`, which is correct — it is the only thing really there.
+     The rest of that ladder (pill, chip) arrives with the surfaces that need
+     it, not before. */
+  --r-float: 18px;
   /* Snapping feedback: blue says "aligned to this line", purple says "these
      two gaps are equal". */
   --guide-spacing: #8b46e0;
@@ -938,7 +944,10 @@ img { height: auto; }
    until pointed at, because a permanent bar down the side of a panel is
    furniture — and this is a thing you use twice a week. */
 .panel-resizer {
-  position: absolute; top: 0; bottom: 0; right: -3px; width: 7px;
+  /* Inset by the corner radius: a rounded panel has no straight edge to grab
+     in its top and bottom 18px, and a hit area that reaches into the curve
+     lands on canvas instead of on the handle. */
+  position: absolute; top: var(--r-float); bottom: var(--r-float); right: -3px; width: 7px;
   z-index: 5; cursor: col-resize;
   /* The line it paints on hover sits in the MIDDLE of the strip, over the
      panel's own border, so pointing at it lights up the edge you are about to
@@ -1716,13 +1725,35 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 /* The designated agent↔user channel. Docked left like the trash panel's
    mirror; messages hug the bottom, chat-style; #item references render as
    cards (ItemCard). Collapsed, it is a pill above the zoom chip. */
+/* **The dock panels float, with ground visible on all four sides.**
+
+   Chat and Files had byte-identical frames written out twice; restyling one
+   would have left the other flush against the edge, so they share the frame
+   now and keep only what differs (which is nothing but their contents).
+
+   They already OVERLAID the canvas — `position: absolute` above the viewport,
+   with `dockEdges` telling framing to avoid them — so this is a restyle and
+   not a change to how the layout works. What is new is the gap: a panel that
+   sits ON the canvas rather than clamped to its edge reads as summoned, and
+   the canvas keeps being one continuous surface underneath.
+
+   `--panel` and a blur, not a new token: this ground is already used for
+   floating chrome in four other places, and a second token for one surface is
+   how a palette starts to drift. */
+.dock-panel {
+  position: absolute; top: 62px; left: 20px; bottom: 20px;
+  width: 320px; z-index: var(--z-dock);
+  background: var(--panel); backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; font-size: 12px;
+  /* The children square off against the rounded frame otherwise — a header's
+     bottom hairline would run past the corner into nothing. */
+  overflow: hidden;
+}
 .main-panel {
   /* `width` is set inline from `uiStore.panelWidth` — this is the floor, and
      what the panel is before React has said otherwise. */
-  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
-  background: var(--card); border-right: 1px solid var(--line);
-  box-shadow: 12px 0 24px -18px var(--shade);
-  display: flex; flex-direction: column; font-size: 12px;
 }
 .main-panel header {
   display: flex; align-items: center; gap: 7px; flex: none;
@@ -2169,12 +2200,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
-.files-panel {
-  position: absolute; top: 48px; left: 0; bottom: 0; width: 320px; z-index: var(--z-dock);
-  background: var(--card); border-right: 1px solid var(--line);
-  box-shadow: 12px 0 24px -18px var(--shade);
-  display: flex; flex-direction: column; font-size: 12px;
-}
+/* Frame shared with the Chat — see `.dock-panel`. */
 .files-panel header {
   display: flex; align-items: center; gap: 7px; flex: none;
   padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
@@ -3394,7 +3420,11 @@ button.mt-card:hover { border-color: var(--accent); }
    (`--panel`, already paired with a blur in four other places), so this adds
    no token. */
 .context-menu {
-  position: fixed; z-index: var(--z-dialog);
+  /* `--z-popover` is documented as "menus, thread popovers, peek cards — a
+     click opened it", which is exactly this. `--z-dialog` is reserved for the
+     one thing nothing else outranks, and a right-click menu floating over the
+     who-are-you dialog would be that reservation spent for nothing. */
+  position: fixed; z-index: var(--z-popover);
   min-width: 208px; padding: 5px;
   background: var(--panel); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 10px;

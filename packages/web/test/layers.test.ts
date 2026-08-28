@@ -148,8 +148,19 @@ describe("the layer scale", () => {
         "var(--z-float)",
       );
     }
-    for (const dock of [".main-panel", ".files-panel", ".trash-panel"]) {
-      expect(layerOf(dock)).toBe("var(--z-dock)");
+    // Chat and Files share one frame now (`.dock-panel`) rather than carrying
+    // two byte-identical copies. Asserting the shared class alone would be
+    // WEAKER than what this replaced — it would pass while a panel quietly
+    // stopped wearing it — so the source is checked too.
+    expect(layerOf(".dock-panel")).toBe("var(--z-dock)");
+    expect(layerOf(".trash-panel")).toBe("var(--z-dock)");
+    const read = (rel: string) =>
+      readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    for (const file of [
+      "../src/components/MainThreadPanel.tsx",
+      "../src/components/FilesPanel.tsx",
+    ]) {
+      expect(read(file), `${file} must wear the shared dock frame`).toMatch(/dock-panel/);
     }
   });
 });

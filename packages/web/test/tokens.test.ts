@@ -47,8 +47,11 @@ describe("colours come from tokens", () => {
     const dark = /:root\[data-theme="dark"\]\s*\{(.*?)\n\}/s.exec(css);
     expect(light && dark).toBeTruthy();
     const missing = [...names(light![1]!)].filter((n) => !names(dark![1]!).has(n));
-    // Sizes and radii are theme-independent; colours are not.
-    const colourish = missing.filter((n) => !["radius"].includes(n));
+    // Sizes and radii are theme-independent; colours are not. Named by the
+    // CONVENTION rather than one by one — `--radius` and the `--r-*` ladder
+    // are all lengths, and a rule that has to be edited for each new radius
+    // is a rule that will one day be edited to silence a colour.
+    const colourish = missing.filter((n) => n !== "radius" && !n.startsWith("r-"));
     expect(colourish, "these tokens have no dark value").toEqual([]);
   });
 

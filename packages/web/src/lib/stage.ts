@@ -73,9 +73,22 @@ export interface DockState {
  * - `stageInsets` does not, because the radar's 6px rim lives in the gutter
  *   quite happily — a rim pushed 76px in from the edge would float in space.
  */
+/**
+ * The window strip a floating rail occupies: its own inset, plus its width.
+ *
+ * The panel moved off the edge, so the space it denies the canvas is no
+ * longer just `panelWidth` — an item framed at exactly `panelWidth` would sit
+ * 20px under the rail's left edge. A rail that floats still takes a strip;
+ * floating changes where the strip starts, not that there is one.
+ */
+export const RAIL_INSET = 20;
+export function railSpan(panelWidth: number): number {
+  return RAIL_INSET + panelWidth;
+}
+
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {
   return {
-    left: ui.mainPanelOpen || ui.filesPanelOpen ? ui.panelWidth : 0,
+    left: ui.mainPanelOpen || ui.filesPanelOpen ? railSpan(ui.panelWidth) : 0,
     dockRight: ui.trashOpen ? TRASH_WIDTH : ui.marksOpen ? MARKS_WIDTH + MARKS_GUTTER : 0,
   };
 }
