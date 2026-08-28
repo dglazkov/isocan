@@ -119,12 +119,13 @@ export function textSizeOf(item: Item): number {
  * Windows and Snell Roundhand — formal calligraphy — on macOS: opposite
  * tones, so unlike the other three the INTENT does not survive the trip.
  *
- * It is served from Google Fonts FOR NOW (see `index.html`), which buys the
- * ability to swap the face in one line while we learn which handwriting
- * actually feels right on a canvas. The two costs are real and written down
- * there rather than glossed: offline it is not handwriting, and it tells
- * Google who is looking. Self-hosting the winner removes both and is the
- * intended end state.
+ * It is SELF-HOSTED — one woff2 served from this app, with its SIL Open Font
+ * License beside it (see `index.html`). It began on Google Fonts as a stated
+ * temporary, to buy the ability to swap the face in one line while we found
+ * out which handwriting felt right on a canvas; that settled on Caveat, so
+ * the two costs written down at the time are paid off rather than carried.
+ * Offline it is still handwriting, and nobody outside the machine is told
+ * who is looking.
  */
 export const TEXT_FACES = ["sans", "mono", "serif", "hand"] as const;
 export type TextFace = (typeof TEXT_FACES)[number];

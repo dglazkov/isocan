@@ -10,34 +10,41 @@
          nothing in this app has ever been built for a browser that old, and
          an icon nobody can regenerate is worse than a letter. -->
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <!-- **The one webfont, and the one place this app fetches from anybody
-         else.** Handwriting is the single face that cannot come from the
-         system stack: CSS `cursive` resolves to Comic Sans on Windows and to
-         Snell Roundhand — formal calligraphy — on macOS, which are opposite
-         tones, so unlike sans/serif/mono the INTENT does not survive the trip.
-         It is ship a file or do not offer it.
+    <!-- **The handwriting face, served from here.**
 
-         This is deliberately the CDN and deliberately temporary. It is here so
-         the handwriting face can be swapped for another in one line while we
-         find out which one actually feels right on a canvas; vendoring a
-         binary is a thing to do once, after that choice is settled. When it
-         is, this link becomes a `@font-face` over a file in `public/` and the
-         two costs below go away.
+         Handwriting is the one face that cannot come from the system stack:
+         CSS `cursive` resolves to Comic Sans on Windows and Snell Roundhand —
+         formal calligraphy — on macOS, which are opposite tones, so unlike
+         sans/serif/mono the INTENT does not survive the trip. It is ship a
+         file or do not offer it.
 
-         What it costs until then, recorded rather than glossed:
-         - **Offline, `hand` is not handwriting.** A local daemon works with
-           the network down; this face does not, and falls back to the split
-           `cursive` above.
-         - **It tells Google who is looking.** Every viewer's IP and referer
-           reach fonts.gstatic.com, which for a local-first tool is a real if
-           small regression.
-         `display=swap` so nothing ever waits on it to paint. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap"
-    />
+         It WAS a Google Fonts link, taken deliberately and as a stated
+         temporary: the CDN bought the ability to swap the face in one line
+         while we found out which handwriting felt right on a canvas. That
+         choice has settled on Caveat, so the two costs recorded beside that
+         link are now paid off rather than carried — offline it is still
+         handwriting, and nobody outside this machine is told who is looking.
+
+         One file: the latin subset is a VARIABLE font, so 400 and 700 are the
+         same 73KB rather than two downloads. `font-display: swap` so nothing
+         ever waits on it, and the fallbacks below are what renders in the
+         moment before it lands.
+
+         SIL Open Font License 1.1, which requires the licence to travel with
+         the font — `Caveat-OFL.txt` sits beside it and is served from the
+         same directory. Copyright 2014 The Caveat Project Authors. -->
+    <style>
+      @font-face {
+        font-family: "Caveat";
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url("/fonts/caveat-latin.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+          U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+          U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+    </style>
     <script>
       // Resolve the theme before first paint so there is no flash of the wrong
       // one. Kept in sync afterwards by src/lib/theme.ts (same storage key).
