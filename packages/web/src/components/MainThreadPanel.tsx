@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, Item } from "@isocan/core";
-import { mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { keyFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
@@ -166,6 +166,11 @@ export function openMainPanel(canvasId: string, open: boolean): void {
   openPanel(canvasId, open ? "main" : null);
 }
 
+/* The key the overlay and `isocan shortcuts` both print for undo. Spelled
+   once, in `SHORTCUTS`, so a notice cannot promise a keystroke the app does
+   not actually listen for. */
+const undoKey = keyFor("Undo and redo") ?? "⌘Z";
+
 export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
@@ -296,7 +301,27 @@ function Panel({
           <button
             className="main-detach"
             title="This conversation goes back to being a pin on the canvas, where it was anchored"
-            onClick={() => sendOp(canvasId, actor, { type: "thread.setMain", threadId: null })}
+            onClick={() => {
+              sendOp(canvasId, actor, { type: "thread.setMain", threadId: null });
+              // **Say what just happened, and how to take it back.**
+              //
+              // This button empties the Chat panel in one click, sits beside
+              // the ✕, and was pressed by mistake on a canvas with 36
+              // messages in it. Nothing was lost — the thread is a pin again
+              // and `thread.setMain` has always had an inverse — but the
+              // screen said nothing, so it read as "the entire chat is gone",
+              // which is the worst thing an interface can be wrong about.
+              //
+              // The op was already reversible; what was missing was anybody
+              // being told. A confirm dialog would have been the other
+              // answer, and the wrong one: it taxes every deliberate press to
+              // protect the rare accidental one, and it still would not have
+              // said the conversation survived.
+              flashNotice(
+                `Chat is a pin on the canvas now — ${undoKey} brings it back.`,
+                6000,
+              );
+            }}
           >
             back to canvas
           </button>
