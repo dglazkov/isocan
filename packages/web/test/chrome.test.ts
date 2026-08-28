@@ -601,6 +601,41 @@ describe("the Chat and the comments say which they are", () => {
     expect(layer).not.toContain("Make main");
   });
 
+  it("tells you where the Chat went, and how to bring it back", () => {
+    /**
+     * The other half of the test above, which was written about the PROMOTE
+     * side and said the quiet part out loud: "the button that hides that is
+     * the button somebody loses a conversation to." The demote side is that
+     * button, and it went unguarded.
+     *
+     * Pressed by mistake on a canvas with 36 messages in it. Nothing was lost
+     * — `thread.setMain` has an inverse and `roundtrip.test.ts` proves the
+     * demote case round-trips — but the panel emptied in silence, so it read
+     * as the whole conversation being gone. Reversible and SEEN to be
+     * reversible are different properties, and only the first had a test.
+     *
+     * Not a confirm dialog: that taxes every deliberate press to catch the
+     * rare accident, and it still would not say the conversation survived.
+     */
+    const panel = read("MainThreadPanel.tsx");
+    expect(panel, "the detach must say something, not empty the panel in silence").toMatch(
+      /flashNotice\(/,
+    );
+    expect(panel, "and it must say the conversation is still there").toMatch(
+      /pin on the canvas now/,
+    );
+    // The keystroke comes from `SHORTCUTS` via `keyFor`, never a literal: a
+    // notice that promises a key the app does not listen for is worse than
+    // one that promises nothing.
+    expect(panel).toMatch(/keyFor\("Undo and redo"\)/);
+    // The glyph itself, not a quoted-string pattern. The first version of
+    // this looked for `"⌘Z` and passed while the literal sat mid-sentence in
+    // a template string — the modifier key is banned from this handler
+    // outright, so there is no spelling of it that slips through.
+    const handler = panel.slice(panel.indexOf("main-detach"), panel.indexOf("main-close"));
+    expect(handler, "spell the undo key once, in the registry").not.toContain("⌘");
+  });
+
   it("names the thing a pin holds a comment, on the button that deletes one", () => {
     expect(read("CommentLayer.tsx")).toContain("Delete comment");
   });
