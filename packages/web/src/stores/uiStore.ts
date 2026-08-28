@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { InkPoint, InkStroke, TextFace, TextStyle } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
+import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 
@@ -91,6 +92,9 @@ interface UiStore {
    *  `lib/clipboard.ts` for why. Survives navigating to another canvas in
    *  this tab, which is what makes pasting across canvases work. */
   clipboard: Clipboard | null;
+  /** The open right-click menu, if any — where it is and what it offers.
+   *  Local and ephemeral: a menu is a thing one person is looking at. */
+  contextMenu: { at: { x: number; y: number }; entries: MenuEntry[] } | null;
   /** The step and face the next new text node opens with — this client's
    *  memory of what you were last writing in, never a canvas fact. */
   lastTextStyle: TextStyle;
@@ -161,6 +165,7 @@ interface UiStore {
   setPendingComment: (pending: PendingComment | null) => void;
   setPendingText: (pending: PendingText | null) => void;
   setClipboard: (clipboard: Clipboard | null) => void;
+  setContextMenu: (menu: { at: { x: number; y: number }; entries: MenuEntry[] } | null) => void;
   setLastText: (style: TextStyle, face: TextFace) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
@@ -345,6 +350,7 @@ export const useUiStore = create<UiStore>((set) => {
     pendingComment: null,
     pendingText: null,
     clipboard: null,
+    contextMenu: null,
     lastTextStyle: "body",
     lastTextFace: "sans",
     sketch: [],
@@ -393,6 +399,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingComment: (pendingComment) => set({ pendingComment }),
     setPendingText: (pendingText) => set({ pendingText }),
     setClipboard: (clipboard) => set({ clipboard }),
+    setContextMenu: (contextMenu) => set({ contextMenu }),
     setLastText: (lastTextStyle, lastTextFace) => set({ lastTextStyle, lastTextFace }),
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),

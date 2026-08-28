@@ -5,8 +5,9 @@ screens, a rationale (`The thinking`), and an implementation spec for two of
 them. This is the order to build it in, and what each step has to be true
 before the next one starts.
 
-**Where we are: nothing built.** Phase 0 is three questions that cost an
-afternoon of nobody's time and would cost a week if answered by building.
+**Where we are: phase 0 answered (28 Aug 2026), nothing built.** The three
+questions took an afternoon and would have cost a week if answered by
+building.
 
 ## What was verified before planning
 
@@ -66,19 +67,22 @@ So, for every phase below:
 
 ---
 
-## Phase 0 — Answer three questions
+## Phase 0 — Answered, 28 Aug 2026
 
-None of them are engineering, all of them change what gets built.
+1. **The rail stays on the left**, where the Chat is today.
+2. **Draw only.** The lane draws the link and moves nothing. `/format` does
+   not grow a lane rule, and no `items.move` is written on anybody's behalf —
+   where results sit stays the person's own arrangement.
+3. **Dark is not the default. System is**, which is what ships today:
+   `index.html` resolves `localStorage["isocan.theme"] || "system"` before
+   first paint. So this is a no-change, and the screens being dark is a
+   description of one theme rather than a proposal about the default.
 
-1. **Which side does the rail live on?** Left is assumed because the Chat is
-   there today. Right would grow results leftward into the reading direction.
-2. **Does the lane ARRANGE items, or only draw the link?** The screens show
-   results already in a column beside the rail. Getting them there is either
-   the person's own arrangement or `/format` growing a rule that MOVES items —
-   a real `items.move`, a real undo, a real surprise if unasked. The spec
-   assumes draw-only. Confirm it.
-3. **Is dark the new default?** Out of scope for the spec and still open. It
-   is a product decision, not a phase.
+Answer 3 sharpens the constraint the rest of this document already carries:
+the design was drawn in dark, the product opens in whatever the machine
+prefers, and **most people will meet these surfaces in light.** A frosted
+slab over a pale canvas is the harder of the two to get right, so it is the
+one to look at first in phase 1 — not the one to check afterwards.
 
 ## Phase 1 — The rail becomes a floating slab
 

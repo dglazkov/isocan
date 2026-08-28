@@ -59,6 +59,18 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["⇧F"], does: "Fit the item to its content", group: "Items", note: "F fits the view to an item; ⇧F fits the item to what is in it. Several at once are settled so nothing overlaps" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo", note: "Yours, not everyone's", group: "Items" },
+  {
+    keys: ["⌘C"],
+    does: "Copy the selection",
+    group: "Items",
+    note: "The arrangement is kept, so a row pastes as a row — and the clipboard survives moving to another canvas, which is how you take things between them",
+  },
+  {
+    keys: ["⌘V"],
+    does: "Paste",
+    group: "Items",
+    note: "Onto this canvas or another one. One undo takes the whole paste back",
+  },
   { keys: ["Scroll a selected item"], does: "Its content moves, not the canvas", group: "Items", note: "Only the wheel is handed over, so a drag still moves it. A page in a frame has to be entered first" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items", note: "Inline, without leaving the canvas. Enter gives it the whole screen instead" },
   { keys: ["Enter"], does: "Open the selection full screen", group: "Items", note: "The address bar holds the screen you are on, so it is a link you can send — and Back leaves it. Esc comes back to the canvas, where you left it" },
@@ -84,6 +96,24 @@ export const SHORTCUTS: Shortcut[] = [
  * roughly the order somebody learns them. */
 export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
   return SHORTCUTS.filter((shortcut) => shortcut.group === group);
+}
+
+/**
+ * **The key printed beside an act, wherever that act is offered.**
+ *
+ * A context menu that spells its own accelerators is a menu that goes stale:
+ * somebody rebinds a key in one place and the menu keeps promising the old
+ * one, which is worse than promising nothing. So a menu asks THIS, by the
+ * same `does` text the `?` overlay and `isocan shortcuts` print, and there is
+ * one answer for all three.
+ *
+ * Null when the act has no key. That is a fine and common answer — most of
+ * what a menu offers has never had one — and it is the reason this returns
+ * rather than throws.
+ */
+export function keyFor(does: string): string | null {
+  const found = SHORTCUTS.find((shortcut) => shortcut.does === does);
+  return found?.keys[0] ?? null;
 }
 
 /** The whole list as text, for a terminal or a comment: the same answer the

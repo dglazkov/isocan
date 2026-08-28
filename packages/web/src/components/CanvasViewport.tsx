@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
@@ -13,6 +14,8 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
+import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
+import { canvasMenu, itemMenu } from "../lib/menuentries.ts";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
@@ -47,6 +50,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
+  const menu = useUiStore((s) => s.contextMenu);
+  const navigate = useNavigate();
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
@@ -315,6 +320,43 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }, delay);
   }
   useEffect(() => holdSettle, []);
+
+  /**
+   * **Right-click: the menu for what is under the pointer.**
+   *
+   * Right-clicking an item that is not selected SELECTS it first — otherwise
+   * "Delete" on the menu you opened over one thing deletes a different thing,
+   * which is the worst possible surprise from a menu. Right-clicking inside
+   * an existing multi-selection leaves it alone, so "Copy 5 items" still
+   * means the five you had.
+   */
+  function onContextMenu(e: React.MouseEvent) {
+    const ui = useUiStore.getState();
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas) return;
+    const target = (e.target as HTMLElement).closest?.("[data-item-id]");
+    const itemId = target?.getAttribute("data-item-id") ?? null;
+    e.preventDefault();
+
+    if (itemId) {
+      const within = ui.selectedItemIds.includes(itemId);
+      const ids = within && ui.selectedItemIds.length > 1 ? ui.selectedItemIds : [itemId];
+      if (!within) ui.setSelection([itemId]);
+      const items = ids
+        .map((id) => canvas.items[id])
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      if (items.length === 0) return;
+      openContextMenu(
+        { x: e.clientX, y: e.clientY },
+        itemMenu(items, { canvasId, actor, world: screenToWorld(ui.viewport, e.clientX, e.clientY), navigate }),
+      );
+      return;
+    }
+    openContextMenu(
+      { x: e.clientX, y: e.clientY },
+      canvasMenu({ canvasId, actor, world: screenToWorld(ui.viewport, e.clientX, e.clientY), navigate }),
+    );
+  }
 
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
@@ -594,6 +636,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
         publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
@@ -635,6 +678,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       <EdgeRadar canvasId={canvasId} />
       <SketchBar canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          entries={menu.entries}
+          onClose={() => useUiStore.getState().setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
