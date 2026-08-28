@@ -206,6 +206,62 @@ catches a missing handler here.
 `isocan who` would call working, `⌘J` works in the browsers people use, and
 the entry appears in both `?` and `isocan shortcuts` from one `SHORTCUTS` row.
 
+**Landed 28 Aug 2026, with the ⌘J browser question OPEN.**
+
+48px, inset and floating like the open rail, because it IS the rail in its
+other state — a strip clamped to the edge beside a floating panel would read
+as two pieces of furniture.
+
+`STRIP_WIDTH` went into `stage.ts`, so `dockEdges().left` is never 0 any more
+and framing, the stage rect, the minimap, the hover cards and phase 2's pan
+all followed from one line. Phase 2's own numbers changed with it: opening the
+rail now pans by 272, not 340, because the shut rail is 48px rather than
+nothing. Three tests that encoded the old truth were updated, and one of them
+gained a fact worth keeping — the 20px inset CANCELS in the pan, since both
+states are inset, and that is now asserted rather than assumed.
+
+Nothing is computed twice: the ring is `sessionState`, the reader `isocan who`
+prints from, so "the ring is on" and "the terminal says working" are one
+claim. Only `working` and `blocked` ring — a ring that is always on says
+nothing.
+
+**A bug found by looking rather than by testing.** The badge sits on the Chat
+button but summed unread across EVERY thread, so a comment pin anywhere on
+the canvas landed on the Chat's count. Verified live: two Chat messages plus
+one unrelated pin read 3 before the fix and 2 after, while the tab title
+correctly moved (1) → (2). The tab title counting THREADS is not a
+contradiction — it answers "how many conversations want you" across the whole
+canvas. Two numbers, two questions.
+
+**⌘J is registered, handled, and unverified in a browser.** The row is in
+`SHORTCUTS`, so `?` and `isocan shortcuts` both print it from one place
+(confirmed on the CLI). Whether a browser hands the combination to a page
+could not be tested here: the harness delivers no key events to the page at
+all — a plain `j` never arrived either — so the result was inconclusive, not
+negative. **This needs one press on a real machine, in Chrome and Safari.**
+
+The design does not rest on the answer: the strip is a button, so a browser
+that keeps ⌘J for its downloads panel costs a keyboard convenience and nothing
+else. A shortcut may be unavailable; a feature reachable ONLY by a shortcut a
+browser might eat may not be.
+
+The general gap the plan named — nothing catches a documented shortcut with no
+handler — is closed for ⌘J and **knowingly left open in general**. A
+table-driven check over every row would have to guess how each key is spelled
+in a handler, and a guard that guesses eventually passes for the wrong reason.
+
+**Not built, because the spec does not say what it does:** the mock's `+`
+button below the faces. Adding a control whose action I would have to invent
+is worse than leaving the strip at what phase 3 actually specifies.
+
+**Known interim duplication:** the Chat's unread count now appears twice — on
+the strip and on the top bar's `Chat` pill. The mock has no Chat pill, and
+removing it is right eventually. It is NOT right now: `PanelSwitch` is a pair,
+and dropping half of it leaves a lone `Files` button four phases before phase
+6 folds Files, marks, trash and the minimap behind one `···` handle. The two
+numbers agree — both read the Chat through `mainThread` + `unreadCount`, which
+is also how the duplication was confirmed harmless rather than assumed to be.
+
 ## Phase 4 — The lane
 
 Spec §4, and the reason the refresh exists: **isocan already records which
