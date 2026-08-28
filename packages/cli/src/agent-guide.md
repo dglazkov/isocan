@@ -421,6 +421,23 @@ decide. Run it when they ask, and say on the thread that you did. Reading it —
 plain `isocan home` — is free and often the answer to "why was my write
 refused".
 
+## Copying things, and taking them to another canvas
+
+`isocan copy <items...>` puts a copy beside the originals; `--to <canvas>`
+puts it on a different one. The human does the same with ⌘C/⌘V, and both
+write the same ops.
+
+Two things it does that a loop over `add` would not. **The arrangement of a
+selection is kept** — four screens in a row copy as four screens in a row,
+because the group is placed as one box rather than each item being placed on
+its own. And **a copy records what it was made from** (`parent`), so
+`isocan lineage` shows it hanging off its original — except across canvases,
+where that id would point at nothing.
+
+A copy does NOT inherit the original's `file`. Two items claiming one path
+would overwrite each other on `save`, and the copy is not that file — bind it
+yourself if it should be one.
+
 ## When a teammate sees the item but not the picture
 
 An item replicates; the BYTES it names do not follow on their own. They are
@@ -1017,6 +1034,9 @@ summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
 `blobs [--push]` (are this canvas's bytes at its home — and send the ones
 that are not; the answer when a teammate sees an item and no picture),
+`copy <items...> [--to <canvas>] [--at x,y]` (copy items beside themselves, or
+into another canvas — the arrangement of a selection is kept, and the bytes
+travel when the canvas does),
 `text <words…>` (words straight onto the canvas as a chromeless node —
 `--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
 and `save` back it like anything else),

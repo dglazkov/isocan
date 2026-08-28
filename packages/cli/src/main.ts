@@ -96,6 +96,8 @@ import {
   buildRecap,
   cleanFilePath,
   FILE_PROP,
+  copyProperties,
+  duplicatePlacements,
   needsDesignSystem,
   TEXT_FACES,
   TEXT_FACE_PROP,
@@ -131,6 +133,7 @@ import {
   metaPatch,
   readConfig,
   readHomeRecord,
+  matchRef,
   resolveCanvas,
   writeConfig,
 } from "./ctx.ts";
@@ -3265,6 +3268,84 @@ program
  * a hand re-upload and the confirmation was somebody else's reload, which is
  * a guess that happened to work.
  */
+/**
+ * **Copy items — the durable act behind the app's ⌘C/⌘V.**
+ *
+ * The clipboard is a UI idea and stays one: it is local, it is per-tab, and
+ * nothing about it belongs on the wire. What both surfaces share is what
+ * actually happens when you paste — new items, made from the old ones,
+ * arranged the way they were. So the CLI has the ACT, not the clipboard, and
+ * the two produce the same ops.
+ *
+ * Across canvases the bytes have to travel: a blob is addressed per canvas,
+ * so a copy into another canvas re-uploads it there. Content addressing makes
+ * that cheap to be right about — the same bytes hash the same on both sides,
+ * so a canvas that already holds them gains nothing new.
+ */
+program
+  .command("copy <items...>")
+  .description("Copy items — beside themselves, or into another canvas with --to")
+  .option("--to <canvas>", "copy into this canvas instead of beside the originals")
+  .option("--at <x,y>", "where the copy goes (default: clear ground beside the originals)")
+  .action(
+    run(async (items: string[], opts: { to?: string; at?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: from, snapshot } = await canvasAndSnapshot(ctx);
+      const sources = items.map((ref) => resolveItem(snapshot, ref));
+      // `--to` names a canvas the way every other ref does; without it the
+      // copies land beside their originals.
+      const target = opts.to
+        ? matchRef(await ctx.client.listCanvases(), opts.to)
+        : from;
+      const sameCanvas = target.id === from.id;
+      // The arrangement is placed against the canvas the copies LAND on —
+      // beside the originals when that is the same one, on clear ground when
+      // it is not.
+      const into = sameCanvas ? snapshot.canvas : (await ctx.client.snapshot(target.id)).canvas;
+      const placements = duplicatePlacements(
+        into,
+        sources,
+        opts.at ? parseXY(opts.at) : undefined,
+      );
+      const made: string[] = [];
+      for (const { item, x, y } of placements) {
+        const version = item.versions.find((v) => v.id === item.currentVersionId);
+        if (!version) continue;
+        let blobHash = version.blobHash;
+        if (!sameCanvas) {
+          // Blobs are addressed per canvas, so the bytes have to be put where
+          // the new item will look for them.
+          const bytes = await ctx.client.downloadBlob(from.id, version.blobHash);
+          const up = await ctx.client.uploadBlob(target.id, bytes, version.mimeType, version.filename);
+          blobHash = up.blobHash;
+        }
+        const itemId = newItemId();
+        await sendOp(ctx, target.id, {
+          type: "item.add",
+          itemId,
+          version: {
+            id: newVersionId(),
+            blobHash,
+            mimeType: version.mimeType,
+            filename: version.filename,
+            size: version.size,
+          },
+          width: item.width,
+          height: item.height,
+          placement: { x, y },
+          title: item.title,
+          ...(item.description ? { description: item.description } : {}),
+          properties: copyProperties(item, { sameCanvas }),
+        });
+        made.push(itemId);
+      }
+      if (ctx.json) return printJson({ items: made, canvasId: target.id });
+      const where = sameCanvas ? "beside the originals" : `into "${target.title}"`;
+      console.log(`copied ${made.length} item${made.length === 1 ? "" : "s"} ${where}`);
+      for (const id of made) console.log(`  ${id}`);
+    }),
+  );
+
 program
   .command("blobs")
   .description("Check that this canvas's bytes reached its home — and send the ones that did not")

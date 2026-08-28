@@ -381,7 +381,10 @@ export async function resolveCanvas(ctx: Ctx, opts: ResolveOptions = {}): Promis
 }
 
 /** Exact id, then case-insensitive title prefix. */
-function matchRef(canvases: Canvas[], ref: string): Canvas {
+/** A canvas by id or by a unique title prefix — the one spelling of "which
+ *  canvas did they mean", shared so `--to` on a copy means exactly what
+ *  `--canvas` means everywhere else. */
+export function matchRef(canvases: Canvas[], ref: string): Canvas {
   const byId = canvases.find((p) => p.id === ref);
   if (byId) return byId;
   const matches = canvases.filter((p) => p.title.toLowerCase().startsWith(ref.toLowerCase()));
