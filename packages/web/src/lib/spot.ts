@@ -87,3 +87,53 @@ export function spotInView(
   }
   return centre;
 }
+
+/**
+ * Where on screen an item may land: the window, less the chrome that would
+ * cover it. The dock is measured rather than assumed, because it is a panel
+ * somebody opened at a width they chose.
+ */
+export function placeableArea() {
+  const dock = document.querySelector(".main-panel, .files-panel");
+  const left = dock ? Math.ceil(dock.getBoundingClientRect().right) + 16 : 24;
+  return {
+    left,
+    top: 64, // under the top bar
+    right: window.innerWidth - 84, // clear of the tool rail
+    bottom: window.innerHeight - 24,
+  };
+}
+
+/**
+ * **Show what just arrived, but only if it is not already in front of you.**
+ *
+ * Dropped files used to land wherever the daemon's ring search put them,
+ * which on a busy canvas is off the edge of the screen — so the thing you
+ * dropped became a thing you had to go and find. Placing them properly is the
+ * fix; this is the safety net for when placement alone is not enough, because
+ * the ring search still moves an item that lands on something.
+ *
+ * A camera move you did not ask for is disorienting, so it is conditional:
+ * if what arrived is already visible, nothing happens at all. That makes the
+ * common case silent and the surprising case handled, which is the right way
+ * round.
+ */
+export function revealIfOffscreen(
+  viewport: Viewport,
+  items: readonly Item[],
+  within: ScreenBox,
+  glide: (box: { minX: number; minY: number; maxX: number; maxY: number }) => void,
+): void {
+  if (items.length === 0) return;
+  const minX = Math.min(...items.map((i) => i.x));
+  const minY = Math.min(...items.map((i) => i.y));
+  const maxX = Math.max(...items.map((i) => i.x + i.width));
+  const maxY = Math.max(...items.map((i) => i.y + i.height));
+  const topLeft = screenToWorld(viewport, within.left, within.top);
+  const bottomRight = screenToWorld(viewport, within.right, within.bottom);
+  // Wholly inside what you can see: leave the camera alone.
+  const visible =
+    minX >= topLeft.x && minY >= topLeft.y && maxX <= bottomRight.x && maxY <= bottomRight.y;
+  if (visible) return;
+  glide({ minX, minY, maxX, maxY });
+}

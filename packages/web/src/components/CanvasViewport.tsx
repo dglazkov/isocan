@@ -8,6 +8,8 @@ import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
+import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
+import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
@@ -564,8 +566,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       setNotice(err instanceof Error ? err.message : "Those files could not be added.");
       return [] as string[];
     });
-    const last = ids[ids.length - 1];
-    if (last) ui.select(last);
+    // The whole drop is selected, not just the last file — you dropped five
+    // things and five things are what arrived.
+    if (ids.length > 0) {
+      useUiStore.getState().setSelection(ids);
+      const canvas = useCanvasStore.getState().canvas;
+      const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
+      revealIfOffscreen(
+        useUiStore.getState().viewport,
+        landed as Parameters<typeof revealIfOffscreen>[1],
+        placeableArea(),
+        glideToBox,
+      );
+    }
   }
 
   const items = canvas ? Object.values(canvas.items) : [];
