@@ -64,3 +64,71 @@ const orphaned = setInterval(() => {
 }, 1000);
 // A worker that finishes early should still exit early.
 orphaned.unref();
+
+/**
+ * **A connection that was never made is a blip, not a verdict.**
+ *
+ * Measured across nine full runs on a 14-core machine: two failures, in two
+ * unrelated files, and both the same thing —
+ *
+ *     TypeError: fetch failed
+ *     Caused by: Error: connect ETIMEDOUT 127.0.0.1:59864
+ *
+ * — raised inside `beforeEach`, connecting to a daemon this very worker had
+ * just started IN-PROCESS. Not an assertion, and not a vitest timeout: the
+ * limit here is 30 seconds and these failed in eight. It is the accept never
+ * happening, because vitest runs one worker per core (fourteen), every worker
+ * stands daemons up, and the CLI files spawn real binaries on top — so a
+ * worker's event loop stalls for seconds and a TCP connect to its own
+ * listener times out.
+ *
+ * Capping parallelism was measured and REJECTED as the fix. Six workers ran
+ * clean four times but cost ~14% wall (48.7s → 55.4s), and seven workers
+ * failed anyway on the third run — so a cap reduces the frequency without
+ * removing the failure mode, which is the worst of both: slower, and still
+ * flaky.
+ *
+ * So the harness does what the PRODUCT already does. `isocan wait` retries a
+ * severed long-poll rather than exiting, and a home link reconnects with
+ * backoff; a test client that cannot survive what the daemon's own clients
+ * survive is holding the suite to a standard the code does not have to meet.
+ *
+ * **The rule is narrow on purpose: only when the request never left.**
+ * `syscall === "connect"` means no bytes reached the server, so a retry
+ * cannot repeat a write — which a blanket retry on "fetch failed" absolutely
+ * could, because a socket dying mid-response looks the same at the call site
+ * and may well have been applied. An HTTP response of any status is an
+ * ANSWER and is returned untouched: a 404 or a 500 is the server speaking,
+ * and swallowing those would hide exactly the failures this suite is for.
+ */
+const realFetch = globalThis.fetch;
+/**
+ * Bounded by the CLOCK, not by a number of attempts — and that distinction was
+ * paid for. The first version retried four times, which is fine against
+ * `ECONNREFUSED` (instant) and catastrophic against `ETIMEDOUT`: a connect
+ * timeout can sit for ten seconds on its own, so four of them turned one 8s
+ * failure into a `beforeEach` that blew the 30s hook limit. The retry made
+ * the symptom worse while fixing the cause.
+ *
+ * A budget cannot do that. However slow one attempt turns out to be, the
+ * whole thing gives up at three seconds and the original error is what the
+ * test sees.
+ */
+const CONNECT_BUDGET_MS = 3000;
+globalThis.fetch = async function retryingFetch(input, init) {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await realFetch(input, init);
+    } catch (err) {
+      const cause = (err as { cause?: { syscall?: string; code?: string } }).cause;
+      const neverLeft =
+        cause?.syscall === "connect" &&
+        (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET");
+      if (!neverLeft || Date.now() - started >= CONNECT_BUDGET_MS) throw err;
+      // Give the stalled loop a moment, and lengthen it — a machine that is
+      // busy now is likely to be busy in a millisecond.
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+} as typeof fetch;
