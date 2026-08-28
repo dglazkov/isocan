@@ -151,6 +151,43 @@ and **it does not fire on mount** — a rail restored open has a viewport that
 is already correct, and panning it would scroll the canvas sideways on every
 load.
 
+**Landed 28 Aug 2026.**
+
+The distance is `dockEdges`, never a fresh measurement — the same derivation
+framing uses, so the pan and the framing cannot come to disagree about one
+rail. That choice answers the awkward cases for free: Chat→Files changes no
+width, so the delta is zero and the canvas does not twitch; widening a CLOSED
+rail moves nothing, because a closed rail occupies nothing.
+
+Measured in the browser, all four transitions, at panelWidth 320:
+
+| transition | pan | expected |
+|---|---|---|
+| Files → Chat (swap) | 0 | 0 |
+| Chat → closed | −340 | −340 |
+| closed → Files | +340 | +340 |
+| Files → closed | −340 | −340 |
+
+A keyboard widen of 128px panned by exactly 128, once. Restoring a remembered
+rail on load does NOT pan: it is the one caller that passes `pan: false`,
+because the viewport being restored was saved with that rail already open.
+
+**Two findings worth more than the phase.**
+
+`requestAnimationFrame` does not fire in a hidden tab, and the harness these
+phases are built in reports `document.hidden === true` permanently. That is
+the answer to phase 1's unmeasurable blur — diagnosed rather than guessed —
+and it is also a real defect it exposed in this phase: an eased pan started
+while nobody is looking does not run slowly, it STOPS half-applied and
+finishes whenever the tab is next brought forward. The ease is skipped when
+the document is hidden, alongside reduced motion.
+
+A reload drifts the camera by ~15–19px **with the rail shut as well as
+open**, so it is pre-existing and not this phase's doing. Recorded rather
+than folded in silently: it is small, it is in both directions, and nobody
+has reported it — but a canvas that does not come back exactly where it was
+left is worth its own look.
+
 ## Phase 3 — Closed: the 48px strip
 
 Spec §3. A new persistent surface, and the first place the redesign REPLACES

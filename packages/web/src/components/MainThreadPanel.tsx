@@ -191,7 +191,10 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
     initedFor.current = canvasId;
     const stored = storedPanel(canvasId);
     // Never chosen here: a canvas that already has a main thread opens with it.
-    openPanel(canvasId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored);
+    // No pan: the viewport being restored was saved WITH this rail open, so
+    // it is already correct. Panning here would slide the canvas sideways on
+    // every load.
+    openPanel(canvasId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored, false);
   }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the

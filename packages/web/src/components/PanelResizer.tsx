@@ -1,4 +1,5 @@
 import { useUiStore, PANEL_MIN_WIDTH, maxPanelWidth } from "../stores/uiStore.ts";
+import { setRailWidth } from "../lib/panels.ts";
 
 /**
  * The docked panel's right edge, as a handle.
@@ -40,7 +41,7 @@ export interface ResizerProps {
 export function PanelResizer(props: Partial<ResizerProps> = {}) {
   const storeWidth = useUiStore((s) => s.panelWidth);
   const value = props.value ?? storeWidth;
-  const onChange = props.onChange ?? ((w: number) => useUiStore.getState().setPanelWidth(w));
+  const onChange = props.onChange ?? setRailWidth;
   const resetTo = props.resetTo ?? PANEL_MIN_WIDTH;
   const min = props.min ?? PANEL_MIN_WIDTH;
   const max =
