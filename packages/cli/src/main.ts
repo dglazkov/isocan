@@ -3303,6 +3303,65 @@ program
  * that cheap to be right about — the same bytes hash the same on both sides,
  * so a canvas that already holds them gains nothing new.
  */
+/**
+ * **Say something in the Chat, in one command.**
+ *
+ * The Chat is the canvas's own conversation and the channel every parked
+ * agent hears — `wait` wakes on anything landing there with no @-mention —
+ * and it is also, in the app, the thing that raises a toast on somebody's
+ * screen. So "notify the human" and "post to the Chat" are the same act, and
+ * this is that act with the ceremony removed.
+ *
+ * The ceremony was the problem. Posting to the Chat meant knowing the main
+ * thread's id: `comment main` to find it, then `comment reply <thr>` to
+ * speak. `comment reply main` does not resolve. So an agent with something to
+ * announce reached for `comment add`, which is a PIN — a thing stuck to a
+ * spot on the canvas — and a canvas collected pins for announcements that
+ * were never about anywhere in particular.
+ *
+ * On a canvas with no Chat yet, the first message births it, exactly as the
+ * app's own `postToMain` does. Its coordinates are only where the pin would
+ * land if the channel were ever demoted, and this end has no viewport to
+ * offer, so they are the origin and say so.
+ */
+program
+  .command("notify <message...>")
+  .description("Say something in the Chat — every parked agent hears it, and the human sees it")
+  .option("--item <ref...>", "items this is about, carried so a reader can act on them")
+  .action(
+    run(async (words: string[], opts: { item?: string[] }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const body = words.join(" ");
+      const attached = (opts.item ?? []).map((ref) => resolveItem(snapshot, ref).id);
+      const withItems = (comment: NewComment): NewComment =>
+        attached.length === 0
+          ? comment
+          : { ...comment, items: [...new Set([...(comment.items ?? []), ...attached])] };
+
+      const main = mainThread(snapshot.canvas);
+      const comment = withItems(await newComment(ctx, p.id, snapshot, body));
+      if (main) {
+        await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id });
+        console.log(`said in the Chat: ${body}`);
+        return;
+      }
+      const threadId = newThreadId();
+      await sendOp(ctx, p.id, {
+        type: "thread.create",
+        threadId,
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        main: true,
+        comment,
+      });
+      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+      console.log(`started the Chat, and said: ${body}`);
+    }),
+  );
+
 program
   .command("copy <items...>")
   .description("Copy items — beside themselves, or into another canvas with --to")

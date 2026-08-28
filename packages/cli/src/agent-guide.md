@@ -256,6 +256,15 @@ channel to you: it renders as a docked panel rather than a pin, everything
 posted there wakes your `wait` with no @-mention needed, and `#Title`
 references in it render as cards that fly the reader to the item.
 
+`isocan notify "…"` is how you say something there in one command — it
+replies to the Chat, or starts it if the canvas has none. Reach for it
+whenever you have an announcement rather than a remark about a thing: the
+human sees it arrive, and every other parked agent wakes on it.
+
+Do NOT use `comment add` for that. A comment is a PIN — it sticks to a spot
+on the canvas — so announcing "the deploy is done" with one leaves a marker
+on a place that had nothing to do with it, and a canvas collects them.
+
 The distinction worth holding, because the words now carry it: **the Chat is
 the canvas's conversation; a comment is pinned to a thing.** Reply to asks
 made in the Chat in the Chat, and keep item-specific critique on the item's
@@ -1037,6 +1046,8 @@ that are not; the answer when a teammate sees an item and no picture),
 `copy <items...> [--to <canvas>] [--at x,y]` (copy items beside themselves, or
 into another canvas — the arrangement of a selection is kept, and the bytes
 travel when the canvas does),
+`notify <message...> [--item <ref>]` (say something in the Chat in one
+command — every parked agent hears it and the human sees it),
 `text <words…>` (words straight onto the canvas as a chromeless node —
 `--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
 and `save` back it like anything else),

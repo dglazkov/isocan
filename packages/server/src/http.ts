@@ -185,6 +185,9 @@ export const STATIC_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".ico": "image/x-icon",
+  // The handwriting face and the licence that has to travel with it.
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
@@ -2596,7 +2599,29 @@ function registerPages(
      *   cheaper mistake than a third caching rule nobody remembers.
      */
     const hashed = file.startsWith(path.join(dist, "assets") + path.sep);
-    reply.header("Cache-Control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
+    /**
+     * A third case, and it is about NAMES rather than about content.
+     *
+     * `/assets/*` may be `immutable` because Vite hashes those names, so new
+     * bytes always arrive as a new URL. A font in `public/` does not get that
+     * — its name is stable — so `immutable` would pin a replaced font in
+     * caches with no way to bust it. But `no-cache` is wrong too: re-fetching
+     * 73KB of handwriting on every load is exactly the cost self-hosting was
+     * supposed to remove.
+     *
+     * So: cached for a day. Long enough that the font is free in normal use,
+     * short enough that replacing it takes effect without anybody being told
+     * to clear anything.
+     */
+    const font = path.extname(file) === ".woff2";
+    reply.header(
+      "Cache-Control",
+      hashed
+        ? "public, max-age=31536000, immutable"
+        : font
+          ? "public, max-age=86400"
+          : "no-cache",
+    );
     return reply.send(createReadStream(file));
   };
 
