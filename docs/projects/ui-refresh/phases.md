@@ -100,7 +100,8 @@ acceptable on the slowest machine that matters.** If blur over a live canvas
 costs too much, that is discovered here, cheaply, before three phases are
 built on top of it.
 
-**Landed 28 Aug 2026, with one acceptance item OUTSTANDING.**
+**Landed 28 Aug 2026. Its outstanding acceptance was closed by hand on
+29 Aug — see the end of this phase.**
 
 Chat and Files share one `.dock-panel` frame — they had byte-identical rules
 written twice, and restyling one would have left the other clamped to the
@@ -118,13 +119,23 @@ themes, all four inks:
 | `--ink-soft` | 5.14 | 5.40 |
 | `--accent-text` | 7.81 | 7.74 |
 
-**The blur is still unmeasured under motion.** The browser pane this was
-built in pauses `requestAnimationFrame` while it is hidden, so frame timing
-during a pan could not be taken, and a number that was not measured must not
-be reported as one. What was done instead is to spend less than the design
-asked for — `blur(12px) saturate(1.2)` rather than 20px/1.3 — and to note
-that four other surfaces already blur without complaint. **This is the item
-to close before phase 2**, on a real machine, by hand.
+**The blur under motion — closed by hand, 29 Aug 2026.** It could not be
+measured here: the browser pane pauses `requestAnimationFrame` while hidden,
+so frame timing during a pan was unavailable, and a number that was not taken
+must not be reported as one. What was done instead was to spend less than the
+design asked — `blur(12px) saturate(1.2)` rather than 20px/1.3 — and to leave
+the acceptance open rather than claim it.
+
+Panned with the rail open on a real machine: fine. That is the right kind of
+answer for this question. The acceptance was always "acceptable on the slowest
+machine that matters", which is a judgement somebody makes with their eyes
+rather than a threshold a test can hold.
+
+**What the harness could never do is worth recording**, because THREE separate
+acceptances waited on one fact: it delivers no key events to the page, never
+runs a frame, and reports the tab hidden. ⌘J, this, and follow's flight were
+all blocked by it, and all three were answered in a minute by somebody with a
+keyboard in front of them.
 
 **Known interim inconsistency:** the trash and marks panels dock to the RIGHT
 edge and are unchanged, so they are still flush while the left rail floats.
@@ -233,12 +244,16 @@ correctly moved (1) → (2). The tab title counting THREADS is not a
 contradiction — it answers "how many conversations want you" across the whole
 canvas. Two numbers, two questions.
 
-**⌘J is registered, handled, and unverified in a browser.** The row is in
+**⌘J is registered, handled, and — as of 29 Aug — VERIFIED.** The row is in
 `SHORTCUTS`, so `?` and `isocan shortcuts` both print it from one place
-(confirmed on the CLI). Whether a browser hands the combination to a page
-could not be tested here: the harness delivers no key events to the page at
-all — a plain `j` never arrived either — so the result was inconclusive, not
-negative. **This needs one press on a real machine, in Chrome and Safari.**
+(confirmed on the CLI), and the key reaches the page in a real browser:
+pressed by hand, it toggles the Chat.
+
+It stayed open for a day because the harness delivers no key events to the
+page at all — a plain `j` never arrived either — so the result here was
+inconclusive rather than negative, and saying so was the only honest option.
+Chrome keeping ⌘J for its downloads panel was a real possibility that would
+have cost a keyboard convenience. It does not.
 
 The design does not rest on the answer: the strip is a button, so a browser
 that keeps ⌘J for its downloads panel costs a keyboard convenience and nothing
