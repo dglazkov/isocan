@@ -6,6 +6,7 @@ import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
+import { NeighbourPad } from "./NeighbourPad.tsx";
 
 /** The editor is its own chunk inside the cover's chunk: CodeMirror is the
  * heaviest thing the workbench owns, and a folded editor must not pay for
@@ -375,6 +376,22 @@ export function ArtifactStage({
                    */}
                   {backing && backing.state !== "unbound" && (
                     <SaveToDisk canvasId={canvasId} itemId={item.id} backing={backing} />
+                  )}
+                  {/**
+                   * **Which way there is something, on the bar people can
+                   * actually see.**
+                   *
+                   * This first went into the full-screen bar — which rests
+                   * after a few still seconds and is therefore invisible
+                   * exactly when somebody is presenting and wants to know
+                   * whether there is a next slide. This bar is the one on
+                   * screen. It is offered only in full screen because that is
+                   * where ⌘-arrows flip slides; on the workbench the same keys
+                   * move the canvas selection and the rail is already the way
+                   * around.
+                   */}
+                  {surface === "fullscreen" && (
+                    <NeighbourPad canvasId={canvasId} itemId={item.id} />
                   )}
                   {offerTextEdit && (
                     <button

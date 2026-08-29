@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas } from "@isocan/core";
 import { canvasPath, newCanvasId } from "@isocan/core";
-import { listCanvases, sendOp } from "../lib/api.ts";
+import { fetchHomes, listCanvases, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
@@ -41,10 +41,50 @@ export function CanvasListPage({
    * them with its home, and each opens in a browser at the address that IS its
    * home. This page is one origin talking about itself.
    */
-  const refresh = useCallback(() => {
-    listCanvases().then(setProjects, () => setProjects([]));
+  /**
+   * **A list that could not be read is not an empty list.**
+   *
+   * This swallowed the failure into `setProjects([])`, so a daemon that was
+   * down, a badge that was refused and a genuinely empty home all rendered the
+   * same page: "no canvases yet". That is the most confident possible way to
+   * be wrong, and it is the same silence the create below had.
+   */
+  const [listError, setListError] = useState<string | null>(null);
+  const refresh = useCallback(
+    () =>
+      listCanvases().then(
+        (found) => {
+          setProjects(found);
+          setListError(null);
+          return found;
+        },
+        (err: unknown) => {
+          setProjects([]);
+          setListError(err instanceof Error ? err.message : "the canvases could not be read");
+          return [] as Canvas[];
+        },
+      ),
+    [],
+  );
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  /**
+   * Where a canvas born here would actually be born. Read once, and only used
+   * to explain a create that landed somewhere this list cannot show — see
+   * `create`. A daemon that will not answer this is not an obstacle to
+   * anything: the explanation is simply less specific.
+   */
+  const [birthHome, setBirthHome] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchHomes().then(
+      (homes) => { if (live) setBirthHome(homes.birth); },
+      () => {},
+    );
+    return () => { live = false; };
   }, []);
-  useEffect(refresh, [refresh]);
 
   /**
    * A named seam, so the next person meets it as a known cost rather than as a
@@ -58,13 +98,62 @@ export function CanvasListPage({
    * phase 10.3's scope was the two changes that close the stale-replica hole,
    * and this is a follow-up rather than a silent omission.
    */
+  const [creating, setCreating] = useState(false);
+  /** What just happened, when what just happened was not a new card. */
+  const [createNote, setCreateNote] = useState<{ kind: "error" | "elsewhere"; text: string } | null>(
+    null,
+  );
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
-    if (!trimmed) return;
-    await sendOp(null, actor, { type: "project.create", canvasId: newCanvasId(), title: trimmed });
-    setTitle("");
-    refresh();
+    if (!trimmed || creating) return;
+    setCreating(true);
+    setCreateNote(null);
+    const canvasId = newCanvasId();
+    try {
+      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed });
+    } catch (err) {
+      /**
+       * **It threw into nothing before.** `create` was an async submit handler
+       * with no catch, and `project.create` is deliberately NOT queueable
+       * (`queueable` in `lib/writequeue.ts`: a canvas born with no network is
+       * offline BIRTH, a design of its own) — so a refusal became an unhandled
+       * rejection and the page said nothing at all.
+       */
+      setCreateNote({
+        kind: "error",
+        text: err instanceof Error ? err.message : "that canvas could not be created",
+      });
+      setCreating(false);
+      return;
+    }
+    const found = await refresh();
+    setCreating(false);
+    if (found.some((canvas) => canvas.id === canvasId)) {
+      setTitle("");
+      return;
+    }
+    /**
+     * **The seam named above, now said out loud.**
+     *
+     * The comment on `refresh` has always warned that on a daemon with a birth
+     * default, a canvas created here is born at THAT home and cannot appear in
+     * this list — and called the honest fix "a sentence saying where it went,
+     * with a link to it". Until now the page did the opposite: it cleared the
+     * field and showed nothing, which reads exactly like a button that does
+     * not work. It was reported as precisely that.
+     *
+     * The title is deliberately NOT cleared. The canvas exists, but not here,
+     * and leaving the words in the field is what makes the difference between
+     * "it worked, elsewhere" and "it worked" visible without reading anything.
+     */
+    setCreateNote({
+      kind: "elsewhere",
+      text: birthHome
+        ? `Created at ${new URL(birthHome).host} — new canvases are born there, so it will not appear in this list.`
+        : "Created, but not at this address — new canvases are born at this daemon's home, so it will not appear in this list.",
+    });
   }
 
   async function edit(canvas: Canvas, patch: MetaPatch) {
@@ -144,9 +233,25 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <button className="btn primary" type="submit" disabled={!title.trim()}>
-            Create
+          <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
+            {creating ? "Creating…" : "Create"}
           </button>
+          {/* **Say what happened.** A create that lands at another home, or is
+              refused outright, used to leave an empty field and no card — a
+              button that reads as broken. */}
+          {createNote && (
+            <p className={`create-note${createNote.kind === "error" ? " bad" : ""}`}>
+              {createNote.text}
+              {createNote.kind === "elsewhere" && birthHome && (
+                <>
+                  {" "}
+                  <a href={birthHome} target="_blank" rel="noreferrer">
+                    Open {new URL(birthHome).host}
+                  </a>
+                </>
+              )}
+            </p>
+          )}
         </form>
         {(canvases ?? []).map((canvas) => (
           <div className="canvas-card" key={canvas.id}>
@@ -210,6 +315,8 @@ export function CanvasListPage({
         ))}
       </div>
       {canvases === null && <p className="canvases-loading">Loading…</p>}
+      {/* An unreadable list is not an empty one, and must not render as one. */}
+      {listError && <p className="canvases-error">{listError}</p>}
     </div>
   );
 }
