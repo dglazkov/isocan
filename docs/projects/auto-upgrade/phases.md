@@ -49,10 +49,10 @@ rather than queued here:
 
 - **The wake cannot say what changed beyond the sha** — the home has no `.git`,
   so Scene 1's commit count and subject line are unbuilt (phase 4's findings).
-- **A fresh machine still starts unmanaged**, because the front door's `setup`
-  runs `npm i -g`; the first adoption is a command somebody runs. Whether
-  `setup` should install straight into `builds/` is a front-door change (see
-  Deliberately open).
+- **The front door installs globally, not into `builds/`** — a machine adopts
+  itself on its first unattended upgrade rather than arriving managed. Whether
+  `setup` should skip the global step is a front-door change (see Deliberately
+  open).
 - **The trust boundary has not been met as a decision.** Whatever is on
   `release` now runs unattended on every managed machine, and multiuser Scene 5
   already puts somebody else's agent on somebody else's laptop. `--pin` and
@@ -103,11 +103,14 @@ decides them deliberately instead of improvising mid-task:
   suspect. This is probably fine, because a rollback is a directory read and a
   symlink flip. It is recorded here so the commands stay that small and never
   gain a network call.
-- **When a fresh machine becomes managed.** Phase 3 adopts an existing global
-  install on its first upgrade, but the front door's `setup` still runs
-  `npm i -g` — so every new machine starts unmanaged and needs one extra
-  adoption step. Whether `setup` should install straight into `builds/` is a
-  front-door change and is not decided here.
+- **Where the front door installs.** `setup` runs `npm i -g`, so a new machine
+  is a GLOBAL install rather than a managed one. **That no longer means it
+  waits to be adopted** — phase 4 makes `auto` the default for a global install
+  too, and its first unattended upgrade is what adopts it, so a machine that
+  came through the front door closes its own gap. What is still open is
+  narrower and belongs to the front door rather than here: whether `setup`
+  should install straight into `builds/` and skip the global step, which would
+  save one adoption and one symlink write outside `~/.isocan`.
 - **Windows.** Phase 3's symlink flip becomes a junction or a `.cmd` shim
   there, and nobody has run this on Windows. Still true after phase 3, which
   did the one thing that costs nothing: `flipTo` writes a junction with an
@@ -731,6 +734,18 @@ network because `applySwap` takes the fetch as a seam.
   rollback followed by a step forward cost a full download to arrive at a
   directory that already existed. It now checks first, which is also what makes
   this phase's proof reachable without a network.
+- **2026-08-29 — `auto` shipped denying itself to the population it was written
+  for**, and it took being asked "does this not defeat the purpose" to see it.
+  The default was `auto` for a managed install and `notify` for everything
+  else, on the reasoning that a first adoption should be something somebody
+  asks for. But the front door runs `npm i -g`, so a global install is what
+  every machine that came through it IS — including Priya's, in the journey
+  that motivates the project. Scene 0 had already ruled: `auto` closes the gap
+  on her machine, and the only two populations that keep the notice are a
+  checkout and a machine where somebody chose it. Corrected: `global` is `auto`
+  too, and its first upgrade adopts it. The lesson is the shape of the mistake
+  — a caution that reads as careful while making the unattended case require
+  attention.
 - **2026-08-29** — The smoke test's scratch home moved from `os.tmpdir()` into
   `builds/`. The test asserting it left nothing behind read the OS temp
   directory, and failed the moment another test file ran a smoke test at the

@@ -60,21 +60,38 @@ async function config(values: Record<string, unknown>): Promise<void> {
 }
 
 describe("who may apply an upgrade", () => {
-  it("makes a managed install auto by default, and says why", async () => {
-    const policy = await upgradePolicy(home, "managed");
-    expect(policy.mode).toBe("auto");
-    expect(policy.why).toContain("default");
-  });
-
   /**
    * In notify mode, applying an upgrade takes four steps on an unattended
    * machine — the notice, the agent reporting it, a person approving, the
    * agent running the command — and that chain never completes on the machines
-   * nobody watches. So the default turns on the kind of install, and only a
-   * managed one gets `auto`.
+   * nobody watches. So the default turns on whether the copy is one that can
+   * adopt itself.
    */
-  it.each(["checkout", "global", "npx", "local"] as const)(
-    "leaves a %s install on notify — only a managed install upgrades itself",
+  it.each(["managed", "global"] as const)(
+    "makes a %s install auto by default, and says why",
+    async (kind) => {
+      const policy = await upgradePolicy(home, kind);
+      expect(policy.mode).toBe("auto");
+      expect(policy.why).toContain(kind);
+    },
+  );
+
+  /**
+   * **The front door's install is a GLOBAL one**, so this is the case the
+   * whole project was written for: `setup` runs `npm i -g`, and a machine that
+   * came through the front door has to be able to close the gap on its own.
+   * Journey Scene 0 says so outright — "after phase 4, `auto` closes the gap on
+   * her machine before it grows" — and names the only two populations that
+   * keep the notice: a checkout, and a machine where somebody chose `notify`.
+   * The first version of this shipped with `global` on notify, which denied
+   * the feature to everybody who had not already opted in by hand.
+   */
+  it("does not leave the front door's own install waiting to be asked", async () => {
+    expect((await upgradePolicy(home, "global")).mode).toBe("auto");
+  });
+
+  it.each(["checkout", "npx", "local"] as const)(
+    "leaves a %s install on notify — it is not a copy that can adopt itself",
     async (kind) => {
       const policy = await upgradePolicy(home, kind);
       expect(policy.mode).toBe("notify");
@@ -86,7 +103,7 @@ describe("who may apply an upgrade", () => {
     await config({ upgrade: "off" });
     expect((await upgradePolicy(home, "managed")).mode).toBe("off");
     await config({ upgrade: "auto" });
-    expect((await upgradePolicy(home, "global")).mode).toBe("auto");
+    expect((await upgradePolicy(home, "npx")).mode).toBe("auto");
   });
 
   it("ignores a mode config.json does not recognise rather than guessing", async () => {
