@@ -28,6 +28,7 @@ const menu = (over = {}) =>
   chromeMenu({
     canvasId: "prj_1",
     filesOpen: false,
+    agentsOpen: false,
     trashOpen: false,
     trashCount: 0,
     minimapOpen: true,
@@ -37,7 +38,7 @@ const menu = (over = {}) =>
 describe("the drawer holds everything it took", () => {
   it("offers files, trash, the map and the shortcut list", () => {
     const found = labels(menu()).join(" | ");
-    for (const control of ["Files", "Trash", "map", "shortcuts"]) {
+    for (const control of ["Files", "Agents", "Trash", "map", "shortcuts"]) {
       expect(found, `${control} left the bar and must be in the drawer`).toContain(control);
     }
   });
@@ -59,6 +60,7 @@ describe("the drawer holds everything it took", () => {
     expect(labels(menu({ filesOpen: true }))).toContain("Hide files");
     expect(labels(menu({ minimapOpen: true }))).toContain("Hide the map");
     expect(labels(menu({ minimapOpen: false }))).toContain("Show the map");
+    expect(labels(menu({ agentsOpen: true }))).toContain("Hide agents");
   });
 
   it("carries the trash count, which is the one thing the bar said that a handle cannot", () => {

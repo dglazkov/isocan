@@ -51,6 +51,7 @@ import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { RailStrip } from "../components/RailStrip.tsx";
 import { openPanel } from "../lib/panels.ts";
 import { FilesPanel } from "../components/FilesPanel.tsx";
+import { AgentTray } from "../components/AgentTray.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
@@ -722,6 +723,7 @@ function CanvasSurface({
       <RailStrip canvasId={canvasId} actor={actor} />
       <MainThreadPanel canvasId={canvasId} actor={actor} />
       <FilesPanel canvasId={canvasId} actor={actor} />
+      <AgentTray canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all

@@ -208,6 +208,7 @@ export const _itemKind = itemKind;
 export function chromeMenu(ctx: {
   canvasId: string;
   filesOpen: boolean;
+  agentsOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
   minimapOpen: boolean;
@@ -217,6 +218,10 @@ export function chromeMenu(ctx: {
     {
       label: ctx.filesOpen ? "Hide files" : "Files",
       run: () => openPanel(ctx.canvasId, ctx.filesOpen ? null : "files"),
+    },
+    {
+      label: ctx.agentsOpen ? "Hide agents" : "Agents",
+      run: () => openPanel(ctx.canvasId, ctx.agentsOpen ? null : "agents"),
     },
     {
       label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,

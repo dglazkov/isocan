@@ -19,6 +19,7 @@ describe("the shut rail takes room, and everything that stands beside it knows",
   const dock = (over = {}) => ({
     mainPanelOpen: false,
     filesPanelOpen: false,
+    agentsPanelOpen: false,
     trashOpen: false,
     marksOpen: false,
     panelWidth: 320,

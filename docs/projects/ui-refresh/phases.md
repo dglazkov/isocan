@@ -392,10 +392,23 @@ The rationale describes six moves; the spec implements parts of three. Naming
 the rest keeps anybody from thinking the refresh is finished when §1–5 are
 green:
 
-- **The agent tray.** `isocan who` given a home — who, what they are doing,
-  what state they are in. The statuses are already computed and already
-  correct; they have never been shown. The rationale argues this is the most
-  isocan-specific move of the lot, and it is not in the spec at all.
+- **The agent tray. Done, 28 Aug 2026.** `isocan who` given a home on the
+  canvas: who is here, what state they are in, what they last did.
+
+  Nothing is computed. `roster()` from core is the same function the terminal
+  calls and the same one the workbench column already used — three surfaces,
+  one derivation, so when the terminal says blocked the canvas says blocked.
+  `AgentRowView` was LIFTED out of `Workbench.tsx` rather than copied, so the
+  two homes draw a row the same way for the same reason one level down.
+
+  The dock holds one of three now (Chat, Files, Agents), and `railIsOpen` in
+  stage.ts is the single answer to "is the rail open" — framing, the phase-2
+  pan and the strip all read it, so a fourth panel cannot be added without
+  every caller learning about it.
+
+  A face on the strip opens the TRAY, not the Chat. A face is a question about
+  what that agent is doing; answering it with the conversation was the strip's
+  faces being decorative, which is what phase 3 set out to avoid.
 - **One handle, not eight panels.** **Done, 28 Aug 2026.** The bar went from
   eight always-present controls to three: `⌂ <name> ···` on the left, and
   `Workbench · live · faces · Share` on the right. Files, trash, the map and

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { railPan } from "../src/lib/railpan.ts";
-import { RAIL_INSET, STRIP_WIDTH, railSpan } from "../src/lib/stage.ts";
+import { RAIL_INSET, STRIP_WIDTH, type DockState, railSpan } from "../src/lib/stage.ts";
 
 /**
  * **The camera moves on the person's behalf here, which is why every case is
@@ -16,9 +16,10 @@ import { RAIL_INSET, STRIP_WIDTH, railSpan } from "../src/lib/stage.ts";
  * it. The distance is `dockEdges`, the same derivation framing uses, so the
  * two can never disagree about one rail.
  */
-const dock = (over: Partial<Parameters<typeof railPan>[0]> = {}) => ({
+const dock = (over: Partial<DockState> = {}): DockState => ({
   mainPanelOpen: false,
   filesPanelOpen: false,
+  agentsPanelOpen: false,
   trashOpen: false,
   marksOpen: false,
   panelWidth: 320,
