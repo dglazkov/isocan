@@ -64,6 +64,7 @@ export interface DockState {
   mainPanelOpen: boolean;
   filesPanelOpen: boolean;
   agentsPanelOpen: boolean;
+  contextPanelOpen: boolean;
   trashOpen: boolean;
   marksOpen: boolean;
   panelWidth: number;
@@ -118,16 +119,31 @@ export function railSpan(panelWidth: number): number {
  * place that has to be updated when a dock is added.
  */
 export function dockStateNow(): DockState {
-  const { mainPanelOpen, filesPanelOpen, agentsPanelOpen, trashOpen, marksOpen, panelWidth } =
-    useUiStore.getState();
-  return { mainPanelOpen, filesPanelOpen, agentsPanelOpen, trashOpen, marksOpen, panelWidth };
+  const {
+    mainPanelOpen,
+    filesPanelOpen,
+    agentsPanelOpen,
+    contextPanelOpen,
+    trashOpen,
+    marksOpen,
+    panelWidth,
+  } = useUiStore.getState();
+  return {
+    mainPanelOpen,
+    filesPanelOpen,
+    agentsPanelOpen,
+    contextPanelOpen,
+    trashOpen,
+    marksOpen,
+    panelWidth,
+  };
 }
 
 /** Any of the three: the dock holds one panel at a time, and what it takes
  *  from the canvas is the same whichever one is showing. Spelled once so a
  *  fourth panel cannot be added without every caller learning about it. */
 export function railIsOpen(ui: DockState): boolean {
-  return ui.mainPanelOpen || ui.filesPanelOpen || ui.agentsPanelOpen;
+  return ui.mainPanelOpen || ui.filesPanelOpen || ui.agentsPanelOpen || ui.contextPanelOpen;
 }
 
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {

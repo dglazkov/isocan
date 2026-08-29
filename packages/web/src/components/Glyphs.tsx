@@ -180,3 +180,22 @@ export function MinimapGlyph({ size = 15 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * **Context: layers.**
+ *
+ * What an agent reads is a stack of things — the guide, the design system, the
+ * Chat, the canvas — and a stack is what the mark says. Not a brain, not a
+ * database: this view stores nothing, and either of those would promise a
+ * memory the feature deliberately does not have.
+ */
+export function ContextGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M8 1.8 14.2 5 8 8.2 1.8 5z" />
+      <path d="M1.8 8 8 11.2 14.2 8" />
+      <path d="M1.8 11 8 14.2 14.2 11" />
+    </svg>
+  );
+}

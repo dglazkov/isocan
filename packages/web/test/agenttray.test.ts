@@ -51,15 +51,20 @@ describe("the tray shows what the terminal would print", () => {
   });
 });
 
-describe("the dock holds one of three, and everything knows", () => {
-  it("counts all three panels as the rail being open", () => {
-    // Spelled once in `stage.ts`, so a fourth panel cannot be added without
-    // every caller learning about it — framing, the pan and the strip all
-    // read this one answer.
+describe("the dock holds one at a time, and everything knows", () => {
+  it("counts every panel as the rail being open", () => {
+    /**
+     * Spelled once in `stage.ts`, so a new panel cannot be added without
+     * every caller learning about it — framing, the pan, the strip and the
+     * minimap all read this one answer.
+     *
+     * The fourth panel (Context) proved it works: adding it meant editing
+     * this one line, and nothing that stands beside the rail had to be found
+     * and told. That is what the guard below is protecting.
+     */
     const stage = read("lib/stage.ts");
-    expect(stage).toMatch(
-      /return ui\.mainPanelOpen \|\| ui\.filesPanelOpen \|\| ui\.agentsPanelOpen;/,
-    );
+    expect(stage).toMatch(/ui\.mainPanelOpen \|\| ui\.filesPanelOpen/);
+    expect(stage).toMatch(/ui\.agentsPanelOpen \|\| ui\.contextPanelOpen/);
     expect(stage, "dockEdges must go through it").toMatch(/railSpan\(railIsOpen\(ui\)/);
   });
 

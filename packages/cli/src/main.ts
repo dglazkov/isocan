@@ -132,6 +132,8 @@ import {
   importDesign,
   importedBody,
   serializeDesign,
+  contextPieces,
+  contextReport,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -4666,6 +4668,56 @@ async function readStdin(): Promise<string> {
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
 }
+
+// ---------- what an agent will read ----------
+
+program
+  .command("context")
+  .description("What an agent will actually read when it starts work here")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+
+      /**
+       * **The design system's findings, read rather than assumed.**
+       *
+       * "Is there one" is a different question from "is it any good", and the
+       * view is worth much less if it answers only the first. This costs one
+       * blob fetch and turns "Design system v3" into "Design system v3, two
+       * findings" — which is the difference between a list and a report.
+       *
+       * A system that cannot be read is not a failure of this command: it is
+       * reported as present with no findings, because saying "0 problems"
+       * about something unparseable would be a false clean bill.
+       */
+      let designProblems: number | undefined;
+      const design = designSystem(snapshot.canvas);
+      if (design) {
+        try {
+          const current =
+            design.versions.find((v) => v.id === design.currentVersionId) ?? design.versions[0];
+          if (current) {
+            const blob = await ctx.client.downloadBlob(p.id, current.blobHash);
+            designProblems = checkDesign(parseDesign(blob.toString("utf8"))).length;
+          }
+        } catch {
+          // Unreadable: say nothing rather than something wrong.
+        }
+      }
+
+      const pieces = contextPieces(snapshot.canvas, {
+        // The guide this BUILD ships, which is the one an agent here has read
+        // — not "the latest", which is a different machine's business.
+        guideVersion: describeBuild(buildStamp()),
+        ...(designProblems === undefined ? {} : { designProblems }),
+      });
+      if (ctx.json) return printJson(pieces);
+      console.log(contextReport(pieces));
+    }),
+  );
 
 // ---------- the design system ----------
 

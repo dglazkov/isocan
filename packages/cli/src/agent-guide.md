@@ -323,6 +323,37 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
 
+## What you are about to read
+
+`isocan context` answers the question nobody could answer before, including
+you: **what will an agent actually read when it starts work here?** The design
+system and whether it passes its own check, the Chat and how much of it, the
+items somebody marked, the maps, the size of the canvas, and which guide this
+build ships.
+
+```
+! Design system  v1 · 6m
+                 2 findings from `design check`
+                 → `isocan design check` lists them
+  The Chat       7 messages · 2h
+· Marked items   not here
+  Mind maps      Lake house (5)
+  The canvas     19 items · 6m
+```
+
+**It stores nothing.** Every line is counted at the moment you ask, so there
+is no context record that can fall out of step with the canvas it describes.
+Run it at the start of a task rather than assuming: a design system that is
+three versions behind the screens it governs is the difference between work
+that lands and work that gets redone.
+
+`!` is a piece that needs attention, and it always says WHY — "3 items have
+changed since it was last written" is something to act on, and a bare warning
+is an accusation. `·` is simply absent, which most things are on most canvases
+and is usually fine.
+
+The same list is a panel on the canvas, so the person can see what you see.
+
 ## Mind maps
 
 Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts

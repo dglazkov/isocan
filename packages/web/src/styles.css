@@ -2377,6 +2377,41 @@ button.mt-card:hover { border-color: var(--accent); }
 .home { display: inline-flex; align-items: center; color: var(--ink-muted); }
 .home:hover { color: var(--ink); }
 
+/* ---------- what an agent reads ----------
+   The dock's fourth panel, on the agent tray's rhythm — a name, a quiet hint,
+   a close. Each row is a fact and, where there is one, the reason it needs
+   attention underneath it in the panel's own words. */
+.context-panel header {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.context-panel header b { font-size: 13px; letter-spacing: -0.01em; }
+.context-panel header .spacer { flex: 1; }
+.context-glyph { color: var(--accent-text); display: inline-flex; }
+.context-hint {
+  font-style: normal; font-size: 11px; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.context-body { flex: 1; overflow: auto; padding: 6px; }
+.ctx-row {
+  padding: 8px 10px; border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.ctx-row + .ctx-row { border-top: 1px solid var(--line-soft); border-radius: 0; }
+.ctx-line { display: flex; align-items: baseline; gap: 10px; }
+.ctx-name { font-size: 12.5px; font-weight: 600; }
+.ctx-size {
+  margin-left: auto; font-size: 11.5px; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Absent is quiet, not alarming: most canvases are missing most of this and
+   that is fine. What is NOT fine gets `stale`, which has a reason. */
+.ctx-row.absent .ctx-name { color: var(--ink-soft); font-weight: 500; }
+.ctx-row.stale .ctx-name { color: var(--warn); }
+.ctx-why { font-size: 11.5px; color: var(--ink-muted); line-height: 1.45; }
+.ctx-fix { font-size: 11.5px; color: var(--accent-text); line-height: 1.45; }
+
 /* ---------- mind maps ----------
 
    An SVG sized to its own contents, holding WORLD coordinates in its viewBox

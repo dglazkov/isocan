@@ -171,3 +171,30 @@ system passes none of them.
 
 Stage 1 is worth having on its own and stores nothing new, which is the test
 of whether the walk is honest.
+
+## Stage 1 built, 29 Aug 2026
+
+`core/context.ts` reads the pieces; `isocan context` prints them and the
+canvas shows the same list in a fourth dock panel. Both call `contextPieces`,
+because a view the CLI cannot print is a view agents cannot use.
+
+**It stores nothing**, as the walk promised. Every number is counted at the
+moment you ask, so there is no context record to keep in step with the canvas
+it describes — the view cannot be stale about anything except by being closed.
+
+**Stale is measured against the WORK, not the clock.** A design system written
+a year ago and untouched is perfectly current if nothing has been designed
+since; one written this morning is out of date if six screens landed after it.
+Ageing on wall-clock time would nag about a system that is exactly right, and
+a warning that is usually wrong is one people learn to dismiss. It is also
+always a REASON — "3 items have changed since it was last written" — never a
+bare flag, because a flag is an accusation and a reason is something to act
+on.
+
+The machine facts (a bound directory, the oplog's size, which guide this build
+ships) are passed IN rather than read, so the web does not report the absence
+of things that cannot exist on it.
+
+Stage 2's pins have a stand-in already: items somebody reacted to are the
+canvas's only existing "this matters", and they are counted rather than
+invented.
