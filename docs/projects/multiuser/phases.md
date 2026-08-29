@@ -107,20 +107,23 @@ the server had been writing to nowhere** — `Fastify({})` with no `logger` key
 hands back `abstract-logging` — so the instrument 13.7 built for its own worst
 failure mode was silent from the day it was typed.
 
-**What is next is a choice, not a queue.** Everything below is a feature added to
-a live isocan.io, and its order returns to being a hypothesis — real users get a
-vote on whether the spark (11, 12) or the airplane (12.5, 12.7) matters more.
-One unpaid debt sits outside that: phase 10.5 is still PART-DONE because Paul
-and Dion have not walked `development.md`. Prod's sign-in mail is done —
-magic-link from an aligned sender, proved on a browser at isocan.io.
+**What is next is a choice, not a queue, and now it is only a choice.**
+Everything below is a feature added to a live isocan.io, and its order returns
+to being a hypothesis — real users get a vote on whether the spark (11, 12) or
+the airplane (12.5, 12.7) matters more. The one debt that sat outside that is
+paid: **phase 10.5 closed 29 Aug 2026**, when Paul and Dion walked
+`development.md`. Nothing on this project is owed to anybody now. Prod's
+sign-in mail is done — magic-link from an aligned sender, proved on a browser
+at isocan.io.
 
 **Two things that were true before launch and still are.** The wire keys renamed
 in 13.5, so **a pre-rename CLI or replica cannot WRITE to a current home** — it
 gets 426 and the upgrade command, reads still work, and Dion and Paul both need
 `npx github:dglazkov/isocan#release setup`. And phase 13.5's own unproven half —
 that Scene 0's three steps, *run*, produce a canvas — **is now proved**, by
-phase 14 against isocan.io; what is still unwalked is `development.md`, which is
-10.5's and belongs to Paul and Dion rather than to a session.
+phase 14 against isocan.io. `development.md` has since been walked too — that
+was 10.5's, it belonged to Paul and Dion rather than to a session, and they did
+it.
 
 The launch-first order set 2026-08-24 by Dimitri ran 10.3 → 10.5 → 13.5 → 13.7
 → 14, and has arrived. The cut line was the journey's own built/unbuilt
@@ -974,12 +977,28 @@ of the walk waits for phase 14, by necessity.)
 
 ## Phase 10.5 — Two doors into the repo
 
-**Status: PART-DONE** 2026-08-24. `docs/development.md` is written, both doors
-and the common matter, and every command in it was run rather than remembered —
-a scratch clone and a scratch `ISOCAN_HOME` for Paul's door, a reconstructed
-pre-multiuser rig for Dion's. The dev deploy now gates on CI green: `release.yml`
-fast-forwards a `green` ref once `npm test` and `npm run typecheck` pass with the
-emulator required, and `infra/95-build-trigger.sh` watches `^green$`.
+**Status: CLOSED** 2026-08-29 — **the two walks happened**, reported by Dimitri.
+
+That is the whole of what this phase was still waiting for, and it was never
+something a session could supply: the conductor had verified that every command
+in `docs/development.md` works, and could not verify the one property the doc
+exists for — that it is legible to somebody who has not read this codebase.
+Only Paul and Dion could answer that, and only once each.
+
+**No findings are recorded from either walk, and that is a gap rather than a
+result.** The Proof below says every out-of-band question either of them asks
+is a finding; none reached this document. Read the empty list as *not
+captured*, not as *none arose*. Both instruments are consumed on first use —
+after one walk each is an insider — so if either of them asked something the
+doc did not answer, this is the last moment it can be written down.
+
+**What was already done, 2026-08-24:** `docs/development.md` is written, both
+doors and the common matter, and every command in it was run rather than
+remembered — a scratch clone and a scratch `ISOCAN_HOME` for Paul's door, a
+reconstructed pre-multiuser rig for Dion's. The dev deploy gates on CI green:
+`release.yml` fast-forwards a `green` ref once `npm test` and `npm run
+typecheck` pass with the emulator required, and `infra/95-build-trigger.sh`
+watches `^green$`.
 
 The ⚑ is **done**: authorized by Dimitri and applied the same day, the live
 `isocan-dev-deploy` trigger watches `^green$`, read back and verified — one
@@ -1067,9 +1086,10 @@ Scene 0's three steps instead of a name prompt. The magic link arrived **in an
 inbox**, from `noreply@dev.isocan.io`, through a handler this repo now serves
 itself. The rename is green at 1321 tests with project-vocabulary gone from
 everywhere a stranger reads. **The half not proven:** "three steps, a canvas"
-— that the steps, *run*, land somebody on a canvas. Nobody ran them. That is
-not a second debt, it is phase 10.5's Paul walk wearing this phase's words, and
-it stays there rather than being counted twice.
+— that the steps, *run*, land somebody on a canvas. Nobody had run them. That
+was not a second debt, it was phase 10.5's Paul walk wearing this phase's
+words, and it stayed there rather than being counted twice. **It was paid
+there, 29 Aug 2026**, when Paul walked the doc.
 
 **Work:** The front page — the home origin wearing Scene 0's three
 steps, built and proven against dev; split out of phase 14 exactly as

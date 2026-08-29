@@ -826,13 +826,48 @@ export async function upgradePolicy(home: string, kind: InstallKind): Promise<Up
   if (isUpgradeMode(config.upgrade)) {
     return { mode: config.upgrade, pin, why: `config.json says ${config.upgrade}${held}` };
   }
-  if (kind === "managed") {
-    return { mode: "auto", pin, why: `the default for a managed install${held}` };
+  /**
+   * **A global install is `auto` too, and its first upgrade is what adopts
+   * it.** The front door's `setup` runs `npm i -g`, so a global install is
+   * what EVERY machine that came through the front door is — Priya's included,
+   * and Priya is the person this project was written for. Leaving that on
+   * `notify` denied the outcome to the whole population it exists for, on the
+   * reasoning that "the first adoption stays a thing somebody asked for": a
+   * caution that sounds careful and is not, because the thing it makes
+   * somebody ask for is the step that makes every later step unattended.
+   *
+   * Journey Scene 0 had already decided this — *"after phase 4, `auto` closes
+   * the gap on her machine before it grows"* — and names the two populations
+   * that keep the notice: a checkout, and a machine where somebody chose
+   * `notify`. A fresh install is neither.
+   *
+   * What adoption actually risks is one symlink in the global bin directory,
+   * which is the only write this project makes outside `~/.isocan`. It is
+   * reversible by the command that created it (`npm i -g` rewrites that link),
+   * it leaves the package tree npm installed exactly where npm put it, and it
+   * happens only after a build has been installed aside and started and asked
+   * which commit it is. `adoptGlobal` refuses a checkout, refuses an npx
+   * cache, and reports a permission failure rather than throwing.
+   */
+  if (kind === "managed" || kind === "global") {
+    return {
+      mode: "auto",
+      pin,
+      why: `the default for a ${kind} install${held}`,
+    };
   }
+  /**
+   * **`npx` and `local` keep the notice, for reasons that are not caution.**
+   * An npx cache is a directory npm is about to delete, so a build installed
+   * into it is thrown away and PATH never resolved through it anyway. A
+   * `local` copy is somebody's `node_modules/isocan` inside another project,
+   * and the `isocan` on PATH is very likely a different copy — adopting would
+   * repoint a link this copy has no claim on.
+   */
   return {
     mode: "notify",
     pin,
-    why: `the default for a ${kind} install — only a managed install upgrades itself${held}`,
+    why: `the default for a ${kind} install — it is not a copy that can adopt itself${held}`,
   };
 }
 
