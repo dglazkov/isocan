@@ -51,6 +51,7 @@ import {
   passesRoute,
   SERVING_ROUTE,
 } from "@isocan/core";
+import type { UpgradeVerdict } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
 import { askTheDoor, bearerHeader, paths, readBadge, writeBadge } from "@isocan/server";
 
@@ -78,6 +79,17 @@ export interface Health extends Partial<BuildStamp> {
    * string a person pastes to another person.
    */
   home?: string;
+  /**
+   * **This daemon disagrees with the home it is talking to about which build
+   * to be** (auto-upgrade phase 2) — or, with `available: false`, has asked
+   * and does not.
+   *
+   * Absent is the ordinary case and it means NO VERDICT: a homeless daemon, a
+   * home that is not answering, a home too old to name its own commit, or a
+   * daemon older than this field. It never means "you are current"; the field
+   * says that itself when it can.
+   */
+  upgrade?: UpgradeVerdict;
 }
 
 export class ApiError extends Error {

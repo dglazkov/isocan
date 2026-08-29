@@ -543,6 +543,52 @@ export interface CanvasSnapshotResponse {
   names: ActorNames;
 }
 
+/**
+ * **Does this copy of isocan disagree with the home it is talking to?**
+ * Auto-upgrade phase 2's whole output: one comparison, reported and nothing
+ * else.
+ *
+ * `stalenessOf` already knows two ways to be stale — another copy holds the
+ * port, and this copy changed under a running daemon. This is the third and
+ * the one that matters across machines: the op vocabulary is the isomorphism
+ * contract, and the home is the other end of it.
+ *
+ * **Absent means no verdict, and absent is not "you are current."** The field
+ * is omitted entirely when either side cannot say which build it is — an
+ * offline daemon, a home that has never answered, a pre-phase-1 image whose
+ * `commit` is null. An oracle that cannot answer must produce no verdict; a
+ * check that cannot fail is the defect `/api/healthz` exists to prevent.
+ */
+export interface UpgradeVerdict {
+  /**
+   * The two builds are known and they differ. False is a real answer — the
+   * home was asked and this copy is running what it runs — and it is why the
+   * field is present at all in that case rather than omitted.
+   */
+  available: boolean;
+  /**
+   * Which side is older, when both dates say so; null when they cannot.
+   *
+   * **Shas identify builds, dates order them**, and neither measures how far
+   * apart two builds are. `behind` is the ordinary case (the home is newer).
+   * `ahead` is a home pinned or lagging behind its own CLIs — a notice, never
+   * a downgrade.
+   */
+  direction: "behind" | "ahead" | null;
+  /** The home this verdict came from. A machine can answer to several, so a
+   * verdict that did not name one would be unattributable. */
+  home: string;
+  /** The build the home runs, and when it was cut. */
+  homeCommit: string;
+  homeBuiltAt: string | null;
+  /** The build this copy runs, and when it was cut. */
+  mine: string;
+  mineBuiltAt: string | null;
+  /** The comparison in one sentence of facts, naming both builds. Empty when
+   * nothing differs. */
+  why: string;
+}
+
 export interface HealthResponse {
   ok: true;
   pid: number;
@@ -560,6 +606,16 @@ export interface HealthResponse {
    * `127.0.0.1`, and the marker a new canvas gets must carry it.
    */
   home?: string;
+  /**
+   * **This daemon disagrees with its home about which build to be** — or,
+   * when `available` is false, has asked and does not.
+   *
+   * On the health route because that is the one call every client already
+   * makes (`makeCtx` fetches it before every command), so the CLI pays no
+   * round trip for it and an offline machine simply has no field. The daemon
+   * is what asks the home, on a timer of its own — see `HomeLink.askBuild`.
+   */
+  upgrade?: UpgradeVerdict;
 }
 
 /** Loopback, by the two literals a URL can produce plus the whole 127/8

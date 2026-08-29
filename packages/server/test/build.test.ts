@@ -7,7 +7,9 @@ import {
   describeBuild,
   plausibleSha,
   stalenessOf,
+  upgradeVerdict,
   type BuildStamp,
+  type HomeBuild,
 } from "../src/build.ts";
 
 /** A stamp with the fields a test does not care about filled in. */
@@ -160,5 +162,88 @@ describe("the build-arg gate (plausibleSha)", () => {
     // A tag ref is not a sha either; only hex passes.
     expect(plausibleSha("v0.1.0")).toBe(null);
     expect(plausibleSha("main")).toBe(null);
+  });
+});
+
+/**
+ * **Auto-upgrade phase 2: the third kind of stale.**
+ *
+ * `stalenessOf` compares a CLI with the daemon holding its port.
+ * `upgradeVerdict` asks the same question one hop further out — does this
+ * daemon disagree with the home it forwards writes to — and the whole of the
+ * care is in what it refuses to answer. The recurring defect this project has
+ * met six times is a system that returns a cheerful success when it was given
+ * nothing to compare against, so every case below where a side cannot name its
+ * build asserts the ABSENCE of a verdict rather than the wording of one.
+ */
+describe("the verdict against the home (upgradeVerdict)", () => {
+  const home = (over: Partial<HomeBuild> = {}): HomeBuild => ({
+    url: "https://isocan.io",
+    commit: "a1b2c3d",
+    builtAt: "2026-08-25T09:00:00.000Z",
+    ...over,
+  });
+
+  it("names both builds, both dates and the home when they differ", () => {
+    const verdict = upgradeVerdict(
+      home(),
+      stampOf({ commit: "04279b2", builtAt: "2026-08-12T09:00:00.000Z" }),
+    );
+    expect(verdict).toMatchObject({
+      available: true,
+      direction: "behind",
+      home: "https://isocan.io",
+      homeCommit: "a1b2c3d",
+      homeBuiltAt: "2026-08-25T09:00:00.000Z",
+      mine: "04279b2",
+      mineBuiltAt: "2026-08-12T09:00:00.000Z",
+    });
+    // The sentence a person reads: facts, both builds, no instruction.
+    expect(verdict?.why).toBe(
+      "this copy is 04279b2 (2026-08-12); your home https://isocan.io runs a1b2c3d (2026-08-25)",
+    );
+  });
+
+  it("says so plainly when the home was asked and this copy is current", () => {
+    const verdict = upgradeVerdict(home(), stampOf({ commit: "a1b2c3d" }));
+    // A verdict, not an absence — "asked and current" and "could not ask" are
+    // different answers, and only one of them may be reported as reassurance.
+    expect(verdict).toMatchObject({ available: false, direction: null, why: "" });
+  });
+
+  it("produces NO verdict when the home cannot say which build it is", () => {
+    // Today's production image, and every image built before phase 1.
+    expect(upgradeVerdict(home({ commit: null }), stampOf({ commit: "04279b2" }))).toBe(null);
+  });
+
+  it("produces NO verdict when this copy cannot say, or when no home answered", () => {
+    expect(upgradeVerdict(home(), stampOf({ commit: null }))).toBe(null);
+    // Offline, homeless, never asked: one answer for all of them.
+    expect(upgradeVerdict(null, stampOf({ commit: "04279b2" }))).toBe(null);
+  });
+
+  /**
+   * Shas identify builds; dates order them. A home that is BEHIND its CLI is a
+   * real shape — a pinned or lagging image — and it is a notice, never a
+   * downgrade, so the direction has to be reported rather than assumed.
+   */
+  it("orders the two builds only when both dates say so", () => {
+    const older = { commit: "04279b2", builtAt: "2026-08-12T09:00:00.000Z" };
+    expect(upgradeVerdict(home(older), stampOf({ commit: "a1b2c3d", builtAt: "2026-08-25T09:00:00.000Z" }))?.direction)
+      .toBe("ahead");
+    // One side undated: they differ, and nothing orders them.
+    expect(upgradeVerdict(home({ builtAt: null }), stampOf(older))?.direction).toBe(null);
+    // Two builds cut the same second are two builds, and neither is older.
+    expect(
+      upgradeVerdict(
+        home({ builtAt: older.builtAt }),
+        stampOf({ commit: "04279b2", builtAt: older.builtAt }),
+      )?.direction,
+    ).toBe(null);
+  });
+
+  it("says the sha alone when a build carries no date", () => {
+    const verdict = upgradeVerdict(home({ builtAt: null }), stampOf({ commit: "04279b2" }));
+    expect(verdict?.why).toBe("this copy is 04279b2; your home https://isocan.io runs a1b2c3d");
   });
 });

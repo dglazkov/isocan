@@ -1,6 +1,7 @@
 import { statSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { UpgradeVerdict } from "@isocan/core";
 
 /**
  * Which copy of isocan is this, and how old is it?
@@ -241,4 +242,82 @@ export function stalenessOf(
     return { stale: true, why: "this copy has been updated since the daemon started" };
   }
   return { stale: false, why: "" };
+}
+
+/**
+ * **What the home runs**, as this daemon last managed to read it. Null for
+ * every reason at once — never asked, asked and got nothing, asked and the
+ * home could not say — because all of them are the same answer downstream.
+ */
+export interface HomeBuild {
+  /** The address that answered. Carried so the verdict can name it: a machine
+   * can answer to several homes (multiuser phase 10.3). */
+  url: string;
+  commit: string | null;
+  builtAt: string | null;
+}
+
+/**
+ * **The third kind of stale: this copy disagrees with its home.**
+ * (auto-upgrade phase 2.)
+ *
+ * A sibling of `stalenessOf` and deliberately shaped like it — pure, given
+ * both sides, so the comparison can be tested without a network — but asking
+ * one hop further out. `stalenessOf` compares a CLI with the daemon holding
+ * its port; this compares that daemon with the home it forwards writes to,
+ * which is the skew the op vocabulary actually depends on.
+ *
+ * **Null is the answer whenever either side cannot say which build it is**,
+ * and that is the whole of the care here. A home with `commit: null` — a
+ * pre-phase-1 image, which is most of what is deployed — must produce NO
+ * verdict rather than "you are current": the recurring defect in this
+ * codebase is a system that returns a cheerful success when it was given
+ * nothing to compare against.
+ */
+export function upgradeVerdict(
+  home: HomeBuild | null,
+  mine: BuildStamp = buildStamp(),
+): UpgradeVerdict | null {
+  if (!home?.commit || !mine.commit) return null;
+  const available = home.commit !== mine.commit;
+  return {
+    available,
+    direction: available ? order(mine.builtAt, home.builtAt) : null,
+    home: home.url,
+    homeCommit: home.commit,
+    homeBuiltAt: home.builtAt,
+    mine: mine.commit,
+    mineBuiltAt: mine.builtAt,
+    /**
+     * Facts, in the order a reader needs them: what this copy is, then what
+     * the home is. It names no action — the CLI's line adds the command, and
+     * whether anybody may run it is a mode's question, not a verdict's.
+     */
+    why: available
+      ? `this copy is ${dated(mine.commit, mine.builtAt)}; your home ${home.url} runs ${dated(home.commit, home.builtAt)}`
+      : "",
+  };
+}
+
+/**
+ * Which build is older, when the dates support saying so.
+ *
+ * **Shas identify builds; dates order them** — and only when both exist and
+ * both parse. Equal dates give null rather than a coin flip: two builds cut
+ * the same second are two builds, and this function's whole job is to not
+ * invent an ordering the inputs do not contain.
+ */
+function order(mineBuiltAt: string | null, homeBuiltAt: string | null): "behind" | "ahead" | null {
+  if (!mineBuiltAt || !homeBuiltAt) return null;
+  const mine = Date.parse(mineBuiltAt);
+  const theirs = Date.parse(homeBuiltAt);
+  if (Number.isNaN(mine) || Number.isNaN(theirs) || mine === theirs) return null;
+  return mine < theirs ? "behind" : "ahead";
+}
+
+/** `a1b2c3d (2026-08-25)`, or just the sha when the build carries no date —
+ * `describeBuild`'s convention, so the two ways isocan says "which build" read
+ * the same. */
+function dated(commit: string, builtAt: string | null): string {
+  return builtAt ? `${commit} (${builtAt.slice(0, 10)})` : commit;
 }

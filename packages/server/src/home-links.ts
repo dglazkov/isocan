@@ -1,4 +1,5 @@
-import { normalizeHomeUrl } from "@isocan/core";
+import { normalizeHomeUrl, type UpgradeVerdict } from "@isocan/core";
+import { upgradeVerdict } from "./build.ts";
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import {
@@ -62,6 +63,9 @@ export interface HomeLinksOptions {
   birthHome: string | null;
   /** How often each link re-reads its home's canvas list. Tests turn it down. */
   pollMs?: number;
+  /** How often each link re-asks its home which build it is. See
+   * `HomeLinkOptions.probeMs`. */
+  probeMs?: number;
 }
 
 export class HomeLinks implements HomeDirectory, HomeRegistry {
@@ -256,6 +260,31 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     return this.birthHome === null ? null : this.linkFor(this.birthHome);
   }
 
+  /**
+   * **Does this daemon disagree with its home about which build to be?**
+   * (auto-upgrade phase 2.) Null for no verdict, which is the answer whenever
+   * anything in the chain cannot say.
+   *
+   * **Which home answers, on a machine with several.** The birth default, and
+   * failing that the single home if there is exactly one. That rule is
+   * deliberately narrow: phase 10.3 made the home a property of the CANVAS, so
+   * "which build should this machine run" has no forced answer on a machine
+   * answering to three homes — picking the newest would be silently choosing
+   * a distribution channel on someone's behalf, which is the flapping the
+   * design warns about. Until that is decided (it is on this project's
+   * Deliberately-open list), an ambiguous machine gets no verdict rather than
+   * a guess, and every verdict that IS produced names the home it came from.
+   */
+  upgrade(): UpgradeVerdict | null {
+    const link =
+      this.birthHome !== null
+        ? this.open.get(this.birthHome)
+        : this.open.size === 1
+          ? [...this.open.values()][0]
+          : undefined;
+    return upgradeVerdict(link?.homeBuild ?? null);
+  }
+
   async bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null> {
     const target = homeUrl !== null ? normalizeHomeUrl(homeUrl) : this.birthHome;
     // Written BEFORE the write is forwarded, not after: the answer landing
@@ -329,6 +358,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
       presence: this.options.presence,
       registry: this,
       ...(this.options.pollMs !== undefined ? { pollMs: this.options.pollMs } : {}),
+      ...(this.options.probeMs !== undefined ? { probeMs: this.options.probeMs } : {}),
     });
     this.open.set(key, link);
     // Not awaited: `start()` costs a sweep's round trip, and the caller here is
