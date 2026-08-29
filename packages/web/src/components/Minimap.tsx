@@ -6,6 +6,7 @@ import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
 import { RAIL_INSET, railIsOpen, railSpan } from "../lib/stage.ts";
+import { MinimapGlyph } from "./Glyphs.tsx";
 
 
 const MAP_W = 168;
@@ -142,7 +143,7 @@ export function Minimap() {
         aria-expanded={open}
         onClick={() => useUiStore.getState().setMinimapOpen(true)}
       >
-        {MAP_GLYPH}
+        <MinimapGlyph />
       </button>
       <div className="minimap-panel">
         <button
@@ -238,8 +239,3 @@ export function Minimap() {
   );
 }
 
-const MAP_GLYPH = (
-  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
-    <path d="M1.5 4.2 5.8 2.4v9.4L1.5 13.6zM5.8 2.4l4.4 1.8v9.4L5.8 11.8zM10.2 4.2l4.3-1.8v9.4l-4.3 1.8z" />
-  </svg>
-);

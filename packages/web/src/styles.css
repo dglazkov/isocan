@@ -2319,13 +2319,32 @@ button.mt-card:hover { border-color: var(--accent); }
    Quiet when off and wearing the accent when on: this moves the canvas on
    somebody's behalf, so whether it is armed has to be readable at a glance
    from the thing it acts on. */
-.main-follow {
+/* **Follow, on the agent it follows.**
+
+   It was a toggle in the Chat's header, which made it mean "follow whatever
+   ANYBODY just made" — the Chat is the canvas-wide channel, so with three
+   agents working it was a camera yanked between unrelated corners. Follow
+   needs a subject you can name.
+
+   Quiet until armed and wearing the accent when it is: this moves the canvas
+   on somebody's behalf, so whether it is on has to be readable at a glance
+   from the row it belongs to. */
+.wb-follow {
+  position: absolute; right: 8px; top: 8px; z-index: 1;
   flex: none; font: inherit; font-size: 11px; line-height: 1;
-  padding: 4px 8px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--line); background: none; color: var(--ink-soft);
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 1px solid transparent;
+  background: none; color: var(--ink-soft);
+  opacity: 0; transition: opacity 0.12s ease;
 }
-.main-follow:hover { color: var(--ink); border-color: var(--accent); }
-.main-follow.on {
+/* Shown on hover, or whenever it is ON — a mode that is running must never
+   be invisible, however the pointer happens to be resting. */
+.wb-row:hover .wb-follow,
+.wb-follow:focus-visible,
+.wb-follow.on { opacity: 1; }
+.wb-follow:hover { color: var(--ink); border-color: var(--accent); }
+.wb-follow.on {
   color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
 }
 

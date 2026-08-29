@@ -32,6 +32,7 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
   const canvas = useCanvasStore((s) => s.canvas);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const following = useUiStore((s) => s.followingActorId);
   if (!open) return null;
 
   // The store filters your own session out of presence, so without this you
@@ -80,6 +81,16 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
               open={openRow === row.actorId}
               focused={null}
               onToggle={() => setOpenRow(openRow === row.actorId ? null : row.actorId)}
+              /* One at a time. Following two agents is following neither —
+                 the camera would be handed back and forth between whichever
+                 of them saved last, which is the incoherence that took this
+                 off the Chat in the first place. */
+              following={following === row.actorId}
+              onFollow={() =>
+                useUiStore
+                  .getState()
+                  .setFollowingActor(following === row.actorId ? null : row.actorId)
+              }
             />
           ))
         )}

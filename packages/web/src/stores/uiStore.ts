@@ -139,11 +139,15 @@ interface UiStore {
   filesPanelOpen: boolean;
   /** The agent tray — `isocan who` given a home. Shares the left dock. */
   agentsPanelOpen: boolean;
-  /** Lane follow: the camera goes to what a message just made. OFF by
-   *  default — this moves the canvas on somebody's behalf, so it is a mode
-   *  they choose rather than one they discover happening to them. Distinct
-   *  from `followSessionId`, which follows a PERSON's cursor. */
-  laneFollow: boolean;
+  /** Whose WORK the camera follows: the agent whose new items it flies to,
+   *  or null. Off by default — this moves the canvas on somebody's behalf, so
+   *  it is a mode they choose rather than one they discover happening to
+   *  them.
+   *
+   *  Distinct from `followSessionId`, which follows a person's CURSOR. Two
+   *  different questions: where somebody is looking, and what they are
+   *  making. */
+  followingActorId: string | null;
   /** The marks dock on the right — the canvas grouped by reaction. */
   marksOpen: boolean;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
@@ -196,7 +200,7 @@ interface UiStore {
   setMinimapOpen: (open: boolean) => void;
   setFilesPanelOpen: (open: boolean) => void;
   setAgentsPanelOpen: (open: boolean) => void;
-  setLaneFollow: (on: boolean) => void;
+  setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
   /** How wide the docked left panel is, in screen pixels. */
@@ -388,7 +392,7 @@ export const useUiStore = create<UiStore>((set) => {
     railPanning: false,
     filesPanelOpen: false,
     agentsPanelOpen: false,
-    laneFollow: false,
+    followingActorId: null,
     marksOpen: false,
     peekedItemId: null,
     followSessionId: null,
@@ -456,7 +460,7 @@ export const useUiStore = create<UiStore>((set) => {
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
-    setLaneFollow: (laneFollow) => set({ laneFollow }),
+    setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     /**

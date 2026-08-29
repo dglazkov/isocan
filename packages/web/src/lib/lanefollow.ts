@@ -12,10 +12,15 @@ import { laneOf } from "@isocan/core";
  *
  * The rules, and each one is a reason to STAY PUT:
  *
- * - **Only when it is on.** Off by default. This is a mode somebody chooses.
- * - **Only for something NEW.** The newest lane entry is compared against the
- *   last one followed; a re-render, a reconnect, or a snapshot arriving twice
- *   must not re-fly to where you already are.
+ * - **Only for an agent somebody chose.** Off by default, and it follows ONE
+ *   actor rather than the room. It used to follow the Chat, which is the
+ *   canvas-wide channel — so it meant "fly to whatever ANYBODY just made",
+ *   and with three agents working it was a camera yanked between unrelated
+ *   corners. Follow needs a subject you can name. "Follow the room" only
+ *   holds while the room is one voice.
+ * - **Only for something NEW.** The newest entry is compared against the last
+ *   one followed; a re-render, a reconnect, or a snapshot arriving twice must
+ *   not re-fly to where you already are.
  * - **Never while a hand is down.** A pan or a drag beats follow outright, and
  *   the move is DROPPED rather than deferred: a camera that lurches the
  *   instant you release the mouse is worse than one that missed a message.
@@ -38,14 +43,17 @@ export function nextFollow(
   canvas: CanvasContents,
   thread: CommentThread | null,
   state: FollowState,
-  now: { on: boolean; busy: boolean; nowMs: number },
+  now: { actorId: string | null; busy: boolean; nowMs: number },
 ): string | null {
-  if (!now.on || !thread) return null;
+  if (now.actorId === null || !thread) return null;
   // A hand is down. Dropped, not queued: see above.
   if (now.busy) return null;
 
-  const lane = laneOf(canvas, thread);
-  const newest = lane[lane.length - 1]?.made.at(-1) ?? null;
+  // Only what the followed agent made. The lane already answers "who made
+  // this" per message, so following one actor is a filter rather than a
+  // second derivation.
+  const mine = laneOf(canvas, thread).filter((row) => row.comment.author.id === now.actorId);
+  const newest = mine[mine.length - 1]?.made.at(-1) ?? null;
   if (!newest) return null;
   // Already there — the common case on every re-render.
   if (newest.itemId === state.lastItemId) return null;

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { workbenchPath, type Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { chromeMenu } from "../lib/menuentries.tsx";
-import { HomeGlyph, WorkbenchGlyph } from "./Glyphs.tsx";
+import { HomeGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
@@ -36,6 +36,7 @@ export function Toolbar({
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
@@ -91,6 +92,7 @@ export function Toolbar({
                   trashOpen,
                   trashCount,
                   minimapOpen,
+                  toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),
               });
             }}
@@ -114,19 +116,11 @@ export function Toolbar({
           Deliberately NOT a segmented pill beside `Chat | Files`: those
           toggle a dock and can both be off, this navigates and one view is
           always true. Same shape would promise the same rules. */}
-      {/* Both of these DO something, so they share a pill. `live`, the faces
-          and your own badge are things you read, and they share the other. */}
+      {/* Share is the one thing left in the bar that DOES something — the
+          workbench moved into the drawer, where the rest of the going-places
+          lives. `live`, the faces and your own badge share the other pill,
+          because those are things you read. */}
       <div className="bar-cluster floats">
-        {canvas && (
-          <Link
-            className="btn wb-enter"
-            to={workbenchPath(canvas.id)}
-            title="Workbench — the agents, the files and the thread around one screen (W)"
-          >
-            <WorkbenchGlyph />
-            Workbench
-          </Link>
-        )}
         <ShareButton actor={actor} />
       </div>
       <div className="bar-cluster floats presence-cluster">
