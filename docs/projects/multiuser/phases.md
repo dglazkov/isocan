@@ -139,6 +139,34 @@ otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
 
+- **Whether `direct` should be the DEFAULT, opened 2026-08-29 by Dimitri
+  (phase 11).** Phase 11 built the switch; which way it points when nobody
+  has said is `DEFAULT_MODE` in `packages/cli/src/direct.ts`, one line, and
+  it is `daemon` today only because nothing has earned the flip yet. **The
+  case for flipping is stronger than it looks.** The daemon's headline
+  justification is offline, and offline has never worked for the CLI —
+  `HomeUnreachableError` refuses a replica's CLI write when the home is
+  unreachable, deliberately, and says so; phase 12.5 is the unpaid debt to
+  fix it. Writes forward synchronously to the home's single-writer pipeline
+  either way, so the replica **adds** a hop rather than removing one; only
+  reads are served locally. And a machine with no CLI replica has exactly
+  ONE replica — the browser's, from phase 10 — instead of two that cannot
+  see each other, **which is the entire premise of the local-bridge debt
+  below**: flipping this would retire phase 12.7, its Private Network
+  Access dependency and its failure-mode list, by deleting the thing they
+  exist to reconcile. **What it costs** is the airplane thesis, converted
+  from a debt into a decision: "a person in the browser and their agent in
+  the terminal, one canvas, no network" becomes impossible-and-honest
+  rather than half-built-and-silent. Plus fast reads and the on-disk blob
+  cache. **What stops it being unconditional:** a machine that IS the home.
+  A locally-born canvas needs a daemon to hold it, so the honest
+  formulation is *direct when the canvas lives elsewhere, daemon when this
+  machine is the home* — and since phase 14 the first is the common case.
+  **Open because the evidence is a real session, not an argument**, and
+  because flipping it must follow phase 14's care exactly: consulted at
+  `setup`, never under a machine that already holds canvases, with a
+  receipt and `isocan direct --clear` as the way back.
+
 - **The local bridge, opened 2026-08-24 (phase 10).** Phase 10 gave the
   browser its own replica and queue, and in doing so made visible that a
   machine now has **two** replicas that cannot see each other: the tab's,
@@ -1336,7 +1364,15 @@ and the journey's missing airplane scene before phase 12.7.
 
 ## Phase 11 — The thin agent (Scene 6)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-08-29).** The mechanism is built and unit-proved:
+`--direct`, `ISOCAN_DIRECT`, `config.direct`, the `setup` decision, the
+daemon-verb refusals and `isocan direct` itself, with
+`packages/cli/test/direct.test.ts` asserting the negative that matters — no
+daemon is ever started and no store is ever written. The lap was driven by
+hand against a scratch home: name, create, list, park, wake, reply. **What
+is missing is the Proof as named** — Scene 6 in a real cloud workspace,
+against a real home — and the kill test came back with a finding rather
+than a pass (below).
 
 **Work:** Setup notices what it stands on — headless, ephemeral, home
 address in hand — and skips the daemon; the CLI speaks straight to the
@@ -1359,7 +1395,46 @@ ring fades only when its own connection dies.
 **Proof:** The scene, played in a scratch directory simulating the
 cloud workspace; a kill test for ring truth.
 
-**Findings:** *none yet.*
+**Findings:**
+
+- **2026-08-29 — "thin" is journey vocabulary; the switch is `--direct`.**
+  A seat name describes a topology to somebody who read the journey; a
+  flag has to say what will happen to somebody who did not.
+- **2026-08-29 — direct-versus-daemon is a property of the directory, not
+  the vendor.** A CI runner is disposable, a cloud dev workspace has disk
+  and persists, a closet server wants a daemon: sniffing the provider is
+  wrong for half of them, so no provider is named in the code. One
+  built-in probe (`CI`), an `ephemeralVars` config hook, `ISOCAN_DIRECT`.
+- **2026-08-29 — the guess lives only in `setup`, and is written down.**
+  Per-command sniffing would move an agent's canvas between two replicas
+  when a variable changed mid-session. Decide once, record with a
+  receipt: phase 14's birth-default shape.
+- **2026-08-29 — the seam was one function, because the CLI never touched
+  the store.** `paths.canvasesDir` has one caller; canvas data and blobs
+  already went over HTTP, so pointing `DaemonClient.base` at the home was
+  most of it. Ten hardcoded `127.0.0.1` sites became `resolveBase`.
+- **2026-08-29 — `redeemPass` and `joinFromHome` already handled being
+  aimed at a home** (the `elsewhere` check, the `not-a-replica` 409 that
+  callers swallow). Written for phase 10.3's many-homes, correct here
+  untouched.
+- **2026-08-29 — `isocan wait` parks at the home and wakes on a mention,
+  with no daemon.** Driven for real against a scratch home: parked, a
+  second actor asked, `wait` returned with the thread and exited. Nothing
+  bound to 127.0.0.1 came up.
+- **2026-08-29 — Open: a killed agent's ring lingers for five minutes.**
+  The kill test ran and the ring did NOT fade with the connection — CLI
+  presence is TTL-based (`SESSION_TTL_MS`, five minutes, swept every ten
+  seconds), touched by commands, never socket-bound. Measured: `kill -9`,
+  then `who` showed Sonia at t+250s and not at t+300s. So Scene 6's *"her
+  ring fades only if her sandbox dies, which is the truth"* is true only
+  within a five-minute window, and the pile says "here" about a dead
+  sandbox for that long. **Not caused by direct mode** — a thick agent's
+  ring behaves the same way — but direct mode is what makes it matter,
+  because a torn-down cloud sandbox is the ordinary way this agent ends.
+  Fixing it means presence bound to a connection rather than a clock, which
+  is a change to the ephemeral plane and not to this phase.
+- **2026-08-29 — Open: `repo:` and the lock-out asymmetry**, untouched by
+  this work and still waiting at the door as written above.
 
 ## Phase 12 — Agent-on-demand (Scene 7) ⚑ provision
 

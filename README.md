@@ -322,6 +322,18 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   not into a `Referer` — and a tab that arrives on one comes up already being
   that person, or says in words which of "expired", "already used" and "no such
   pass" it met.
+- **Direct machines**: a workspace that will be thrown away does not want a
+  replica in it. `isocan setup <address> --direct` — or `ISOCAN_DIRECT=1` in a
+  workflow file, which reads the address out of the committed marker — sets a
+  machine up with **no daemon at all**: every command speaks to the home
+  itself, nothing is copied to disk, and a torn-down sandbox loses nothing
+  because its whole state was always the home's. `serve`, `restart` and `stop`
+  refuse there rather than quietly giving the machine a second replica, and
+  `isocan direct` shows which way a machine works, sets it, or undoes it. It is
+  a choice about the directory and never a guess about the vendor: the only
+  environment isocan reads on its own is `CI`, and
+  `{"ephemeralVars": [...]}` in `~/.isocan/config.json` teaches it any other
+  without waiting for a release.
 - **Your surfaces**: a canvas you can reach from four machines is four
   credentials, and one of them can go missing. Click your own face and pick
   **"Your surfaces…"** — every holder that carries your identity, what each

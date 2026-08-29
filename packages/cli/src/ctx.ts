@@ -8,6 +8,7 @@ import type { UpgradeConfig } from "./managed.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
+import { DIRECT_VAR, resolveDeclared, type DirectConfig } from "./direct.ts";
 import {
   bindableRoot,
   findBinding,
@@ -125,6 +126,68 @@ export function canvasRefOf(opts: { canvas?: string; project?: string }): string
   return opts.canvas ?? opts.project;
 }
 
+/**
+ * **Which address this CLI's commands go to** — the one computation behind
+ * every `DaemonClient` in the process.
+ *
+ * It was `http://127.0.0.1:${port}` written out at ten call sites, which was
+ * fine while there was one answer. Phase 11 gave it a second, so the rule
+ * lives in one place: ten sites each learning it separately is ten chances for
+ * a command to reach the wrong replica, and the failure would be silent
+ * because both answers are real daemons that will cheerfully serve the
+ * request.
+ *
+ * Direct mode's address, in order: whatever said "direct" if it named an
+ * address, then the directory marker's `home`. The marker is what makes the
+ * cloned-repo case work with nothing but `ISOCAN_DIRECT=1` in the
+ * environment — the committed `.isocan/project.json` already carries the
+ * canvas id and the home address, which is exactly what Scene 6 leans on when
+ * it says the marker "corroborates" them.
+ */
+export async function resolveBase(
+  isocanHome: string,
+  port: number,
+  binding: DirBinding | null,
+): Promise<{ base: string; direct: string | null }> {
+  const declared = await resolveDeclared(isocanHome);
+  if (declared?.mode === "direct") {
+    // The address, in order: whatever declared it, if it named one; then the
+    // directory marker's `home`. The marker is what makes the cloned-repo case
+    // work with nothing but `ISOCAN_DIRECT=1` in the environment — the
+    // committed `.isocan/project.json` already carries the canvas id and the
+    // home address, which is exactly what Scene 6 leans on when it says the
+    // marker "corroborates" them.
+    const at = declared.at ?? binding?.home ?? null;
+    if (at) return { base: at, direct: at };
+    // Direct was asked for and no address could be found. Refusing here rather
+    // than falling back to 127.0.0.1 is the whole care: a silent fallback would
+    // start a daemon on a machine that said not to, and the agent would work a
+    // local replica of nothing while believing it was on the team's canvas.
+    throw new Error(
+      `${DIRECT_VAR} says this machine runs no daemon, but nothing says which home to ` +
+        "speak to: it does not name an address, there is no `direct` in " +
+        `${paths.configFile(isocanHome)}, and no .isocan/project.json marker in this ` +
+        `directory names one. Set the address itself ` +
+        `(${DIRECT_VAR}=https://isocan.io), or run \`isocan setup <canvas address> --direct\` here.`,
+    );
+  }
+  return { base: `http://127.0.0.1:${port}`, direct: null };
+}
+
+/**
+ * {@link resolveBase} for the commands that build a client outside a `Ctx` —
+ * `identity`, `whoami`, `clone`, and the two best-effort helpers behind a
+ * rename. They each resolve the directory's marker for themselves, which is
+ * one extra walk up the tree and buys the thing that matters: there is no
+ * second spelling of "which address does this machine talk to".
+ */
+export async function baseForCwd(
+  isocanHome: string,
+  port: number,
+): Promise<{ base: string; direct: string | null }> {
+  return resolveBase(isocanHome, port, await findBinding(process.cwd(), isocanHome));
+}
+
 export async function makeCtx(cmd: Command): Promise<Ctx> {
   const opts = cmd.optsWithGlobals() as {
     json?: boolean;
@@ -135,7 +198,18 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   };
   const home = paths.isocanHome();
   const port = opts.port ? Number(opts.port) : Number(process.env.ISOCAN_PORT ?? DEFAULT_PORT);
-  const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+  /**
+   * **The marker, read before the client rather than after it** (phase 11).
+   *
+   * It used to be resolved near the bottom, where only `Ctx.binding` wanted
+   * it. Direct mode gave it a second reader that has to run first: on a
+   * machine that has said "no daemon" without saying where to go, the
+   * directory's `.isocan/project.json` is what names the home — which is the
+   * whole of how a cloned repo in a fresh cloud workspace knows its address.
+   */
+  const binding = await findBinding(process.cwd(), home);
+  const { base, direct } = await resolveBase(home, port, binding);
+  const client = new DaemonClient(base, home);
   // A person at a keyboard is asked once, up front. Everyone else is asked
   // only if it turns out to matter: looking (`ls`, `canvas list`, `show`)
   // stamps nothing, and an agent should be able to see where it has landed
@@ -145,12 +219,20 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   const known = await resolveIdentity(client, home);
   const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
   const harness = known?.harness ?? null;
-  await client.ensureDaemon();
+  // A direct machine has no daemon to ensure, and starting one would be the
+  // one thing it has said not to do.
+  if (!direct) await client.ensureDaemon();
   // One health call, two answers. It was already being made for the staleness
   // warning; asking it again for the home address would be a second round trip
   // on every command for a field that travels in the same body.
   const health = await client.healthz().catch(() => null);
-  await warnIfStale(health, home);
+  // Staleness is "the daemon holding this port is an older build than this
+  // CLI", and on a direct machine that sentence has no referent — the process
+  // answering is somebody else's home, and whether ITS build matches this CLI
+  // is the wire-version question, which the door answers with a 426 and an
+  // upgrade command. Asking `stalenessOf` here would compare a laptop's CLI to
+  // a server's deploy and warn about it on every command.
+  if (!direct) await warnIfStale(health, home);
   await warnIfBehind(health, home);
   const birthHome = health?.home ?? null;
   // Lazily, and at most once: `GET /api/homes` is a second round trip, and
@@ -162,7 +244,6 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   // an eager claim on every command would put an actors-log entry behind
   // `ls`. `resolveIdentity` has already told the client HOW to claim; the
   // home asking is what makes it happen, exactly once per badge.
-  const binding = await findBinding(process.cwd(), home);
   return {
     client,
     get actor(): Actor {
@@ -352,7 +433,7 @@ async function warnIfBehind(health: Health | null, home: string): Promise<void> 
   }
 }
 
-interface ConfigFile extends HarnessVarConfig, HomeConfig, UpgradeConfig {
+interface ConfigFile extends HarnessVarConfig, HomeConfig, UpgradeConfig, DirectConfig {
   /** **A deliberate holdout** (phase 13.5's rename): this is a KEY in
    * `~/.isocan/config.json`, a hand-edited file that already exists on every
    * machine. Renaming it would have an upgraded CLI read an old file, find no
