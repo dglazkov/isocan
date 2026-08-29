@@ -1,8 +1,32 @@
 # Reviews
 
-Standing reviews of this repo, by the four personas in
-[`.claude/agents/`](../../.claude/agents/). Each one is a pass by somebody
-whose only job is that lens: design, architecture, tests, and the market.
+Standing reviews of this repo, by the personas in
+[`.agents/personas/`](../../.agents/personas/) (Claude Code reads the same
+files through symlinks in `.claude/agents/`). Each one is a pass by somebody
+whose only job is that lens.
+
+| Persona | The lens | Its number |
+| --- | --- | --- |
+| `accessibility` | Usable by somebody not using it the way you are | contrast, names, targets, alt |
+| `architect` | The op vocabulary, boundaries, the isomorphism | core's runtime deps, op types |
+| `copy` | The words: labels, errors, tooltips, empty states | greppable copy tells |
+| `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals |
+| `market-researcher` | What else exists and what to take from it | **none, honestly** |
+| `performance` | Whether it still feels fast | largest built chunk |
+| `qa-tester` | Whether the tests mean anything | eslint errors |
+
+**Seven, and the count is the discipline rather than a target.** The design
+says four fit in a head and warns against a persona per concern; the gate it
+sets is stricter and is what these pass: *a persona needs a standing number
+nobody else is watching.* `market-researcher` has none and says so out loud in
+`isocan persona ls` — a lens that cannot state a number is worth keeping and
+worth being honest about, not worth a made-up metric.
+
+Two roles were considered and NOT added, for the same reason: **security** (the
+jails are real and well-tested, but there is no standing number today, and the
+architect's review already covers the boundaries) and **docs** (drift between
+what the docs claim and what the code does — which is already, by name, part of
+the architect's charter).
 
 They exist because the work moves fast and the things that rot quietly —
 a token nobody used, a test that asserts nothing, a dependency that stopped

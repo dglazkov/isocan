@@ -1,6 +1,6 @@
 # architect — 2026-08-29
 
-Run by `scripts/persona-run.mjs` at `f2da36c`. **Nothing was changed.**
+Run by `scripts/persona-run.mjs` at `cc085f0`. **Nothing was changed.**
 
 | Goal | Target | Now | Verdict |
 | --- | --- | --- | --- |

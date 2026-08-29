@@ -1,10 +1,10 @@
-# qa-tester — 2026-08-29
+# performance — 2026-08-29
 
 Run by `scripts/persona-run.mjs` at `cc085f0`. **Nothing was changed.**
 
 | Goal | Target | Now | Verdict |
 | --- | --- | --- | --- |
-| eslint errors | at most 0 | 0 | held |
+| largest built JavaScript chunk | at most 700000 | 673076 | held |
 
 ## Findings
 

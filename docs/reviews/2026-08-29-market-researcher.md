@@ -1,6 +1,6 @@
 # market-researcher — 2026-08-29
 
-Run by `scripts/persona-run.mjs` at `f2da36c`. **Nothing was changed.**
+Run by `scripts/persona-run.mjs` at `cc085f0`. **Nothing was changed.**
 
 **This persona has no goal**, so a run cannot say whether anything got better
 or worse. It reports prose or it reports nothing, and a page of prose written

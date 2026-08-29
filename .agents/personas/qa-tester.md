@@ -11,6 +11,8 @@ goal:
     measured by: node scripts/measure.mjs lint-violations
     baseline: 0, 2026-08-29, 6b1afaf
 runs: docs/reviews/
+trigger:
+  cron: 43 8 * * *
 ---
 
 You are responsible for whether the tests mean anything. A green suite that

@@ -61,15 +61,18 @@ describe("a goal points at a metric that exists", () => {
     const { promises: fs } = await import("node:fs");
     const path = await import("node:path");
     const { parsePersona, PERSONA_DIR } = await import("@isocan/core");
+    // Digits included: `a11y-failures` is a metric, and a name pattern that
+    // stopped at the "1" extracted "a" and reported a metric that does not
+    // exist — found by this test on the day the metric was added.
     const known = new Set(
-      [...source.matchAll(/^ {2}"([a-z-]+)": \{$/gm)].map((m) => m[1]!),
+      [...source.matchAll(/^ {2}"([a-z0-9-]+)": \{$/gm)].map((m) => m[1]!),
     );
     expect(known.size).toBeGreaterThan(3);
     const dir = path.join(repo, PERSONA_DIR);
     for (const file of (await fs.readdir(dir)).filter((f) => f.endsWith(".md"))) {
       const persona = parsePersona(await fs.readFile(path.join(dir, file), "utf8"), file);
       for (const goal of persona?.goals ?? []) {
-        const named = /measure\.mjs\s+([a-z-]+)/.exec(goal.measuredBy)?.[1];
+        const named = /measure\.mjs\s+([a-z0-9-]+)/.exec(goal.measuredBy)?.[1];
         // Goals may point at other commands; this only checks the ones that
         // claim to use this instrument, so a typo cannot produce a goal whose
         // command exits 2 and is read as "nothing to report".
