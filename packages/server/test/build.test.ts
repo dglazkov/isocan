@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -11,6 +11,34 @@ import {
   type BuildStamp,
   type HomeBuild,
 } from "../src/build.ts";
+
+/** This checkout's root — the directory `buildStamp` resolves for itself. */
+const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+
+/**
+ * Where this checkout's REFS live, which is not always where its `.git` is.
+ *
+ * In a worktree `.git` is a file naming a per-worktree gitdir, and that gitdir
+ * names the shared one in `commondir`. Probing `<root>/.git/reftable` therefore
+ * answers "not reftable" for every worktree of a reftable repo, and the test
+ * below would then demand a sha that `gitHead` is right to withhold. Same walk
+ * as `gitHead`'s, for the same reason.
+ */
+function gitCommonDir(): string {
+  let dir = path.join(repoRoot, ".git");
+  if (statSync(dir).isFile()) {
+    const pointer = readFileSync(dir, "utf8").match(/^gitdir:\s*(.+)$/m)?.[1]?.trim();
+    if (!pointer) return dir;
+    dir = path.resolve(repoRoot, pointer);
+    try {
+      const common = readFileSync(path.join(dir, "commondir"), "utf8").trim();
+      if (common) dir = path.resolve(dir, common);
+    } catch {
+      // A gitdir without a commondir keeps its refs where it is.
+    }
+  }
+  return dir;
+}
 
 /** A stamp with the fields a test does not care about filled in. */
 const stampOf = (over: Partial<BuildStamp>): BuildStamp => ({
@@ -31,7 +59,10 @@ describe("build stamp", () => {
   it("names this copy: a version, a root, and when its code was written", () => {
     const stamp = buildStamp();
     expect(stamp.version).toMatch(/^\d+\.\d+\.\d+/);
-    expect(stamp.root).toMatch(/isocan$/);
+    // The property is "it names THIS copy", not "the directory is spelled
+    // isocan" — which a worktree, a second clone or an npx cache directory all
+    // fail while the stamp is perfectly correct.
+    expect(stamp.root).toBe(repoRoot);
     expect(Number.isNaN(Date.parse(stamp.codeAt))).toBe(false);
   });
 
@@ -75,9 +106,7 @@ describe("build stamp", () => {
     // asserting a promise the feature cannot keep. The guard is shape-aware
     // rather than weakened: a readable checkout must name the sha, and a
     // reftable one must say nothing rather than something wrong.
-    const reftable = existsSync(
-      path.join(fileURLToPath(new URL("../../..", import.meta.url)), ".git", "reftable"),
-    );
+    const reftable = existsSync(path.join(gitCommonDir(), "reftable"));
     if (reftable) {
       expect(stamp.commit).toBeNull();
       expect(describeBuild(stamp)).toBe(stamp.version);
