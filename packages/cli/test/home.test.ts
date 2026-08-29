@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { paths, startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { reservePort } from "../../../test/ports.ts";
 import { harnessVars } from "../src/harness.ts";
 
 /**
@@ -46,24 +46,11 @@ let port: number;
 let upstream: Daemon;
 let homeBase: string;
 
-/** A port nobody is on. Two uses here: the replica's own (the CLI spawns the
- * daemon itself, which is the path the verb walks) and, once, an address that
- * is guaranteed to answer nothing. */
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(address.port));
-    });
-  });
-}
-
 beforeEach(async () => {
   isocanHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-"));
   upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-up-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-work-"));
-  port = await freePort();
+  port = await reservePort();
   upstream = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   const address = upstream.app.server.address();
   homeBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -191,7 +178,7 @@ describe("isocan home <url>", () => {
   }, 30_000);
 
   it("reports a home that does not answer rather than walking into it", async () => {
-    const nowhere = `http://127.0.0.1:${await freePort()}`;
+    const nowhere = `http://127.0.0.1:${await reservePort()}`;
     const refused = await isocan("home", nowhere);
     expect(refused.code).toBe(1);
     expect(refused.stderr).toContain("refuses every write");

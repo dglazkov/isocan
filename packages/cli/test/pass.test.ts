@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +8,7 @@ import { canvasUrl, INSTALL_SPEC } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
 import { harnessVars } from "../src/harness.ts";
+import { reservePort } from "../../../test/ports.ts";
 
 /**
  * **Scene 5, from the terminal end.**
@@ -46,16 +46,6 @@ let homeDaemon: Daemon;
 let homePort: number;
 let awayPort: number;
 
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(address.port));
-    });
-  });
-}
-
 /**
  * A stand-in for `open`/`xdg-open` on the PATH, recording what the CLI handed
  * the browser.
@@ -92,7 +82,7 @@ beforeEach(async () => {
   homeDaemon = await startDaemon({ port: 0, home: homeDir, birthHome: null });
   const address = homeDaemon.app.server.address();
   homePort = typeof address === "object" && address ? address.port : 0;
-  awayPort = await freePort();
+  awayPort = await reservePort();
 });
 
 afterEach(async () => {

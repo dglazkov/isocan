@@ -18,14 +18,34 @@ import net from "node:net";
  * Measured before replacing it, because the fix should follow the diagnosis:
  * 13 processes taking 300 ephemeral ports each, as fast as they could, produced
  * ZERO cross-process duplicates — the kernel hands them out from one rotating
- * counter, so the window is real but very rarely hit. This is therefore not a
- * fix for an observed failure; it is the removal of a shared resource nobody
- * needs to share, and it costs one bind attempt.
+ * counter, so the window is real but very rarely hit.
+ *
+ * **That measurement said this was rare, and it was read as saying it does not
+ * happen.** It has now happened. On 2026-08-29 the suite was run six times over
+ * and the fifth failed `packages/cli/test/upgrade-notice.test.ts` twice —
+ * `listen EADDRINUSE 127.0.0.1:64787` and `:49177`, both above macOS's 49152
+ * floor — in a file that had kept a local copy of the guess. The reason the
+ * measurement missed it is worth keeping: it counted duplicates handed out
+ * WITHIN the run, and the collision was with a process outside it. Ephemeral
+ * ports are shared with the whole machine, so no experiment confined to the
+ * suite can bound this. So it IS a fix for an observed failure, and the cost is
+ * still one bind attempt.
  *
  * Each vitest worker gets its own slice of a private range, so two workers
  * CANNOT be handed the same number. The range sits below 32768, under the
  * ephemeral floor on Linux (32768) as well as macOS (49152), so nothing the
- * OS assigns can land in it either.
+ * OS assigns can land in it either — which is the half that actually mattered
+ * above, and the half a `listen(0)` guess cannot have.
+ *
+ * Use this rather than a local `listen(0) → read → close`, and if you find one
+ * of those, move it. Three CLI test files had kept their own until the day
+ * above, which is how one of them was still able to lose this race.
+ *
+ * `test/emulator.ts` is the one deliberate exception and stays as it is: it
+ * runs in globalSetup, before any worker exists, so there is no
+ * `VITEST_POOL_ID` to slice by — and it holds its port for the whole run, so a
+ * worker that later reached for the same number would simply find it unbindable
+ * and take the next.
  */
 
 const FIRST = 20_000;

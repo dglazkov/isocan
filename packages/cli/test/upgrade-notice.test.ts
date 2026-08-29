@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildStamp, startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { reservePort } from "../../../test/ports.ts";
 import { harnessVars } from "../src/harness.ts";
 
 /**
@@ -50,16 +51,6 @@ let work: string;
 let port: number;
 let daemon: Daemon;
 
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(address.port));
-    });
-  });
-}
-
 beforeEach(async () => {
   isocanHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-upgrade-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-upgrade-work-"));
@@ -90,7 +81,7 @@ beforeEach(async () => {
   const address = fakeHome.address() as net.AddressInfo;
   homeBase = `http://127.0.0.1:${address.port}`;
 
-  port = await freePort();
+  port = await reservePort();
   // Started HERE rather than by the CLI, so the probe interval is a knob this
   // test can turn down: the real one is an hour, and "the home moved under a
   // running daemon" is a beat no test can wait out.
