@@ -95,7 +95,11 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
             style={{ background: actorColorIn(colors, face.actor.id) }}
             title={face.status ? `${face.label} — ${face.status}` : face.label}
             aria-label={face.label}
-            onClick={() => openPanel(canvasId, "main")}
+            /* The TRAY, not the Chat. A face is a question about what that
+               agent is doing, and the tray is where that is answered — sending
+               it to the conversation instead was the strip's faces being
+               decorative, which is the thing phase 3 was trying to avoid. */
+            onClick={() => openPanel(canvasId, "agents")}
           >
             {face.label.trim().charAt(0).toUpperCase()}
           </button>

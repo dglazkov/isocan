@@ -9,11 +9,12 @@ import { dockStateNow } from "./stage.ts";
  * for a panel that was pushed aside would fight the next reload.
  */
 
-export type Panel = "main" | "files";
+export type Panel = "main" | "files" | "agents";
 
 const KEY: Record<Panel, (canvasId: string) => string> = {
   main: (canvasId) => `isocan.mainpanel.${canvasId}`,
   files: (canvasId) => `isocan.filespanel.${canvasId}`,
+  agents: (canvasId) => `isocan.agentspanel.${canvasId}`,
 };
 
 /**
@@ -43,7 +44,7 @@ export function setRailWidth(width: number): void {
  * first render" is not a thing this function can honestly know.
  */
 export function openPanel(canvasId: string, panel: Panel | null, pan = true): void {
-  for (const which of ["main", "files"] as const) {
+  for (const which of ["main", "files", "agents"] as const) {
     try {
       localStorage.setItem(KEY[which](canvasId), panel === which ? "open" : "closed");
     } catch {
@@ -54,6 +55,7 @@ export function openPanel(canvasId: string, panel: Panel | null, pan = true): vo
   const ui = useUiStore.getState();
   ui.setMainPanelOpen(panel === "main");
   ui.setFilesPanelOpen(panel === "files");
+  ui.setAgentsPanelOpen(panel === "agents");
   if (pan) panForDockChange(before, RAIL_PAN_MS);
 }
 
@@ -62,6 +64,7 @@ export function storedPanel(canvasId: string): Panel | null | undefined {
   try {
     if (localStorage.getItem(KEY.main(canvasId)) === "open") return "main";
     if (localStorage.getItem(KEY.files(canvasId)) === "open") return "files";
+    if (localStorage.getItem(KEY.agents(canvasId)) === "open") return "agents";
     return localStorage.getItem(KEY.main(canvasId)) === null ? undefined : null;
   } catch {
     return undefined;

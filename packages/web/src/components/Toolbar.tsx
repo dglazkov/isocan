@@ -29,6 +29,7 @@ export function Toolbar({
   const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
+  const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
@@ -83,6 +84,7 @@ export function Toolbar({
                 entries: chromeMenu({
                   canvasId: canvas.id,
                   filesOpen,
+                  agentsOpen,
                   trashOpen,
                   trashCount,
                   minimapOpen,

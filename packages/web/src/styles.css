@@ -2106,6 +2106,25 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow-wrap: anywhere;
 }
 
+/* ---------- the agent tray ----------
+   The dock's third panel. It borrows the files panel's header rhythm rather
+   than inventing one — a name, a quiet hint, a close — because three panels
+   in one dock that each announce themselves differently read as three
+   different products sharing a hole in the screen. */
+.agents-panel header {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.agents-panel header b { font-size: 13px; letter-spacing: -0.01em; }
+.agents-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
+.agents-hint {
+  font-style: normal; font-size: 11px; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.agents-body { flex: 1; overflow: auto; padding: 6px; }
+.agents-quiet { margin: 10px 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+.agents-quiet code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
 /* ---------- the lane ----------
 
    What a message MADE, under the message that made it. The claim is narrow on

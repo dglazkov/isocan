@@ -137,6 +137,8 @@ interface UiStore {
   /** The docked files panel — the canvas as a list of files. Shares the left
    * dock with the main thread (see lib/panels.ts). */
   filesPanelOpen: boolean;
+  /** The agent tray — `isocan who` given a home. Shares the left dock. */
+  agentsPanelOpen: boolean;
   /** The marks dock on the right — the canvas grouped by reaction. */
   marksOpen: boolean;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
@@ -188,6 +190,7 @@ interface UiStore {
   setMainPanelOpen: (open: boolean) => void;
   setMinimapOpen: (open: boolean) => void;
   setFilesPanelOpen: (open: boolean) => void;
+  setAgentsPanelOpen: (open: boolean) => void;
   setMarksOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
   /** How wide the docked left panel is, in screen pixels. */
@@ -373,6 +376,7 @@ export const useUiStore = create<UiStore>((set) => {
     panelResizing: false,
     panning: false,
     filesPanelOpen: false,
+    agentsPanelOpen: false,
     marksOpen: false,
     peekedItemId: null,
     followSessionId: null,
@@ -439,6 +443,7 @@ export const useUiStore = create<UiStore>((set) => {
     setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
+    setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     /**

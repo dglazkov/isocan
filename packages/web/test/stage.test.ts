@@ -155,6 +155,7 @@ describe("the stage, asked directly", () => {
   const ui = (over: Partial<Parameters<typeof dockEdges>[0]> = {}) => ({
     mainPanelOpen: false,
     filesPanelOpen: false,
+    agentsPanelOpen: false,
     trashOpen: false,
     marksOpen: false,
     panelWidth: 320,
