@@ -134,6 +134,19 @@ async function main() {
     const env = { ...process.env, GIT_INDEX_FILE: path.join(tmp, "index") };
     git("read-tree", head, { env });
     git("add", "-f", "packages/web/dist", { env });
+    /**
+     * **`.github/` does not ship.**
+     *
+     * Two reasons, and the second is why this is here rather than a tidy-up.
+     * Nobody installing isocan needs our CI, and a fork of the release branch
+     * would inherit a nightly grader and a changelog job aimed at a repository
+     * that is not theirs. And `GITHUB_TOKEN` may never push a commit that
+     * touches `.github/workflows/` — a platform rule with no `permissions:`
+     * key that grants it — so while the release tree carried them, every
+     * release built from a commit that edited a workflow was rejected. That
+     * happened the first time one was added and took `green` down with it.
+     */
+    git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ".github", { env });
 
     // From HEAD, not from disk: a release is of a commit, so nothing an
     // install left lying in the working tree can end up in the manifest.

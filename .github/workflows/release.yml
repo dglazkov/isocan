@@ -17,7 +17,21 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write # push the release branch
+  contents: write # push the release branch and advance `green`
+  #
+  # **There is no permission that fixes the workflow-file case, and it is worth
+  # writing down rather than rediscovering.** `GITHUB_TOKEN` cannot push a
+  # commit that adds or changes anything under `.github/workflows/` — that is a
+  # platform rule, not a scope this block can grant (`workflows` is a PAT scope
+  # and has no `permissions:` key). Adding `grade.yml` therefore rejected BOTH
+  # pushes from this job on the commit that added it.
+  #
+  # The `release` branch no longer carries `.github/` at all, which fixes that
+  # side permanently and is right anyway — nobody installing isocan needs our
+  # CI, and shipping it means every fork inherits our nightly. `green` is a
+  # fast-forward of main's own commit and cannot dodge it, so on a commit that
+  # touches a workflow, green is advanced by hand. The step below says so
+  # instead of guessing.
 
 jobs:
   release:
@@ -127,10 +141,30 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # A plain push already refuses a non-fast-forward, which IS the
           # guard — no --force anything, deliberately.
-          if git push origin "${GITHUB_SHA}:refs/heads/green"; then
+          #
+          # **The else branch used to state a cause it had not checked**, and
+          # got it wrong the first time it mattered: the push was rejected for
+          # a missing `workflows` permission and this printed "an out-of-order
+          # or re-run build" with complete confidence, as a WARNING, leaving the
+          # step green. A step that fails, reports success, and explains itself
+          # incorrectly is worse than one that simply fails.
+          #
+          # So the reason is now whatever git actually said, and only the
+          # non-fast-forward — the one case this genuinely knows and genuinely
+          # tolerates — stays a warning. Everything else fails the job.
+          if git push origin "${GITHUB_SHA}:refs/heads/green" 2>/tmp/green.err; then
             echo "green -> ${GITHUB_SHA}; dev deploys this commit."
+          elif grep -q "workflow" /tmp/green.err; then
+            cat /tmp/green.err
+            echo "::error::green cannot be advanced to ${GITHUB_SHA} because this commit touches .github/workflows/, which GITHUB_TOKEN may never push. No permission fixes this. Advance it by hand: git push origin ${GITHUB_SHA}:green"
+            exit 1
+          elif grep -q "non-fast-forward\|fetch first\|not an ancestor" /tmp/green.err; then
+            cat /tmp/green.err
+            echo "::warning::green was not fast-forwarded to ${GITHUB_SHA}: it already points at something this commit is not an ancestor of — an out-of-order or re-run build. The deployed home stays where it is rather than moving backwards."
           else
-            echo "::warning::green was not fast-forwarded to ${GITHUB_SHA}. It already points at something this commit is not an ancestor of — an out-of-order or re-run build. The deployed home stays where it is rather than moving backwards."
+            cat /tmp/green.err
+            echo "::error::green could not be advanced to ${GITHUB_SHA}, and not because of ordering. The reason git gave is above."
+            exit 1
           fi
 
       - name: Build and publish the release branch

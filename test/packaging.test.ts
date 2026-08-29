@@ -191,3 +191,42 @@ async function sourceFiles(packages: string): Promise<string[]> {
   }
   return found;
 }
+
+/**
+ * **What the release branch must NOT carry.**
+ *
+ * Adding `.github/workflows/grade.yml` rejected both of the release job's
+ * pushes — the release branch AND `green` — with "refusing to allow a GitHub
+ * App to create or update workflow … without `workflows` permission". That is
+ * a platform rule with no `permissions:` key that grants it, so the fix is not
+ * to ask for more: the release tree simply does not carry `.github/`.
+ *
+ * Which is right on its own terms. An install is a package, and nobody
+ * installing isocan needs our CI — a fork of the release branch would inherit
+ * a nightly grader and a changelog job aimed at somebody else's repository.
+ */
+describe("the release branch is a package, not a copy of the repo", () => {
+  it("does not ship .github — the CI belongs to this repo, not to installs", async () => {
+    const script = await fs.readFile(path.join(repo, "scripts/release.mjs"), "utf8");
+    expect(script).toMatch(/git\("rm", "-r", "--cached", "--ignore-unmatch", "-q", "\.github"/);
+  });
+
+  it("the release job asks for no permission that cannot exist", async () => {
+    // `workflows` is a PAT scope. Writing it here is a workflow that fails to
+    // parse; asking for `actions: write` instead is a scope that looks like
+    // the fix and is not, which is the more expensive mistake.
+    const yml = await fs.readFile(path.join(repo, ".github/workflows/release.yml"), "utf8");
+    const block = yml.slice(yml.indexOf("permissions:"), yml.indexOf("jobs:"));
+    const asked = [...block.matchAll(/^\s{2}([a-z-]+):\s*(write|read)/gm)].map((m) => m[1]);
+    expect(asked).toEqual(["contents"]);
+  });
+
+  it("green's failure names the workflow case instead of guessing at ordering", async () => {
+    // It guessed, once, and was confidently wrong: the push was rejected for
+    // the permission above and the step printed "an out-of-order or re-run
+    // build" — as a WARNING, leaving the step green.
+    const yml = await fs.readFile(path.join(repo, ".github/workflows/release.yml"), "utf8");
+    expect(yml).toContain("git push origin ${GITHUB_SHA}:green");
+    expect(yml).toMatch(/grep -q "workflow" \/tmp\/green\.err/);
+  });
+});
