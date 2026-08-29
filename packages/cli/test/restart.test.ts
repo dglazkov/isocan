@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stopDaemons } from "@isocan/server";
 import { reservePort } from "../../../test/ports.ts";
+import { nodeModulesDir } from "./deps.ts";
 
 /**
  * Upgrading the CLI leaves the daemon behind: `ensureDaemon` only starts one
@@ -73,7 +74,10 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
       recursive: true,
     });
   }
-  await fs.symlink(path.join(repo, "node_modules"), path.join(root, "node_modules"));
+  // The repo's dependencies, resolved rather than guessed at from this
+  // file's location — see `nodeModulesDir`, and the "gave up after 3389ms"
+  // failure that was a dead process rather than a slow one.
+  await fs.symlink(nodeModulesDir(), path.join(root, "node_modules"));
 
   const copied = Date.now() - started;
 
