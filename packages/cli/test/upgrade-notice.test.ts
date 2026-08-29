@@ -103,10 +103,23 @@ beforeEach(async () => {
   });
 });
 
+/**
+ * **Teardown must not throw over the top of setup's error.**
+ *
+ * `beforeEach` here starts a real daemon, and when it fails — a port taken, a
+ * hook that ran out of its 30 seconds under a loaded suite — `daemon` is never
+ * assigned. An unguarded `daemon.close()` then throws a TypeError of its own,
+ * and vitest reports BOTH: the real cause and this one. The real cause is the
+ * first of the two, which is exactly the one a `tail` of a CI log cuts off.
+ *
+ * So every handle here is optional-chained. This fixes no flake; it is what
+ * makes the next one legible instead of reading as "cannot read properties of
+ * undefined", which describes the cleanup and not the failure.
+ */
 afterEach(async () => {
-  await daemon.close().catch(() => {});
+  await daemon?.close().catch(() => {});
   await stopDaemons(port, isocanHome).catch(() => {});
-  await new Promise<void>((resolve) => fakeHome.close(() => resolve()));
+  if (fakeHome) await new Promise<void>((resolve) => fakeHome.close(() => resolve()));
   await Promise.allSettled([isocanHome, work].map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
