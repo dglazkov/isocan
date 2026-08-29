@@ -1188,6 +1188,36 @@ img { height: auto; }
   background: var(--ground);
   display: flex; flex-direction: column;
 }
+/* **Full screen's chrome floats, and the slide gets the whole window.**
+
+   The bar below — still the workbench's — states the principle: "every pixel
+   this takes is one the thing you are reading does not get." Floating is that
+   argument finished. The stage is the window, and two clusters sit on it in
+   the same slab language as the canvas's own header.
+
+   `.resting` is the slideshow answer. This view walks the canvas with ⌘← and
+   ⌘→, and a permanent bar across the top of every slide is the one thing a
+   slideshow must not have — so after a few still seconds the chrome bows out,
+   and a pointer move brings it back. Visibility, not display: a control that
+   is laid out but transparent keeps its place, so nothing reflows when it
+   returns and the fade cannot move the slide. */
+.fs-bar {
+  position: absolute; top: var(--edge); left: var(--edge); right: var(--edge);
+  z-index: 1; display: flex; align-items: center; gap: 10px;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.fs-bar > * { pointer-events: auto; }
+.fs-cluster {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 5px 10px;
+}
+.fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
+.fullscreen.resting .fs-bar > * { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }
+/* The stage is the whole window now that nothing above it takes a slice. */
+.fullscreen > .fullscreen-stage { position: absolute; inset: 0; }
+
 /* A thin bar, not a chrome header: the item is what you came for, and every
    pixel this takes is one the thing you are reading does not get. */
 .fullscreen-bar {
