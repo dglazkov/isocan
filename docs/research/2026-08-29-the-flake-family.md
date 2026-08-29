@@ -2,10 +2,11 @@
 
 **29 August 2026**
 
-**Status: one member fixed with proof, and FOUR more witnessed in a single
-afternoon — the third of which names its own cause: a connect that timed out
-on loopback, which means a blocked event loop rather than anything the
-application decided.** This note exists because the family had
+**Status: one member fixed with proof; five more witnessed in a single
+afternoon; and — after instrumenting the event loop — the leading hypothesis
+KILLED by its first measurement. The evidence now points below the
+application, at test daemons listening on ports inside the kernel's ephemeral
+range.** This note exists because the family had
 been chased twice by reasoning and never by observation, and the second kind
 of attempt just produced something the first kind could not.
 
@@ -218,6 +219,134 @@ It also sits oddly beside the third witness. A connect that times out on
 loopback and a port that is already in use are both about *sockets*, in a
 suite whose members were assumed to be about state. Whether that is one cause
 or two is exactly what the event-loop experiment above would start to separate.
+
+---
+
+## The experiment, run
+
+`test/setup.ts` now watches the event loop. The tests start their daemons
+**in-process**, so the worker's loop IS the daemon's loop: a stall measured
+here is the stall that did not accept the connection. The histogram is reset
+per test, so a number attaches to a NAME; every file reports its ceiling
+whether or not anything went wrong, and any stall over a second says so loudly.
+When `retryingFetch` gives up it now names the stall in the same sentence as
+the timeout, so the two halves of the hypothesis arrive together instead of
+being correlated by hand an afternoon later.
+
+**It was mutation-tested before it was believed**, and the first version failed
+that test: a test that blocked the loop for 1500ms on purpose was reported at
+**0ms**. Twice, for two different reasons — the histogram cannot observe a
+stall until its own overdue timer fires (so the read needs a turn of the loop),
+and it cannot observe one it was not re-armed before (so `reset()` needs one
+too). Both versions looked exactly like a working instrument: no error, no
+warning, a tidy zero. That is the third silent zero this week, and the only
+reason it is not the fourth is that it was pointed at a loop blocked on
+purpose.
+
+### What it found
+
+**A quiet, green run**, 185 files:
+
+| | worst stall |
+| --- | --- |
+| `lint.test.ts` "reports no violation anywhere in src" | 375 ms |
+| everything else | 40–82 ms |
+
+**Under 16 spinners on 14 cores**, green again:
+
+| | worst stall |
+| --- | --- |
+| `lint.test.ts` "reports no violation anywhere in src" | 1242 ms |
+| everything else | 150–250 ms |
+
+**The witness needed 7803 ms.** Nothing in either run is within a factor of six
+of that, and the one outlier is a synchronous source scan in a file that starts
+no daemon. So a stall of that size is **not** in this suite's ordinary
+distribution, oversubscribed or not.
+
+### What that means, stated carefully
+
+It does not confirm the hypothesis and it does not kill it. Neither run
+reproduced a flake, so there is still no paired observation — the thing this
+was built to produce. What has changed is that the **next** one arrives with a
+number attached, and the number is decisive either way:
+
+- a stall of seconds under the failing test → the blocked-loop hypothesis is
+  confirmed, and the question shrinks to *what blocks it*
+- a stall of 50 ms under the failing test → **the hypothesis is dead**, and the
+  cause is below the application: the socket layer, the kernel's backlog, or
+  the harness itself
+
+The second outcome is the more valuable one to have made possible, because it
+is the one no amount of reading the application code could ever reach.
+
+### A limit of the instrument, measured
+
+**78 of 185 files reported a ceiling.** Every file should. The cause is not
+deduplication — all 78 lines are distinct — and it is not yet understood, so
+the baselines above are a claim about those 78 (which do include the
+daemon-heavy files the family clusters in) rather than about the suite. Worth
+fixing before the numbers are leaned on harder.
+
+---
+
+## The verdict, on the very next run: the hypothesis is DEAD
+
+The instrument caught a flake the first time one occurred after it landed, and
+the sentence it produced is the whole answer:
+
+```
+FAIL packages/server/test/blobs.test.ts
+     > the blob route honors Range > refuses a zero-length suffix
+TypeError: fetch failed — POST http://127.0.0.1:59866/api/door,
+  connect/ETIMEDOUT, gave up after 7848ms and 1 attempt (budget 3000ms),
+  loop stalled 30ms during this test
+```
+
+**The loop stalled 30 milliseconds.** A connect to loopback timed out after
+7.8 seconds while the process was, by measurement, entirely responsive.
+
+So the blocked-loop hypothesis — the one this instrument was built to test, and
+the one this document argued for two sections ago — **is wrong**. It was the
+best reading of the evidence available and it does not survive its first
+measurement, which is the outcome the experiment was designed to be able to
+produce. Nothing in the application was busy. The fault is below it.
+
+### Where it actually is, and the evidence is now converging
+
+Every socket-flavoured witness names a port, and every one of them is in the
+**ephemeral range**:
+
+| Witness | Port | macOS ephemeral range |
+| --- | --- | --- |
+| ETIMEDOUT (pass.test.ts) | 59863 | 49152–65535 |
+| ETIMEDOUT (blobs.test.ts) | 59866 | 49152–65535 |
+| EADDRINUSE (upgrade-notice.test.ts) | 62903 | 49152–65535 |
+| EADDRINUSE, same run | 64787, 49177 | 49152–65535 |
+
+`sysctl net.inet.ip.portrange.first` is 49152 on this machine. **Test daemons
+are listening on ports the kernel is simultaneously handing out to outgoing
+connections**, which is the same collision Dimitri's fix names from the other
+side: it removed three tests that probed for a free port and then raced to bind
+it. `EADDRINUSE` is that race lost at bind time. `ETIMEDOUT` on loopback with
+an idle loop is consistent with losing it at connect time — a SYN arriving at a
+socket in a state that drops it rather than refusing it.
+
+Two people, two symptoms, one range. That is the strongest thing this
+investigation has, and neither half would have been conclusive alone: the
+`EADDRINUSE` evidence has no loop measurement, and the loop measurement without
+the port numbers would have said only "not the application".
+
+### The next step, and it is small
+
+Bind test daemons **below 49152**. `port: 0` asks the kernel for a free port
+and the kernel answers from exactly the range it is also allocating outgoing
+connections from — which is correct behaviour for a client and the wrong ask
+for a server that something else must then connect to. A per-worker slice in
+the registered range takes the collision off the table for both symptoms at
+once, and it is testable: if it is right, both families stop.
+
+Recorded, not yet done. The prediction is written down first on purpose.
 
 ---
 

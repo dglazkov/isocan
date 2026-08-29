@@ -1,3 +1,6 @@
+import { monitorEventLoopDelay } from "node:perf_hooks";
+import { afterAll, afterEach, beforeEach } from "vitest";
+
 /**
  * Nothing this run starts may outlive it.
  *
@@ -101,6 +104,108 @@ orphaned.unref();
  * ANSWER and is returned untouched: a 404 or a 500 is the server speaking,
  * and swallowing those would hide exactly the failures this suite is for.
  */
+/**
+ * **The event loop, watched.**
+ *
+ * The flake family's third witness was `connect ETIMEDOUT 127.0.0.1` on a POST
+ * to a daemon this very worker had started in-process
+ * (`docs/research/2026-08-29-the-flake-family.md`). On loopback a connect
+ * either completes at once or is refused; a TIMEOUT means the SYN sat in a
+ * listen backlog nothing accepted — **the loop was blocked long enough that
+ * the kernel gave up on the handshake.**
+ *
+ * That is a claim about this process, and this process can be asked. The tests
+ * start their daemons IN-PROCESS, so the worker's loop IS the daemon's loop:
+ * a stall measured here is the stall that did not accept the connection.
+ *
+ * `resolution: 10` samples every 10ms — fine enough to see a multi-second
+ * stall, coarse enough to cost nothing. The histogram is reset per test so a
+ * number can be attributed to a NAME rather than to a file.
+ */
+const loop = monitorEventLoopDelay({ resolution: 10 });
+loop.enable();
+/** Milliseconds, because nanoseconds are unreadable at a glance. */
+const stallMs = () => Math.round(loop.max / 1e6);
+/**
+ * A stall this long is not scheduling noise. The suite runs one worker per
+ * core and is deliberately oversubscribed, so hundreds of milliseconds are
+ * ordinary; a full second is something else, and the witness that prompted
+ * this was seven.
+ */
+const STALL_MS = 1000;
+let worstStall = { ms: 0, test: "" };
+
+beforeEach(async () => {
+  loop.reset();
+  /**
+   * **And a turn of the loop before the test starts, for the same reason the
+   * read needs one.** Measured: with `reset()` and the test body in the same
+   * turn, a test that blocked for 1500ms on purpose reported **0ms** — the
+   * histogram cannot observe a stall it was not re-armed before. Yield here
+   * and the identical test reports 1205ms.
+   *
+   * That first version looked exactly like a working instrument: no error, no
+   * warning, a tidy zero. It is the same silent-zero shape as the CI selftest
+   * that never ran and the nightly that reported "0 failing checks" — which is
+   * why this one was mutation-tested against a loop blocked on purpose before
+   * it was believed.
+   */
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+
+afterEach(async (ctx) => {
+  /**
+   * **One turn of the loop before reading, or the number is always zero.**
+   *
+   * The histogram does not learn about a stall until its own overdue timer
+   * fires, and that cannot happen until the loop turns again — so reading
+   * synchronously at the end of a test reports the delay that had accrued
+   * BEFORE the test blocked, which is nothing. The first version of this did
+   * exactly that: a test that blocked the loop for 1500ms on purpose was
+   * reported at 0ms, and it looked like a working instrument.
+   *
+   * A zero-delay timer is the cheapest way to reach the timers phase, where
+   * the overdue callback is already waiting. Sub-millisecond, once per test.
+   */
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const ms = stallMs();
+  // Tracked for EVERY test, not only the loud ones: the ceiling on a quiet
+  // run is what says whether stalls of seconds are even in this suite's
+  // ordinary range, and that is the number the flake hypothesis needs.
+  if (ms > worstStall.ms) worstStall = { ms, test: ctx.task?.name ?? "(unnamed)" };
+  if (ms < STALL_MS) return;
+  const name = ctx.task?.name ?? "(unnamed)";
+  /**
+   * Printed whether the test passed or failed, and that is the point: a stall
+   * under a test that PASSED is the same evidence as one under a test that did
+   * not, and the passing ones are how a rare fault gets characterised before it
+   * next bites. Four flakes were witnessed in one afternoon and each was a
+   * separate archaeology; this is meant to make the fifth arrive with its
+   * cause attached.
+   */
+  process.stderr.write(`stall: the event loop blocked ${ms}ms during "${name}"\n`);
+});
+
+/**
+ * **Always, not only when something was wrong.** A run that reports nothing is
+ * indistinguishable from an instrument that measures nothing — this week has
+ * three examples — so every FILE says its ceiling, and a silent run becomes a
+ * claim somebody can check rather than an absence.
+ *
+ * `afterAll` from a setup file runs once per test file, which is also the
+ * attribution the flake hypothesis wants: the family clusters by file, and
+ * "which files stall" is the question. (`process.on("exit")` was the first
+ * attempt and printed nothing — a worker's exit writes do not reach the
+ * reporter.)
+ */
+afterAll(() => {
+  if (worstStall.test === "") return;
+  process.stderr.write(
+    `loop: worst stall ${worstStall.ms}ms — "${worstStall.test}"\n`,
+  );
+  worstStall = { ms: 0, test: "" };
+});
+
 const realFetch = globalThis.fetch;
 /**
  * Bounded by the CLOCK, not by a number of attempts — and that distinction was
@@ -166,7 +271,16 @@ globalThis.fetch = async function retryingFetch(input, init) {
           `${(err as Error).message} — ${init?.method ?? "GET"} ${where}` +
           `, ${cause?.syscall ?? "?"}/${cause?.code ?? "?"}` +
           `, gave up after ${took}ms and ${attempt + 1} attempt${attempt === 0 ? "" : "s"}` +
-          (neverLeft ? ` (budget ${CONNECT_BUDGET_MS}ms)` : " (not a connect failure — not retried)");
+          (neverLeft ? ` (budget ${CONNECT_BUDGET_MS}ms)` : " (not a connect failure — not retried)") +
+          /**
+           * **The two facts, in one sentence.** A connect that timed out on
+           * loopback and a loop that stalled for seconds are the same event
+           * seen from two sides, and reading them in two places — an assertion
+           * message here, a `stall:` line somewhere up the log — is how an
+           * afternoon gets spent proving they are related. Reported for THIS
+           * test, since the histogram is reset before each one.
+           */
+          `, loop stalled ${stallMs()}ms during this test`;
         throw err;
       }
       // Give the stalled loop a moment, and lengthen it — a machine that is
