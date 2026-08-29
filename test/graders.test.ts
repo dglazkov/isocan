@@ -46,6 +46,39 @@ describe("the graders can actually start", () => {
   });
 });
 
+/**
+ * **The rule the grader did not know, and the count that sent you hunting.**
+ *
+ * The front door failed twelve contrast checks and three target checks. The
+ * twelve were three CSS rules — the report showed the same heading style three
+ * times and called it three problems — and ALL THREE target failures were
+ * false: ordinary prose links, which WCAG 2.5.8 explicitly exempts as "in a
+ * sentence". Padding them to 24px would have broken the line rhythm to satisfy
+ * a rule that was never about them.
+ *
+ * Both halves matter for the same reason. A grader that reports false failures
+ * gets ignored, and a grader that reports true ones without saying WHERE gets
+ * ignored a little more slowly. The night shift's own list of ways this fails
+ * ends with the graders drifting into decoration.
+ */
+describe("the graders are actionable, and right", () => {
+  const grader = read("../scripts/grade.mjs");
+
+  it("knows WCAG 2.5.8's inline exception", () => {
+    expect(grader).toContain("inSentence");
+    // Close to the spec's words: it lays out inline, and the element holding
+    // it has text of its own outside it.
+    expect(grader).toMatch(/getComputedStyle\(el\)\.display !== "inline"/);
+  });
+
+  it("says which element failed, not just how many", () => {
+    expect(grader).toContain("smallTargetDetail");
+    // And the nightly's page prints them, or the detail is collected for
+    // nobody — which is how `worstContrast` sat at three for weeks.
+    expect(read("../scripts/grade-night.mjs")).toContain("smallTargetDetail");
+  });
+});
+
 describe("the selftest is a gate", () => {
   it("release.yml does not let it fail quietly", () => {
     const yml = read("../.github/workflows/release.yml");
@@ -102,5 +135,20 @@ describe.skipIf(!chrome)("--json carries its own verdicts", () => {
     // The fixture is built to break everything, so the verdicts must say so —
     // a `checks` object of all-true here would be the silent zero again.
     expect(Object.values(checks!).filter((ok) => !ok).length).toBeGreaterThan(4);
+  }, 120_000);
+
+  /**
+   * The front door is the page the graders were pointed at first, and the one
+   * whose failures argued for pointing them anywhere. It passes now; this is
+   * what stops it drifting back while nobody is reading the nightly.
+   */
+  it("the front door passes every check", () => {
+    const grader = fileURLToPath(new URL("../scripts/grade.mjs", import.meta.url));
+    const page = fileURLToPath(new URL("../docs/index.html", import.meta.url));
+    const out = JSON.parse(
+      execFileSync("node", [grader, "--file", page, "--json"], { encoding: "utf8" }),
+    ) as Array<{ checks: Record<string, boolean> }>;
+    const failed = Object.entries(out[0]!.checks).filter(([, ok]) => !ok).map(([n]) => n);
+    expect(failed).toEqual([]);
   }, 120_000);
 });

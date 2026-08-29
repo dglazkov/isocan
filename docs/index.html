@@ -11,11 +11,27 @@
     --ink:      #14131a;
     --ink-soft: #4a4854;
     --ink-mute: #66646f;
-    --ink-dim:  #a9a6b2;
+    /* **Measured, not chosen by eye** (29 Aug 2026). These three were the
+       whole of this page's contrast failure — twelve failing elements at every
+       width, which read as twelve problems and were three rules.
+
+       `--ink-dim` was #a9a6b2: 2.39 against the card, when text needs 4.5. It
+       is the "quiet" token, and quiet had been implemented as *faint* — the
+       one move that makes a label unreadable rather than secondary. Weight,
+       size and letter-spacing already do that job here; the colour was doing
+       it a second time and paying for it in legibility. */
+    --ink-dim:  #6a6872;
     --card:     #ffffff;
     --rule:     #e0ddd6;
     --lime:     #d9f24b;
     --violet:   #7b61ff;
+    /* The same violet is 3.83 as TEXT on this ground and 4.2 on the card —
+       both short of 4.5 — while being exactly right as a graphic fill, where
+       no such rule applies. So the fill keeps the hue and text gets its own
+       token: 4.89 on the ground, 5.37 on the card. Splitting the token is the
+       honest fix; darkening the one everything shares would have dulled the
+       diagrams to satisfy a rule that was never about them. */
+    --violet-text: #6b52e0;
     --dark:     #14131a;
     --dark-2:   #211f2a;
     --on-dark:  #f6f4f0;
@@ -46,7 +62,7 @@
   p { margin: 0 0 1.15rem; color: var(--ink-soft); }
   strong { color: var(--ink); font-weight: 650; }
   em { font-style: italic; }
-  a { color: var(--violet); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a { color: var(--violet-text); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
   code {
     font-family: var(--mono);
@@ -119,7 +135,7 @@
     font-size: 0.7rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--violet);
+    color: var(--violet-text);
     font-weight: 400;
     margin-bottom: 0.75rem;
   }
@@ -297,7 +313,9 @@
     margin: 1.9rem 0 0.65rem;
   }
   pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-  pre .c { color: #75727f; }
+  /* 3.93 on the code block's own ground, which is a comment you cannot read
+     in the one place a comment is the point. 4.92 now. */
+  pre .c { color: #858291; }
   pre .k { color: var(--lime); }
   pre .s { color: #cfc9ff; }
   .caption { font-size: 0.82rem; color: var(--ink-mute); margin: 0 0 1.6rem; }
@@ -350,7 +368,10 @@
     overflow-x: auto;
     white-space: pre;
   }
-  .try .cmd .p { color: #75727f; }
+  /* The same #75727f as the code comment was, on the same dark ground and
+     failing the same way — a shell sigil you cannot quite see is a prompt that
+     reads as part of the command you are meant to copy. */
+  .try .cmd .p { color: #858291; }
   .try .said {
     display: inline-block;
     font-family: var(--mono);
@@ -390,7 +411,7 @@
     font-size: 0.66rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--violet);
+    color: var(--violet-text);
     margin: 0 0 0.7rem;
   }
   .example h3 { margin-top: 0; font-size: 1.06rem; }

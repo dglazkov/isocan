@@ -170,12 +170,16 @@ if (broken) {
   for (const g of graded) {
     const worst = g.worstContrast ?? [];
     const stretched = g.stretchedDetail ?? [];
-    if (worst.length === 0 && stretched.length === 0 && (g.slop ?? []).length === 0) continue;
+    const small = g.smallTargetDetail ?? [];
+    if (worst.length === 0 && stretched.length === 0 && small.length === 0 && (g.slop ?? []).length === 0) {
+      continue;
+    }
     lines.push(`## ${g.canvas ? `${g.canvas} · ` : ""}${path.basename(g.file)}`, "");
     for (const f of worst) lines.push(`- contrast ${f.ratio} (needs ${f.need}) — "${f.text}"`);
     for (const st of stretched) {
       lines.push(`- stretched \`${st.src}\` — natural ${st.natural}, rendered ${st.rendered}`);
     }
+    for (const t of small) lines.push(`- target ${t.size} — \`${t.where}\` "${t.text}"`);
     for (const tell of g.slop ?? []) lines.push(`- tell: ${tell}`);
     lines.push("");
   }
