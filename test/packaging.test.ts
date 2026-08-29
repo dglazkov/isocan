@@ -197,13 +197,21 @@ async function sourceFiles(packages: string): Promise<string[]> {
  *
  * Adding `.github/workflows/grade.yml` rejected both of the release job's
  * pushes — the release branch AND `green` — with "refusing to allow a GitHub
- * App to create or update workflow … without `workflows` permission". That is
- * a platform rule with no `permissions:` key that grants it, so the fix is not
- * to ask for more: the release tree simply does not carry `.github/`.
+ * App to create or update workflow … without `workflows` permission". No
+ * `permissions:` key grants that scope, so the fix is not to ask for more: the
+ * release tree does not carry `.github/`, and a tree with no workflow files in
+ * it cannot be a workflow change.
  *
- * Which is right on its own terms. An install is a package, and nobody
+ * Which is right on its own terms besides. An install is a package, and nobody
  * installing isocan needs our CI — a fork of the release branch would inherit
  * a nightly grader and a changelog job aimed at somebody else's repository.
+ *
+ * **The `green` half of that story did not hold up.** The next run pushed the
+ * same workflow change to `green` with identical permissions and was allowed,
+ * so the rejection is conditional on something neither run made visible. The
+ * cases below guard the two things that ARE established: the release tree's
+ * contents, and a failure path that prints what git said instead of naming a
+ * cause it never checked.
  */
 describe("the release branch is a package, not a copy of the repo", () => {
   it("does not ship .github — the CI belongs to this repo, not to installs", async () => {
@@ -221,10 +229,12 @@ describe("the release branch is a package, not a copy of the repo", () => {
     expect(asked).toEqual(["contents"]);
   });
 
-  it("green's failure names the workflow case instead of guessing at ordering", async () => {
-    // It guessed, once, and was confidently wrong: the push was rejected for
-    // the permission above and the step printed "an out-of-order or re-run
-    // build" — as a WARNING, leaving the step green.
+  it("green's failure prints what git said instead of guessing at ordering", async () => {
+    // It guessed, once, and was confidently wrong: the push was rejected over
+    // a workflow file and the step printed "an out-of-order or re-run build" —
+    // as a WARNING, leaving the step green. The replacement deliberately does
+    // NOT assert a cause of its own, because the next run contradicted the one
+    // I would have written.
     const yml = await fs.readFile(path.join(repo, ".github/workflows/release.yml"), "utf8");
     expect(yml).toContain("git push origin ${GITHUB_SHA}:green");
     expect(yml).toMatch(/grep -q "workflow" \/tmp\/green\.err/);

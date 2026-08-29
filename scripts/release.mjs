@@ -140,11 +140,12 @@ async function main() {
      * Two reasons, and the second is why this is here rather than a tidy-up.
      * Nobody installing isocan needs our CI, and a fork of the release branch
      * would inherit a nightly grader and a changelog job aimed at a repository
-     * that is not theirs. And `GITHUB_TOKEN` may never push a commit that
-     * touches `.github/workflows/` — a platform rule with no `permissions:`
-     * key that grants it — so while the release tree carried them, every
-     * release built from a commit that edited a workflow was rejected. That
-     * happened the first time one was added and took `green` down with it.
+     * that is not theirs. And on 29 Aug this push was rejected outright —
+     * "refusing to allow a GitHub App to create or update workflow ... without
+     * `workflows` permission" — because the tree carried `.github/workflows/`
+     * and the commit had changed it. No `permissions:` key grants that scope.
+     * A tree with no workflow files in it cannot be a workflow change, which
+     * is why this is a fix and not a hope.
      */
     git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ".github", { env });
 
