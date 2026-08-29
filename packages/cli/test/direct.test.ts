@@ -204,6 +204,43 @@ describe("declaring the mode", () => {
   });
 });
 
+describe("files, with nowhere to keep them", () => {
+  /**
+   * **The half of direct mode that was a hypothesis until it was driven.**
+   *
+   * "Blobs already travel over HTTP" was read off the code — `paths.canvasesDir`
+   * having one caller — and reading is not proving. An agent's whole job is
+   * files: `add` uploads bytes, `get` writes them back to disk, `edit` stacks a
+   * version. Without a local store every one of those crosses the network, and
+   * a break in any of them would make Scene 6's agent useless while every other
+   * test in this file still passed.
+   */
+  it("uploads, downloads and re-versions a file with no local store", async () => {
+    await isocan(["identity", "--name", "Sonia", "--session"], { ISOCAN_DIRECT: homeUrl });
+    const svg = (size: number) =>
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"></svg>`;
+    await fs.writeFile(path.join(work, "card.svg"), svg(10));
+
+    const added = await isocan(["add", "card.svg"], { ISOCAN_DIRECT: homeUrl });
+    expect(added.code, added.stderr).toBe(0);
+
+    // Down again, into a file — the bytes made a full round trip to the home
+    // and back rather than being read out of a replica that does not exist.
+    const got = await isocan(["get", "card.svg", "out.svg"], { ISOCAN_DIRECT: homeUrl });
+    expect(got.code, got.stderr).toBe(0);
+    expect(await fs.readFile(path.join(work, "out.svg"), "utf8")).toBe(svg(10));
+
+    // And a second version stacks, which is the op an agent's rebuild sends.
+    await fs.writeFile(path.join(work, "card.svg"), svg(20));
+    const edited = await isocan(["edit", "card.svg", "card.svg"], { ISOCAN_DIRECT: homeUrl });
+    expect(edited.code, edited.stderr).toBe(0);
+    expect(edited.stdout).toContain("2 total");
+
+    expect(await hasStore()).toBe(false);
+    expect(await daemonStarted()).toBe(false);
+  });
+});
+
 describe("the daemon verbs", () => {
   for (const verb of ["serve", "restart", "stop"]) {
     it(`\`isocan ${verb}\` refuses on a direct machine, and starts nothing`, async () => {
