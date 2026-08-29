@@ -42,6 +42,7 @@ import {
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } from "./badge-store.ts";
+import { plausibleSha, type HomeBuild } from "./build.ts";
 
 /**
  * The home connection: what turns a local daemon into a **syncing replica**.
@@ -87,6 +88,23 @@ const RECONNECT_MAX_MS = 10_000;
 /** How often the set of canvases to replicate is re-read from the home. See
  * `sync()` for why this is a poll and not a subscription. */
 const DEFAULT_POLL_MS = 2000;
+
+/**
+ * **How often a link re-asks its home which build it is** (auto-upgrade
+ * phase 2).
+ *
+ * An hour, and deliberately nowhere near the poll. `DEFAULT_POLL_MS` is 2000,
+ * so riding the sweep would be 1,800 requests an hour for an answer that
+ * changes about twice a day. The other half of the schedule is the one that
+ * makes an hour tolerable: a link that starts answering again re-asks at once,
+ * so a laptop that opened its lid does not wait out the interval.
+ */
+const BUILD_PROBE_MS = 60 * 60 * 1000;
+
+/** The build probe's own timeout. Short, because nothing waits on the answer:
+ * a home that is slow to say which build it is simply has not said yet, and
+ * the next probe asks again. */
+const BUILD_PROBE_TIMEOUT_MS = 5000;
 
 /** Presence beats are coalesced before they go up, exactly as `ws.ts`
  * coalesces roster broadcasts and for the same reason: a cursor stream would
@@ -403,6 +421,11 @@ export interface HomeLinkOptions {
   registry: HomeRegistry;
   /** How often to re-read the home's canvas list. Tests turn it down. */
   pollMs?: number;
+  /** How often to re-ask the home which build it is. An hour by default —
+   * `BUILD_PROBE_MS`, and see it for why an hour. A knob for the same reason
+   * `gcIntervalMs` is one: a proof that the timer FIRES cannot be written
+   * against an interval a test would have to wait out. */
+  probeMs?: number;
 }
 
 interface CanvasLink {
@@ -478,6 +501,7 @@ export class HomeLink implements HomeConnection {
   private readonly presence: PresenceHub;
   private readonly registry: HomeRegistry;
   private readonly pollMs: number;
+  private readonly probeMs: number;
 
   /**
    * Did the last poll of this home get an answer? Null until one has been
@@ -493,9 +517,26 @@ export class HomeLink implements HomeConnection {
    */
   answering: boolean | null = null;
 
+  /**
+   * **Which build this home last said it was**, or null for every way of not
+   * knowing at once: never asked, asked and got nothing, asked and the home
+   * could not say.
+   *
+   * Read by `HomeLinks.upgrade()` and turned into the health body's `upgrade`
+   * field. Cleared on a failed probe rather than left holding the last good
+   * answer, because a verdict is a statement about NOW: an oracle that cannot
+   * answer must produce no verdict, and a cached one would go on asserting a
+   * comparison nobody re-made.
+   */
+  homeBuild: HomeBuild | null = null;
+
   private badge: StoredBadge | null = null;
   private links = new Map<string, CanvasLink>();
   private poll: ReturnType<typeof setInterval> | null = null;
+  /** A self-rescheduling timeout, `gc.ts`'s pattern — never a second
+   * `setInterval`, which would keep firing into a home that stopped answering
+   * and would pile up if a probe ever outran its own interval. */
+  private probe: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private syncing: Promise<void> | null = null;
   private handshakeLog = new Map<string, HomeHandshakes>();
@@ -532,6 +573,7 @@ export class HomeLink implements HomeConnection {
     this.presence = options.presence;
     this.registry = options.registry;
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS;
+    this.probeMs = options.probeMs ?? BUILD_PROBE_MS;
     // Local faces going up. Coalesced per canvas; see `scheduleRelay`.
     this.presence.onChange((canvasId) => this.scheduleRelay(canvasId));
     /**
@@ -563,13 +605,37 @@ export class HomeLink implements HomeConnection {
     });
   }
 
-  /** Open the connection and keep it open. Never throws: a home that is down
+  /**
+   * Open the connection and keep it open. Never throws: a home that is down
    * at boot must not stop a daemon from serving its local CLIs — the retry
-   * loop is the whole point. */
-  async start(): Promise<void> {
-    await this.sync().catch(() => {});
+   * loop is the whole point.
+   *
+   * **Idempotent, and it has to be.** `HomeLinks.linkFor` fires `start()` on a
+   * link the moment it creates one, and `HomeLinks.start()` then awaits
+   * `start()` on every address it dials — so every link created at boot was
+   * being started TWICE. That is two `setInterval` polls, of which `close()`
+   * can only clear the one the field still holds, and it doubled the sweep
+   * rate against every home for the life of the daemon. Measured
+   * 2026-08-28 while adding the build probe, which would otherwise have
+   * inherited the same doubling; `upgrade-probe.test.ts` counts it now.
+   */
+  start(): Promise<void> {
+    return (this.starting ??= this.boot());
+  }
+
+  private starting: Promise<void> | null = null;
+
+  private async boot(): Promise<void> {
+    // Both round trips at once. The build probe is awaited so that a daemon
+    // which has finished booting has already asked — the CLI's very first
+    // command reads the health body, and a verdict that arrived a moment later
+    // would be a verdict that missed the session it was for. It costs nothing
+    // extra against a home that is down: `sync()` is already a request to the
+    // same address, and this one gives up in five seconds.
+    await Promise.all([this.sync().catch(() => {}), this.askBuild()]);
     this.poll = setInterval(() => void this.sync().catch(() => {}), this.pollMs);
     this.poll.unref?.();
+    this.scheduleProbe();
   }
 
   /**
@@ -586,6 +652,8 @@ export class HomeLink implements HomeConnection {
     this.aborter.abort();
     if (this.poll) clearInterval(this.poll);
     this.poll = null;
+    if (this.probe) clearTimeout(this.probe);
+    this.probe = null;
     const links = [...this.links.values()];
     this.links.clear();
     for (const link of links) this.closeLink(link);
@@ -682,7 +750,23 @@ export class HomeLink implements HomeConnection {
      * with the record, instead of by whichever poll ran first.
      */
     const theirs = await this.api<Canvas[]>("GET", canvasesRoute("admitted")).catch(() => null);
+    const was = this.answering;
     this.answering = theirs !== null;
+    /**
+     * **Reconnect**, at the granularity that matters here: not a canvas socket
+     * coming back — there are many of those and they say nothing about the
+     * home as a whole — but this home starting to answer AGAIN. A laptop that
+     * was asleep, or a home that was redeploying, gets its build re-read now
+     * instead of at the top of the next hour.
+     *
+     * `false` and not "anything but true": at boot `answering` is null and
+     * `boot()` has already asked, so treating null as a reconnect would probe
+     * every home twice on every daemon start. The one case that falls between
+     * them — the home answers its canvas list but not its health route, so the
+     * boot probe missed and no reconnect ever follows — waits out the hour,
+     * which is the right price for not putting a probe on the poll.
+     */
+    if (this.answering && was === false) void this.askBuild();
     if (theirs) {
       for (const canvas of theirs) {
         if (this.stopped) return;
@@ -1648,6 +1732,58 @@ export class HomeLink implements HomeConnection {
     } catch (err) {
       throw new HomeUnreachableError(this.homeUrl, (err as Error).message);
     }
+  }
+
+  /**
+   * **Ask the home which build it is.** Auto-upgrade phase 2's one new
+   * request, and the only one this class makes without a badge.
+   *
+   * The health routes are open by construction — they are the load balancer's
+   * probe, and the door cannot ask for what it hands out — so this is a plain
+   * `fetch` rather than `api()`. That matters beyond tidiness: a replica whose
+   * badge has been swept can still find out that it is behind, which is
+   * exactly the machine most likely to be.
+   *
+   * Every failure is the same answer, null, and null is silence downstream
+   * rather than "you are current". A home too old to carry a `commit` reaches
+   * here as `{ commit: null }` and is stored as such — the verdict is refused
+   * one layer up, in `upgradeVerdict`, so that "the home could not say" and
+   * "the home did not answer" stay one behaviour with one test.
+   */
+  private async askBuild(): Promise<void> {
+    if (this.stopped) return;
+    try {
+      const res = await fetch(`${this.homeUrl}${healthPath(this.homeUrl)}`, {
+        signal: AbortSignal.any([
+          this.aborter.signal,
+          AbortSignal.timeout(BUILD_PROBE_TIMEOUT_MS),
+        ]),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as { commit?: unknown; builtAt?: unknown };
+      this.homeBuild = {
+        url: this.homeUrl,
+        // Re-gated at this end too. The home already applies `plausibleSha`
+        // before it reports, so this is belt to that brace — but the value has
+        // crossed a network from a machine this one does not control, and a
+        // word arriving where a sha belongs must fall to null here rather than
+        // be printed at a person as an identity.
+        commit: plausibleSha(typeof body.commit === "string" ? body.commit : undefined),
+        builtAt: typeof body.builtAt === "string" ? body.builtAt : null,
+      };
+    } catch {
+      this.homeBuild = null;
+    }
+  }
+
+  /** The hourly beat. Unref'd, like every other timer here: a probe pending on
+   * a home that went away must not be the reason a daemon will not exit. */
+  private scheduleProbe(): void {
+    if (this.stopped) return;
+    this.probe = setTimeout(() => {
+      void this.askBuild().finally(() => this.scheduleProbe());
+    }, this.probeMs);
+    this.probe.unref?.();
   }
 
   /** Is the home answering at all? Uses `healthPath`, never a literal: against

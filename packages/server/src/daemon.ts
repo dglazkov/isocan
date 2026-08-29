@@ -102,6 +102,12 @@ export interface DaemonOptions {
    * A knob rather than a constant only because tests want it small and a
    * gentle innkeeper might want it large; see `HomeLink.sync`. */
   homePollMs?: number;
+  /** How often each home connection re-asks its home which build it is
+   * (auto-upgrade phase 2). An hour by default; a knob for the reason
+   * `gcIntervalMs` is one — an hourly timer is not something a test can wait
+   * for, and the proof that a MOVED home produces a second verdict has to be
+   * able to run at millisecond scale against a real daemon. */
+  homeProbeMs?: number;
   /**
    * **How often this home collects its own garbage** (phase 13.7), in
    * milliseconds. `0` never sweeps.
@@ -338,6 +344,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     presence,
     birthHome,
     ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
+    ...(options.homeProbeMs !== undefined ? { probeMs: options.homeProbeMs } : {}),
   });
   engine.forwardTo(homes);
 

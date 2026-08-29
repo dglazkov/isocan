@@ -27,16 +27,19 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: PHASE 1 DONE (27 Aug 2026), phases 2–4 not started.**
-isocan.io can now say which commit it is running — the defect this project
-was built on top of is fixed in production, and the proof is in phase 1's
-status below. Nothing else here is built.
+**Where we are: PHASES 1 AND 2 DONE (27–28 Aug 2026), phases 3–4 not
+started.** isocan.io can say which commit it is running, and a CLI that
+disagrees with its home now says so — once, naming both builds, and silently
+when it cannot find out. Nothing is fetched, applied or restarted by any of
+it: that is phases 3 and 4, and neither is built.
 
 Phase 1 was four lines of code and one build-arg, and it was worth doing
 regardless of what happens to the rest: it fixed a live production defect and
-depended on nothing else in this document. **Phase 2 is the natural next
-step** and its test rig now exists, because two daemons on one laptop can be
-given two different shas.
+depended on nothing else in this document. Phase 2 stands on it and is worth
+having on the same terms — nobody spends an afternoon debugging yesterday's
+build again — and it is the last phase that changes nothing on anybody's
+disk. **Phase 3 is the natural next step**, and it is where the project stops
+being a notice and starts being an install root.
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
@@ -57,8 +60,12 @@ decides them deliberately instead of improvising mid-task:
   the comparison only; nothing enforces a minimum until someone decides this.
 - **Which home wins on a machine with several.** Multiuser phase 10.3 made the
   home a property of the canvas, so one machine can answer to several homes.
-  The likely answer is the birth home, and the verdict should name the home it
-  came from rather than silently using the newest.
+  **Phase 2 answered half of this and left the other half open on purpose:**
+  the verdict comes from the birth home, or from the single home when there is
+  exactly one, and a machine answering to several homes with no birth default
+  gets **no verdict at all** rather than the newest. Every verdict names its
+  home. What is still open is what such a machine should be told — silence is
+  the safe answer, not obviously the right one.
 - **What a pin can reach, and what a verdict older than this copy means.**
   `--pin <sha>` can only name a sha still present in `builds/`; reaching
   arbitrary history would require building from source, which is a separate
@@ -197,7 +204,41 @@ and a plausible sha passes through.
 
 ## Phase 2 — A third kind of stale
 
-**Status: NOT STARTED**
+**Status: DONE 28 Aug 2026 — proof taken on this machine, against a stub
+home.**
+
+```
+$ isocan canvas list --all
+note: this copy is a1b2c3d (2026-08-12); your home http://127.0.0.1:4499 runs
+b2c3d4e (2026-08-25) — `isocan upgrade` catches up.
+(none)
+$ isocan canvas list --all
+(none)
+```
+
+**What was built.** `upgradeVerdict()` sits beside `stalenessOf()` in
+`build.ts` and asks the same question one hop further out, pure and given both
+sides. `HomeLink.askBuild()` fetches the home's health route — a plain
+`fetch`, because the health routes are open, so a replica whose badge was
+swept can still find out it is behind — on a self-rescheduling hourly timeout
+and on every transition of a home back to answering. `HomeLinks.upgrade()`
+picks the home and the verdict rides the daemon's own health body, which
+`makeCtx` already fetches, so no command pays a round trip. `warnIfBehind()`
+in `ctx.ts` says it once per **sha pair** (`.upgrade-noted`), and `isocan
+status` carries the whole verdict in `--json` and one line in text.
+
+**Three things the phase decided that the Work below did not.** The verdict
+carries `available: false` when the home was asked and this copy is current —
+"asked and current" and "could not ask" are different answers and only one of
+them may be reported as reassurance. It carries `direction` (`behind` /
+`ahead` / null), because a home running the older build is a real shape and
+the notice for it must name no upgrade command. And `homeProbeMs` is a daemon
+option for the reason `gcIntervalMs` is one: an hourly timer is not something
+a test can wait out.
+
+**What of Scene 0 is NOT closed:** the wake payload. The scene asks for the
+field on `isocan status --json` *and on every wake payload*; the second is
+phase 4's park-and-wake work and is untouched here.
 
 **Work:** `stalenessOf` knows two ways to be stale — another copy holds the
 port, and this copy changed under a running daemon. This phase adds the
@@ -248,7 +289,36 @@ today — produces **no verdict**, and the test asserts the absence, not the
 message. A daemon with the network cut prints nothing and answers commands
 normally.
 
-**Findings:** none yet.
+**Taken 28 Aug 2026**, every beat, in
+`packages/cli/test/upgrade-notice.test.ts`: the real `bin/isocan.js` against a
+real daemon whose home is a stub that can change its sha between requests. The
+comparison itself is unit-tested in `packages/server/test/build.test.ts`. Suite
+green (1814 tests), plus the hand walk quoted in the status above.
+
+**Findings:**
+
+- **2026-08-28** — The home is a stub, not a second daemon, and it has to be:
+  `buildStamp()` caches for the life of a process, so a real daemon's sha is
+  fixed and "the home moved" is a beat no in-process rig can play.
+- **2026-08-28** — A verdict is a statement about now, so a failed probe
+  CLEARS the cached one rather than keeping the last good answer. The cheap
+  recovery is the re-probe on a home that starts answering again, not a
+  remembered comparison nobody re-made.
+- **2026-08-28** — Links start after `listen`, so the first command against a
+  cold daemon can beat the first probe and see no field. Acceptable: this is a
+  notice, not a gate, and the next command carries it. It would not be
+  acceptable for phase 4.
+- **2026-08-28** — `HomeLink.start()` was running TWICE for every link created
+  at boot: `linkFor` fires it, then `HomeLinks.start()` awaits it. Two poll
+  intervals, of which `close()` cleared one. Pre-existing; found by counting
+  the new probe's requests, fixed here, and the count is the guard.
+- **2026-08-28** — A rate check on the sweeps could NOT see that doubling —
+  `sync()` coalesces — and passed against the unfixed code. Deleted. A test
+  that survives the bug it names is worse than no test.
+- **2026-08-28** — `plausibleSha` is applied at BOTH ends. The home already
+  gates its own stamp, but the value crosses a network from a machine this one
+  does not control, and `unknown` printed at a person as an identity is the
+  same defect phase 1 fixed.
 
 ---
 

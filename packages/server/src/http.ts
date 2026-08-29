@@ -509,6 +509,21 @@ export function registerRoutes(
      */
     ...(options.birthHome ? { home: options.birthHome } : {}),
     ...buildStamp(),
+    /**
+     * **The third kind of stale** (auto-upgrade phase 2): this daemon's build
+     * against the build its home runs.
+     *
+     * It rides this body because `makeCtx` already fetches it before every
+     * command, so the CLI pays no round trip and an offline machine simply has
+     * no field. The daemon did the asking, on its own hourly timer — see
+     * `HomeLink.askBuild`. **Absent is absent**, never "you are current": a
+     * spread of `{}` is what a homeless daemon, an unreachable home and a home
+     * too old to name its own commit all produce.
+     */
+    ...(() => {
+      const verdict = options.homes?.upgrade() ?? null;
+      return verdict ? { upgrade: verdict } : {};
+    })(),
   });
   for (const route of HEALTH_ROUTES) app.get(route, health);
 

@@ -150,6 +150,7 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
   // on every command for a field that travels in the same body.
   const health = await client.healthz().catch(() => null);
   await warnIfStale(health, home);
+  await warnIfBehind(health, home);
   const birthHome = health?.home ?? null;
   // Lazily, and at most once: `GET /api/homes` is a second round trip, and
   // most commands never name an address. `ls` should not pay for `share`.
@@ -300,6 +301,51 @@ async function warnIfStale(health: Health | null, home: string): Promise<void> {
     if (said.trim() === health.startedAt) return;
     await fs.writeFile(marker, health.startedAt).catch(() => {});
     console.error(`note: ${why} — \`isocan restart\` to run this one.`);
+  } catch {
+    // Never let a courtesy check break a command.
+  }
+}
+
+/**
+ * **The third kind of stale, reported once per verdict** (auto-upgrade phase
+ * 2): this copy disagrees with the home it is talking to.
+ *
+ * `warnIfStale`'s sibling, and the differences from it are the phase:
+ *
+ * - **Keyed on the pair of shas, not on the daemon.** `warnIfStale` keys on
+ *   `startedAt` because the thing it reports is the daemon. A daemon lives for
+ *   days while its home moves about twice a day, so the same key here would
+ *   report the first skew and then stay silent through every later one.
+ * - **It names a command and does not instruct.** Who may act on it is a
+ *   separate rule: in notify mode the upgrade decision belongs to a person
+ *   even when the reader is an agent, and an agent that upgrades itself on
+ *   seeing this line has re-implemented auto mode without its controls.
+ * - **The `--json` field is the primary surface.** This line's real audience
+ *   is a person reading the transcript of an agent's session; the field on
+ *   `isocan status --json` is what an agent reads.
+ *
+ * No verdict, no line — and no line either when the verdict is that this copy
+ * is current, because "you are current" is not news and printing it on the one
+ * machine whose home has stopped answering is exactly the false success this
+ * project's standing lesson names.
+ */
+async function warnIfBehind(health: Health | null, home: string): Promise<void> {
+  try {
+    const verdict = health?.upgrade;
+    if (!verdict?.available) return;
+    const pair = `${verdict.mine}->${verdict.homeCommit}`;
+    const marker = path.join(home, ".upgrade-noted");
+    const said = await fs.readFile(marker, "utf8").catch(() => "");
+    if (said.trim() === pair) return;
+    await fs.writeFile(marker, pair).catch(() => {});
+    // A home running the OLDER build is a notice, never a downgrade: builds
+    // come from the release branch, and pointing at `isocan upgrade` here
+    // would name a command that cannot do what the line implies.
+    const next =
+      verdict.direction === "ahead"
+        ? "your home is the older build"
+        : "`isocan upgrade` catches up";
+    console.error(`note: ${verdict.why} — ${next}.`);
   } catch {
     // Never let a courtesy check break a command.
   }

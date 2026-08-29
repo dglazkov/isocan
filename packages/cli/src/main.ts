@@ -22,6 +22,7 @@ import type {
   PresenceSession,
   Canvas,
   SweepReport,
+  UpgradeVerdict,
   WatchedLogEntry,
 } from "@isocan/core";
 import {
@@ -848,6 +849,9 @@ program
         root?: string;
         codeAt?: string;
         home?: string;
+        /** Auto-upgrade phase 2. Absent on a homeless or offline daemon, and
+         * on any daemon older than the field — absent is never "current". */
+        upgrade?: UpgradeVerdict;
       };
       /**
        * **Which canvases live where** — the second read, and the one that
@@ -901,6 +905,21 @@ program
           }))
           .catch(() => ({}))),
         ...(stale ? { stale: `${why} — \`isocan restart\`` } : {}),
+        /**
+         * **What the home runs, when the home was asked** (auto-upgrade phase
+         * 2). Present only when there is a verdict, so a machine with no home,
+         * no network, or a home too old to name its own commit gets no line
+         * rather than a reassuring one. `--json` carries the whole verdict —
+         * both shas, both dates, the home — because that is the form an agent
+         * acts on; this is the person's one line.
+         */
+        ...(health.upgrade
+          ? {
+              upgrade: health.upgrade.available
+                ? `${health.upgrade.why} — \`isocan upgrade\``
+                : `current with ${health.upgrade.home} (${health.upgrade.homeCommit})`,
+            }
+          : {}),
       });
     }),
   );

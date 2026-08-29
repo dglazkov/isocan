@@ -12,6 +12,8 @@ reference; this is the protocol. Read both once per session.
 isocan status                  # daemon auto-starts on any command if down
                                # says "stale"? `isocan restart` — the daemon is
                                # an older copy than the CLI you just ran
+                               # says "upgrade"? relay it to the human and carry
+                               # on — catching up is their call, not yours
 isocan whoami                  # identity must be YOURS, not the user's
 isocan identity --session      # be handed a name, as THIS agent — and bind
                                # this directory to its canvas (see below)
