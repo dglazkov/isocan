@@ -5,7 +5,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
-import { railSpan } from "../lib/stage.ts";
+import { RAIL_INSET, railSpan } from "../lib/stage.ts";
 
 
 const MAP_W = 168;
@@ -127,7 +127,7 @@ export function Minimap() {
   return (
     <div
       className={`minimap-dock${open ? "" : " folded"}${placed ? " placed" : ""}`}
-      style={{ left: (panelOpen ? railSpan(panelWidth) : 0) + 14 }}
+      style={{ left: (panelOpen ? railSpan(panelWidth) : 0) + RAIL_INSET }}
     >
       <button
         className="minimap-handle"

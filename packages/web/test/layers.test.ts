@@ -225,9 +225,22 @@ describe("the marks dock clears the zoom bar", () => {
   const bottomOf = (selector: string): number => {
     const rule = rules().find((r) => selectorsOf(r).includes(selector) && r.at.length === 0);
     expect(rule, `${selector} has no top-level rule`).toBeTruthy();
-    const bottom = rule!.body.match(/bottom:\s*(\d+)px/);
-    expect(bottom, `${selector} sets no plain px bottom`).toBeTruthy();
-    return Number(bottom![1]);
+    // Both offsets are expressed through `--edge` now, so this resolves the
+    // token rather than demanding a literal. The arithmetic is the point of
+    // the guard — a bar that moves must move the dock above it — and it would
+    // have been lost by rewriting these as plain pixels to keep the old
+    // matcher happy.
+    const edge = Number(/--edge:\s*(\d+)px/.exec(css)?.[1]);
+    expect(edge, "--edge must have a value").toBeGreaterThan(0);
+    const plain = rule!.body.match(/bottom:\s*(\d+)px/);
+    if (plain) return Number(plain[1]);
+    // Two honest spellings: the bar sits AT the edge (`var(--edge)`), the dock
+    // sits a measured distance above it (`calc(var(--edge) + 53px)`).
+    const viaToken = rule!.body.match(
+      /bottom:\s*(?:var\(--edge\)|calc\(var\(--edge\)\s*\+\s*(\d+)px\))/,
+    );
+    expect(viaToken, `${selector} sets no bottom this can read`).toBeTruthy();
+    return edge + Number(viaToken![1] ?? 0);
   };
 
   it("starts above where the bar reaches", () => {
