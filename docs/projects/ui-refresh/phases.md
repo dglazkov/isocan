@@ -356,6 +356,36 @@ dot joins the name line. **Anchors do not move** — this changes what chrome
 looks like, not where it sits or how it counter-scales. If the work reaches
 `counterScale` call sites, it has gone past its scope.
 
+**Landed 28 Aug 2026, PARTIALLY — and the honest reason is below.**
+
+Most of §5 turned out to be already true. The titlebar has no box: `padding:
+0`, no background, no border, and `bottom: calc(100% + …)` already floats it
+above the paper. The redesign had been asking for something the app had.
+
+What was NOT true is that the row's two ends behaved the same way. The row's
+own stylesheet comment says it — "each side holds its size about its OWN
+edge" — and the name obeyed it while the work chip did not. So at 30% zoom the
+title read at 11px and the chip saying an agent is working here read at 3:
+gone at exactly the zoom somebody uses to scan a whole canvas and find out
+where the work is happening. It counter-scales now, anchored `right bottom` so
+it holds its own edge rather than growing leftward across the name.
+
+**The version count did NOT move beside the name, and this is a real conflict
+in the phase as specified.** §5 asks for it and also says "this changes what
+chrome looks like, not where it sits or how it counter-scales" — and the badge
+cannot move without changing exactly that. It has its own counter-scale anchor
+(`top: -9px / var(--scale)`), and `worldchrome.test.ts` guards those offsets
+because the badge once slid under the corner resize handle below 43% zoom.
+
+Moving it into the label row is defensible — it would DELETE that failure mode
+rather than un-guard it. But it lands inside `titleRow`'s yield ladder, where
+the icon yields to the name and the name is dropped rather than squeezed, and
+adding a competitor for the name's room is a design pass with its own
+ordering question ("does the version go before the name does?") and its own
+tests. That is not a restyle, and the plan itself ranks this phase least
+important. Doing it carelessly would reintroduce the overlap the ladder exists
+to prevent — a name once drawn straight through the star.
+
 ## Phase 6 and beyond — the rest of the redesign, not in the spec
 
 The rationale describes six moves; the spec implements parts of three. Naming

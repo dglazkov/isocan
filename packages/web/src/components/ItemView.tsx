@@ -557,8 +557,24 @@ export function ItemView({
         )}
         </span>
         {worker && (
+          /**
+           * **Counter-scaled, like the name at the other end of the row.**
+           *
+           * It was not, and the row's own rule already said it should be:
+           * "each side holds its size about its OWN edge". The name stayed a
+           * label at every zoom while this shrank with the world, so at 30%
+           * the title read at 11px and the chip that says an agent is working
+           * here read at 3 — invisible at exactly the zoom where somebody is
+           * scanning a whole canvas to find out where the work is happening.
+           *
+           * `right bottom`, not `left bottom`: it holds its size about the
+           * edge it is pinned to, or it grows leftward across the name as you
+           * zoom out — which is the failure the row's comment describes for
+           * counter-scaling the whole row at once.
+           */
           <span
             className="work-chip"
+            style={{ ...chrome, transformOrigin: "right bottom" }}
             title={`${worker.name} is working${worker.status ? ` — ${worker.status}` : ""}`}
           >
             <span className="work-dot" />
