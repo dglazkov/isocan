@@ -623,49 +623,39 @@ describe("the Chat and the comments say which they are", () => {
      * Not a confirm dialog: that taxes every deliberate press to catch the
      * rare accident, and it still would not say the conversation survived.
      */
-    const panel = read("MainThreadPanel.tsx");
-    expect(panel, "the detach must say something, not empty the panel in silence").toMatch(
-      /flashNotice\(/,
-    );
-    expect(panel, "and it must say the conversation is still there").toMatch(
-      /pin on the canvas now/,
-    );
     /**
-     * **The button may not claim the Chat came from the canvas.**
+     * **And the answer, in the end, was to take the button away.**
      *
-     * `thread.create` takes `main: true` — the panel uses it on a virgin
-     * canvas — so a Chat is often born as the Chat and has never been
-     * anchored to anything. The button said "back to canvas" and the tooltip
-     * said "where it was anchored", and on the canvas this was reported from,
-     * the create op reads `{"main": true, "anchorItemId": null}`: both claims
-     * were false for that thread.
+     * Every fix above was a repair to a control that should not have been on
+     * this header. The reducer demotes the previous main whenever another
+     * thread is promoted (`thread.setMain`), so switching the Chat needs only
+     * the promote button on a pin, and undoing a promotion is what undo is
+     * for — which the flash notice itself pointed at. The single thing the
+     * button uniquely did was leave a canvas with NO Chat, whose real
+     * consequence the tooltip never named: `isocan wait` wakes on the main
+     * thread, so a canvas without one stops waking parked agents.
+     *
+     * That is a deliberate act of configuration. It lives in
+     * `isocan comment main --clear`, typed on purpose, and not one pixel from
+     * the ✕ that collapses the panel.
      */
-    // Against the CODE, not the commentary: this component's own comment
-    // quotes the wording it replaced in order to explain it, exactly as
-    // `livecolor.test.ts` had to allow for.
+    const panel = read("MainThreadPanel.tsx");
     const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code, "a born-main Chat has no canvas to go back to").not.toContain("back to canvas");
-    expect(code).not.toContain("where it was anchored");
-    expect(panel, "the demote mirrors the promote's wording").toContain("make it a pin");
-    /**
-     * And it must SHOW where the pin went. A demoted Chat lands at the
-     * thread's own coordinates — for a born-main thread, the centre of the
-     * view its first message was typed in, which can be days and screens
-     * away. Naming a place the person cannot see is not telling them.
-     */
-    expect(panel, "reveal the pin, do not merely assert it exists").toMatch(
-      /revealIfOffscreen\(/,
+    expect(code, "the Chat header does not offer to stop being the Chat").not.toContain(
+      "make it a pin",
     );
-    // The keystroke comes from `SHORTCUTS` via `keyFor`, never a literal: a
-    // notice that promises a key the app does not listen for is worse than
-    // one that promises nothing.
-    expect(panel).toMatch(/keyFor\("Undo and redo"\)/);
-    // The glyph itself, not a quoted-string pattern. The first version of
-    // this looked for `"⌘Z` and passed while the literal sat mid-sentence in
-    // a template string — the modifier key is banned from this handler
-    // outright, so there is no spelling of it that slips through.
-    const handler = panel.slice(panel.indexOf("main-detach"), panel.indexOf("main-close"));
-    expect(handler, "spell the undo key once, in the registry").not.toContain("⌘");
+    expect(code, "nor by any other name").not.toMatch(/thread\.setMain[\s\S]{0,80}threadId: null/);
+    // The capability is not lost, and the CLI is where it lives.
+    const cli = readFileSync(
+      new URL("../../cli/src/main.ts", import.meta.url),
+      "utf8",
+    );
+    expect(cli, "`isocan comment main --clear` keeps the demote").toMatch(
+      /type: "thread\.setMain", threadId: null/,
+    );
+    // And promoting still works from the canvas, which is what makes the
+    // removal safe: it is how you change which thread is the Chat.
+    expect(read("CommentLayer.tsx")).toMatch(/type: "thread\.setMain", threadId: thread\.id/);
   });
 
   it("writes a name one way, on every screen", () => {

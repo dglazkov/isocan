@@ -376,6 +376,47 @@ rather than a first.
 
 ---
 
+## The prediction, half-confirmed the same afternoon
+
+This note ended by predicting the fix: **bind test daemons below 49152**,
+because `port: 0` asks the kernel for a free port out of exactly the range it
+is also handing to outgoing connections.
+
+`test/ports.ts` — written independently, from the `EADDRINUSE` side — does
+precisely that: a private range at 20000–32000, sliced per worker, *"below
+every ephemeral floor we run on"*. Two people reached the same range from two
+symptoms.
+
+**It does not cover the failures still being seen, and the boundary is exact.**
+`ports.ts` is for tests that must tell ANOTHER PROCESS the number before
+anything is listening. The `packages/server` tests do not: they call
+`startDaemon({ port: 0 })` and read `server.address()`, so they never guess and
+`ports.ts` correctly leaves them alone.
+
+But `port: 0` is the OS's ephemeral range, and that is where every remaining
+`ETIMEDOUT` lives:
+
+```
+POST http://127.0.0.1:59866/api/door, connect/ETIMEDOUT,
+  gave up after 7813ms and 1 attempt, loop stalled 17ms during this test
+```
+
+**17ms.** The second measurement, in a different file, confirming the first:
+the loop is idle while a loopback connect times out for nearly eight seconds.
+
+And `59866` is the same port as the earlier `blobs.test.ts` failure, in a
+separate run. Nothing is listening on it now and nothing was listening in that
+band; the repeat is the kernel's rotating counter landing in the same place,
+which is what makes a listening socket in that range a standing hazard rather
+than a rare one.
+
+**So the next step is narrow and testable:** give the in-process daemons a port
+from the private range too, rather than `port: 0`. If the hypothesis holds, the
+`ETIMEDOUT` family stops. If it does not, the cause is below even this, and the
+next place to look is the loopback stack rather than anything isocan wrote.
+
+---
+
 ## The shape worth keeping
 
 Both times this family gave anything up, it was to **observation rather than

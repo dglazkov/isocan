@@ -2,14 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { keyFor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
-import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { centerOn, threadWorldPos } from "../lib/viewport.ts";
+import { centerOn } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
-import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox, revealItem } from "../lib/zoomactions.ts";
 import { type FollowState, nextFollow } from "../lib/lanefollow.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -169,15 +168,6 @@ function catapultBesidePanel(itemId: string): void {
 export function openMainPanel(canvasId: string, open: boolean): void {
   openPanel(canvasId, open ? "main" : null);
 }
-
-/* The key the overlay and `isocan shortcuts` both print for undo. Spelled
-   once, in `SHORTCUTS`, so a notice cannot promise a keystroke the app does
-   not actually listen for. */
-const undoKey = keyFor("Undo and redo") ?? "⌘Z";
-
-/* A pin is a small round mark, not a box — this is the span the reveal treats
-   it as so that "is it on screen" has something to measure. */
-const PIN_SIZE = 28;
 
 export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -433,76 +423,28 @@ function Panel({
         <b>Chat</b>
         <i className="main-hint" title="Everything posted here reaches every collaborator, agents included, with no @-mention needed — which is what makes it different from a comment pinned to one thing.">everyone here, agents included</i>
         <span className="spacer" />
-        {thread && (
-          <button
-            className="main-detach"
-            /**
-             * **It was never necessarily on the canvas.**
-             *
-             * This said "back to canvas", and the tooltip said "where it was
-             * anchored" — both of which assume the Chat used to be a pin that
-             * somebody promoted. A Chat can equally be BORN as the Chat:
-             * `thread.create` takes `main: true`, which is what the panel
-             * does on a virgin canvas, and such a thread has never been
-             * anchored to anything. Told it was going "back" somewhere it had
-             * never been, on a canvas with 36 messages in it, a person reads
-             * a button that has lost their conversation.
-             *
-             * "Make it a pin" is true either way, and mirrors the promote
-             * button's "Make this the Chat" on the other side of the same op.
-             */
-            title="This conversation stops being the Chat and becomes an ordinary pin on the canvas. Nothing is deleted, and it can be made the Chat again."
-            onClick={() => {
-              /**
-               * **Show where it went, do not just claim it went somewhere.**
-               *
-               * The pin lands at the thread's own coordinates, and for a Chat
-               * born as the Chat those are the centre of whatever view the
-               * FIRST message was typed in — which on this canvas was nine
-               * days and one other person ago. So the honest failure is not
-               * that the conversation is lost, it is that the pin can be two
-               * screens away with nothing on screen changing except the panel
-               * emptying.
-               *
-               * Same safety net dropped files got, and conditional for the
-               * same reason: if the pin is already in front of you, the
-               * camera does not move. Silent in the common case, handled in
-               * the surprising one.
-               */
-              const canvas = useCanvasStore.getState().canvas;
-              const at = canvas && thread ? threadWorldPos(canvas, thread) : null;
-              sendOp(canvasId, actor, { type: "thread.setMain", threadId: null });
-              if (at) {
-                revealIfOffscreen(
-                  useUiStore.getState().viewport,
-                  [{ x: at.x, y: at.y, width: PIN_SIZE, height: PIN_SIZE }],
-                  placeableArea(),
-                  glideToBox,
-                );
-              }
-              // **Say what just happened, and how to take it back.**
-              //
-              // This button empties the Chat panel in one click, sits beside
-              // the ✕, and was pressed by mistake on a canvas with 36
-              // messages in it. Nothing was lost — the thread is a pin again
-              // and `thread.setMain` has always had an inverse — but the
-              // screen said nothing, so it read as "the entire chat is gone",
-              // which is the worst thing an interface can be wrong about.
-              //
-              // The op was already reversible; what was missing was anybody
-              // being told. A confirm dialog would have been the other
-              // answer, and the wrong one: it taxes every deliberate press to
-              // protect the rare accidental one, and it still would not have
-              // said the conversation survived.
-              flashNotice(
-                `This is a pin on the canvas now — ${undoKey} makes it the Chat again.`,
-                6000,
-              );
-            }}
-          >
-            make it a pin
-          </button>
-        )}
+        {/**
+         * **There is no "make it a pin" here, and that is the decision.**
+         *
+         * This button demoted the Chat to an ordinary pin. It was renamed once
+         * (from "back to canvas", which was false for a Chat born as the Chat)
+         * and given a flash notice after somebody pressed it by mistake on a
+         * canvas holding 36 messages. Both were repairs to a button that
+         * should not have been on this header.
+         *
+         * **Because the only thing it does is leave the canvas with NO Chat.**
+         * The reducer already demotes the previous main when another thread is
+         * promoted (`thread.setMain` in `reducer.ts`), so switching the Chat
+         * needs only the promote button on a pin. And undoing a promotion is
+         * what undo is for — which the removed notice itself pointed at.
+         *
+         * What is left is a rare, deliberate act of configuration whose real
+         * consequence the tooltip never mentioned: `isocan wait` wakes on the
+         * main thread, so a canvas without one stops waking parked agents.
+         * That belongs in `isocan comment main --clear`, where it is typed on
+         * purpose, and not one pixel from the ✕ that collapses the panel.
+         */}
+        {/* Deliberately reintroducing it would trip `chrome.test.ts`. */}
         <button
           className="main-close"
           title="Collapse"
