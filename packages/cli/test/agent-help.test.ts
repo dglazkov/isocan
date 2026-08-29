@@ -23,7 +23,28 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
   });
   let stdout = "";
   let stderr = "";
+  /**
+   * **`setEncoding`, or the guide comes back with holes in it.**
+   *
+   * `stdout += chunk` on a raw stream concatenates BUFFERS onto a string, and
+   * each one is decoded on its own. A UTF-8 character that straddles a chunk
+   * boundary is therefore decoded as two half-characters and lands as `���`.
+   *
+   * That is exactly how this test failed on CI and never here: the guide is
+   * 61KB with em-dashes all through it, where the OS splits the stream depends
+   * on how loaded the machine is, and the assertion diff read
+   *
+   *     - prints — and opens — the address of that ONE item
+   *     + prints — and opens ��� the address of that ONE item
+   *
+   * one em-dash mangled and every other one intact. Setting the encoding puts
+   * a `StringDecoder` in the way, which holds a partial character back until
+   * its remaining bytes arrive. `main.ts` already does this when it reads
+   * stdin — the tests simply had not copied the idiom.
+   */
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => (stdout += chunk));
+  child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => (stderr += chunk));
   return new Promise((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),

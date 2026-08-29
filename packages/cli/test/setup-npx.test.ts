@@ -83,6 +83,7 @@ function setup(extraEnv: Record<string, string> = {}): Promise<{
     stdio: ["ignore", "pipe", "ignore"],
   });
   let stdout = "";
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => (stdout += chunk));
   return new Promise((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout })),

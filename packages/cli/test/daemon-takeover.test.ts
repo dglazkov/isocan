@@ -97,6 +97,7 @@ function spawnSquatter(extraEnv: Record<string, string> = {}): ChildProcess {
     cwd: home,
     stdio: ["ignore", "ignore", "pipe"],
   });
+  child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk) => (squatterErr += chunk));
   return child;
 }
@@ -164,6 +165,7 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string }> {
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => (stdout += chunk));
   return new Promise((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout })),
