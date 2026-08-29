@@ -211,8 +211,8 @@ import {
   lastRefusal,
   listBuilds,
   shaOfRoot,
-  shelveExisting,
   upgradePolicy,
+  type Adoption,
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -1838,7 +1838,7 @@ program
           `pinned to ${found.sha}${before && before !== found.sha ? ` (was ${before})` : ""} — ` +
             "auto upgrades stop here until `isocan upgrade --unpin`",
         );
-        await sayAdoption(home);
+        say(await adoptGlobal(home));
         if (opts.restart !== false) {
           const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
@@ -2014,21 +2014,8 @@ async function swapBuild(options: {
     }
     await flipTo(home, previous.sha);
     console.log(`rolled back to ${previous.sha}${before ? ` from ${before}` : ""}`);
-    await sayAdoption(home);
+    say(await adoptGlobal(home));
     return previous;
-  }
-
-  /**
-   * The copy being adopted gets a name in `builds/` BEFORE anything is
-   * fetched, so that a first upgrade is as reversible as every later one. It
-   * is a symlink at the tree npm already installed; see `shelveExisting`.
-   */
-  const shelved = await shelveExisting(home, install.root, buildStamp().commit);
-  if (shelved) {
-    console.error(
-      `isocan: ${shelved.sha} is now reachable as a build — ` +
-        "`isocan upgrade --rollback` comes back to it",
-    );
   }
 
   const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
@@ -2038,7 +2025,7 @@ async function swapBuild(options: {
     // machine whose PATH has not been moved yet, which is why this returns
     // through the same door rather than early.
     console.log(`already on ${want}, which is what ${health?.upgrade?.home} runs`);
-    await sayAdoption(home);
+    say(await adoptGlobal(home));
     return null;
   }
 
@@ -2055,16 +2042,19 @@ async function swapBuild(options: {
     home,
     spec: INSTALL_SPEC,
     want,
+    install,
     ...(mine ? { protect: [mine] } : {}),
   });
-  if (!swapped.ok) throw new Error(swapped.why);
-  if (swapped.step === "current") {
-    console.log(swapped.why);
-    await sayAdoption(home);
-    return null;
+  if (swapped.shelved) {
+    console.error(
+      `isocan: ${swapped.shelved} is now reachable as a build — ` +
+        "`isocan upgrade --rollback` comes back to it",
+    );
   }
+  if (!swapped.ok) throw new Error(swapped.why);
   console.log(swapped.why);
-  await sayAdoption(home);
+  say(swapped.adoption);
+  if (swapped.step === "current") return null;
   if (swapped.removed.length > 0) {
     console.error(
       `isocan: removed old build${swapped.removed.length > 1 ? "s" : ""} ` +
@@ -2074,11 +2064,11 @@ async function swapBuild(options: {
   return (await currentBuild(home)) ?? null;
 }
 
-/** Adoption is reported on stderr, always: silence would leave a person whose
- * PATH could not be moved believing the upgrade took. */
-async function sayAdoption(home: string): Promise<void> {
-  const adoption = await adoptGlobal(home);
-  if (adoption.moved || !adoption.managed) console.error(`isocan: ${adoption.why}`);
+/** Adoption is reported on stderr whenever it did something or failed to:
+ * silence would leave a person whose PATH could not be moved believing the
+ * upgrade took. A PATH that already ran through `current` is not news. */
+function say(adoption: Adoption | null): void {
+  if (adoption && (adoption.moved || !adoption.managed)) console.error(`isocan: ${adoption.why}`);
 }
 
 program
