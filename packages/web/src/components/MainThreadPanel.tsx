@@ -372,7 +372,7 @@ function Panel({
 
   return (
     <div
-      className="main-panel dock-panel"
+      className="main-panel dock-panel floats"
       style={docked ? { width: panelWidth } : undefined}
       onPointerDown={(e) => {
         e.stopPropagation();

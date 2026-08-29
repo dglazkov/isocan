@@ -154,7 +154,7 @@ export function FilesPanel({ canvasId, actor }: { canvasId: string; actor: Actor
   }
 
   return (
-    <aside className="files-panel dock-panel" style={{ width: panelWidth }} aria-label="Files on this canvas">
+    <aside className="files-panel dock-panel floats" style={{ width: panelWidth }} aria-label="Files on this canvas">
       <PanelResizer />
       <header>
         <span className="files-glyph">▤</span>
