@@ -43,6 +43,11 @@ jobs:
         with:
           node-version: 22
 
+      # `grade.mjs` drives headless Chrome over the devtools protocol and loads
+      # `ws` from `node_modules` — without this the run dies on an import, which
+      # would be the third way this month a grader failed to start.
+      - run: npm ci
+
       # No `continue-on-error` here, and that is the whole point of this file.
       # `release.yml` ran `--selftest` on every commit for weeks with that flag
       # on, spawning a macOS Chrome path that does not exist on this runner —
