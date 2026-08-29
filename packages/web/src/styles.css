@@ -290,20 +290,86 @@ img { height: auto; }
 .identity-dialog .identity-known { margin-bottom: 14px; }
 
 /* ---------- canvas list ---------- */
-.canvases-page { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
-.canvases-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
-.canvases-head h1 { font-size: 24px; margin: 0; }
-.canvases-head .who { position: relative; margin-left: auto; }
-.canvas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-.canvas-card {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow-card); padding: 16px; display: flex; flex-direction: column; gap: 6px;
-  min-height: 120px; text-align: left;
+/* ---------- every canvas ----------
+
+   The last surface still dressed the old way: a page title with a name
+   floating beside it, cards carrying three equal buttons, and the only action
+   on the page — making one — behind a dashed border at the bottom.
+
+   It wears the canvas's language now. The header is the same floating cluster
+   on the same `--edge` inset; the cards are the same slab; the only thing
+   that is different is that these are CONTENT rather than chrome, so they sit
+   in a grid instead of over something. */
+.canvases-page {
+  max-width: 1000px; margin: 0 auto; padding: var(--edge) 24px 64px;
+  min-height: 100%;
 }
-.canvas-card:hover { border-color: var(--accent); }
-.canvas-card h3 { margin: 0; font-size: 15px; }
-.canvas-card .desc { color: var(--ink-muted); font-size: 12.5px; flex: 1; }
-.canvas-card .meta { color: var(--ink-soft); font-size: 11px; }
+.canvases-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 32px;
+}
+.canvases-head h1 {
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0;
+}
+.canvases-head .home-mark { display: inline-flex; color: var(--ink-soft); }
+.canvases-head .spacer { flex: 1; }
+.canvases-head .who { position: relative; }
+.canvas-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px; align-items: start;
+}
+.canvas-card {
+  position: relative;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-float);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column;
+  text-align: left; overflow: hidden;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+.canvas-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-pop);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) { .canvas-card:hover { transform: none; } }
+/* The whole card is the way in — the thing you want every time should not be
+   one of three equal buttons, one of which deletes. */
+.card-open {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 16px 16px 12px; color: inherit; text-decoration: none;
+}
+.canvas-card h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
+.canvas-card .desc {
+  color: var(--ink-muted); font-size: 12.5px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* No "No description" any more: a card saying it has nothing to say is a
+   line of type spent on an absence. When there is a description it shows;
+   when there is not, the card is shorter. */
+.canvas-card .meta {
+  color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums;
+  margin-top: auto; padding-top: 4px;
+}
+/* The two rarer acts, on their own line and quiet — under the card's own
+   hairline so they read as belonging to it rather than floating in it. */
+.card-more {
+  display: flex; gap: 4px; padding: 6px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.card-act {
+  background: none; border-color: transparent; padding: 4px 8px;
+  font-size: 11.5px; color: var(--ink-soft);
+}
+.card-act:hover { background: var(--chip); color: var(--ink); }
+.card-act.danger:hover { color: var(--danger); }
+/* Making one comes FIRST, and looks like the action it is rather than an
+   empty slot at the end of the list. */
+.canvas-card.create {
+  gap: 8px; padding: 16px; justify-content: center;
+  border-style: dashed; box-shadow: none;
+}
+.canvas-card.create:hover { transform: none; box-shadow: none; }
+.canvases-loading { color: var(--ink-muted); font-size: 13px; padding: 8px 2px; }
 .canvas-card .row { display: flex; gap: 6px; }
 .canvas-card.create {
   border-style: dashed; align-items: stretch; justify-content: center; gap: 8px;
@@ -600,14 +666,25 @@ img { height: auto; }
   color: var(--ink-muted); font-size: 15px; letter-spacing: 1px;
 }
 .drawer-handle:hover { color: var(--ink); }
-/* **A circle needs more air than a rectangle.**
+/* **This pill is not symmetrical, on purpose.**
 
-   The faces are round and the pill is round, so at the shared 4px inset their
-   curves run nearly parallel and the gap READS smaller than it measures —
-   reported as "the logged in circles feel very tight". Round things get the
-   inset they look like they have rather than the one the ruler agrees with. */
-.presence-cluster { padding-right: calc(var(--pill-inset) + 3px); gap: 7px; }
+   Its two ends are different shapes. The left is a 5px status dot with a word
+   after it — a small mark against a large curve, which reads as crowded at
+   the inset a button looks fine at. The right is a face, round, whose curve
+   runs nearly parallel to the pill's own and so reads TIGHTER than it
+   measures.
+
+   Measured before changing: 5px of left inset, 7px between, 8px on the right.
+   The dot got the room and the gap gave it up, which is the trade the eye
+   was asking for — "more spacing on the left, and maybe less on the right".
+   Optical, not arithmetic: the numbers now disagree so that the spaces look
+   the same. */
+.presence-cluster { padding-left: 10px; padding-right: calc(var(--pill-inset) + 2px); gap: 5px; }
 .presence-cluster .face { margin: 0; }
+/* The word ends where the word ends: its dot already carries a 4px margin on
+   the leading side, and a trailing space here would double the gap the faces
+   are meant to sit against. */
+.presence-cluster .conn { margin-right: 0; }
 .bar-cluster .btn:hover { background: var(--chip); }
 .bar-cluster .btn.active { background: var(--accent); border-color: var(--accent); }
 /* Nothing in the bar breaks its own label in half.
@@ -2260,6 +2337,19 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-soft);
 }
 .context-menu button:hover .menu-icon { color: var(--accent-text); }
+.context-item kbd { margin-left: auto; }
+/* A key standing in for a mark: same column, same size as the glyphs beside
+   it, in the mono the rest of the app spells keys in. */
+.menu-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; line-height: 1;
+}
+
+/* In a menu where ANY row has a mark, the rows without one indent to match,
+   so every label starts at the same x. Menus with no marks at all — the
+   right-click menu on an item — are untouched and start at the edge. */
+.context-menu.has-icons .menu-icon { width: 16px; }
+
 /* Glyphs inside the bar's buttons ride with the label rather than sitting on
    the baseline, which is where an inline SVG lands by default. */
 .bar-cluster .btn svg,
@@ -3823,8 +3913,19 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop);
   display: flex; flex-direction: column; gap: 1px;
 }
+/* **One text column.**
+
+   This was `justify-content: space-between`, which left-aligns a row with one
+   child and pushes the label to the far edge of a row with two — so the
+   moment the rail's entries gained icons, half the menu's labels moved right
+   and the other half did not. A menu is scanned down its words; two text
+   columns is a menu you have to read twice.
+
+   The accelerator claims the far edge on its own (`margin-left: auto`), which
+   is what `space-between` was there to do and does correctly however many
+   children a row has. */
 .context-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
   width: 100%; padding: 6px 9px; border: none; border-radius: 6px;
   background: transparent; color: var(--ink);
   font: inherit; font-size: 12.5px; line-height: 1.2; text-align: left;

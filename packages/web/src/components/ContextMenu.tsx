@@ -47,6 +47,11 @@ export function ContextMenu({
   onClose: () => void;
 }): ReactNode {
   const box = useRef<HTMLDivElement | null>(null);
+  /* Whether THIS menu has marks at all. If it does, the rows without one keep
+     an empty slot so every label starts at the same x; if it does not — the
+     right-click menu on an item — nothing is indented for a column that is
+     not there. */
+  const marks = entries.some((entry) => "icon" in entry && entry.icon !== undefined);
 
   useEffect(() => {
     // Anything that is not a press inside the menu closes it — including a
@@ -91,7 +96,7 @@ export function ContextMenu({
 
   return (
     <div
-      className="context-menu"
+      className={`context-menu${marks ? " has-icons" : ""}`}
       ref={box}
       role="menu"
       style={{ left: at.x, top: at.y }}
@@ -113,7 +118,7 @@ export function ContextMenu({
               entry.run();
             }}
           >
-            {entry.icon && <span className="menu-icon">{entry.icon}</span>}
+            {marks && <span className="menu-icon">{entry.icon}</span>}
             <span>{entry.label}</span>
             {entry.shortcutFor && <kbd>{keyFor(entry.shortcutFor) ?? ""}</kbd>}
           </button>

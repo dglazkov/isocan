@@ -1,8 +1,14 @@
 import type { Actor, Item } from "@isocan/core";
-import { itemKind, itemPath, workbenchItemPath } from "@isocan/core";
+import { itemKind, itemPath, workbenchItemPath, keyFor} from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
-import { AgentsGlyph, ChatGlyph, FilesGlyph } from "../components/Glyphs.tsx";
+import {
+  AgentsGlyph,
+  ChatGlyph,
+  FilesGlyph,
+  MinimapGlyph,
+  TrashGlyph,
+} from "../components/Glyphs.tsx";
 import { blobUrl } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
@@ -247,16 +253,22 @@ export function chromeMenu(ctx: {
     { separator: "" },
     {
       label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
+      icon: <TrashGlyph size={14} />,
       run: () => ui().setTrashOpen(!ctx.trashOpen),
     },
     {
       label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
+      icon: <MinimapGlyph size={14} />,
       run: () => ui().setMinimapOpen(!ctx.minimapOpen),
     },
     { separator: "" },
     {
       label: "Keyboard shortcuts",
-      shortcutFor: "This list",
+      /* The key IS this row's mark, so it goes in the icon column with the
+         others rather than alone at the far right. Every other row now has
+         something in that column; a lone accelerator across the gap was the
+         last thing pulling the eye sideways. */
+      icon: <span className="menu-key">{keyFor("This list") ?? "?"}</span>,
       run: () => ui().setHelpOpen(!ui().helpOpen),
     },
   ];
