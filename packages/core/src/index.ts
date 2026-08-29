@@ -53,3 +53,4 @@ export * from "./designimport.ts";
 export * from "./context.ts";
 export * from "./converge.ts";
 export * from "./itemthread.ts";
+export * from "./claim.ts";

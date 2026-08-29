@@ -78,12 +78,19 @@ jobs:
       # error made every reading undefined. The guard existed and nothing
       # invoked it, which is the same hole one level up.
       #
-      # Chrome is on the GitHub runner already; `continue-on-error` because a
-      # browser that will not start on CI is not a reason to block a release,
-      # and the run still shows red in the log where somebody will see it.
+      # **This step was a lie for weeks and nobody could have known.** The
+      # comment here read "Chrome is on the GitHub runner already" — true, at
+      # `/usr/bin/google-chrome`; `grade.mjs` spawned the macOS path, ENOENT'd
+      # on every commit, and `continue-on-error` rendered it a green checkmark.
+      # The graders that exist to stop us believing a silent zero WERE one, in
+      # the exact place we pointed at when we said they were checked. Found by
+      # reading this run's log while wiring the nightly, not by anything here.
+      #
+      # So the flag is gone. `grade.mjs` now finds Chrome wherever it is and
+      # names what it looked for when it cannot, which makes a red step a real
+      # fact about this commit rather than an accident of the runner image.
       - name: The graders still measure something
         run: node scripts/grade.mjs --selftest
-        continue-on-error: true
 
       # ---- the gate the dev home deploys behind (phase 10.5) ----
       #

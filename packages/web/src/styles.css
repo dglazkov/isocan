@@ -3729,8 +3729,17 @@ button.mt-card:hover { border-color: var(--accent); }
 .wb-pick-take { flex: none; color: var(--accent-text); }
 .wb-pick-take.here { align-self: flex-start; border-color: var(--line-soft); }
 /* Already spoken for: said rather than offered, so nobody picks it and meets
-   a refusal a click later. */
-.wb-pick-bound { flex: none; font-size: 10px; color: var(--ink-soft); }
+   a refusal a click later. It carries the NAME of the canvas that has it —
+   the bare word "bound" was a label with nothing to learn from it — so it is
+   clipped rather than allowed to push the row's folder name off the left. */
+.wb-pick-bound {
+  flex: none; font-size: 10px; color: var(--ink-soft);
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The clone that already knows what it is. Offered, not blocked — taking it
+   writes nothing into the repo — and worded, because "✓" beside a folder you
+   have never bound reads as a fresh binding rather than a recognition. */
+.wb-pick-take.adopt { border-color: var(--line-soft); font-size: 10.5px; }
 
 /* ---------- the editor's chrome ----------
    CodeMirror shipped stock: its own greys, its own blue, its own gutter — a

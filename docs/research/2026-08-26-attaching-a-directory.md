@@ -176,6 +176,26 @@ and it reuses `readMarker` plus `recordDir` with nothing new invented.
 **B, then A, with D(ii) folded in — and C built separately, for the hosted
 case, and never called binding.**
 
+**Where this stands, 29 Aug 2026: 1, 2 and 3 are built.** The pane offers a
+typed path and a daemon-side picker, and the picker now NAMES the canvas that
+holds a directory instead of showing the bare word `bound` — which was the
+same dead end one level down, a label with nothing to learn from it and
+nothing to do about it. Adoption is distinguished from binding on both
+surfaces (`bindVerdict` in core), and the case the old boolean got *wrong*
+rather than merely thin is covered: a repo cloned this morning carries its
+marker and appears in no roster anywhere, so it read as free and adopted
+silently.
+
+Wiring that verdict up found the surfaces disagreeing. The web had refused to
+rebind a claimed directory since the picker shipped; **`isocan use` overwrote
+the marker without a word** — and the marker is committed, so running it in a
+repo a teammate bound changed the file under both of you with the only
+evidence a line in `git status` nobody expected. `use` now refuses and names
+the canvas that has it, with `--force` for the deliberate case. Recommendation
+4 (the File System Access API for hosted canvases) is untouched, and so is the
+open question about a local daemon serving the tree for a canvas homed
+elsewhere.
+
 1. **Replace the dead end with an affordance.** The pane's message should
    offer the two things a person can actually do rather than name a command
    they must leave to run. Paste-a-path (B) is the whole of step one, and it

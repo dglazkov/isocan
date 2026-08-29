@@ -138,6 +138,8 @@ import {
   isRefusal,
   openAsks,
   itemThread,
+  bindVerdict,
+  takenSentence,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -155,7 +157,15 @@ import {
   resolveCanvas,
   writeConfig,
 } from "./ctx.ts";
-import { bindableRoot, dirsOf, findBinding, markerFile, recordDir, writeMarker } from "@isocan/server";
+import {
+  bindableRoot,
+  dirsOf,
+  findBinding,
+  markerFile,
+  readMarker,
+  recordDir,
+  writeMarker,
+} from "@isocan/server";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
@@ -2765,7 +2775,13 @@ program
          */
         if (arrival && daemonUp) {
           const standing = await findBinding(work, home);
-          if (standing && standing.canvasId !== arrival.canvasId) {
+          // The same verdict `use` and the picker read (core's `bindVerdict`):
+          // one directory, one canvas, and a marker naming somebody else is
+          // not something to quietly rewrite. The SENTENCE stays this one —
+          // arriving into a directory is a different moment from choosing to
+          // bind one, and this is the moment where "run this somewhere else"
+          // is the useful thing to say.
+          if (standing && bindVerdict(standing, arrival.canvasId) === "taken") {
             // Not a merge and not a re-home: two canvases cannot share one
             // directory, and quietly rewriting the marker would orphan the
             // work the first one holds. `ctx.ts`'s `refuseHomeDisagreement`
@@ -3094,8 +3110,9 @@ program
     "--home",
     "set the home-wide default, consulted only in directories not bound to a canvas",
   )
+  .option("--force", "rebind a directory that already belongs to another canvas")
   .action(
-    run(async (ref: string, opts: { home?: boolean }, cmd: Command) => {
+    run(async (ref: string, opts: { home?: boolean; force?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       ctx.canvasRef = ref;
       const p = await resolveCanvas(ctx);
@@ -3125,6 +3142,26 @@ program
       // somewhere else would commit the disagreement that
       // `refuseHomeDisagreement` exists to refuse — to git, where a teammate
       // would clone it.
+      /**
+       * **Rebinding somebody else's directory is a choice, not a keystroke.**
+       *
+       * This overwrote the marker without a word. The marker is COMMITTED —
+       * run `isocan use` in a repo a teammate bound and the file changes
+       * under both of you, with the only evidence a line in `git status`
+       * nobody was expecting. The web has refused this since the picker
+       * shipped; the two surfaces simply disagreed, and the surface that was
+       * right is the one whose gesture is cheapest.
+       *
+       * Adoption is NOT this case and is not touched: a marker already
+       * naming this canvas is a fresh clone, and rewriting it changes
+       * nothing (`bindVerdict`).
+       */
+      const claim = await readMarker(root);
+      if (!opts.force && bindVerdict(claim, p.id) === "taken") {
+        throw new Error(
+          `${takenSentence(root, claim!)} — \`isocan use ${ref} --force\` rebinds it anyway`,
+        );
+      }
       const livesAt = await ctx.homeOf(p.id);
       const file = await writeMarker(root, {
         canvasId: p.id,
@@ -3132,7 +3169,14 @@ program
         ...(livesAt ? { home: livesAt } : {}),
       });
       await recordDir(ctx.home, root, p.id);
-      console.log(`this directory now means "${p.title}" (${p.id}) — bound via ${file}`);
+      // "Recognised" and "attached" are different facts about the world, so
+      // the clone case says which one happened rather than claiming to have
+      // changed a repo it did not touch.
+      console.log(
+        bindVerdict(claim, p.id) === "adopt"
+          ? `this directory already meant "${p.title}" (${p.id}) — adopted via ${file}`
+          : `this directory now means "${p.title}" (${p.id}) — bound via ${file}`,
+      );
     }),
   );
 
