@@ -26,7 +26,30 @@ describe("the tether layer", () => {
      * component needed to know.
      */
     expect(layer).toMatch(/const quiet = drag !== null \|\| panning \|\| resizing;/);
-    expect(layer).toMatch(/if \(quiet[^)]*\) \{\s*setLines\(\[\]\);/);
+    // The RULE, not one spelling of it: while quiet, no lines are produced.
+    // This asserted `setLines([])` and broke when the implementation improved
+    // while the rule held — a guard that fails on a refactor it should not
+    // care about teaches people to edit guards.
+    expect(layer).toMatch(/if \(quiet[^)]*\) return \[\];/);
+  });
+
+  /**
+   * **And the layout read is not on the viewport's path**, which is the fix
+   * the render count found: this measured `getBoundingClientRect` on every
+   * chip on every viewport change — a forced layout per frame, and 14.3% of a
+   * zoom profile — to re-measure something that had not moved. A chip lives in
+   * the panel; it does not move when the canvas pans.
+   */
+  it("re-measures the chips only when the chips can have moved", () => {
+    const effect = layer.slice(layer.indexOf("const measure = () =>"));
+    const deps = /\}, \[([^\]]*)\]\);/.exec(effect)?.[1] ?? "";
+    expect(deps, "the anchor effect must not depend on the viewport").not.toContain("viewport");
+    expect(deps).toContain("canvas");
+    // And the arithmetic that DOES depend on the viewport does not set state,
+    // or the second render comes straight back.
+    expect(layer).toMatch(/useMemo<Tether\[\]>/);
+    const memo = layer.slice(layer.indexOf("useMemo<Tether[]>"));
+    expect(memo.slice(0, memo.indexOf("}, ["))).not.toContain("set");
     expect(read("stores/uiStore.ts"), "panning must be readable across components").toMatch(
       /setPanning: \(panning\) => set\(\{ panning \}\)/,
     );

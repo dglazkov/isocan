@@ -101,13 +101,61 @@ frames over 32 ms 2–9 → 0–1.
 
 ---
 
-## What is still unexplained
+## The unexplained 14%, explained — by counting renders
 
-**`getBoundingClientRect` was 14.3% of zoom samples** in one profile — a forced
-synchronous layout somewhere in the zoom path, and by far the largest remaining
-single line. It is not chased here. It stopped mattering to the frame budget
-once the parsing went, but it is the obvious next thing if zoom ever regresses,
-and 14% is a lot to leave unaccounted for.
+The note above used to end here, saying `getBoundingClientRect` was 14.3% of
+zoom samples and had not been chased. It has been, by asking a question the
+profile could not answer: **which components re-render, and how often.** A
+temporary counter in all 103 components, through the same scripted pan and zoom:
+
+| | pan (60 wheel events) | zoom (60 events) |
+| --- | --- | --- |
+| `ItemView` | **0** — the memo holds | 1342 — scale changed, so it must |
+| every screen-space layer | 60 — once each | 60 |
+| **`LaneTethers`** | **120 — twice per frame** | **120** |
+| idle, 2.5s | `CursorLayer` ×1 (the 5s "quiet Ns" tick) | — |
+
+One component rendered twice per frame, and it was the one holding the missing
+14%. `LaneTethers` draws the dashed line from a message to the thing it made,
+and it did two things on every viewport change:
+
+- **`setLines([])` with a fresh array** while suppressed. `Object.is` sees two
+  different arrays, so React never bails — a pan re-rendered it sixty times to
+  set empty state that was already empty.
+- **`getBoundingClientRect` on every chip**, in an effect keyed on `viewport`.
+  That is the forced layout, and it was measuring something that had not moved:
+  **a chip lives in the panel and does not move when the canvas pans.**
+
+The fix is a split by what actually changes each part. Anchors are read from
+the DOM only when the messages or the scroll move them; the lines are a
+`useMemo` over those anchors and the viewport — pure arithmetic, no layout, no
+state, and therefore no second render.
+
+| | pan p90 | pan >32ms | zoom p90 | zoom worst | script |
+| --- | --- | --- | --- | --- | --- |
+| Before everything | 33.2–33.7 ms | 21–24 of ~140 | 25.1–26.3 ms | 33.4 ms | 2.82–2.96 s |
+| After the memos | 9.0–9.2 ms | 0 | 9.0–9.2 ms | 9.3–33.5 ms | 1.20–1.28 s |
+| **After the tether split** | **9.6–9.9 ms** | **0 of ~200** | **9.6–9.9 ms** | **10.4–17 ms** | **1.11–1.15 s** |
+
+`getBoundingClientRect` no longer appears in the zoom profile at all.
+
+**The lesson is the method, not the fix.** Two hypotheses about zoom were wrong
+earlier in this note, and both were settled by counting renders rather than by
+reading the component tree. The third finding came the same way: the profile
+said *a forced layout is happening*, and only a render count could say *which
+component, and why twice*.
+
+### What is still not chased
+
+`ItemView` re-renders 1342 times during a zoom and drags `VersionContent`
+(1320), `KindIcon` (1192) and `Reactions` (792) with it. Most is legitimate —
+`viewport.scale` really does change the counter-scaled chrome — but the
+children whose props do not depend on scale are re-rendering for nothing.
+**Left alone deliberately**: zoom already meets the frame budget with no frame
+over 32 ms, and memoising four more components to move a number that is
+already inside its bound is how a codebase acquires complexity it cannot
+justify. Recorded here so the next person starts from the count instead of the
+guess.
 
 ---
 

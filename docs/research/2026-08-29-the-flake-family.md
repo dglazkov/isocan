@@ -350,6 +350,32 @@ Recorded, not yet done. The prediction is written down first on purpose.
 
 ---
 
+## A fifth witness, of a different species, and it points the wrong way
+
+```
+FAIL test/graders.test.ts > every reading comes with the check it decides
+AssertionError: expected 1 to be greater than 4
+```
+
+The grader ran against `deliberately-bad.html` — a page built to break seven
+checks — inside a full 14-worker suite run, and reported **one** failure. Alone
+it reports seven, every time.
+
+Not a socket flake, and worth separating from the family above: nothing timed
+out and nothing was refused. **Under load, an instrument reported healthier than
+the truth.** Whatever slowed it — a headless Chrome starved of CPU, a page
+whose paint had not settled when the probe read it — the direction is the
+dangerous one, and it is the fourth appearance this week of the same shape.
+
+The check that caught it is the one that exists for exactly this: `--selftest`
+asserts every check FIRES on a page built to break them. It did its job. But it
+also means the grader's readings are load-sensitive, which nothing else has
+established, and a nightly running beside other work could report a clean page
+that is not. Unchased; recorded so the next occurrence is a second data point
+rather than a first.
+
+---
+
 ## The shape worth keeping
 
 Both times this family gave anything up, it was to **observation rather than

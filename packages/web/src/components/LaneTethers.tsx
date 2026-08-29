@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Tether, tetherFor } from "../lib/tether.ts";
@@ -29,32 +29,37 @@ export function LaneTethers() {
   const drag = useUiStore((s) => s.drag);
   const panning = useUiStore((s) => s.panning);
   const resizing = useUiStore((s) => s.panelResizing);
-  const [lines, setLines] = useState<Tether[]>([]);
+  /** Where each chip's arrow leaves, in screen pixels. Read from the DOM,
+   *  because only the DOM knows. */
+  const [anchors, setAnchors] = useState<Array<{ itemId: string; x: number; y: number }>>([]);
   const quiet = drag !== null || panning || resizing;
 
   useEffect(() => {
     if (quiet || !canvas) {
-      setLines([]);
+      // **The same array, not a new one.** `setLines([])` with a fresh literal
+      // never bails out — `Object.is` sees two different arrays — so this
+      // re-rendered on every frame of a pan purely to set empty state that was
+      // already empty.
+      setAnchors((prev) => (prev.length === 0 ? prev : []));
       return;
     }
-    const area = placeableArea();
     const measure = () => {
-      const found: Tether[] = [];
+      const found: Array<{ itemId: string; x: number; y: number }> = [];
       for (const el of document.querySelectorAll<HTMLElement>(".lane-chip[data-item]")) {
         const itemId = el.dataset.item;
-        const item = itemId ? canvas.items[itemId] : undefined;
-        if (!item) continue;
+        if (!itemId || !canvas.items[itemId]) continue;
         const rect = el.getBoundingClientRect();
         // The chip's right edge: the line leaves where the arrow points.
-        const line = tetherFor(
-          { x: rect.right, y: rect.top + rect.height / 2 },
-          item,
-          viewport,
-          area,
-        );
-        if (line) found.push(line);
+        found.push({ itemId, x: rect.right, y: rect.top + rect.height / 2 });
       }
-      setLines(found);
+      setAnchors((prev) =>
+        prev.length === found.length &&
+        prev.every(
+          (a, i) => a.itemId === found[i]!.itemId && a.x === found[i]!.x && a.y === found[i]!.y,
+        )
+          ? prev
+          : found,
+      );
     };
     measure();
     // A scroll inside the panel moves the chips without changing anything
@@ -62,7 +67,24 @@ export function LaneTethers() {
     // because the scroll happens on the message list, not on the window.
     document.addEventListener("scroll", measure, true);
     return () => document.removeEventListener("scroll", measure, true);
-  }, [canvas, viewport, quiet]);
+    // NOT `viewport`: a chip lives in the panel and does not move when the
+    // canvas pans. Measuring here on every frame was the forced layout.
+  }, [canvas, quiet]);
+
+  /** The lines themselves: pure arithmetic over the anchors and the viewport,
+   *  so a pan recomputes them without touching the DOM or setting state. */
+  const lines = useMemo<Tether[]>(() => {
+    if (quiet || !canvas || anchors.length === 0) return [];
+    const area = placeableArea();
+    const found: Tether[] = [];
+    for (const anchor of anchors) {
+      const item = canvas.items[anchor.itemId];
+      if (!item) continue;
+      const line = tetherFor({ x: anchor.x, y: anchor.y }, item, viewport, area);
+      if (line) found.push(line);
+    }
+    return found;
+  }, [anchors, canvas, viewport, quiet]);
 
   if (lines.length === 0) return null;
   return (
