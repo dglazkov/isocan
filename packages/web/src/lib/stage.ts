@@ -65,6 +65,7 @@ export interface DockState {
   filesPanelOpen: boolean;
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
+  personasPanelOpen: boolean;
   trashOpen: boolean;
   marksOpen: boolean;
   panelWidth: number;
@@ -124,6 +125,7 @@ export function dockStateNow(): DockState {
     filesPanelOpen,
     agentsPanelOpen,
     contextPanelOpen,
+    personasPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
@@ -133,17 +135,26 @@ export function dockStateNow(): DockState {
     filesPanelOpen,
     agentsPanelOpen,
     contextPanelOpen,
+    personasPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
   };
 }
 
-/** Any of the three: the dock holds one panel at a time, and what it takes
- *  from the canvas is the same whichever one is showing. Spelled once so a
- *  fourth panel cannot be added without every caller learning about it. */
+/** Any of them: the dock holds one panel at a time, and what it takes from the
+ *  canvas is the same whichever one is showing. Spelled once so a NEW panel
+ *  cannot be added without every caller learning about it — which is not
+ *  hypothetical: the minimap once asked about two of the three by hand and
+ *  opened inside the agent tray, and Personas is the fifth to arrive since. */
 export function railIsOpen(ui: DockState): boolean {
-  return ui.mainPanelOpen || ui.filesPanelOpen || ui.agentsPanelOpen || ui.contextPanelOpen;
+  return (
+    ui.mainPanelOpen ||
+    ui.filesPanelOpen ||
+    ui.agentsPanelOpen ||
+    ui.contextPanelOpen ||
+    ui.personasPanelOpen
+  );
 }
 
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {

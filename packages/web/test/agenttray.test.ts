@@ -58,13 +58,28 @@ describe("the dock holds one at a time, and everything knows", () => {
      * every caller learning about it — framing, the pan, the strip and the
      * minimap all read this one answer.
      *
-     * The fourth panel (Context) proved it works: adding it meant editing
-     * this one line, and nothing that stands beside the rail had to be found
-     * and told. That is what the guard below is protecting.
+     * The fourth panel (Context) proved it works, and the fifth (Personas)
+     * proved it again: adding one meant editing this one function, and nothing
+     * standing beside the rail had to be found and told. That is what the
+     * guard below is protecting.
      */
     const stage = read("lib/stage.ts");
-    expect(stage).toMatch(/ui\.mainPanelOpen \|\| ui\.filesPanelOpen/);
-    expect(stage).toMatch(/ui\.agentsPanelOpen \|\| ui\.contextPanelOpen/);
+    /**
+     * **Derived from `DockState`, not a hard-coded pair.** This used to assert
+     * two exact strings — `ui.mainPanelOpen || ui.filesPanelOpen` and
+     * `ui.agentsPanelOpen || ui.contextPanelOpen` — which had two problems:
+     * reformatting the function across lines broke it while the code stayed
+     * correct, and adding a SIXTH panel would have left it passing while
+     * `railIsOpen` ignored it. Reading the field list off the interface fixes
+     * both: every `*PanelOpen` that exists must be counted, however the
+     * function happens to be laid out.
+     */
+    const fields = [...stage.matchAll(/^ {2}(\w+PanelOpen): boolean;$/gm)].map((m) => m[1]!);
+    expect(fields.length, "DockState should declare the panels").toBeGreaterThan(3);
+    const body = stage.slice(stage.indexOf("export function railIsOpen"));
+    const answer = body.slice(0, body.indexOf("}"));
+    const missing = fields.filter((f) => !answer.includes(`ui.${f}`));
+    expect(missing, "railIsOpen must count every panel in DockState").toEqual([]);
     expect(stage, "dockEdges must go through it").toMatch(/railSpan\(railIsOpen\(ui\)/);
   });
 

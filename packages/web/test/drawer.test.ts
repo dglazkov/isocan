@@ -30,6 +30,7 @@ const menu = (over = {}) =>
     filesOpen: false,
     agentsOpen: false,
     contextOpen: false,
+    personasOpen: false,
     mainOpen: false,
     trashOpen: false,
     trashCount: 0,

@@ -199,3 +199,19 @@ export function ContextGlyph({ size = 15 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * A persona: a face inside a frame — the costume rather than the actor.
+ * Deliberately not the agent glyph, which stands for somebody who is actually
+ * working right now; a persona is a role sitting on a shelf until one is.
+ */
+export function PersonaGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round">
+      <rect x="2" y="2" width="12" height="12" rx="3.2" />
+      <circle cx="8" cy="6.6" r="1.9" />
+      <path d="M4.9 12.1a3.4 3.4 0 0 1 6.2 0" />
+    </svg>
+  );
+}

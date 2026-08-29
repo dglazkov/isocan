@@ -48,3 +48,4 @@ export {
   writeMarker,
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";
+export * from "./personas.ts";

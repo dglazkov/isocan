@@ -33,6 +33,7 @@ export function Toolbar({
   const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const contextOpen = useUiStore((s) => s.contextPanelOpen);
+  const personasOpen = useUiStore((s) => s.personasPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
@@ -91,6 +92,7 @@ export function Toolbar({
                   agentsOpen,
                   mainOpen,
                   contextOpen,
+                  personasOpen,
                   trashOpen,
                   trashCount,
                   minimapOpen,

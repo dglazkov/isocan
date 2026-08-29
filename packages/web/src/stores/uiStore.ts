@@ -140,6 +140,7 @@ interface UiStore {
   /** The agent tray — `isocan who` given a home. Shares the left dock. */
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
+  personasPanelOpen: boolean;
   /** Whose WORK the camera follows: the agent whose new items it flies to,
    *  or null. Off by default — this moves the canvas on somebody's behalf, so
    *  it is a mode they choose rather than one they discover happening to
@@ -202,6 +203,7 @@ interface UiStore {
   setFilesPanelOpen: (open: boolean) => void;
   setAgentsPanelOpen: (open: boolean) => void;
   setContextPanelOpen: (open: boolean) => void;
+  setPersonasPanelOpen: (open: boolean) => void;
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
@@ -395,6 +397,7 @@ export const useUiStore = create<UiStore>((set) => {
     filesPanelOpen: false,
     agentsPanelOpen: false,
     contextPanelOpen: false,
+    personasPanelOpen: false,
     followingActorId: null,
     marksOpen: false,
     peekedItemId: null,
@@ -464,6 +467,7 @@ export const useUiStore = create<UiStore>((set) => {
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
     setContextPanelOpen: (contextPanelOpen) => set({ contextPanelOpen }),
+    setPersonasPanelOpen: (personasPanelOpen) => set({ personasPanelOpen }),
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
