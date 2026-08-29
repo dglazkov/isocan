@@ -125,7 +125,31 @@ globalThis.fetch = async function retryingFetch(input, init) {
       const neverLeft =
         cause?.syscall === "connect" &&
         (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET");
-      if (!neverLeft || Date.now() - started >= CONNECT_BUDGET_MS) throw err;
+      /**
+       * **When it gives up, it says what it gave up ON.**
+       *
+       * `TypeError: fetch failed` is what Node throws, and it is the single
+       * least useful sentence this suite can produce: it names no address, no
+       * syscall, no duration. Seven failures were recorded across a week on
+       * that message alone, in seven different files, and none of them could
+       * be told apart afterwards — which is why "the flake family" stayed one
+       * undifferentiated thing for so long.
+       *
+       * A run that fails now carries its own diagnosis: which host, which
+       * error code, how long it tried, how many attempts it made. That does
+       * not fix anything by itself. It makes the NEXT occurrence evidence
+       * instead of another sighting.
+       */
+      if (!neverLeft || Date.now() - started >= CONNECT_BUDGET_MS) {
+        const where = typeof input === "string" ? input : String((input as Request).url ?? input);
+        const took = Date.now() - started;
+        (err as Error).message =
+          `${(err as Error).message} — ${init?.method ?? "GET"} ${where}` +
+          `, ${cause?.syscall ?? "?"}/${cause?.code ?? "?"}` +
+          `, gave up after ${took}ms and ${attempt + 1} attempt${attempt === 0 ? "" : "s"}` +
+          (neverLeft ? ` (budget ${CONNECT_BUDGET_MS}ms)` : " (not a connect failure — not retried)");
+        throw err;
+      }
       // Give the stalled loop a moment, and lengthen it — a machine that is
       // busy now is likely to be busy in a millisecond.
       await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));

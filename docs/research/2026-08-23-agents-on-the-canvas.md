@@ -248,7 +248,27 @@ Good idea, wrong shape for us.
 
 ## Recommendation
 
-**Ship the convergence operation.** One op that means *this one won*: on a
+**Ship the convergence operation. BUILT 29 Aug 2026** — as `isocan choose`,
+and **without a new op type**, which is the one place this recommendation was
+overtaken by events. It asked for a composite op with a computed inverse, and
+that was right when it was written; op grouping shipped on 28 Aug, so
+`item.addVersion` plus one `item.delete` per child, all carrying one group,
+gives the same one-gesture-one-undo out of ops that already exist and already
+replay. A new op type would have been a second way to say something the
+vocabulary could already say.
+
+Two things the recommendation could not have known:
+
+- **The winner goes to the trash too.** Its content is now the source's top
+  version, so leaving it would be two copies of one decision and an invitation
+  to edit the wrong one.
+- **There is nowhere to carry the idea-name.** `ItemVersion` has a filename
+  and an author, and a group is an ID rather than a label — grouping matches
+  by string equality, so two decisions sharing a human name and landing next
+  to each other would merge into one undo. What records the decision is the
+  version on the source and the named children in the trash, both recoverable.
+
+**The original recommendation, as written:** One op that means *this one won*: on a
 sibling made by `/variation` (or on any item with a `parent`), fold the chosen
 child back onto its source — `item.addVersion` on the parent from the child's
 current blob, the losing siblings to the trash, the child's idea-name carried

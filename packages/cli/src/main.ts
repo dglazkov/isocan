@@ -134,6 +134,8 @@ import {
   serializeDesign,
   contextPieces,
   contextReport,
+  convergePlan,
+  isRefusal,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -4669,6 +4671,67 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+program
+  .command("choose <item>")
+  .description("This one won: fold a variation back onto what it was made from")
+  .option("--canvas <canvas>")
+  .option("--dry-run", "say what it would do, and do nothing")
+  .action(
+    run(async (ref: string, opts: { dryRun?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const chosen = resolveItem(snapshot, ref);
+      const plan = convergePlan(snapshot.canvas, chosen.id);
+      if (isRefusal(plan)) throw new Error(plan.refused);
+
+      const parent = snapshot.canvas.items[plan.parentId]!;
+      const losing = plan.trash.filter((id) => id !== chosen.id).length;
+      if (opts.dryRun) {
+        if (ctx.json) return printJson(plan);
+        console.log(
+          `"${chosen.title}" would become v${parent.versions.length + 1} of "${parent.title}", ` +
+            `and ${plan.trash.length} item${plan.trash.length === 1 ? "" : "s"} would go to the trash`,
+        );
+        return;
+      }
+
+      /**
+       * **One group, so the decision undoes as a decision.**
+       *
+       * The research that asked for this wanted a composite op with a
+       * computed inverse. Op grouping landed since and does the same job out
+       * of ops that already exist and already replay: one `⌘Z` takes the
+       * version back off the parent AND brings every child out of the trash,
+       * because they share a group and undo walks the contiguous run.
+       *
+       * The group is an ID, not a name: grouping matches by string equality,
+       * so two decisions sharing a human label and landing next to each other
+       * would merge into one undo. What records the decision is the version
+       * on the source and the named children in the trash.
+       */
+      const group = newGroupId();
+      await sendOp(
+        ctx,
+        p.id,
+        { type: "item.addVersion", itemId: plan.parentId, version: plan.version },
+        group,
+      );
+      for (const id of plan.trash) {
+        await sendOp(ctx, p.id, { type: "item.delete", itemId: id }, group);
+      }
+
+      if (ctx.json) {
+        return printJson({ parentId: plan.parentId, trashed: plan.trash, label: plan.label });
+      }
+      console.error(
+        `"${chosen.title}" is v${parent.versions.length + 1} of "${parent.title}"` +
+          (losing > 0 ? `, and ${losing} other${losing === 1 ? "" : "s"} went to the trash` : "") +
+          " — one undo takes it all back",
+      );
+    }),
+  );
+
 // ---------- what an agent will read ----------
 
 program
@@ -6187,6 +6250,24 @@ program
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       const entry = await ctx.client.undo(p.id, ctx.actor);
+      /**
+       * **This names ONE op even when a whole gesture was undone**, and that
+       * is knowingly left. `isocan choose` undoes a version and two deletions;
+       * this says "applied item.removeVersion".
+       *
+       * It is terse rather than wrong, and the honest fix is not cheap. The
+       * engine returns the LAST entry it wrote as a receipt, and the inverse
+       * entries carry NO group — redo works from the undo stack's target
+       * sequence rather than from the log's grouping. Making this line count
+       * the gesture means either changing that return shape or writing groups
+       * onto inverses, and writing groups onto inverses touches what
+       * `nextUndoGroup` sees for an actor. That is the undo path, changed for
+       * a message.
+       *
+       * What closes the gap in the meantime is the command that made the
+       * gesture: `isocan choose` says "one undo takes it all back" as it
+       * does it, which is where the expectation belongs.
+       */
       console.log(`undid: applied ${entry.envelope.op.type}`);
     }),
   );
