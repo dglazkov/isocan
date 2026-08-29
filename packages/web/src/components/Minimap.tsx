@@ -5,7 +5,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { itemsBounds, screenToWorld, type Box } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
-import { RAIL_INSET, railSpan } from "../lib/stage.ts";
+import { RAIL_INSET, railIsOpen, railSpan } from "../lib/stage.ts";
 
 
 const MAP_W = 168;
@@ -66,7 +66,13 @@ export function Minimap() {
   // A docked panel takes the corner the map stands in, and a map behind a
   // panel is a control you cannot see or click. Same answer the edge radar
   // gives: stand at the wall the panel leaves, not at the window's.
-  const panelOpen = useUiStore((s) => s.mainPanelOpen || s.filesPanelOpen);
+  /**
+   * `railIsOpen`, not two of the three panels spelled out here. The tray was
+   * added and this went on asking about Chat and Files, so opening Agents
+   * left the map sitting INSIDE it — which is the exact failure the shared
+   * answer exists to stop, arriving one panel later than the answer did.
+   */
+  const panelOpen = useUiStore(railIsOpen);
   if (!canvas) return null;
 
   // Everyone with a place to stand — an on-call session has none.

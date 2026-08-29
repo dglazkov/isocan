@@ -212,6 +212,10 @@ interface UiStore {
   /** The canvas is being dragged under the hand. */
   panning: boolean;
   setPanning: (panning: boolean) => void;
+  /** The rail is panning the canvas: `.world` takes a transform transition
+   *  for the duration, so the motion is the compositor's and not React's. */
+  railPanning: boolean;
+  setRailPanning: (on: boolean) => void;
 }
 
 const INK_KEY = "isocan.ink";
@@ -381,6 +385,7 @@ export const useUiStore = create<UiStore>((set) => {
     panelWidth: readPanelWidth(),
     panelResizing: false,
     panning: false,
+    railPanning: false,
     filesPanelOpen: false,
     agentsPanelOpen: false,
     laneFollow: false,
@@ -473,6 +478,7 @@ export const useUiStore = create<UiStore>((set) => {
      * that is only ever glanced at.
      */
     setPanning: (panning) => set({ panning }),
+    setRailPanning: (railPanning) => set({ railPanning }),
     setPanelWidth: (width) => {
       // Clamped HERE rather than at the drag, so every caller gets the same
       // answer: the keyboard resize, a restored value, and a pointer that

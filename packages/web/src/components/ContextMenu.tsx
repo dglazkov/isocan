@@ -20,6 +20,11 @@ import { useUiStore } from "../stores/uiStore.ts";
 
 export interface MenuAction {
   label: string;
+  /** The thing's own mark, where it has one. Only the rail's three panels do:
+   *  an icon on every row would be decoration, and an icon on the rows that
+   *  name a SURFACE is the same mark you will see on the surface when it
+   *  opens. */
+  icon?: ReactNode;
   /** The `does` text of the shortcut this act corresponds to, if it has one —
    *  the accelerator is looked up rather than written. */
   shortcutFor?: string;
@@ -108,6 +113,7 @@ export function ContextMenu({
               entry.run();
             }}
           >
+            {entry.icon && <span className="menu-icon">{entry.icon}</span>}
             <span>{entry.label}</span>
             {entry.shortcutFor && <kbd>{keyFor(entry.shortcutFor) ?? ""}</kbd>}
           </button>

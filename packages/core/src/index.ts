@@ -47,3 +47,4 @@ export * from "./fit.ts";
 export * from "./attest.ts";
 export * from "./authaction.ts";
 export * from "./lane.ts";
+export * from "./frameable.ts";

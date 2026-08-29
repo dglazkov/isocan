@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { chromeMenu } from "../src/lib/menuentries.ts";
+import { chromeMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
 /**
@@ -29,6 +29,7 @@ const menu = (over = {}) =>
     canvasId: "prj_1",
     filesOpen: false,
     agentsOpen: false,
+    mainOpen: false,
     trashOpen: false,
     trashCount: 0,
     minimapOpen: true,
@@ -36,47 +37,66 @@ const menu = (over = {}) =>
   });
 
 describe("the drawer holds everything it took", () => {
-  it("offers files, trash, the map and the shortcut list", () => {
+  it("offers the rail's panels, the trash, the map and the shortcut list", () => {
     const found = labels(menu()).join(" | ");
-    for (const control of ["Files", "Agents", "Trash", "map", "shortcuts"]) {
-      expect(found, `${control} left the bar and must be in the drawer`).toContain(control);
+    for (const control of ["Chat", "Files", "Agents", "Trash", "minimap", "shortcuts"]) {
+      expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
   });
 
-  it("no longer keeps those four in the bar", () => {
-    // The other half: a control in both places is not a drawer, it is a
-    // duplicate — and the duplicate is what makes people believe the drawer
-    // is optional and stop looking in it.
+  it("no longer keeps those in the bar", () => {
+    // A control in both places is not a drawer, it is a duplicate — and the
+    // duplicate is what makes people believe the drawer is optional and stop
+    // looking in it.
     expect(toolbar, "the trash button moved").not.toMatch(/setTrashOpen\(!trashOpen\)\}\s*>/);
     expect(toolbar, "the help button moved").not.toMatch(/className="btn help-btn"/);
     expect(toolbar, "Chat|Files moved").not.toMatch(/<PanelSwitch/);
   });
 
-  it("says what state each toggle is in, so a label is never a lie", () => {
-    // "Files" when it is shut and "Hide files" when it is open. A menu that
-    // says "Files" while the files are already showing has told you nothing
-    // about what the click will do.
-    expect(labels(menu({ filesOpen: false }))).toContain("Files");
-    expect(labels(menu({ filesOpen: true }))).toContain("Hide files");
-    expect(labels(menu({ minimapOpen: true }))).toContain("Hide the map");
-    expect(labels(menu({ minimapOpen: false }))).toContain("Show the map");
-    expect(labels(menu({ agentsOpen: true }))).toContain("Hide agents");
+  it("offers the two panels you are NOT looking at", () => {
+    /**
+     * The dock holds one of three, so "hide this" was never the useful
+     * question — "which of the other two" is. Toggles named what you already
+     * had and said nothing about where else you could go.
+     */
+    expect(labels(menu({ filesOpen: true }))).not.toContain("Files");
+    expect(labels(menu({ filesOpen: true }))).toContain("Chat");
+    expect(labels(menu({ filesOpen: true }))).toContain("Agents");
+    expect(labels(menu({ agentsOpen: true }))).not.toContain("Agents");
+    expect(labels(menu({ mainOpen: true }))).not.toContain("Chat");
+    // Shut, all three are on offer.
+    expect(labels(menu())).toEqual(expect.arrayContaining(["Chat", "Files", "Agents"]));
+  });
+
+  it("keeps them in one order, so the menu does not have to be re-read", () => {
+    // A menu whose items move about is a menu you read every time. Chat,
+    // Files, Agents — always, minus whichever is showing.
+    const shown = labels(menu()).slice(0, 3);
+    expect(shown).toEqual(["Chat", "Files", "Agents"]);
+    expect(labels(menu({ filesOpen: true })).slice(0, 2)).toEqual(["Chat", "Agents"]);
+  });
+
+  it("has Chat in it, because the strip IS the shut rail", () => {
+    /**
+     * Chat was deliberately left out, on the argument that it already had two
+     * doors — the strip and ⌘J. That argument was wrong: the strip only
+     * exists when the rail is SHUT, so with Files open there was no strip and
+     * therefore no visible door to the Chat at all, from the one place you
+     * would most want one.
+     */
+    expect(labels(menu({ filesOpen: true }))).toContain("Chat");
+    expect(labels(menu({ agentsOpen: true }))).toContain("Chat");
   });
 
   it("carries the trash count, which is the one thing the bar said that a handle cannot", () => {
-    // `🗑 16` was information at a glance. A bare `···` cannot show it, so the
-    // number travels with the label instead of being dropped quietly.
     expect(labels(menu({ trashCount: 16 })).join(" ")).toContain("Trash (16)");
     expect(labels(menu({ trashCount: 0 })).join(" "), "and no empty parentheses").toContain("Trash");
     expect(labels(menu({ trashCount: 0 })).join(" ")).not.toContain("(0)");
   });
 
-  it("leaves Chat out, because Chat already has two doors", () => {
-    /**
-     * The strip is a permanent surface carrying its unread count, and ⌘J
-     * toggles it. A third door would make the strip look decorative and give
-     * one thing three ways in — which is how a menu becomes a junk drawer.
-     */
-    expect(labels(menu()).join(" ")).not.toContain("Chat");
+  it("says which way the remaining toggles will go", () => {
+    expect(labels(menu({ minimapOpen: true }))).toContain("Hide minimap");
+    expect(labels(menu({ minimapOpen: false }))).toContain("Show minimap");
+    expect(labels(menu({ trashOpen: true }))).toContain("Hide trash");
   });
 });

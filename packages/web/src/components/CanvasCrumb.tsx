@@ -8,6 +8,7 @@ import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
+import { ShareGlyph } from "./Glyphs.tsx";
 
 /**
  * **What is true wherever you are on a canvas.**
@@ -69,9 +70,14 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
 }
 
 /**
- * Whether you are live, who may be here, and who is. Share sits beside the
- * pile because they are the same subject from two sides — who is in the room
- * and who may come in.
+ * **Whether you are live, and who is here.** Nothing else.
+ *
+ * Share used to live in here, on the argument that who is in the room and who
+ * may come in are one subject. True, and beside the point: this group is
+ * things you LOOK AT and Share is a thing you PRESS, so putting it here left
+ * a green status dot between two buttons and a row that read as broken. It is
+ * `ShareButton` now, and it sits with the workbench in the pill of things
+ * that do something.
  */
 export function CanvasPresence({
   actor,
@@ -83,32 +89,13 @@ export function CanvasPresence({
   const canvas = useCanvasStore((s) => s.project);
   const connection = useCanvasStore((s) => s.connection);
   const identityOpen = useUiStore((s) => s.identityOpen);
-  const shareOpen = useUiStore((s) => s.shareOpen);
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
     useUiStore.getState().setIdentityOpen(false),
-  );
-  const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
-    useUiStore.getState().setShareOpen(false),
   );
 
   return (
     <>
       <span className={`conn ${connection}`}>{connection}</span>
-      <div className="identity-anchor" ref={shareRef}>
-        <button
-          className={`btn${shareOpen ? " active" : ""}`}
-          title="Who may enter this canvas"
-          disabled={!canvas}
-          onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
-        >
-          Share
-        </button>
-        {shareOpen && canvas && (
-          <div className="identity-popover share-popover">
-            <ShareDialog actor={actor} onClose={() => useUiStore.getState().setShareOpen(false)} />
-          </div>
-        )}
-      </div>
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>
@@ -125,5 +112,37 @@ export function CanvasPresence({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * **Share, on its own**, so it can stand with the other control rather than
+ * inside the group of things you only read. Exported because three surfaces
+ * carry it — the canvas bar, full screen and the workbench — and a button
+ * that lives in three places is one button or it is three that drift.
+ */
+export function ShareButton({ actor }: { actor: Actor }) {
+  const canvas = useCanvasStore((s) => s.project);
+  const shareOpen = useUiStore((s) => s.shareOpen);
+  const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
+    useUiStore.getState().setShareOpen(false),
+  );
+  return (
+    <div className="identity-anchor" ref={shareRef}>
+      <button
+        className={`btn${shareOpen ? " active" : ""}`}
+        title="Who may enter this canvas"
+        disabled={!canvas}
+        onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
+      >
+        <ShareGlyph />
+        Share
+      </button>
+      {shareOpen && canvas && (
+        <div className="identity-popover share-popover">
+          <ShareDialog actor={actor} onClose={() => useUiStore.getState().setShareOpen(false)} />
+        </div>
+      )}
+    </div>
   );
 }

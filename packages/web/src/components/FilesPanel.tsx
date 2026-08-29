@@ -14,6 +14,7 @@ import { openPanel } from "../lib/panels.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { railSpan } from "../lib/stage.ts";
+import { FilesGlyph } from "./Glyphs.tsx";
 
 /**
  * The files on this canvas, docked like the main thread — because every item
@@ -157,7 +158,7 @@ export function FilesPanel({ canvasId, actor }: { canvasId: string; actor: Actor
     <aside className="files-panel dock-panel floats" style={{ width: panelWidth }} aria-label="Files on this canvas">
       <PanelResizer />
       <header>
-        <span className="files-glyph">▤</span>
+        <span className="files-glyph"><FilesGlyph size={13} /></span>
         <b>Files</b>
         <span className="files-count">{total}</span>
         <span className="spacer" />

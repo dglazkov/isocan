@@ -578,3 +578,25 @@ export function blobUrl(canvasId: string, blobHash: string): string {
 export function getServing(): Promise<ServingResponse> {
   return request("GET", SERVING_ROUTE);
 }
+
+
+/**
+ * Whether a site will let itself be shown in a frame — asked of the daemon,
+ * because only something making the request server-side can read the headers
+ * that decide it. See `/api/frameable` and `core/frameable.ts`.
+ *
+ * Never throws: a check that cannot be made answers `ok`, so the person is
+ * free to try. Refusing a site on a failed probe would be worse than the
+ * blank frame this exists to prevent.
+ */
+export async function checkFrameable(
+  url: string,
+): Promise<{ ok: boolean; why?: string; url?: string }> {
+  try {
+    const res = await fetch(`/api/frameable?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return { ok: true };
+    return (await res.json()) as { ok: boolean; why?: string; url?: string };
+  } catch {
+    return { ok: true };
+  }
+}

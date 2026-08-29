@@ -5,6 +5,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "../lib/panels.ts";
 import { AgentRowView } from "./AgentRow.tsx";
+import { AgentsGlyph } from "./Glyphs.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 
 /**
@@ -47,9 +48,7 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
       aria-label="Agents on this canvas"
     >
       <header>
-        <span className="agents-glyph" aria-hidden>
-          ◆
-        </span>
+        <span className="agents-glyph"><AgentsGlyph size={13} /></span>
         <b>Agents</b>
         <i className="agents-hint">who is here, and what they are doing</i>
         <span className="spacer" />

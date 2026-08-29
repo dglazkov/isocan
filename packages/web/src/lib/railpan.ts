@@ -1,7 +1,6 @@
 import type { Viewport } from "./viewport.ts";
 import { type DockState, dockEdges } from "./stage.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { smoothEase } from "./zoomactions.ts";
 
 /**
  * **Opening the rail pans the canvas. It does not reflow it.**
@@ -69,15 +68,16 @@ export function panForDockChange(before: DockState, durationMs = 0): void {
  * Two reasons to skip the animation, and the second one is not an
  * accessibility setting.
  *
- * `requestAnimationFrame` does not fire in a hidden tab. An eased pan started
- * while nobody is looking does not run slowly — it STOPS, half applied, and
- * finishes whenever the tab is next brought forward, so somebody returns to a
- * canvas that slides out from under them for no reason they can see. An
- * animation for a person who cannot see it is a delayed jump at best.
+ * A hidden tab cannot see an animation, and somebody who asked for less motion
+ * has asked for this one too.
  *
- * Found by the harness rather than by reasoning: the browser pane these
- * phases are built in reports `document.hidden === true`, which is also why
- * phase 1's blur-under-motion number could never be taken there.
+ * The hidden-tab half used to matter far more than it does: when this eased
+ * in a `requestAnimationFrame` loop, a pan started in a hidden tab STOPPED
+ * half-applied and finished whenever the tab was next brought forward.
+ * Handing the motion to CSS removed that failure at the root — the viewport
+ * now moves in one update and the transition is decoration — so this is a
+ * courtesy rather than a guard against a stall. It stays because animating
+ * for somebody who cannot see it is still pointless.
  */
 function skipAnimation(): boolean {
   if (typeof window === "undefined") return true;
@@ -85,40 +85,38 @@ function skipAnimation(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
-let panning = 0;
-
 /**
- * The eased version, for the one-step cases: opening and closing.
+ * **The eased version, for the one-step cases: opening and closing.**
  *
  * A drag does NOT come through here. While the resizer is under a hand the
  * pan has to track it frame for frame — an ease would make the canvas trail
  * the edge and settle a fifth of a second after the person stopped, which is
- * the same complaint the minimap's `resizing-panel` rule already exists to
- * answer.
+ * the same complaint the minimap's `resizing-panel` rule already answers.
  *
- * It cannot reuse `glideTo`: that animates toward an absolute target through
- * `setViewport`, and both halves are wrong here. This pans by a DELTA — the
- * person may pan or zoom mid-animation and their input must survive rather
- * than being overwritten by a target computed before they moved — and it goes
- * through `followViewport` so follow survives. The easing curve is shared, so
- * the two motions still feel like one app.
+ * **CSS, not `requestAnimationFrame`, and that is the whole fix.**
+ *
+ * The first version stepped `tx` in a rAF loop. Every frame was a React
+ * render of the entire canvas — and it ran at exactly the moment the Chat
+ * panel was mounting, with its markdown and its message list. The two
+ * competed, frames were dropped, and the canvas arrived in four or five
+ * visible jumps. Reported as "a janky jumpy move in chunks vs a smooth
+ * animation", which is precisely what a dropped-frame animation looks like.
+ *
+ * A transform transition is handled by the compositor. The viewport moves in
+ * ONE state update, the browser animates the layer, and the panel can take as
+ * long as it likes to mount without the motion knowing about it. The class
+ * comes off when the transition is done so that panning and zooming — which
+ * must never lag the hand — are untouched.
  */
 function glidePan(dx: number, durationMs: number): void {
-  cancelAnimationFrame(panning);
-  const started = performance.now();
-  let applied = 0;
-  const step = (now: number) => {
-    const progress = Math.min(1, (now - started) / durationMs);
-    const target = dx * smoothEase(progress);
-    const ui = useUiStore.getState();
-    // The STEP, not the total: whatever else moved the camera this frame is
-    // left alone, so a person who grabs the wheel mid-open keeps their pan.
-    pan(target - applied, ui.viewport);
-    applied = target;
-    if (progress < 1) panning = requestAnimationFrame(step);
-  };
-  panning = requestAnimationFrame(step);
+  const ui = useUiStore.getState();
+  ui.setRailPanning(true);
+  pan(dx, ui.viewport);
+  clearTimeout(settling);
+  settling = setTimeout(() => useUiStore.getState().setRailPanning(false), durationMs + 40);
 }
+
+let settling: ReturnType<typeof setTimeout> | undefined;
 
 /** How long the one-step open/close pan takes. Matches the rail's own CSS
  *  transition, so the panel and the canvas arrive together. */

@@ -1,12 +1,14 @@
 import type { Actor, Item } from "@isocan/core";
 import { itemKind, itemPath, workbenchItemPath } from "@isocan/core";
+import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
+import { AgentsGlyph, ChatGlyph, FilesGlyph } from "../components/Glyphs.tsx";
 import { blobUrl } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { useCanvasStore, flashNotice, setNotice } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { openPanel } from "./panels.ts";
+import { type Panel, openPanel } from "./panels.ts";
 import { glideToBox } from "./zoomactions.ts";
 
 /**
@@ -193,42 +195,62 @@ export const _itemKind = itemKind;
  * and the ones in here are the ones you occasionally reach FOR.
  *
  * **Nothing is lost, and that is a test rather than a promise.**
- * `chrome.test.ts` asserts every control this drawer swallowed is in here,
+ * `drawer.test.ts` asserts every control this drawer swallowed is in here,
  * because "we moved it into a menu" is the sentence that precedes a feature
  * nobody can find again.
  *
- * Chat is deliberately NOT here. It has the strip when shut — a permanent
- * surface with its unread count on it — and ⌘J; putting it behind a handle as
- * well would give one thing three doors and make the strip look decorative.
+ * **The rail's three panels are offered as the two you are NOT looking at.**
  *
- * The counts travel with the labels. "Trash" alone is a question; "Trash (16)"
- * is the answer somebody opened the menu for, and it is the one thing the old
- * bar said that a bare handle cannot.
+ * They were toggles — "Hide files" while Files was open — which named what
+ * you already had and said nothing about where else you could go. The dock
+ * holds ONE of three, so the useful question is never "hide this", it is
+ * "which of the other two". Always the same order, Chat then Files then
+ * Agents, minus whichever is showing: a menu whose items move about is a menu
+ * you have to read every time.
+ *
+ * Chat is in here now, and the argument for leaving it out was wrong. It said
+ * Chat already had two doors — the strip and ⌘J — and missed that THE STRIP
+ * IS THE SHUT RAIL. With Files open there is no strip, so Chat had no visible
+ * door at all from the one place you would most want it. Found by somebody
+ * looking at the menu and asking why the thing that was missing was not in
+ * the list of things you could have.
+ *
+ * Closing the rail is the panel's own ✕ and ⌘J, which is where a close
+ * belongs: on the thing being closed.
  */
 export function chromeMenu(ctx: {
   canvasId: string;
   filesOpen: boolean;
   agentsOpen: boolean;
+  mainOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
   minimapOpen: boolean;
 }): MenuEntry[] {
   const ui = () => useUiStore.getState();
+  /* The same mark the surface itself wears, so the row and the thing it opens
+     are recognisably one item. Only these three carry icons: a menu where
+     every row has one is a menu where none of them means anything. */
+  const rail: { label: string; open: boolean; panel: Panel; icon: ReactNode }[] = [
+    { label: "Chat", open: ctx.mainOpen, panel: "main", icon: <ChatGlyph size={14} /> },
+    { label: "Files", open: ctx.filesOpen, panel: "files", icon: <FilesGlyph size={14} /> },
+    { label: "Agents", open: ctx.agentsOpen, panel: "agents", icon: <AgentsGlyph size={14} /> },
+  ];
   return [
-    {
-      label: ctx.filesOpen ? "Hide files" : "Files",
-      run: () => openPanel(ctx.canvasId, ctx.filesOpen ? null : "files"),
-    },
-    {
-      label: ctx.agentsOpen ? "Hide agents" : "Agents",
-      run: () => openPanel(ctx.canvasId, ctx.agentsOpen ? null : "agents"),
-    },
+    ...rail
+      .filter((one) => !one.open)
+      .map((one) => ({
+        label: one.label,
+        icon: one.icon,
+        run: () => openPanel(ctx.canvasId, one.panel),
+      })),
+    { separator: "" },
     {
       label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
       run: () => ui().setTrashOpen(!ctx.trashOpen),
     },
     {
-      label: ctx.minimapOpen ? "Hide the map" : "Show the map",
+      label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
       run: () => ui().setMinimapOpen(!ctx.minimapOpen),
     },
     { separator: "" },

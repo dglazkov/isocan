@@ -464,7 +464,10 @@ function CanvasSurface({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j" && canvasId) {
         e.preventDefault();
         const ui = useUiStore.getState();
-        openPanel(canvasId, ui.mainPanelOpen || ui.filesPanelOpen ? null : "main");
+        // The CHAT, not "whatever is open". From Files it used to close the
+        // rail, so the key named for the Chat was the one way you could not
+        // reach it.
+        openPanel(canvasId, ui.mainPanelOpen ? null : "main");
         return;
       }
       // ⌘+/⌘− zoom the canvas, not the browser viewport. ⌘0 → zoom-to-fit.

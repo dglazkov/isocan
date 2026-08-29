@@ -2,6 +2,8 @@ import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { BROWSER_SIZE, addBrowserItem, addFiles } from "../lib/upload.ts";
+import { checkFrameable } from "../lib/api.ts";
+import { siteLabel } from "@isocan/core";
 import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { screenToWorld } from "../lib/viewport.ts";
@@ -304,6 +306,29 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
         BROWSER_SIZE.height,
         placeableArea(),
       );
+      /**
+       * **Ask whether the site will let itself be framed, before making an
+       * item that cannot show it.**
+       *
+       * An item is an iframe, and most of the public web refuses to be one.
+       * The refusal was silent: `yahoo.com` created an item, the browser
+       * declined to render it, and the canvas showed a blank rectangle — so
+       * the honest report was "it didn't work" when it had worked exactly as
+       * built and nobody had said what happened.
+       *
+       * The check runs on the daemon because a page cannot tell a blocked
+       * cross-origin frame from a loaded one. It is ADVICE and never a gate:
+       * anything that goes wrong in the probe answers `ok`, so a site that
+       * would have worked is never refused on our guess.
+       */
+      const verdict = await checkFrameable(url);
+      if (!verdict.ok) {
+        setError(
+          `${siteLabel(verdict.url ?? url)} ${verdict.why ?? "refuses to be shown in a frame"}. ` +
+            "Nothing was added.",
+        );
+        return;
+      }
       const itemId = await addBrowserItem(canvasId, actor, url, at);
       setOpen(false);
       setUrl("");
@@ -318,7 +343,12 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
     <div className="create-site">
       <button
         className={`tool-btn${open ? " active" : ""}`}
-        title="Add a live site — point it at your localhost dev server"
+        /* It said "point it at your localhost dev server", which named the
+           common case as if it were the rule and left somebody typing a real
+           address wondering what they had done wrong. Any http(s) address
+           works — what decides is whether the SITE allows framing, which is
+           the site's call and not ours. */
+        title="Add a live site — any address that allows being shown in a frame"
         aria-label="Add a live site"
         aria-pressed={open}
         onClick={() => {
@@ -333,7 +363,7 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
           <input
             className="text-input"
             autoFocus
-            placeholder="localhost:5173"
+            placeholder="localhost:5173, or any site"
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);

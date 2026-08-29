@@ -82,6 +82,32 @@ describe("the rail pan is wired to the doors and to nothing else", () => {
     expect(railpan, "reduced motion still counts too").toMatch(/prefers-reduced-motion/);
   });
 
+  it("hands the motion to the compositor, not to React", () => {
+    /**
+     * The first version stepped `tx` in a `requestAnimationFrame` loop, so
+     * every frame was a React render of the whole canvas — running at exactly
+     * the moment the Chat panel was mounting, with its markdown and its
+     * message list. Frames dropped and the canvas arrived in four or five
+     * visible jumps: "a janky jumpy move in chunks vs a smooth animation".
+     *
+     * A transform transition is the compositor's. The viewport moves in ONE
+     * state update and the panel can take as long as it likes to mount
+     * without the motion knowing about it.
+     */
+    const railpan = read("lib/railpan.ts");
+    // Against the CODE: this file explains the rAF loop it replaced, and
+    // would otherwise fail on its own account of the bug.
+    const code = railpan.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code, "no per-frame loop").not.toMatch(/requestAnimationFrame/);
+    expect(railpan).toMatch(/setRailPanning\(true\)/);
+    const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+    expect(css).toMatch(/\.world\.rail-panning \{ transition: transform/);
+    // …and ONLY then. A canvas that eased every transform would lag the hand
+    // on every pan and zoom, which is the one thing a canvas may not do.
+    const plain = /\.world \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(plain).not.toMatch(/transition/);
+  });
+
   it("measures the distance with dockEdges rather than measuring the rail again", () => {
     // A second derivation of "what the rail takes" is how the pan and the
     // framing would come to disagree about one rail — the same mistake that
