@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { nodeModulesDir } from "./deps.ts";
 
 /**
  * Bootstrapping through npx, and what the next command finds (#48).
@@ -44,7 +45,10 @@ beforeEach(async () => {
     });
   }
   await fs.cp(path.join(repo, ".agents"), path.join(npxRoot, ".agents"), { recursive: true });
-  await fs.symlink(path.join(repo, "node_modules"), path.join(npxRoot, "node_modules"));
+  // Resolved, not constructed: a worktree keeps its dependencies in the main
+  // checkout, and the symlink that assumed otherwise produced a timeout
+  // message about a process that had already exited. See `nodeModulesDir`.
+  await fs.symlink(nodeModulesDir(), path.join(npxRoot, "node_modules"));
   npxBin = path.join(npxRoot, "packages", "cli", "bin", "isocan.js");
 
   // The durable copy, as `npm i -g` leaves it: a symlink on PATH into a tree

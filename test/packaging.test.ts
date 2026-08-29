@@ -112,6 +112,40 @@ describe("installable straight from git", () => {
       `import INSTALL_SPEC/setupCommand from @isocan/core instead:\n${strays.join("\n")}`,
     ).toEqual([]);
 
+    /**
+     * **Nobody builds a `node_modules` path out of a file's own location.**
+     *
+     * Two tests copied isocan to a temp directory and symlinked the repo's
+     * dependencies in as `path.join(repo, "node_modules")`, where `repo` was
+     * three levels up from the test file. Correct in a plain checkout, wrong
+     * in a git WORKTREE — whose dependencies live in the main checkout — so
+     * the copy started with no `tsx`, exited 1 before the first probe, and the
+     * test reported "gave up after 3389ms waiting for the other copy to
+     * answer". That reads as a slow machine, and the instinct it invites is to
+     * raise the timeout, which would never have worked.
+     *
+     * `nodeModulesDir()` resolves it by asking Node where `tsx` really is.
+     * This is the forcing function, because the wrong version is one obvious
+     * line that will look right to whoever writes it next.
+     */
+    // **`sourceFiles` walks `src` only**, and this bug lives in `test` — so
+    // sweeping with it passed while the bad line sat two directories away.
+    // Caught by mutation-testing this guard, which is the only reason it is
+    // not still a silent zero.
+    const built: string[] = [];
+    for (const file of await testFiles(path.join(repo, "packages"))) {
+      const text = await fs.readFile(file, "utf8");
+      for (const [i, line] of text.split("\n").entries()) {
+        if (/(join|resolve)\([^)]*\brepo\b[^)]*["'`]node_modules/.test(line)) {
+          built.push(`${path.relative(repo, file)}:${i + 1}: ${line.trim()}`);
+        }
+      }
+    }
+    expect(
+      built,
+      `use nodeModulesDir() — a worktree keeps its dependencies elsewhere:\n${built.join("\n")}`,
+    ).toEqual([]);
+
     for (const doc of ["README.md", ".agents/skills/isocan-collab/SKILL.md"]) {
       const text = await fs.readFile(path.join(repo, doc), "utf8");
       const specs = text.match(/github:dglazkov\/isocan[^\s`.,)]*/g) ?? [];
@@ -170,6 +204,30 @@ describe("installable straight from git", () => {
     expect(gitignore).toMatch(/^dist$/m); // on main it stays an artifact
   });
 });
+
+/**
+ * Every `.ts` under each workspace's `test` directory, for the guards whose
+ * subject is what a TEST does rather than what ships. `sourceFiles` below
+ * deliberately walks `src` only, and a guard that reached for it to check test
+ * code swept an empty set and reported success — found by mutation-testing the
+ * guard, which is the only reason it is not still a silent zero.
+ */
+async function testFiles(packages: string): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === "dist") continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (/\.tsx?$/.test(entry.name)) found.push(full);
+    }
+  };
+  for (const pkg of await fs.readdir(packages)) {
+    const dir = path.join(packages, pkg, "test");
+    if (await fs.stat(dir).then((st) => st.isDirectory(), () => false)) await walk(dir);
+  }
+  return found;
+}
 
 /** Every `.ts`/`.tsx` under the workspaces' `src` directories — the same walk
  * `core/test/address.test.ts` uses for its own forcing function, and for the
