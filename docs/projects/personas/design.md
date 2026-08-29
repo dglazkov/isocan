@@ -282,6 +282,35 @@ more.**
 
 ---
 
+## The roster, 29 Aug 2026
+
+Seven, in `.agents/personas/`: `accessibility`, `architect`, `copy`,
+`design-auditor`, `market-researcher`, `performance`, `qa-tester`.
+
+Three were added and one was narrowed, and the gate each had to pass is the one
+below rather than "would this lens be nice to have":
+
+- **`accessibility`** split out of `design-auditor` — the argument in the next
+  section, applied. Contrast, names, targets and alt are numbers; the rest of
+  design is a judgement.
+- **`performance`** owns the largest built chunk. The frame budget is the real
+  subject and needs a daemon and a real canvas, so it lives in the run's prose
+  with its numbers stated rather than in a nightly bound — an honest split
+  between what CI can hold and what it cannot.
+- **`copy`** owns greppable copy tells. It is the one added purely on
+  judgement about what this project *is*: two surfaces speak one vocabulary, a
+  thing named two ways is two things, and the two worst word bugs shipped here
+  were both a sentence that was confidently wrong.
+- **`design-auditor`** kept tokens, both themes and the tells, and its
+  DESCRIPTION was corrected — it still claimed contrast and accessibility after
+  those moved, which is the exact failure its own `copy` neighbour exists to
+  catch.
+
+**Two roles considered and refused**: `security` and `docs`. Both are real
+concerns; neither has a standing number nobody else is watching, and both are
+already named in the architect's charter. A persona per concern is the
+temptation the rule below exists to resist.
+
 ## One persona per lens, and the reason is arithmetic
 
 The question was whether "Darren the designer" is one persona or three —

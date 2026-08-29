@@ -19,7 +19,7 @@
  * selftest breaks it and checks the number moves.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,6 +84,97 @@ const METRICS = {
       apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
     },
   },
+  "a11y-failures": {
+    what: "controls with no accessible name, targets under 24px, images with no alt — the front door",
+    take() {
+      const out = run("node", ["scripts/grade.mjs", "--file", "docs/index.html", "--json"]);
+      const g = JSON.parse(out)[0];
+      return (g.namelessControls ?? 0) + (g.smallTargets ?? 0) + (g.imagesWithoutAlt ?? 0);
+    },
+    breakIt: {
+      file: "docs/index.html",
+      // A control with nothing in it and nothing naming it: unreachable by
+      // anyone not looking at the pixels.
+      apply: (t) => t.replace("</body>", '<button style="width:12px;height:12px"></button>\n</body>'),
+    },
+  },
+  "colour-literals": {
+    what: "colours written as literals where a token exists — the front door",
+    take() {
+      const out = run("node", ["scripts/grade.mjs", "--file", "docs/index.html", "--json"]);
+      return JSON.parse(out)[0].colourLiterals ?? 0;
+    },
+    breakIt: {
+      file: "docs/index.html",
+      apply: (t) => t.replace(":root {", ":root {\n    /* selftest */ --x: #abcdef;"),
+    },
+  },
+  "bundle-bytes": {
+    what: "the largest built JavaScript chunk, in bytes — what a first visit downloads",
+    take() {
+      const dir = path.join(repo, "packages/web/dist/assets");
+      if (!existsSync(dir)) {
+        throw new Error("no build at packages/web/dist — run `npm run build` first");
+      }
+      const sizes = readdirSync(dir)
+        .filter((f) => f.endsWith(".js"))
+        .map((f) => statSync(path.join(dir, f)).size);
+      return sizes.length ? Math.max(...sizes) : 0;
+    },
+    breakIt: {
+      // Not the bundle — a source file, so the number moves only if a build
+      // ran. That is the honest shape: this metric measures the artifact, and
+      // an artifact nobody rebuilt is a stale reading rather than a lie.
+      file: "packages/web/dist/assets/.selftest-chunk.js",
+      create: true,
+      apply: () => `// selftest\n${"x".repeat(2_000_000)}\n`,
+    },
+  },
+  /**
+   * **The words, which nothing else here watches.**
+   *
+   * `slop.ts` carries the copy rules this project believes — an apology as an
+   * error message, copy that narrates the interface, Title Case On Everything,
+   * "not just X, it's Y". Most need a reader. These few are a string match, and
+   * a string match is a number.
+   */
+  "copy-tells": {
+    what: "user-facing strings in the app that trip a greppable copy rule",
+    take() {
+      const dirs = ["packages/web/src/components", "packages/web/src/pages", "packages/web/src/lib"];
+      const BANNED = [
+        /\b(sorry|oops|whoops|unfortunately)\b/i,
+        /\b(seamless|seamlessly|revolutioni[sz]e|unlock|elevate|effortless|cutting-edge|leverage)\b/i,
+        /not just [^,"'`]{2,30}[—,-] it'?s\b/i,
+      ];
+      let hits = 0;
+      for (const dir of dirs) {
+        const full = path.join(repo, dir);
+        if (!existsSync(full)) continue;
+        for (const file of readdirSync(full).filter((f) => /\.(tsx?|ts)$/.test(f))) {
+          const src = readFileSync(path.join(full, file), "utf8")
+            // Comments are where this codebase does its arguing, and an
+            // argument that QUOTES a banned phrase to ban it is not a tell.
+            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/^\s*\/\/.*$/gm, "");
+          // Only strings a person can read: a label, a title, an aria-label,
+          // or text between tags. Not identifiers, not imports.
+          const strings = [
+            ...src.matchAll(/(?:title|aria-label|placeholder|label)=\{?["'`]([^"'`]{4,200})["'`]/g),
+            ...src.matchAll(/>\s*([A-Z][^<>{}\n]{6,200}?)\s*</g),
+          ].map((m) => m[1]);
+          for (const text of strings) {
+            if (BANNED.some((rx) => rx.test(text))) hits += 1;
+          }
+        }
+      }
+      return hits;
+    },
+    breakIt: {
+      file: "packages/web/src/components/Glyphs.tsx",
+      apply: (t) => t + '\nexport const SELFTEST = <button title="Sorry, something went wrong">x</button>;\n',
+    },
+  },
   "lint-violations": {
     what: "eslint errors — rules-of-hooks and exhaustive-deps, both at error",
     take() {
@@ -140,7 +231,13 @@ if (argv.includes("--selftest")) {
    * selftest that clobbers uncommitted work is worse than one that does not
    * run.
    */
-  const targets = [...new Set(Object.values(METRICS).map((m) => m.breakIt?.file).filter(Boolean))];
+  const targets = [
+    ...new Set(
+      Object.values(METRICS)
+        .filter((m) => m.breakIt && !m.breakIt.create)
+        .map((m) => m.breakIt.file),
+    ),
+  ];
   const dirty = run("git", ["status", "--porcelain", "--", ...targets]).trim();
   if (dirty) {
     console.error(
@@ -158,12 +255,24 @@ if (argv.includes("--selftest")) {
       continue;
     }
     const file = path.join(repo, m.breakIt.file);
-    const before = readFileSync(file, "utf8");
+    /**
+     * Two shapes of mutation: EDIT a file that is there, or CREATE one that is
+     * not. `bundle-bytes` needs the second — it measures built artifacts, and
+     * the way to break that number is to put a big one in the directory, not
+     * to edit a source file it does not read.
+     */
+    const creating = m.breakIt.create === true;
+    if (creating && existsSync(file)) {
+      console.log(`SILENT  ${name} — ${m.breakIt.file} already exists; the selftest will not overwrite it`);
+      bad++;
+      continue;
+    }
+    const before = creating ? null : readFileSync(file, "utf8");
     const clean = m.take();
     let broken;
     try {
-      const mutated = m.breakIt.apply(before);
-      if (mutated === before) {
+      const mutated = m.breakIt.apply(before ?? "");
+      if (!creating && mutated === before) {
         console.log(`SILENT  ${name} — its mutation changed nothing; the anchor has moved`);
         bad++;
         continue;
@@ -171,7 +280,9 @@ if (argv.includes("--selftest")) {
       writeFileSync(file, mutated);
       broken = m.take();
     } finally {
-      writeFileSync(file, before);
+      // Put it back exactly, or take away exactly what was added.
+      if (creating) rmSync(file, { force: true });
+      else writeFileSync(file, before);
     }
     if (broken === clean) {
       console.log(`SILENT  ${name} — ${clean} before and after a deliberate break`);

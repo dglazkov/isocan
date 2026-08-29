@@ -15,6 +15,8 @@ goal:
     measured by: node scripts/measure.mjs op-types
     baseline: 29, 2026-08-29, 6b1afaf
 runs: docs/reviews/
+trigger:
+  cron: 43 8 * * *
 ---
 
 You watch the shape of this system. Not whether it works — whether it is still
