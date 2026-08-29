@@ -127,6 +127,17 @@ resolves through `current` to the new build.
 - A wake that upgraded the agent tells it to re-read `agent-guide.md`.
 - The next command after the flip runs the new build.
 
+**Played 29 Aug 2026, except one line.** Phase 4 closes every item above but
+the commit count and the subject: the home has no `.git` — `.dockerignore`
+excludes it, correctly, and that exclusion is why phase 1 existed — so nothing
+at the home can read the history between two shas. Producing it would mean a
+GitHub API call from the home, the dependency the design rejected when it
+chose the home as the oracle. Until somebody decides that trade, the wake
+names both shas and says nothing it cannot know. **The scene is not amended to
+match what shipped**, because the shortfall is worth keeping visible: an
+upgrade that says what changed is the one people leave enabled, and this one
+does not say it yet.
+
 ## Scene 2 — A broken build never reaches PATH
 
 *A build that fails the smoke test is refused: `current` does not move, the

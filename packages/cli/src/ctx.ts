@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import type { Actor, HomesResponse, MetaPatch, Canvas } from "@isocan/core";
 import { DEFAULT_PORT, newCanvasId } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
+import type { UpgradeConfig } from "./managed.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
 import type { HarnessVarConfig } from "./harness.ts";
@@ -351,7 +352,7 @@ async function warnIfBehind(health: Health | null, home: string): Promise<void> 
   }
 }
 
-interface ConfigFile extends HarnessVarConfig, HomeConfig {
+interface ConfigFile extends HarnessVarConfig, HomeConfig, UpgradeConfig {
   /** **A deliberate holdout** (phase 13.5's rename): this is a KEY in
    * `~/.isocan/config.json`, a hand-edited file that already exists on every
    * machine. Renaming it would have an upgraded CLI read an old file, find no

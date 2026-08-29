@@ -146,7 +146,7 @@ import {
   goalLine,
   personaWarnings,
 } from "@isocan/core";
-import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
+import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
   type HomeRecord,
@@ -194,15 +194,16 @@ import {
 } from "./upgrade.ts";
 import {
   adoptGlobal,
+  applySwap,
+  autoUpgrade,
+  currentBuild,
   currentSha,
   flipTo,
-  installBuild,
+  lastRefusal,
   listBuilds,
-  liveBuildShas,
-  pruneBuilds,
   shaOfRoot,
   shelveExisting,
-  smokeTest,
+  upgradePolicy,
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -970,6 +971,30 @@ program
                 : `current with ${health.upgrade.home} (${health.upgrade.homeCommit})`,
             }
           : {}),
+        /**
+         * **What this machine will DO about an upgrade** (auto-upgrade phase
+         * 4), which is a different question from whether one is available and
+         * is not answerable from anywhere else. Agents set these controls on a
+         * person's behalf, so a mode nobody can read back is a mode nobody can
+         * check. Always present, including `off` — the whole value of the line
+         * is that a machine which has stopped upgrading says so.
+         */
+        upgrades: await upgradePolicy(
+          paths.isocanHome(),
+          (await whichInstall(path.resolve(myRoot()), paths.isocanHome())).kind,
+        ).then((policy) => `${policy.mode} — ${policy.why}`),
+        /**
+         * **A build this machine tried and refused** (journey Scene 2). The
+         * refusal was reported once, at the moment it happened, into whatever
+         * transcript was open — which on an unattended machine is nobody's.
+         * Without a line here, a machine that has quietly stopped upgrading
+         * looks exactly like one that has nothing to upgrade to.
+         */
+        ...(await lastRefusal(paths.isocanHome()).then((refusal) =>
+          refusal
+            ? { "upgrade refused": `${refusal.sha} — ${refusal.why}` }
+            : {},
+        )),
       });
     }),
   );
@@ -1142,9 +1167,27 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+      /**
+       * **The second idle point** (auto-upgrade phase 4). `restart` already
+       * means "come back on current code", so applying a pending upgrade
+       * before the restart is the command doing what it says rather than a
+       * new behaviour bolted onto it. It runs BEFORE the stop, while the old
+       * daemon is still answering, because the verdict rides that daemon's
+       * health body — asking a daemon that has already been killed which
+       * build the home runs would produce no verdict and no upgrade, forever.
+       */
+      const mineNow = shaOfRoot(home, myRoot());
+      const applied = await autoUpgrade({
+        home,
+        install: await whichInstall(path.resolve(myRoot()), home),
+        health: await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz(),
+        spec: INSTALL_SPEC,
+        ...(mineNow ? { protect: [mineNow] } : {}),
+      });
+      if (applied) console.error(applied);
       const { stopped, health, client } = await restartDaemon(home, port);
       const globals = cmd.optsWithGlobals() as { json?: boolean };
-      if (globals.json) return printJson({ stopped, ...(health ?? {}) });
+      if (globals.json) return printJson({ stopped, ...(applied ? { upgraded: applied } : {}), ...(health ?? {}) });
       printKeyValues({
         stopped: stopped.length > 0 ? stopped.join(", ") : "(nothing was running)",
         daemon: `running on ${client.base}`,
@@ -1577,10 +1620,67 @@ program
     "--rollback",
     "go back to the build before this one — a symlink flip, and no network at all",
   )
+  .option("--pin <sha>", "hold this machine on a build already in builds/, and stop auto there")
+  .option("--unpin", "let this machine follow its home again")
   .action(
-    run(async (opts: { restart?: boolean; rollback?: boolean }, cmd: Command) => {
+    run(async (
+      opts: { restart?: boolean; rollback?: boolean; pin?: string; unpin?: boolean },
+      cmd: Command,
+    ) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+
+      /**
+       * **A pin is a recorded decision, not a one-off flip** (auto-upgrade
+       * phase 4): it has to survive a home that moves, which is the only
+       * situation anybody sets one in. So it writes `config.json` and then
+       * flips, in that order — a pin that flipped and failed to record itself
+       * would be undone by the next park.
+       *
+       * **It can only name a build already in `builds/`.** Reaching an
+       * arbitrary commit would mean building from source, which is a separate
+       * project rather than a flag; and a pin that named a sha this machine
+       * cannot produce would be a machine that refuses to upgrade and cannot
+       * reach the build it is holding out for.
+       */
+      if (opts.pin !== undefined || opts.unpin) {
+        const config = await readConfig(home);
+        if (opts.unpin) {
+          delete config.upgradePin;
+          await writeConfig(home, config);
+          console.log("unpinned — this machine follows its home again");
+          return;
+        }
+        const wanted = plausibleSha(opts.pin);
+        const builds = await listBuilds(home);
+        const found = wanted ? builds.find((build) => build.sha === wanted) : undefined;
+        if (!found) {
+          throw new Error(
+            `no build ${opts.pin} in ${paths.buildsDir(home)} — ` +
+              (builds.length > 0
+                ? `this machine has ${builds.map((b) => b.sha).join(", ")}`
+                : "this machine has none, so there is nothing to pin to") +
+              ". A pin names a build you already have; reaching further would mean " +
+              "building from source",
+          );
+        }
+        config.upgradePin = found.sha;
+        await writeConfig(home, config);
+        const before = await currentSha(home);
+        if (before !== found.sha) await flipTo(home, found.sha);
+        console.log(
+          `pinned to ${found.sha}${before && before !== found.sha ? ` (was ${before})` : ""} — ` +
+            "auto upgrades stop here until `isocan upgrade --unpin`",
+        );
+        await sayAdoption(home);
+        if (opts.restart !== false) {
+          const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
+          spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
+            stdio: "inherit",
+          });
+        }
+        return;
+      }
       const install = await whichInstall(path.resolve(myRoot()), home);
       const plan = planUpgrade(
         install,
@@ -1771,53 +1871,35 @@ async function swapBuild(options: {
   }
 
   console.error(`isocan: ${plan.message}`);
-  const fetched = await installBuild({ home, spec: INSTALL_SPEC, want });
-  if (!fetched.ok || !fetched.build) throw new Error(fetched.why);
-  const build = fetched.build;
-  if (build.sha === before) {
-    console.log(`${build.sha} is already the current build`);
+  /**
+   * The mechanism is `applySwap`, shared with the unattended points (auto-
+   * upgrade phase 4). This branch only narrates it — and the protected build
+   * it adds is THIS process's own: cleanup deleting the tree the running
+   * command is executing out of does not stop it, it breaks it halfway
+   * through.
+   */
+  const mine = shaOfRoot(home, myRoot());
+  const swapped = await applySwap({
+    home,
+    spec: INSTALL_SPEC,
+    want,
+    ...(mine ? { protect: [mine] } : {}),
+  });
+  if (!swapped.ok) throw new Error(swapped.why);
+  if (swapped.step === "current") {
+    console.log(swapped.why);
     await sayAdoption(home);
     return null;
   }
-
-  /**
-   * **The smoke test is what makes the flip safe to do unattended**, and it
-   * asks the only question that matters: does this tree start, and is it the
-   * build it says it is? A failure here is a directory to delete later —
-   * `current` has not moved, and the message says so, because a person reading
-   * this needs to know their machine is fine before they need to know why.
-   */
-  console.error(`isocan: checking that ${build.sha} runs…`);
-  const smoke = await smokeTest(build.root, build.sha);
-  if (!smoke.ok) {
-    throw new Error(
-      `${build.sha} did not start cleanly — ${smoke.why}. Nothing was swapped: ` +
-        `you are still on ${before ?? "the copy you were on"}. The tree is at ${build.dir} ` +
-        "if you want to look at it",
-    );
-  }
-
-  await flipTo(home, build.sha);
-  console.log(`now on ${build.sha}${before ? ` (was ${before})` : ""}`);
+  console.log(swapped.why);
   await sayAdoption(home);
-
-  /**
-   * **Cleanup that cannot break a running process.** The count keeps three;
-   * the protected set overrides the count. Two things are protected beyond the
-   * one `current` names: whatever a live daemon loaded, and the build THIS
-   * process is executing out of — deleting either does not stop it, it breaks
-   * it halfway through.
-   */
-  const protect = await liveBuildShas(home);
-  const mine = shaOfRoot(home, myRoot());
-  if (mine) protect.add(mine);
-  const removed = await pruneBuilds(home, { protect });
-  if (removed.length > 0) {
+  if (swapped.removed.length > 0) {
     console.error(
-      `isocan: removed old build${removed.length > 1 ? "s" : ""} ${removed.join(", ")}`,
+      `isocan: removed old build${swapped.removed.length > 1 ? "s" : ""} ` +
+        swapped.removed.join(", "),
     );
   }
-  return build;
+  return (await currentBuild(home)) ?? null;
 }
 
 /** Adoption is reported on stderr, always: silence would leave a person whose
@@ -6442,15 +6524,58 @@ command or reply. No \`session start\` needed after a wake.`,
       let offlineSince: number | null = null;
       let complained = false;
 
+      /**
+       * **The first idle point** (auto-upgrade phase 4). An agent waiting for
+       * feedback is idle by definition, so this is the one moment in a
+       * session when swapping the build under it costs nobody anything.
+       *
+       * Checked on every lap rather than once at the top, because a park lasts
+       * minutes to hours and the home moves during it — a single check when
+       * the park opened would miss every build cut while the agent was
+       * actually waiting, which is all of them.
+       *
+       * It runs CONCURRENTLY with the long-poll and never blocks it. That is
+       * why `installBuild` spawns instead of `spawnSync`: a synchronous npm
+       * install here would stop the poll answering and stop the presence
+       * heartbeat beating, and the canvas would show a frozen agent for a
+       * minute as a side effect of keeping itself current.
+       */
+      const install = await whichInstall(path.resolve(myRoot()), ctx.home);
+      // The build this park is running out of: cleanup deleting it would not
+      // stop this process, it would break it mid-park.
+      const parkedOn = shaOfRoot(ctx.home, myRoot());
+      let upgraded: string | null = null;
+      let upgrading = false;
+      const considerUpgrade = () => {
+        if (upgrading || upgraded) return;
+        upgrading = true;
+        void (async () => {
+          const health = await ctx.client.healthz().catch(() => null);
+          upgraded = await autoUpgrade({
+            home: ctx.home,
+            install,
+            health,
+            spec: INSTALL_SPEC,
+            ...(parkedOn ? { protect: [parkedOn] } : {}),
+          });
+        })()
+          .catch(() => {})
+          .finally(() => {
+            upgrading = false;
+          });
+      };
+
       try {
         await say("waiting for you…");
 
         for (;;) {
+          considerUpgrade();
           const remaining = deadline === null ? Infinity : deadline - Date.now();
           if (remaining <= 0) {
             // Exit 2 is silence, not dismissal. Say so on the way out: an
             // agent that reads "timed out" as "we're done here" is the most
             // common way a session dies with nobody deciding to end it.
+            if (upgraded) console.error(upgraded);
             console.error(
               "wait: timed out with no feedback — nobody came yet. Park again; " +
                 "the session ends when the human says so, not when a wait expires.",
@@ -6586,11 +6711,20 @@ command or reply. No \`session start\` needed after a wake.`,
                 cursors,
                 entries: matches,
                 reason: summoned ? "summons" : "change",
+                /**
+                 * **The wake carries the upgrade** (auto-upgrade phase 4), in
+                 * the same message as the feedback it woke for, because an
+                 * agent reads one payload and then acts. A separate channel
+                 * would be a notice nobody read. `agent-guide.md` ships inside
+                 * the build, so the line tells the agent to re-read it.
+                 */
+                ...(upgraded ? { upgraded } : {}),
                 next: summoned
                   ? "reply on the thread, then `isocan wait` again — a lap ends parked"
                   : "do the work the change asks for, then `isocan wait` again — a lap ends parked",
               });
             }
+            if (upgraded) console.error(upgraded);
             for (const entry of matches) {
               console.log(describeEntry(entry));
               const op = entry.envelope.op;

@@ -1,13 +1,11 @@
 import { promises as fs } from "node:fs";
 import { spawn, type SpawnSyncReturns } from "node:child_process";
-import { spawnSync } from "node:child_process";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { healthPath } from "@isocan/core";
-import { paths, plausibleSha } from "@isocan/server";
+import { healthPath, type UpgradeVerdict } from "@isocan/core";
+import { paths, plausibleSha, readConfigFile } from "@isocan/server";
 import { findOnPath, rootOfBin } from "./onpath.ts";
-import { resolved, whichInstall } from "./upgrade.ts";
+import { resolved, whichInstall, type Install, type InstallKind } from "./upgrade.ts";
 
 /**
  * **The managed install root** (auto-upgrade phase 3).
@@ -168,11 +166,22 @@ export interface SmokeResult {
  * build as broken because something else took a port for a millisecond — is
  * the one failure this test must not have.
  */
-export async function smokeTest(
-  root: string,
-  expect: string,
-  options: { timeoutMs?: number; attempts?: number } = {},
-): Promise<SmokeResult> {
+export async function smokeTest(options: {
+  /** The isocan home whose `builds/` this candidate lives in. The scratch home
+   * the candidate runs against is made INSIDE it — dot-prefixed, so
+   * `listBuilds` never sees it — rather than in the OS temp directory. A
+   * process killed mid-upgrade otherwise leaves a directory in `/tmp` that
+   * nothing owns and nothing sweeps; here it is litter in a directory this
+   * tool already cleans. */
+  home: string;
+  /** The candidate's package root. */
+  root: string;
+  /** The sha it must report. */
+  expect: string;
+  timeoutMs?: number;
+  attempts?: number;
+}): Promise<SmokeResult> {
+  const { home, root, expect } = options;
   const attempts = options.attempts ?? 3;
   let last: SmokeResult & { raced?: boolean } = {
     ok: false,
@@ -180,7 +189,7 @@ export async function smokeTest(
     why: "no attempt was made",
   };
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    last = await smokeAttempt(root, expect, options.timeoutMs ?? 30_000);
+    last = await smokeAttempt(home, root, expect, options.timeoutMs ?? 30_000);
     if (last.ok || !last.raced) return strip(last);
   }
   return strip(last);
@@ -193,11 +202,13 @@ function strip(result: SmokeResult & { raced?: boolean }): SmokeResult {
 }
 
 async function smokeAttempt(
+  home: string,
   root: string,
   expect: string,
   timeoutMs: number,
 ): Promise<SmokeResult & { raced?: boolean }> {
-  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-smoke-"));
+  await fs.mkdir(paths.buildsDir(home), { recursive: true });
+  const scratch = await fs.mkdtemp(path.join(paths.buildsDir(home), ".smoke-"));
   const bin = path.join(root, "packages", "cli", "bin", "isocan.js");
   const logFile = path.join(scratch, "smoke.log");
   const port = await freePort();
@@ -355,8 +366,25 @@ export type RunResult = Pick<SpawnSyncReturns<string>, "status" | "stdout" | "st
 };
 export type Runner = (command: string, args: string[]) => RunResult | Promise<RunResult>;
 
+/**
+ * **`spawn`, not `spawnSync`, and the difference is load-bearing** (auto-
+ * upgrade phase 4). A fetch takes tens of seconds, and from phase 4 one of its
+ * callers is a process that is in the middle of a long-poll: `isocan wait`
+ * applies an upgrade while parked. `spawnSync` blocks the event loop for the
+ * whole install, so the park would stop answering, the presence heartbeat
+ * would stop beating, and the canvas would show a frozen agent — for a minute,
+ * on purpose, as a side effect of keeping itself current.
+ */
 const defaultRunner: Runner = (command, args) =>
-  spawnSync(command, args, { encoding: "utf8" });
+  new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+    child.once("error", (error) => resolve({ status: 1, stdout, stderr, error }));
+    child.once("close", (code) => resolve({ status: code ?? 1, stdout, stderr }));
+  });
 
 /**
  * **Fetch a build into `builds/<sha>`, or explain why not.**
@@ -383,6 +411,26 @@ export async function installBuild(options: {
   run?: Runner;
 }): Promise<InstallResult> {
   const { home, spec, want } = options;
+  /**
+   * **The build we were asked for may already be here**, and then there is
+   * nothing to fetch. A rollback followed by a step forward is the ordinary
+   * way this happens — the tree was smoke-tested when it landed and nothing
+   * has touched it since — and re-downloading tens of megabytes to arrive at
+   * a directory that already exists is the kind of waste that only shows up
+   * on somebody's metered connection. Only when a sha was NAMED: with no
+   * verdict there is nothing to check `builds/` against.
+   */
+  if (want) {
+    const dir = paths.buildDir(home, want);
+    if (await exists(paths.buildRoot(dir))) {
+      const stat = await fs.stat(dir);
+      return {
+        ok: true,
+        build: buildOf(home, want, stat.mtimeMs),
+        why: `${want} is already on disk`,
+      };
+    }
+  }
   const npm = options.npm ?? (process.platform === "win32" ? "npm.cmd" : "npm");
   const run = options.run ?? defaultRunner;
   const staging = paths.stagingBuildDir(home);
@@ -683,4 +731,364 @@ async function exists(target: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+// ---------- applying it: the mode, the lock, and the swap ----------
+//
+// Auto-upgrade phase 4. Phase 3 built the mechanism and gave it one caller —
+// a person typing `isocan upgrade`. What follows is what lets it run when
+// nobody is typing anything, which is the population the whole project was
+// written for.
+
+/**
+ * **What this machine is allowed to do about an upgrade.**
+ *
+ * - `auto` — apply it, at the points that are idle by construction.
+ * - `notify` — say so and stop. The decision belongs to a person, and an agent
+ *   that upgrades itself in notify mode has re-implemented auto mode without
+ *   its controls.
+ * - `off` — say nothing about applying, and apply nothing.
+ */
+export type UpgradeMode = "auto" | "notify" | "off";
+
+/** The keys phase 4 reads from `~/.isocan/config.json`. */
+export interface UpgradeConfig {
+  upgrade?: UpgradeMode;
+  /**
+   * A build this machine has been held on. It is a sha in `builds/`, never an
+   * arbitrary commit: reaching further would mean building from source, which
+   * is a separate project rather than a flag.
+   */
+  upgradePin?: string;
+}
+
+export interface UpgradePolicy {
+  mode: UpgradeMode;
+  pin: string | null;
+  /** One clause naming what decided this, for `isocan status`. A mode nobody
+   * can account for is a mode nobody trusts. */
+  why: string;
+}
+
+const MODES: readonly UpgradeMode[] = ["auto", "notify", "off"];
+
+export function isUpgradeMode(value: unknown): value is UpgradeMode {
+  return typeof value === "string" && (MODES as readonly string[]).includes(value);
+}
+
+/**
+ * **`auto` is the managed install's default, and only the managed install's.**
+ *
+ * The argument for a default this strong is in the phase document and worth
+ * restating where it is implemented: in notify mode, applying an upgrade takes
+ * four steps on an unattended machine — the notice appears, the agent reports
+ * it, a person approves, the agent runs the command — and that chain never
+ * completes on the machines nobody watches, which is the normal case. A notify
+ * default would deny this feature to exactly the machines that need it.
+ *
+ * Safety does not come from the mode. It comes from the smoke test, the kept
+ * builds and the pin.
+ *
+ * **Everything that is not a managed install gets `notify`**, and a checkout
+ * gets it by construction: this machinery never modifies a working copy.
+ * A global install that has not been adopted yet also gets it — the first
+ * adoption stays a thing somebody asked for.
+ *
+ * Precedence: the environment (one shell), then the file (one machine), then
+ * the default (the kind of install). The environment goes first because
+ * `ISOCAN_NO_UPGRADE=1` is what somebody reaches for when they need this to
+ * stop right now, and a control you have to edit a file to use is not that.
+ */
+export async function upgradePolicy(home: string, kind: InstallKind): Promise<UpgradePolicy> {
+  const config = await readConfigFile<UpgradeConfig>(home);
+  const pin = plausibleSha(config.upgradePin);
+  const held = pin ? `, pinned to ${pin}` : "";
+  const halted = process.env.ISOCAN_NO_UPGRADE?.trim();
+  if (halted && halted !== "0") {
+    return { mode: "off", pin, why: `ISOCAN_NO_UPGRADE is set in this shell${held}` };
+  }
+  /**
+   * **A checkout is never `auto`, whatever the file says.** Every other
+   * control here is a preference; this one is the rule the whole project turns
+   * on — this machinery does not modify somebody's working copy. `config.json`
+   * is per-machine and a developer's machine is the one most likely to have
+   * been set to `auto` for a managed install months earlier and then have a
+   * checkout put on its PATH with `npm link`. Downgrading rather than
+   * refusing, because there is nothing wrong with wanting the notice.
+   */
+  if (kind === "checkout" && config.upgrade === "auto") {
+    return {
+      mode: "notify",
+      pin,
+      why: `config.json says auto, but this is a checkout — a working copy is never upgraded for you${held}`,
+    };
+  }
+  if (isUpgradeMode(config.upgrade)) {
+    return { mode: config.upgrade, pin, why: `config.json says ${config.upgrade}${held}` };
+  }
+  if (kind === "managed") {
+    return { mode: "auto", pin, why: `the default for a managed install${held}` };
+  }
+  return {
+    mode: "notify",
+    pin,
+    why: `the default for a ${kind} install — only a managed install upgrades itself${held}`,
+  };
+}
+
+/**
+ * **One upgrade at a time on this machine.**
+ *
+ * Phase 3 had one caller and it was a person; phase 4 has three, and two of
+ * them fire without anybody asking. Two of them at once share `builds/.staging`
+ * and would race the flip — so the whole swap is taken under a directory
+ * created with `mkdir`, which is atomic everywhere this runs.
+ *
+ * A lock whose owner is gone is not a lock: the pid is recorded, and a lock
+ * naming a process that no longer exists is taken over rather than waited on.
+ * The alternative is a machine that stops upgrading forever because something
+ * was once killed at the wrong moment — a failure that would be invisible for
+ * weeks, which is the failure mode this project keeps finding.
+ */
+export async function withUpgradeLock<T>(
+  home: string,
+  work: () => Promise<T>,
+): Promise<T | null> {
+  const lock = path.join(paths.buildsDir(home), ".lock");
+  await fs.mkdir(paths.buildsDir(home), { recursive: true });
+  const claim = async (): Promise<boolean> => {
+    try {
+      await fs.mkdir(lock);
+      await fs.writeFile(path.join(lock, "pid"), String(process.pid));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (!(await claim())) {
+    const owner = Number(await fs.readFile(path.join(lock, "pid"), "utf8").catch(() => ""));
+    const alive = Number.isInteger(owner) && owner > 0 && isAlive(owner);
+    if (alive) return null;
+    await fs.rm(lock, { recursive: true, force: true });
+    if (!(await claim())) return null;
+  }
+  try {
+    return await work();
+  } finally {
+    await fs.rm(lock, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where a swap stopped, so a caller can say something true about it without
+ * parsing a sentence. */
+export type SwapStep = "locked" | "fetch" | "smoke" | "done" | "current";
+
+export interface SwapOutcome {
+  ok: boolean;
+  step: SwapStep;
+  from: string | null;
+  to: string | null;
+  /** Always says something, including when it succeeded. */
+  why: string;
+  removed: string[];
+}
+
+/**
+ * **Install aside, prove it, flip one symlink, keep three.** The mechanism,
+ * with no opinion about who asked for it and nothing printed: `isocan upgrade`
+ * narrates it, and phase 4's unattended points report it in a wake message.
+ * One implementation, because two would drift and only one of them would be
+ * the one running while nobody watches.
+ */
+export async function applySwap(options: {
+  home: string;
+  spec: string;
+  want: string | null;
+  protect?: Iterable<string>;
+  keep?: number;
+  run?: Runner;
+}): Promise<SwapOutcome> {
+  const { home, spec, want } = options;
+  const taken = await withUpgradeLock(home, async (): Promise<SwapOutcome> => {
+    const from = await currentSha(home);
+    const fetched = await installBuild({
+      home,
+      spec,
+      want,
+      ...(options.run ? { run: options.run } : {}),
+    });
+    if (!fetched.ok || !fetched.build) {
+      return { ok: false, step: "fetch", from, to: null, why: fetched.why, removed: [] };
+    }
+    const build = fetched.build;
+    if (build.sha === from) {
+      return {
+        ok: true,
+        step: "current",
+        from,
+        to: build.sha,
+        why: `${build.sha} is already the current build`,
+        removed: [],
+      };
+    }
+    const smoke = await smokeTest({ home, root: build.root, expect: build.sha });
+    if (!smoke.ok) {
+      return {
+        ok: false,
+        step: "smoke",
+        from,
+        to: build.sha,
+        why:
+          `${build.sha} did not start cleanly — ${smoke.why}. Nothing was swapped: ` +
+          `you are still on ${from ?? "the copy you were on"}. The tree is at ${build.dir} ` +
+          "if you want to look at it",
+        removed: [],
+      };
+    }
+    await flipTo(home, build.sha);
+    const protect = await liveBuildShas(home);
+    for (const sha of options.protect ?? []) protect.add(sha);
+    const removed = await pruneBuilds(home, {
+      protect,
+      ...(options.keep !== undefined ? { keep: options.keep } : {}),
+    });
+    return {
+      ok: true,
+      step: "done",
+      from,
+      to: build.sha,
+      why: `now on ${build.sha}${from ? ` (was ${from})` : ""}`,
+      removed,
+    };
+  });
+  return (
+    taken ?? {
+      ok: false,
+      step: "locked",
+      from: null,
+      to: null,
+      why: "another isocan process is already installing a build — leaving this one to it",
+      removed: [],
+    }
+  );
+}
+
+/**
+ * **An upgrade applied at a moment that is idle by construction** (auto-
+ * upgrade phase 4). Returns the line to report, or null when nothing was done
+ * — and it never throws, because every one of its callers is doing something
+ * else and none of them should fail because a fetch did.
+ *
+ * The three callers are the three idle points, and they are idle for different
+ * reasons: an agent parked in `isocan wait` is idle by definition; `isocan
+ * restart` already means "come back on current code"; and `ensureDaemon`
+ * starting a daemon is a fresh process either way. Nothing here has to guess
+ * whether a swap is safe, which is the whole reason the points were chosen
+ * rather than a timer.
+ *
+ * **A failure is remembered, and that matters more than it looks.** Without
+ * the marker, a build that cannot start would be re-fetched and re-tested at
+ * every park — tens of megabytes and half a minute, forever, on a machine
+ * nobody is watching. The marker is keyed on the target sha, so the next build
+ * the home cuts is tried immediately.
+ */
+export async function autoUpgrade(options: {
+  home: string;
+  install: Install;
+  health: { upgrade?: UpgradeVerdict } | null;
+  spec: string;
+  /** Builds the caller knows are in use — its own, usually. */
+  protect?: Iterable<string>;
+}): Promise<string | null> {
+  const { home, install, health, spec } = options;
+  try {
+    const verdict = health?.upgrade;
+    if (!verdict?.available) return null;
+    // A home on the OLDER build is a notice, never a downgrade. Downgrades
+    // happen from `builds/`, on a person's command.
+    if (verdict.direction === "ahead") return null;
+    const policy = await upgradePolicy(home, install.kind);
+    if (policy.mode !== "auto") return null;
+    if (policy.pin) return null;
+
+    if ((await lastRefusal(home))?.sha === verdict.homeCommit) return null;
+    const swapped = await applySwap({
+      home,
+      spec,
+      want: verdict.homeCommit,
+      ...(options.protect ? { protect: options.protect } : {}),
+    });
+    if (swapped.step === "locked" || swapped.step === "current") return null;
+    if (!swapped.ok) {
+      await fs
+        .writeFile(
+          refusalFile(home),
+          JSON.stringify({ sha: verdict.homeCommit, why: swapped.why, at: new Date().toISOString() }),
+        )
+        .catch(() => {});
+      return `isocan: could not upgrade to ${verdict.homeCommit} — ${swapped.why}`;
+    }
+    await fs.rm(refusalFile(home), { force: true }).catch(() => {});
+    /**
+     * **"On the new build", stated precisely.** No symlink flip moves a
+     * running process, so the process reading this line is still the old one —
+     * and telling an agent otherwise, when it is about to re-read a guide that
+     * ships inside the build, would be a lie it would act on. What is true is
+     * that `current` has moved and the NEXT command resolves through it.
+     */
+    return (
+      `isocan: upgraded to ${swapped.to}${swapped.from ? ` from ${swapped.from}` : ""} ` +
+      `while you were parked. This process is still running the old build — the next ` +
+      "command you run is on the new one, so re-read your guide (`isocan agent-guide`) " +
+      "before acting on anything that depends on it."
+    );
+  } catch (err) {
+    // A courtesy must never be the reason a park, a restart or a daemon start
+    // fails.
+    return `isocan: upgrade attempt failed — ${(err as Error).message}`;
+  }
+}
+
+/**
+ * **The last build this machine refused, and why** — journey Scene 2's "a
+ * refused build is always reported".
+ *
+ * The record exists for two jobs and it is worth being explicit that they are
+ * different. The first is not repeating work: without it a build that cannot
+ * start is re-fetched and re-tested at every park, forever, on a machine
+ * nobody is watching. The second is being answerable — `isocan status` reads
+ * this, because a refusal that was reported once into a transcript nobody kept
+ * is a machine that silently stopped upgrading.
+ *
+ * Keyed on the sha, so the next build the home cuts is tried at once rather
+ * than inheriting the last one's verdict.
+ */
+export interface Refusal {
+  sha: string;
+  why: string;
+  at: string;
+}
+
+const refusalFile = (home: string) => path.join(home, ".upgrade-failed");
+
+export async function lastRefusal(home: string): Promise<Refusal | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(refusalFile(home), "utf8")) as Partial<Refusal>;
+    return typeof raw.sha === "string" && typeof raw.why === "string"
+      ? { sha: raw.sha, why: raw.why, at: typeof raw.at === "string" ? raw.at : "" }
+      : null;
+  } catch {
+    // Absent (nothing has been refused) or unreadable (a file nobody should
+    // have been editing). Both mean the same thing here: no refusal to report.
+    return null;
+  }
 }
