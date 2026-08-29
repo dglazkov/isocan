@@ -374,6 +374,23 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## The roles you can take on
+
+`isocan persona ls` lists the personas this directory holds — `.agents/personas/`.
+A persona is a named role: a lens, the tools for it, a **goal it is judged
+against**, and a memory of what it already found. `isocan persona show <name>`
+prints one in full, including the command that produces its number.
+
+**Read one before you work in its lane.** A persona says what has already been
+measured and what the line is, which is the difference between "I improved the
+contrast" and "contrast failures went 2 → 0, measured by the command the goal
+names". The second is a claim somebody can check.
+
+A goal is `(number, bound, the command that produces it)` — never an
+aspiration. If you add one, run its command against something broken first and
+watch the number move. A measurement that cannot fail reports success forever,
+which is worse than no measurement because it is believed.
+
 ## When you need a person
 
 `isocan ask "…"` asks and stops. It posts your question to the Chat — or to a
