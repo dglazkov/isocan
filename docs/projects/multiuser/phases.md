@@ -1376,7 +1376,9 @@ than a pass (below).
 
 **Work:** Setup notices what it stands on — headless, ephemeral, home
 address in hand — and skips the daemon; the CLI speaks straight to the
-home; `isocan wait` parks at the home itself.
+home; `isocan wait` parks at the home itself. **And the door the scene
+opens with:** "Run an agent in the cloud…" under your own face, beside
+Scene 5's "Bring your own agent…", handing over the line Inna pastes.
 
 **One decision waits at this phase's door, put there on purpose.**
 Phase 9's finding defers `repo:` here, and Scene 6's own premise leans
@@ -1388,12 +1390,16 @@ the lock-out asymmetry as a finding — the OAuth access-token custody
 decision belongs with phase 12's design, which is already in the
 token-custody business.
 
-**Outcome:** Scene 6 plays: an agent in an empty ephemeral directory
-works the canvas through dev with no replica and nothing to lose; its
-ring fades only when its own connection dies.
+**Outcome:** Scene 6 plays **from its own door**: the dialog under your
+own face at dev hands over a line, that line pasted into a real cloud
+session brings up an agent in an empty ephemeral directory with no
+replica and nothing to lose, and it works the canvas; its ring fades
+only when its own connection dies.
 
-**Proof:** The scene, played in a scratch directory simulating the
-cloud workspace; a kill test for ring truth.
+**Proof:** The scene, played from the dialog at dev into a real cloud
+workspace — the same bar phase 8 held itself to, and NOT a scratch
+directory, which proves the mechanism and not the journey; a kill test
+for ring truth.
 
 **Findings:**
 
@@ -1433,6 +1439,32 @@ cloud workspace; a kill test for ring truth.
   because a torn-down cloud sandbox is the ordinary way this agent ends.
   Fixing it means presence bound to a connection rather than a clock, which
   is a change to the ephemeral plane and not to this phase.
+- **2026-08-29 — The scene's own door was assigned to no phase, and this
+  one's Outcome let itself off.** "Run an agent in the cloud…" appeared in
+  exactly one place in the repo — `journey.md:295` — while its Scene 5
+  sibling has been a real component since phase 8. This phase's Outcome
+  described the MECHANISM ("an agent in an empty ephemeral directory works
+  the canvas") where phase 8's named the scene, so building to it produced
+  a verifiable CLI and an unwalkable journey. Caught by Dimitri asking what
+  he was verifying. Outcome and Proof rewritten above; the dialog built.
+- **2026-08-29 — A scene's UI is load-bearing and easy to lose**, because
+  prose in the journey reads like a description rather than a work item.
+  **Phase 12 has the same hazard right now:** its registration UI is one
+  clause of its Work line, and `launch/design.md` explicitly disclaims it
+  ("The registration UI. Where a person creates and reviews one is phase
+  12's build"). Whoever opens 12 should name the surface in the Outcome
+  before writing code.
+- **2026-08-29 — The person picking the menu entry IS the declaration.**
+  Direct mode refuses to sniff the vendor, which left Scene 6's "setup
+  notices what it stands on" false in a sandbox that sets no `CI`. The
+  dialog resolves it without a guess: choosing "Run an agent in the
+  cloud…" says the workspace is disposable, so the line it hands over
+  carries `ISOCAN_DIRECT=1` and the person still types nothing.
+- **2026-08-29 — This worktree was typechecking against the MAIN
+  checkout.** No `node_modules/@isocan` of its own, so `@isocan/*`
+  resolved up to the main repo's symlinks and a new core export was
+  invisible to the web package. Fixed locally with symlinks; worth knowing
+  before trusting a green `npm run typecheck` in a fresh worktree.
 - **2026-08-29 — Open: `repo:` and the lock-out asymmetry**, untouched by
   this work and still waiting at the door as written above.
 

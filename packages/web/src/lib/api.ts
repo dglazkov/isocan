@@ -548,8 +548,14 @@ export function killBadge(badgeId: string): Promise<KillBadgeResponse> {
  * that needs it (an agent that will name itself) is not one a person makes in
  * a browser.
  */
-export function mintPass(canvasId: string, actorId: string): Promise<MintPassResponse> {
-  return request("POST", passesRoute(canvasId), { actorId });
+export function mintPass(canvasId: string, actorId?: string): Promise<MintPassResponse> {
+  // **Omitting the actor is the admission-only shape**, and it is a real
+  // gesture rather than a degenerate one: Scene 5 hands your identity to your
+  // own second machine, and Scene 6 admits an AGENT that will name itself.
+  // Sending `actorId: undefined` would serialize the key away anyway; saying
+  // so here is what stops the next reader from "fixing" it into a required
+  // argument.
+  return request("POST", passesRoute(canvasId), actorId ? { actorId } : {});
 }
 
 /**

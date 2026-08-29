@@ -2990,7 +2990,9 @@ program
           const because = opts.direct
             ? "--direct"
             : declared?.mode === "direct"
-              ? "already set on this machine"
+              ? declared.from === "env"
+                ? `${DIRECT_VAR} is set in this shell`
+                : `already set in ${paths.configFile(isocanHome)}`
               : `${guess?.why} is set and nothing is attached to a terminal`;
           report.mode =
             `direct (${because}) — no daemon or local copy here; ` +

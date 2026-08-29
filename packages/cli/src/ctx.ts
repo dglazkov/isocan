@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
 import type { Actor, HomesResponse, MetaPatch, Canvas } from "@isocan/core";
-import { DEFAULT_PORT, newCanvasId } from "@isocan/core";
+import { DEFAULT_PORT, newCanvasId, normalizeHomeUrl } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf, type HomeConfig } from "@isocan/server";
 import type { UpgradeConfig } from "./managed.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
@@ -346,17 +346,37 @@ function refuseHomeDisagreement(
    * "no row" would otherwise read as "never heard of it", which is the join
    * case rather than the disagreement. */
   heldHere: boolean,
+  /**
+   * **Whose answer this record is** — the address the client asked.
+   *
+   * A `null` row does not mean "local machine"; it means *"the daemon
+   * answering is this canvas's home"*, and until phase 11 those were the same
+   * sentence because the daemon answering was always `127.0.0.1`. On a direct
+   * machine it is the home itself, so the home's `null` for its OWN canvas —
+   * which is the truth, plainly stated — read as a disagreement with a marker
+   * naming that very home, and refused the command that `setup` had just
+   * written the marker for. Every command after a successful arrival failed.
+   *
+   * Found by walking Scene 6 rather than by a test: `direct.test.ts` wrote its
+   * own marker and never went through the arrival that writes `home` into one.
+   */
+  base: string,
 ): void {
   if (binding.home === undefined) return; // an older marker; it names no home
   const row = record.legacy ? record.birth : record.rowFor(binding.canvasId);
   // No row and not on this machine: nothing to disagree with. `fetchFromHome`
   // takes it from here, and the home the marker names is the one it asks.
   if (row === undefined && !heldHere) return;
-  const recorded = row ?? null;
-  if (recorded === binding.home) return;
-  const mine = recorded
-    ? `this machine has that canvas recorded as living at ${recorded}`
-    : "this machine holds that canvas as a LOCAL one (this daemon is its home)";
+  // `null` resolves to whoever answered, which is what it has always meant.
+  // In daemon mode that is `127.0.0.1:<port>`, so a marker naming a remote
+  // home still disagrees exactly as it did before; in direct mode it is the
+  // home, and the two agree because they are the same address.
+  const recorded = row ?? base;
+  if (normalizeHomeUrl(recorded) === normalizeHomeUrl(binding.home)) return;
+  const mine =
+    row === null || row === undefined
+      ? `the daemon at ${base} holds that canvas as its OWN (it is its home)`
+      : `this machine has that canvas recorded as living at ${recorded}`;
   throw new Error(
     `this directory's canvas lives at ${binding.home} (${markerFile(binding.root)}), but ` +
       `${mine}. Those cannot both be true, and nothing here will guess: moving a canvas ` +
@@ -476,7 +496,7 @@ export async function resolveCanvas(ctx: Ctx, opts: ResolveOptions = {}): Promis
   if (ctx.canvasRef !== undefined) return matchRef(canvases, ctx.canvasRef);
   if (ctx.binding) {
     const bound = canvases.find((p) => p.id === ctx.binding!.canvasId);
-    refuseHomeDisagreement(ctx.binding, await ctx.homes(), bound !== undefined);
+    refuseHomeDisagreement(ctx.binding, await ctx.homes(), bound !== undefined, ctx.client.base);
     if (bound) {
       await recordDir(ctx.home, ctx.binding.root, bound.id);
       return bound;
@@ -740,7 +760,12 @@ export async function ensureDirBinding(
     // The same question `resolveCanvas` asks, asked the same way and against
     // the same record — the handshake lands in a directory nobody vetted, so it
     // is exactly as likely to meet a marker that disagrees.
-    refuseHomeDisagreement(binding, await readHomeRecord(client, birthHome), existing !== undefined);
+    refuseHomeDisagreement(
+      binding,
+      await readHomeRecord(client, birthHome),
+      existing !== undefined,
+      client.base,
+    );
     if (existing) {
       await recordDir(home, binding.root, existing.id);
       return { canvas: existing, root: binding.root, created: false };

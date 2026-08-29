@@ -116,6 +116,19 @@ export const DIRECT_VAR = "ISOCAN_DIRECT";
  */
 const BUILTIN_EPHEMERAL: readonly string[] = ["CI"];
 
+/**
+ * **Where a declaration came from**, which the report has to be able to say.
+ *
+ * `setup` reported an `ISOCAN_DIRECT` in the shell as "already set on this
+ * machine", and that is the kind of small lie this codebase spends paragraphs
+ * avoiding elsewhere: a variable in one shell is not a property of the
+ * machine, and somebody who reads that line and then greps `config.json` for
+ * the setting finds nothing. The two are also undone by different gestures —
+ * `unset ISOCAN_DIRECT` against `isocan direct --clear` — so a report that
+ * conflates them names the wrong way out.
+ */
+export type Source = "env" | "config";
+
 /** Which signal fired, for the report — a decision this quiet has to be able
  * to say why it went the way it did. */
 export interface Ephemerality {
@@ -159,19 +172,21 @@ export function looksEphemeral(vars: readonly string[] = []): Ephemerality {
  */
 export async function resolveDeclared(
   isocanHome: string,
-): Promise<{ mode: Mode; at: string | null } | null> {
+): Promise<{ mode: Mode; at: string | null; from: Source } | null> {
   const fromEnv = process.env[DIRECT_VAR]?.trim();
   if (fromEnv) {
-    if (isFalsy(fromEnv)) return { mode: "daemon", at: null };
+    if (isFalsy(fromEnv)) return { mode: "daemon", at: null, from: "env" };
     // `1`/`true` means "direct, address from the marker or the config"; a URL
     // means both at once. Returning a null address is not a failure — "on,
     // address unknown" is a real state, and the caller resolves it against
     // whatever the directory knows.
-    if (isTruthy(fromEnv)) return { mode: "direct", at: await configuredDirect(isocanHome) };
-    return { mode: "direct", at: normalizeHomeUrl(fromEnv) };
+    if (isTruthy(fromEnv)) {
+      return { mode: "direct", at: await configuredDirect(isocanHome), from: "env" };
+    }
+    return { mode: "direct", at: normalizeHomeUrl(fromEnv), from: "env" };
   }
   const at = await configuredDirect(isocanHome);
-  return at ? { mode: "direct", at } : null;
+  return at ? { mode: "direct", at, from: "config" } : null;
 }
 
 async function configuredDirect(isocanHome: string): Promise<string | null> {

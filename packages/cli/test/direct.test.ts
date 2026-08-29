@@ -204,6 +204,66 @@ describe("declaring the mode", () => {
   });
 });
 
+describe("arriving on a pass, the way the cloud dialog sends you", () => {
+  /**
+   * **The bug this file did not catch, and why.**
+   *
+   * Every test above writes its own marker or lets a canvas be born. Neither
+   * goes through `setup <address>`, which is the ONE path that writes `home`
+   * into a marker — and that turned out to be the path where direct mode broke
+   * completely: the home answers `null` for its own canvases, meaning "the
+   * daemon you are talking to is its home", and `refuseHomeDisagreement` read
+   * that as "a local canvas on this machine" and refused. Every command after
+   * a successful `setup` failed, including the `identity --session` the agent
+   * runs next.
+   *
+   * It was found by walking Scene 6 by hand, which is the argument for walking
+   * scenes: fifteen green tests and an unusable product.
+   */
+  it("leaves a machine where the NEXT command works", async () => {
+    const seeder = { id: "usr_priya", name: "Priya" };
+    await badge.speakAs(seeder);
+    await fetch(`${homeUrl}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: null,
+        actor: seeder,
+        op: { type: "project.create", canvasId: "prj_acme", title: "Acme redesign" },
+      }),
+    });
+    const { token } = (await fetch(`${homeUrl}/api/projects/prj_acme/passes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({}), // admission-only: the agent names itself
+    }).then((r) => r.json())) as { token: string };
+
+    const arrived = await isocan(["setup", `${homeUrl}/p/prj_acme#${token}`, "--direct"]);
+    expect(arrived.code, arrived.stderr).toBe(0);
+    expect(arrived.stdout).toContain("direct");
+    // The marker the arrival wrote names the home — which is the input that
+    // used to poison every command after it.
+    const marker = JSON.parse(
+      await fs.readFile(path.join(work, ".isocan", "project.json"), "utf8"),
+    ) as { home?: string };
+    expect(marker.home).toBeTruthy();
+
+    // The next command, and it is the one the agent actually runs: the pass
+    // admitted it and named nobody, so naming itself is step one of the lap.
+    // This is the command that failed in the walk.
+    const named = await isocan(["identity", "--session"]);
+    expect(named.code, named.stderr).toBe(0);
+    expect(named.stderr).not.toContain("cannot both be true");
+
+    const next = await isocan(["ls"]);
+    expect(next.code, next.stderr).toBe(0);
+    expect(next.stderr).not.toContain("cannot both be true");
+
+    expect(await hasStore()).toBe(false);
+    expect(await daemonStarted()).toBe(false);
+  });
+});
+
 describe("files, with nowhere to keep them", () => {
   /**
    * **The half of direct mode that was a hypothesis until it was driven.**

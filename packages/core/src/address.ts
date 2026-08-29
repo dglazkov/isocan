@@ -389,3 +389,39 @@ export function setupCommand(origin: string, canvasId: string, token?: string): 
   const address = token ? canvasUrlWithPass(origin, canvasId, token) : canvasUrl(origin, canvasId);
   return `npx ${INSTALL_SPEC} setup ${address}`;
 }
+
+/**
+ * **Scene 6's line — what Inna pastes into a cloud session's prompt box.**
+ *
+ *     use isocan — the canvas is at isocan.io/p/7f3a…#<pass>.
+ *     Park and handle summonses.
+ *
+ * The sibling of {@link setupCommand}, and deliberately a different KIND of
+ * artifact. Scene 5's is a shell command for a person at a terminal; this one
+ * is addressed to an **agent**, because that is who reads it — the person's
+ * four clicks are New session, pick the repo, paste, Start, and the paste goes
+ * into a prompt box rather than a shell.
+ *
+ * **It carries `ISOCAN_DIRECT=1`, and that is not a guess leaking in.** A
+ * disposable workspace wants no daemon and no local copy, and the ordinary way
+ * a machine learns that is by being told. Here the person told us: they picked
+ * "Run an agent in the cloud…" out of a menu, which is a declaration, so the
+ * line declares. Nothing sniffs the vendor — the same line works in any
+ * harness that can run a shell, which is the whole reason it names none.
+ *
+ * **Vendor-free on purpose.** The journey says "claude.ai/code" as *one*
+ * concrete instantiation and this string must not: it goes to whatever cloud
+ * the person already has, and a line naming somebody's product would be wrong
+ * for every other reader of it.
+ */
+export function cloudAgentInstructions(origin: string, canvasId: string, token?: string): string {
+  const address = token ? canvasUrlWithPass(origin, canvasId, token) : canvasUrl(origin, canvasId);
+  return [
+    `use isocan — the canvas is at ${address}`,
+    "",
+    "This workspace is disposable, so set it up with no local copy:",
+    `  ISOCAN_DIRECT=1 npx ${INSTALL_SPEC} setup ${address}`,
+    "",
+    "Then run `isocan wait` to park, and handle what you are summoned for.",
+  ].join("\n");
+}
