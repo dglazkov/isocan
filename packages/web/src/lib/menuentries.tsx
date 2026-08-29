@@ -8,6 +8,7 @@ import {
   FilesGlyph,
   MinimapGlyph,
   TrashGlyph,
+  WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { blobUrl } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
@@ -232,6 +233,9 @@ export function chromeMenu(ctx: {
   trashOpen: boolean;
   trashCount: number;
   minimapOpen: boolean;
+  /** Navigation belongs to the caller: this module builds entries and has no
+   *  business holding a router. */
+  toWorkbench: () => void;
 }): MenuEntry[] {
   const ui = () => useUiStore.getState();
   /* The same mark the surface itself wears, so the row and the thing it opens
@@ -250,6 +254,18 @@ export function chromeMenu(ctx: {
         icon: one.icon,
         run: () => openPanel(ctx.canvasId, one.panel),
       })),
+    { separator: "" },
+    {
+      /* The way into the other room. It was a button in the bar, said out
+         loud because `W` alone was a door only people who had read the
+         shortcut list could find — and saying it out loud is what the menu
+         does for everything else in here. Above the trash because it is a
+         place you GO, and the two below are things you look at. */
+      label: "Workbench",
+      icon: <WorkbenchGlyph size={14} />,
+      shortcutFor: "Workbench — the agent room",
+      run: () => ctx.toWorkbench(),
+    },
     { separator: "" },
     {
       label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,

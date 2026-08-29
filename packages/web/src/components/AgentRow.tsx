@@ -37,12 +37,25 @@ export function AgentRowView({
   open,
   focused,
   onToggle,
+  following,
+  onFollow,
 }: {
   canvasId: string;
   row: AgentRow;
   open: boolean;
   focused: string | null;
   onToggle: () => void;
+  /**
+   * **Follow is the TRAY's, not the row's.**
+   *
+   * These props are optional and the workbench passes neither, so no control
+   * appears there — and that is the point rather than an omission. The
+   * workbench COVERS the canvas: a camera flying around underneath a screen
+   * you cannot see is motion with no audience, and a toggle offering it would
+   * be a promise the room cannot keep.
+   */
+  following?: boolean;
+  onFollow?: () => void;
 }) {
   // The peek is position:FIXED at a measured point — the roster scrolls,
   // and a peek positioned inside it gets clipped by the scroll box (the
@@ -128,6 +141,23 @@ export function AgentRowView({
             )}
           </ul>
         </div>
+      )}
+      {onFollow && (
+        <button
+          className={`wb-follow${following ? " on" : ""}`}
+          aria-pressed={following}
+          title={
+            following
+              ? `Following ${row.name} — the canvas goes to what they make. Click to stop.`
+              : `Follow ${row.name} — send the canvas to whatever they make next`
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onFollow();
+          }}
+        >
+          ⇅
+        </button>
       )}
       <button className="wb-row-head" onClick={onToggle} aria-expanded={open}>
         <span className="wb-dot" style={{ background: color }} aria-hidden />

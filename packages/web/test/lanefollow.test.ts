@@ -13,15 +13,37 @@ import { FOLLOW_EVERY_MS, nextFollow } from "../src/lib/lanefollow.ts";
  * rather than an effect precisely so they can be argued with here.
  */
 const fable = { id: "usr_fable", name: "Fable" };
-const version = (id: string, at: string) => ({
+const di = { id: "usr_di", name: "Di" };
+const version = (id: string, at: string, by = fable) => ({
   id,
   blobHash: id,
   mimeType: "text/html",
   filename: `${id}.html`,
   size: 1,
   createdAt: at,
-  createdBy: fable,
+  createdBy: by,
 });
+const oneItem = (itemId: string, at: string, by = fable) =>
+  ({
+        id: itemId,
+        title: itemId,
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        versions: [version(`${itemId}_v1`, at, by)],
+        currentVersionId: `${itemId}_v1`,
+        createdAt: at,
+        createdBy: by,
+        updatedAt: at,
+        updatedBy: by,
+        description: "",
+        properties: {},
+  }) as unknown as CanvasContents["items"][string];
+
+const canvasOf = (items: Record<string, unknown>): CanvasContents =>
+  ({ items, threads: {} }) as unknown as CanvasContents;
+
 const canvasWith = (itemId: string, at: string): CanvasContents =>
   ({
     items: {
@@ -52,7 +74,7 @@ const said = (itemId: string, at: string): CommentThread =>
   }) as unknown as CommentThread;
 
 const idle = { lastItemId: null, lastAtMs: 0 };
-const now = { on: true, busy: false, nowMs: 1_000_000 };
+const now = { actorId: fable.id, busy: false, nowMs: 1_000_000 };
 
 describe("follow moves only when it should", () => {
   it("flies to what a message just made", () => {
@@ -60,12 +82,38 @@ describe("follow moves only when it should", () => {
     expect(nextFollow(canvas, said("itm_a", "2026-08-01T10:00:00Z"), idle, now)).toBe("itm_a");
   });
 
-  it("does nothing at all when it is off", () => {
+  it("does nothing at all when nobody is being followed", () => {
     // Off by default and a mode somebody chooses. This is the whole contract.
     const canvas = canvasWith("itm_a", "2026-08-01T10:00:30Z");
     expect(
-      nextFollow(canvas, said("itm_a", "2026-08-01T10:00:00Z"), idle, { ...now, on: false }),
+      nextFollow(canvas, said("itm_a", "2026-08-01T10:00:00Z"), idle, { ...now, actorId: null }),
     ).toBeNull();
+  });
+
+  it("follows ONE agent, and ignores what anybody else makes", () => {
+    /**
+     * The reason this moved off the Chat. The Chat is the canvas-wide
+     * channel, so a toggle there meant "fly to whatever ANYBODY just made" —
+     * with three agents working, a camera yanked between unrelated corners.
+     *
+     * Follow needs a subject you can name. Somebody else's work is now not a
+     * missed flight, it is not this follow's business.
+     */
+    const canvas = canvasOf({
+      itm_a: oneItem("itm_a", "2026-08-01T10:00:30Z", fable),
+      itm_b: oneItem("itm_b", "2026-08-01T10:10:30Z", di),
+    });
+    const t = {
+      id: "thr_1",
+      comments: [
+        { id: "c1", author: fable, body: "made it", items: ["itm_a"], createdAt: "2026-08-01T10:00:00Z" },
+        { id: "c2", author: di, body: "and this", items: ["itm_b"], createdAt: "2026-08-01T10:10:00Z" },
+      ],
+    } as unknown as CommentThread;
+    // Following Fable: their item, not Di's — even though Di's is newer.
+    expect(nextFollow(canvas, t, idle, now)).toBe("itm_a");
+    // And following Di gets Di's.
+    expect(nextFollow(canvas, t, idle, { ...now, actorId: di.id })).toBe("itm_b");
   });
 
   it("stays put while a hand is down", () => {
@@ -120,23 +168,58 @@ describe("follow moves only when it should", () => {
  * The decision above is pure. This is the wiring, which is where a correct
  * rule can still be connected to the wrong thing.
  */
-describe("follow is wired to the mode, and to nothing else", () => {
+describe("follow is wired to an agent, and to nothing else", () => {
   const panel = readFileSync(
     fileURLToPath(new URL("../src/components/MainThreadPanel.tsx", import.meta.url)),
     "utf8",
   );
+  const tray = readFileSync(
+    fileURLToPath(new URL("../src/components/AgentTray.tsx", import.meta.url)),
+    "utf8",
+  );
+  const store = readFileSync(
+    fileURLToPath(new URL("../src/stores/uiStore.ts", import.meta.url)),
+    "utf8",
+  );
 
   it("is off by default, because it moves the canvas for you", () => {
-    const store = readFileSync(
-      fileURLToPath(new URL("../src/stores/uiStore.ts", import.meta.url)),
+    expect(store).toMatch(/followingActorId: null,/);
+  });
+
+  it("is chosen on an agent, not on the room", () => {
+    // The Chat's header no longer carries it: a toggle there followed
+    // whatever anybody made, which is not a subject.
+    expect(panel, "the Chat header must not own follow").not.toMatch(/main-follow/);
+    expect(tray).toMatch(/setFollowingActor\(/);
+  });
+
+  it("follows one agent at a time", () => {
+    // Following two is following neither — the camera would be handed back
+    // and forth between whichever of them saved last, which is the exact
+    // incoherence that took this off the Chat.
+    expect(tray).toMatch(/following === row\.actorId \? null : row\.actorId/);
+  });
+
+  it("offers nothing in the workbench, which covers the canvas", () => {
+    /**
+     * `AgentRowView` is shared. The workbench passes neither prop, so no
+     * control appears there — a camera flying around underneath a screen you
+     * cannot see is motion with no audience, and a toggle offering it would
+     * be a promise the room cannot keep.
+     */
+    const wb = readFileSync(
+      fileURLToPath(new URL("../src/components/Workbench.tsx", import.meta.url)),
       "utf8",
     );
-    expect(store).toMatch(/laneFollow: false,/);
+    const call = /<AgentRowView[\s\S]*?\/>/.exec(wb)?.[0] ?? "";
+    expect(call, "the workbench renders a row").not.toBe("");
+    expect(call).not.toMatch(/onFollow/);
+    expect(/<AgentRowView[\s\S]*?\/>/.exec(tray)?.[0] ?? "").toMatch(/onFollow/);
   });
 
   it("counts a pan or a drag as busy", () => {
-    // Both, not one. A drag moves the item; a pan moves the world. Either is a
-    // hand down, and follow yields to a hand.
+    // Both, not one. A drag moves the item; a pan moves the world. Either is
+    // a hand down, and follow yields to a hand.
     expect(panel).toMatch(/busy: panning \|\| drag !== null/);
   });
 
@@ -146,21 +229,15 @@ describe("follow is wired to the mode, and to nothing else", () => {
   });
 
   it("reveals rather than centring, so a thing in view does not move", () => {
-    // The same conditional flight a dropped file gets: if what arrived is
-    // already in front of you, the camera stays exactly where it is.
     const hook = panel.slice(panel.indexOf("function useLaneFollow"), panel.indexOf("export function MainThreadBody"));
     expect(hook).toMatch(/revealItem\(go\)/);
     expect(hook).not.toMatch(/centerOn\(/);
   });
 
   it("is a different thing from following a person, and says so", () => {
-    // `followSessionId` follows somebody's CURSOR. Sharing a name with this
-    // would make "stop following" ambiguous in a room where both are on.
-    expect(panel).toMatch(/main-follow/);
-    const store = readFileSync(
-      fileURLToPath(new URL("../src/stores/uiStore.ts", import.meta.url)),
-      "utf8",
-    );
-    expect(store).toMatch(/Distinct\s+\*\s+from `followSessionId`/);
+    // `followSessionId` follows somebody's CURSOR — where they are looking.
+    // This follows what they MAKE. Sharing a name would make "stop
+    // following" ambiguous in a room where both are on.
+    expect(store).toMatch(/follows a person's CURSOR/);
   });
 });

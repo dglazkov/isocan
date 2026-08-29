@@ -33,13 +33,14 @@ const menu = (over = {}) =>
     trashOpen: false,
     trashCount: 0,
     minimapOpen: true,
+    toWorkbench: () => {},
     ...over,
   });
 
 describe("the drawer holds everything it took", () => {
   it("offers the rail's panels, the trash, the map and the shortcut list", () => {
     const found = labels(menu()).join(" | ");
-    for (const control of ["Chat", "Files", "Agents", "Trash", "minimap", "shortcuts"]) {
+    for (const control of ["Chat", "Files", "Agents", "Workbench", "Trash", "minimap", "shortcuts"]) {
       expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
   });
@@ -66,6 +67,14 @@ describe("the drawer holds everything it took", () => {
     expect(labels(menu({ mainOpen: true }))).not.toContain("Chat");
     // Shut, all three are on offer.
     expect(labels(menu())).toEqual(expect.arrayContaining(["Chat", "Files", "Agents"]));
+  });
+
+  it("puts the place you GO above the things you look at", () => {
+    // Workbench is a room you flip to; the trash and the map are surfaces you
+    // glance at. It came out of the bar because the bar's job is now what you
+    // are looking at and who is here, and going somewhere is not that.
+    const shown = labels(menu());
+    expect(shown.indexOf("Workbench")).toBeLessThan(shown.findIndex((l) => l.startsWith("Trash")));
   });
 
   it("keeps them in one order, so the menu does not have to be re-read", () => {

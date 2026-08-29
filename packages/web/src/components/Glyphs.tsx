@@ -163,15 +163,20 @@ export function TrashGlyph({ size = 15 }: { size?: number }) {
   );
 }
 
-/** The minimap: the canvas seen small — a frame with a few things in it, and
- *  a viewport rectangle, which is what the map actually shows. */
+/**
+ * **The minimap — the mark the map already wore.**
+ *
+ * A folded map, three panels. There was briefly a second drawing of this for
+ * the `···` menu, invented rather than found, which is how two pictures of
+ * one thing get into a product. The map's own handle has carried this since
+ * it shipped; the menu shows the same mark, so the row and the thing it opens
+ * are recognisably one item.
+ */
 export function MinimapGlyph({ size = 15 }: { size?: number }) {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
-      stroke="currentColor" strokeWidth={1.35} strokeLinejoin="round">
-      <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6" />
-      <rect x="3.9" y="5.4" width="4.2" height="3" rx="0.8" />
-      <path d="M10 5.4h2.1M10 7.4h2.1M3.9 10.2h5.2" />
+      stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+      <path d="M1.5 4.2 5.8 2.4v9.4L1.5 13.6zM5.8 2.4l4.4 1.8v9.4L5.8 11.8zM10.2 4.2l4.3-1.8v9.4l-4.3 1.8z" />
     </svg>
   );
 }
