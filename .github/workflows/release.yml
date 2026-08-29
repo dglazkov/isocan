@@ -19,19 +19,24 @@ concurrency:
 permissions:
   contents: write # push the release branch and advance `green`
   #
-  # **There is no permission that fixes the workflow-file case, and it is worth
-  # writing down rather than rediscovering.** `GITHUB_TOKEN` cannot push a
-  # commit that adds or changes anything under `.github/workflows/` — that is a
-  # platform rule, not a scope this block can grant (`workflows` is a PAT scope
-  # and has no `permissions:` key). Adding `grade.yml` therefore rejected BOTH
-  # pushes from this job on the commit that added it.
+  # **Do not add `actions: write` here hoping to fix a workflow-file
+  # rejection.** On 29 Aug both pushes from this job were rejected with
+  # "refusing to allow a GitHub App to create or update workflow
+  # `.github/workflows/grade.yml` without `workflows` permission" on the commit
+  # that added that file. `workflows` is a PAT scope with no `permissions:` key
+  # behind it, so nothing in this block grants it; `actions: write` looks like
+  # the fix and is not.
   #
-  # The `release` branch no longer carries `.github/` at all, which fixes that
-  # side permanently and is right anyway — nobody installing isocan needs our
-  # CI, and shipping it means every fork inherits our nightly. `green` is a
-  # fast-forward of main's own commit and cannot dodge it, so on a commit that
-  # touches a workflow, green is advanced by hand. The step below says so
-  # instead of guessing.
+  # **What is NOT understood, and is written down as not understood:** the very
+  # next run pushed the same workflow change to `green` with these same
+  # permissions and was allowed. So the rejection is conditional on something
+  # neither run makes visible — not simply "a workflow file changed". If this
+  # comes back, read the error rather than trusting either story; the step
+  # below now prints exactly what git said.
+  #
+  # The `release` branch no longer carries `.github/` at all. That side IS
+  # explained — its tree stopped containing workflow files, so its push stopped
+  # being a workflow change — and it is right on its own terms besides.
 
 jobs:
   release:
@@ -156,7 +161,7 @@ jobs:
             echo "green -> ${GITHUB_SHA}; dev deploys this commit."
           elif grep -q "workflow" /tmp/green.err; then
             cat /tmp/green.err
-            echo "::error::green cannot be advanced to ${GITHUB_SHA} because this commit touches .github/workflows/, which GITHUB_TOKEN may never push. No permission fixes this. Advance it by hand: git push origin ${GITHUB_SHA}:green"
+            echo "::error::green could not be advanced to ${GITHUB_SHA}: git refused the push over a workflow file. Seen once on 29 Aug and NOT reproduced on the next run with identical permissions, so do not assume a cause — read the git output above. Advancing by hand works: git push origin ${GITHUB_SHA}:green"
             exit 1
           elif grep -q "non-fast-forward\|fetch first\|not an ancestor" /tmp/green.err; then
             cat /tmp/green.err
