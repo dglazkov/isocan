@@ -407,7 +407,18 @@ export function setupCommand(origin: string, canvasId: string, token?: string): 
  * a machine learns that is by being told. Here the person told us: they picked
  * "Run an agent in the cloud…" out of a menu, which is a declaration, so the
  * line declares. Nothing sniffs the vendor — the same line works in any
- * harness that can run a shell, which is the whole reason it names none.
+ * harness that can run a shell, which is the whole reason it names none. (A
+ * narrow guess used to stand in for this and was deleted the day it shipped;
+ * `direct.ts` carries that story.)
+ *
+ * **The address appears exactly once**, which it did not at first. The line
+ * opened `use isocan — the canvas is at <address>` and then repeated the whole
+ * address inside the command, because the prose had been written before the
+ * command was. `setup` takes the address, so the first copy told the agent
+ * nothing the second did not — and a pass token is eighty characters, printed
+ * twice, in a box a person is asked to read. What the opening keeps is the
+ * PHRASE: "use isocan" is how Scene 0 hands this product to an agent, and it
+ * is worth a line on its own.
  *
  * **Vendor-free on purpose.** The journey says "claude.ai/code" as *one*
  * concrete instantiation and this string must not: it goes to whatever cloud
@@ -417,11 +428,10 @@ export function setupCommand(origin: string, canvasId: string, token?: string): 
 export function cloudAgentInstructions(origin: string, canvasId: string, token?: string): string {
   const address = token ? canvasUrlWithPass(origin, canvasId, token) : canvasUrl(origin, canvasId);
   return [
-    `use isocan — the canvas is at ${address}`,
+    "use isocan. This workspace is disposable, so set up with no local copy:",
     "",
-    "This workspace is disposable, so set it up with no local copy:",
     `  ISOCAN_DIRECT=1 npx ${INSTALL_SPEC} setup ${address}`,
     "",
-    "Then run `isocan wait` to park, and handle what you are summoned for.",
+    "Then park with `isocan wait` and handle what you are summoned for.",
   ].join("\n");
 }

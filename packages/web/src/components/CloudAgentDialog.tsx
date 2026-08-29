@@ -114,12 +114,11 @@ export function CloudAgentDialog({
     >
       <div className="share-head">Run an agent in the cloud</div>
 
-      {/* The one sentence of concept, said as the problem it solves rather
-          than as the topology it produces. */}
+      {/* One sentence, and it is the problem rather than the topology. What
+          it used to also say — that no copy is kept — is a consequence the
+          agent acts on and the person never does, so it went. */}
       <div className="share-link-note">
-        An agent that outlives your lid needs to run somewhere that doesn&apos;t close. This starts
-        one in your own cloud workspace — it keeps no copy of the canvas, so nothing is lost when
-        the workspace goes away.
+        Run an agent in a cloud workspace so it keeps working after you close your laptop.
       </div>
 
       {error && <div className="identity-warning">{error}</div>}
@@ -129,10 +128,11 @@ export function CloudAgentDialog({
       {minted && !dead && (
         <>
           {/* Deliberately no vendor named: whatever cloud you already have,
-              so long as it can clone a repo and run a shell. */}
+              so long as it can clone a repo and run a shell. The action leads
+              now — it used to arrive after two qualifiers. */}
           <div className="share-link-note">
-            Start a session in your coding harness&apos;s cloud, on the repo you want it to work
-            from, and paste this as the prompt:
+            In your coding harness&apos;s cloud, start a session on the repo you want the agent to
+            work from. Paste this as the prompt:
           </div>
           <pre className="terminal-command">{minted.line}</pre>
           <div className="terminal-actions">
@@ -142,18 +142,18 @@ export function CloudAgentDialog({
             <span className="terminal-expiry">{expiryLine(left)}</span>
           </div>
           <div className="share-link-note">
-            It names itself when it arrives, parks, and wakes when somebody @-mentions it. Its face
-            appears here — and unlike an agent on your laptop, it stays reachable after you close
-            the lid.
+            The agent names itself, parks, and wakes when you @-mention it.
           </div>
           {/* Its sibling says "it arrives as you", and this one MUST NOT: the
               pass here endows nobody, so saying so would be false about the
               one thing a person needs to be right about before pasting a
-              credential somewhere. Still a key, for a different reason. */}
+              credential somewhere. Still a key, for a different reason.
+
+              "It works once" is gone from this line and not from the product:
+              the expiry sits directly above it, and a warning that repeats
+              what the reader just read is a warning they learn to skip. */}
           <div className="share-deferred">
-            It works once, and it lets one workspace onto this canvas — so it is a key, not an
-            invitation. It carries no identity: the agent names itself when it arrives. To invite a
-            person, hand them the address from Share instead.
+            This admits one workspace: a key, not an invitation. To invite a person, use Share.
           </div>
         </>
       )}
