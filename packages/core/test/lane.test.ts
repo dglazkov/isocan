@@ -73,6 +73,37 @@ describe("what a message made", () => {
     expect(laneFor(canvas, thread([msg]), msg)).toEqual([]);
   });
 
+  it("claims what its author made moments BEFORE saying so", () => {
+    /**
+     * The commonest flow in the product, and it produced no arrow at all
+     * until this was fixed. `comment.items` is resolved when a message is
+     * written, so an agent cannot #-reference an item that does not exist
+     * yet: the only way to point at a new thing is to make it first and
+     * announce it after. A rule that demanded the work come after the words
+     * described a habit nobody has.
+     *
+     * Found by using it rather than by reading it — an agent probe added an
+     * item and announced it, exactly as an agent does, and the lane stayed
+     * empty.
+     */
+    const msg = say("c1", fable, "2026-08-01T10:00:30Z", ["itm_a"]);
+    const canvas = canvasOf([item({ id: "itm_a", createdAt: "2026-08-01T10:00:00Z", createdBy: fable })]);
+    expect(laneFor(canvas, thread([msg]), msg)).toEqual([
+      { itemId: "itm_a", title: "itm_a", version: 1, born: true },
+    ]);
+  });
+
+  it("will not reach back past the author's previous word", () => {
+    // The span a message owns starts where the author last spoke. Work done
+    // before that belongs to the earlier message, or to no message at all.
+    const first = say("c1", fable, "2026-08-01T10:00:00Z", []);
+    const second = say("c2", fable, "2026-08-01T10:05:00Z", ["itm_a"]);
+    const canvas = canvasOf([
+      item({ id: "itm_a", createdAt: "2026-08-01T09:59:00Z", createdBy: fable }),
+    ]);
+    expect(laneFor(canvas, thread([first, second]), second)).toEqual([]);
+  });
+
   it("does not claim somebody else's work", () => {
     // An agent's message does not get credit for the version a person
     // uploaded half a minute later.

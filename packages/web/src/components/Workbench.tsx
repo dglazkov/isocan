@@ -125,7 +125,8 @@ export function Workbench({
 
   return (
     <div className="workbench">
-      <div className="fullscreen-bar">
+      <div className="wb-bar">
+        <div className="floats fs-cluster">
         <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
           ← Canvas
         </button>
@@ -136,6 +137,7 @@ export function Workbench({
             <b>{item.title}</b>
           </span>
         )}
+        </div>
         {followed && (
           <button
             className="follow-banner wb"
@@ -151,7 +153,9 @@ export function Workbench({
             more — which canvas you are in, whether you are live, and everyone
             else's faces. Losing the pile on the way into the room where the
             agents are was the worst of it. */}
-        <CanvasPresence actor={actor} onIdentity={onIdentity} />
+        <div className="floats fs-cluster">
+          <CanvasPresence actor={actor} onIdentity={onIdentity} />
+        </div>
       </div>
       <div className="wb-body">
         {/* Collapsible to a RAIL, never removed: the agent view is the reason

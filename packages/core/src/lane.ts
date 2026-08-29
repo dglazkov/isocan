@@ -16,12 +16,25 @@ import type { CanvasContents, Comment, CommentThread } from "./model.ts";
  *   author did not point at it, this does not guess that they meant it.
  * - By the SAME author. An agent's message does not get credit for the
  *   version a person uploaded thirty seconds later.
- * - AT OR AFTER the message, and BEFORE that author's next message in the
- *   thread. The upper bound is not in the original sketch and the feature is
- *   wrong without it: with only a lower bound, the first message that ever
- *   mentioned an item would claim every version of it made afterwards, so a
- *   long thread would grow arrows pointing at work that a later message did.
- *   A message owns what its author did between it and their next word.
+ * - IN THE SPAN THIS MESSAGE OWNS. The upper bound is that author's next
+ *   message: without it, the first message that ever mentioned an item claims
+ *   every version made afterwards, and a long thread grows arrows pointing at
+ *   work a later message did.
+ *
+ *   The lower bound is the author's PREVIOUS message — not the message's own
+ *   timestamp, which is where this started and where it was nearly useless.
+ *   `comment.items` is resolved when the message is written, so an agent
+ *   cannot #-reference something that does not exist yet; the only way to
+ *   point at a new item is to make it FIRST and announce it after. Requiring
+ *   the work to come after the words meant the commonest flow in the product
+ *   — build it, then say so — produced no arrow at all, while "announce, then
+ *   build, then edit the message" was the only path that worked. That is a
+ *   rule describing a habit nobody has.
+ *
+ *   With no previous message there is still a floor, `CLAIM_GRACE_MS`, or a
+ *   first message would claim work its author did a month ago. The span is
+ *   "what this message is announcing", and a couple of minutes is the
+ *   generous end of what announcing means.
  *
  * The version number is the 1-based position in `versions`, which is
  * append-only in creation order — the same "v5" the item's own badge shows,
@@ -36,6 +49,13 @@ export interface LaneEntry {
   born: boolean;
 }
 
+/**
+ * How far back a message may claim work when its author has not spoken before.
+ * Long enough to cover "make the thing, then say so", short enough that a
+ * first message cannot claim a canvas somebody built last week.
+ */
+export const CLAIM_GRACE_MS = 120_000;
+
 /** When this author next speaks in the thread — the upper bound for what this
  *  message can claim. `null` means they never speak again, so the bound is
  *  open and everything after belongs to this message. */
@@ -47,12 +67,25 @@ function nextWordFrom(thread: CommentThread, comment: Comment): string | null {
   return later[0] ?? null;
 }
 
+/** Where this message's span begins: the author's previous word, or a short
+ *  grace before the message itself when this is their first. */
+function sinceFor(thread: CommentThread, comment: Comment): string {
+  const earlier = thread.comments
+    .filter((c) => c.author.id === comment.author.id && c.createdAt < comment.createdAt)
+    .map((c) => c.createdAt)
+    .sort();
+  const previous = earlier[earlier.length - 1];
+  if (previous) return previous;
+  return new Date(Date.parse(comment.createdAt) - CLAIM_GRACE_MS).toISOString();
+}
+
 export function laneFor(
   canvas: CanvasContents,
   thread: CommentThread,
   comment: Comment,
 ): LaneEntry[] {
   const until = nextWordFrom(thread, comment);
+  const since = sinceFor(thread, comment);
   const entries: LaneEntry[] = [];
   for (const itemId of comment.items ?? []) {
     const item = canvas.items[itemId];
@@ -60,7 +93,7 @@ export function laneFor(
     const mine = item.versions.filter(
       (v) =>
         v.createdBy.id === comment.author.id &&
-        v.createdAt >= comment.createdAt &&
+        v.createdAt >= since &&
         (until === null || v.createdAt < until),
     );
     if (mine.length === 0) continue; // mentioned, not made
@@ -72,7 +105,7 @@ export function laneFor(
       itemId,
       title: item.title,
       version: item.versions.findIndex((v) => v.id === last.id) + 1,
-      born: item.createdAt >= comment.createdAt && (until === null || item.createdAt < until),
+      born: item.createdAt >= since && (until === null || item.createdAt < until),
     });
   }
   return entries;
