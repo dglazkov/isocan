@@ -111,6 +111,7 @@ import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import { registerContentRoutes } from "./content.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
+import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -2218,6 +2219,48 @@ export function registerRoutes(
     const roots = [];
     for (const dir of dirs) roots.push(await readTree(dir));
     return { roots };
+  });
+
+  /**
+   * **The personas this canvas's directory holds.**
+   *
+   * Gated exactly like the tree — this daemon, this machine, loopback, a
+   * verified binding — because it reads somebody's disk and nothing about a
+   * markdown file makes that safer. It does NOT reuse the tree's jail: that
+   * one refuses every dotted name, which is what keeps `.ssh` and `.env` out
+   * of a listing, and personas live under `.agents/`. `personas.ts` has a
+   * tighter jail instead, where the directory is fixed and the name is a stem
+   * that cannot express a path.
+   *
+   * Parsed by core, so this and `isocan persona ls` cannot disagree about what
+   * a persona says — and the raw text rides along, because an editor should
+   * show what is actually in the file rather than a re-rendering of what we
+   * understood from it.
+   */
+  app.get("/api/projects/:id/personas", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await engine.getSnapshot(id);
+    const dirs = await treeGate(id, req, reply);
+    if (!dirs) return reply;
+    const root = dirs[0]!;
+    return { root, personas: await readPersonas(root) };
+  });
+
+  /** Save one. The name is a stem; the body is the whole file. */
+  app.put("/api/projects/:id/personas/:name", async (req, reply) => {
+    const { id, name } = req.params as { id: string; name: string };
+    await engine.getSnapshot(id);
+    const dirs = await treeGate(id, req, reply);
+    if (!dirs) return reply;
+    const text = (req.body as { text?: string } | undefined)?.text;
+    if (typeof text !== "string") {
+      return reply.status(400).send({ error: "what should it say?", code: "bad-op" });
+    }
+    const written = await writePersona(dirs[0]!, name, text);
+    if (!written.ok) {
+      return reply.status(400).send({ error: personaRefusal(written.refusal), code: written.refusal });
+    }
+    return written;
   });
 
   app.get("/api/projects/:id/tree/file", async (req, reply) => {

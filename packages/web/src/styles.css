@@ -3750,6 +3750,53 @@ button.mt-card:hover { border-color: var(--accent); }
    have never bound reads as a fresh binding rather than a recognition. */
 .wb-pick-take.adopt { border-color: var(--line-soft); font-size: 10.5px; }
 
+/* ---------- personas ----------
+   A role sitting on a shelf until an agent wears it. The rows are quieter than
+   the files panel's on purpose: a persona is read, not navigated to, so nothing
+   here is a target that wants to be clicked. */
+.persona-none { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.persona-row {
+  padding: 12px 12px 10px; border-top: 1px solid var(--line-soft);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.persona-row:first-of-type { border-top: none; }
+/* Every dock panel scopes its own `.spacer`, so a new one that forgets has a
+   header whose close button sits against the title — which is what this did
+   until it was looked at. Both rows named here for the same reason. */
+.personas-panel header .spacer { flex: 1; }
+.persona-head { display: flex; align-items: baseline; gap: 8px; }
+.persona-head .spacer { flex: 1; }
+.persona-head b { font-size: 13.5px; letter-spacing: -0.01em; }
+.persona-head i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+.persona-desc { margin: 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+/* The goal, and the command under it. The command is the part that makes the
+   number checkable, so it is shown rather than hidden behind the name. */
+.persona-goal {
+  margin: 0; font-size: 12px; color: var(--ink);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.persona-goal code {
+  font-size: 10.5px; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Warnings read as warnings. A persona that cannot fail is the failure this
+   whole feature exists to prevent, and it is invisible unless something says
+   so where the persona is read. */
+.persona-warn { margin: 0; font-size: 11.5px; color: var(--warn); }
+.persona-warn-summary {
+  margin: 8px 12px 0; padding: 6px 9px; border-radius: var(--radius);
+  background: var(--chip); color: var(--ink-muted); font-size: 11.5px;
+}
+.persona-edit { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.persona-text {
+  min-height: 260px; resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5;
+  white-space: pre; overflow-wrap: normal; overflow-x: auto;
+}
+.persona-edit-row { display: flex; align-items: center; gap: 6px; }
+.persona-edit-row .spacer { flex: 1; }
+.persona-edit-row .wb-quiet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ---------- the editor's chrome ----------
    CodeMirror shipped stock: its own greys, its own blue, its own gutter — a
    component sitting IN the app rather than part of it. The chrome is here,

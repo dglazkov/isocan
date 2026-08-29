@@ -157,6 +157,7 @@ describe("the stage, asked directly", () => {
     filesPanelOpen: false,
     agentsPanelOpen: false,
     contextPanelOpen: false,
+    personasPanelOpen: false,
     trashOpen: false,
     marksOpen: false,
     panelWidth: 320,

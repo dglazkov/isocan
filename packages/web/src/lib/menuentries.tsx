@@ -6,6 +6,7 @@ import {
   AgentsGlyph,
   ChatGlyph,
   ContextGlyph,
+  PersonaGlyph,
   FilesGlyph,
   MinimapGlyph,
   TrashGlyph,
@@ -231,6 +232,7 @@ export function chromeMenu(ctx: {
   filesOpen: boolean;
   agentsOpen: boolean;
   contextOpen: boolean;
+  personasOpen: boolean;
   mainOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
@@ -248,6 +250,12 @@ export function chromeMenu(ctx: {
     { label: "Files", open: ctx.filesOpen, panel: "files", icon: <FilesGlyph size={14} /> },
     { label: "Agents", open: ctx.agentsOpen, panel: "agents", icon: <AgentsGlyph size={14} /> },
     { label: "Context", open: ctx.contextOpen, panel: "context", icon: <ContextGlyph size={14} /> },
+    {
+      label: "Personas",
+      open: ctx.personasOpen,
+      panel: "personas",
+      icon: <PersonaGlyph size={14} />,
+    },
   ];
   return [
     ...rail

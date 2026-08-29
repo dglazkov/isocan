@@ -83,6 +83,48 @@ on. **The persona is the costume, not the actor.** Any agent can wear it; the
 canvas already knows who is actually working, because presence is a session
 with an actor behind it.
 
+### Where this is going, so the first version does not close the door
+
+**The model to end at: anyone on the canvas can edit a persona, and agents sign
+up for work.** Two halves, and the second is a new idea rather than a
+consequence of the first.
+
+*Editing* is the part files already make awkward. A persona in `.agents/` is
+editable by whoever holds the repo, which is exactly one machine — fine while
+a persona is a habit one person keeps, wrong the moment a team has an opinion
+about what Darren looks for. That is the canvas's job and the ordering is
+argued below: the canvas becomes authoritative when a second person edits a
+persona, not before.
+
+*Signing up* is the half nothing here does yet. Today an agent is told what to
+do. The model worth building toward is a **standing offer**: a persona
+describes work that wants doing, and an agent that arrives — any agent, on any
+harness, on any machine — can take it on, do it, and report against the goal.
+The persona is the costume; the sign-up is the shift. It makes the canvas a
+place where work is *available* rather than *assigned*, which is what makes a
+night shift something other than a cron job with a name.
+
+Three consequences worth writing down while they are cheap:
+
+- **A persona must be readable by an agent that has never seen this
+  repository.** It travels; it cannot depend on local paths that only mean
+  something on one laptop.
+- **A run needs an author.** "Percy said" is not enough once several agents
+  can wear Percy: the run records the persona AND the session that wore it.
+  Presence already carries the second, so nothing new is needed to store it —
+  only the discipline of writing both down from the first run.
+- **Taking work must be refusable.** Two agents claiming the same shift is the
+  ordinary case, not the exception, and whatever mechanism grants it has to be
+  able to say no. `openAsk` and the `blocked` tier are the nearest existing
+  shape, and the roster is where a claim would be visible.
+
+None of that is built. It is here because a format chosen without it becomes a
+format that has to be broken later, and the two things this first version owes
+the future are cheap: **one file per persona** (so it can become one item), and
+**front matter that keeps keys it does not understand** (so a field added by a
+later build survives a round trip through an editor that predates it). Both
+are done.
+
 ### Why the canvas is the source of truth, eventually and not first
 
 The long answer is that a persona is a shared fact — something a team writes,
