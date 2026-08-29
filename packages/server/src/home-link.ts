@@ -605,10 +605,27 @@ export class HomeLink implements HomeConnection {
     });
   }
 
-  /** Open the connection and keep it open. Never throws: a home that is down
+  /**
+   * Open the connection and keep it open. Never throws: a home that is down
    * at boot must not stop a daemon from serving its local CLIs — the retry
-   * loop is the whole point. */
-  async start(): Promise<void> {
+   * loop is the whole point.
+   *
+   * **Idempotent, and it has to be.** `HomeLinks.linkFor` fires `start()` on a
+   * link the moment it creates one, and `HomeLinks.start()` then awaits
+   * `start()` on every address it dials — so every link created at boot was
+   * being started TWICE. That is two `setInterval` polls, of which `close()`
+   * can only clear the one the field still holds, and it doubled the sweep
+   * rate against every home for the life of the daemon. Measured
+   * 2026-08-28 while adding the build probe, which would otherwise have
+   * inherited the same doubling; `upgrade-probe.test.ts` counts it now.
+   */
+  start(): Promise<void> {
+    return (this.starting ??= this.boot());
+  }
+
+  private starting: Promise<void> | null = null;
+
+  private async boot(): Promise<void> {
     // Both round trips at once. The build probe is awaited so that a daemon
     // which has finished booting has already asked — the CLI's very first
     // command reads the health body, and a verdict that arrived a moment later
@@ -735,12 +752,21 @@ export class HomeLink implements HomeConnection {
     const theirs = await this.api<Canvas[]>("GET", canvasesRoute("admitted")).catch(() => null);
     const was = this.answering;
     this.answering = theirs !== null;
-    // **Reconnect**, at the granularity that matters here: not a canvas socket
-    // coming back — there are many of those and they say nothing about the
-    // home as a whole — but this home starting to answer again. A laptop that
-    // was asleep, or a home that was redeploying, gets its build re-read now
-    // instead of at the top of the next hour.
-    if (this.answering && was !== true) void this.askBuild();
+    /**
+     * **Reconnect**, at the granularity that matters here: not a canvas socket
+     * coming back — there are many of those and they say nothing about the
+     * home as a whole — but this home starting to answer AGAIN. A laptop that
+     * was asleep, or a home that was redeploying, gets its build re-read now
+     * instead of at the top of the next hour.
+     *
+     * `false` and not "anything but true": at boot `answering` is null and
+     * `boot()` has already asked, so treating null as a reconnect would probe
+     * every home twice on every daemon start. The one case that falls between
+     * them — the home answers its canvas list but not its health route, so the
+     * boot probe missed and no reconnect ever follows — waits out the hour,
+     * which is the right price for not putting a probe on the poll.
+     */
+    if (this.answering && was === false) void this.askBuild();
     if (theirs) {
       for (const canvas of theirs) {
         if (this.stopped) return;

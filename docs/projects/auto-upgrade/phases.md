@@ -308,6 +308,13 @@ green (1814 tests), plus the hand walk quoted in the status above.
   cold daemon can beat the first probe and see no field. Acceptable: this is a
   notice, not a gate, and the next command carries it. It would not be
   acceptable for phase 4.
+- **2026-08-28** — `HomeLink.start()` was running TWICE for every link created
+  at boot: `linkFor` fires it, then `HomeLinks.start()` awaits it. Two poll
+  intervals, of which `close()` cleared one. Pre-existing; found by counting
+  the new probe's requests, fixed here, and the count is the guard.
+- **2026-08-28** — A rate check on the sweeps could NOT see that doubling —
+  `sync()` coalesces — and passed against the unfixed code. Deleted. A test
+  that survives the bug it names is worse than no test.
 - **2026-08-28** — `plausibleSha` is applied at BOTH ends. The home already
   gates its own stamp, but the value crosses a network from a machine this one
   does not control, and `unknown` printed at a person as an identity is the
