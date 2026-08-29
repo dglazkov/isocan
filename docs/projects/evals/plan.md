@@ -155,6 +155,12 @@ It reports counts and pass/fail, deliberately **not** a weighted score. A
 single number invites tuning the number, and each of these is independently
 actionable.
 
+**Wired to a schedule, 29 Aug 2026.** `scripts/grade-night.mjs` runs the
+selftest as a GATE and then grades, filing a dated page in `docs/grades/` and
+writing to no canvas; `.github/workflows/grade.yml` runs it nightly and opens
+a pull request. `--canvases` points the same run at every HTML item in an
+isocan home, which is the half no CI runner can reach.
+
 **Run it against `--selftest` before believing it.** The first version of this
 grader was theatre: the in-page probe carried a syntax error, and
 `Runtime.evaluate` answers a malformed expression with `exceptionDetails`

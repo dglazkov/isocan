@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { bindVerdict, claimName } from "@isocan/core";
 import {
   MAX_READ_BYTES,
   boundDirs,
@@ -262,6 +263,66 @@ describe("pickList", () => {
     const listing = await pickList(root, sandbox);
     expect(listing?.entries.find((e) => e.name === "taken")?.bound).toBe(true);
     expect(listing?.entries.find((e) => e.name === "free")?.bound).toBe(false);
+  });
+
+  /**
+   * **The dead end had only moved.** The pane stopped naming a command and
+   * started offering a picker, and the picker offered a folder wearing the
+   * word `bound` — nothing to learn from it, nothing to do about it. The name
+   * of the canvas that has it is the whole difference, so the listing carries
+   * it and the app does not have to guess.
+   */
+  it("names the canvas that has it, from the marker", async () => {
+    const taken = path.join(sandbox, "taken");
+    await fs.mkdir(path.join(taken, ".isocan"), { recursive: true });
+    await fs.writeFile(
+      path.join(taken, ".isocan", "project.json"),
+      JSON.stringify({ projectId: "prj_acme", title: "Acme Board" }),
+    );
+    const listing = await pickList(root, sandbox);
+    const entry = listing?.entries.find((e) => e.name === "taken");
+    expect(entry?.claim).toEqual({ canvasId: "prj_acme", title: "Acme Board" });
+  });
+
+  /**
+   * The case the boolean got WRONG rather than merely thin: a repo cloned
+   * this morning carries its marker and appears in no roster on this machine.
+   * It read as free, was picked, and adopted silently — the person learned
+   * what had happened by noticing the tree fill with files they recognised.
+   */
+  it("sees a fresh clone's marker even though no roster mentions it", async () => {
+    const cloned = path.join(sandbox, "cloned");
+    await fs.mkdir(path.join(cloned, ".isocan"), { recursive: true });
+    await fs.writeFile(
+      path.join(cloned, ".isocan", "project.json"),
+      JSON.stringify({ projectId: "prj_mine" }),
+    );
+    // No dirs.json at all: this machine has never heard of it.
+    const listing = await pickList(root, sandbox);
+    const entry = listing?.entries.find((e) => e.name === "cloned");
+    expect(entry?.bound).toBe(true);
+    expect(entry?.claim).toEqual({ canvasId: "prj_mine" });
+  });
+
+  it("falls back to the roster when there is no marker to read", async () => {
+    // Bound by an isocan old enough to predate the marker, or by a hand that
+    // deleted it: the machine still remembers, and the row is still not free.
+    const taken = path.join(sandbox, "remembered");
+    await fs.mkdir(taken, { recursive: true });
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(path.join(root, "dirs.json"), JSON.stringify({ [taken]: "prj_old" }));
+    const entry = (await pickList(root, sandbox))?.entries[0];
+    expect(entry?.claim).toEqual({ canvasId: "prj_old" });
+    // No title in a roster row, so the sentence uses the id rather than
+    // saying "undefined" at somebody.
+    expect(claimName(entry!.claim!)).toBe("prj_old");
+  });
+
+  it("leaves a free directory with no claim at all", async () => {
+    await fs.mkdir(path.join(sandbox, "free"), { recursive: true });
+    const entry = (await pickList(root, sandbox))?.entries[0];
+    expect(entry?.claim).toBeUndefined();
+    expect(bindVerdict(entry?.claim, "prj_anything")).toBe("free");
   });
 });
 

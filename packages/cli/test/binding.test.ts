@@ -215,6 +215,50 @@ describe("isocan use and the narrowed defaults", () => {
     }
   }, 30_000);
 
+  /**
+   * **The marker is committed, so rebinding is somebody else's git diff.**
+   *
+   * `use` overwrote a marker naming another canvas without a word. Run it in
+   * a repo a teammate bound and the file changes under both of you, the only
+   * evidence a line in `git status` nobody expected. The WEB has refused this
+   * since the picker shipped — the surfaces simply disagreed, and the one
+   * that was right is the one whose gesture is cheapest.
+   */
+  it("refuses to steal a directory that belongs to another canvas", async () => {
+    await cli(work, {}, "canvas", "create", "Roadmap");
+    await cli(work, {}, "canvas", "create", "Elsewhere");
+    await cli(work, {}, "use", "Roadmap");
+    const before = await marker(work);
+
+    const steal = await cli(work, {}, "use", "Elsewhere");
+    expect(steal.code).not.toBe(0);
+    // It NAMES the canvas that has it: "already bound" names nobody, and a
+    // person then has to go looking for who took their folder.
+    expect(steal.stderr).toContain("already belongs to Roadmap");
+    // And the marker is untouched — a refusal that half-wrote would be worse
+    // than the overwrite it replaced.
+    expect((await marker(work)).projectId).toBe(before.projectId);
+
+    // Rebinding stays possible; it is a choice somebody makes on purpose.
+    const forced = await cli(work, {}, "use", "Elsewhere", "--force");
+    expect(forced.code).toBe(0);
+    expect((await marker(work)).projectId).not.toBe(before.projectId);
+  }, 30_000);
+
+  it("adoption is not a rebind, and says so", async () => {
+    // A clone carrying its marker: the repo already knows what it is and only
+    // this machine's roster row is missing. Nothing is written to the repo,
+    // so "attached" would be a claim about a change that did not happen.
+    await cli(work, {}, "canvas", "create", "Roadmap");
+    await cli(work, {}, "use", "Roadmap");
+    const before = await marker(work);
+
+    const again = await cli(work, {}, "use", "Roadmap");
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain("already meant");
+    expect((await marker(work)).projectId).toBe(before.projectId);
+  }, 30_000);
+
   it("canvas list narrows to the directory's canvas; --all opens the home back up", async () => {
     await cli(work, {}, "canvas", "create", "Roadmap");
     await cli(work, {}, "canvas", "create", "Elsewhere");

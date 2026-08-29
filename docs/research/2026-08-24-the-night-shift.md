@@ -2,10 +2,23 @@
 
 **24 August 2026**
 
-**Where this stands, 29 Aug 2026: not built.** `grade.mjs --selftest` runs
-in CI, which is the graders grading themselves; nothing grades any screen on
-any schedule. Recommendation 1 — the cheapest and the one everything else
-waits on — is untouched.
+**Where this stands, 29 Aug 2026: step 1 is BUILT** —
+`scripts/grade-night.mjs`, `.github/workflows/grade.yml`, and a dated page per
+run in `docs/grades/`. Nightly, selftest-gated, and it writes to no canvas.
+
+**And the sentence this note used to open with was false.** It read "`grade.mjs
+--selftest` runs in CI, which is the graders grading themselves." It did not.
+The step spawned a macOS-only Chrome path on an Ubuntu runner, failed with
+`ENOENT` on every commit for weeks, and carried `continue-on-error: true` — so
+the check that exists to stop us believing a silent zero **was one**, in the
+exact place this document pointed at when it said the graders were verified.
+Found by reading a real run's log while wiring the schedule; the grader now
+finds Chrome wherever it is, and the flag is gone.
+
+The first night's reading, on the pages this repo ships: isocan.io's own front
+door fails contrast on three headings (3.83, needs 4.5) and has targets under
+24px. Which is the argument for step 1 in one line — *is anything already
+broken* had an answer, and nobody had asked.
 
 The question: *what could a self-improvement loop be — for isocan itself, for
 the projects isocan holds canvases for, and on the canvas as the surface that

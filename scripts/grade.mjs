@@ -24,7 +24,7 @@
  * pretending otherwise would put a number on something this file cannot see.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,7 +32,50 @@ import { fileURLToPath } from "node:url";
 const repo = fileURLToPath(new URL("..", import.meta.url));
 /** Temp path → the canvas title to report it under. */
 const titles = new Map();
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+/**
+ * **Where Chrome is, which is not one place.**
+ *
+ * This was a single macOS path, and the consequence was the lesson arriving a
+ * third time. `release.yml` has run `--selftest` on every commit for weeks
+ * under a comment reading "Chrome is on the GitHub runner already" — true, at
+ * `/usr/bin/google-chrome`. The spawn ENOENT'd every single time, and
+ * `continue-on-error` turned it into a green checkmark. The graders that exist
+ * to stop us believing a silent zero were themselves a silent zero, in the one
+ * place we pointed at when we said they were checked.
+ *
+ * `CHROME_PATH` first so a machine can always answer for itself; then the
+ * ordinary places on both platforms. `chromeOrDie` says what it looked for
+ * rather than throwing a bare ENOENT, because the whole failure above was
+ * somebody reading an error that did not name its own cause.
+ */
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  process.env.CHROME_BIN,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/opt/google/chrome/chrome",
+].filter(Boolean);
+
+function chromeOrDie() {
+  // An env var that is SET and wrong is a mistake, not a hint: falling
+  // through to whatever else is on the machine would grade with a browser
+  // nobody asked for and say nothing, which is the shape of the bug this
+  // whole block exists to close.
+  for (const name of ["CHROME_PATH", "CHROME_BIN"]) {
+    const asked = process.env[name];
+    if (asked && !existsSync(asked)) throw new Error(`${name} is set to ${asked} — nothing there`);
+  }
+  for (const candidate of CHROME_CANDIDATES) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    "no Chrome found — set CHROME_PATH. Looked in:\n  " + CHROME_CANDIDATES.join("\n  "),
+  );
+}
 const WIDTHS = [390, 768, 1440];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -63,7 +106,7 @@ const slopHits = (text) => GREPPABLE.filter((r) => r.re.test(text)).map((r) => r
 async function browser() {
   const port = 9500 + Math.floor(process.pid % 400);
   const dir = mkdtempSync(path.join(tmpdir(), "grade-"));
-  const proc = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${port}`,
+  const proc = spawn(chromeOrDie(), ["--headless=new", `--remote-debugging-port=${port}`,
     `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
   const { default: WebSocket } = await import(path.join(repo, "node_modules/ws/index.js"));
   let target = null;
@@ -300,5 +343,11 @@ const graded = [];
 try { for (const f of files) graded.push(await gradeFile(b, f)); } finally { await b.close(); }
 if (scratch) rmSync(scratch, { recursive: true, force: true });
 
-if (asJson) console.log(JSON.stringify(graded, null, 2));
+// **The verdicts ride WITH the readings.** `--json` used to emit the raw
+// measurements only, and every consumer therefore had to re-derive pass/fail
+// from `contrastFailures` and `stretchedImages` by hand — which the nightly
+// promptly got wrong, reporting "0 failing checks" on a page whose contrast
+// failures it printed three lines further down. A grader whose machine-readable
+// output omits its own conclusion is inviting exactly that.
+if (asJson) console.log(JSON.stringify(graded.map((g) => ({ ...g, checks: checks(g) })), null, 2));
 else report(graded);

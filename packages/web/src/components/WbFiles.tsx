@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { FILE_PROP, cleanFilePath, workbenchItemPath } from "@isocan/core";
+import type { DirClaim } from "@isocan/core";
+import {
+  FILE_PROP,
+  bindVerdict,
+  claimName,
+  cleanFilePath,
+  takenSentence,
+  workbenchItemPath,
+} from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -399,6 +407,17 @@ function BindDirectory({
  * enumeration surface the daemon has, so it lists no files, never recurses,
  * and cannot leave `$HOME`. A directory already bound to something is shown
  * as such instead of being offered and then refused.
+ *
+ * **And it says WHICH canvas has it**, because the bare word `bound` was the
+ * dead end again one level down: a folder wearing a label with nothing to
+ * learn from it and nothing to do about it. A name is something a person can
+ * act on. The three states are core's (`bindVerdict`), so this list and the
+ * bind route it feeds cannot disagree about what a directory is:
+ *
+ * - free — pick it
+ * - **this canvas** — a clone that already knows what it is. Not an obstacle:
+ *   it is offered, and taking it writes nothing into the repo
+ * - somebody else's — named, and not offered
  */
 /** The last of a path, with an ellipsis for what was cut — see the call. */
 function tailOf(dir: string, keep = 34): string {
@@ -417,7 +436,7 @@ function Picker({
   const [listing, setListing] = useState<{
     dir: string;
     up: string | null;
-    entries: Array<{ name: string; path: string; bound: boolean }>;
+    entries: Array<{ name: string; path: string; bound: boolean; claim?: DirClaim }>;
   } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   // What the picker is showing, which follows what you click — NOT the field,
@@ -464,29 +483,36 @@ function Picker({
       </div>
       <ul className="wb-pick-list">
         {listing.entries.length === 0 && <li className="wb-quiet">nothing to show here</li>}
-        {listing.entries.map((entry) => (
-          <li key={entry.path}>
-            {/* One click goes IN; the ✓ takes it. A folder you can enter and
-                a folder you can choose are the same folder, so both live on
-                the row rather than behind a mode. */}
-            <button className="wb-pick-btn wb-pick-in" onClick={() => setWhere(entry.path)}>
-              {entry.name}/
-            </button>
-            {entry.bound ? (
-              <span className="wb-pick-bound" title="Already bound to a canvas">
-                bound
-              </span>
-            ) : (
-              <button
-                className="wb-pick-btn wb-pick-take"
-                title={`Use ${entry.path}`}
-                onClick={() => onPick(entry.path)}
-              >
-                ✓
+        {listing.entries.map((entry) => {
+          const verdict = bindVerdict(entry.claim, canvasId);
+          return (
+            <li key={entry.path}>
+              {/* One click goes IN; the ✓ takes it. A folder you can enter and
+                  a folder you can choose are the same folder, so both live on
+                  the row rather than behind a mode. */}
+              <button className="wb-pick-btn wb-pick-in" onClick={() => setWhere(entry.path)}>
+                {entry.name}/
               </button>
-            )}
-          </li>
-        ))}
+              {verdict === "taken" ? (
+                <span className="wb-pick-bound" title={takenSentence(entry.path, entry.claim!)}>
+                  {claimName(entry.claim!)}
+                </span>
+              ) : (
+                <button
+                  className={`wb-pick-btn wb-pick-take${verdict === "adopt" ? " adopt" : ""}`}
+                  title={
+                    verdict === "adopt"
+                      ? `${entry.path} already names this canvas — attach it here`
+                      : `Use ${entry.path}`
+                  }
+                  onClick={() => onPick(entry.path)}
+                >
+                  {verdict === "adopt" ? "this canvas ✓" : "✓"}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <button className="wb-pick-btn wb-pick-take here" onClick={() => onPick(listing.dir)}>
         Use this folder

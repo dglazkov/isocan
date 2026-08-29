@@ -69,6 +69,8 @@ import {
   UNKNOWN_ROUTE,
   frameVerdict,
   normalizeSiteUrl,
+  bindVerdict,
+  takenSentence,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -2103,9 +2105,9 @@ export function registerRoutes(
     // which is the adoption case: a cloned repo carries its marker, and all
     // that is missing on this machine is the roster row.
     const existing = await readMarker(root);
-    if (existing && existing.canvasId !== id) {
+    if (bindVerdict(existing, id) === "taken") {
       return reply.status(409).send({
-        error: `${root} already belongs to ${existing.title ?? existing.canvasId} — unbind it there first`,
+        error: `${takenSentence(root, existing!)} — unbind it there first`,
         code: "bound-elsewhere",
       });
     }

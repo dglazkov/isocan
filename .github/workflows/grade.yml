@@ -1,0 +1,80 @@
+# The night shift, step 1: measure before anything tries to fix.
+#
+# `docs/research/2026-08-24-the-night-shift.md` lists this first of six and
+# calls it the one everything else waits on — it answers *is anything already
+# broken*, which is the question a self-improvement loop has to have an answer
+# to before it is allowed to change anything.
+#
+# NOTHING IS WRITTEN TO ANY CANVAS. This run measures and files a page. A
+# grader with an interest in what it finds is a grader nobody can read, and
+# every later stage of that plan depends on these numbers being disinterested.
+#
+# The changelog's shape, deliberately: a scheduled gather, a dated page, and a
+# pull request rather than a push. A machine writing into `main` every night is
+# how a directory quietly fills with things nobody agreed to.
+name: grade
+
+on:
+  schedule:
+    # 08:23 UTC — twenty minutes after the changelog, so two nightly jobs are
+    # not racing for the same branch namespace or the same runner minute.
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "Date for the page (YYYY-MM-DD). Blank = today, US Pacific."
+        required: false
+
+concurrency:
+  group: grade
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No `continue-on-error` here, and that is the whole point of this file.
+      # `release.yml` ran `--selftest` on every commit for weeks with that flag
+      # on, spawning a macOS Chrome path that does not exist on this runner —
+      # ENOENT every time, green checkmark every time. The graders that exist
+      # to stop us believing a silent zero were a silent zero. `grade.mjs` now
+      # finds Chrome wherever it is and says what it looked for when it cannot;
+      # if this step goes red, the graders are broken and the run reports
+      # nothing rather than a page of encouraging noughts.
+      - name: Grade the pages this repo ships
+        env:
+          DAY: ${{ inputs.day }}
+        run: node scripts/grade-night.mjs ${DAY:+--day "$DAY"}
+
+      # A failing CHECK is news, not a build break: the page is the report, and
+      # a red run every morning would train everybody to stop looking. Only a
+      # broken GRADER fails this workflow, which the step above does.
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DAY=$(ls docs/grades/*.md | grep -v README | xargs -n1 basename | sed 's/\.md$//' | sort | tail -1)
+          if [ -z "$(git status --porcelain docs/grades)" ]; then
+            echo "nothing changed — the same page, the same readings"
+            exit 0
+          fi
+          git config user.name "isocan grades"
+          git config user.email "noreply@github.com"
+          git checkout -b "grades/$DAY"
+          git add docs/grades
+          git commit -m "Grades: $DAY"
+          git push -u origin "grades/$DAY" --force
+          gh pr list --head "grades/$DAY" --json number --jq '.[0].number' | grep -q . || \
+            gh pr create --base main --head "grades/$DAY" \
+              --title "Grades: $DAY" \
+              --body "Deterministic graders over the pages this repo ships. Every check has a right answer a machine can be certain of; nothing here is a judgement and nothing was written to any canvas. A failing check is something to fix, not something to merge past."

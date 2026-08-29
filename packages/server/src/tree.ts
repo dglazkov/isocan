@@ -1,6 +1,8 @@
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
+import type { DirClaim } from "@isocan/core";
 import { dirsFile } from "./paths.ts";
+import { readMarker } from "./binding.ts";
 
 /**
  * The bound directory, read-only — the workbench's file tree.
@@ -203,6 +205,22 @@ export interface PickEntry {
   /** Already bound to some canvas — the picker says so rather than letting
    *  somebody pick it and meet a refusal. */
   bound: boolean;
+  /**
+   * **WHICH canvas has it**, when anything does.
+   *
+   * `bound` alone was a dead end that had simply moved: the picker replaced
+   * "run this command" with a folder wearing the word `bound` and no way to
+   * learn what that meant or what to do about it. The name is the whole
+   * answer — a directory claimed by *Acme Board* is a fact somebody can act
+   * on, and a directory claimed by THIS canvas is not an obstacle at all
+   * (`bindVerdict`, core): it is a clone that already knows what it is.
+   *
+   * Read from the committed marker first and the machine's roster second,
+   * because the marker is the fact that travels. A repo cloned this morning
+   * carries its binding and appears in no roster anywhere, which is exactly
+   * the case the bare boolean got wrong.
+   */
+  claim?: DirClaim;
 }
 
 export interface PickListing {
@@ -244,7 +262,20 @@ export async function pickList(home: string, at: string | null): Promise<PickLis
     if (!entry.isDirectory()) continue;
     if (!listable(entry.name, "dir")) continue;
     const full = path.join(real, entry.name);
-    entries.push({ name: entry.name, path: full, bound: bound[full] !== undefined });
+    // The marker is the fact that travels; the roster is this machine's
+    // memory of it. A fresh clone has the first and not the second.
+    const marker = await readMarker(full);
+    const claim: DirClaim | undefined = marker
+      ? { canvasId: marker.canvasId, ...(marker.title ? { title: marker.title } : {}) }
+      : bound[full] !== undefined
+        ? { canvasId: bound[full]! }
+        : undefined;
+    entries.push({
+      name: entry.name,
+      path: full,
+      bound: claim !== undefined,
+      ...(claim ? { claim } : {}),
+    });
     if (entries.length >= MAX_PICK_ENTRIES) break;
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
