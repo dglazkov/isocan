@@ -139,9 +139,17 @@ describe("a canvas's address", () => {
 
   it("builds Scene 6's instructions — a prompt for an agent, not a shell command", () => {
     const line = cloudAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
-    // The address, with its pass, so the agent arrives admitted and as
-    // somebody rather than knocking at a door.
+    // The address, with its pass, so the agent arrives admitted.
     expect(line).toContain("https://isocan.io/p/prj_acme#pss_1.s3cret");
+    // **Exactly once.** The line used to open by naming the canvas and then
+    // repeat the whole address inside the command, which told the agent
+    // nothing the second copy did not and printed an eighty-character pass
+    // twice in a box a person is asked to read.
+    expect(line.split("https://isocan.io/p/prj_acme")).toHaveLength(2);
+    // What the opening keeps is the PHRASE: "use isocan" is how Scene 0 hands
+    // this product to an agent, and it is worth a line without an address on
+    // it.
+    expect(line).toContain("use isocan");
     // **`ISOCAN_DIRECT=1` is the whole reason this is a separate builder.**
     // Picking "Run an agent in the cloud…" IS the declaration that the
     // workspace is disposable, so the line carries it and nothing has to sniff
