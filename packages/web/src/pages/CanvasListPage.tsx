@@ -86,14 +86,28 @@ export function CanvasListPage({
           is the same product one screen earlier, and it was the last surface
           still dressed the old way. */}
       <div className="canvases-head">
-        <div className="bar-cluster floats">
+        {/**
+         * **No pill here, and that is the point of the difference.**
+         *
+         * The floating slab means "this chrome is sitting ON a canvas" — it
+         * exists so the rail and the toolbar read as hovering over a surface
+         * that runs edge to edge underneath them. This page has no canvas
+         * under it. A pill on a plain page is a frame around nothing: it drew
+         * a box tight around two words and made the wordmark look like a
+         * button nobody can press.
+         *
+         * So the mark and the name sit on the page, and what remains a
+         * control still looks like one — the identity button keeps its hover
+         * chip, because that says something the frame never did.
+         */}
+        <div className="head-mark">
           <span className="home-mark" aria-hidden>
             <HomeGlyph size={16} />
           </span>
           <h1>isocan</h1>
         </div>
         <span className="spacer" />
-        <div className="bar-cluster floats presence-cluster who" ref={whoRef}>
+        <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}
             title="You — rename yourself, or enter as someone else"

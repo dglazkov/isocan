@@ -110,9 +110,28 @@ const realFetch = globalThis.fetch;
  * failure into a `beforeEach` that blew the 30s hook limit. The retry made
  * the symptom worse while fixing the cause.
  *
- * A budget cannot do that. However slow one attempt turns out to be, the
- * whole thing gives up at three seconds and the original error is what the
- * test sees.
+ * A budget cannot do that — but read what it actually promises, because the
+ * sentence that used to be here promised more than the code delivers.
+ *
+ * **The budget is checked BETWEEN attempts, so one slow attempt can and does
+ * exceed it.** Witnessed 29 Aug: `connect ETIMEDOUT 127.0.0.1` on a POST to
+ * the door, "gave up after 7803ms and 1 attempt (budget 3000ms)". The budget
+ * stopped the retry storm, which is what it was for; it never bounded a
+ * single attempt, and this comment claimed it did.
+ *
+ * **Why it is not fixed by aborting each attempt at the budget.** An
+ * `AbortSignal.timeout` would make the number honest and would break the rule
+ * directly above it: a retry is safe here ONLY because `syscall === "connect"`
+ * proves no bytes reached the server, and an `AbortError` carries no syscall —
+ * it cannot distinguish a connect that never completed from a request already
+ * on the wire. Retrying on that would let a POST that mints a badge mint two.
+ * Trading a flake for a possible double write is the wrong direction in a
+ * suite that exists to catch double writes.
+ *
+ * So the number stays advisory and the message says the truth: how long it
+ * really took, and how many attempts it really made. See
+ * `docs/research/2026-08-29-the-flake-family.md` — a loopback connect that
+ * takes 7.8 seconds is not an application bug at all, and that is the finding.
  */
 const CONNECT_BUDGET_MS = 3000;
 globalThis.fetch = async function retryingFetch(input, init) {

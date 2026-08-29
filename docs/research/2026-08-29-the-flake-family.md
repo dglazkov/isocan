@@ -2,9 +2,10 @@
 
 **29 August 2026**
 
-**Status: one member fixed with proof, and TWO more witnessed in a single
-afternoon — with evidence that rules out most of the standing guesses and
-suggests one hypothesis that fits both.** This note exists because the family had
+**Status: one member fixed with proof, and FOUR more witnessed in a single
+afternoon — the third of which names its own cause: a connect that timed out
+on loopback, which means a blocked event loop rather than anything the
+application decided.** This note exists because the family had
 been chased twice by reasoning and never by observation, and the second kind
 of attempt just produced something the first kind could not.
 
@@ -136,6 +137,87 @@ next step is the same as before: make the failures carry more, then read them.
 handler cannot produce, the failure carries the body and the `server` header —
 which distinguishes a not-found handler from a foreign listener, the two
 candidates the first witness left standing. The ordinary path is unchanged.
+
+---
+
+## A third witness, and this one names its own cause
+
+```
+FAIL packages/web/test/pass.test.ts
+     > a tab that arrives carrying one
+     > admits without endowing when the pass carries no actor
+TypeError: fetch failed — POST http://127.0.0.1:59863/api/door,
+  connect/ETIMEDOUT, gave up after 7803ms and 1 attempt (budget 3000ms)
+Caused by: Error: connect ETIMEDOUT 127.0.0.1:59863
+```
+
+**A connect timeout on loopback.** That is the whole finding, and it is not an
+application-level fact at all. On 127.0.0.1 a connect either completes
+immediately or is refused; ETIMEDOUT means the SYN sat in a listen backlog
+that was never accepted — **the daemon's event loop was blocked long enough
+that the kernel gave up on the handshake.**
+
+Everything about the family follows from that better than from anything
+proposed so far:
+
+- It looks like "the second daemon is unreachable" because a blocked loop
+  cannot accept, and a suite running two daemons has twice as many chances.
+- It does not reproduce, because whatever blocks the loop is occasional.
+- Load does not surface it — a starved machine changes *when* the block
+  happens, not whether it can.
+
+**This supersedes the visibility-race hypothesis from the second witness.**
+That one fitted two observations; this one is measured rather than fitted, and
+a blocked event loop would produce the second witness's symptom too — a
+redemption that appears not to have landed because the request that carried it
+timed out.
+
+### And the retry could not help, for a reason worth knowing
+
+`retryingFetch` gives up "after 3000ms", and the failure above took **7803ms
+in a single attempt**. The budget is checked *between* attempts, so one slow
+attempt sails past it: the guard that exists to turn a connect failure into a
+retry never got a second chance to run.
+
+It is deliberately still not fixed by aborting each attempt at the budget. A
+retry is safe there only because `syscall === "connect"` proves no bytes
+reached the server; an `AbortError` carries no syscall and cannot make that
+promise, so retrying on one would let a POST that mints a badge mint two. The
+comment in `test/setup.ts` now says what the budget does instead of what it
+was assumed to do.
+
+### The experiment that would settle it
+
+Sample the daemon's event-loop delay (`perf_hooks.monitorEventLoopDelay`)
+across a suite run and report the maximum per test file. If a blocked loop is
+the cause, the failing files are the ones with a multi-second stall, and the
+question becomes the much smaller one of *what* blocks it — a synchronous
+`readFileSync` over an oplog, a hash over a large blob, a snapshot rebuild.
+
+---
+
+## A fourth witness, which contradicts the table above
+
+```
+FAIL packages/cli/test/upgrade-notice.test.ts
+     > is silent about a word arriving where a sha belongs
+Error: listen EADDRINUSE: address already in use 127.0.0.1:62903
+```
+
+**Port collision is listed as killed in the table at the top of this note, by
+"per-worker port slices".** It is not killed. Whatever the slicing does, two
+things asked for 62903 in the same run.
+
+Recorded rather than explained, and the table is left standing with this
+underneath it deliberately: the entry was written in good faith from a real
+mitigation, and striking it out would hide that a mitigation which looked
+sufficient was not. A cost that was PAID rather than avoided is worth being
+able to see.
+
+It also sits oddly beside the third witness. A connect that times out on
+loopback and a port that is already in use are both about *sockets*, in a
+suite whose members were assumed to be about state. Whether that is one cause
+or two is exactly what the event-loop experiment above would start to separate.
 
 ---
 
