@@ -1188,6 +1188,66 @@ img { height: auto; }
   background: var(--ground);
   display: flex; flex-direction: column;
 }
+/* **Full screen's chrome floats, and the slide gets the whole window.**
+
+   The bar below — still the workbench's — states the principle: "every pixel
+   this takes is one the thing you are reading does not get." Floating is that
+   argument finished. The stage is the window, and two clusters sit on it in
+   the same slab language as the canvas's own header.
+
+   `.resting` is the slideshow answer. This view walks the canvas with ⌘← and
+   ⌘→, and a permanent bar across the top of every slide is the one thing a
+   slideshow must not have — so after a few still seconds the chrome bows out,
+   and a pointer move brings it back. Visibility, not display: a control that
+   is laid out but transparent keeps its place, so nothing reflows when it
+   returns and the fade cannot move the slide. */
+.fs-bar {
+  position: absolute; top: var(--edge); left: var(--edge); right: var(--edge);
+  z-index: 1; display: flex; align-items: center; gap: 10px;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.fs-bar > * { pointer-events: auto; }
+.fs-cluster {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 5px 10px;
+}
+.fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
+.fullscreen.resting .fs-bar > * { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }
+/* The stage is the whole window now that nothing above it takes a slice. */
+.fullscreen > .fullscreen-stage { position: absolute; inset: 0; }
+
+/* **The workbench's bar, in the same language as the canvas's.**
+
+   It shared `.fullscreen-bar` with full screen, and when that view's chrome
+   went floating this one could not follow: full screen has a single stage to
+   float over, and the workbench has COLUMNS. Chrome floating over a column of
+   agent rows covers the rows.
+
+   So it takes its space — the columns start below it — and what changes is
+   that the slab is gone. The bar paints nothing; the clusters on it do, in
+   the `.floats` language every other surface uses. The room and the canvas
+   now look like the same product with two rooms in it. */
+.wb-bar {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: var(--edge) var(--edge) 0;
+  background: none; border: none;
+}
+/* The columns keep the gap the bar started, so the room breathes on the same
+   rhythm as the canvas rather than running its panels into the window. */
+.workbench .wb-body { padding: var(--edge); gap: var(--edge); }
+/* Floating panels, not walls: the divider each column drew against its
+   neighbour was the last of the flush-and-bordered language in here. */
+.workbench .wb-agents {
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  background: var(--panel); box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.workbench .wb-stage {
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  background: var(--panel); overflow: hidden;
+}
+
 /* A thin bar, not a chrome header: the item is what you came for, and every
    pixel this takes is one the thing you are reading does not get. */
 .fullscreen-bar {
@@ -1343,9 +1403,22 @@ img { height: auto; }
   flex: none; overflow-y: auto; overscroll-behavior: contain;
   padding: 10px 12px; border-bottom: 1px solid var(--line);
 }
+/* **A name is written one way, everywhere.**
+
+   These were uppercased: AGENTS, DIRECTORY, and — in the panel below them —
+   CHAT. On the canvas the same words are buttons that say "Chat" and
+   "Agents", so the app was shouting its own nouns in one room and speaking
+   them in another. Reported three times about the canvas before it was
+   believed; the workbench had the identical bug one screen over.
+
+   Uppercase is not banned. A DESCRIPTIVE label — "made by this conversation"
+   — is a caption and may be set however it reads best. What may not vary is a
+   NAME: Chat, Files, Agents are things this product has, and a thing has one
+   spelling. The size and the colour still say "section label"; only the
+   shouting is gone. */
 .wb-roster h3 {
-  margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+  margin: 0 0 8px; font-size: 11px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink-soft);
   display: flex; align-items: center; justify-content: space-between;
 }
 .wb-quiet { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-muted); }
@@ -1357,8 +1430,8 @@ img { height: auto; }
   padding: 8px 12px; border-bottom: 1px solid var(--line);
 }
 .wb-files h3 {
-  margin: 0 0 6px; font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+  margin: 0 0 6px; font-size: 11px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink-soft);
 }
 .wb-tree { margin: 0; padding: 0; list-style: none; font-size: 11.5px; }
 .wb-tree li { display: flex; align-items: center; min-width: 0; line-height: 1.7; }
@@ -2124,6 +2197,20 @@ button.mt-card:hover { border-color: var(--accent); }
 .agents-body { flex: 1; overflow: auto; padding: 6px; }
 .agents-quiet { margin: 10px 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .agents-quiet code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
+/* Follow's toggle, in the Chat's own header because that is what it follows.
+   Quiet when off and wearing the accent when on: this moves the canvas on
+   somebody's behalf, so whether it is armed has to be readable at a glance
+   from the thing it acts on. */
+.main-follow {
+  flex: none; font: inherit; font-size: 11px; line-height: 1;
+  padding: 4px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: none; color: var(--ink-soft);
+}
+.main-follow:hover { color: var(--ink); border-color: var(--accent); }
+.main-follow.on {
+  color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
+}
 
 /* ---------- the lane ----------
 
@@ -3528,8 +3615,8 @@ button.mt-card:hover { border-color: var(--accent); }
   border-bottom: none;
 }
 .workbench .main-panel header b {
-  font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink-soft);
 }
 /* The glyph and the hint come down with it — a mark sized for a panel title
    beside a section label is the same mismatch one element along. */

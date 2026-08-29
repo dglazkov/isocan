@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { canvasPath, itemPath } from "@isocan/core";
@@ -37,6 +37,11 @@ const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowR
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
+/** Still for this long and the chrome bows out. Long enough that reading a
+ *  slide does not dismiss it by accident, short enough to be gone by the
+ *  second slide of a talk. */
+const REST_AFTER_MS = 2500;
+
 export function FullScreen({
   canvasId,
   itemId,
@@ -94,15 +99,50 @@ export function FullScreen({
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
+  /**
+   * **The chrome gets out of the way while you are presenting.**
+   *
+   * This view is used as a slideshow — ⌘← and ⌘→ walk the canvas — and a
+   * permanent bar across the top of every slide is the one thing a slideshow
+   * must not have. So it fades after a few still seconds and comes back the
+   * moment the pointer moves.
+   *
+   * **A key press deliberately does NOT bring it back.** Flipping slides is
+   * the act of presenting; if ⌘→ revealed the chrome, it would blink into
+   * view on every slide, which is worse than leaving it up. Moving the mouse
+   * is the honest signal that somebody wants a control.
+   *
+   * Focus brings it back regardless of the pointer: somebody arriving at
+   * "← Canvas" by keyboard must be able to see where they are, and a focus
+   * ring on an invisible button is the worst of both.
+   */
+  const [resting, setResting] = useState(false);
+  useEffect(() => {
+    let timer = window.setTimeout(() => setResting(true), REST_AFTER_MS);
+    const wake = () => {
+      setResting(false);
+      clearTimeout(timer);
+      timer = window.setTimeout(() => setResting(true), REST_AFTER_MS);
+    };
+    window.addEventListener("pointermove", wake, { passive: true });
+    window.addEventListener("focusin", wake);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("pointermove", wake);
+      window.removeEventListener("focusin", wake);
+    };
+  }, []);
+
   // The stage answers for the item — found, missing, or still loading — so
   // full screen and the workbench cannot drift apart about what an item looks
   // like (see ArtifactStage). The bar renders either way: the way back must
   // not depend on the item existing.
   return (
-    <div className="fullscreen">
-      <div className="fullscreen-bar">
+    <div className={`fullscreen${resting ? " resting" : ""}`}>
+      <div className="fs-bar">
         {/* The way back, and it says where back IS. An arrow alone would be a
             guess; "Canvas" is the answer to "where am I". */}
+        <div className="floats fs-cluster">
         <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
           ← Canvas
         </button>
@@ -114,13 +154,16 @@ export function FullScreen({
             <i>{item.versions.find((v) => v.id === item.currentVersionId)?.filename}</i>
           </span>
         )}
+        </div>
         <span className="spacer" />
+        <div className="floats fs-cluster">
         {/* No "Copy link" button: the address bar already holds the address of
             this exact view — that IS what the route bought — and a button that
             re-copies what the browser is already showing is chrome earning
             nothing. What belongs here instead is what this view had been
             throwing away: which canvas you are in, and who is in it. */}
         <CanvasPresence actor={actor} onIdentity={onIdentity} />
+        </div>
       </div>
       <div className="fullscreen-stage">
         <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />

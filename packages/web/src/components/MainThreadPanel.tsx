@@ -11,6 +11,7 @@ import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox, revealItem } from "../lib/zoomactions.ts";
+import { type FollowState, nextFollow } from "../lib/lanefollow.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
@@ -299,6 +300,39 @@ function LaneChips({
   );
 }
 
+/**
+ * **Follow: the camera goes to what a message just made.**
+ *
+ * The decision lives in `lib/lanefollow.ts` as a pure function, and that is
+ * the point rather than tidiness: this is the one feature that moves the
+ * canvas without being asked each time, so its rules are somewhere they can
+ * be argued with instead of buried in an effect.
+ *
+ * `busy` is a pan or a drag, and it beats follow outright — the move is
+ * dropped rather than deferred, because a camera that lurches the instant you
+ * release the mouse is worse than one that missed a message.
+ *
+ * `revealItem`, not `centerOn`: the same conditional flight a dropped file
+ * gets. If the thing is already in front of you, nothing moves at all.
+ */
+function useLaneFollow(canvas: CanvasContents | null, thread: CommentThread | null) {
+  const on = useUiStore((s) => s.laneFollow);
+  const panning = useUiStore((s) => s.panning);
+  const drag = useUiStore((s) => s.drag);
+  const state = useRef<FollowState>({ lastItemId: null, lastAtMs: 0 });
+  useEffect(() => {
+    if (!canvas) return;
+    const go = nextFollow(canvas, thread, state.current, {
+      on,
+      busy: panning || drag !== null,
+      nowMs: Date.now(),
+    });
+    if (!go) return;
+    state.current = { lastItemId: go, lastAtMs: Date.now() };
+    revealItem(go);
+  }, [canvas, thread, on, panning, drag]);
+}
+
 export function MainThreadBody({
   canvasId,
   actor,
@@ -330,6 +364,8 @@ function Panel({
   const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
+  const laneFollow = useUiStore((s) => s.laneFollow);
+  useLaneFollow(canvas, thread);
   const [draft, setDraft] = useState("");
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
@@ -391,6 +427,20 @@ function Panel({
         <b>Chat</b>
         <i className="main-hint" title="Everything posted here reaches every collaborator, agents included, with no @-mention needed — which is what makes it different from a comment pinned to one thing.">everyone here, agents included</i>
         <span className="spacer" />
+        {thread && (
+          <button
+            className={`main-follow${laneFollow ? " on" : ""}`}
+            aria-pressed={laneFollow}
+            title={
+              laneFollow
+                ? "Following: the canvas goes to what a message makes. Click to stop."
+                : "Follow: send the canvas to whatever a message makes next"
+            }
+            onClick={() => useUiStore.getState().setLaneFollow(!laneFollow)}
+          >
+            ⇅ follow
+          </button>
+        )}
         {thread && (
           <button
             className="main-detach"

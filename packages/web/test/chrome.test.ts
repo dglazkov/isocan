@@ -665,6 +665,40 @@ describe("the Chat and the comments say which they are", () => {
     expect(handler, "spell the undo key once, in the registry").not.toContain("⌘");
   });
 
+  it("writes a name one way, on every screen", () => {
+    /**
+     * **Chat, Files and Agents are things this product HAS, and a thing has
+     * one spelling.**
+     *
+     * The canvas panel headers shouted CHAT and FILES while the buttons that
+     * opened them said "Chat" and "Files" — the same word twice, at two
+     * volumes, three inches apart. Reported three times before it was
+     * believed. The workbench then turned out to have the identical bug one
+     * screen over: AGENTS, DIRECTORY, and a CHAT under them.
+     *
+     * Uppercase is NOT banned, and this guard is careful to say so. A
+     * descriptive label — "made by this conversation", "everyone here, agents
+     * included" — is a caption and may be set however it reads best. What may
+     * not vary is a name.
+     */
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    const shouts = (selector: string) => {
+      const rule = new RegExp(`\\${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
+      expect(rule, `${selector} must have a rule`).not.toBe("");
+      return /text-transform:\s*uppercase/.test(rule);
+    };
+    for (const named of [
+      ".main-panel header b",
+      ".files-panel header b",
+      ".agents-panel header b",
+      ".wb-roster h3",
+      ".wb-files h3",
+      ".workbench .main-panel header b",
+    ]) {
+      expect(shouts(named), `${named} names a thing — do not shout it`).toBe(false);
+    }
+  });
+
   it("names the thing a pin holds a comment, on the button that deletes one", () => {
     expect(read("CommentLayer.tsx")).toContain("Delete comment");
   });

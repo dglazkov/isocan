@@ -338,13 +338,28 @@ Three refusals were also confirmed live rather than only in tests — an item
 off screen, an item behind the rail, and a 372px rise — each of which looked
 like a broken feature until the numbers said otherwise.
 
-**Follow is not built.** It is the "⇅ follow" toggle in the mock: the camera
-tracking the lane as messages arrive. Everything above is drawing; follow
-MOVES THE CANVAS on the person's behalf, which puts it in the same class as
-phase 2 and deserves the same treatment — its own pass, with the pan/drag
-suppression and the throttle designed rather than bolted on. Shipping a
-half-considered version of the one feature whose worst failure is "the canvas
-moved under my hand" would be the wrong trade.
+**Follow landed 28 Aug 2026**, in its own pass as promised. The decision is a
+pure function (`lib/lanefollow.ts`) rather than an effect, because this is the
+one feature that moves the canvas without being asked each time and its rules
+deserve somewhere they can be argued with. Off by default; a pan or a drag
+beats it outright and the move is DROPPED rather than deferred; a burst of
+saves is one flight, not five; and it never re-flies to where the camera
+already is. `revealItem`, so something already in front of you does not move
+at all.
+
+**And using it found a real gap in 4a's rule.** `comment.items` is resolved
+when a message is WRITTEN, so an agent cannot #-reference an item that does
+not exist yet — the only way to point at a new thing is to make it first and
+announce it after. The rule demanded the work come after the words, so the
+commonest flow in the product produced no arrow at all, while "announce, then
+build, then edit the message" was the only path that worked. That is a rule
+describing a habit nobody has.
+
+A message now owns the span from its author's PREVIOUS word to their next, so
+it claims what its author made moments before saying so. With no previous
+message there is still a floor (`CLAIM_GRACE_MS`, two minutes) or a first
+message would claim a canvas built last week. Verified live: three chips where
+there had been one.
 
 ## Phase 5 — Item chrome sheds its box
 
