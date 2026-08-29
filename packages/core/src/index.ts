@@ -51,3 +51,4 @@ export * from "./frameable.ts";
 export * from "./mindmap.ts";
 export * from "./designimport.ts";
 export * from "./context.ts";
+export * from "./converge.ts";

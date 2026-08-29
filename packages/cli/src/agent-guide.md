@@ -354,6 +354,26 @@ and is usually fine.
 
 The same list is a panel on the canvas, so the person can see what you see.
 
+## Choosing between variations
+
+Explore with `/variation`, then `isocan choose <item>` says **this one won**:
+the winner's content becomes a new version of the screen it was made from, and
+every sibling — the winner included — goes to the trash.
+
+The winner goes too, and that is deliberate: its content now lives on the
+source's stack, so leaving it would be two copies of one decision and an
+invitation to edit the wrong one. Nothing is lost. `--dry-run` says what would
+happen and does nothing.
+
+**One undo takes the whole decision back**, because the version and the
+deletions share a group. The version comes off the source and every child
+comes out of the trash in one gesture. (`isocan undo` names one op when it
+does this — it is terse rather than wrong; the whole gesture is undone.)
+
+It refuses with a reason rather than a shrug: an item made from nothing has
+nowhere to fold back into, and an item whose source has been deleted since
+says so.
+
 ## Mind maps
 
 Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts
