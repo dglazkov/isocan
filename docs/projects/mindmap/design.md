@@ -109,12 +109,13 @@ rejected.
 - **Forty items where there was one.** Files, `ls`, counts and trash all see
   them. The `map` property is what keeps that manageable, and it is the real
   new work here.
-- **Undo is per-op.** An agent building a map from one sentence writes dozens
-  of ops, and `⌘Z` walks back through them one at a time. This is the same gap
-  a text-node edit hit (two ops, two undos), and a map makes it loud. The
-  honest fix is grouping in the oplog, which would pay for itself across every
-  multi-op gesture — worth its own argument, and not something to invent
-  inside this feature.
+- ~~**Undo is per-op.**~~ **Paid, 28 Aug 2026.** This said the honest fix was
+  grouping in the oplog, worth its own argument rather than something to
+  invent inside this feature — and that argument was had and won the same day
+  (`LogEntry.group`, and `docs/research/2026-08-28-op-grouping.md`). An agent
+  building a map from one sentence is already one `⌘Z`. The cost stands
+  recorded because the reasoning is what made the case for grouping, and a
+  cost that was paid rather than avoided is worth being able to see.
 - **Layout.** An agent producing thirty nodes must place them somewhere
   legible. `fit.ts` already grows items and settles them without collisions,
   and `spotInView` already picks a spot you can see; a radial or layered tree
