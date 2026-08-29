@@ -10,7 +10,7 @@ import {
   workbenchPath,
   type AgentRow,
 } from "@isocan/core";
-import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
+import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { WB_AGENTS_MIN_WIDTH, useUiStore } from "../stores/uiStore.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
@@ -154,6 +154,7 @@ export function Workbench({
             else's faces. Losing the pile on the way into the room where the
             agents are was the worst of it. */}
         <div className="floats fs-cluster">
+          <ShareButton actor={actor} />
           <CanvasPresence actor={actor} onIdentity={onIdentity} />
         </div>
       </div>

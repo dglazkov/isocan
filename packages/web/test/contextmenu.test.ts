@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Actor, Item } from "@isocan/core";
 import { keyFor } from "@isocan/core";
-import { canvasMenu, itemMenu } from "../src/lib/menuentries.ts";
+import { canvasMenu, itemMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
 /**

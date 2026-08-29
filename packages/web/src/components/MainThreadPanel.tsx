@@ -21,6 +21,7 @@ import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
+import { ChatGlyph } from "./Glyphs.tsx";
 import { OnIt } from "./OnIt.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
@@ -418,7 +419,7 @@ function Panel({
     >
       {docked && <PanelResizer />}
       <header>
-        <span className="main-glyph">✳</span>
+        <span className="main-glyph"><ChatGlyph size={13} /></span>
         {/* The same word the button that opens it says. It read "Main
             thread" under a button that said "Main" — two labels for one panel,
             and both naming the SLOT (there is one, it is the main one) rather

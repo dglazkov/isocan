@@ -583,7 +583,10 @@ describe("the Chat and the comments say which they are", () => {
     readFileSync(new URL(`../src/components/${file}`, import.meta.url), "utf8");
 
   it("gives the button and the panel it opens the SAME word", () => {
-    expect(read("CreateActions.tsx")).toMatch(/shelf-glyph">✳<\/span> Chat/);
+    // `PanelSwitch` was deleted with the `···` drawer: nothing rendered it any
+    // more, and it was the last thing wearing the old `✳`. What replaced this
+    // assertion is `chatglyph.test.ts`, which holds the mark itself.
+    expect(read("CreateActions.tsx"), "PanelSwitch is gone").not.toMatch(/PanelSwitch/);
     expect(read("MainThreadPanel.tsx")).toContain("<b>Chat</b>");
     // The old pair, gone from both: a label naming the slot taught nobody
     // what the panel was for.

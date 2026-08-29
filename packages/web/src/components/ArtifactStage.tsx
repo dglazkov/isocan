@@ -54,8 +54,23 @@ type Panes = { preview: boolean; edit: boolean };
  * room you flipped to in order to change something.
  *
  * One shared preference could not say that — it made Enter and W open the
- * same way, so whichever you used last decided what the other did. Two keys,
- * two defaults, and each cover remembers its own folding.
+ * same way, so whichever you used last decided what the other did. Two keys
+ * and two defaults fixed that much.
+ *
+ * **What they did not fix: full screen remembered.** Open the editor there
+ * once — to check a line, months ago — and Enter meant "look at this thing
+ * big, with an editor" from then on. Reported as Enter putting the canvas
+ * into workbench mode, which is exactly what it looked like, and the route
+ * was never wrong: the remembered pane was.
+ *
+ * So full screen no longer persists its folding. Enter means the preview,
+ * every time, on any machine, however you left it last. The editor is still
+ * one click away and still holds for as long as you are in there — what is
+ * gone is a preference quietly redefining a key.
+ *
+ * The workbench still remembers, and should: it is a room you go to in order
+ * to work, and how you like that room arranged is a statement about how you
+ * work. Full screen is not a room, it is a look at one thing.
  */
 export type Surface = "fullscreen" | "workbench";
 
@@ -110,6 +125,8 @@ function writeSplit(fraction: number | null): void {
 }
 
 function readPanes(surface: Surface): Panes {
+  // Full screen opens the same way every time — see the note above.
+  if (surface === "fullscreen") return DEFAULT_PANES.fullscreen;
   try {
     const raw = localStorage.getItem(PANES_KEY[surface]);
     if (raw === "preview") return { preview: true, edit: false };
@@ -122,6 +139,10 @@ function readPanes(surface: Surface): Panes {
 }
 
 function writePanes(surface: Surface, panes: Panes): void {
+  // Nothing is written for full screen: the fold holds while you are in
+  // there and is forgotten on the way out, which is what makes Enter mean
+  // one thing.
+  if (surface === "fullscreen") return;
   try {
     localStorage.setItem(
       PANES_KEY[surface],

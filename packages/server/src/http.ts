@@ -67,6 +67,8 @@ import {
   CANVASES_REACH_PARAM,
   SHELF,
   UNKNOWN_ROUTE,
+  frameVerdict,
+  normalizeSiteUrl,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -878,6 +880,48 @@ export function registerRoutes(
 
   /** Chosen identity colors, for clients painting faces before a canvas is
    * open (the canvases page) — everything absent is derived from the id. */
+  /**
+   * **Can this site be shown in a frame?**
+   *
+   * "Add site" projects a live site into an item, and an item is an iframe.
+   * Most of the public web refuses that — `X-Frame-Options` and CSP
+   * `frame-ancestors` exist to stop exactly this — and the refusal was
+   * SILENT: the item appeared, the browser declined to render it, and the
+   * canvas showed a blank rectangle. "I tried yahoo.com and it didn't work."
+   *
+   * It has to be asked from HERE. A page cannot tell a blocked cross-origin
+   * frame from a loaded one, so the headers are the only fact available and
+   * only something making the request server-side can read them.
+   *
+   * A verdict is advice, never a gate: a site can answer differently to a
+   * different agent, redirect, or simply be slow, so anything that goes wrong
+   * here answers `ok` and lets the person try. The one thing this must not do
+   * is refuse a site that would have worked.
+   */
+  app.get("/api/frameable", async (req) => {
+    const raw = (req.query as { url?: string }).url ?? "";
+    let target: string;
+    try {
+      target = normalizeSiteUrl(raw);
+    } catch (err) {
+      return { ok: true, unchecked: (err as Error).message };
+    }
+    try {
+      const probe = await fetch(target, {
+        method: "GET",
+        redirect: "follow",
+        signal: AbortSignal.timeout(4000),
+      });
+      const verdict = frameVerdict(probe.headers, null);
+      // The address AFTER redirects: `yahoo.com` answers from elsewhere, and
+      // naming the place that refused beats naming the place you typed.
+      return { ...verdict, url: probe.url || target };
+    } catch {
+      // Unreachable, too slow, refused the probe: not our verdict to give.
+      return { ok: true, unchecked: "could not be reached to check" };
+    }
+  });
+
   app.get("/api/colors", async () => engine.actorColors());
 
   /** Current names, for clients rendering words somebody wrote under a name

@@ -6,7 +6,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
 import { KindIcon } from "./KindIcon.tsx";
-import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
+import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { revealItem } from "../lib/zoomactions.ts";
@@ -162,7 +162,8 @@ export function FullScreen({
             re-copies what the browser is already showing is chrome earning
             nothing. What belongs here instead is what this view had been
             throwing away: which canvas you are in, and who is in it. */}
-        <CanvasPresence actor={actor} onIdentity={onIdentity} />
+        <ShareButton actor={actor} />
+          <CanvasPresence actor={actor} onIdentity={onIdentity} />
         </div>
       </div>
       <div className="fullscreen-stage">

@@ -8,6 +8,7 @@ import { unreadByAuthor } from "../lib/facepile.ts";
 import { facesFor } from "../lib/facepile.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openPanel } from "../lib/panels.ts";
+import { ChatGlyph } from "./Glyphs.tsx";
 
 /**
  * **The rail when it is shut.**
@@ -76,8 +77,8 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
         aria-label={unread > 0 ? `Open the Chat, ${unread} unread` : "Open the Chat"}
         onClick={() => openPanel(canvasId, "main")}
       >
-        <span className="strip-glyph" aria-hidden>
-          ✳
+        <span className="strip-glyph">
+          <ChatGlyph />
         </span>
         {unread > 0 && (
           <span className="strip-unread" aria-hidden>

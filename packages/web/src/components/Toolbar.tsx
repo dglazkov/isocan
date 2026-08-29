@@ -5,12 +5,13 @@ import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { chromeMenu } from "../lib/menuentries.ts";
+import { chromeMenu } from "../lib/menuentries.tsx";
+import { HomeGlyph, WorkbenchGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
-import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
+import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
@@ -30,6 +31,7 @@ export function Toolbar({
   const trashOpen = useUiStore((s) => s.trashOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
   const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
+  const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
@@ -64,8 +66,8 @@ export function Toolbar({
      */
     <div className="toolbar">
       <div className="bar-cluster floats">
-        <Link className="home" to="/" title="All canvases">
-          ⌂
+        <Link className="home" to="/" title="All canvases" aria-label="All canvases">
+          <HomeGlyph />
         </Link>
         <CanvasTitle actor={actor} />
         {canvas && (
@@ -85,6 +87,7 @@ export function Toolbar({
                   canvasId: canvas.id,
                   filesOpen,
                   agentsOpen,
+                  mainOpen,
                   trashOpen,
                   trashCount,
                   minimapOpen,
@@ -97,7 +100,13 @@ export function Toolbar({
         )}
       </div>
       <span className="spacer" />
-      <div className="bar-cluster floats">
+      {/* **Two clusters, not one.**
+          `⌗ Workbench  ● live  Share` put a STATUS between two buttons, which
+          reads as a broken row — you scan buttons, hit a green dot, and have
+          to start again. Workbench navigates and stands alone; `live`, the
+          faces and your own badge are one subject — who is in the room — and
+          Share belongs with them because it is that subject from the other
+          side: who may come in. */}
       {/* The way into the workbench, said out loud. It was `W` and nothing
           else — a door only people who had read the shortcut list could find
           — and the workbench has had a visible `← Canvas` since the day it
@@ -105,15 +114,22 @@ export function Toolbar({
           Deliberately NOT a segmented pill beside `Chat | Files`: those
           toggle a dock and can both be off, this navigates and one view is
           always true. Same shape would promise the same rules. */}
-      {canvas && (
-        <Link
-          className="btn wb-enter"
-          to={workbenchPath(canvas.id)}
-          title="Workbench — the agents, the files and the thread around one screen (W)"
-        >
-          ⌗ Workbench
-        </Link>
-      )}
+      {/* Both of these DO something, so they share a pill. `live`, the faces
+          and your own badge are things you read, and they share the other. */}
+      <div className="bar-cluster floats">
+        {canvas && (
+          <Link
+            className="btn wb-enter"
+            to={workbenchPath(canvas.id)}
+            title="Workbench — the agents, the files and the thread around one screen (W)"
+          >
+            <WorkbenchGlyph />
+            Workbench
+          </Link>
+        )}
+        <ShareButton actor={actor} />
+      </div>
+      <div className="bar-cluster floats presence-cluster">
       {/* RIGHT: things you look up, and the way out. Nothing here MAKES an
           item any more — the two that did (upload, then Site) both went to
           the tool rail, which is where a canvas keeps the things that put

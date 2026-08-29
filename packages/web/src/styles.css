@@ -512,6 +512,13 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) { .sketch-dot-live { animation: none; } }
 .sketch-label { font-size: 11.5px; color: var(--ink-muted); white-space: nowrap; }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+/* **Only while the rail is opening or closing**, and never otherwise: a
+   canvas that eased every transform would lag the hand on every pan and
+   zoom, which is the one thing a canvas may not do. Transforms transition on
+   the compositor, so this stays smooth while React is busy mounting the panel
+   that caused it — which is exactly what the rAF version could not do. */
+.world.rail-panning { transition: transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) { .world.rail-panning { transition: none; } }
 
 /* Cursor spotlight: a brighter copy of the dot grid, aligned to the base grid,
    revealed only in a soft circle around the pointer. JS fades its opacity out
@@ -593,6 +600,14 @@ img { height: auto; }
   color: var(--ink-muted); font-size: 15px; letter-spacing: 1px;
 }
 .drawer-handle:hover { color: var(--ink); }
+/* **A circle needs more air than a rectangle.**
+
+   The faces are round and the pill is round, so at the shared 4px inset their
+   curves run nearly parallel and the gap READS smaller than it measures —
+   reported as "the logged in circles feel very tight". Round things get the
+   inset they look like they have rather than the one the ruler agrees with. */
+.presence-cluster { padding-right: calc(var(--pill-inset) + 3px); gap: 7px; }
+.presence-cluster .face { margin: 0; }
 .bar-cluster .btn:hover { background: var(--chip); }
 .bar-cluster .btn.active { background: var(--accent); border-color: var(--accent); }
 /* Nothing in the bar breaks its own label in half.
@@ -1660,6 +1675,26 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   transition: transform 0.16s ease, opacity 0.16s ease;
 }
 .fan-card.current { outline: 2px solid var(--accent); }
+/* **It said it was clickable and then did nothing.**
+
+   `cursor: pointer` and a `transition` were already here — the card declared
+   itself a control and had no hover state at all, so the pointer changed and
+   the card did not. That is the one combination that reads as broken rather
+   than as plain: a thing that ignores you after telling you it wouldn't.
+
+   A border and a lift, on the transition that was already declared. The
+   current version keeps its outline on top, because "which one is live" must
+   not be something hovering can take away. */
+.fan-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px -12px var(--accent-shadow);
+  z-index: 4;
+}
+.fan-card:focus-visible { border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .fan-card:hover { transform: none; }
+}
 .fan-card .fan-label {
   flex: none; font-size: 10px; padding: 4px 8px; color: var(--ink-muted);
   border-bottom: 1px solid var(--line-soft); display: flex; gap: 6px; white-space: nowrap;
@@ -2189,10 +2224,15 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
 }
 .agents-panel header b { font-size: 13px; letter-spacing: -0.01em; }
+/* The close sits at the far edge, where it does on the other two panels — a
+   ✕ that floats next to the subtitle reads as part of the sentence. The hint
+   takes the slack instead. */
+.agents-panel header .spacer { flex: 1; }
 .agents-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
 .agents-hint {
   font-style: normal; font-size: 11px; color: var(--ink-soft);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  flex: 0 1 auto;
 }
 .agents-body { flex: 1; overflow: auto; padding: 6px; }
 .agents-quiet { margin: 10px 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
@@ -2211,6 +2251,22 @@ button.mt-card:hover { border-color: var(--accent); }
 .main-follow.on {
   color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
 }
+
+/* A glyph in a menu row: fixed width so the labels line up whether or not a
+   row has one, and quieter than the words — it is a reminder of the surface,
+   not the point of the row. */
+.menu-icon {
+  flex: none; display: inline-flex; width: 16px; justify-content: center;
+  color: var(--ink-soft);
+}
+.context-menu button:hover .menu-icon { color: var(--accent-text); }
+/* Glyphs inside the bar's buttons ride with the label rather than sitting on
+   the baseline, which is where an inline SVG lands by default. */
+.bar-cluster .btn svg,
+.fs-cluster .btn svg,
+.identity-anchor .btn svg { flex: none; }
+.home { display: inline-flex; align-items: center; color: var(--ink-muted); }
+.home:hover { color: var(--ink); }
 
 /* ---------- the lane ----------
 
@@ -2370,11 +2426,23 @@ button.mt-card:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 /* The fold control: quiet until you are looking at the map. */
+/* **It hung off the corner like something that had come loose.**
+
+   `right: 2px; top: -2px` put a circle astride the map's own rounded border —
+   half on the panel, half on the canvas — with the selection outline running
+   under it. Two edges crossing at a corner is the one place a border cannot
+   look deliberate, and a round control on a rounded corner is two arcs
+   fighting.
+
+   Inside the panel now, clear of the radius, wearing the panel's own ground
+   and a matching corner: a control that belongs to the map rather than one
+   stuck to it. */
 .minimap-fold {
-  position: absolute; right: 2px; top: -2px; z-index: 1;
+  position: absolute; right: 6px; top: 6px; z-index: 1;
   width: 20px; height: 20px; padding: 0; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line-soft); border-radius: 7px;
+  backdrop-filter: blur(6px);
   color: var(--ink-muted); font-size: 12px;
   opacity: 0; transition: opacity 0.14s ease;
 }

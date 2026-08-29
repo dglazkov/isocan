@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -61,6 +61,36 @@ describe("the dock holds one of three, and everything knows", () => {
       /return ui\.mainPanelOpen \|\| ui\.filesPanelOpen \|\| ui\.agentsPanelOpen;/,
     );
     expect(stage, "dockEdges must go through it").toMatch(/railSpan\(railIsOpen\(ui\)/);
+  });
+
+  it("lets nobody spell out which panels count as open", () => {
+    /**
+     * `railIsOpen` existed and the minimap did not ask it — it asked about
+     * Chat and Files by name, which was true until the tray was added and
+     * then left the map sitting INSIDE the open tray. A shared answer only
+     * helps if it is the only answer, so this is the rule rather than the
+     * instance: nothing outside `stage.ts` and the store may decide what
+     * "the rail is open" means.
+     */
+    const offenders: string[] = [];
+    for (const rel of readdirSync(fileURLToPath(new URL("../src", import.meta.url)), {
+      recursive: true,
+      encoding: "utf8",
+    })) {
+      if (!rel.endsWith(".tsx") && !rel.endsWith(".ts")) continue;
+      if (rel.endsWith("lib/stage.ts") || rel.endsWith("stores/uiStore.ts")) continue;
+      if (rel.endsWith("lib/panels.ts")) continue; // it SETS them, one at a time
+      const src = read(rel);
+      src.split("\n").forEach((line, i) => {
+        const code = line.trim();
+        if (code.startsWith("//") || code.startsWith("*")) return;
+        // Two of the three panels in one boolean is the shape that goes stale.
+        if (/(mainPanelOpen|filesPanelOpen|agentsPanelOpen)[^\n]*\|\|[^\n]*(mainPanelOpen|filesPanelOpen|agentsPanelOpen)/.test(line)) {
+          offenders.push(`src/${rel}:${i + 1} — ${code}`);
+        }
+      });
+    }
+    expect(offenders, "ask railIsOpen(); it is the whole answer").toEqual([]);
   });
 
   it("remembers the tray the way it remembers the other two", () => {

@@ -15,7 +15,7 @@ import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
 import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
-import { canvasMenu, itemMenu } from "../lib/menuentries.ts";
+import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
@@ -51,6 +51,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
+  const railPanning = useUiStore((s) => s.railPanning);
   const menu = useUiStore((s) => s.contextMenu);
   const navigate = useNavigate();
   const fannedItemId = useUiStore((s) => s.fannedItemId);
@@ -664,7 +665,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     >
       <CursorGlow />
       <div
-        className="world"
+        className={`world${railPanning ? " rail-panning" : ""}`}
         style={
           {
             transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,

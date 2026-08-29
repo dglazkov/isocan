@@ -119,8 +119,14 @@ describe("⌘J is one row that reaches both surfaces", () => {
      */
     const page = read("pages/CanvasPage.tsx");
     expect(page).toMatch(/e\.key\.toLowerCase\(\) === "j"/);
-    expect(page, "and it must toggle rather than only open").toMatch(
-      /mainPanelOpen \|\| ui\.filesPanelOpen \? null : "main"/,
+    /**
+     * It toggles THE CHAT, not "whatever is open". It used to close the rail
+     * whichever panel was showing, so from Files the key named for the Chat
+     * was the one way you could not reach it — the same hole that kept Chat
+     * out of the `···` drawer, found the same day.
+     */
+    expect(page, "⌘J means the Chat, from wherever you are").toMatch(
+      /openPanel\(canvasId, ui\.mainPanelOpen \? null : "main"\)/,
     );
   });
 });
