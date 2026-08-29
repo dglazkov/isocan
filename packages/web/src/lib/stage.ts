@@ -24,7 +24,15 @@ import { useUiStore } from "../stores/uiStore.ts";
  * window each dock takes.
  */
 
-export const TOPBAR_HEIGHT = 48;
+/**
+ * What the header occupies: `--edge` plus a 34px cluster.
+ *
+ * It was 48 while the bar was a slab flush to the top. The clusters float at
+ * the shared inset now, so the space they take begins at 20 and ends at 54 —
+ * and this number is what stops framing parking an item under them, so it has
+ * to be what they actually occupy rather than what the old bar did.
+ */
+export const TOPBAR_HEIGHT = 54;
 
 /** The trash panel's docked width. `.trash-panel { width: 300px }` — the two
  * are one number with two homes, which is why the CSS is guarded. */

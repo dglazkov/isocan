@@ -32,9 +32,13 @@ describe("the rail's footprint has one spelling", () => {
     // every surface beside the rail is wrong by the difference.
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
     const rule = /\.dock-panel\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
-    expect(rule, ".dock-panel must be inset by RAIL_INSET").toMatch(
-      new RegExp(`left:\\s*${RAIL_INSET}px`),
-    );
+    // Through the shared token, and the token must equal the constant. The
+    // stylesheet and `stage.ts` each hold half of "how far in does chrome
+    // sit", and this is the seam where they could disagree — which is exactly
+    // how the minimap ended up 6px off everything else.
+    expect(rule, ".dock-panel must be inset through --edge").toMatch(/left:\s*var\(--edge\)/);
+    const edge = Number(/--edge:\s*(\d+)px/.exec(css)?.[1]);
+    expect(edge, "--edge and RAIL_INSET are one number").toBe(RAIL_INSET);
   });
 
   it("is not re-derived anywhere else", () => {

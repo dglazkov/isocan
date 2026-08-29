@@ -47,11 +47,29 @@ describe("colours come from tokens", () => {
     const dark = /:root\[data-theme="dark"\]\s*\{(.*?)\n\}/s.exec(css);
     expect(light && dark).toBeTruthy();
     const missing = [...names(light![1]!)].filter((n) => !names(dark![1]!).has(n));
-    // Sizes and radii are theme-independent; colours are not. Named by the
-    // CONVENTION rather than one by one — `--radius` and the `--r-*` ladder
-    // are all lengths, and a rule that has to be edited for each new radius
-    // is a rule that will one day be edited to silence a colour.
-    const colourish = missing.filter((n) => n !== "radius" && !n.startsWith("r-"));
+    // Sizes, radii and insets are theme-independent; colours are not. Named by
+    // the CONVENTION rather than one by one — `--radius` and the `--r-*`
+    // ladder are all lengths, and a rule that has to be edited for each new
+    // radius is a rule that will one day be edited to silence a colour.
+    //
+    // `--edge` and `--topbar` joined them when the header dissolved: the
+    // distance chrome keeps from a window edge, and the space the header
+    // occupies. A canvas does not change shape in the dark.
+    //
+    // By VALUE, not by name, and not by a list.
+    //
+    // This was a list — `radius`, then `edge`, then `topbar` — and it wanted a
+    // fourth entry within the hour, which is the fate the comment above
+    // predicted for it. The real rule was never "these particular names": it
+    // is that A PLAIN LENGTH HAS NO DARK VARIANT. A canvas does not change
+    // shape in the dark.
+    //
+    // Reading the value rather than the name is also what keeps it safe. A
+    // colour cannot be smuggled past by being called `--edge-2`, because the
+    // exemption is granted to `20px` and never to `#1f3fd0`.
+    const valueOf = (name: string) =>
+      new RegExp(`--${name}:\\s*([^;]+)`).exec(light![1]!)?.[1]?.trim() ?? "";
+    const colourish = missing.filter((n) => !/^-?[\d.]+(px|rem|em)$/.test(valueOf(n)));
     expect(colourish, "these tokens have no dark value").toEqual([]);
   });
 

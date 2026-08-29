@@ -75,8 +75,44 @@ describe("everything that floats wears the same slab", () => {
      * the chrome, and the clusters are centred inside it — 34px tall in a
      * 48px band, measured live at top 7, bottom 41.
      */
+    // The RELATIONSHIP, not the literal. The first version of this asserted
+    // `height: 48px` and had to be edited the moment the header moved to the
+    // shared inset — a guard that pins a number instead of a rule is one that
+    // gets rewritten to match whatever the code now says, which is no guard.
+    const num = (re: RegExp, from: string) => {
+      const found = re.exec(from);
+      expect(found, `no match for ${re}`).not.toBeNull();
+      return Number(found![1]);
+    };
+    const edge = num(/--edge:\s*(\d+)px/, css);
+    const topbar = num(/--topbar:\s*(\d+)px/, css);
     const rule = /\.toolbar\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
-    expect(rule).toMatch(/height: 48px/);
-    expect(read("lib/stage.ts")).toMatch(/TOPBAR_HEIGHT = 48/);
+    const height = num(/height:\s*(\d+)px/, rule);
+    expect(rule, "the bar stands at the shared inset").toMatch(/top: var\(--edge\)/);
+    expect(edge + height, "what the header occupies is where it starts plus how tall").toBe(topbar);
+    expect(num(/TOPBAR_HEIGHT = (\d+)/, read("lib/stage.ts")), "framing reserves it").toBe(topbar);
+  });
+
+  it("gives every floating surface the same distance from its edge", () => {
+    /**
+     * There were four insets: the header clusters 7px from the top, the rail
+     * 20 from the left, the minimap 14 and 16, the tool rail 14. Each made
+     * sense the day it was written and none of them as a set. Reported as
+     * "the top elements are tight" — the symptom of the one that was worst.
+     *
+     * Chrome that floats keeps the same distance from whichever edge it
+     * floats against. The literals are gone; a new one is the thing to catch.
+     */
+    for (const selector of [".tool-rail", ".minimap-dock", ".rail-strip", ".dock-panel", ".toolbar"]) {
+      const rule = new RegExp(`\\${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
+      expect(rule, `${selector} must have a rule`).not.toBe("");
+      const offsets = rule.match(/(?:^|[;{\s])(?:top|right|bottom|left):\s*([^;]+)/g) ?? [];
+      for (const offset of offsets) {
+        if (/50%|auto|0\b/.test(offset)) continue; // centred or flush on purpose
+        expect(offset, `${selector} spells its own inset: ${offset.trim()}`).toMatch(
+          /var\(--edge\)|var\(--topbar\)/,
+        );
+      }
+    }
   });
 });
