@@ -316,6 +316,14 @@ img { height: auto; }
    word — at 6 they read as one clump, which is what the pill was making worse
    by clamping a border around both. */
 .canvases-head .head-mark { display: inline-flex; align-items: center; gap: 9px; }
+/* What happened, when what happened was not a new card. Inside the create
+   form, because the answer belongs beside the button that asked. */
+.create-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+.create-note.bad { color: var(--warn); }
+.canvases-error {
+  margin: 0 0 16px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--chip); color: var(--warn); font-size: 13px;
+}
 .canvases-head .home-mark { display: inline-flex; color: var(--ink-soft); }
 .canvases-head .spacer { flex: 1; }
 .canvases-head .who { position: relative; }
@@ -1313,6 +1321,45 @@ img { height: auto; }
   display: flex; align-items: center; gap: 8px; min-width: 0;
   padding: 5px 10px;
 }
+/* **The neighbour pad**, in the same language as the pill beside it.
+
+   A row rather than a cross: the glyph is already an arrow, so position was
+   repeating what the shape said — and a 2D grid stood taller than the bar's
+   one line and dropped the arrows below its centreline, which is what it
+   looked like. One pill, the button's own border and radius, segmented.
+
+   Height is not set: the padding matches `.stage-editor-btn`'s, so both sit on
+   the same centreline for the same reason rather than by two numbers that have
+   to be kept equal. */
+.neighbour-pad {
+  display: inline-flex; align-items: center; gap: 1px;
+  padding: 1px 2px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+}
+.neighbour-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 18px; padding: 0;
+  background: none; border: none; border-radius: 999px;
+  color: var(--ink-soft); cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+/* One glyph, turned. Four separate arrow paths would be four chances for them
+   to stop matching. */
+.neighbour-arrow.up svg { transform: rotate(-90deg); }
+.neighbour-arrow.down svg { transform: rotate(90deg); }
+.neighbour-arrow.left svg { transform: rotate(180deg); }
+.neighbour-arrow:hover { color: var(--ink); background: var(--chip); }
+/* It leans the way it points — the smallest possible "this goes somewhere". */
+.neighbour-arrow.up:hover { transform: translateY(-1px); }
+.neighbour-arrow.down:hover { transform: translateY(1px); }
+.neighbour-arrow.left:hover { transform: translateX(-1px); }
+.neighbour-arrow.right:hover { transform: translateX(1px); }
+.neighbour-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .neighbour-arrow { transition: color 0.12s ease, background 0.12s ease; }
+  .neighbour-arrow:hover { transform: none; }
+}
+
 .fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
 .fullscreen.resting .fs-bar > * { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }

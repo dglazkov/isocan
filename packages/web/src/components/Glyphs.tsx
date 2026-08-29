@@ -215,3 +215,19 @@ export function PersonaGlyph({ size = 15 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * One arrow, pointing right, rotated by CSS for the other three — so four
+ * directions cannot drift into four slightly different arrows. Same stroke
+ * weight and cap as the rest of this family, because it sits on a bar beside
+ * them.
+ */
+export function ArrowGlyph({ size = 12 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M3.4 8h9" />
+      <path d="M8.9 4.4 12.4 8l-3.5 3.6" />
+    </svg>
+  );
+}
