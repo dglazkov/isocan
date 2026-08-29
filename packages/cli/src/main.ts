@@ -129,6 +129,9 @@ import {
   mapOutline,
   mapsOn,
   newMapId,
+  importDesign,
+  importedBody,
+  serializeDesign,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -4808,6 +4811,91 @@ style
         properties: designSystemProperties(),
       });
       console.error(`${itemId} — design system for ${p.title} (isocan design)`);
+    }),
+  );
+
+style
+  .command("import")
+  .description("Land somebody else's theme as this canvas's design system")
+  .argument("<file>", "a stylesheet of custom properties, or a W3C token JSON")
+  .option("--dry-run", "read it and report, without writing anything")
+  .option("--title <title>", "name for the item", "DESIGN.md")
+  .action(
+    run(async (file: string, opts: { dryRun?: boolean; title: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const text = await fs.readFile(file, "utf8");
+      const { tokens, problems, format } = importDesign(text, path.basename(file));
+      const counts = {
+        colors: Object.keys(tokens.colors ?? {}).length,
+        typography: Object.keys(tokens.typography ?? {}).length,
+        rounded: Object.keys(tokens.rounded ?? {}).length,
+        spacing: Object.keys(tokens.spacing ?? {}).length,
+      };
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (total === 0) {
+        // Nothing read is a failure, not an empty success — writing an empty
+        // design system over a real one would be the worst outcome here.
+        throw new Error(
+          `nothing to import from ${path.basename(file)}${problems.length ? ` — ${problems[0]}` : ""}`,
+        );
+      }
+      const body = importedBody(path.basename(file), tokens);
+      const markdown = serializeDesign(tokens, body);
+
+      // Problems go to STDERR whichever mode this is in: they qualify the
+      // result, and an agent reading `--json` off stdout needs the caveat as
+      // much as a person reading the summary does.
+      for (const problem of problems) console.error(`note: ${problem}`);
+
+      if (opts.dryRun) {
+        if (ctx.json) return printJson({ format, counts, problems, markdown });
+        console.log(markdown);
+        console.error(
+          `${format}: ${counts.colors} colours, ${counts.typography} type roles, ${counts.rounded} radii, ${counts.spacing} spacings — nothing written`,
+        );
+        return;
+      }
+
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+      const filename = "DESIGN.md";
+      const upload = await ctx.client.uploadBlob(
+        p.id,
+        Buffer.from(markdown, "utf8"),
+        "text/markdown",
+        filename,
+      );
+      const version = {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType: "text/markdown",
+        filename,
+        size: upload.size,
+      };
+      const existing = designSystem(snapshot.canvas);
+      if (existing) {
+        // A version, never a replacement — the same rule `design set` holds
+        // to, and it matters more here: an import is exactly the moment
+        // somebody discovers they wanted the old one back.
+        await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
+        if (ctx.json) return printJson({ itemId: existing.id, format, counts, problems });
+        console.error(
+          `${existing.id} — design system v${existing.versions.length + 1} from ${path.basename(file)}`,
+        );
+        return;
+      }
+      const itemId = newItemId();
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version,
+        width: 560,
+        height: 720,
+        placement: placementFor(snapshot, {}),
+        title: opts.title,
+        properties: designSystemProperties(),
+      });
+      if (ctx.json) return printJson({ itemId, format, counts, problems });
+      console.error(`${itemId} — design system for ${p.title}, imported from ${path.basename(file)}`);
     }),
   );
 

@@ -49,3 +49,4 @@ export * from "./authaction.ts";
 export * from "./lane.ts";
 export * from "./frameable.ts";
 export * from "./mindmap.ts";
+export * from "./designimport.ts";

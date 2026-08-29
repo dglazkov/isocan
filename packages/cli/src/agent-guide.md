@@ -354,6 +354,31 @@ The outline `map show` prints is DERIVED, every time. There is no stored copy
 to go stale when a node moves, which is why it is safe to read one at the
 start of a task and trust it.
 
+## Bringing in somebody else's theme
+
+`isocan design import <file>` takes a stylesheet of custom properties — a
+shadcn theme, a `:root` block out of devtools — or a W3C token JSON, and lands
+it as this canvas's design system. `--dry-run` reads it and prints what it
+would write without touching the canvas, which is how to check a theme before
+committing to it.
+
+It reads **every** block, not just `:root`, because a shadcn theme keeps its
+dark palette in `.dark` and taking half a theme silently is the worst thing an
+importer can do. It wraps a bare HSL triplet — `222.2 47.4% 11.2%`, which is
+what shadcn actually ships — into a real colour, because a contrast checker
+cannot do anything with three numbers.
+
+**Whatever it cannot place, it names** on stderr rather than dropping. A
+`--duration-fast: 150ms` has no home in a design system yet, and you should
+know that rather than find out weeks later.
+
+Importing over an existing system writes a NEW VERSION, never a replacement:
+an import is exactly the moment somebody discovers they wanted the old one
+back. Run `isocan design check` afterwards — what it flags is usually not an
+import error but the part of a design system that lives in a house's head
+rather than in its stylesheet, and those are the first things worth writing
+down.
+
 ## Screens that become files
 
 Most of what you make on a canvas should stay on the canvas. Somebody asks to
