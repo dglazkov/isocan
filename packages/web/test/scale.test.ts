@@ -159,13 +159,16 @@ describe("the parser can still see the stylesheet", () => {
 });
 
 /**
- * 25 distinct spacing values across 407 declarations, measured 2026-08-24.
+ * 24 distinct spacing values, measured 2026-08-29 — one FEWER than the 25
+ * counted on 24 Aug, which is the direction this number is supposed to move.
+ * The canvases page lost its `48px` page padding when it took the shared
+ * `--edge` inset like every other surface; nothing else used 48.
  * The long tail is the tell: 13px appears once, 28px once, 34px twice, 40px
  * once, 96px once. Those are eyeballed, and each one is a step somebody else
  * now has to decide whether to match.
  */
 describe("spacing", () => {
-  const SPACING_STEPS = 25;
+  const SPACING_STEPS = 24;
 
   it("invents no new step", () => {
     expect(
@@ -176,7 +179,7 @@ describe("spacing", () => {
   });
 
   it("keeps the count honest by naming the declaration total too", () => {
-    // A refactor that halves the file while keeping all 25 steps is not caught
+    // A refactor that halves the file while keeping all the steps is not caught
     // by the count above, and should not be — but a jump in declarations with
     // no jump in steps is exactly the shape of healthy growth, so it is worth
     // being able to see. Generous bounds; this is a trip-wire, not a budget.
@@ -250,7 +253,12 @@ describe("corner radii", () => {
 });
 
 /**
- * 17 distinct font-sizes, five of them on a half pixel: 9.5, 10.5, 11.5, 12.5,
+ * 16 distinct font-sizes as of 29 Aug — one fewer than the 17 counted on 24
+ * Aug. The canvases page's 24px `h1` went when its header became the same
+ * floating cluster the canvas wears, where the name is 15px like every other
+ * title in the app; nothing else used 24.
+ *
+ * Five sit on a half pixel: 9.5, 10.5, 11.5, 12.5,
  * 13.5, together 70 of the 170 declarations. `slop.ts` calls "more than six
  * distinct sizes on one page" the tell; this is a whole app rather than one
  * page, so the count alone proves less — but a half-pixel size lands between
@@ -258,7 +266,7 @@ describe("corner radii", () => {
  * chosen.
  */
 describe("type sizes", () => {
-  const TYPE_STEPS = 17;
+  const TYPE_STEPS = 16;
   const HALF_PIXEL = [9.5, 10.5, 11.5, 12.5, 13.5];
 
   it("invents no new size", () => {

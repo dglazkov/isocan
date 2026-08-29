@@ -148,3 +148,30 @@ export function ShareGlyph({ size = 15 }: { size?: number }) {
     </svg>
   );
 }
+
+
+/** The trash: a bin with a lid, drawn open-topped so it reads at 14px where a
+ *  closed one turns into a filled rectangle. */
+export function TrashGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.35} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M2.6 4.3h10.8" />
+      <path d="M6.2 4.3V3.1a1 1 0 0 1 1-1h1.6a1 1 0 0 1 1 1v1.2" />
+      <path d="M3.9 4.3l.5 8.1a1.3 1.3 0 0 0 1.3 1.2h4.6a1.3 1.3 0 0 0 1.3-1.2l.5-8.1" />
+    </svg>
+  );
+}
+
+/** The minimap: the canvas seen small — a frame with a few things in it, and
+ *  a viewport rectangle, which is what the map actually shows. */
+export function MinimapGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.35} strokeLinejoin="round">
+      <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6" />
+      <rect x="3.9" y="5.4" width="4.2" height="3" rx="0.8" />
+      <path d="M10 5.4h2.1M10 7.4h2.1M3.9 10.2h5.2" />
+    </svg>
+  );
+}

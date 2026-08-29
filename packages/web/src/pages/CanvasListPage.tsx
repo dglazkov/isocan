@@ -7,6 +7,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
+import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 
 export function CanvasListPage({
@@ -80,9 +81,19 @@ export function CanvasListPage({
 
   return (
     <div className="canvases-page">
+      {/* **The same header the canvas wears.** A floating cluster on the
+          shared inset, not a page title with a name floating beside it — this
+          is the same product one screen earlier, and it was the last surface
+          still dressed the old way. */}
       <div className="canvases-head">
-        <h1>isocan</h1>
-        <div className="who" ref={whoRef}>
+        <div className="bar-cluster floats">
+          <span className="home-mark" aria-hidden>
+            <HomeGlyph size={16} />
+          </span>
+          <h1>isocan</h1>
+        </div>
+        <span className="spacer" />
+        <div className="bar-cluster floats presence-cluster who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}
             title="You — rename yourself, or enter as someone else"
@@ -108,6 +119,21 @@ export function CanvasListPage({
         </div>
       </div>
       <div className="canvas-grid">
+        {/* **Making one comes first**, because an empty home is somebody's
+            first screen and the one thing they need is the way in. It was
+            last, after every canvas, behind a dashed border that made the
+            only action on the page look like a placeholder. */}
+        <form className="canvas-card create" onSubmit={create}>
+          <input
+            className="text-input"
+            placeholder="Name a new canvas…"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="btn primary" type="submit" disabled={!title.trim()}>
+            Create
+          </button>
+        </form>
         {(canvases ?? []).map((canvas) => (
           <div className="canvas-card" key={canvas.id}>
             {editing === canvas.id ? (
@@ -119,29 +145,20 @@ export function CanvasListPage({
               />
             ) : (
               <>
-                <h3>
-                  <Link to={canvasPath(canvas.id)} style={{ color: "inherit", textDecoration: "none" }}>
-                    {canvas.title}
-                  </Link>
-                </h3>
-                <div className="desc">{canvas.description || "No description"}</div>
-                <div className="meta">
-                  updated {new Date(canvas.updatedAt).toLocaleString()} by {actorNameIn(names, canvas.updatedBy)}
-                </div>
-                <div className="row">
-                  <Link className="btn" to={canvasPath(canvas.id)}>
-                    Open
-                  </Link>
-                  <button
-                    className="btn"
-                    title="Edit title and description"
-                    onClick={() => {
-                      setEditing(canvas.id);
-                      setConfirmingDelete(null);
-                    }}
-                  >
-                    Edit
-                  </button>
+                {/* **The whole card opens it.** Three equal buttons made
+                    "Open" — the thing you want every time — compete with two
+                    you want rarely, one of which deletes. The card is the
+                    link now and the other two are behind the same `···` the
+                    canvas uses, which is also what stops Delete sitting one
+                    pixel from Open. */}
+                <Link className="card-open" to={canvasPath(canvas.id)}>
+                  <h3>{canvas.title}</h3>
+                  {canvas.description && <div className="desc">{canvas.description}</div>}
+                  <div className="meta">
+                    {new Date(canvas.updatedAt).toLocaleDateString()} · {actorNameIn(names, canvas.updatedBy)}
+                  </div>
+                </Link>
+                <div className="card-more">
                   {confirmingDelete === canvas.id ? (
                     <>
                       <button className="btn danger" onClick={() => remove(canvas)}>
@@ -152,28 +169,33 @@ export function CanvasListPage({
                       </button>
                     </>
                   ) : (
-                    <button className="btn danger" onClick={() => setConfirmingDelete(canvas.id)}>
-                      Delete
-                    </button>
+                    <>
+                      <button
+                        className="btn card-act"
+                        title="Rename, or describe it"
+                        onClick={() => {
+                          setEditing(canvas.id);
+                          setConfirmingDelete(null);
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        className="btn card-act danger"
+                        title="Delete this canvas"
+                        onClick={() => setConfirmingDelete(canvas.id)}
+                      >
+                        Delete
+                      </button>
+                    </>
                   )}
                 </div>
               </>
             )}
           </div>
         ))}
-        <form className="canvas-card create" onSubmit={create}>
-          <input
-            className="text-input"
-            placeholder="New canvas title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <button className="btn primary" type="submit" disabled={!title.trim()}>
-            Create canvas
-          </button>
-        </form>
       </div>
-      {canvases === null && <p style={{ color: "var(--ink-muted)" }}>Loading…</p>}
+      {canvases === null && <p className="canvases-loading">Loading…</p>}
     </div>
   );
 }
