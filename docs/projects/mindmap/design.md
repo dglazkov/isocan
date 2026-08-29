@@ -144,3 +144,35 @@ Every step of that is items, properties and moves.
    other work, which is where this meets `docs/projects/context/`.
 
 Stage 1 is a graph you can drag, which is the thing that was asked for.
+
+## Built, 29 Aug 2026 — stages 1, 2 and 4
+
+`core/mindmap.ts` holds the whole model: `map` and `mapParent` properties,
+`mapsOn`, `mapEdges`, `mapRoots`, `mapOutline`, and `edgeAnchors`. The CLI has
+`map new | add | link | show | ls`; the canvas draws the lines. **Zero new op
+types**, as designed — `item.add` with properties and `item.update`.
+
+Stage 2 came free with the `map` property: `map ls` treats a map as one thing
+because the set is a query, not a structure to maintain. Stage 4's projection
+is `map show`, derived every time, which is why it cannot drift.
+
+**Stage 3 (layout) is deliberately partial.** A child lands to the right of
+its parent and stacks under its siblings — enough that an agent building
+thirty nodes produces something legible rather than a pile, which was the
+stated risk. A radial or balanced tree layout is still unbuilt, and the honest
+reason to wait is that nobody has yet dragged a real map into a shape that
+says what the automatic one should have been.
+
+**Two things the design did not anticipate, both found by running it:**
+
+- **A cycle has no roots.** `mapParent` is a string, so two `item.update`s can
+  make A the parent of B and B the parent of A. The walk terminated — that was
+  guarded from the start — but printed NOTHING, because the outline starts
+  from roots and a pure cycle has none. A map whose nodes all vanish from the
+  outline reads as "the map is empty" while it sits on the screen. The oldest
+  node is used as a way in now, and the loop is marked where it closes.
+- **A zero-sized SVG clips its own painting.** The lines had correct layout
+  boxes, correct strokes and correct positions, and did not appear. Proved by
+  turning the stroke red and 6px wide and still seeing nothing. `overflow:
+  visible` does not save an SVG root; the box is measured from the lines now
+  and the `viewBox` carries the world origin.

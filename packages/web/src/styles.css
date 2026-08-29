@@ -2377,6 +2377,42 @@ button.mt-card:hover { border-color: var(--accent); }
 .home { display: inline-flex; align-items: center; color: var(--ink-muted); }
 .home:hover { color: var(--ink); }
 
+/* ---------- mind maps ----------
+
+   An SVG sized to its own contents, holding WORLD coordinates in its viewBox
+   — so it inherits `.world`'s transform and pans, zooms and scales with the
+   nodes without a single listener.
+
+   Untouchable: it is a drawing about other things, and catching a click would
+   make the canvas unreachable in a band nobody can see.
+
+   The stroke is a WORLD width divided by the zoom, the same counter-scale the
+   titlebar uses — a flat 2px would be a hairline at 6% and a rope at 400%. */
+.map-edges {
+  /* Position and size come from the component: the box is measured from the
+     lines it holds. It was `0 0` with `overflow: visible`, which laid every
+     line out correctly and painted none of them — an SVG root clips its own
+     painting to its viewport whatever `overflow` says. */
+  position: absolute; pointer-events: none; z-index: 0;
+}
+/* **The edges ARE the map**, so they are drawn to be seen.
+
+   `--chip-line` was the first guess and it is the wrong token by a mile: it
+   is a chip's border, #343a44 on a #0e0f12 ground, and at 55% zoom the lines
+   were there in the DOM, correctly positioned, and invisible on screen. A
+   structure you cannot see is not a structure.
+
+   `--ink-soft` at two-thirds is the level this wants: quieter than the words
+   it joins, which are the content, and unmistakably present. Both themes get
+   it from the same token, so the dark ground and the pale one each hold the
+   same relationship. */
+.map-edge {
+  stroke: var(--ink-soft);
+  opacity: 0.65;
+  stroke-width: calc(1.5px / var(--scale, 1));
+  stroke-linecap: round;
+}
+
 /* ---------- the lane ----------
 
    What a message MADE, under the message that made it. The claim is narrow on

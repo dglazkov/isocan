@@ -323,6 +323,37 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
 
+## Mind maps
+
+Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts
+one with a root node; `isocan map add "Booking" --to <node>` hangs a child off
+it; `isocan map link <node> <parent>` moves a branch somewhere else. `isocan
+map show` prints the whole thing as a tree, and `isocan map ls` names every
+map on the canvas.
+
+```
+Lake house
+├── Booking
+│   ├── Checkout day is exclusive
+│   └── Timezone is the browser's
+└── The four screens are islands
+```
+
+**A node is a text node and an edge is a property**, so nothing here is a new
+kind of thing: nodes version, `#Title` points at them, `isocan get` hands back
+a `.md`, and the human can drag any node anywhere. The lines are worked out
+from where the nodes ARE, so they follow a drag rather than needing to be
+redrawn.
+
+That is also the reason to reach for a map rather than a list: the person you
+are talking to can rearrange it, and rearranging is how somebody thinks. Use
+one when the shape of the thinking matters — options and their consequences,
+a question that branches — and use `isocan text` when it does not.
+
+The outline `map show` prints is DERIVED, every time. There is no stored copy
+to go stale when a node moves, which is why it is safe to read one at the
+start of a task and trust it.
+
 ## Screens that become files
 
 Most of what you make on a canvas should stay on the canvas. Somebody asks to
