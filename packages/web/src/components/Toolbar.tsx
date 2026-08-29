@@ -41,15 +41,42 @@ export function Toolbar({
   );
 
   return (
+    /**
+     * **Three floating clusters, not a bar.**
+     *
+     * This was a full-width slab with its own ground and a hairline under it,
+     * which cut the canvas off at 48px and made the top of the surface
+     * somebody else's. The canvas runs edge to edge now and the controls sit
+     * ON it, in groups, wearing the same frosted slab the rail wears — one
+     * language for everything that floats.
+     *
+     * The clusters carry the grouping the bar used to state with a `spacer`:
+     * what you are LOOKING AT on the left, what you can DO on the right. That
+     * was already true and invisible; separating them says it.
+     *
+     * **Nothing moved out of reach.** Every control the bar had is still here
+     * and still one click away. Folding Files, trash and the rest behind a
+     * `···` is the other half of phase 6 and the place "do not lose features"
+     * is most at risk, so it is deliberately not bundled into a restyle.
+     */
     <div className="toolbar">
-      <Link className="home" to="/" title="All canvases">
-        ⌂
-      </Link>
-      <CanvasTitle actor={actor} />
-      {/* LEFT: what you are looking at. Both toggles drive the same dock and
-          only one can win, so they read as one control with two settings. */}
-      {canvas && <PanelSwitch canvasId={canvas.id} actor={actor} />}
+      <div className="bar-cluster floats">
+        <Link className="home" to="/" title="All canvases">
+          ⌂
+        </Link>
+        <CanvasTitle actor={actor} />
+      </div>
+      {/* Its own cluster, not part of the title's. Both toggles drive the same
+          dock and only one can win, so they read as one control with two
+          settings — and that reading only survives if nothing else shares
+          their box. */}
+      {canvas && (
+        <div className="bar-cluster floats">
+          <PanelSwitch canvasId={canvas.id} actor={actor} />
+        </div>
+      )}
       <span className="spacer" />
+      <div className="bar-cluster floats">
       {/* The way into the workbench, said out loud. It was `W` and nothing
           else — a door only people who had read the shortcut list could find
           — and the workbench has had a visible `← Canvas` since the day it
@@ -89,6 +116,7 @@ export function Toolbar({
         ?
       </button>
       <CanvasPresence actor={actor} onIdentity={onIdentity} />
+      </div>
     </div>
   );
 }

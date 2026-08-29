@@ -403,6 +403,24 @@ green:
   and why it comes after everything above rather than first.
 - **The radius ladder and borders-into-elevation**, generalised past the rail.
   Phase 1 proves the language on one surface; this spends it everywhere.
+  **Done, 28 Aug 2026: the header dissolved.** It was a full-width slab with
+  its own ground and a hairline under it, which cut the canvas off at 48px and
+  handed the top of the surface to something else. It is three floating
+  clusters now — what you are LOOKING AT on the left, what you can DO on the
+  right — and the canvas runs edge to edge behind them. The bar still reserves
+  its 48px, because floating changed what you can see through and not what is
+  in the way; the 34px clusters are centred in that band (measured live at top
+  7, bottom 41) and stand on the rail's 20px line.
+
+  With that, `.floats` exists: one ground, one hairline, one radius, one
+  shadow, spelled ONCE and worn by Chat, Files, the strip and the clusters.
+  This is the phase-1 lesson applied as a rule rather than a resolution — the
+  five properties had already been duplicated once, and a fourth copy was
+  about to be written.
+
+  Nothing moved out of reach. Every control the bar had is still one click
+  away; folding them behind `···` is the next item and is deliberately not
+  bundled into a restyle.
 - **The composer question**, which the rationale itself leaves open: a field
   that takes `@Fable`, `/format` and prose has to say which it heard BEFORE
   return. That is upstream of any composer work and is not designed yet.

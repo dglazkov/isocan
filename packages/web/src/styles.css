@@ -506,12 +506,44 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) { .cursor-glow { display: none; } }
 
 /* ---------- toolbar ---------- */
+/* **The bar is a layout, not a surface.**
+
+   It had its own ground and a hairline under it, which cut the canvas off at
+   48px and handed the top of the surface to something else. It paints nothing
+   now: the CLUSTERS inside it are the floating things, wearing the same
+   frosted slab as the rail. The canvas runs edge to edge behind them.
+
+   It still RESERVES 48px, and that number is `TOPBAR_HEIGHT` in stage.ts —
+   framing must go on refusing to park an item under the clusters, whether or
+   not there is a slab behind them. Floating changed what you can see through,
+   not what is in the way. The 34px clusters are centred in that 48, so what
+   they occupy is exactly what is reserved.
+
+   Untouchable except where something is drawn: the strip between the clusters
+   is canvas, and a person should be able to drag it. */
 .toolbar {
   position: absolute; top: 0; left: 0; right: 0; height: 48px; z-index: var(--z-bar);
-  display: flex; align-items: center; gap: 8px; padding: 0 12px;
-  background: var(--panel); border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(4px);
+  display: flex; align-items: center; gap: 8px;
+  /* 20px, the rail's inset: the title cluster and the rail below it stand on
+     the same line, or the eye reads two different margins. */
+  padding: 0 20px;
+  pointer-events: none;
 }
+.toolbar > * { pointer-events: auto; }
+.bar-cluster {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  height: 34px; padding: 0 6px;
+}
+/* Inside a cluster the buttons stop being boxes. The cluster is the box, and
+   a bordered chip inside a bordered pill is two frames around one control —
+   the "nested box" that made the old bar read as heavy. What a button keeps
+   is its HOVER and its ACTIVE state, because those say something the frame
+   never did. */
+.bar-cluster .btn {
+  background: none; border-color: transparent; padding: 5px 9px;
+}
+.bar-cluster .btn:hover { background: var(--chip); }
+.bar-cluster .btn.active { background: var(--accent); border-color: var(--accent); }
 /* Nothing in the bar breaks its own label in half.
    Under width pressure a flex row shrinks its children, and a button whose
    text wraps is unreadable long before it is unclickable — "+ Site" has been
@@ -1744,12 +1776,28 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    `--panel` and a blur, not a new token: this ground is already used for
    floating chrome in four other places, and a second token for one surface is
    how a palette starts to drift. */
-.dock-panel {
-  position: absolute; top: 62px; left: 20px; bottom: 20px;
-  width: 320px; z-index: var(--z-dock);
+/* **One language for everything that floats.**
+
+   Chat, Files, the shut rail's strip and the three header clusters are all
+   the same kind of thing: chrome sitting ON the canvas rather than beside it.
+   They wear one ground, one hairline, one radius, one shadow — and they wear
+   it from HERE, once.
+
+   This is the phase-1 lesson applied a second time. Chat and Files had these
+   five properties written out twice, and restyling one left the other looking
+   like a different product. By the time the header dissolved into clusters
+   there would have been four copies, so the class is the fix rather than the
+   discipline to remember. Anything new that floats over the canvas wears
+   `floats` and inherits every future change to what floating means. */
+.floats {
   background: var(--panel); backdrop-filter: blur(12px) saturate(1.2);
   border: 1px solid var(--line); border-radius: var(--r-float);
   box-shadow: var(--shadow-pop);
+}
+
+.dock-panel {
+  position: absolute; top: 62px; left: 20px; bottom: 20px;
+  width: 320px; z-index: var(--z-dock);
   display: flex; flex-direction: column; font-size: 12px;
   /* The children square off against the rounded frame otherwise — a header's
      bottom hairline would run past the corner into nothing. */
@@ -2055,9 +2103,6 @@ button.mt-card:hover { border-color: var(--accent); }
   width: 48px; z-index: var(--z-dock);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 8px 0;
-  background: var(--panel); backdrop-filter: blur(12px) saturate(1.2);
-  border: 1px solid var(--line); border-radius: var(--r-float);
-  box-shadow: var(--shadow-pop);
 }
 .strip-chat {
   position: relative;

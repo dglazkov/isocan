@@ -69,7 +69,7 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
   };
 
   return (
-    <div className="rail-strip" aria-label="Chat and agents">
+    <div className="rail-strip floats" aria-label="Chat and agents">
       <button
         className="strip-chat"
         title={unread > 0 ? `Open the Chat — ${unread} unread` : "Open the Chat"}
