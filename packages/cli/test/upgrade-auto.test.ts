@@ -90,6 +90,27 @@ describe("who may apply an upgrade", () => {
     expect((await upgradePolicy(home, "global")).mode).toBe("auto");
   });
 
+  /**
+   * **A rolled-back machine must not quietly stop upgrading itself.**
+   *
+   * Adoption shelves the outgoing copy as a SYMLINK at the global prefix, so a
+   * machine rolled back onto it has `current -> builds/<sha>` whose realpath is
+   * the global tree — and `whichInstall` therefore calls it `global`, not
+   * `managed`. Measured on a real machine against dev.isocan.io: after
+   * `--rollback`, `isocan status` read `running …/lib/node_modules/isocan` and
+   * `upgrades notify`.
+   *
+   * With `global` on notify, that meant **`--rollback` silently turned auto
+   * off** — permanently, on the one command a person reaches for when a build
+   * is suspect, and with nothing saying so. `global` being `auto` is what
+   * closes it; this test is here so the two facts stay tied together, because
+   * the next person to narrow the default will not be thinking about symlinks.
+   */
+  it("keeps upgrading itself after a rollback onto the shelved build", async () => {
+    expect((await upgradePolicy(home, "global")).mode).toBe("auto");
+    expect((await upgradePolicy(home, "managed")).mode).toBe("auto");
+  });
+
   it.each(["checkout", "npx", "local"] as const)(
     "leaves a %s install on notify — it is not a copy that can adopt itself",
     async (kind) => {

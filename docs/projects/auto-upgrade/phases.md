@@ -734,6 +734,15 @@ network because `applySwap` takes the fetch as a seam.
   rollback followed by a step forward cost a full download to arrive at a
   directory that already existed. It now checks first, which is also what makes
   this phase's proof reachable without a network.
+- **2026-08-29 — `--rollback` silently turned auto off, and the same one-word
+  fix closes it.** Adoption shelves the outgoing copy as a symlink at the
+  global prefix, so a machine rolled back onto it has a `current` whose
+  realpath is the global tree — `whichInstall` calls it `global`, not
+  `managed`. With `global` on notify that meant the one command a person
+  reaches for when a build is suspect also stopped the machine upgrading,
+  permanently and with nothing saying so. Measured on a real machine against
+  dev.isocan.io, after the correction below was already written; `global`
+  being `auto` is what closes it, and a test now ties the two facts together.
 - **2026-08-29 — `auto` shipped denying itself to the population it was written
   for**, and it took being asked "does this not defeat the purpose" to see it.
   The default was `auto` for a managed install and `notify` for everything
