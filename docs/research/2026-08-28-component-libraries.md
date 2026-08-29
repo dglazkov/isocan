@@ -105,9 +105,21 @@ box" means.
 
 ## What to build
 
-1. **`isocan design import <source>`** — take a theme (a shadcn theme, a
-   `:root` block of custom properties, W3C DTCG tokens) and land it as this
-   canvas's DESIGN.md. This is the one change that makes all seven of these
+1. **`isocan design import <source>`** — **BUILT 29 Aug 2026.** Take a theme (a
+   shadcn theme, a `:root` block of custom properties, W3C DTCG tokens) and
+   land it as this canvas's DESIGN.md.
+
+   Two things the survey did not surface, both found by importing a real
+   shadcn theme: it keeps its dark palette in `.dark` rather than `:root`, so
+   reading only the first block takes half a theme and says nothing; and its
+   colours are BARE HSL TRIPLETS — `222.2 47.4% 11.2%` — which are colours
+   only because the stylesheet wraps them somewhere the importer never sees.
+   A value-only classifier loses the entire palette of the most popular theme
+   format there is.
+
+   What it cannot place is named rather than dropped. `--duration-fast: 150ms`
+   has no home in a design system yet, and the person should hear that now
+   rather than wonder later. This is the one change that makes all seven of these
    sites useful, and it converges with work landed the same day: components in
    a design system are now drawn as real components, so an imported theme
    arrives as something you can look at rather than a table of hexes.

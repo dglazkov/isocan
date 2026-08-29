@@ -20,6 +20,7 @@ const dock = (over: Partial<DockState> = {}): DockState => ({
   mainPanelOpen: false,
   filesPanelOpen: false,
   agentsPanelOpen: false,
+  contextPanelOpen: false,
   trashOpen: false,
   marksOpen: false,
   panelWidth: 320,

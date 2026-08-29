@@ -5,6 +5,7 @@ import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
   AgentsGlyph,
   ChatGlyph,
+  ContextGlyph,
   FilesGlyph,
   MinimapGlyph,
   TrashGlyph,
@@ -229,6 +230,7 @@ export function chromeMenu(ctx: {
   canvasId: string;
   filesOpen: boolean;
   agentsOpen: boolean;
+  contextOpen: boolean;
   mainOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
@@ -245,6 +247,7 @@ export function chromeMenu(ctx: {
     { label: "Chat", open: ctx.mainOpen, panel: "main", icon: <ChatGlyph size={14} /> },
     { label: "Files", open: ctx.filesOpen, panel: "files", icon: <FilesGlyph size={14} /> },
     { label: "Agents", open: ctx.agentsOpen, panel: "agents", icon: <AgentsGlyph size={14} /> },
+    { label: "Context", open: ctx.contextOpen, panel: "context", icon: <ContextGlyph size={14} /> },
   ];
   return [
     ...rail

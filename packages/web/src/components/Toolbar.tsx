@@ -32,6 +32,7 @@ export function Toolbar({
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
   const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
+  const contextOpen = useUiStore((s) => s.contextPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
@@ -89,6 +90,7 @@ export function Toolbar({
                   filesOpen,
                   agentsOpen,
                   mainOpen,
+                  contextOpen,
                   trashOpen,
                   trashCount,
                   minimapOpen,

@@ -29,6 +29,7 @@ const menu = (over = {}) =>
     canvasId: "prj_1",
     filesOpen: false,
     agentsOpen: false,
+    contextOpen: false,
     mainOpen: false,
     trashOpen: false,
     trashCount: 0,
@@ -40,7 +41,7 @@ const menu = (over = {}) =>
 describe("the drawer holds everything it took", () => {
   it("offers the rail's panels, the trash, the map and the shortcut list", () => {
     const found = labels(menu()).join(" | ");
-    for (const control of ["Chat", "Files", "Agents", "Workbench", "Trash", "minimap", "shortcuts"]) {
+    for (const control of ["Chat", "Files", "Agents", "Context", "Workbench", "Trash", "minimap", "shortcuts"]) {
       expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
   });
@@ -66,7 +67,7 @@ describe("the drawer holds everything it took", () => {
     expect(labels(menu({ agentsOpen: true }))).not.toContain("Agents");
     expect(labels(menu({ mainOpen: true }))).not.toContain("Chat");
     // Shut, all three are on offer.
-    expect(labels(menu())).toEqual(expect.arrayContaining(["Chat", "Files", "Agents"]));
+    expect(labels(menu())).toEqual(expect.arrayContaining(["Chat", "Files", "Agents", "Context"]));
   });
 
   it("puts the place you GO above the things you look at", () => {
@@ -80,9 +81,9 @@ describe("the drawer holds everything it took", () => {
   it("keeps them in one order, so the menu does not have to be re-read", () => {
     // A menu whose items move about is a menu you read every time. Chat,
     // Files, Agents — always, minus whichever is showing.
-    const shown = labels(menu()).slice(0, 3);
-    expect(shown).toEqual(["Chat", "Files", "Agents"]);
-    expect(labels(menu({ filesOpen: true })).slice(0, 2)).toEqual(["Chat", "Agents"]);
+    const shown = labels(menu()).slice(0, 4);
+    expect(shown).toEqual(["Chat", "Files", "Agents", "Context"]);
+    expect(labels(menu({ filesOpen: true })).slice(0, 3)).toEqual(["Chat", "Agents", "Context"]);
   });
 
   it("has Chat in it, because the strip IS the shut rail", () => {

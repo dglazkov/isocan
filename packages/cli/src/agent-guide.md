@@ -323,6 +323,93 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
 
+## What you are about to read
+
+`isocan context` answers the question nobody could answer before, including
+you: **what will an agent actually read when it starts work here?** The design
+system and whether it passes its own check, the Chat and how much of it, the
+items somebody marked, the maps, the size of the canvas, and which guide this
+build ships.
+
+```
+! Design system  v1 · 6m
+                 2 findings from `design check`
+                 → `isocan design check` lists them
+  The Chat       7 messages · 2h
+· Marked items   not here
+  Mind maps      Lake house (5)
+  The canvas     19 items · 6m
+```
+
+**It stores nothing.** Every line is counted at the moment you ask, so there
+is no context record that can fall out of step with the canvas it describes.
+Run it at the start of a task rather than assuming: a design system that is
+three versions behind the screens it governs is the difference between work
+that lands and work that gets redone.
+
+`!` is a piece that needs attention, and it always says WHY — "3 items have
+changed since it was last written" is something to act on, and a bare warning
+is an accusation. `·` is simply absent, which most things are on most canvases
+and is usually fine.
+
+The same list is a panel on the canvas, so the person can see what you see.
+
+## Mind maps
+
+Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts
+one with a root node; `isocan map add "Booking" --to <node>` hangs a child off
+it; `isocan map link <node> <parent>` moves a branch somewhere else. `isocan
+map show` prints the whole thing as a tree, and `isocan map ls` names every
+map on the canvas.
+
+```
+Lake house
+├── Booking
+│   ├── Checkout day is exclusive
+│   └── Timezone is the browser's
+└── The four screens are islands
+```
+
+**A node is a text node and an edge is a property**, so nothing here is a new
+kind of thing: nodes version, `#Title` points at them, `isocan get` hands back
+a `.md`, and the human can drag any node anywhere. The lines are worked out
+from where the nodes ARE, so they follow a drag rather than needing to be
+redrawn.
+
+That is also the reason to reach for a map rather than a list: the person you
+are talking to can rearrange it, and rearranging is how somebody thinks. Use
+one when the shape of the thinking matters — options and their consequences,
+a question that branches — and use `isocan text` when it does not.
+
+The outline `map show` prints is DERIVED, every time. There is no stored copy
+to go stale when a node moves, which is why it is safe to read one at the
+start of a task and trust it.
+
+## Bringing in somebody else's theme
+
+`isocan design import <file>` takes a stylesheet of custom properties — a
+shadcn theme, a `:root` block out of devtools — or a W3C token JSON, and lands
+it as this canvas's design system. `--dry-run` reads it and prints what it
+would write without touching the canvas, which is how to check a theme before
+committing to it.
+
+It reads **every** block, not just `:root`, because a shadcn theme keeps its
+dark palette in `.dark` and taking half a theme silently is the worst thing an
+importer can do. It wraps a bare HSL triplet — `222.2 47.4% 11.2%`, which is
+what shadcn actually ships — into a real colour, because a contrast checker
+cannot do anything with three numbers.
+
+**Whatever it cannot place, it names** on stderr rather than dropping. A
+`--duration-fast: 150ms` has no home in a design system yet, and you should
+know that rather than find out weeks later.
+
+Importing over an existing system writes a NEW VERSION, never a replacement:
+an import is exactly the moment somebody discovers they wanted the old one
+back. Run `isocan design check` afterwards — what it flags is usually not an
+import error but the part of a design system that lives in a house's head
+rather than in its stylesheet, and those are the first things worth writing
+down.
+
 ## Screens that become files
 
 Most of what you make on a canvas should stay on the canvas. Somebody asks to
