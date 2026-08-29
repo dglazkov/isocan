@@ -96,7 +96,16 @@ about what Darren looks for. That is the canvas's job and the ordering is
 argued below: the canvas becomes authoritative when a second person edits a
 persona, not before.
 
-*Signing up* is the half nothing here does yet. Today an agent is told what to
+*Signing up* is the half nothing here does yet, and it has since been
+researched on its own:
+[`docs/research/2026-08-29-one-agent-many-canvases.md`](../../research/2026-08-29-one-agent-many-canvases.md)
+found that the fan-out is not blocked by the presence model at all — rooms are
+per canvas and one actor may be in many — but by a vouch gate that cannot tell
+the same agent arriving somewhere else from somebody claiming to be them. It
+also names the consequence that matters most here: an agent working on four
+canvases is four actors with four histories today, so **the trust battery can
+never charge**. Sign-up is a precondition for the rest of this document, not a
+later convenience. Today an agent is told what to
 do. The model worth building toward is a **standing offer**: a persona
 describes work that wants doing, and an agent that arrives — any agent, on any
 harness, on any machine — can take it on, do it, and report against the goal.
