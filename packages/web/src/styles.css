@@ -311,6 +311,11 @@ img { height: auto; }
 .canvases-head h1 {
   font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0;
 }
+/* The wordmark, unboxed: the glyph and the name with air between them, on the
+   page rather than in a slab. 9px because the mark is a small square against a
+   word — at 6 they read as one clump, which is what the pill was making worse
+   by clamping a border around both. */
+.canvases-head .head-mark { display: inline-flex; align-items: center; gap: 9px; }
 .canvases-head .home-mark { display: inline-flex; color: var(--ink-soft); }
 .canvases-head .spacer { flex: 1; }
 .canvases-head .who { position: relative; }
@@ -508,9 +513,13 @@ img { height: auto; }
 }
 
 /* The canvas list wears the same handle in its header. */
+/* Its own hover chip is the only frame it needs, so the resting state is the
+   page and the pressable state is visible the moment you go near it. The
+   padding grew with the pill's removal — inside a slab it was inset from a
+   border, and on its own it has to make its own edge. */
 .canvases-head .who-btn {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
+  padding: 6px 12px 6px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
   background: none; border: 1px solid transparent;
 }
 .canvases-head .who-btn:hover, .canvases-head .who-btn.active {

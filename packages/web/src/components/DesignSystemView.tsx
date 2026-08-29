@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DesignDoc, DesignTypography } from "@isocan/core";
@@ -33,7 +33,7 @@ import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
  * repo's own `contrastRatio`, so a palette that cannot carry text says so here
  * rather than in an audit three weeks later.
  */
-export function DesignSystemView({ url }: { url: string }) {
+function DesignSystemViewInner({ url }: { url: string }) {
   const [load, setLoad] = useState<TextLoad>(() => {
     const cached = peekBlobText(url);
     return cached === undefined ? null : { text: cached };
@@ -49,10 +49,28 @@ export function DesignSystemView({ url }: { url: string }) {
     };
   }, [url]);
 
+  /**
+   * **Parsed once per document, not once per frame.**
+   *
+   * This ran on every render, and `ItemView` re-renders on every zoom frame
+   * (it reads `viewport.scale` for its counter-scaled chrome) — so pinching
+   * over a canvas holding a DESIGN.md re-parsed the whole document, and
+   * re-rendered every section's Markdown, sixty times a second. Measured at
+   * 4x CPU throttle: the tokenizer was 28% of zoom's samples.
+   *
+   * Above the early returns, because a hook below one is the bug that white
+   * screened the pen tool (`eslint.config.js` now refuses it).
+   */
+  const parsed = useMemo(
+    () => (load && !("failed" in load) ? parseDesign(load.text) : null),
+    [load],
+  );
+
   if (load === null) return <div className="file-view">…</div>;
   if ("failed" in load) return <div className="file-view">{load.failed}</div>;
+  if (!parsed) return <div className="file-view">…</div>;
 
-  const doc = parseDesign(load.text);
+  const doc = parsed;
   return (
     <div className="ds-view">
       <Masthead doc={doc} />
@@ -335,3 +353,12 @@ function Components({ doc }: { doc: DesignDoc }) {
     </section>
   );
 }
+
+
+/**
+ * **Memoised**, like `ItemView` and the Markdown body, and for the reason the
+ * measurement gave: its only prop is a stable blob URL, and nothing it draws
+ * depends on the viewport. Without it, zoom re-rendered every section of every
+ * design document on every frame.
+ */
+export const DesignSystemView = memo(DesignSystemViewInner);
