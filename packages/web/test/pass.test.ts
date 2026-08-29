@@ -23,7 +23,7 @@ import { enterAs, knownIdentities, readIdentity } from "../src/lib/identity.ts";
 /**
  * **Scene 5, from the browser's two ends** (phase 8).
  *
- * The minting end is the "Work from your terminal…" dialog: an admitted tab
+ * The minting end is the "Bring your own agent…" dialog: an admitted tab
  * asks for a pass that names this canvas and this person's actor. The
  * redeeming end is a tab that arrives on `…/p/<id>#<pass>` — `isocan open`'s
  * doing — and has to come up ALREADY BEING that person.
@@ -279,7 +279,7 @@ describe("a tab that arrives carrying one", () => {
     expect(refusal?.note).toMatch(/already been used/);
     // Not a blank page and not a silent fall back to being a stranger: the
     // three refusals exist so that each one names what to do next.
-    expect(refusal?.hint).toMatch(/Work from your terminal|isocan open/);
+    expect(refusal?.hint).toMatch(/Bring your own agent|isocan open/);
   });
 
   it("says so when the home has never heard of the pass", async () => {
@@ -343,7 +343,7 @@ describe("refusals this browser cannot make a real daemon produce", () => {
     expect(refusal?.code).toBe(PASS_EXPIRED);
     expect(refusal?.note).toMatch(/expired/);
     expect(refusal?.note).toMatch(/15 minutes/); // from PASS_TTL_MS, not a literal
-    expect(refusal?.hint).toMatch(/Work from your terminal/);
+    expect(refusal?.hint).toMatch(/Bring your own agent/);
     expect(readIdentity()).toBeNull(); // and nobody was quietly minted
   });
 

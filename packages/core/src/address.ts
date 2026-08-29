@@ -303,7 +303,7 @@ export function normalizeHomeUrl(raw: string): string {
  *
  * It lives in core, beside the address, because phase 8 made the two into one
  * string: the command a person pastes is `npx <spec> setup <address>#<pass>`,
- * and the CLI's `isocan pass` and the web app's "Work from your terminal…"
+ * and the CLI's `isocan pass` and the web app's "Bring your own agent…"
  * dialog both hand it over. Two surfaces printing one string is house rule 4's
  * definition of a computation that belongs to neither of them — and a second
  * copy in the web app would be a branchless spec waiting to happen, in the one

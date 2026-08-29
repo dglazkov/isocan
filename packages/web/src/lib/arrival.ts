@@ -146,7 +146,7 @@ function refusalOf(err: unknown): ArrivalRefused {
   // guessing which of them this tab was opened by.
   const fresh =
     "Nothing was handed over, so this tab is whoever it already was. For a fresh one: " +
-    "“Work from your terminal…” under your own face on the canvas that gave you this link, " +
+    "“Bring your own agent…” under your own face on the canvas that gave you this link, " +
     "or `isocan open` on your own machine.";
   if (err instanceof ApiError && err.code === PASS_EXPIRED) {
     return {

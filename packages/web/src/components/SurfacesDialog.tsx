@@ -13,7 +13,7 @@ import { killBadge, listBadges } from "../lib/api.ts";
  * still answers is Jordan's phone, and what she needs from it is a list she
  * recognises and one button.
  *
- * **It belongs in the identity menu**, beside "Work from your terminal…", for
+ * **It belongs in the identity menu**, beside "Bring your own agent…", for
  * the reason that menu already states: this menu is *how I'm connected here*,
  * and a surface carrying your identity is another way you are connected. Share
  * is *who may be here*, which is about somebody else. Ending a surface is

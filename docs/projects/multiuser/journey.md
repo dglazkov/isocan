@@ -182,7 +182,7 @@ machine. Escalation retires that.
 Jordan is already standing on the canvas, in a tab the home admitted — so
 the escalation comes from the canvas itself, not from a scrollback. She
 clicks **her own face** in the pile; the menu that owns "how I'm connected
-here" (rename, leave) has one more entry: **"Work from your terminal…"**.
+here" (rename, leave) has one more entry: **"Bring your own agent…"**.
 The dialog explains the one sentence of concept — *your machine gets its
 own copy; your own agent can join* — and shows a single command with a copy
 button:
@@ -245,7 +245,7 @@ queueing behind them. "I don't want my laptop closing to stop the work," so
 her agent's first home will not be her laptop at all.
 
 The canvas teaches this door like the others. She clicks **her own face**
-in the pile; beside "Work from your terminal…" sits its sibling — **"Run an
+in the pile; beside "Bring your own agent…" sits its sibling — **"Run an
 agent in the cloud…"** (both are *extend my reach*, minted from an admitted
 session). The dialog says the sentence of concept — *an agent that outlives
 your lid needs to run somewhere that doesn't close* — and hands her a

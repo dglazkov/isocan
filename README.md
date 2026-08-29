@@ -298,7 +298,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   no control, because the link is how sharing works there; whether a home has
   one is configuration, so the same build runs on a laptop and at isocan.io.
 - **Escalation**: a thin guest goes thick in one command, and the canvas hands
-  it to you — click your own face and pick **"Work from your terminal…"**: one
+  it to you — click your own face and pick **"Bring your own agent…"**: one
   sentence of concept, one command, a copy button, and a clock, because the
   thing it hands you is single-use and dies in fifteen minutes. The terminal
   half is the same gesture: from a canvas you are
