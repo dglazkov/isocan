@@ -6,6 +6,7 @@ import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./i
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { useCanvasStore, flashNotice, setNotice } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { openPanel } from "./panels.ts";
 import { glideToBox } from "./zoomactions.ts";
 
 /**
@@ -182,3 +183,54 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
 
 /** Only used to keep the import honest when a kind-specific entry is added. */
 export const _itemKind = itemKind;
+
+/**
+ * **The `···` drawer: one handle instead of a row of buttons.**
+ *
+ * The bar had grown to eight always-present controls, each of which was right
+ * on its own and none of which was worth the canvas it cost. The ones that
+ * remain in the bar are the ones you look AT — where you are, who is here —
+ * and the ones in here are the ones you occasionally reach FOR.
+ *
+ * **Nothing is lost, and that is a test rather than a promise.**
+ * `chrome.test.ts` asserts every control this drawer swallowed is in here,
+ * because "we moved it into a menu" is the sentence that precedes a feature
+ * nobody can find again.
+ *
+ * Chat is deliberately NOT here. It has the strip when shut — a permanent
+ * surface with its unread count on it — and ⌘J; putting it behind a handle as
+ * well would give one thing three doors and make the strip look decorative.
+ *
+ * The counts travel with the labels. "Trash" alone is a question; "Trash (16)"
+ * is the answer somebody opened the menu for, and it is the one thing the old
+ * bar said that a bare handle cannot.
+ */
+export function chromeMenu(ctx: {
+  canvasId: string;
+  filesOpen: boolean;
+  trashOpen: boolean;
+  trashCount: number;
+  minimapOpen: boolean;
+}): MenuEntry[] {
+  const ui = () => useUiStore.getState();
+  return [
+    {
+      label: ctx.filesOpen ? "Hide files" : "Files",
+      run: () => openPanel(ctx.canvasId, ctx.filesOpen ? null : "files"),
+    },
+    {
+      label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
+      run: () => ui().setTrashOpen(!ctx.trashOpen),
+    },
+    {
+      label: ctx.minimapOpen ? "Hide the map" : "Show the map",
+      run: () => ui().setMinimapOpen(!ctx.minimapOpen),
+    },
+    { separator: "" },
+    {
+      label: "Keyboard shortcuts",
+      shortcutFor: "This list",
+      run: () => ui().setHelpOpen(!ui().helpOpen),
+    },
+  ];
+}

@@ -396,11 +396,27 @@ green:
   what state they are in. The statuses are already computed and already
   correct; they have never been shown. The rationale argues this is the most
   isocan-specific move of the lot, and it is not in the spec at all.
-- **One handle, not eight panels.** Files, marks, trash, minimap, design
-  system, workbench, help behind a single `···`. There are eight
-  always-present chrome surfaces today; this is the move that would repay the
-  most canvas. **It is also where "do not lose features" is most at risk**,
-  and why it comes after everything above rather than first.
+- **One handle, not eight panels.** **Done, 28 Aug 2026.** The bar went from
+  eight always-present controls to three: `⌂ <name> ···` on the left, and
+  `Workbench · live · faces · Share` on the right. Files, trash, the map and
+  the shortcut list are behind the handle.
+
+  What stayed out, and why: **Chat**, because the strip already gives it a
+  permanent surface with its unread count and ⌘J gives it a key — a third door
+  would make the strip look decorative. **Workbench**, because it navigates
+  rather than toggling a dock, and one view is always true. **Marks**, because
+  it lives on the tool rail beside the tools, which is a different kind of
+  place from a chrome drawer.
+
+  "Do not lose features" is a TEST, not a promise: `drawer.test.ts` asserts
+  every control the drawer swallowed is reachable from it, that none of them
+  is still in the bar as a duplicate, that each toggle says which way it will
+  go ("Files" vs "Hide files"), and that the trash COUNT travels with its
+  label — `🗑 16` was information at a glance and a bare handle cannot show
+  it, so the number moved rather than being dropped quietly.
+
+  Reused the right-click menu's machinery rather than building a second one,
+  so the entries are pure data and can be asserted without a browser.
 - **The radius ladder and borders-into-elevation**, generalised past the rail.
   Phase 1 proves the language on one surface; this spends it everywhere.
   **Done, 28 Aug 2026: the header dissolved.** It was a full-width slab with
