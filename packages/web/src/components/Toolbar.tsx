@@ -5,11 +5,11 @@ import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { chromeMenu } from "../lib/menuentries.ts";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
-import { PanelSwitch } from "./CreateActions.tsx";
 import { CanvasPresence, CanvasTitle } from "./CanvasCrumb.tsx";
 
 /**
@@ -28,6 +28,8 @@ export function Toolbar({
   const canvas = useCanvasStore((s) => s.project);
   const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
+  const filesOpen = useUiStore((s) => s.filesPanelOpen);
+  const minimapOpen = useUiStore((s) => s.minimapOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
@@ -65,16 +67,33 @@ export function Toolbar({
           ⌂
         </Link>
         <CanvasTitle actor={actor} />
+        {canvas && (
+          <button
+            className="btn drawer-handle"
+            title="Files, trash, the map and the shortcut list"
+            aria-label="More"
+            aria-haspopup="menu"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              useUiStore.getState().setContextMenu({
+                // Under the handle, aligned to its left edge — a menu that
+                // opens where the pointer happened to be is right for a
+                // right-click and wrong for a button, which has a place.
+                at: { x: r.left, y: r.bottom + 6 },
+                entries: chromeMenu({
+                  canvasId: canvas.id,
+                  filesOpen,
+                  trashOpen,
+                  trashCount,
+                  minimapOpen,
+                }),
+              });
+            }}
+          >
+            ···
+          </button>
+        )}
       </div>
-      {/* Its own cluster, not part of the title's. Both toggles drive the same
-          dock and only one can win, so they read as one control with two
-          settings — and that reading only survives if nothing else shares
-          their box. */}
-      {canvas && (
-        <div className="bar-cluster floats">
-          <PanelSwitch canvasId={canvas.id} actor={actor} />
-        </div>
-      )}
       <span className="spacer" />
       <div className="bar-cluster floats">
       {/* The way into the workbench, said out loud. It was `W` and nothing
@@ -97,24 +116,6 @@ export function Toolbar({
           item any more — the two that did (upload, then Site) both went to
           the tool rail, which is where a canvas keeps the things that put
           content on it. */}
-      <button
-        className={`btn${trashOpen ? " active" : ""}`}
-        onClick={() => useUiStore.getState().setTrashOpen(!trashOpen)}
-      >
-        🗑{trashCount > 0 ? ` ${trashCount}` : ""}
-      </button>
-      {/* A shortcut nobody can find is a shortcut nobody has. */}
-      <button
-        className="btn help-btn"
-        title="What this canvas answers to (?)"
-        aria-label="Help"
-        onClick={() => {
-          const ui = useUiStore.getState();
-          ui.setHelpOpen(!ui.helpOpen);
-        }}
-      >
-        ?
-      </button>
       <CanvasPresence actor={actor} onIdentity={onIdentity} />
       </div>
     </div>
