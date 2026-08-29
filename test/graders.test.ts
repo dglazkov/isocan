@@ -120,6 +120,62 @@ const chrome = [
 ].some((p) => p && existsSync(p));
 if (!chrome) console.warn("graders: no Chrome — the --json verdict case was NOT checked");
 
+/**
+ * **The grader may not wait for a duration.**
+ *
+ * It did, and it cost a red main. `Page.navigate` resolves when navigation
+ * STARTS, and the render path followed it with `sleep(1400)` and `sleep(600)`
+ * — a bet that a page would be loaded and settled in two seconds. A loaded CI
+ * runner loses that bet, and loses it in the dangerous direction: the probe
+ * measures a half-built document, finds fewer contrast failures than exist,
+ * and the grader reports a page as HEALTHIER than it is. An instrument that
+ * fails toward good news is worse than one that fails loudly.
+ *
+ * These are source assertions rather than behavioural ones, deliberately: the
+ * behaviour they protect only misbehaves under load, which is the one
+ * condition a test cannot reliably create. What CAN be pinned is the rule —
+ * the render path waits on conditions the page declares, and on nothing else.
+ */
+describe("the grader waits for conditions, never for a clock", () => {
+  const grader = read("../scripts/grade.mjs");
+  /** The render path only: `browser()`'s startup poll and `close()`'s bounded
+   * kill are deadlines on conditions, and are not what this is about. */
+  const renderPath = grader.slice(grader.indexOf("async function gradeFile"));
+
+  it("does not sleep between navigating and measuring", () => {
+    expect(renderPath).not.toMatch(/await sleep\(/);
+  });
+
+  it("waits for the load event, and arms it before navigating", () => {
+    // Armed after `navigate` is a race a fast load wins, and losing it hangs.
+    expect(renderPath).toContain('once("Page.loadEventFired")');
+    expect(renderPath.indexOf('once("Page.loadEventFired")')).toBeLessThan(
+      renderPath.indexOf('send("Page.navigate"'),
+    );
+  });
+
+  it("waits for fonts and a served paint before it measures", () => {
+    // Contrast and target size are read off RENDERED text: a fallback font is
+    // a different reading, and an unpainted frame is no reading at all.
+    expect(renderPath).toContain("document.fonts.ready");
+    expect(renderPath).toMatch(/requestAnimationFrame\(\(\) => requestAnimationFrame/);
+  });
+
+  it("lets Chrome choose its own debugging port", () => {
+    // `9500 + (pid % 400)` collided two ways: two graders 400 pids apart, and
+    // a Chrome left behind by an aborted run still holding the port — where
+    // the next grader would attach to somebody else's browser and drive it.
+    //
+    // Comments stripped first, the way the hard-coded-path guard above does
+    // it: the doc that EXPLAINS the old formula names it, and a guard that
+    // cannot tell prose from code fails on its own explanation.
+    const code = grader.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toContain("--remote-debugging-port=0");
+    expect(code).toContain("DevToolsActivePort");
+    expect(code).not.toMatch(/9500 \+/);
+  });
+});
+
 describe.skipIf(!chrome)("--json carries its own verdicts", () => {
   it("every reading comes with the check it decides", () => {
     // Measured, not asserted about the source: the nightly consumed `checks`

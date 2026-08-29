@@ -103,25 +103,88 @@ const slopHits = (text) => GREPPABLE.filter((r) => r.re.test(text)).map((r) => r
 
 // ---- the rendered half ----
 
-async function browser() {
-  const port = 9500 + Math.floor(process.pid % 400);
-  const dir = mkdtempSync(path.join(tmpdir(), "grade-"));
-  const proc = spawn(chromeOrDie(), ["--headless=new", `--remote-debugging-port=${port}`,
-    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
-  const { default: WebSocket } = await import(path.join(repo, "node_modules/ws/index.js"));
-  let target = null;
-  for (let i = 0; i < 80 && !target; i++) {
-    await sleep(200);
-    try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === "page"); } catch {}
+/**
+ * **Chrome picks the port, and tells us which one it picked.**
+ *
+ * It used to be `9500 + (pid % 400)`, which is a guess with two ways to be
+ * wrong and no way to notice either. Two graders whose pids differ by exactly
+ * 400 want one port; and a Chrome left behind by an aborted run still HOLDS
+ * that port, so the next grader's `/json/list` answers with the OLD browser's
+ * target and it drives somebody else's browser. Two graders sharing one page,
+ * each navigating under the other, is a reading of whatever happened to be
+ * loaded — which is exactly the shape of "reported one failure on a page built
+ * to break seven".
+ *
+ * `--remote-debugging-port=0` makes Chrome bind a free port and write it to
+ * `DevToolsActivePort` in the profile directory. The profile is a fresh
+ * mkdtemp, so that file cannot be anybody else's, and reading it is a fact
+ * rather than a guess. Waiting for it is a condition — the file exists or it
+ * does not — and never a duration.
+ */
+async function devtoolsEndpoint(dir, proc) {
+  const file = path.join(dir, "DevToolsActivePort");
+  // Bounded so a Chrome that never starts fails rather than hangs; the bound
+  // is a deadline on a CONDITION, which is the honest use of a clock — the
+  // loop exits the moment the file appears, not when a timer says it should.
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    if (proc.exitCode !== null) throw new Error(`chrome exited (${proc.exitCode}) before it was ready`);
+    try {
+      const [port, wsPath] = readFileSync(file, "utf8").split("\n");
+      if (port && wsPath) return `ws://127.0.0.1:${port.trim()}${wsPath.trim()}`;
+    } catch {}
+    if (Date.now() > deadline) throw new Error(`chrome did not write ${file} — no DevTools endpoint`);
+    await sleep(50);
   }
-  if (!target) { proc.kill(); rmSync(dir, { recursive: true, force: true }); throw new Error("chrome did not start"); }
-  const ws = new WebSocket(target.webSocketDebuggerUrl, { maxPayload: 1 << 28 });
-  await new Promise((r) => ws.once("open", r));
+}
+
+async function browser() {
+  const dir = mkdtempSync(path.join(tmpdir(), "grade-"));
+  const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
+    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+  // Ordinary resolution first, and the explicit path only as the fallback it
+  // was meant to be. The hardcoded one alone fails in a git WORKTREE, whose
+  // `node_modules` is the main checkout's and not `repo/node_modules` — so the
+  // graders could not run there at all, which reads exactly like a flake to
+  // whoever meets it.
+  const { default: WebSocket } = await import("ws").catch(() =>
+    import(path.join(repo, "node_modules/ws/index.js")),
+  );
+  let endpoint;
+  try {
+    endpoint = await devtoolsEndpoint(dir, proc);
+  } catch (err) {
+    proc.kill(); rmSync(dir, { recursive: true, force: true }); throw err;
+  }
+  // The browser endpoint, then a page target of our own — created rather than
+  // discovered, so nothing depends on which targets happen to exist.
+  const browserWs = new WebSocket(endpoint, { maxPayload: 1 << 28 });
+  await new Promise((r, j) => { browserWs.once("open", r); browserWs.once("error", j); });
+  let bid = 0; const bpending = new Map();
+  browserWs.on("message", (d) => {
+    const m = JSON.parse(d.toString());
+    if (m.id && bpending.has(m.id)) { bpending.get(m.id)(m); bpending.delete(m.id); }
+  });
+  const bsend = (method, params = {}) => {
+    const mid = ++bid; browserWs.send(JSON.stringify({ id: mid, method, params }));
+    return new Promise((res, rej) => bpending.set(mid, (m) => (m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result))));
+  };
+  const { targetId } = await bsend("Target.createTarget", { url: "about:blank" });
+  const { targetInfos } = await bsend("Target.getTargets");
+  const mine = targetInfos.find((t) => t.targetId === targetId);
+  if (!mine) throw new Error("chrome would not make a page target");
+  const wsUrl = endpoint.replace(/\/devtools\/browser\/.*$/, `/devtools/page/${targetId}`);
+  const ws = new WebSocket(wsUrl, { maxPayload: 1 << 28 });
+  await new Promise((r, j) => { ws.once("open", r); ws.once("error", j); });
   let id = 0; const pending = new Map(); let errors = [];
+  /** Callers waiting on a CDP EVENT rather than a reply — see `once`. */
+  const waiters = new Map();
   ws.on("message", (d) => {
     const m = JSON.parse(d.toString());
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
     if (m.method === "Runtime.exceptionThrown") errors.push((m.params.exceptionDetails?.exception?.description ?? "").split("\n")[0]);
+    const w = waiters.get(m.method);
+    if (w) { waiters.delete(m.method); w(m.params); }
   });
   const send = (method, params = {}) => {
     const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params }));
@@ -130,6 +193,14 @@ async function browser() {
   await send("Page.enable"); await send("Runtime.enable");
   return {
     send,
+    /**
+     * **Arm a listener for one CDP event, BEFORE the thing that causes it.**
+     *
+     * The order is the whole point: arming after `Page.navigate` is a race
+     * that a fast load wins, and the symptom of losing it is a wait that
+     * never ends. So callers arm, then act, then await.
+     */
+    once: (method) => new Promise((res) => waiters.set(method, res)),
     ev: async (e) => {
       const r = await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true });
       if (r.exceptionDetails) {
@@ -252,11 +323,47 @@ async function gradeFile(b, file) {
   let renders = true, pageErrors = [];
   for (const w of WIDTHS) {
     await b.send("Emulation.setDeviceMetricsOverride", { width: w, height: 900, deviceScaleFactor: 1, mobile: w < 700 });
-    await b.send("Page.navigate", { url: `file://${path.resolve(file)}` });
-    await sleep(1400);
+    /**
+     * **Nothing here waits for a duration.**
+     *
+     * It used to be `navigate; sleep(1400); takeErrors(); sleep(600)`, and
+     * `Page.navigate` resolves when navigation STARTS. So the two sleeps were
+     * a bet that a page would be loaded and settled in 2 seconds — a bet that
+     * a loaded CI runner loses, and loses SILENTLY: the probe runs against a
+     * half-built document, finds fewer contrast failures than exist, and the
+     * grader reports a page as healthier than it is. That is the dangerous
+     * direction for an instrument, and it is what "one failure on a page built
+     * to break seven" was.
+     *
+     * Three conditions replace it, and each is something the page itself
+     * declares:
+     *
+     * 1. `Page.loadEventFired` — the document and its subresources are in.
+     *    Armed BEFORE `navigate`, because a fast load would otherwise fire
+     *    before anybody was listening.
+     * 2. `document.fonts.ready` — text is laid out in the font it will be
+     *    measured in. Contrast and target-size read from rendered text, so a
+     *    fallback font is a different reading.
+     * 3. Two animation frames — the browser has produced a paint with all of
+     *    the above applied. One frame schedules; the second proves the first
+     *    was served.
+     *
+     * The errors are cleared BEFORE the navigation rather than partway
+     * through it. The old clear sat between the two sleeps, which dropped
+     * whatever the page reported in its first 1.4 seconds — a page that threw
+     * on load looked clean if it threw quickly enough.
+     */
     b.takeErrors();
-    await sleep(600);
+    const loaded = b.once("Page.loadEventFired");
+    const nav = await b.send("Page.navigate", { url: `file://${path.resolve(file)}` });
+    if (nav.errorText) throw new Error(`could not open ${file}: ${nav.errorText}`);
+    await loaded;
     try {
+      await b.ev(`(async () => {
+        await document.fonts.ready;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return true;
+      })()`);
       const reading = await b.ev(PROBE);
       if (!reading || typeof reading !== "object" || !Array.isArray(reading.contrast)) {
         throw new Error(`probe returned ${reading === undefined ? "undefined" : typeof reading}, not a reading`);
