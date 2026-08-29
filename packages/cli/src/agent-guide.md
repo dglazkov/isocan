@@ -386,6 +386,10 @@ measured and what the line is, which is the difference between "I improved the
 contrast" and "contrast failures went 2 → 0, measured by the command the goal
 names". The second is a claim somebody can check.
 
+`isocan persona runs <name>` shows what its runs found and what was decided
+about each — `accepted`, `rejected`, or `unanswered`. Nothing computes a score
+from those yet, deliberately: an accept rate over five findings is noise.
+
 A goal is `(number, bound, the command that produces it)` — never an
 aspiration. If you add one, run its command against something broken first and
 watch the number move. A measurement that cannot fail reports success forever,

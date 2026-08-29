@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import type {
   Persona,
+  RunFinding,
   Actor,
   BadgeSummary,
   CanvasAddress,
@@ -145,6 +146,8 @@ import {
   parsePersona,
   goalLine,
   personaWarnings,
+  runFindings,
+  tallyOutcomes,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -5535,6 +5538,51 @@ persona
       console.log(p.goals.length ? "  judged on" : "  judged on nothing yet");
       for (const goal of p.goals) console.log(`    · ${goalLine(goal)}\n      ${goal.measuredBy}`);
       for (const warning of personaWarnings(p)) console.log(`  ! ${warning}`);
+    }),
+  );
+
+persona
+  .command("runs <name>")
+  .description("What this persona's runs found, and what was decided about each")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const root = await personaRoot(ctx);
+      const found = await personaFiles(root);
+      const match =
+        found.find((f) => f.persona.name === name) ??
+        found.find((f) => f.persona.name.startsWith(name));
+      if (!match) throw new Error(`no persona called "${name}"`);
+      const dir = path.join(root, match.persona.runs ?? "docs/reviews/");
+      const names = (await fs.readdir(dir).catch(() => [] as string[]))
+        .filter((f) => f.endsWith(`-${match.persona.name}.md`))
+        .sort()
+        .reverse();
+      const runs: Array<{ page: string; findings: RunFinding[] }> = [];
+      for (const file of names) {
+        const page = await fs.readFile(path.join(dir, file), "utf8").catch(() => null);
+        if (page !== null) runs.push({ page: file, findings: runFindings(page) });
+      }
+      if (ctx.json) return console.log(JSON.stringify(runs, null, 2));
+      if (runs.length === 0) {
+        return console.log(`no runs yet — \`node scripts/persona-run.mjs ${match.persona.name}\``);
+      }
+      for (const r of runs) {
+        console.log(r.page);
+        for (const f of r.findings) console.log(`  ${f.outcome.padEnd(11)} ${f.finding}`);
+        if (r.findings.length === 0) console.log("  nothing found");
+      }
+      /**
+       * **The tally, and no ratio.** An accept rate over five findings is
+       * noise, and a trust score that governs autonomy before it means
+       * anything is a way to lose trust in trust. The numbers are here from
+       * the first run; what to make of them waits until there are enough to
+       * argue about.
+       */
+      const tally = tallyOutcomes(runs.flatMap((r) => r.findings));
+      console.log(
+        `\n${tally.accepted} accepted · ${tally.rejected} rejected · ${tally.unanswered} unanswered`,
+      );
     }),
   );
 

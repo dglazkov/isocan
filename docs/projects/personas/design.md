@@ -347,11 +347,55 @@ Each is useful alone. None requires the next.
    product has rather than a thing the repo has.
 4. **One persona on the nightly**, writing a page and nothing else — the night
    shift's step 2, which exists to prove the ritual before trusting it with
-   work.
+   work. **Built 29 Aug**: `scripts/persona-run.mjs`, `.github/workflows/persona.yml`,
+   a dated page per persona in `docs/reviews/`.
 5. **Runs record their outcome.** A finding is accepted, rejected, or
-   unanswered. Still no score, just the column.
+   unanswered. Still no score, just the column. **Built 29 Aug**: the column is
+   in the page, `runFindings`/`tallyOutcomes` are in core, and
+   `isocan persona runs <name>` reads them.
 6. **The canvas as source of truth**, projected out to `.agents/`. When there
    is a second person editing a persona, and not before.
+
+### Why 6 is not built, stated rather than skipped
+
+Its condition has not happened. The gate above is not a guess about effort, it
+is the moment the canvas starts paying for itself — a second person with an
+opinion about what Darren looks for. Until then, making the canvas
+authoritative converts a text file that any harness can read with no daemon, no
+badge and no network into a distributed system, in exchange for nothing anybody
+has asked for.
+
+The two things this version owed that future are done, so the move stays cheap
+when it is due: one file per persona (so it can become one item), and front
+matter that keeps keys it does not understand (so a later build's field
+survives a round trip through an editor that predates it).
+
+**What would move it:** the sign-up half of
+[one agent, many canvases](../../research/2026-08-29-one-agent-many-canvases.md),
+which is a stronger reason than editing. A persona that several agents can wear
+needs a place both of them can read that is not one laptop's disk.
+
+---
+
+## What a run is, and what it is not
+
+A run takes the persona's numbers, writes a dated page, and stops. Three rules
+came out of building it, and each has a test:
+
+**It may not edit the persona.** A runner that can change its own goal can pass
+by lowering the bar. Enforced by comparing every persona file before and after
+— not by asking git what is dirty, which was the first version and could not
+tell "the runner changed this" from "this was already edited".
+
+**A broken instrument is never a zero.** A command that fails, or prints
+something that is not a number, is reported as *instrument broken*. "0 contrast
+failures" and "nothing could be measured" look identical in a report that does
+not separate them, and this week produced three instruments that reported the
+first while meaning the second.
+
+**A missed goal is news; a broken instrument is a failure.** The page is the
+report, and a run that goes red every morning trains everybody to stop looking.
+The run exits non-zero for exactly one reason: a number nobody could take.
 
 ---
 
