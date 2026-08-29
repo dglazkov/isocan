@@ -1,10 +1,12 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, promises as fsp } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildStamp,
   describeBuild,
+  gitHead,
   plausibleSha,
   stalenessOf,
   upgradeVerdict,
@@ -114,6 +116,114 @@ describe("build stamp", () => {
       expect(stamp.commit).toMatch(/^[0-9a-f]{7}$/);
       expect(describeBuild(stamp)).toContain(stamp.commit!);
     }
+  });
+
+  /**
+   * **The four shapes `gitHead` claims to survive, built on disk and asked.**
+   *
+   * Written after the worktree one turned out not to be survived at all: it
+   * returned null, which is indistinguishable from "this copy cannot say" and
+   * so read as correct for as long as nobody checked. Every agent working in
+   * this repo works in a worktree, so that null was `commit: null` on every
+   * development copy — and no upgrade verdict on any of them.
+   */
+  describe("reading .git by hand", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    let scratch: string;
+
+    beforeEach(async () => {
+      scratch = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-githead-"));
+    });
+    afterEach(async () => {
+      await fsp.rm(scratch, { recursive: true, force: true });
+    });
+
+    /** A clone: `.git` is a directory, and the ref is a loose file. */
+    async function clone(at: string): Promise<string> {
+      const dot = path.join(at, ".git", "refs", "heads");
+      await fsp.mkdir(dot, { recursive: true });
+      await fsp.writeFile(path.join(at, ".git", "HEAD"), "ref: refs/heads/main\n");
+      await fsp.writeFile(path.join(dot, "main"), `${sha}\n`);
+      return at;
+    }
+
+    it("reads a plain clone", async () => {
+      const at = await clone(path.join(scratch, "clone"));
+      expect(gitHead(at)?.commit).toBe(sha.slice(0, 7));
+    });
+
+    it("reads a detached HEAD, which names the sha outright", async () => {
+      const at = path.join(scratch, "detached");
+      await fsp.mkdir(path.join(at, ".git"), { recursive: true });
+      await fsp.writeFile(path.join(at, ".git", "HEAD"), `${sha}\n`);
+      expect(gitHead(at)?.commit).toBe(sha.slice(0, 7));
+    });
+
+    it("reads a repo whose refs `git gc` has packed", async () => {
+      const at = path.join(scratch, "packed");
+      await fsp.mkdir(path.join(at, ".git"), { recursive: true });
+      await fsp.writeFile(path.join(at, ".git", "HEAD"), "ref: refs/heads/main\n");
+      await fsp.writeFile(
+        path.join(at, ".git", "packed-refs"),
+        `# pack-refs with: peeled fully-peeled sorted\n${sha} refs/heads/main\n`,
+      );
+      expect(gitHead(at)?.commit).toBe(sha.slice(0, 7));
+    });
+
+    /**
+     * The shape that was broken. A worktree's `.git` is a FILE naming a
+     * per-worktree directory; that directory holds its own HEAD and a
+     * `commondir` pointing at the repository, where the refs actually live.
+     * Reading only the near half finds HEAD and then finds nothing.
+     */
+    it("reads a worktree, whose HEAD is its own and whose refs are not", async () => {
+      const repo = await clone(path.join(scratch, "repo"));
+      const gitdir = path.join(repo, ".git", "worktrees", "feature");
+      await fsp.mkdir(gitdir, { recursive: true });
+      await fsp.writeFile(path.join(gitdir, "HEAD"), "ref: refs/heads/feature\n");
+      await fsp.writeFile(path.join(gitdir, "commondir"), "../..\n");
+      // The branch lives in the REPOSITORY, which is the whole point.
+      await fsp.writeFile(path.join(repo, ".git", "refs", "heads", "feature"), `${sha}\n`);
+
+      const at = path.join(scratch, "tree");
+      await fsp.mkdir(at, { recursive: true });
+      await fsp.writeFile(path.join(at, ".git"), `gitdir: ${gitdir}\n`);
+      expect(gitHead(at)?.commit).toBe(sha.slice(0, 7));
+    });
+
+    it("reads a worktree whose shared refs are packed", async () => {
+      const repo = path.join(scratch, "repo2");
+      await fsp.mkdir(path.join(repo, ".git"), { recursive: true });
+      await fsp.writeFile(
+        path.join(repo, ".git", "packed-refs"),
+        `${sha} refs/heads/feature\n`,
+      );
+      const gitdir = path.join(repo, ".git", "worktrees", "feature");
+      await fsp.mkdir(gitdir, { recursive: true });
+      await fsp.writeFile(path.join(gitdir, "HEAD"), "ref: refs/heads/feature\n");
+      await fsp.writeFile(path.join(gitdir, "commondir"), "../..\n");
+
+      const at = path.join(scratch, "tree2");
+      await fsp.mkdir(at, { recursive: true });
+      await fsp.writeFile(path.join(at, ".git"), `gitdir: ${gitdir}\n`);
+      expect(gitHead(at)?.commit).toBe(sha.slice(0, 7));
+    });
+
+    /** Reftable: the honest answer is null, and it must stay null rather than
+     * become `.invalid` chased as a branch name. */
+    it("says nothing at all on reftable, rather than something wrong", async () => {
+      const at = path.join(scratch, "reftable");
+      await fsp.mkdir(path.join(at, ".git", "reftable"), { recursive: true });
+      await fsp.writeFile(path.join(at, ".git", "HEAD"), "ref: refs/heads/.invalid\n");
+      expect(gitHead(at)).toBeNull();
+    });
+
+    it("says nothing when the ref is nowhere to be found", async () => {
+      const at = path.join(scratch, "dangling");
+      await fsp.mkdir(path.join(at, ".git"), { recursive: true });
+      await fsp.writeFile(path.join(at, ".git", "HEAD"), "ref: refs/heads/gone\n");
+      expect(gitHead(at)).toBeNull();
+    });
   });
 
   it("says which build a daemon is running when the two shas disagree", () => {

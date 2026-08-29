@@ -27,19 +27,37 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: PHASES 1 AND 2 DONE (27–28 Aug 2026), phases 3–4 not
-started.** isocan.io can say which commit it is running, and a CLI that
-disagrees with its home now says so — once, naming both builds, and silently
-when it cannot find out. Nothing is fetched, applied or restarted by any of
-it: that is phases 3 and 4, and neither is built.
+**Where we are: ALL FOUR PHASES DONE (27–29 Aug 2026).** isocan.io can say
+which commit it is running; a CLI that disagrees with its home says so, once,
+naming both builds; an upgrade is a build installed aside, started and asked
+which commit it is, and a symlink flipped only if it answered correctly; and
+on a managed install that now happens while an agent is parked, with the
+result reported in the wake it was parked for.
 
 Phase 1 was four lines of code and one build-arg, and it was worth doing
 regardless of what happens to the rest: it fixed a live production defect and
 depended on nothing else in this document. Phase 2 stands on it and is worth
 having on the same terms — nobody spends an afternoon debugging yesterday's
-build again — and it is the last phase that changes nothing on anybody's
-disk. **Phase 3 is the natural next step**, and it is where the project stops
-being a notice and starts being an install root.
+build again. Phase 3 is where the project stopped being a notice and became an
+install root, and it paid for itself twice on the way: `buildStamp()` could
+not name a commit in any git worktree, so phase 2's verdict had never once
+fired on a development machine. Phase 4 is the one that changes what happens
+on a machine nobody is watching.
+
+**What is left is not a phase.** Three things, each recorded where it belongs
+rather than queued here:
+
+- **The wake cannot say what changed beyond the sha** — the home has no `.git`,
+  so Scene 1's commit count and subject line are unbuilt (phase 4's findings).
+- **A fresh machine still starts unmanaged**, because the front door's `setup`
+  runs `npm i -g`; the first adoption is a command somebody runs. Whether
+  `setup` should install straight into `builds/` is a front-door change (see
+  Deliberately open).
+- **The trust boundary has not been met as a decision.** Whatever is on
+  `release` now runs unattended on every managed machine, and multiuser Scene 5
+  already puts somebody else's agent on somebody else's laptop. `--pin` and
+  `off` are the recovery paths; the boundary itself is still on the
+  Deliberately-open list, where it should be read before the day it matters.
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
@@ -54,6 +72,13 @@ decides them deliberately instead of improvising mid-task:
   designed and deliberately not scheduled in any phase: it is the second-best
   answer to a question the home answers better, and building it early would
   make it the version that gets maintained.
+- **Which channel, now that there is only one.** Phase 4 was to ship
+  `--channel release | main` and could not: `main` carries `workspaces` and
+  `prepare`, which is precisely why the `release` branch exists (#47), so a
+  `main` channel installs an empty directory. What a second channel would
+  actually take is a second BRANCH cut the way `release` is — a `next`, say —
+  and that is a pipeline decision rather than a flag. Recorded so nobody
+  re-adds the flag from the design text without noticing it cannot work.
 - **Whether a home may declare a minimum version.** A `minCli` field ("your
   build predates the ops I use") would turn a notice into a refusal, and
   refusing is a compatibility promise this product has not made. Phase 2 adds
@@ -84,8 +109,11 @@ decides them deliberately instead of improvising mid-task:
   adoption step. Whether `setup` should install straight into `builds/` is a
   front-door change and is not decided here.
 - **Windows.** Phase 3's symlink flip becomes a junction or a `.cmd` shim
-  there, and nobody has run this on Windows. Recorded so it is a decision
-  rather than a surprise.
+  there, and nobody has run this on Windows. Still true after phase 3, which
+  did the one thing that costs nothing: `flipTo` writes a junction with an
+  absolute target on win32, and `adoptGlobal` REFUSES a bin that is a shim
+  rather than a symlink, naming this line. So the failure on Windows is a
+  message, not a broken PATH — but the path itself is unrun.
 - **The stamp is self-reported, and always was.** A checkout reads its own
   `.git`; after phase 1 an image reads its own environment variable. Anyone
   who can set `ISOCAN_BUILD_SHA` can make a build claim to be another one.
@@ -324,7 +352,93 @@ green (1814 tests), plus the hand walk quoted in the status above.
 
 ## Phase 3 — The managed install root
 
-**Status: NOT STARTED**
+**Status: DONE 29 Aug 2026 — proof taken on this machine, against the real
+`release` branch on GitHub.**
+
+```
+$ isocan --version
+0.1.0 (aaa1111, 2026-08-29)                    # a real global install of this branch
+$ isocan upgrade --no-restart
+isocan: aaa1111 is now reachable as a build — `isocan upgrade --rollback` comes back to it
+isocan: adopting the global install at …/lib/node_modules/isocan — the copy stays
+  where npm put it; what moves is `isocan` on your PATH, onto a build root that
+  can be rolled back
+isocan: checking that 4da3862 runs…
+now on 4da3862 (was aaa1111)
+isocan: …/npm/bin/isocan now resolves through …/home/current
+$ ls ~/.isocan/builds ; readlink ~/.isocan/current ; isocan --version
+4da3862  aaa1111
+builds/4da3862
+0.1.0 (4da3862, 2026-08-29)
+$ isocan upgrade --rollback --no-restart ; isocan --version
+rolled back to aaa1111 from 4da3862
+0.1.0 (aaa1111, 2026-08-29)
+```
+
+Every step of that is real: a global install of this branch on a scratch npm
+prefix, a real `npm install` of `github:dglazkov/isocan#release`, a real
+daemon started from the candidate tree and asked which commit it was, and a
+real symlink flip that `isocan` on PATH then resolved through. The scratch
+`ISOCAN_HOME` and scratch `npm_config_prefix` are what kept it off the
+machine's own PATH — which is exactly the property `builds/` living under
+`ISOCAN_HOME` was chosen for.
+
+**The other three beats, measured the same way:**
+
+- **A candidate that will not start leaves `current` where it was.** Broken
+  deliberately — `packages/server` deleted out of the fetched tree — and the
+  message names the file: `4da3862 did not start cleanly — it exited before
+  answering (Error: ENOENT … packages/server/src/index.ts). Nothing was
+  swapped: you are still on aaa1111.` Exit 1, and `current` still
+  `builds/aaa1111`.
+- **A daemon left running survives the cleanup.** A real daemon out of
+  `builds/4da3862` — the OLDEST build, and not the current one — with five
+  builds on disk. Two prune rounds removed a *newer* build and left the
+  daemon's alone; the daemon still answered `/healthz` from the same root
+  afterwards, with its tree intact.
+- **The managed path through PATH.** After adoption, `isocan upgrade` run
+  through `current` reports `installing aside — nothing that is running
+  changes until the new build answers for itself`, and swaps without saying
+  anything about adoption, because there is nothing left to adopt.
+
+**What was built.** `packages/cli/src/managed.ts` is the phase: `listBuilds`,
+`currentSha`, `flipTo` (a symlink written aside and `rename`d over, so there
+is no window in which `isocan` resolves to nothing), `smokeTest`,
+`installBuild`, `liveBuildShas`, `pruneBuilds`, `shelveExisting` and
+`adoptGlobal`. `whichInstall` grows the `managed` kind and checks it first;
+`planUpgrade` grows a `swap` action that both `managed` and `global` take, so
+a global install adopts rather than overwriting itself. `paths.ts` owns the
+layout (`buildsDir`, `buildDir`, `stagingBuildDir`, `currentLink`,
+`buildRoot`). `isocan upgrade` gains `--rollback`.
+
+**Three things the phase decided that the Work below did not.**
+
+- **Adoption shelves the outgoing copy**, as a symlink at `builds/<sha>`
+  pointing at the global prefix's `lib`. Without it the first upgrade is the
+  one upgrade with no way back — `builds/` holds a single entry and
+  `--rollback` has nowhere to go — and that is the upgrade most likely to be
+  unattended. A symlink rather than a copy: `builds/<sha>` is an npm prefix
+  and a global install is already laid out as one, so it costs an inode
+  instead of four hundred packages, and "the global copy is left in place"
+  stays literally true.
+- **The smoke test picks its own port and retries.** `ISOCAN_PORT=0` would be
+  exact, but `startDaemon` records the port it was ASKED for, so every build
+  already on `release` writes the literal `0` into `daemon.json` and cannot be
+  found afterwards. A candidate is not always a NEW build — a rollback re-runs
+  against an old tree — so the test has to work against builds that predate
+  it. A candidate that could not bind is treated as a lost race and retried,
+  never as a bad build.
+- **Protected builds count toward the three.** Retention is "three builds,
+  plus anything in use", not "three spare ones on top of what is pinned".
+  Measured above: with a live daemon on the oldest build, the pruner removed a
+  newer build instead of it.
+
+**What is NOT closed here.** The refusal that matters most —
+*the release tip is not the build your home runs, so nothing was installed* —
+is unit-tested only. The real `release` tip and the real home were the same
+commit throughout, and manufacturing the lag would have meant a stub home,
+which is phase 2's rig rather than this one's. Windows is untouched:
+`adoptGlobal` refuses a bin that is a shim rather than a symlink, and says so.
 
 **Work:** `npm i -g` overwrites in place, which disqualifies it from running
 unattended: a failed install leaves no working CLI and nothing to fall back
@@ -389,13 +503,137 @@ install adopts on its first upgrade, and the global copy is untouched
 afterwards. And the cleanup check: a daemon left running on build A survives
 two upgrades with its tree intact.
 
-**Findings:** none yet.
+**Taken 29 Aug 2026**, every beat, quoted in the status above. Suite green
+(2031 tests). The mechanics are unit-tested in
+`packages/cli/test/managed.test.ts` against fixture builds, because npm can
+fetch exactly one build — the tip — so "two builds", "a build that lies about
+its sha" and "a build that will not start" are unreachable through the real
+thing. One detail of the transcript is worth stating plainly: `--rollback` had
+to be run from build A's own bin, because the build being rolled back FROM was
+the release tip, which predates the flag. That is the open item "the recovery
+commands run on the build they recover from", met in practice on the first
+try.
+
+**Findings:**
+
+- **2026-08-29** — `gitHead()` returned null for every git WORKTREE. HEAD is
+  per-worktree; `refs/` and `packed-refs` belong to the repository, named by
+  `commondir`. Agents here work in worktrees, so every development copy
+  reported `commit: null` — and phase 2's verdict was dead on all of them.
+  **Found twice on the same day, independently**: this phase hit it building
+  the smoke test, and `f35b01f` on main hit it running the suite from a
+  worktree. Main's fix is the one that stands — it replaces the ref directory
+  rather than searching both, which is what git actually does. Worth recording
+  that two sessions found one bug by two routes on the day the project started
+  depending on the field; the shared cause is that nothing had ever asserted
+  the shape.
+- **2026-08-29** — Two path comparisons compared a path node had already
+  realpath'd against one nobody had. `whichInstall` called a plainly global
+  install `local`, whose upgrade path is `npm i -g`: the first run of this
+  phase's own proof overwrote the install it was meant to adopt. Both sides
+  now go through `realpath`.
+- **2026-08-29** — `build.test.ts` could only assert the `.git` shape of the
+  machine it happened to be running on, so three of the four shapes the stamp
+  claims to survive were tested by nobody — which is why the worktree bug
+  above survived. `f35b01f` fixed the two assertions that were wrong about
+  THIS machine; this phase adds the missing half, exporting `gitHead(from)` so
+  a clone, a worktree, a packed repo, a detached HEAD and reftable are each
+  built on disk and asked.
+- **2026-08-29** — The last line of a node crash is node's own version, so a
+  build that could not find `@isocan/server` was reported as "it exited before
+  answering (Node.js v24.11.0)" — true, and naming nothing. The first `Error`
+  line is preferred; the last line stays the fallback.
+- **2026-08-29** — `startDaemon` records the port it was ASKED for, so
+  `ISOCAN_PORT=0` writes `0` into `daemon.json` and the daemon cannot be found
+  by anything outside its own process. Left alone deliberately: the smoke test
+  must work against candidates that predate any fix, so it probes instead.
 
 ---
 
 ## Phase 4 — Applying it unattended
 
-**Status: NOT STARTED**
+**Status: DONE 29 Aug 2026 — proof taken on this machine, two real managed
+builds and a real park.**
+
+```
+$ isocan status
+version   0.1.0 (aaa1111, 2026-08-12)
+running   …/home/builds/aaa1111/node_modules/isocan
+upgrade   this copy is aaa1111 (2026-08-12); your home http://127.0.0.1:21905
+          runs bbb2222 (2026-08-29) — `isocan upgrade`
+upgrades  auto — the default for a managed install
+
+$ isocan wait --json --timeout 90        # parked; config.json says nothing about upgrades
+  …twelve seconds later, with no command run:
+  current -> builds/bbb2222
+
+  …then a comment from somebody else wakes it:
+{ "reason": "summons", "entries": [ … ],
+  "upgraded": "isocan: upgraded to bbb2222 from aaa1111 while you were parked.
+    This process is still running the old build — the next command you run is on
+    the new one, so re-read your guide (`isocan agent-guide`) before acting on
+    anything that depends on it." }
+
+$ isocan --version
+0.1.0 (bbb2222, 2026-08-29)
+```
+
+The machine is a managed install of two real builds of this branch, stamped
+`aaa1111` and `bbb2222`; the home is a stub that answers the one question the
+probe asks. Nothing about the park is simulated: a real daemon, a real canvas,
+a real second actor commenting to wake it. **What the rig does not exercise is
+the fetch** — `bbb2222` was already in `builds/`, which is exactly the case
+`installBuild` now short-circuits — and that step is phase 3's, already proven
+against the real `release` branch on GitHub.
+
+**The other three beats, measured the same way:**
+
+- **No flip moves a running process.** The park was started by its resolved
+  path so `ps` records which build it came from. Twelve seconds later
+  `current` pointed at `builds/bbb2222` while the running process still read
+  `builds/aaa1111`, its tree intact and the process alive — and it went on to
+  wake normally.
+- **A dirty checkout is untouched and reports why.** The same machine, same
+  home, `config.json` saying `upgrade: "auto"`, driven from the checkout's own
+  bin with seven uncommitted files: `upgrades  notify — config.json says auto,
+  but this is a checkout — a working copy is never upgraded for you`. An
+  eight-second park moved nothing.
+- **`off`, a pin and `ISOCAN_NO_UPGRADE=1` each hold across a home that has
+  moved.** Each in turn, each with the verdict live, each with `current` still
+  at `aaa1111` after a park. The pin also held across an `isocan restart` — the
+  daemon came back on `aaa1111`, not on what the home runs — and a pinned
+  machine still gets the notice, which is journey Scene 3's requirement that
+  it not become a machine everyone forgot. `--pin deadbee` is refused by name:
+  *no build deadbee in …/builds — this machine has bbb2222, aaa1111*.
+
+**What was built.** `autoUpgrade()` in `managed.ts` is the decision;
+`applySwap()` is phase 3's mechanism with the narration taken out, so the
+command and the unattended points run one implementation rather than two.
+`upgradePolicy()` resolves the mode (environment, then `config.json`, then the
+kind of install) and `withUpgradeLock()` keeps two of the three points from
+racing each other through one staging directory. The three idle points are
+wired: `isocan wait` considers an upgrade on every lap and reports it in the
+wake payload and on stderr; `isocan restart` applies one before it stops the
+daemon; and `DaemonClient.ensureDaemon` starts a daemon through `current` when
+this copy is managed. `isocan upgrade` gains `--pin` and `--unpin`, and
+`isocan status` gains two lines — what this machine will do, and what it last
+refused.
+
+**The decision the phase left open, decided: the daemon's own swap defers.**
+The choice was between making `isocan wait` survive its daemon being restarted
+under it, or leaving the daemon alone and moving only the CLI. It turned out
+not to be a choice: the park ALREADY survives a daemon restart on its seq
+cursor — that was built earlier, for a developer who was restarting a daemon
+all afternoon and knocking every parked agent off — and it calls `ensureDaemon`
+when its daemon goes away. So teaching `ensureDaemon` to start through
+`current` gets both halves for one small change, and the upgrade never has to
+restart anything. The daemon lands on the new build the next time anything
+starts one.
+
+**What is NOT closed.** Journey Scene 1 asks the wake to report *"upgraded to
+`a1b2c3d` — 4 commits, incl. 'the face that never went up'"*. The sha is
+there; the count and the subject line are not, and cannot be as designed —
+see the findings. The wake reports both shas and nothing it cannot know.
 
 **Work:** Auto-apply, at three points that are idle by construction, so
 nothing has to guess whether it is safe: **park and wake** (an agent waiting
@@ -457,4 +695,45 @@ negative case, measured rather than reasoned: no flip moves a running
 process — a long-running `isocan wait` interrupted mid-flight is still
 running from `builds/A`, and that tree is intact.
 
-**Findings:** none yet.
+**Taken 29 Aug 2026**, every beat, quoted in the status above. Suite green
+(2060 tests). The decision in front of the mechanism — who may apply an
+upgrade, when they may stop, what is reported — is unit-tested in
+`packages/cli/test/upgrade-auto.test.ts`, where it is all reachable without a
+network because `applySwap` takes the fetch as a seam.
+
+**Findings:**
+
+- **2026-08-29** — **`--channel release | main` cannot exist as named.** `main`
+  carries `workspaces` and `prepare`, which is the whole reason the `release`
+  branch exists (#47): npm's git installer reads either as "needs preparation"
+  and installs the package into an empty directory. A `main` channel would
+  hand somebody a dangling `isocan`. Not shipped.
+- **2026-08-29** — **The home cannot report commit subjects**, so journey
+  Scene 1's *"4 commits, incl. …"* is unbuilt. `.dockerignore` excludes `.git`
+  — correctly, and for the reason phase 1 existed at all — so the image has no
+  history to read. Producing it would mean a GitHub API call, the dependency
+  the design rejected for the oracle.
+- **2026-08-29** — `installBuild` used `spawnSync`, and the first idle point is
+  a process in the middle of a long-poll. A synchronous npm install there stops
+  the poll answering and the presence heartbeat beating: the canvas shows a
+  frozen agent for a minute, as a side effect of the agent keeping itself
+  current. It spawns.
+- **2026-08-29** — A checkout is forced to `notify` even when `config.json`
+  says `auto`. The file is per-machine, and a machine set to `auto` for a
+  managed install months earlier can later have a checkout put on its PATH by
+  `npm link` — at which point a preference silently becomes a policy about
+  somebody's working copy.
+- **2026-08-29** — The verdict rides the daemon's health body, so `isocan
+  restart` has to apply the upgrade BEFORE it stops the daemon. Asking a daemon
+  that has already been killed which build the home runs produces no verdict,
+  and therefore no upgrade, on every restart forever.
+- **2026-08-29** — `installBuild` re-fetched a build already in `builds/`. A
+  rollback followed by a step forward cost a full download to arrive at a
+  directory that already existed. It now checks first, which is also what makes
+  this phase's proof reachable without a network.
+- **2026-08-29** — The smoke test's scratch home moved from `os.tmpdir()` into
+  `builds/`. The test asserting it left nothing behind read the OS temp
+  directory, and failed the moment another test file ran a smoke test at the
+  same time — a test measuring the machine rather than the code. The new
+  location is also the better one: a process killed mid-upgrade leaves its
+  litter somewhere this tool already sweeps.

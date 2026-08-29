@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import { openSync } from "node:fs";
+import { existsSync, openSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { shaOfRoot } from "./managed.ts";
 import type {
   Actor,
   ActorBindingRecord,
@@ -290,10 +291,36 @@ export class DaemonClient {
     }
   }
 
+  /**
+   * **Which copy a daemon started from here should run** (auto-upgrade phase
+   * 4). Normally this one — the process asking for a daemon is the obvious
+   * candidate to provide it. On a MANAGED install it is `current` instead,
+   * and that difference is one of the phase's three idle points: starting a
+   * daemon is a fresh process either way, so it is a free moment to land on
+   * whatever build the machine has since flipped to. It is also what makes a
+   * parked agent's reconnect land on the new build, because `isocan wait`
+   * calls `ensureDaemon` when its daemon goes away.
+   *
+   * Gated on this copy being managed, and that gate is the whole of the care
+   * here. A CHECKOUT must keep starting the daemon it built, whatever
+   * `~/.isocan/current` happens to point at — a developer whose daemon quietly
+   * came up on a release build instead of their own working tree would spend
+   * an afternoon on it. Same for a global install nobody has adopted.
+   */
+  private daemonBin(): string {
+    const own = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../bin/isocan.js");
+    if (shaOfRoot(this.home, path.resolve(own, "../../../..")) === null) return own;
+    const current = path.join(
+      paths.currentLink(this.home),
+      "node_modules/isocan/packages/cli/bin/isocan.js",
+    );
+    return existsSync(current) ? current : own;
+  }
+
   /** Start the daemon detached if it isn't answering, then wait for healthz. */
   async ensureDaemon(): Promise<void> {
     if (await this.health()) return;
-    const cliBin = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../bin/isocan.js");
+    const cliBin = this.daemonBin();
     await fs.mkdir(this.home, { recursive: true });
     const log = openSync(paths.daemonLogFile(this.home), "a");
     const port = new URL(this.base).port;

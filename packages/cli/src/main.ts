@@ -146,7 +146,7 @@ import {
   goalLine,
   personaWarnings,
 } from "@isocan/core";
-import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
+import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
   type HomeRecord,
@@ -185,7 +185,27 @@ import {
   writeIdentity,
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
-import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
+import {
+  checkoutState,
+  planUpgrade,
+  whichInstall,
+  type Install,
+  type UpgradePlan,
+} from "./upgrade.ts";
+import {
+  adoptGlobal,
+  applySwap,
+  autoUpgrade,
+  currentBuild,
+  currentSha,
+  flipTo,
+  lastRefusal,
+  listBuilds,
+  shaOfRoot,
+  shelveExisting,
+  upgradePolicy,
+  type Build,
+} from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
@@ -951,6 +971,30 @@ program
                 : `current with ${health.upgrade.home} (${health.upgrade.homeCommit})`,
             }
           : {}),
+        /**
+         * **What this machine will DO about an upgrade** (auto-upgrade phase
+         * 4), which is a different question from whether one is available and
+         * is not answerable from anywhere else. Agents set these controls on a
+         * person's behalf, so a mode nobody can read back is a mode nobody can
+         * check. Always present, including `off` — the whole value of the line
+         * is that a machine which has stopped upgrading says so.
+         */
+        upgrades: await upgradePolicy(
+          paths.isocanHome(),
+          (await whichInstall(path.resolve(myRoot()), paths.isocanHome())).kind,
+        ).then((policy) => `${policy.mode} — ${policy.why}`),
+        /**
+         * **A build this machine tried and refused** (journey Scene 2). The
+         * refusal was reported once, at the moment it happened, into whatever
+         * transcript was open — which on an unattended machine is nobody's.
+         * Without a line here, a machine that has quietly stopped upgrading
+         * looks exactly like one that has nothing to upgrade to.
+         */
+        ...(await lastRefusal(paths.isocanHome()).then((refusal) =>
+          refusal
+            ? { "upgrade refused": `${refusal.sha} — ${refusal.why}` }
+            : {},
+        )),
       });
     }),
   );
@@ -1123,9 +1167,27 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+      /**
+       * **The second idle point** (auto-upgrade phase 4). `restart` already
+       * means "come back on current code", so applying a pending upgrade
+       * before the restart is the command doing what it says rather than a
+       * new behaviour bolted onto it. It runs BEFORE the stop, while the old
+       * daemon is still answering, because the verdict rides that daemon's
+       * health body — asking a daemon that has already been killed which
+       * build the home runs would produce no verdict and no upgrade, forever.
+       */
+      const mineNow = shaOfRoot(home, myRoot());
+      const applied = await autoUpgrade({
+        home,
+        install: await whichInstall(path.resolve(myRoot()), home),
+        health: await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz(),
+        spec: INSTALL_SPEC,
+        ...(mineNow ? { protect: [mineNow] } : {}),
+      });
+      if (applied) console.error(applied);
       const { stopped, health, client } = await restartDaemon(home, port);
       const globals = cmd.optsWithGlobals() as { json?: boolean };
-      if (globals.json) return printJson({ stopped, ...(health ?? {}) });
+      if (globals.json) return printJson({ stopped, ...(applied ? { upgraded: applied } : {}), ...(health ?? {}) });
       printKeyValues({
         stopped: stopped.length > 0 ? stopped.join(", ") : "(nothing was running)",
         daemon: `running on ${client.base}`,
@@ -1554,11 +1616,72 @@ program
   .command("upgrade")
   .description("Fetch the newest isocan and restart the daemon on it")
   .option("--no-restart", "fetch only; leave the running daemon alone")
+  .option(
+    "--rollback",
+    "go back to the build before this one — a symlink flip, and no network at all",
+  )
+  .option("--pin <sha>", "hold this machine on a build already in builds/, and stop auto there")
+  .option("--unpin", "let this machine follow its home again")
   .action(
-    run(async (opts: { restart?: boolean }, cmd: Command) => {
-      const install = await whichInstall(
-        path.resolve(fileURLToPath(new URL("../../..", import.meta.url))),
-      );
+    run(async (
+      opts: { restart?: boolean; rollback?: boolean; pin?: string; unpin?: boolean },
+      cmd: Command,
+    ) => {
+      const home = paths.isocanHome();
+      const port = daemonPort(cmd);
+
+      /**
+       * **A pin is a recorded decision, not a one-off flip** (auto-upgrade
+       * phase 4): it has to survive a home that moves, which is the only
+       * situation anybody sets one in. So it writes `config.json` and then
+       * flips, in that order — a pin that flipped and failed to record itself
+       * would be undone by the next park.
+       *
+       * **It can only name a build already in `builds/`.** Reaching an
+       * arbitrary commit would mean building from source, which is a separate
+       * project rather than a flag; and a pin that named a sha this machine
+       * cannot produce would be a machine that refuses to upgrade and cannot
+       * reach the build it is holding out for.
+       */
+      if (opts.pin !== undefined || opts.unpin) {
+        const config = await readConfig(home);
+        if (opts.unpin) {
+          delete config.upgradePin;
+          await writeConfig(home, config);
+          console.log("unpinned — this machine follows its home again");
+          return;
+        }
+        const wanted = plausibleSha(opts.pin);
+        const builds = await listBuilds(home);
+        const found = wanted ? builds.find((build) => build.sha === wanted) : undefined;
+        if (!found) {
+          throw new Error(
+            `no build ${opts.pin} in ${paths.buildsDir(home)} — ` +
+              (builds.length > 0
+                ? `this machine has ${builds.map((b) => b.sha).join(", ")}`
+                : "this machine has none, so there is nothing to pin to") +
+              ". A pin names a build you already have; reaching further would mean " +
+              "building from source",
+          );
+        }
+        config.upgradePin = found.sha;
+        await writeConfig(home, config);
+        const before = await currentSha(home);
+        if (before !== found.sha) await flipTo(home, found.sha);
+        console.log(
+          `pinned to ${found.sha}${before && before !== found.sha ? ` (was ${before})` : ""} — ` +
+            "auto upgrades stop here until `isocan upgrade --unpin`",
+        );
+        await sayAdoption(home);
+        if (opts.restart !== false) {
+          const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
+          spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
+            stdio: "inherit",
+          });
+        }
+        return;
+      }
+      const install = await whichInstall(path.resolve(myRoot()), home);
       const plan = planUpgrade(
         install,
         install.kind === "checkout" ? checkoutState(install.root) : null,
@@ -1567,6 +1690,52 @@ program
       const npm = process.platform === "win32" ? "npm.cmd" : "npm";
       const shell = (command: string, args: string[], cwd?: string) =>
         spawnSync(command, args, { stdio: "inherit", ...(cwd ? { cwd } : {}) });
+
+      /**
+       * **The managed root: install aside, prove it, then flip one symlink**
+       * (auto-upgrade phase 3). `swapBuild` returns the build now current, or
+       * null when nothing moved — the same two answers the branches below give
+       * by other means, so the restart at the end of this action does not have
+       * to know which path got here.
+       */
+      if (opts.rollback || plan.action === "swap") {
+        const moved = await swapBuild({
+          home,
+          rollback: opts.rollback === true,
+          install,
+          plan,
+          port,
+        });
+        if (opts.restart === false) {
+          console.log(
+            moved
+              ? "the daemon still runs the old build — `isocan restart` when you're ready"
+              : "nothing changed, and nothing was restarted",
+          );
+          return;
+        }
+        if (!moved) {
+          // Nothing was swapped, so bouncing the daemon would be theatre —
+          // unless it is serving some other copy, which is the one case where
+          // an upgrade that changed nothing still has work to do.
+          const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+          if (!health || !stalenessOf(health).stale) {
+            console.log("the daemon is already running this build");
+            return;
+          }
+        }
+        // Re-exec THE BUILD WE JUST POINTED AT — by path, never by PATH. This
+        // process is running the OLD build's code, and no symlink flip moves a
+        // running process; the whole point of the flip is that the next
+        // command resolves differently, and this is that next command.
+        const bin = moved
+          ? path.join(moved.root, "packages", "cli", "bin", "isocan.js")
+          : path.join(install.root, "packages", "cli", "bin", "isocan.js");
+        spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
+          stdio: "inherit",
+        });
+        return;
+      }
 
       if (plan.action === "none") {
         console.log(plan.message);
@@ -1607,13 +1776,11 @@ program
         console.log("the daemon still runs the old build — `isocan restart` when you're ready");
         return;
       }
-      const port = daemonPort(cmd);
       if (plan.action === "none") {
         // Nothing was fetched, so bouncing the daemon would be theatre —
         // unless it is serving some other copy, which is the one case where
         // an upgrade that changed nothing still has work to do.
-        const health = await new DaemonClient(`http://127.0.0.1:${port}`, paths.isocanHome())
-          .healthz();
+        const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
         if (!health || !stalenessOf(health).stale) {
           console.log("the daemon is already running this build");
           return;
@@ -1630,6 +1797,117 @@ program
       );
     }),
   );
+
+/**
+ * **Install aside, prove it, flip one symlink, keep three** — the managed
+ * upgrade, and the whole of auto-upgrade phase 3.
+ *
+ * Returns the build `current` now points at, or null when nothing moved. The
+ * ORDER is the design: every step before the flip happens in a directory
+ * nothing resolves through, so a failure anywhere in it leaves the machine
+ * running exactly what it was running, with a message about why. The flip is
+ * the only irreversible-looking moment and it is one `rename`.
+ *
+ * **The oracle is the home, and it is a precondition rather than a request.**
+ * `want` is the sha the home reports (auto-upgrade phase 2 put it on the
+ * health body); `installBuild` refuses to promote a release tip that carries
+ * a different one, because npm can fetch exactly one build and installing
+ * whatever the tip happens to hold is how the flapping the design warns about
+ * starts. A machine with no home, or an offline one, has no verdict and takes
+ * the tip — which is what `npm i -g` did before any of this existed.
+ */
+async function swapBuild(options: {
+  home: string;
+  rollback: boolean;
+  install: Install;
+  plan: UpgradePlan;
+  port: number;
+}): Promise<Build | null> {
+  const { home, rollback, install, plan, port } = options;
+  const before = await currentSha(home);
+
+  /**
+   * **Rollback is a directory read and a symlink flip, and it stays that
+   * small.** A person reaches for it exactly when the current build — the code
+   * this command is itself executing — is suspect, so it must not depend on a
+   * network, a home, or anything that can be slow or absent.
+   */
+  if (rollback) {
+    const previous = (await listBuilds(home)).find((build) => build.sha !== before);
+    if (!previous) {
+      throw new Error(
+        `there is no other build in ${paths.buildsDir(home)} to go back to` +
+          (before ? ` — ${before} is the only one kept` : ""),
+      );
+    }
+    await flipTo(home, previous.sha);
+    console.log(`rolled back to ${previous.sha}${before ? ` from ${before}` : ""}`);
+    await sayAdoption(home);
+    return previous;
+  }
+
+  /**
+   * The copy being adopted gets a name in `builds/` BEFORE anything is
+   * fetched, so that a first upgrade is as reversible as every later one. It
+   * is a symlink at the tree npm already installed; see `shelveExisting`.
+   */
+  const shelved = await shelveExisting(home, install.root, buildStamp().commit);
+  if (shelved) {
+    console.error(
+      `isocan: ${shelved.sha} is now reachable as a build — ` +
+        "`isocan upgrade --rollback` comes back to it",
+    );
+  }
+
+  const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+  const want = health?.upgrade?.homeCommit ?? null;
+  if (want && before === want) {
+    // Already on what the home runs. There is still adoption to do on a
+    // machine whose PATH has not been moved yet, which is why this returns
+    // through the same door rather than early.
+    console.log(`already on ${want}, which is what ${health?.upgrade?.home} runs`);
+    await sayAdoption(home);
+    return null;
+  }
+
+  console.error(`isocan: ${plan.message}`);
+  /**
+   * The mechanism is `applySwap`, shared with the unattended points (auto-
+   * upgrade phase 4). This branch only narrates it — and the protected build
+   * it adds is THIS process's own: cleanup deleting the tree the running
+   * command is executing out of does not stop it, it breaks it halfway
+   * through.
+   */
+  const mine = shaOfRoot(home, myRoot());
+  const swapped = await applySwap({
+    home,
+    spec: INSTALL_SPEC,
+    want,
+    ...(mine ? { protect: [mine] } : {}),
+  });
+  if (!swapped.ok) throw new Error(swapped.why);
+  if (swapped.step === "current") {
+    console.log(swapped.why);
+    await sayAdoption(home);
+    return null;
+  }
+  console.log(swapped.why);
+  await sayAdoption(home);
+  if (swapped.removed.length > 0) {
+    console.error(
+      `isocan: removed old build${swapped.removed.length > 1 ? "s" : ""} ` +
+        swapped.removed.join(", "),
+    );
+  }
+  return (await currentBuild(home)) ?? null;
+}
+
+/** Adoption is reported on stderr, always: silence would leave a person whose
+ * PATH could not be moved believing the upgrade took. */
+async function sayAdoption(home: string): Promise<void> {
+  const adoption = await adoptGlobal(home);
+  if (adoption.moved || !adoption.managed) console.error(`isocan: ${adoption.why}`);
+}
 
 program
   .command("stop")
@@ -6246,15 +6524,58 @@ command or reply. No \`session start\` needed after a wake.`,
       let offlineSince: number | null = null;
       let complained = false;
 
+      /**
+       * **The first idle point** (auto-upgrade phase 4). An agent waiting for
+       * feedback is idle by definition, so this is the one moment in a
+       * session when swapping the build under it costs nobody anything.
+       *
+       * Checked on every lap rather than once at the top, because a park lasts
+       * minutes to hours and the home moves during it — a single check when
+       * the park opened would miss every build cut while the agent was
+       * actually waiting, which is all of them.
+       *
+       * It runs CONCURRENTLY with the long-poll and never blocks it. That is
+       * why `installBuild` spawns instead of `spawnSync`: a synchronous npm
+       * install here would stop the poll answering and stop the presence
+       * heartbeat beating, and the canvas would show a frozen agent for a
+       * minute as a side effect of keeping itself current.
+       */
+      const install = await whichInstall(path.resolve(myRoot()), ctx.home);
+      // The build this park is running out of: cleanup deleting it would not
+      // stop this process, it would break it mid-park.
+      const parkedOn = shaOfRoot(ctx.home, myRoot());
+      let upgraded: string | null = null;
+      let upgrading = false;
+      const considerUpgrade = () => {
+        if (upgrading || upgraded) return;
+        upgrading = true;
+        void (async () => {
+          const health = await ctx.client.healthz().catch(() => null);
+          upgraded = await autoUpgrade({
+            home: ctx.home,
+            install,
+            health,
+            spec: INSTALL_SPEC,
+            ...(parkedOn ? { protect: [parkedOn] } : {}),
+          });
+        })()
+          .catch(() => {})
+          .finally(() => {
+            upgrading = false;
+          });
+      };
+
       try {
         await say("waiting for you…");
 
         for (;;) {
+          considerUpgrade();
           const remaining = deadline === null ? Infinity : deadline - Date.now();
           if (remaining <= 0) {
             // Exit 2 is silence, not dismissal. Say so on the way out: an
             // agent that reads "timed out" as "we're done here" is the most
             // common way a session dies with nobody deciding to end it.
+            if (upgraded) console.error(upgraded);
             console.error(
               "wait: timed out with no feedback — nobody came yet. Park again; " +
                 "the session ends when the human says so, not when a wait expires.",
@@ -6390,11 +6711,20 @@ command or reply. No \`session start\` needed after a wake.`,
                 cursors,
                 entries: matches,
                 reason: summoned ? "summons" : "change",
+                /**
+                 * **The wake carries the upgrade** (auto-upgrade phase 4), in
+                 * the same message as the feedback it woke for, because an
+                 * agent reads one payload and then acts. A separate channel
+                 * would be a notice nobody read. `agent-guide.md` ships inside
+                 * the build, so the line tells the agent to re-read it.
+                 */
+                ...(upgraded ? { upgraded } : {}),
                 next: summoned
                   ? "reply on the thread, then `isocan wait` again — a lap ends parked"
                   : "do the work the change asks for, then `isocan wait` again — a lap ends parked",
               });
             }
+            if (upgraded) console.error(upgraded);
             for (const entry of matches) {
               console.log(describeEntry(entry));
               const op = entry.envelope.op;

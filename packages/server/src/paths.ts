@@ -69,6 +69,37 @@ export const legacySessionFile = (home: string) => path.join(home, "session.json
 export const cliSessionFile = (home: string, actorId: string) =>
   path.join(home, "sessions", `${actorId}.json`);
 export const configFile = (home: string) => path.join(home, "config.json");
+
+/**
+ * **The managed install root** (auto-upgrade phase 3): one tree per build,
+ * and a symlink naming the one in use.
+ *
+ * ```
+ * ~/.isocan/builds/<sha>/     an npm prefix — the package lands in node_modules/isocan
+ * ~/.isocan/current -> builds/<sha>
+ * ```
+ *
+ * It lives under `ISOCAN_HOME` rather than beside the global install for one
+ * reason worth more than tidiness: `ISOCAN_HOME` already redirects everything
+ * else here, so a test can drive a whole install-smoke-flip-rollback cycle
+ * against a scratch directory without touching the machine it runs on. The
+ * alternative — a fixed `~/.isocan` — would make every test of this an
+ * experiment on the developer's own PATH.
+ */
+export const buildsDir = (home: string) => path.join(home, "builds");
+export const buildDir = (home: string, sha: string) => path.join(buildsDir(home), sha);
+/** Where a build is being installed before it has earned a name. Dot-prefixed
+ * so a half-written tree can never be read back as a build (`listBuilds`
+ * skips dotted entries), and inside `builds/` so the rename that promotes it
+ * stays on one filesystem — a cross-device rename is a copy, and a copy is
+ * not atomic. */
+export const stagingBuildDir = (home: string) => path.join(buildsDir(home), ".staging");
+/** The symlink `isocan` on PATH resolves through. Flipping it IS the upgrade:
+ * every other step happens in a directory nothing points at. */
+export const currentLink = (home: string) => path.join(home, "current");
+/** The package root inside a build tree — what `buildStamp().root` reports for
+ * a managed copy, and so what a daemon's `root` is compared against. */
+export const buildRoot = (dir: string) => path.join(dir, "node_modules", "isocan");
 /** Slash commands this home has written: one markdown file per command, named
  * by the command. A home file shadows the built-in of the same name. */
 export const commandsDir = (home: string) => path.join(home, "commands");
