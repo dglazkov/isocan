@@ -144,7 +144,8 @@ export function plausibleSha(raw: string | undefined): string | null {
  *
  * The four shapes it has to survive are the four this repo actually meets: a
  * plain clone; a WORKTREE (where `.git` is a file naming the real directory —
- * agents here work in worktrees); a repo whose refs have been packed by
+ * agents here work in worktrees; the `commondir` walk below is the rest of
+ * that story); a repo whose refs have been packed by
  * `git gc`, where `refs/heads/main` is one line of one file; and a repo on
  * REFTABLE (`extensions.refStorage = reftable` — this repo's own dev machine
  * is one), where refs are binary tables under `.git/reftable` and `HEAD` is
@@ -155,15 +156,23 @@ export function plausibleSha(raw: string | undefined): string | null {
  * shelling out to `git` at daemon boot is a failure surface it deliberately
  * does not have. The stub is matched EXPLICITLY below so nobody reading a
  * log ever chases `.invalid` as a corrupt branch name.
+ *
+ * `from` defaults to this build's own root and is a parameter only so the four
+ * shapes above can be built on disk and asserted. They cannot be reached any
+ * other way: which shape the machine running the tests is in is not something
+ * a test gets to choose, and three of the four would otherwise be tested by
+ * whoever happened to run them.
  */
-function gitHead(): { commit: string; committedAt: string | null } | null {
+export function gitHead(
+  from: string = root,
+): { commit: string; committedAt: string | null } | null {
   try {
-    let dir = path.join(root, ".git");
+    let dir = path.join(from, ".git");
     const stat = statSync(dir);
     if (stat.isFile()) {
       const pointer = readFileSync(dir, "utf8").match(/^gitdir:\s*(.+)$/m)?.[1]?.trim();
       if (!pointer) return null;
-      dir = path.resolve(root, pointer);
+      dir = path.resolve(from, pointer);
     }
     /**
      * **HEAD is per-worktree; refs are not.** A worktree's gitdir holds its own

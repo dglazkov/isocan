@@ -27,19 +27,27 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: PHASES 1 AND 2 DONE (27–28 Aug 2026), phases 3–4 not
-started.** isocan.io can say which commit it is running, and a CLI that
-disagrees with its home now says so — once, naming both builds, and silently
-when it cannot find out. Nothing is fetched, applied or restarted by any of
-it: that is phases 3 and 4, and neither is built.
+**Where we are: PHASES 1, 2 AND 3 DONE (27–29 Aug 2026), phase 4 not
+started.** isocan.io can say which commit it is running; a CLI that disagrees
+with its home says so, once, naming both builds; and an upgrade is now a
+build installed aside, started and asked which commit it is, and a symlink
+flipped only if it answered correctly. Nothing does any of that on its own
+yet: every swap here is a command somebody ran. That is phase 4.
 
 Phase 1 was four lines of code and one build-arg, and it was worth doing
 regardless of what happens to the rest: it fixed a live production defect and
 depended on nothing else in this document. Phase 2 stands on it and is worth
 having on the same terms — nobody spends an afternoon debugging yesterday's
-build again — and it is the last phase that changes nothing on anybody's
-disk. **Phase 3 is the natural next step**, and it is where the project stops
-being a notice and starts being an install root.
+build again. Phase 3 is where the project stopped being a notice and became an
+install root, and it paid for itself twice on the way: `buildStamp()` could
+not name a commit in any git worktree, so phase 2's verdict had never once
+fired on a development machine.
+
+**Phase 4 is the natural next step**, and it is the one that changes what
+happens on a machine nobody is watching. Two of its decisions are already
+narrowed by what phase 3 built: `--rollback` exists, so `--pin` is the same
+symlink flip with a name given to it, and adoption shelves the outgoing build,
+so the first unattended upgrade has somewhere to go back to.
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
@@ -84,8 +92,11 @@ decides them deliberately instead of improvising mid-task:
   adoption step. Whether `setup` should install straight into `builds/` is a
   front-door change and is not decided here.
 - **Windows.** Phase 3's symlink flip becomes a junction or a `.cmd` shim
-  there, and nobody has run this on Windows. Recorded so it is a decision
-  rather than a surprise.
+  there, and nobody has run this on Windows. Still true after phase 3, which
+  did the one thing that costs nothing: `flipTo` writes a junction with an
+  absolute target on win32, and `adoptGlobal` REFUSES a bin that is a shim
+  rather than a symlink, naming this line. So the failure on Windows is a
+  message, not a broken PATH — but the path itself is unrun.
 - **The stamp is self-reported, and always was.** A checkout reads its own
   `.git`; after phase 1 an image reads its own environment variable. Anyone
   who can set `ISOCAN_BUILD_SHA` can make a build claim to be another one.
@@ -324,7 +335,93 @@ green (1814 tests), plus the hand walk quoted in the status above.
 
 ## Phase 3 — The managed install root
 
-**Status: NOT STARTED**
+**Status: DONE 29 Aug 2026 — proof taken on this machine, against the real
+`release` branch on GitHub.**
+
+```
+$ isocan --version
+0.1.0 (aaa1111, 2026-08-29)                    # a real global install of this branch
+$ isocan upgrade --no-restart
+isocan: aaa1111 is now reachable as a build — `isocan upgrade --rollback` comes back to it
+isocan: adopting the global install at …/lib/node_modules/isocan — the copy stays
+  where npm put it; what moves is `isocan` on your PATH, onto a build root that
+  can be rolled back
+isocan: checking that 4da3862 runs…
+now on 4da3862 (was aaa1111)
+isocan: …/npm/bin/isocan now resolves through …/home/current
+$ ls ~/.isocan/builds ; readlink ~/.isocan/current ; isocan --version
+4da3862  aaa1111
+builds/4da3862
+0.1.0 (4da3862, 2026-08-29)
+$ isocan upgrade --rollback --no-restart ; isocan --version
+rolled back to aaa1111 from 4da3862
+0.1.0 (aaa1111, 2026-08-29)
+```
+
+Every step of that is real: a global install of this branch on a scratch npm
+prefix, a real `npm install` of `github:dglazkov/isocan#release`, a real
+daemon started from the candidate tree and asked which commit it was, and a
+real symlink flip that `isocan` on PATH then resolved through. The scratch
+`ISOCAN_HOME` and scratch `npm_config_prefix` are what kept it off the
+machine's own PATH — which is exactly the property `builds/` living under
+`ISOCAN_HOME` was chosen for.
+
+**The other three beats, measured the same way:**
+
+- **A candidate that will not start leaves `current` where it was.** Broken
+  deliberately — `packages/server` deleted out of the fetched tree — and the
+  message names the file: `4da3862 did not start cleanly — it exited before
+  answering (Error: ENOENT … packages/server/src/index.ts). Nothing was
+  swapped: you are still on aaa1111.` Exit 1, and `current` still
+  `builds/aaa1111`.
+- **A daemon left running survives the cleanup.** A real daemon out of
+  `builds/4da3862` — the OLDEST build, and not the current one — with five
+  builds on disk. Two prune rounds removed a *newer* build and left the
+  daemon's alone; the daemon still answered `/healthz` from the same root
+  afterwards, with its tree intact.
+- **The managed path through PATH.** After adoption, `isocan upgrade` run
+  through `current` reports `installing aside — nothing that is running
+  changes until the new build answers for itself`, and swaps without saying
+  anything about adoption, because there is nothing left to adopt.
+
+**What was built.** `packages/cli/src/managed.ts` is the phase: `listBuilds`,
+`currentSha`, `flipTo` (a symlink written aside and `rename`d over, so there
+is no window in which `isocan` resolves to nothing), `smokeTest`,
+`installBuild`, `liveBuildShas`, `pruneBuilds`, `shelveExisting` and
+`adoptGlobal`. `whichInstall` grows the `managed` kind and checks it first;
+`planUpgrade` grows a `swap` action that both `managed` and `global` take, so
+a global install adopts rather than overwriting itself. `paths.ts` owns the
+layout (`buildsDir`, `buildDir`, `stagingBuildDir`, `currentLink`,
+`buildRoot`). `isocan upgrade` gains `--rollback`.
+
+**Three things the phase decided that the Work below did not.**
+
+- **Adoption shelves the outgoing copy**, as a symlink at `builds/<sha>`
+  pointing at the global prefix's `lib`. Without it the first upgrade is the
+  one upgrade with no way back — `builds/` holds a single entry and
+  `--rollback` has nowhere to go — and that is the upgrade most likely to be
+  unattended. A symlink rather than a copy: `builds/<sha>` is an npm prefix
+  and a global install is already laid out as one, so it costs an inode
+  instead of four hundred packages, and "the global copy is left in place"
+  stays literally true.
+- **The smoke test picks its own port and retries.** `ISOCAN_PORT=0` would be
+  exact, but `startDaemon` records the port it was ASKED for, so every build
+  already on `release` writes the literal `0` into `daemon.json` and cannot be
+  found afterwards. A candidate is not always a NEW build — a rollback re-runs
+  against an old tree — so the test has to work against builds that predate
+  it. A candidate that could not bind is treated as a lost race and retried,
+  never as a bad build.
+- **Protected builds count toward the three.** Retention is "three builds,
+  plus anything in use", not "three spare ones on top of what is pinned".
+  Measured above: with a live daemon on the oldest build, the pruner removed a
+  newer build instead of it.
+
+**What is NOT closed here.** The refusal that matters most —
+*the release tip is not the build your home runs, so nothing was installed* —
+is unit-tested only. The real `release` tip and the real home were the same
+commit throughout, and manufacturing the lag would have meant a stub home,
+which is phase 2's rig rather than this one's. Windows is untouched:
+`adoptGlobal` refuses a bin that is a shim rather than a symlink, and says so.
 
 **Work:** `npm i -g` overwrites in place, which disqualifies it from running
 unattended: a failed install leaves no working CLI and nothing to fall back
@@ -389,7 +486,50 @@ install adopts on its first upgrade, and the global copy is untouched
 afterwards. And the cleanup check: a daemon left running on build A survives
 two upgrades with its tree intact.
 
-**Findings:** none yet.
+**Taken 29 Aug 2026**, every beat, quoted in the status above. Suite green
+(2031 tests). The mechanics are unit-tested in
+`packages/cli/test/managed.test.ts` against fixture builds, because npm can
+fetch exactly one build — the tip — so "two builds", "a build that lies about
+its sha" and "a build that will not start" are unreachable through the real
+thing. One detail of the transcript is worth stating plainly: `--rollback` had
+to be run from build A's own bin, because the build being rolled back FROM was
+the release tip, which predates the flag. That is the open item "the recovery
+commands run on the build they recover from", met in practice on the first
+try.
+
+**Findings:**
+
+- **2026-08-29** — `gitHead()` returned null for every git WORKTREE. HEAD is
+  per-worktree; `refs/` and `packed-refs` belong to the repository, named by
+  `commondir`. Agents here work in worktrees, so every development copy
+  reported `commit: null` — and phase 2's verdict was dead on all of them.
+  **Found twice on the same day, independently**: this phase hit it building
+  the smoke test, and `f35b01f` on main hit it running the suite from a
+  worktree. Main's fix is the one that stands — it replaces the ref directory
+  rather than searching both, which is what git actually does. Worth recording
+  that two sessions found one bug by two routes on the day the project started
+  depending on the field; the shared cause is that nothing had ever asserted
+  the shape.
+- **2026-08-29** — Two path comparisons compared a path node had already
+  realpath'd against one nobody had. `whichInstall` called a plainly global
+  install `local`, whose upgrade path is `npm i -g`: the first run of this
+  phase's own proof overwrote the install it was meant to adopt. Both sides
+  now go through `realpath`.
+- **2026-08-29** — `build.test.ts` could only assert the `.git` shape of the
+  machine it happened to be running on, so three of the four shapes the stamp
+  claims to survive were tested by nobody — which is why the worktree bug
+  above survived. `f35b01f` fixed the two assertions that were wrong about
+  THIS machine; this phase adds the missing half, exporting `gitHead(from)` so
+  a clone, a worktree, a packed repo, a detached HEAD and reftable are each
+  built on disk and asked.
+- **2026-08-29** — The last line of a node crash is node's own version, so a
+  build that could not find `@isocan/server` was reported as "it exited before
+  answering (Node.js v24.11.0)" — true, and naming nothing. The first `Error`
+  line is preferred; the last line stays the fallback.
+- **2026-08-29** — `startDaemon` records the port it was ASKED for, so
+  `ISOCAN_PORT=0` writes `0` into `daemon.json` and the daemon cannot be found
+  by anything outside its own process. Left alone deliberately: the smoke test
+  must work against candidates that predate any fix, so it probes instead.
 
 ---
 

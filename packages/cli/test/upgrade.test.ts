@@ -42,10 +42,24 @@ describe("planning an upgrade", () => {
     expect(plan.message).toContain(`npm i -g ${spec}`);
   });
 
-  it("fetches for a global install, naming where it lands", () => {
+  /**
+   * Auto-upgrade phase 3 moved the global install off `npm i -g`. It no longer
+   * overwrites itself in place; it adopts — installed once into `builds/<sha>`
+   * with PATH repointed at `current` — and the copy npm made stays where npm
+   * made it, so `npm uninstall -g` still knows about it.
+   */
+  it("adopts a global install rather than overwriting it in place", () => {
     const global: Install = { kind: "global", root: "/usr/local/lib/node_modules/isocan" };
     const plan = planUpgrade(global, null, spec);
-    expect(plan.action).toBe("fetch");
+    expect(plan.action).toBe("swap");
     expect(plan.message).toContain(global.root);
+    expect(plan.message).toContain("PATH");
+  });
+
+  it("swaps a managed install, and promises nothing running changes until it works", () => {
+    const managed: Install = { kind: "managed", root: "/home/me/.isocan/builds/a1b2c3d/node_modules/isocan" };
+    const plan = planUpgrade(managed, null, spec);
+    expect(plan.action).toBe("swap");
+    expect(plan.message).toContain("aside");
   });
 });

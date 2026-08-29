@@ -185,7 +185,26 @@ import {
   writeIdentity,
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
-import { checkoutState, planUpgrade, whichInstall } from "./upgrade.ts";
+import {
+  checkoutState,
+  planUpgrade,
+  whichInstall,
+  type Install,
+  type UpgradePlan,
+} from "./upgrade.ts";
+import {
+  adoptGlobal,
+  currentSha,
+  flipTo,
+  installBuild,
+  listBuilds,
+  liveBuildShas,
+  pruneBuilds,
+  shaOfRoot,
+  shelveExisting,
+  smokeTest,
+  type Build,
+} from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import {
@@ -1554,11 +1573,15 @@ program
   .command("upgrade")
   .description("Fetch the newest isocan and restart the daemon on it")
   .option("--no-restart", "fetch only; leave the running daemon alone")
+  .option(
+    "--rollback",
+    "go back to the build before this one — a symlink flip, and no network at all",
+  )
   .action(
-    run(async (opts: { restart?: boolean }, cmd: Command) => {
-      const install = await whichInstall(
-        path.resolve(fileURLToPath(new URL("../../..", import.meta.url))),
-      );
+    run(async (opts: { restart?: boolean; rollback?: boolean }, cmd: Command) => {
+      const home = paths.isocanHome();
+      const port = daemonPort(cmd);
+      const install = await whichInstall(path.resolve(myRoot()), home);
       const plan = planUpgrade(
         install,
         install.kind === "checkout" ? checkoutState(install.root) : null,
@@ -1567,6 +1590,52 @@ program
       const npm = process.platform === "win32" ? "npm.cmd" : "npm";
       const shell = (command: string, args: string[], cwd?: string) =>
         spawnSync(command, args, { stdio: "inherit", ...(cwd ? { cwd } : {}) });
+
+      /**
+       * **The managed root: install aside, prove it, then flip one symlink**
+       * (auto-upgrade phase 3). `swapBuild` returns the build now current, or
+       * null when nothing moved — the same two answers the branches below give
+       * by other means, so the restart at the end of this action does not have
+       * to know which path got here.
+       */
+      if (opts.rollback || plan.action === "swap") {
+        const moved = await swapBuild({
+          home,
+          rollback: opts.rollback === true,
+          install,
+          plan,
+          port,
+        });
+        if (opts.restart === false) {
+          console.log(
+            moved
+              ? "the daemon still runs the old build — `isocan restart` when you're ready"
+              : "nothing changed, and nothing was restarted",
+          );
+          return;
+        }
+        if (!moved) {
+          // Nothing was swapped, so bouncing the daemon would be theatre —
+          // unless it is serving some other copy, which is the one case where
+          // an upgrade that changed nothing still has work to do.
+          const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+          if (!health || !stalenessOf(health).stale) {
+            console.log("the daemon is already running this build");
+            return;
+          }
+        }
+        // Re-exec THE BUILD WE JUST POINTED AT — by path, never by PATH. This
+        // process is running the OLD build's code, and no symlink flip moves a
+        // running process; the whole point of the flip is that the next
+        // command resolves differently, and this is that next command.
+        const bin = moved
+          ? path.join(moved.root, "packages", "cli", "bin", "isocan.js")
+          : path.join(install.root, "packages", "cli", "bin", "isocan.js");
+        spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
+          stdio: "inherit",
+        });
+        return;
+      }
 
       if (plan.action === "none") {
         console.log(plan.message);
@@ -1607,13 +1676,11 @@ program
         console.log("the daemon still runs the old build — `isocan restart` when you're ready");
         return;
       }
-      const port = daemonPort(cmd);
       if (plan.action === "none") {
         // Nothing was fetched, so bouncing the daemon would be theatre —
         // unless it is serving some other copy, which is the one case where
         // an upgrade that changed nothing still has work to do.
-        const health = await new DaemonClient(`http://127.0.0.1:${port}`, paths.isocanHome())
-          .healthz();
+        const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
         if (!health || !stalenessOf(health).stale) {
           console.log("the daemon is already running this build");
           return;
@@ -1630,6 +1697,135 @@ program
       );
     }),
   );
+
+/**
+ * **Install aside, prove it, flip one symlink, keep three** — the managed
+ * upgrade, and the whole of auto-upgrade phase 3.
+ *
+ * Returns the build `current` now points at, or null when nothing moved. The
+ * ORDER is the design: every step before the flip happens in a directory
+ * nothing resolves through, so a failure anywhere in it leaves the machine
+ * running exactly what it was running, with a message about why. The flip is
+ * the only irreversible-looking moment and it is one `rename`.
+ *
+ * **The oracle is the home, and it is a precondition rather than a request.**
+ * `want` is the sha the home reports (auto-upgrade phase 2 put it on the
+ * health body); `installBuild` refuses to promote a release tip that carries
+ * a different one, because npm can fetch exactly one build and installing
+ * whatever the tip happens to hold is how the flapping the design warns about
+ * starts. A machine with no home, or an offline one, has no verdict and takes
+ * the tip — which is what `npm i -g` did before any of this existed.
+ */
+async function swapBuild(options: {
+  home: string;
+  rollback: boolean;
+  install: Install;
+  plan: UpgradePlan;
+  port: number;
+}): Promise<Build | null> {
+  const { home, rollback, install, plan, port } = options;
+  const before = await currentSha(home);
+
+  /**
+   * **Rollback is a directory read and a symlink flip, and it stays that
+   * small.** A person reaches for it exactly when the current build — the code
+   * this command is itself executing — is suspect, so it must not depend on a
+   * network, a home, or anything that can be slow or absent.
+   */
+  if (rollback) {
+    const previous = (await listBuilds(home)).find((build) => build.sha !== before);
+    if (!previous) {
+      throw new Error(
+        `there is no other build in ${paths.buildsDir(home)} to go back to` +
+          (before ? ` — ${before} is the only one kept` : ""),
+      );
+    }
+    await flipTo(home, previous.sha);
+    console.log(`rolled back to ${previous.sha}${before ? ` from ${before}` : ""}`);
+    await sayAdoption(home);
+    return previous;
+  }
+
+  /**
+   * The copy being adopted gets a name in `builds/` BEFORE anything is
+   * fetched, so that a first upgrade is as reversible as every later one. It
+   * is a symlink at the tree npm already installed; see `shelveExisting`.
+   */
+  const shelved = await shelveExisting(home, install.root, buildStamp().commit);
+  if (shelved) {
+    console.error(
+      `isocan: ${shelved.sha} is now reachable as a build — ` +
+        "`isocan upgrade --rollback` comes back to it",
+    );
+  }
+
+  const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+  const want = health?.upgrade?.homeCommit ?? null;
+  if (want && before === want) {
+    // Already on what the home runs. There is still adoption to do on a
+    // machine whose PATH has not been moved yet, which is why this returns
+    // through the same door rather than early.
+    console.log(`already on ${want}, which is what ${health?.upgrade?.home} runs`);
+    await sayAdoption(home);
+    return null;
+  }
+
+  console.error(`isocan: ${plan.message}`);
+  const fetched = await installBuild({ home, spec: INSTALL_SPEC, want });
+  if (!fetched.ok || !fetched.build) throw new Error(fetched.why);
+  const build = fetched.build;
+  if (build.sha === before) {
+    console.log(`${build.sha} is already the current build`);
+    await sayAdoption(home);
+    return null;
+  }
+
+  /**
+   * **The smoke test is what makes the flip safe to do unattended**, and it
+   * asks the only question that matters: does this tree start, and is it the
+   * build it says it is? A failure here is a directory to delete later —
+   * `current` has not moved, and the message says so, because a person reading
+   * this needs to know their machine is fine before they need to know why.
+   */
+  console.error(`isocan: checking that ${build.sha} runs…`);
+  const smoke = await smokeTest(build.root, build.sha);
+  if (!smoke.ok) {
+    throw new Error(
+      `${build.sha} did not start cleanly — ${smoke.why}. Nothing was swapped: ` +
+        `you are still on ${before ?? "the copy you were on"}. The tree is at ${build.dir} ` +
+        "if you want to look at it",
+    );
+  }
+
+  await flipTo(home, build.sha);
+  console.log(`now on ${build.sha}${before ? ` (was ${before})` : ""}`);
+  await sayAdoption(home);
+
+  /**
+   * **Cleanup that cannot break a running process.** The count keeps three;
+   * the protected set overrides the count. Two things are protected beyond the
+   * one `current` names: whatever a live daemon loaded, and the build THIS
+   * process is executing out of — deleting either does not stop it, it breaks
+   * it halfway through.
+   */
+  const protect = await liveBuildShas(home);
+  const mine = shaOfRoot(home, myRoot());
+  if (mine) protect.add(mine);
+  const removed = await pruneBuilds(home, { protect });
+  if (removed.length > 0) {
+    console.error(
+      `isocan: removed old build${removed.length > 1 ? "s" : ""} ${removed.join(", ")}`,
+    );
+  }
+  return build;
+}
+
+/** Adoption is reported on stderr, always: silence would leave a person whose
+ * PATH could not be moved believing the upgrade took. */
+async function sayAdoption(home: string): Promise<void> {
+  const adoption = await adoptGlobal(home);
+  if (adoption.moved || !adoption.managed) console.error(`isocan: ${adoption.why}`);
+}
 
 program
   .command("stop")
