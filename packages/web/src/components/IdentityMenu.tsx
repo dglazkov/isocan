@@ -5,6 +5,7 @@ import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts"
 import { setActorColor } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { TerminalDialog } from "./TerminalDialog.tsx";
+import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
 
@@ -77,6 +78,7 @@ export function IdentityMenu({
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
+  const [cloud, setCloud] = useState(false);
   const [surfaces, setSurfaces] = useState(false);
   const [verify, setVerify] = useState(false);
   const themePref = useTheme((s) => s.pref);
@@ -98,6 +100,9 @@ export function IdentityMenu({
   // stacked panels hanging off one face is a worse thing to look at than one.
   if (terminal && canvasId) {
     return <TerminalDialog actor={actor} canvasId={canvasId} onClose={onClose} />;
+  }
+  if (cloud && canvasId) {
+    return <CloudAgentDialog actor={actor} canvasId={canvasId} onClose={onClose} />;
   }
   if (surfaces) return <SurfacesDialog onClose={onClose} />;
   if (verify) {
@@ -195,6 +200,21 @@ export function IdentityMenu({
           onClick={() => setTerminal(true)}
         >
           Bring your own agent…
+        </button>
+      )}
+      {/* Scene 6's sibling door, and it sits directly under Scene 5's because
+          the journey groups them by what they are: both are *extend my reach*,
+          minted from an admitted session. The order is the order a person
+          meets them — your own machine is the obvious answer, and the cloud is
+          what you reach for once you have watched a lid take your agent with
+          it. */}
+      {canvasId && (
+        <button
+          className="btn identity-terminal"
+          title="Run an agent somewhere that doesn't close when your laptop does"
+          onClick={() => setCloud(true)}
+        >
+          Run an agent in the cloud…
         </button>
       )}
       {/* Proving an address — phase 9 stage 2, and it belongs on this menu for

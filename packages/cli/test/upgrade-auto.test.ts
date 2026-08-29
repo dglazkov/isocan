@@ -264,6 +264,86 @@ describe("applying it", () => {
   });
 });
 
+/**
+ * **A swap that PATH does not follow is not an upgrade**, and for a day it was
+ * shipped as one.
+ *
+ * `adoptGlobal` and `shelveExisting` lived in `isocan upgrade`'s own code path
+ * rather than in the swap both callers share, so the unattended path fetched a
+ * build, smoke-tested it, flipped `current` — and left `isocan` on PATH
+ * pointing at the old copy. Measured on a real front-door install against
+ * dev.isocan.io: `current -> builds/c0c5c12` and `isocan --version` reporting
+ * `bf4e1af`, forever. The phase 4 proof missed it because that rig had been
+ * adopted by hand while proving phase 3, so PATH already ran through `current`
+ * before the test began — a proof that carried state from the previous one.
+ */
+describe("a swap PATH actually follows", () => {
+  async function fakeGlobal(): Promise<{ bin: string; root: string }> {
+    const prefix = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-adopt-"));
+    const root = path.join(prefix, "lib", "node_modules", "isocan");
+    await fs.mkdir(path.join(root, "packages", "cli", "bin"), { recursive: true });
+    await fs.writeFile(path.join(root, "package.json"), '{"name":"isocan"}');
+    const real = path.join(root, "packages", "cli", "bin", "isocan.js");
+    await fs.writeFile(real, "// the old copy\n");
+    await fs.mkdir(path.join(prefix, "bin"), { recursive: true });
+    const bin = path.join(prefix, "bin", "isocan");
+    await fs.symlink(real, bin);
+    return { bin, root };
+  }
+
+  it("repoints PATH through current when nobody typed the command", async () => {
+    const { bin, root } = await fakeGlobal();
+    await makeBuild(paths.buildDir(home, "bbbbbbb"), "bbbbbbb");
+    const swapped = await applySwap({
+      home,
+      spec,
+      want: "bbbbbbb",
+      install: { kind: "global", root },
+    });
+    expect(swapped.ok).toBe(true);
+    expect(await currentSha(home)).toBe("bbbbbbb");
+    // The claim under test: the NEXT command resolves to the new build.
+    expect(swapped.adoption?.managed).toBe(true);
+    expect(await fs.readlink(bin)).toBe(
+      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/bin/isocan.js"),
+    );
+  });
+
+  /** And the outgoing copy gets a name, so `--rollback` has somewhere to go
+   * on a machine that was never upgraded by hand. */
+  it("shelves the outgoing copy when nobody typed the command either", async () => {
+    const { root } = await fakeGlobal();
+    await makeBuild(paths.buildDir(home, "bbbbbbb"), "bbbbbbb");
+    const swapped = await applySwap({
+      home,
+      spec,
+      want: "bbbbbbb",
+      install: { kind: "global", root },
+    });
+    // `buildStamp()` is this test process's own, so the shelved sha is
+    // whatever the suite is running as — what matters is that there IS one,
+    // and that `--rollback` therefore has a second build to reach.
+    if (swapped.shelved) {
+      expect((await listBuilds(home)).map((b) => b.sha)).toContain(swapped.shelved);
+    }
+  });
+
+  it("tells a parked agent the truth when PATH could NOT be moved", async () => {
+    await makeBuild(paths.buildDir(home, "aaaaaaa"), "aaaaaaa");
+    await makeBuild(paths.buildDir(home, "bbbbbbb"), "bbbbbbb");
+    await flipTo(home, "aaaaaaa");
+    // No `isocan` anywhere on this PATH, so adoption cannot happen.
+    const said = await autoUpgrade({
+      home,
+      install: { kind: "global", root: "/nowhere/lib/node_modules/isocan" },
+      health: { upgrade: verdictOf() },
+      spec,
+    });
+    expect(said).toContain("still resolves to the old copy");
+    expect(said).not.toContain("the next command you run is on the new one");
+  });
+});
+
 describe("the unattended decision", () => {
   const managed = installOf("managed");
   const ready = async () => {

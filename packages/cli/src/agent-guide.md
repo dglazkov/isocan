@@ -576,6 +576,39 @@ decide. Run it when they ask, and say on the thread that you did. Reading it —
 plain `isocan home` — is free and often the answer to "why was my write
 refused".
 
+**`isocan direct`** is the other half of the same subject: whether this machine
+runs a daemon at all.
+
+```sh
+isocan direct                  # which way this machine works, and why
+isocan direct https://isocan.io  # no daemon here; commands speak to the home
+isocan direct --clear          # run a daemon here again, with its own replica
+```
+
+Ordinarily a machine runs a local daemon holding a replica of every canvas it
+has been let onto, and your commands talk to that. **Direct** is the other
+arrangement: no daemon, no local copy, and every command speaks to the home
+itself. It is what a disposable workspace wants — a CI runner, a cloud sandbox
+that will be torn down — because there is nothing there worth replicating into
+and nothing to lose when it disappears.
+
+You will normally be *in* one or the other rather than choosing: `isocan setup`
+decides once and writes it down, and `ISOCAN_DIRECT=1` (or
+`ISOCAN_DIRECT=https://isocan.io`) is how a workflow file or a harness prompt
+says so without editing anything. What matters for you is what changes:
+
+- **`serve`, `restart` and `stop` refuse** on a direct machine, because there
+  is no daemon for them to be about. That refusal is correct — do not work
+  around it by starting one.
+- **Nothing is cached locally.** Reads cross the network, and if the home is
+  unreachable, every command fails rather than falling back — there is no
+  replica to fall back to. Say so on the thread rather than retrying forever.
+- **`isocan home` refuses too**, since a canvas made here is born at the home;
+  there is no separate birth default to set.
+
+Same as `isocan home`: **do not switch a machine on your own initiative.** Read
+it freely — plain `isocan direct` — and say what you found.
+
 ## Copying things, and taking them to another canvas
 
 `isocan copy <items...>` puts a copy beside the originals; `--to <canvas>`

@@ -3,7 +3,7 @@ import { spawn, type SpawnSyncReturns } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { healthPath, type UpgradeVerdict } from "@isocan/core";
-import { paths, plausibleSha, readConfigFile } from "@isocan/server";
+import { buildStamp, paths, plausibleSha, readConfigFile } from "@isocan/server";
 import { findOnPath, rootOfBin } from "./onpath.ts";
 import { resolved, whichInstall, type Install, type InstallKind } from "./upgrade.ts";
 
@@ -654,6 +654,25 @@ export interface Adoption {
  * copy and this machinery never modifies one, and an NPX cache is a directory
  * npm is about to delete.
  */
+/**
+ * **Where npm put the bin for a global install, derived rather than searched.**
+ *
+ * npm's global layout is `<prefix>/lib/node_modules/<pkg>` and
+ * `<prefix>/bin/<bin>`, so a package root names its own bin exactly. Asking
+ * PATH instead answers a different question — "which isocan would a shell run"
+ * — and on a machine with more than one copy that is somebody else's link.
+ * The unattended path in particular must repoint the install it is replacing
+ * and nothing else: it runs with no one watching, and a swap that repointed a
+ * checkout's `npm link` would be this machinery modifying a working copy,
+ * which is the one thing it must never do.
+ */
+export function binOfInstall(root: string): string {
+  const prefix = path.resolve(root, "..", "..", "..");
+  return process.platform === "win32"
+    ? path.join(prefix, "isocan.cmd")
+    : path.join(prefix, "bin", "isocan");
+}
+
 export async function adoptGlobal(
   home: string,
   bin: string | null = findOnPath("isocan"),
@@ -923,6 +942,20 @@ function isAlive(pid: number): boolean {
   }
 }
 
+/**
+ * **Adoption is a global install's step and only a global install's.** A
+ * managed copy already resolves through `current` — that is what managed
+ * means — and `binOfInstall` would not even name the right file for one, since
+ * its root is not laid out as an npm prefix. Everything else is a copy this
+ * machinery does not own: a checkout is somebody's working tree, an npx cache
+ * is about to be deleted, and a `local` copy has no claim on the `isocan` a
+ * shell would run.
+ */
+async function adopt(home: string, install?: Install): Promise<Adoption | null> {
+  if (install?.kind !== "global") return null;
+  return adoptGlobal(home, binOfInstall(install.root));
+}
+
 /** Where a swap stopped, so a caller can say something true about it without
  * parsing a sentence. */
 export type SwapStep = "locked" | "fetch" | "smoke" | "done" | "current";
@@ -935,6 +968,14 @@ export interface SwapOutcome {
   /** Always says something, including when it succeeded. */
   why: string;
   removed: string[];
+  /** The outgoing copy, given a name in `builds/` so it can be rolled back to. */
+  shelved: string | null;
+  /**
+   * **Whether `isocan` on PATH ends up resolving through `current`** — which is
+   * the difference between a swap that happened and a swap that took effect.
+   * Null when no swap was attempted.
+   */
+  adoption: Adoption | null;
 }
 
 /**
@@ -948,6 +989,21 @@ export async function applySwap(options: {
   home: string;
   spec: string;
   want: string | null;
+  /**
+   * The copy being replaced. Given one, the swap SHELVES it first and ADOPTS
+   * afterwards — the two steps that make a flip take effect on a machine whose
+   * PATH does not already run through `current`.
+   *
+   * **These belong here and nowhere else, and that is not a style
+   * preference.** They lived in `isocan upgrade`'s own code path for a day, so
+   * the unattended path fetched a build, smoke-tested it, flipped `current`,
+   * and left PATH pointing at the old copy — an upgrade that reported success
+   * and changed nothing, on the front-door population, which is every machine
+   * that came through `npm i -g`. The comment on this function already claimed
+   * one implementation because two would drift; two steps had been left
+   * outside it, and they drifted.
+   */
+  install?: Install;
   protect?: Iterable<string>;
   keep?: number;
   run?: Runner;
@@ -955,6 +1011,15 @@ export async function applySwap(options: {
   const { home, spec, want } = options;
   const taken = await withUpgradeLock(home, async (): Promise<SwapOutcome> => {
     const from = await currentSha(home);
+    /**
+     * Before anything is fetched, so a first upgrade is as reversible as every
+     * later one — and before the lock is given up, so two processes cannot
+     * both decide they are the outgoing copy.
+     */
+    const shelved = options.install
+      ? await shelveExisting(home, options.install.root, buildStamp().commit)
+      : null;
+    const idle = { shelved: shelved?.sha ?? null, adoption: null };
     const fetched = await installBuild({
       home,
       spec,
@@ -962,10 +1027,13 @@ export async function applySwap(options: {
       ...(options.run ? { run: options.run } : {}),
     });
     if (!fetched.ok || !fetched.build) {
-      return { ok: false, step: "fetch", from, to: null, why: fetched.why, removed: [] };
+      return { ok: false, step: "fetch", from, to: null, why: fetched.why, removed: [], ...idle };
     }
     const build = fetched.build;
     if (build.sha === from) {
+      // Already current, but PATH may still not run through it — which is the
+      // whole of what adoption is, and the case a machine sits in forever if
+      // this returns before doing it.
       return {
         ok: true,
         step: "current",
@@ -973,6 +1041,8 @@ export async function applySwap(options: {
         to: build.sha,
         why: `${build.sha} is already the current build`,
         removed: [],
+        shelved: shelved?.sha ?? null,
+        adoption: await adopt(home, options.install),
       };
     }
     const smoke = await smokeTest({ home, root: build.root, expect: build.sha });
@@ -987,9 +1057,13 @@ export async function applySwap(options: {
           `you are still on ${from ?? "the copy you were on"}. The tree is at ${build.dir} ` +
           "if you want to look at it",
         removed: [],
+        ...idle,
       };
     }
     await flipTo(home, build.sha);
+    // The flip moved `current`; adoption is what moves PATH onto it. A flip
+    // without it is a build nothing resolves to.
+    const adoption = await adopt(home, options.install);
     const protect = await liveBuildShas(home);
     for (const sha of options.protect ?? []) protect.add(sha);
     const removed = await pruneBuilds(home, {
@@ -1003,6 +1077,8 @@ export async function applySwap(options: {
       to: build.sha,
       why: `now on ${build.sha}${from ? ` (was ${from})` : ""}`,
       removed,
+      shelved: shelved?.sha ?? null,
+      adoption,
     };
   });
   return (
@@ -1013,6 +1089,8 @@ export async function applySwap(options: {
       to: null,
       why: "another isocan process is already installing a build — leaving this one to it",
       removed: [],
+      shelved: null,
+      adoption: null,
     }
   );
 }
@@ -1060,6 +1138,7 @@ export async function autoUpgrade(options: {
       home,
       spec,
       want: verdict.homeCommit,
+      install,
       ...(options.protect ? { protect: options.protect } : {}),
     });
     if (swapped.step === "locked" || swapped.step === "current") return null;
@@ -1074,17 +1153,33 @@ export async function autoUpgrade(options: {
     }
     await fs.rm(refusalFile(home), { force: true }).catch(() => {});
     /**
-     * **"On the new build", stated precisely.** No symlink flip moves a
-     * running process, so the process reading this line is still the old one —
-     * and telling an agent otherwise, when it is about to re-read a guide that
-     * ships inside the build, would be a lie it would act on. What is true is
-     * that `current` has moved and the NEXT command resolves through it.
+     * **"On the new build", stated precisely, twice over.**
+     *
+     * No symlink flip moves a running process, so the process reading this
+     * line is still the old one — telling an agent otherwise, when it is about
+     * to re-read a guide that ships inside the build, would be a lie it would
+     * act on.
+     *
+     * And the *next* command is only on the new build if PATH was repointed.
+     * That sentence was written when it could not fail, because adoption
+     * happened in a code path this one did not run: a machine could be told
+     * its next command was on the new build while `isocan` on PATH still
+     * resolved to the old copy, permanently. So the claim is now made only
+     * when the adoption that backs it succeeded, and the other case says what
+     * to do about it.
      */
+    const swap = `upgraded to ${swapped.to}${swapped.from ? ` from ${swapped.from}` : ""}`;
+    if (swapped.adoption && !swapped.adoption.managed) {
+      return (
+        `isocan: ${swap} while you were parked, but \`isocan\` on your PATH still ` +
+        `resolves to the old copy — ${swapped.adoption.why}. Until that is fixed every ` +
+        "command you run is the old build, whatever `current` says."
+      );
+    }
     return (
-      `isocan: upgraded to ${swapped.to}${swapped.from ? ` from ${swapped.from}` : ""} ` +
-      `while you were parked. This process is still running the old build — the next ` +
-      "command you run is on the new one, so re-read your guide (`isocan agent-guide`) " +
-      "before acting on anything that depends on it."
+      `isocan: ${swap} while you were parked. This process is still running the old ` +
+      "build — the next command you run is on the new one, so re-read your guide " +
+      "(`isocan agent-guide`) before acting on anything that depends on it."
     );
   } catch (err) {
     // A courtesy must never be the reason a park, a restart or a daemon start

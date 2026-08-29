@@ -609,6 +609,43 @@ against the real `release` branch on GitHub.
   it not become a machine everyone forgot. `--pin deadbee` is refused by name:
   *no build deadbee in …/builds — this machine has bbb2222, aaa1111*.
 
+**Re-proved 29 Aug 2026 on a FRONT-DOOR-shaped install**, after the first
+proof turned out to have been taken on a rig that hid the phase's worst bug.
+
+```
+bin -> …/npm/lib/node_modules/isocan/…       # npm's global layout, nothing adopted
+isocan --version → 0.1.0 (a000001, 2026-08-01)
+upgrade   this copy is a000001; your home https://dev.isocan.io runs c0c5c12
+upgrades  auto — the default for a global install
+
+$ isocan wait --json --timeout 180           # and then nothing was typed
+current -> builds/c0c5c12
+bin ->     …/home/current/node_modules/isocan/packages/cli/bin/isocan.js
+isocan --version → 0.1.0 (c0c5c12, 2026-08-29)
+builds/:   a000001  c0c5c12
+
+  …then a comment woke it:
+{ "reason": "summons",
+  "upgraded": "isocan: upgraded to c0c5c12 while you were parked. This process is
+    still running the old build — the next command you run is on the new one…" }
+
+$ isocan upgrade --rollback --no-restart     # on a machine never upgraded by hand
+rolled back to a000001 from c0c5c12
+isocan --version → 0.1.0 (a000001, 2026-08-01)
+```
+
+The home is real (`dev.isocan.io`), the fetch is real (the release tip from
+GitHub), the layout is npm's own, and nothing was adopted beforehand. The one
+artificial part is the stamp: the install is this branch's tree with an older
+sha written into its manifest, because the only build carrying the fix is the
+build the home runs, and a machine cannot be behind itself.
+
+**Why it had to be re-proved.** The first proof built its rig by hand and had
+adopted it while proving phase 3, so PATH already resolved through `current`
+before the park began — the one shape in which a swap that never repoints PATH
+still appears to work. It took installing the thing the way a person installs
+it to see that `current` moved and nothing ran the new build.
+
 **What was built.** `autoUpgrade()` in `managed.ts` is the decision;
 `applySwap()` is phase 3's mechanism with the narration taken out, so the
 command and the unattended points run one implementation rather than two.

@@ -11,6 +11,7 @@ import {
   canvasUrlWithPass,
   parseCanvasAddress,
   setupCommand,
+  cloudAgentInstructions,
   splitPassFragment,
 } from "../src/address.ts";
 
@@ -134,6 +135,38 @@ describe("a canvas's address", () => {
     );
     // #47: a branchless spec installs an EMPTY directory and a dangling bin.
     expect(INSTALL_SPEC).toContain("#release");
+  });
+
+  it("builds Scene 6's instructions — a prompt for an agent, not a shell command", () => {
+    const line = cloudAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
+    // The address, with its pass, so the agent arrives admitted and as
+    // somebody rather than knocking at a door.
+    expect(line).toContain("https://isocan.io/p/prj_acme#pss_1.s3cret");
+    // **`ISOCAN_DIRECT=1` is the whole reason this is a separate builder.**
+    // Picking "Run an agent in the cloud…" IS the declaration that the
+    // workspace is disposable, so the line carries it and nothing has to sniff
+    // the environment on the person's behalf. Without this, the agent sets up
+    // a daemon and a replica in a sandbox that is about to be deleted.
+    expect(line).toContain("ISOCAN_DIRECT=1");
+    // It parks. An agent that sets itself up and exits is not on the canvas.
+    expect(line).toContain("isocan wait");
+    expect(line).toContain("#release"); // #47, same hazard as its sibling
+  });
+
+  it("names no vendor — the line goes to whatever cloud the person already has", () => {
+    // The journey says claude.ai/code as ONE instantiation. A string that
+    // named it would be wrong for every other reader of this dialog, and the
+    // same rule direct mode follows in the CLI: never ask who the vendor is.
+    const line = cloudAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
+    for (const vendor of ["claude", "anthropic", "github", "codex", "gemini", "cursor", "gitpod"]) {
+      // `github:` inside the install spec is a package source, not a harness —
+      // so the check is on the prose, with the command line taken out.
+      const prose = line
+        .split("\n")
+        .filter((row) => !row.includes(INSTALL_SPEC))
+        .join("\n");
+      expect(prose.toLowerCase(), vendor).not.toContain(vendor);
+    }
   });
 
   it("joins an origin without doubling or dropping the slash", () => {

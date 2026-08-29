@@ -151,6 +151,7 @@ import {
   type Ctx,
   type HomeRecord,
   type ResolveOptions,
+  baseForCwd,
   canvasRefOf,
   ensureDirBinding,
   homeAddressOf,
@@ -171,6 +172,7 @@ import {
   recordDir,
   writeMarker,
 } from "@isocan/server";
+import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "./direct.ts";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
@@ -202,8 +204,8 @@ import {
   lastRefusal,
   listBuilds,
   shaOfRoot,
-  shelveExisting,
   upgradePolicy,
+  type Adoption,
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
@@ -581,7 +583,7 @@ async function nameCollision(
     };
     const home = paths.isocanHome();
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
-    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+    const client = new DaemonClient((await baseForCwd(home, port)).base, home);
     if (!(await client.health())) return null;
     // A hand-built context, for one lookup that must not start a daemon. The
     // home questions are answered from the same record `makeCtx` uses and by
@@ -630,7 +632,7 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
     if (!session) return;
     const globals = cmd.optsWithGlobals() as { port?: string };
     const port = Number(globals.port ?? process.env.ISOCAN_PORT ?? DEFAULT_PORT);
-    const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+    const client = new DaemonClient((await baseForCwd(home, port)).base, home);
     if (!(await client.health())) return;
     await client.updateSession(session.canvasId, session.sessionId, { actor });
   } catch {
@@ -698,7 +700,7 @@ program
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
-        const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+        const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
         await retireStrandedIdentities(process.cwd(), home);
         // Choosing your color is a mutation on the actor registry, the same
         // one the web app's identity menu sends — so both clients change the
@@ -811,7 +813,7 @@ program
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
-      const client = new DaemonClient(`http://127.0.0.1:${daemonPort(cmd)}`, home);
+      const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
       await retireStrandedIdentities(process.cwd(), home);
       const resolved = await resolveIdentity(client, home);
       if (!resolved) throw new Error(await noIdentityHere(client, home));
@@ -849,6 +851,13 @@ program
     run(async (opts: { foreground?: boolean; force?: boolean }, cmd: Command) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+      // A direct machine has said it runs no daemon. Starting one here would
+      // give it a second replica queueing toward a home the CLI already talks
+      // to, and every later command would reach whichever it happened to find.
+      const declared = await resolveDeclared(home);
+      if (declared?.mode === "direct") {
+        throw refuseDaemonVerb("serve", declared.at ?? "its home");
+      }
       if (opts.foreground) {
         const { runDaemon } = await import("@isocan/server");
         await runDaemon({ port, home, ...(opts.force ? { takeover: true } : {}) });
@@ -881,16 +890,36 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const globals = cmd.optsWithGlobals() as { json?: boolean };
       const port = daemonPort(cmd);
+      /**
+       * **On a direct machine, `status` is about the home** — because that is
+       * the only process this machine's commands ever speak to.
+       *
+       * The alternative was to leave it probing 127.0.0.1 and print "daemon:
+       * not running", which is true and useless: it is the answer a broken
+       * machine gives, and a direct machine is working exactly as configured.
+       * `status` is the first place anybody looks when something is wrong, so
+       * it has to be able to say "nothing is wrong, and here is why there is
+       * no daemon".
+       */
+      const declared = await resolveDeclared(paths.isocanHome());
+      const direct = declared?.mode === "direct" ? declared.at : null;
       // The one raw health fetch left in the CLI — `status` wants the body
       // shape, not `healthz()`'s null-or-Health. The path still comes from the
       // address (see `healthPath`), so this cannot drift from every other
       // probe the way a literal would.
-      const daemonBase = `http://127.0.0.1:${port}`;
+      const daemonBase = direct ?? `http://127.0.0.1:${port}`;
       const res = await fetch(`${daemonBase}${healthPath(daemonBase)}`, {
-        signal: AbortSignal.timeout(500),
+        // A hosted home over the internet is not a loopback port; half a
+        // second is a fine deadline for one and a coin-flip for the other.
+        signal: AbortSignal.timeout(direct ? 5_000 : 500),
       }).catch(() => null);
       if (!res?.ok) {
-        console.log(`daemon: not running (port ${port})`);
+        console.log(
+          direct
+            ? `mode: direct — no daemon here; commands speak to ${direct}\n` +
+              `home: NOT ANSWERING — every command against this canvas will fail until it does`
+            : `daemon: not running (port ${port})`,
+        );
         return;
       }
       const health = (await res.json()) as {
@@ -932,7 +961,9 @@ program
       }
       const { stale, why } = stalenessOf(health);
       printKeyValues({
-        daemon: `running on http://127.0.0.1:${port}`,
+        ...(direct
+          ? { mode: `direct — no daemon here; commands speak to ${direct}`, home: direct }
+          : { daemon: `running on http://127.0.0.1:${port}` }),
         // What this daemon is. A daemon that stopped serving pages for a canvas
         // without saying so reads as a broken daemon, and `status` is the first
         // place anybody looks.
@@ -955,7 +986,11 @@ program
             "content origin": s.contentBase ?? "none — item content serves from the app origin",
           }))
           .catch(() => ({}))),
-        ...(stale ? { stale: `${why} — \`isocan restart\`` } : {}),
+        // Staleness is "the daemon on this port is older than this CLI", and
+        // on a direct machine the process answering is somebody else's home.
+        // Comparing a laptop's CLI to a server's deploy and then offering
+        // `isocan restart` would name a command that refuses on this machine.
+        ...(stale && !direct ? { stale: `${why} — \`isocan restart\`` } : {}),
         /**
          * **What the home runs, when the home was asked** (auto-upgrade phase
          * 2). Present only when there is a verdict, so a machine with no home,
@@ -1167,6 +1202,13 @@ program
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+      // Before the upgrade, not after it: on a direct machine there is no
+      // daemon to bring back on current code, so applying a pending upgrade
+      // here would be work done toward a process that is never going to start.
+      const declared = await resolveDeclared(home);
+      if (declared?.mode === "direct") {
+        throw refuseDaemonVerb("restart", declared.at ?? "its home");
+      }
       /**
        * **The second idle point** (auto-upgrade phase 4). `restart` already
        * means "come back on current code", so applying a pending upgrade
@@ -1260,6 +1302,24 @@ program
       if (url !== undefined && opts.clear) {
         throw new Error(
           "`isocan home <url>` sets a home and `isocan home --clear` removes one — not both",
+        );
+      }
+      /**
+       * **A direct machine has no birth default to set**, because it has no
+       * daemon to hold one: a canvas made here is posted to the home and born
+       * at the home, which is the only address in play. Writing `config.json`'s
+       * `home` key would leave a setting that does nothing, waiting to confuse
+       * whoever reads the file — and the restart this verb performs would
+       * refuse anyway.
+       */
+      const declared = await resolveDeclared(isocanHome);
+      if (declared?.mode === "direct") {
+        const at = declared.at ?? "its home";
+        throw new Error(
+          `this machine is direct, so there is no birth default to set: a canvas made here ` +
+            `is born at ${at}, which is the only home in play. \`isocan direct\` shows that ` +
+            "address and `isocan direct --clear` gives this machine a daemon of its own, " +
+            "which is what would make this verb mean something again.",
         );
       }
 
@@ -1480,6 +1540,105 @@ program
   );
 
 /**
+ * **`isocan direct` — show, set, or undo this machine's mode.**
+ *
+ * The sibling of `isocan home`, and it exists for the reason every refusal in
+ * `direct.ts` names it: a setting with no off switch is a trap. `setup` can
+ * put a machine into direct mode from a guess, and a guess a person cannot
+ * inspect and reverse is a guess that will eventually be wrong on somebody's
+ * laptop with no way out of it.
+ *
+ * It writes `config.json` and nothing else — no restart, unlike `isocan home`,
+ * because there is no daemon whose boot-time read has to be re-taken. Going
+ * the other way (`--clear`) leaves the daemon to be started by the next
+ * command that wants one, which is what `ensureDaemon` has always done.
+ */
+program
+  .command("direct [url]")
+  .description("Work without a local daemon, speaking to the home itself — show, set, or undo")
+  .option("--clear", "run a daemon here again, with a replica of its own")
+  .action(
+    run(async (url: string | undefined, opts: { clear?: boolean }, cmd: Command) => {
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const isocanHome = paths.isocanHome();
+      if (url !== undefined && opts.clear) {
+        throw new Error(
+          "`isocan direct <url>` goes direct and `isocan direct --clear` undoes it — not both",
+        );
+      }
+      const override = process.env[DIRECT_VAR]?.trim();
+      // The same refusal `isocan home` gives for `ISOCAN_HOME_URL`, for the
+      // same reason: the variable wins over the file, so writing the file
+      // would change nothing and report success.
+      if (override && (url !== undefined || opts.clear)) {
+        throw new Error(
+          `${DIRECT_VAR}=${override} is set in this shell and wins over the config file — ` +
+            `unset it first (\`unset ${DIRECT_VAR}\`), then run this again`,
+        );
+      }
+      const config = await readConfig(isocanHome);
+      const written = typeof config.direct === "string" ? config.direct.trim() : "";
+
+      if (url === undefined && !opts.clear) {
+        const declared = await resolveDeclared(isocanHome);
+        const at = declared?.mode === "direct" ? declared.at : null;
+        if (globals.json) {
+          return printJson({
+            mode: declared?.mode ?? DEFAULT_MODE,
+            direct: at,
+            ...(override ? { override } : {}),
+            configured: written || null,
+          });
+        }
+        return printKeyValues({
+          mode:
+            declared?.mode === "direct"
+              ? `direct — no daemon here; commands speak to ${at ?? "the address in this directory's marker"}`
+              : "daemon — this machine runs one, with a replica of its own",
+          ...(override ? { [DIRECT_VAR]: `${override} (set in this shell; wins over the file)` } : {}),
+          ...(written ? { configured: `${written} (${paths.configFile(isocanHome)})` } : {}),
+        });
+      }
+
+      if (opts.clear) {
+        if (!written) {
+          return printKeyValues({ mode: "daemon — already; nothing was configured" });
+        }
+        delete config.direct;
+        await writeConfig(isocanHome, config);
+        return printKeyValues({
+          mode: "daemon — this machine will run one again",
+          was: written,
+          wrote: paths.configFile(isocanHome),
+          next: "the next command that needs a daemon starts it (`isocan status` to look)",
+        });
+      }
+
+      // Reachability is checked and REFUSED here, not warned about, and that
+      // is the difference from `isocan home --force`. A birth default that
+      // does not answer costs you the next canvas you make; a direct machine
+      // pointed at an address that does not answer cannot run a single
+      // command, because there is no replica underneath to fall back to.
+      const target = normalizeHomeUrl(url!);
+      const answers = await homeAnswers(target);
+      if (!answers.ok) {
+        throw new Error(
+          `nothing answered at ${target} (${answers.why}) — a direct machine has no local ` +
+            "replica to fall back on, so every command here would fail. Check the address, " +
+            "or leave this machine on its daemon.",
+        );
+      }
+      config.direct = target;
+      await writeConfig(isocanHome, config);
+      printKeyValues({
+        mode: `direct — no daemon here; commands speak to ${target}`,
+        wrote: paths.configFile(isocanHome),
+        note: "`isocan direct --clear` gives this machine a daemon and a replica again",
+      });
+    }),
+  );
+
+/**
  * **Point this daemon at a home, for real** — the machinery behind
  * `isocan home <url>`, extracted in phase 8 because `isocan setup <address>`
  * has to do the identical thing.
@@ -1672,7 +1831,7 @@ program
           `pinned to ${found.sha}${before && before !== found.sha ? ` (was ${before})` : ""} — ` +
             "auto upgrades stop here until `isocan upgrade --unpin`",
         );
-        await sayAdoption(home);
+        say(await adoptGlobal(home));
         if (opts.restart !== false) {
           const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
@@ -1779,8 +1938,14 @@ program
       if (plan.action === "none") {
         // Nothing was fetched, so bouncing the daemon would be theatre —
         // unless it is serving some other copy, which is the one case where
-        // an upgrade that changed nothing still has work to do.
-        const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+        // an upgrade that changed nothing still has work to do. On a direct
+        // machine there is no daemon to be serving anything, so the exception
+        // has no case to cover: what got upgraded is this CLI, and it is
+        // already the copy that will run next time.
+        const { direct } = await baseForCwd(home, port);
+        const health = direct
+          ? null
+          : await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
         if (!health || !stalenessOf(health).stale) {
           console.log("the daemon is already running this build");
           return;
@@ -1842,21 +2007,8 @@ async function swapBuild(options: {
     }
     await flipTo(home, previous.sha);
     console.log(`rolled back to ${previous.sha}${before ? ` from ${before}` : ""}`);
-    await sayAdoption(home);
+    say(await adoptGlobal(home));
     return previous;
-  }
-
-  /**
-   * The copy being adopted gets a name in `builds/` BEFORE anything is
-   * fetched, so that a first upgrade is as reversible as every later one. It
-   * is a symlink at the tree npm already installed; see `shelveExisting`.
-   */
-  const shelved = await shelveExisting(home, install.root, buildStamp().commit);
-  if (shelved) {
-    console.error(
-      `isocan: ${shelved.sha} is now reachable as a build — ` +
-        "`isocan upgrade --rollback` comes back to it",
-    );
   }
 
   const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
@@ -1866,7 +2018,7 @@ async function swapBuild(options: {
     // machine whose PATH has not been moved yet, which is why this returns
     // through the same door rather than early.
     console.log(`already on ${want}, which is what ${health?.upgrade?.home} runs`);
-    await sayAdoption(home);
+    say(await adoptGlobal(home));
     return null;
   }
 
@@ -1883,16 +2035,19 @@ async function swapBuild(options: {
     home,
     spec: INSTALL_SPEC,
     want,
+    install,
     ...(mine ? { protect: [mine] } : {}),
   });
-  if (!swapped.ok) throw new Error(swapped.why);
-  if (swapped.step === "current") {
-    console.log(swapped.why);
-    await sayAdoption(home);
-    return null;
+  if (swapped.shelved) {
+    console.error(
+      `isocan: ${swapped.shelved} is now reachable as a build — ` +
+        "`isocan upgrade --rollback` comes back to it",
+    );
   }
+  if (!swapped.ok) throw new Error(swapped.why);
   console.log(swapped.why);
-  await sayAdoption(home);
+  say(swapped.adoption);
+  if (swapped.step === "current") return null;
   if (swapped.removed.length > 0) {
     console.error(
       `isocan: removed old build${swapped.removed.length > 1 ? "s" : ""} ` +
@@ -1902,11 +2057,11 @@ async function swapBuild(options: {
   return (await currentBuild(home)) ?? null;
 }
 
-/** Adoption is reported on stderr, always: silence would leave a person whose
- * PATH could not be moved believing the upgrade took. */
-async function sayAdoption(home: string): Promise<void> {
-  const adoption = await adoptGlobal(home);
-  if (adoption.moved || !adoption.managed) console.error(`isocan: ${adoption.why}`);
+/** Adoption is reported on stderr whenever it did something or failed to:
+ * silence would leave a person whose PATH could not be moved believing the
+ * upgrade took. A PATH that already ran through `current` is not news. */
+function say(adoption: Adoption | null): void {
+  if (adoption && (adoption.moved || !adoption.managed)) console.error(`isocan: ${adoption.why}`);
 }
 
 program
@@ -1915,6 +2070,10 @@ program
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const { stopDaemons } = await import("@isocan/server");
+      const declared = await resolveDeclared(paths.isocanHome());
+      if (declared?.mode === "direct") {
+        throw refuseDaemonVerb("stop", declared.at ?? "its home");
+      }
       // Waits for the processes to actually die (SIGKILL if they won't), so
       // `stop && serve` can't race its own predecessor.
       const stopped = await stopDaemons(daemonPort(cmd), paths.isocanHome());
@@ -2501,10 +2660,13 @@ program
         // definition — so unlike `setup` there is no CLI to install here.
         const home = paths.isocanHome();
         const port = daemonPort(cmd);
-        const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+        const { base, direct } = await baseForCwd(home, port);
+        const client = new DaemonClient(base, home);
         try {
-          await client.ensureDaemon();
-          report.app = client.base;
+          // A direct machine has nothing to ensure — the home is already up or
+          // this clone has bigger problems, and `report.app` says which.
+          if (!direct) await client.ensureDaemon();
+          report.app = direct && !(await client.awaitHealth(5_000)) ? `${base} — not answering` : client.base;
         } catch (err) {
           report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
         }
@@ -2720,11 +2882,19 @@ program
   .option("--open", "open the app in a browser (default when you're at a terminal)")
   .option("--no-open", "never open a browser")
   .option("--force", "refresh the skill even if this directory already has one")
+  .option("--direct", "run no daemon here — speak to the home itself, keeping no local copy")
+  .option("--daemon", "run a daemon here with a replica of its own, whatever this place looks like")
   .action(
     run(
       async (
         target: string | undefined,
-        opts: { install?: boolean; open?: boolean; force?: boolean },
+        opts: {
+          install?: boolean;
+          open?: boolean;
+          force?: boolean;
+          direct?: boolean;
+          daemon?: boolean;
+        },
         cmd: Command,
       ) => {
         const globals = cmd.optsWithGlobals() as { json?: boolean };
@@ -2748,6 +2918,65 @@ program
         const work = arrival ? process.cwd() : path.resolve(target ?? process.cwd());
         if (!(await exists(work))) throw new Error(`no such directory: ${work}`);
         const report: Record<string, string> = {};
+
+        /**
+         * **Which way this machine works — decided here, once, and written
+         * down** (phase 11).
+         *
+         * `setup` is the only command that guesses, and this is the whole of
+         * the guessing. Everything after it reads `config.json`, so an agent
+         * running fifty commands re-derives nothing and cannot find its canvas
+         * moving between two replicas because a variable changed mid-session.
+         * The shape is phase 14's birth default, deliberately: consulted at
+         * setup, recorded with a receipt, and never applied to a machine that
+         * has already made a decision.
+         *
+         * Precedence: the flags, then whatever was already declared
+         * (environment or config), then the guess — and the guess can only
+         * ever reach a machine ARRIVING at an address, because direct mode
+         * with no home is a CLI with nothing to talk to.
+         */
+        const isocanHome = paths.isocanHome();
+        if (opts.direct && opts.daemon) {
+          throw new Error("`--direct` and `--daemon` are opposites — pick one");
+        }
+        if (opts.direct && !arrival) {
+          throw new Error(
+            "`isocan setup --direct` needs the canvas address to go direct TO: a machine with " +
+              "no daemon and no home has nothing to talk to. Paste the address from the " +
+              "canvas's own \"Run an agent in the cloud…\" dialog, or drop `--direct` to set " +
+              "this directory up with a daemon of its own.",
+          );
+        }
+        const declared = await resolveDeclared(isocanHome);
+        const mode: "direct" | "daemon" = opts.direct
+          ? "direct"
+          : opts.daemon
+            ? "daemon"
+            : (declared?.mode ?? DEFAULT_MODE);
+        const direct = mode === "direct" ? (arrival?.origin ?? declared?.at ?? null) : null;
+        if (mode === "direct" && !direct) {
+          throw new Error(
+            `${DIRECT_VAR} says this machine runs no daemon, but nothing here says which ` +
+              "home to speak to. Run `isocan setup <canvas address>`, or set the address " +
+              `itself (${DIRECT_VAR}=https://isocan.io).`,
+          );
+        }
+        // Said whenever it is not the ordinary answer, and it names the way
+        // back in the same breath — the receipt rule `report.birth` follows.
+        // It also names WHICH declaration decided it, because the two are
+        // undone by different gestures and a report that conflated them would
+        // name the wrong way out.
+        if (direct) {
+          const because = opts.direct
+            ? "--direct"
+            : declared?.from === "env"
+              ? `${DIRECT_VAR} is set in this shell`
+              : `already set in ${paths.configFile(isocanHome)}`;
+          report.mode =
+            `direct (${because}) — no daemon or local copy here; ` +
+            `commands speak to ${direct} itself. \`isocan direct --clear\` for a daemon`;
+        }
 
         const skill = await installSkill(work, opts.force ?? false);
         report.skill =
@@ -2799,17 +3028,36 @@ program
         // at the home and arrives here by replication — and the identity it
         // ends up holding was chosen by the person in a browser and HANDED
         // over, never minted here.
-        const home = paths.isocanHome();
+        const home = isocanHome;
         const port = daemonPort(cmd);
-        const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
+        const client = new DaemonClient(direct ?? `http://127.0.0.1:${port}`, home);
         // The daemon outlives the command that starts it, so it has to belong
         // to a copy that outlives it too. Run through npx, THIS copy is a
         // cache directory npm deletes — and every command from the CLI we just
         // installed would find that daemon and call it stale (#48). So when we
         // are the transient one, the installed copy is handed the daemon.
         const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
-        const handOff = transient ? durableBin : null;
-        try {
+        const handOff = transient && !direct ? durableBin : null;
+        /**
+         * **The whole daemon paragraph, skipped** — this is what direct mode
+         * IS, and every line of it is about a process this machine has decided
+         * not to run: the npx hand-off, the staleness replacement, the restart
+         * on the installed copy, and `ensureDaemon` itself.
+         *
+         * What replaces it is a reachability probe against the home, because
+         * `daemonUp` is load-bearing three times below (the pass is redeemed
+         * only when it is true, and a pass that goes unspent while the command
+         * reports success is the bug the block below this one exists to
+         * prevent). On a direct machine the question "is there something to
+         * talk to" has the same shape and a different address.
+         */
+        if (direct) {
+          const answering = await client.awaitHealth(5_000);
+          report.app = answering
+            ? client.base
+            : `${client.base} — NOT ANSWERING; nothing on this machine works until it does`;
+        } else {
+          try {
           // Setup is what you run after an upgrade, so a daemon left over from
           // an older copy is replaced rather than reported: "make this
           // directory work" includes serving today's app, not yesterday's.
@@ -2844,11 +3092,46 @@ program
           }
           await client.ensureDaemon();
           report.app = client.base;
-        } catch (err) {
-          report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
+          } catch (err) {
+            report.app = `not running — \`isocan serve\` (${(err as Error).message})`;
+          }
         }
 
+        /**
+         * **"Is there something to talk to" — the one question, either way.**
+         *
+         * The name is now a slight lie on a direct machine, where nothing local
+         * is up and what answered is the home. It kept the name deliberately:
+         * three branches below gate on it (the pass, the marker, the record),
+         * and each of them wants exactly this question. Renaming it to
+         * `reachable` and leaving the branches identical would be churn; giving
+         * direct mode its own flag would be two things to keep in step.
+         */
         let daemonUp = report.app === client.base;
+
+        /**
+         * **Write the mode down — but only once the home has answered.**
+         *
+         * The order is the care. `config.direct` is what every later command
+         * on this machine reads, and a machine recorded as direct against an
+         * address that never answered is a machine where nothing works and
+         * `isocan direct --clear` is the only way out — which the person would
+         * have to know to type. So the probe comes first and this only runs
+         * behind it, exactly as `isocan direct <url>` refuses an address that
+         * does not answer.
+         *
+         * Written even when it is already written: the value can differ (a
+         * second canvas at a different home), and an idempotent write of the
+         * same string costs nothing.
+         */
+        if (direct && daemonUp) {
+          const config = await readConfig(home);
+          if (config.direct?.trim() !== direct) {
+            config.direct = direct;
+            await writeConfig(home, config);
+            report.wrote = paths.configFile(home);
+          }
+        }
 
         /**
          * **Step one of the collapsed three: make this the machine's birth
@@ -2882,7 +3165,7 @@ program
          * home, so an unreachable address is not a warning, it is the end of
          * the command — and the refusal says which address and why.
          */
-        if (arrival && daemonUp) {
+        if (arrival && daemonUp && !direct) {
           const health = await client.healthz(2000);
           const configured = (await readConfig(home)).home?.trim() || null;
           const birth = health?.home ?? configured;
@@ -2944,7 +3227,7 @@ program
          * the same breath. This is the one place a person is told their next
          * canvas is going somewhere else.
          */
-        const fresh = !arrival && daemonUp ? await defaultHomeUrl() : null;
+        const fresh = !arrival && daemonUp && !direct ? await defaultHomeUrl() : null;
         if (fresh) {
           const health = await client.healthz(2000);
           const configured = (await readConfig(home)).home?.trim() || null;
@@ -3121,7 +3404,14 @@ program
               "filesystem root). Run this in a project directory.";
           }
           report.replicated = landed
-            ? `"${landed.title}" is on this machine`
+            ? // Nothing replicated on a direct machine, and saying it did
+              // would be the one sentence that makes somebody believe they
+              // can close the lid and keep working. What the probe actually
+              // proved here is admission: the home listed the canvas for this
+              // badge, which is the useful half either way.
+              direct
+              ? `"${landed.title}" — admitted at ${direct}; nothing is copied here`
+              : `"${landed.title}" is on this machine`
             : "not yet — the home has not offered this canvas to this machine. " +
               (arrival.pass
                 ? "The pass was redeemed, so this should heal on the next sweep."
