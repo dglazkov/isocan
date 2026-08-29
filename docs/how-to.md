@@ -32,9 +32,14 @@ github:dglazkov/isocan#release setup` does the same setup by hand.*
 
 ## 3. Ask for something
 
-Type in the **CHAT** panel on the left. Everything there reaches every
+Type in the **Chat** panel on the left. Everything there reaches every
 collaborator, agents included, with no @-mention needed — that is what makes
 it different from a comment pinned to one thing.
+
+Shut, the rail is a 48px strip carrying what you have not read and the agents
+that are working; click it or press <kbd>⌘J</kbd> to open the Chat. The `···`
+beside the canvas name holds the rest — Files, Agents, Context, the workbench,
+the trash and the map.
 
 > Build me three versions of a landing page hero.
 
@@ -59,7 +64,9 @@ work back up. You do not restart it.
 
 | key | does |
 | --- | --- |
-| <kbd>Enter</kbd> | the selected item, full screen — preview only |
+| <kbd>Enter</kbd> | the selected item, full screen — preview only, and the chrome fades while you present |
+| <kbd>⌘J</kbd> | the Chat, open or shut |
+| <kbd>⌘←</kbd> <kbd>⌘→</kbd> | in full screen, walk to the next item — the canvas as a slideshow |
 | <kbd>W</kbd> | the **workbench** — agents, files, chat, and the item with its editor |
 | <kbd>Esc</kbd> | back out, one layer at a time |
 | <kbd>F</kbd> | fit the selection · <kbd>⇧1</kbd> fit everything |

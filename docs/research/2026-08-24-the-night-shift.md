@@ -2,6 +2,11 @@
 
 **24 August 2026**
 
+**Where this stands, 29 Aug 2026: not built.** `grade.mjs --selftest` runs
+in CI, which is the graders grading themselves; nothing grades any screen on
+any schedule. Recommendation 1 — the cheapest and the one everything else
+waits on — is untouched.
+
 The question: *what could a self-improvement loop be — for isocan itself, for
 the projects isocan holds canvases for, and on the canvas as the surface that
 displays it — such that a person wakes up to changes that are verified to be
