@@ -2125,6 +2125,10 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; bottom: 16px; z-index: var(--z-float);
   /* left comes from the component: it steps aside for a docked panel. */
   transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* …but not on the way in. Until the map has been placed once, `left` is
+     where it belongs rather than somewhere it moved to, and easing into it
+     drew a slide across the screen on every load. `.placed` arrives a frame
+     later; see the note in Minimap.tsx. */
   /* THE BOX PAINTS NOTHING, SO IT CATCHES NOTHING. It is a positioning box
      that is larger than either thing inside it — 168×108 around a 138×89 map,
      and around a 32×32 handle once folded — and at `--z-float` it sat over
@@ -2144,6 +2148,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* …except while the edge is being DRAGGED, when the width changes every frame
    and an ease means the map trails your hand and settles a fifth of a second
    after you stop. The ease is for the one step of opening and closing. */
+.minimap-dock:not(.placed) { transition: none; }
 .canvas-page.resizing-panel .minimap-dock { transition: none; }
 .minimap-panel {
   /* Claimed back from the dock above — this one is drawn, so it is clickable

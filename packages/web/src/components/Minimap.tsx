@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -35,6 +35,30 @@ export function Minimap() {
   const [peek, setPeek] = useState<{ itemId: string; x: number; top: number } | null>(null);
   const open = useUiStore((s) => s.minimapOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
+  /**
+   * **The first position is not a move, so it is not animated.**
+   *
+   * `left` eases over 0.22s, which is right for opening and closing a rail
+   * and wrong for arriving. Whatever settles the rail's state on load — a
+   * remembered choice, or the canvas turning up and deciding — the map's
+   * first `left` is where it BELONGS, and easing to it draws a 340px slide
+   * across the screen that reads as a bug because it is one.
+   *
+   * A tick's delay rather than a mount flag: the class has to land in a later
+   * paint than the position it is allowed to animate from, or the browser has
+   * nothing to hold still.
+   *
+   * `setTimeout`, NOT `requestAnimationFrame`, and that is the phase-2 lesson
+   * applied rather than relearned: rAF does not fire in a hidden tab, so a
+   * canvas opened in a background tab would never become `.placed` and would
+   * keep its transition disabled until somebody looked at it. A timer fires
+   * either way, and being a frame late costs nothing here.
+   */
+  const [placed, setPlaced] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setPlaced(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
@@ -102,7 +126,7 @@ export function Minimap() {
 
   return (
     <div
-      className={`minimap-dock${open ? "" : " folded"}`}
+      className={`minimap-dock${open ? "" : " folded"}${placed ? " placed" : ""}`}
       style={{ left: (panelOpen ? railSpan(panelWidth) : 0) + 14 }}
     >
       <button
