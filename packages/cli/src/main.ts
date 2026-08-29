@@ -172,14 +172,7 @@ import {
   recordDir,
   writeMarker,
 } from "@isocan/server";
-import {
-  DEFAULT_MODE,
-  DIRECT_VAR,
-  ephemeralVars,
-  looksEphemeral,
-  refuseDaemonVerb,
-  resolveDeclared,
-} from "./direct.ts";
+import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "./direct.ts";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "./client.ts";
 import {
@@ -2956,13 +2949,11 @@ program
           );
         }
         const declared = await resolveDeclared(isocanHome);
-        const guess = arrival ? looksEphemeral(await ephemeralVars(isocanHome)) : null;
         const mode: "direct" | "daemon" = opts.direct
           ? "direct"
           : opts.daemon
             ? "daemon"
-            : (declared?.mode ??
-              (guess?.ephemeral && !process.stdin.isTTY ? "direct" : DEFAULT_MODE));
+            : (declared?.mode ?? DEFAULT_MODE);
         const direct = mode === "direct" ? (arrival?.origin ?? declared?.at ?? null) : null;
         if (mode === "direct" && !direct) {
           throw new Error(
@@ -2973,17 +2964,15 @@ program
         }
         // Said whenever it is not the ordinary answer, and it names the way
         // back in the same breath — the receipt rule `report.birth` follows.
-        // A machine that went direct because something GUESSED gets told which
-        // variable decided it, because a decision nobody can see is a decision
-        // nobody can correct.
+        // It also names WHICH declaration decided it, because the two are
+        // undone by different gestures and a report that conflated them would
+        // name the wrong way out.
         if (direct) {
           const because = opts.direct
             ? "--direct"
-            : declared?.mode === "direct"
-              ? declared.from === "env"
-                ? `${DIRECT_VAR} is set in this shell`
-                : `already set in ${paths.configFile(isocanHome)}`
-              : `${guess?.why} is set and nothing is attached to a terminal`;
+            : declared?.from === "env"
+              ? `${DIRECT_VAR} is set in this shell`
+              : `already set in ${paths.configFile(isocanHome)}`;
           report.mode =
             `direct (${because}) — no daemon or local copy here; ` +
             `commands speak to ${direct} itself. \`isocan direct --clear\` for a daemon`;

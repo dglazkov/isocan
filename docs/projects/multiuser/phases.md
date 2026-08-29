@@ -1409,12 +1409,13 @@ for ring truth.
 - **2026-08-29 — direct-versus-daemon is a property of the directory, not
   the vendor.** A CI runner is disposable, a cloud dev workspace has disk
   and persists, a closet server wants a daemon: sniffing the provider is
-  wrong for half of them, so no provider is named in the code. One
-  built-in probe (`CI`), an `ephemeralVars` config hook, `ISOCAN_DIRECT`.
-- **2026-08-29 — the guess lives only in `setup`, and is written down.**
-  Per-command sniffing would move an agent's canvas between two replicas
-  when a variable changed mid-session. Decide once, record with a
-  receipt: phase 14's birth-default shape.
+  wrong for half of them, so no provider is named in the code.
+- **2026-08-29 — the guess was deleted, by CI, after turning main red.**
+  It was narrow (`CI` set, no TTY, an address in hand) and CI is where it
+  fired: `pass.test.ts` spawns `setup <address>` with `CI=true` and no
+  TTY, so four unrelated tests began asserting against a direct machine.
+  Deleting it is free because the dialog's line carries `ISOCAN_DIRECT=1`:
+  **a guess that infers what the UI can state has no job.**
 - **2026-08-29 — the seam was one function, because the CLI never touched
   the store.** `paths.canvasesDir` has one caller; canvas data and blobs
   already went over HTTP, so pointing `DaemonClient.base` at the home was

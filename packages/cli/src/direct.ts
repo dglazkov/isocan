@@ -11,19 +11,25 @@ import { readConfigFile } from "@isocan/server";
  * commands go straight to the home, with no local replica and nothing on this
  * machine to lose.
  *
- * **It is a choice, never a vendor fingerprint.** Direct-versus-daemon is a
- * property of the *directory*, not of whose cloud it sits in: a CI runner is
- * disposable, a cloud dev workspace has disk and persists for days, a headless
- * box in a closet wants a daemon like any laptop. Sniffing the vendor gets half
- * of them wrong, so the vendor is never asked. What is asked is whether
- * somebody said so — flag, environment, or config file — and only failing all
- * three does a deliberately narrow guess run, once, in `setup`.
+ * **It is declared and never guessed**, and the second half of that sentence
+ * was learned the hard way. Direct-versus-daemon is a property of the
+ * *directory*, not of whose cloud it sits in: a CI runner is disposable, a
+ * cloud dev workspace has disk and persists for days, a headless box in a
+ * closet wants a daemon like any laptop. So the vendor is never asked.
  *
- * The shape is `harness.ts`'s, on purpose and for its reason: a table isocan
- * happens to know, a `config.json` hook so an unknown environment works the
- * day it ships rather than the day isocan ships, and an environment variable
- * that overrides both. No provider is privileged, and adding one is a line of
- * config rather than a release.
+ * **There used to be a guess** — `CI` set, nothing on a terminal, an address
+ * in hand — as a narrow way to make Scene 6's "setup notices what it stands
+ * on" literally true. It shipped, and CI is exactly where it fired: this
+ * repo's own `pass.test.ts` spawns `isocan setup <address>` with `CI=true`
+ * inherited and no TTY, so four tests that had nothing to do with this feature
+ * quietly started asserting against a direct machine. Green locally, red on
+ * CI, and the diagnosis was a report field going undefined.
+ *
+ * It is gone, and what makes that free is the dialog. "Run an agent in the
+ * cloud…" hands over a line carrying `ISOCAN_DIRECT=1`, so the person who
+ * meant direct mode says so and still types nothing — the declaration moved
+ * from a sniff to the gesture that already expressed the intent. A guess that
+ * exists to infer something the UI can state is a guess with no job.
  */
 
 /** Which way a machine works. Two words, used everywhere rather than a
@@ -72,16 +78,6 @@ export interface DirectConfig {
    * already spelled `home` (the birth default, which means something else).
    */
   direct?: string;
-  /**
-   * **Environments this machine should treat as disposable**, beyond the one
-   * below. `{"ephemeralVars": ["MY_RUNNER_ID"]}` — the presence of any named
-   * variable is the signal.
-   *
-   * The hook exists so that a provider isocan has never heard of gets the
-   * guess right without waiting for a release, and so that the built-in list
-   * never has to grow into a directory of vendors.
-   */
-  ephemeralVars?: string[];
 }
 
 /**
@@ -100,23 +96,6 @@ export interface DirectConfig {
 export const DIRECT_VAR = "ISOCAN_DIRECT";
 
 /**
- * **Environments that are disposable by construction**, which is the only
- * property that matters here.
- *
- * Exactly one entry, and that is not an oversight. `CI` is set by essentially
- * every continuous-integration system — GitHub Actions, GitLab, CircleCI,
- * Buildkite, Travis — so one probe covers the whole category that phase 12's
- * summoned agent runs in. Cloud *development* workspaces are deliberately
- * absent: they have disk, they persist across a session, and several of them
- * would reasonably want a daemon. Guessing on their behalf would be this table
- * pretending to know something about somebody else's product.
- *
- * A workspace that wants direct mode says so, and `ephemeralVars` is how it
- * teaches this machine to stop being asked.
- */
-const BUILTIN_EPHEMERAL: readonly string[] = ["CI"];
-
-/**
  * **Where a declaration came from**, which the report has to be able to say.
  *
  * `setup` reported an `ISOCAN_DIRECT` in the shell as "already set on this
@@ -129,46 +108,14 @@ const BUILTIN_EPHEMERAL: readonly string[] = ["CI"];
  */
 export type Source = "env" | "config";
 
-/** Which signal fired, for the report — a decision this quiet has to be able
- * to say why it went the way it did. */
-export interface Ephemerality {
-  ephemeral: boolean;
-  /** The variable that said so, or null. */
-  why: string | null;
-}
-
-/**
- * Does this look like a directory that will not outlive the session?
- *
- * Only ever consulted by `setup`, and only when nobody has declared — see
- * {@link resolveDeclared} for why the guess lives in exactly one command.
- */
-export function looksEphemeral(vars: readonly string[] = []): Ephemerality {
-  for (const name of [...BUILTIN_EPHEMERAL, ...vars]) {
-    const value = process.env[name]?.trim();
-    // `CI=false` is set by at least one CI system to mean "not CI", and `CI=""`
-    // is what an unset-but-exported variable looks like. Both are "no", and
-    // reading either as "yes" would put a laptop into direct mode.
-    if (value && !isFalsy(value)) return { ephemeral: true, why: name };
-  }
-  return { ephemeral: false, why: null };
-}
-
 /**
  * **What somebody actually said**, in precedence order, or null for "nobody
  * said anything".
  *
- * Environment first, then the config file, and **no guess**. That last part is
- * the load-bearing one and it is a deliberate narrowing of what the journey's
- * sentence ("setup notices what it stands on") could have meant.
- *
- * The guess runs **once, in `setup`, and is written down** — the same shape as
- * the birth default, for the same reason. A per-command sniff would mean every
- * `isocan ls` re-derives the topology from ambient variables, and an agent that
- * exported something halfway through a session would find its canvas moving
- * between two replicas. Deciding once and recording the answer makes the
- * machine's own config the single truth, hand-editable and greppable, and
- * leaves every command after setup with nothing to guess.
+ * Environment first, then the config file, and **nothing else** — there is no
+ * third source and no inference. A machine is direct because somebody said so,
+ * and `setup` writes the answer down so every later command reads one truth
+ * out of a file rather than re-deriving topology from ambient variables.
  */
 export async function resolveDeclared(
   isocanHome: string,
@@ -193,14 +140,6 @@ async function configuredDirect(isocanHome: string): Promise<string | null> {
   const config = await readConfigFile<DirectConfig>(isocanHome);
   const configured = typeof config.direct === "string" ? config.direct.trim() : "";
   return configured ? normalizeHomeUrl(configured) : null;
-}
-
-/** The declarations `ephemeralVars` adds, for `setup`'s guess. */
-export async function ephemeralVars(isocanHome: string): Promise<readonly string[]> {
-  const config = await readConfigFile<DirectConfig>(isocanHome);
-  return Array.isArray(config.ephemeralVars)
-    ? config.ephemeralVars.filter((name): name is string => typeof name === "string")
-    : [];
 }
 
 const isTruthy = (value: string): boolean =>

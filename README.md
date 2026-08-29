@@ -330,10 +330,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   because its whole state was always the home's. `serve`, `restart` and `stop`
   refuse there rather than quietly giving the machine a second replica, and
   `isocan direct` shows which way a machine works, sets it, or undoes it. It is
-  a choice about the directory and never a guess about the vendor: the only
-  environment isocan reads on its own is `CI`, and
-  `{"ephemeralVars": [...]}` in `~/.isocan/config.json` teaches it any other
-  without waiting for a release.
+  always declared and never guessed — no environment is sniffed and no vendor
+  is named, because whether a directory is worth a replica is something only
+  the person setting it up knows.
 - **Your surfaces**: a canvas you can reach from four machines is four
   credentials, and one of them can go missing. Click your own face and pick
   **"Your surfaces…"** — every holder that carries your identity, what each

@@ -365,23 +365,36 @@ describe("isocan direct", () => {
   });
 });
 
-describe("the guess", () => {
-  it("does not fire on a laptop: nobody said anything, so the daemon is the default", async () => {
-    // No CI variable, no flag, no config — and critically an ARRIVAL, so the
-    // only reason this stays on a daemon is the default itself.
-    const shown = await isocan(["direct", "--json"]);
-    expect(JSON.parse(shown.stdout).mode).toBe("daemon");
-  });
-
-  it("does not fire on CI alone without an address to go to", async () => {
-    // `CI` says disposable; it does not say where. A machine with nowhere to
-    // speak to must never be guessed into having no daemon.
+describe("nothing is ever guessed", () => {
+  /**
+   * **The guard on the bug that turned main red.**
+   *
+   * There used to be a guess: `CI` set, nothing on a terminal, an address in
+   * hand. CI is exactly where it fired — `pass.test.ts` spawns `isocan setup
+   * <address>` with `CI=true` inherited and no TTY, so four tests that have
+   * nothing to do with this feature quietly began asserting against a direct
+   * machine. Green locally, red on CI.
+   *
+   * So these assert the ABSENCE of inference, which is the only thing that
+   * keeps a feature like this from reaching somebody who never asked for it.
+   */
+  it("stays on a daemon in CI, which is where the guess used to fire", async () => {
     const shown = await isocan(["direct", "--json"], { CI: "true" });
     expect(JSON.parse(shown.stdout).mode).toBe("daemon");
   });
 
-  it("`CI=false` is a no, not a yes", async () => {
-    const shown = await isocan(["direct", "--json"], { CI: "false" });
+  it("`setup` in CI does not quietly make a machine direct", async () => {
+    // The exact shape of the failure: a spawned `setup` with an address, no
+    // TTY, and CI set. It must leave an ordinary daemon-backed machine, and
+    // must not write `direct` into the config file.
+    const out = await isocan(["setup", `${homeUrl}/p/prj_nope`], { CI: "true" });
+    expect(out.stdout).not.toContain("mode");
+    const config = await fs.readFile(path.join(machine, "config.json"), "utf8").catch(() => "{}");
+    expect(JSON.parse(config).direct).toBeUndefined();
+  });
+
+  it("says daemon when nobody has said anything at all", async () => {
+    const shown = await isocan(["direct", "--json"]);
     expect(JSON.parse(shown.stdout).mode).toBe("daemon");
   });
 });
