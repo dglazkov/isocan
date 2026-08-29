@@ -165,6 +165,26 @@ function gitHead(): { commit: string; committedAt: string | null } | null {
       if (!pointer) return null;
       dir = path.resolve(root, pointer);
     }
+    /**
+     * **HEAD is per-worktree; refs are not.** A worktree's gitdir holds its own
+     * HEAD, index and logs, and a `refs/` with only `bisect` and `rewritten` in
+     * it — the branch itself lives in the COMMON directory, which that gitdir
+     * names in a one-line `commondir` file. Reading `refs/heads/<branch>`
+     * beside HEAD therefore misses, `packed-refs` beside HEAD misses too, and
+     * the whole function fell through to null: a worktree could follow the
+     * `.git` pointer and still never name its commit, in the one shape this
+     * file says agents here work in.
+     *
+     * A plain clone has no `commondir` and keeps its refs beside HEAD, which
+     * is what the catch leaves in place.
+     */
+    let refs = dir;
+    try {
+      const common = readFileSync(path.join(dir, "commondir"), "utf8").trim();
+      if (common) refs = path.resolve(dir, common);
+    } catch {
+      // Not a worktree: HEAD and the refs are in the same directory.
+    }
     const head = readFileSync(path.join(dir, "HEAD"), "utf8").trim();
     // Reftable's stub: refs live in binary tables this reader will not parse.
     if (head === "ref: refs/heads/.invalid") return null;
@@ -173,10 +193,10 @@ function gitHead(): { commit: string; committedAt: string | null } | null {
     let sha = ref ? null : head;
     if (ref) {
       try {
-        sha = readFileSync(path.join(dir, ref), "utf8").trim();
+        sha = readFileSync(path.join(refs, ref), "utf8").trim();
       } catch {
         // Packed: `git gc` moved the loose ref into one file of `sha ref` lines.
-        const packed = readFileSync(path.join(dir, "packed-refs"), "utf8");
+        const packed = readFileSync(path.join(refs, "packed-refs"), "utf8");
         sha = packed.match(new RegExp(`^([0-9a-f]{40})\\s+${ref}$`, "m"))?.[1] ?? null;
       }
     }
