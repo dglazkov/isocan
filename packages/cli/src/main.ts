@@ -136,6 +136,8 @@ import {
   contextReport,
   convergePlan,
   isRefusal,
+  openAsks,
+  itemThread,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -3396,6 +3398,83 @@ program
   );
 
 program
+  .command("ask <question...>")
+  .description("Ask the person a question and stop — the canvas shows you as waiting")
+  .option("--item <item>", "pin the question to a thing, instead of the Chat")
+  .action(
+    run(async (words: string[], opts: { item?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const question = words.join(" ").trim();
+      if (question === "") throw new Error("ask what?");
+
+      /**
+       * **`/ask` is the wire format, and it belongs to core.**
+       *
+       * `openAsk` reads a comment body for `^/ask`, and that derivation is
+       * what puts an agent in the roster's `blocked` tier and prints *asked*
+       * beside its name in the tray. Writing the prefix here rather than
+       * asking the person to type it is the whole point of the verb: the
+       * state is a consequence of the words, so the words must be exact.
+       *
+       * Left alone if it is already there, so `isocan ask "/ask …"` — which
+       * somebody who has read the guide will type — does not become
+       * `/ask /ask …` and fail to parse as anything.
+       */
+      const body = question.startsWith("/ask") ? question : `/ask ${question}`;
+      const comment = await newComment(ctx, p.id, snapshot, body);
+
+      if (opts.item) {
+        // A question about one thing belongs on that thing, where somebody
+        // looking at it will find it — `itemThread` is the same rule ⇧C uses,
+        // so this reopens the item's conversation rather than starting a
+        // second one beside it.
+        const item = resolveItem(snapshot, opts.item);
+        const existing = itemThread(snapshot.canvas, item.id);
+        if (existing) {
+          await sendOp(ctx, p.id, { type: "thread.reply", threadId: existing.id, comment });
+          if (ctx.json) return printJson({ threadId: existing.id, commentId: comment.id });
+          console.log(`asked on "${item.title}" — parked until somebody answers`);
+          return;
+        }
+        const threadId = newThreadId();
+        const { x, y } = anchorOffset(item);
+        await sendOp(ctx, p.id, {
+          type: "thread.create",
+          threadId,
+          x,
+          y,
+          anchorItemId: item.id,
+          comment,
+        });
+        if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+        console.log(`asked on "${item.title}" — parked until somebody answers`);
+        return;
+      }
+
+      const main = mainThread(snapshot.canvas);
+      if (main) {
+        await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id });
+        console.log("asked in the Chat — parked until somebody answers");
+        return;
+      }
+      const threadId = newThreadId();
+      await sendOp(ctx, p.id, {
+        type: "thread.create",
+        threadId,
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        main: true,
+        comment,
+      });
+      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+      console.log("asked in the Chat — parked until somebody answers");
+    }),
+  );
+
+program
   .command("copy <items...>")
   .description("Copy items — beside themselves, or into another canvas with --to")
   .option("--to <canvas>", "copy into this canvas instead of beside the originals")
@@ -5327,11 +5406,45 @@ comment
   .command("list")
   .description("List comment threads")
   .option("--item <item>", "only threads anchored to this item")
+  .option("--open", "only questions nobody has answered yet")
   .action(
-    run(async (opts: { item?: string }, cmd: Command) => {
+    run(async (opts: { item?: string; open?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "reading the comments…" });
+
+      /**
+       * **What is waiting on a person, from the terminal.**
+       *
+       * The canvas has shown this since `openAsk` shipped — an agent that has
+       * asked reads as *asked* in the tray and *blocked* in `isocan who`. The
+       * terminal could not list what those questions WERE, which is the wrong
+       * way round for a feature about the moment an agent needs a person: the
+       * one who most needs to re-read the question is the one who asked it.
+       *
+       * `openAsks` is core's, so this list and that badge cannot disagree.
+       */
+      if (opts.open) {
+        const asks = openAsks(snapshot.canvas);
+        if (ctx.json) return printJson(asks);
+        if (asks.length === 0) {
+          console.log("nothing is waiting on an answer");
+          return;
+        }
+        for (const ask of asks) {
+          const thread = snapshot.canvas.threads[ask.threadId]!;
+          const where = thread.main
+            ? "the Chat"
+            : thread.anchorItemId
+              ? `"${snapshot.canvas.items[thread.anchorItemId]?.title ?? thread.anchorItemId}"`
+              : `${thread.x},${thread.y}`;
+          console.log(`${actorNameIn(snapshot.names, { id: ask.askerId, name: ask.askerId })} · on ${where}`);
+          console.log(`  ${ask.body}`);
+          console.log(`  reply: isocan comment reply ${ask.threadId} "…"`);
+        }
+        return;
+      }
+
       let threads = Object.values(snapshot.canvas.threads);
       if (opts.item) {
         const item = resolveItem(snapshot, opts.item);

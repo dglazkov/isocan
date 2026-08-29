@@ -374,6 +374,26 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## When you need a person
+
+`isocan ask "…"` asks and stops. It posts your question to the Chat — or to a
+thing with `--item` — and the canvas immediately shows you as **asked**: in
+the agent tray, in the facepile, and in `isocan who`. Then park on
+`isocan wait` as usual.
+
+Ask when the answer changes what you would build and you cannot get it from
+the canvas. Do not ask to confirm something you could check, and do not ask
+and then carry on guessing — the point of the state is that it is TRUE.
+
+`isocan comment list --open` lists every question nobody has answered yet,
+across every thread, with the command to reply to each. Read it when you come
+back to a canvas: an unanswered question from an earlier lap is the first
+thing worth knowing, and it is often yours.
+
+**Somebody else answering closes it.** Adding to your own question does not —
+amending what you asked is still asking. That is why "I'll just add a bit more
+detail" never accidentally marks you unblocked.
+
 ## Mind maps
 
 Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts
