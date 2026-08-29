@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import type {
+  Persona,
   Actor,
   BadgeSummary,
   CanvasAddress,
@@ -140,6 +141,10 @@ import {
   itemThread,
   bindVerdict,
   takenSentence,
+  PERSONA_DIR,
+  parsePersona,
+  goalLine,
+  personaWarnings,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, stalenessOf } from "@isocan/server";
 import {
@@ -4856,6 +4861,114 @@ program
   );
 
 // ---------- what an agent will read ----------
+
+/**
+ * **The personas this directory holds** — `.agents/personas/*.md`.
+ *
+ * A directory rather than a canvas, deliberately and for now: a persona file
+ * is what a harness reads at the moment it starts, with no daemon, no badge
+ * and no network. `docs/projects/personas/design.md` stages the canvas last
+ * for exactly that reason. The parsing is core's, so this listing and the
+ * app's panel cannot disagree about what a persona says.
+ */
+async function personaFiles(root: string): Promise<Array<{ file: string; persona: Persona }>> {
+  const dir = path.join(root, PERSONA_DIR);
+  const names = await fs.readdir(dir).catch(() => [] as string[]);
+  const out: Array<{ file: string; persona: Persona }> = [];
+  for (const name of names.filter((n) => n.endsWith(".md")).sort()) {
+    const text = await fs.readFile(path.join(dir, name), "utf8").catch(() => null);
+    if (text === null) continue;
+    const persona = parsePersona(text, name);
+    // A README beside the personas is a README, not a broken persona.
+    if (persona) out.push({ file: path.join(PERSONA_DIR, name), persona });
+  }
+  return out;
+}
+
+/** Where personas live for THIS invocation: the bound directory when there is
+ *  one, otherwise the cwd — so `isocan persona ls` works in a checkout that
+ *  has never been bound to a canvas. */
+async function personaRoot(ctx: Ctx): Promise<string> {
+  return ctx.binding?.root ?? process.cwd();
+}
+
+const persona = program
+  .command("persona")
+  .description("The roles an agent can take on here — `.agents/personas/`");
+
+persona
+  .command("ls", { isDefault: true })
+  .description("Every persona in this directory, and what it is judged on")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const root = await personaRoot(ctx);
+      const found = await personaFiles(root);
+      if (found.length === 0) {
+        console.log(
+          `no personas here — a persona is a file in ${PERSONA_DIR}/, ` +
+            "and `isocan persona show <name>` prints one",
+        );
+        return;
+      }
+      if (ctx.json) {
+        console.log(JSON.stringify(found.map((f) => ({ ...f.persona, file: f.file })), null, 2));
+        return;
+      }
+      for (const { persona: p } of found) {
+        console.log(`${p.name}  ${p.description}`);
+        for (const goal of p.goals) console.log(`  · ${goalLine(goal)}`);
+        // **The warnings are printed with the persona, not behind a flag.** A
+        // persona that cannot fail is the thing this feature exists to make
+        // impossible, and it is invisible unless somebody says so where it is
+        // read.
+        for (const warning of personaWarnings(p)) console.log(`  ! ${warning}`);
+      }
+    }),
+  );
+
+persona
+  .command("show <name>")
+  .description("One persona in full — its goals, its trigger, and its lens")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const root = await personaRoot(ctx);
+      const found = await personaFiles(root);
+      const match =
+        found.find((f) => f.persona.name === name) ??
+        found.find((f) => f.persona.name.startsWith(name));
+      if (!match) {
+        throw new Error(
+          found.length === 0
+            ? `no personas here — nothing in ${PERSONA_DIR}/`
+            : `no persona called "${name}" — there is ${found.map((f) => f.persona.name).join(", ")}`,
+        );
+      }
+      const p = match.persona;
+      if (ctx.json) {
+        console.log(JSON.stringify({ ...p, file: match.file }, null, 2));
+        return;
+      }
+      console.log(`${p.name} — ${p.description}`);
+      console.log(`  file      ${match.file}`);
+      if (p.model) console.log(`  model     ${p.model}${p.effort ? ` · ${p.effort}` : ""}`);
+      if (p.tools.length) console.log(`  tools     ${p.tools.join(", ")}`);
+      console.log(
+        `  trigger   ${
+          p.trigger.kind === "schedule"
+            ? p.trigger.cron
+            : p.trigger.kind === "push"
+              ? `push to ${p.trigger.to}${p.trigger.paths ? ` (${p.trigger.paths.join(", ")})` : ""}`
+              : "manual — somebody has to run it"
+        }`,
+      );
+      if (p.runs) console.log(`  runs      ${p.runs}`);
+      console.log(p.goals.length ? "  judged on" : "  judged on nothing yet");
+      for (const goal of p.goals) console.log(`    · ${goalLine(goal)}\n      ${goal.measuredBy}`);
+      for (const warning of personaWarnings(p)) console.log(`  ! ${warning}`);
+    }),
+  );
 
 program
   .command("context")
