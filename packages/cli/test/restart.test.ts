@@ -41,7 +41,9 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
   });
   let stdout = "";
   let stderr = "";
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => (stdout += chunk));
+  child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => (stderr += chunk));
   return new Promise((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
@@ -87,6 +89,7 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
     },
   );
   let complaint = "";
+  daemon.stderr?.setEncoding("utf8");
   daemon.stderr?.on("data", (chunk) => (complaint += chunk));
 
   /**

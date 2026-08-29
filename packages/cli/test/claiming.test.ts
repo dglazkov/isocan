@@ -65,7 +65,9 @@ function isocan(...args: string[]) {
   });
   let stdout = "";
   let stderr = "";
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => (stdout += chunk));
+  child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => (stderr += chunk));
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
