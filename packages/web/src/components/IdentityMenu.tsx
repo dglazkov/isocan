@@ -185,14 +185,16 @@ export function IdentityMenu({
       </div>
       {/* Escalation, one click from your own face — "the canvas teaches its
           own escalation", so nobody is ever sent to documentation to find out
-          how to bring their own machine in. */}
+          how to get their own agent working here. Named for what the person
+          came for (their agent on this canvas) and not for the surface they
+          pass through on the way (a terminal). */}
       {canvasId && (
         <button
           className="btn identity-terminal"
-          title="Bring your own machine onto this canvas"
+          title="Run your own agent on this canvas, from your own machine"
           onClick={() => setTerminal(true)}
         >
-          Work from your terminal…
+          Bring your own agent…
         </button>
       )}
       {/* Proving an address — phase 9 stage 2, and it belongs on this menu for

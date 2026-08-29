@@ -32,7 +32,7 @@ import { formatDotToken, parseDotToken } from "./badge.ts";
  * How long a pass is worth anything: **fifteen minutes**.
  *
  * The number is set by what actually happens in Scene 5 — a human clicks
- * "Work from your terminal…", copies a command out of a dialog, switches
+ * "Bring your own agent…", copies a command out of a dialog, switches
  * windows, finds a directory, maybe opens a new terminal tab, and pastes. That
  * is minutes, not hours, and not seconds. Shorter (a minute) would fail people
  * who get interrupted between the copy and the paste, and the failure would be
@@ -56,7 +56,7 @@ export const PASS_TTL_MS = 15 * 60 * 1000;
  * **One canvas per pass, and the design says "admissions" plural.** Mechanism
  * 1's diagram hands the redeemer `{admissions: [7f3a…], claims: [jordan]}`,
  * and a badge's admissions genuinely are a list — but a pass is minted from a
- * COMMAND that names one canvas ("work from your terminal" is a button on one
+ * COMMAND that names one canvas ("bring your own agent" is a button on one
  * canvas; `isocan share` names one canvas), so there is exactly one canvas in
  * scope at the moment of minting and nothing to enumerate. A second machine
  * is a second pass, and a second canvas is a second pass. Making it a list

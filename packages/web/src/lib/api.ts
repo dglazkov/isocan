@@ -540,7 +540,7 @@ export function killBadge(badgeId: string): Promise<KillBadgeResponse> {
 /**
  * Mint one for this canvas, endowing an actor this badge already holds.
  *
- * The "Work from your terminal…" dialog's only call. The endowment is the
+ * The "Bring your own agent…" dialog's only call. The endowment is the
  * point rather than an option — Scene 5's pass is *minted by her admitted tab,
  * for her actor* — and the home refuses a claim this badge does not hold
  * (`not-your-actor`), so endowing somebody else is not reachable from here.

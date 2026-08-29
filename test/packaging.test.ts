@@ -89,7 +89,7 @@ describe("installable straight from git", () => {
     //
     // Phase 8 moved the constant into `@isocan/core`: the command Scene 5
     // hands a person is `npx <spec> setup <address>#<pass>`, printed by the
-    // CLI's `isocan pass` AND by the web app's "Work from your terminal…"
+    // CLI's `isocan pass` AND by the web app's "Bring your own agent…"
     // dialog, so the spec and the address are now one string with one builder
     // (`setupCommand`). The assertion moved with it — and grew a forcing
     // function, because a second copy in `packages/web/src` is exactly the

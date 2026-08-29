@@ -4,14 +4,24 @@ import { setupCommand } from "@isocan/core";
 import { mintPass } from "../lib/api.ts";
 
 /**
- * **"Work from your terminal…"** — Scene 5's dialog, and the canvas teaching
+ * **"Bring your own agent…"** — Scene 5's dialog, and the canvas teaching
  * its own escalation.
  *
- * One sentence of concept and one command with a copy button. That is the
- * whole design, and the journey wrote it that way for a reason: the person
- * reading this has, by construction, never installed isocan. Anything more
- * than a line to paste is a tutorial, and a tutorial is the thing arriving
- * thin was supposed to make unnecessary.
+ * The concept, one command with a copy button, and the one thing left to do
+ * once it lands. That is the whole design, and the journey wrote it that way
+ * for a reason: the person reading this has, by construction, never installed
+ * isocan. Anything more than a line to paste is a tutorial, and a tutorial is
+ * the thing arriving thin was supposed to make unnecessary.
+ *
+ * **It is named for the outcome, not for the surface.** "Work from your
+ * terminal…" described the tool the person would end up holding; what they
+ * actually came for is their own agent on this canvas, and the terminal is
+ * only the way there. The command is also not the end of the job — an agent
+ * is on the canvas when somebody starts it, not when `setup` finishes — so
+ * the dialog says that step rather than leaving the person with a replicated
+ * canvas and no agent on it. The sibling entry the journey plans, "Run an
+ * agent in the cloud…", is the same kind of thing under this name and was
+ * not under the old one.
  *
  * **The command is built, never written** — `setupCommand` in `@isocan/core`,
  * the same function `isocan pass` prints from. Two surfaces spelling one
@@ -101,12 +111,13 @@ export function TerminalDialog({
         if (e.key === "Escape") onClose();
       }}
     >
-      <div className="share-head">Work from your terminal</div>
+      <div className="share-head">Bring your own agent</div>
 
-      {/* The one sentence of concept, in the journey's own words. */}
+      {/* The concept, said as what the person gets rather than as what the
+          command does to their machine. */}
       <div className="share-link-note">
-        Your machine gets its own copy of this canvas, and your own agent can join it here.
-        Paste this into a terminal, in an empty directory:
+        Your own agent can work on this canvas, running on your machine. This puts a copy of the
+        canvas there for it to work on. Paste it into a terminal, in an empty directory:
       </div>
 
       {error && <div className="identity-warning">{error}</div>}
@@ -121,6 +132,13 @@ export function TerminalDialog({
               {copied ? "Copied" : "Copy command"}
             </button>
             <span className="terminal-expiry">{expiryLine(left)}</span>
+          </div>
+          {/* The command is half the job. Nothing has an agent on this canvas
+              until somebody starts one, and the person who just pasted a line
+              should not have to guess that. */}
+          <div className="share-link-note">
+            Then start your agent in that directory and tell it to use isocan. It joins this canvas
+            under its own name, and its work appears here as it goes.
           </div>
           {/* Said where the credential is, not in a tooltip: this line arrives
               as you, and a person who has just been handed something copyable

@@ -122,7 +122,7 @@ describe("a canvas's address", () => {
 
   it("builds Scene 5's whole command, with the branch on the install spec", () => {
     // The one command a person pastes, built rather than written: the CLI's
-    // `isocan pass` and the web app's "Work from your terminal…" dialog both
+    // `isocan pass` and the web app's "Bring your own agent…" dialog both
     // hand over this exact string, so they cannot disagree.
     expect(setupCommand("https://isocan.io", "prj_acme", "pss_1.s3cret")).toBe(
       `npx ${INSTALL_SPEC} setup https://isocan.io/p/prj_acme#pss_1.s3cret`,
