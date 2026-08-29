@@ -292,3 +292,63 @@ export function withBaseline(
     goals: persona.goals.map((g) => (g.name === goalName ? { ...g, baseline: reading } : g)),
   };
 }
+
+/**
+ * **What a run found, and what was done about it.**
+ *
+ * Step 5 of `docs/projects/personas/design.md`: a finding is accepted,
+ * rejected, or unanswered — *"still no score, just the column."*
+ *
+ * Read out of the run page's own table rather than kept in a second file,
+ * because the page is what a person edits when they decide. A record that
+ * lives beside the thing it describes cannot drift from it; one that lives
+ * elsewhere needs somebody to keep the two in step, and nobody ever does.
+ */
+export type FindingOutcome = "accepted" | "rejected" | "unanswered";
+
+export interface RunFinding {
+  finding: string;
+  outcome: FindingOutcome;
+}
+
+const OUTCOMES = new Set<string>(["accepted", "rejected", "unanswered"]);
+
+/**
+ * The findings table of one run page. Anything that is not one of the three
+ * words is read as `unanswered` — a cell somebody typed a sentence into is a
+ * finding nobody has decided, and guessing at their meaning would be worse
+ * than saying so.
+ */
+export function runFindings(page: string): RunFinding[] {
+  const start = page.indexOf("## Findings");
+  if (start < 0) return [];
+  const out: RunFinding[] = [];
+  for (const line of page.slice(start).split(/\r?\n/)) {
+    if (line.startsWith("#") && !line.startsWith("## Findings")) break;
+    const cells = /^\|([^|]*)\|([^|]*)\|\s*$/.exec(line);
+    if (!cells) continue;
+    const finding = cells[1]!.trim();
+    const outcome = cells[2]!.trim().toLowerCase();
+    // The header row and the empty-table placeholder are not findings.
+    if (finding === "" || finding === "—" || finding === "Finding" || /^-+$/.test(finding)) continue;
+    out.push({
+      finding,
+      outcome: (OUTCOMES.has(outcome) ? outcome : "unanswered") as FindingOutcome,
+    });
+  }
+  return out;
+}
+
+/**
+ * **Counted, and deliberately not scored.**
+ *
+ * An accept rate over five findings is noise, and a trust score that governs
+ * autonomy before it means anything is a way to lose trust in trust. So this
+ * returns the tally and nothing derived from it: the ratio is somebody's to
+ * compute when there is enough to argue about.
+ */
+export function tallyOutcomes(findings: readonly RunFinding[]): Record<FindingOutcome, number> {
+  const tally: Record<FindingOutcome, number> = { accepted: 0, rejected: 0, unanswered: 0 };
+  for (const f of findings) tally[f.outcome] += 1;
+  return tally;
+}

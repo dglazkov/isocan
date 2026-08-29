@@ -1,0 +1,75 @@
+# The personas, run on a schedule — step 4 of docs/projects/personas/design.md,
+# which is the night shift's step 2: "one agent, one canvas, posts one summary.
+# No changes at all. Proves the ritual before trusting it with work."
+#
+# NOTHING IS CHANGED. Each run takes its persona's numbers, writes a dated page,
+# and stops. It may not touch `.agents/personas/` — a runner that can edit its
+# own goal can pass by lowering the bar — and `persona-run.mjs` compares the
+# files before and after to prove it did not.
+#
+# The changelog's shape again: a scheduled gather, a dated page, a pull request
+# rather than a push. A machine writing into `main` every night is how a
+# directory quietly fills with things nobody agreed to.
+name: personas
+
+on:
+  schedule:
+    # 08:43 UTC — twenty minutes after the grades run, so the two nightlies do
+    # not race for the same runner minute or branch namespace.
+    - cron: "43 8 * * *"
+  workflow_dispatch:
+    inputs:
+      persona:
+        description: "One persona by name. Blank = all of them."
+        required: false
+
+concurrency:
+  group: personas
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  personas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The goals point at commands that grade a page in a browser and run
+      # eslint; both need the workspace installed and built.
+      - run: npm ci
+      - run: npm run build
+
+      # A MISSED goal is news and does not fail this step — the page is the
+      # report, and a run that goes red every morning trains everybody to stop
+      # looking. It fails for one reason: an instrument that would not run,
+      # because a number nobody could take must never be filed as a zero.
+      - name: Take each persona's numbers
+        env:
+          ONE: ${{ inputs.persona }}
+        run: node scripts/persona-run.mjs ${ONE:---all}
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain docs/reviews)" ]; then
+            echo "nothing changed — the same readings as the last run"
+            exit 0
+          fi
+          DAY=$(date -u +%Y-%m-%d)
+          git config user.name "isocan personas"
+          git config user.email "noreply@github.com"
+          git checkout -b "personas/$DAY"
+          git add docs/reviews
+          git commit -m "Persona runs: $DAY"
+          git push -u origin "personas/$DAY" --force
+          gh pr list --head "personas/$DAY" --json number --jq '.[0].number' | grep -q . || \
+            gh pr create --base main --head "personas/$DAY" \
+              --title "Persona runs: $DAY" \
+              --body "Each persona's numbers, taken and written down. Nothing was changed — not the code, not the personas, not a canvas. A goal marked MISSED is a finding; write \`accepted\` or \`rejected\` beside it in the Findings table when you have decided."
