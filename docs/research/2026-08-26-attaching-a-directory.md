@@ -2,6 +2,11 @@
 
 **26 August 2026.** The workbench's files pane, on an unbound canvas, says:
 
+**Where this stands, 29 Aug 2026: not built.** The workbench's files pane
+still answers an unbound canvas with the dead end this document was written
+about — it names a command instead of offering the two things a person can
+actually do.
+
 > no directory is bound to this canvas on this machine (isocan use \<canvas\>)
 
 A dead end that names a terminal. The ask: **a non-CLI way to do what `isocan

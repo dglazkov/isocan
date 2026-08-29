@@ -1,6 +1,8 @@
 # Retiring a name
 
 **25 August 2026.** Every measurement here was taken from this home's own desk
+
+**Where this stands, 29 Aug 2026: not built.**
 and oplogs on that date. Where something is inference rather than evidence, it
 says so.
 
