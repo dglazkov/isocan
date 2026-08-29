@@ -181,12 +181,52 @@ const PROBE = `(() => {
     (el.getAttribute("aria-labelledby") && document.getElementById(el.getAttribute("aria-labelledby"))?.textContent.trim()) ||
     (el.tagName === "IMG" && el.getAttribute("alt") !== null);
   const controls = [...document.querySelectorAll("a[href], button, input, select, textarea, [role=button]")];
+  /**
+   * **WCAG 2.5.8's inline exception, which this grader did not know.**
+   *
+   * "Target Size (Minimum)" exempts a target that is *in a sentence, or whose
+   * size is otherwise constrained by the line-height of non-target text*. A
+   * link inside a paragraph is the case it was written for: padding it to 24px
+   * would break the line rhythm of the prose around it, so enforcing the rule
+   * there does not just fail to help, it asks for a worse page.
+   *
+   * The front door tripped this three times, on three ordinary prose links,
+   * and every one was a false failure. **False failures are how a grader
+   * becomes decoration** — the night shift's own list of ways this fails ends
+   * with the graders drifting into it — so the rule learns the exception
+   * rather than the page learning to live with a wrong number.
+   *
+   * Read mechanically and close to the spec's words: the control lays out
+   * inline, and the element holding it has text of its own outside it. That is
+   * "in a sentence" without needing to know what a sentence is.
+   */
+  const inSentence = (el) => {
+    if (getComputedStyle(el).display !== "inline") return false;
+    const parent = el.parentElement;
+    if (!parent) return false;
+    return (parent.textContent || "").trim().length > (el.textContent || "").trim().length;
+  };
+  const undersized = controls.filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && (r.height < 24 || r.width < 24) && !inSentence(el);
+  });
   return {
     contrast,
     stretched,
     sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     nameless: controls.filter((el) => el.offsetParent !== null && !named(el)).length,
-    smallTargets: controls.filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.height < 24 || r.width < 24); }).length,
+    smallTargets: undersized.length,
+    // **Which ones.** A count is not actionable: "3 small targets" on a page
+    // of six hundred lines sends somebody hunting, and this file exists to be
+    // acted on. Named the way a person finds it — the tag, its classes, and
+    // the words in it — rather than by a synthesised selector nobody can grep.
+    smallTargetDetail: undersized
+      .slice(0, 20)
+      .map((el) => { const r = el.getBoundingClientRect(); return {
+        where: el.tagName.toLowerCase() + (el.className && typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\s+/).join(".") : ""),
+        text: (el.textContent || "").trim().slice(0, 40),
+        size: Math.round(r.width) + "×" + Math.round(r.height),
+      }; }),
     imagesWithoutAlt: [...document.querySelectorAll("img")].filter((i) => i.getAttribute("alt") === null).length,
   };
 })()`;
@@ -233,12 +273,16 @@ async function gradeFile(b, file) {
     renders: renders && Object.keys(perWidth).length === WIDTHS.length,
     pageErrors: [...new Set(pageErrors)].slice(0, 3),
     contrastFailures: at((r) => (r?.contrast ?? []).length),
-    worstContrast: (widest.contrast ?? []).slice(0, 3),
+    // Ten, not three. Three was a taste of a list, and a page failing twelve
+    // times showed the same heading style three times over — which reads as
+    // "three problems" when it is one rule used twelve times.
+    worstContrast: (widest.contrast ?? []).slice(0, 10),
     stretchedImages: (widest.stretched ?? []).length,
     stretchedDetail: widest.stretched ?? [],
     sidewaysAt: Object.entries(at((r) => r?.sideways)).filter(([, v]) => v).map(([w]) => +w),
     namelessControls: widest.nameless ?? 0,
     smallTargets: widest.smallTargets ?? 0,
+    smallTargetDetail: widest.smallTargetDetail ?? [],
     imagesWithoutAlt: widest.imagesWithoutAlt ?? 0,
     colourLiterals: literals,
     colourTokens: tokens,
@@ -280,6 +324,7 @@ function report(graded) {
     console.log(`       contrast failures by width  ${Object.entries(g.contrastFailures).map(([w, n]) => `${w}:${n}`).join("  ")}`);
     for (const f of g.worstContrast) console.log(`         ${f.ratio} (needs ${f.need})  "${f.text}"`);
     for (const st of g.stretchedDetail) console.log(`         stretched ${st.src}  natural ${st.natural} rendered ${st.rendered}`);
+    for (const t of g.smallTargetDetail) console.log(`         small target ${t.size}  ${t.where}  "${t.text}"`);
     if (g.slop.length) console.log(`       tells: ${g.slop.join(", ")}`);
     console.log(`       colour: ${g.colourLiterals} literals, ${g.colourTokens} token uses`);
   }

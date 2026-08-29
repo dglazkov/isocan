@@ -116,7 +116,9 @@ describe("the door mints", () => {
     const desk = await deskFile();
     const record = desk.badges[json!.badgeId]!;
     expect(record.secretHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(record.secretHash).toBe(createHash("sha256").update(json!.secret!).digest("hex"));
+    expect(record.secretHash).toBe(
+      createHash("sha256").update(json!.secret!).digest("hex"),
+    );
     // A leaked ledger leaks no bearer tokens.
     expect(JSON.stringify(desk)).not.toContain(json!.secret!);
   });
@@ -149,7 +151,9 @@ describe("both carriers are one badge", () => {
   it("carries as a cookie", async () => {
     const { json, setCookie } = await door({ carrier: "cookie" });
     const value = setCookie!.split(";")[0]!;
-    const res = await fetch(`${base}/api/projects`, { headers: { cookie: value } });
+    const res = await fetch(`${base}/api/projects`, {
+      headers: { cookie: value },
+    });
     expect(res.status).toBe(200);
     expect(value).toContain(json!.badgeId);
   });
@@ -172,7 +176,9 @@ describe("both carriers are one badge", () => {
     expect(res.status).toBe(200);
     // The claim landed on the BEARER's badge, not the cookie's.
     const desk = await deskFile();
-    expect(desk.badges[bearer.badgeId]!.claims.map((c) => c.sessionKey)).toEqual(["cli:s-1"]);
+    expect(
+      desk.badges[bearer.badgeId]!.claims.map((c) => c.sessionKey),
+    ).toEqual(["cli:s-1"]);
     expect(desk.badges[cookieBadge.json!.badgeId]!.claims).toEqual([]);
   });
 
@@ -190,7 +196,9 @@ describe("both carriers are one badge", () => {
     });
     const wsBase = base.replace("http", "ws");
 
-    const badged = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, { headers: badge.headers });
+    const badged = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
+      headers: badge.headers,
+    });
     const hello = await new Promise<string>((resolve, reject) => {
       badged.on("message", (data) => resolve(String(data)));
       badged.on("error", reject);
@@ -203,7 +211,9 @@ describe("both carriers are one badge", () => {
     // act on rather than a silent hang.
     const bare = new WebSocket(`${wsBase}/ws?canvasId=prj_1`);
     bare.on("error", () => {});
-    const code = await new Promise<number>((resolve) => bare.on("close", resolve));
+    const code = await new Promise<number>((resolve) =>
+      bare.on("close", resolve),
+    );
     expect(code).toBe(WS_NO_BADGE);
 
     const cookieBadge = await door({ carrier: "cookie" });
@@ -235,7 +245,9 @@ describe("the badge-less are refused, actionably", () => {
 
   it("distinguishes a badge it does not know: throw yours away, get a new one", async () => {
     const res = await fetch(`${base}/api/projects`, {
-      headers: { Authorization: `Bearer ${formatBadgeToken("bdg_nosuchbdg", "x".repeat(43))}` },
+      headers: {
+        Authorization: `Bearer ${formatBadgeToken("bdg_nosuchbdg", "x".repeat(43))}`,
+      },
     });
     expect(res.status).toBe(401);
     expect(((await res.json()) as { code: string }).code).toBe("bad-badge");
@@ -244,7 +256,9 @@ describe("the badge-less are refused, actionably", () => {
   it("refuses a real badge id with the wrong secret", async () => {
     const badge = await mintTestBadge(base);
     const res = await fetch(`${base}/api/projects`, {
-      headers: { Authorization: `Bearer ${formatBadgeToken(badge.badgeId, "n".repeat(43))}` },
+      headers: {
+        Authorization: `Bearer ${formatBadgeToken(badge.badgeId, "n".repeat(43))}`,
+      },
     });
     expect(res.status).toBe(401);
     expect(((await res.json()) as { code: string }).code).toBe("bad-badge");
@@ -309,7 +323,11 @@ describe("the badge-less are refused, actionably", () => {
     });
     const upload = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",
-      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "page.html", ...badge.headers },
+      headers: {
+        "Content-Type": "text/html",
+        "X-Isocan-Filename": "page.html",
+        ...badge.headers,
+      },
       body: "<h1>hi</h1>",
     });
     const { blobHash } = (await upload.json()) as { blobHash: string };
@@ -342,7 +360,9 @@ describe("the badge-less are refused, actionably", () => {
 describe("the Origin check", () => {
   it("allows an absent Origin — that is not a browser", async () => {
     const badge = await mintTestBadge(base);
-    expect((await fetch(`${base}/api/projects`, { headers: badge.headers })).status).toBe(200);
+    expect(
+      (await fetch(`${base}/api/projects`, { headers: badge.headers })).status,
+    ).toBe(200);
   });
 
   it("allows any loopback origin on a loopback daemon", async () => {
@@ -350,7 +370,11 @@ describe("the Origin check", () => {
     // trust stands. This is what makes Vite's `localhost:5173` dev proxy work
     // without a special case.
     const badge = await mintTestBadge(base);
-    for (const origin of ["http://localhost:5173", `http://127.0.0.1:${port}`, "http://[::1]:1234"]) {
+    for (const origin of [
+      "http://localhost:5173",
+      `http://127.0.0.1:${port}`,
+      "http://[::1]:1234",
+    ]) {
       const res = await fetch(`${base}/api/projects`, {
         headers: { ...badge.headers, Origin: origin },
       });
@@ -371,7 +395,9 @@ describe("the Origin check", () => {
         headers: { cookie, Origin: "http://evil.example" },
       });
       expect(foreign.status).toBe(403);
-      expect(((await foreign.json()) as { code: string }).code).toBe("bad-origin");
+      expect(((await foreign.json()) as { code: string }).code).toBe(
+        "bad-origin",
+      );
 
       const own = await fetch(`${base}/api/projects`, {
         headers: { cookie, Origin: `http://127.0.0.1:${port}` },
@@ -396,14 +422,19 @@ describe("the Origin check", () => {
     process.env.ISOCAN_ALLOWED_ORIGINS = `http://127.0.0.1:${port}`;
     try {
       const cookieBadge = await door({ carrier: "cookie" });
-      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
-        headers: {
-          cookie: cookieBadge.setCookie!.split(";")[0]!,
-          Origin: "http://evil.example",
+      const ws = new WebSocket(
+        `${base.replace("http", "ws")}/ws?canvasId=prj_1`,
+        {
+          headers: {
+            cookie: cookieBadge.setCookie!.split(";")[0]!,
+            Origin: "http://evil.example",
+          },
         },
-      });
+      );
       ws.on("error", () => {});
-      expect(await new Promise<number>((resolve) => ws.on("close", resolve))).toBe(WS_BAD_ORIGIN);
+      expect(
+        await new Promise<number>((resolve) => ws.on("close", resolve)),
+      ).toBe(WS_BAD_ORIGIN);
     } finally {
       if (previous === undefined) delete process.env.ISOCAN_ALLOWED_ORIGINS;
       else process.env.ISOCAN_ALLOWED_ORIGINS = previous;
@@ -424,18 +455,19 @@ describe("what a badge holds", () => {
           canvasId: null,
           op: { type: "actor.claim", sessionKey, name },
         }),
-      }).then((r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>);
+      }).then(
+        (r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>,
+      );
     const kenny = await claim("claude-code:s-1", "Kenny");
     const isaac = await claim("codex:t-1", "Isaac");
 
     const desk = await deskFile();
-    expect(desk.badges[badge.badgeId]!.claims.map((c) => c.sessionKey).sort()).toEqual([
-      "claude-code:s-1",
-      "codex:t-1",
-    ]);
-    expect(desk.badges[badge.badgeId]!.claims.map((c) => c.actorId).sort()).toEqual(
-      [kenny.envelope.actor.id, isaac.envelope.actor.id].sort(),
-    );
+    expect(
+      desk.badges[badge.badgeId]!.claims.map((c) => c.sessionKey).sort(),
+    ).toEqual(["claude-code:s-1", "codex:t-1"]);
+    expect(
+      desk.badges[badge.badgeId]!.claims.map((c) => c.actorId).sort(),
+    ).toEqual([kenny.envelope.actor.id, isaac.envelope.actor.id].sort());
   });
 
   it("sees its own claims and nobody else's", async () => {
@@ -487,12 +519,17 @@ describe("what a badge holds", () => {
       }),
     });
     const visitor = await mintTestBadge(base);
-    const seen = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: visitor.headers });
+    const seen = await fetch(`${base}/api/projects/prj_1/canvas`, {
+      headers: visitor.headers,
+    });
     expect(seen.status).toBe(200); // the link grant admits — the status quo, as data
 
     const desk = await deskFile();
     expect(desk.badges[creator.badgeId]!.admissions).toEqual([
-      expect.objectContaining({ canvasId: "prj_1", provenance: { root: "created" } }),
+      expect.objectContaining({
+        canvasId: "prj_1",
+        provenance: { root: "created" },
+      }),
     ]);
     expect(desk.badges[visitor.badgeId]!.admissions).toEqual([
       expect.objectContaining({
@@ -510,16 +547,30 @@ describe("a badge that was lost", () => {
    * true of the badge, false of the home, and pointing at the one recovery
    * (`--name`) that mints a stranger.
    */
-  const claimOn = (badge: { headers: Record<string, string> }, sessionKey: string, name: string) =>
+  const claimOn = (
+    badge: { headers: Record<string, string> },
+    sessionKey: string,
+    name: string,
+  ) =>
     fetch(`${base}/api/ops`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...badge.headers },
-      body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", sessionKey, name } }),
-    }).then((r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>);
+      body: JSON.stringify({
+        canvasId: null,
+        op: { type: "actor.claim", sessionKey, name },
+      }),
+    }).then(
+      (r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>,
+    );
 
   const orphaned = (badge: { headers: Record<string, string> }, keys: string) =>
-    fetch(`${base}/api/actors/orphaned?keys=${keys}`, { headers: badge.headers }).then(
-      (r) => r.json() as Promise<{ key: string; actor: { id: string; name: string } }[]>,
+    fetch(`${base}/api/actors/orphaned?keys=${keys}`, {
+      headers: badge.headers,
+    }).then(
+      (r) =>
+        r.json() as Promise<
+          { key: string; actor: { id: string; name: string } }[]
+        >,
     );
 
   it("names the actor a re-badged client should come back as", async () => {
@@ -531,7 +582,9 @@ describe("a badge that was lost", () => {
     const replacement = await mintTestBadge(base);
     expect(
       await (
-        await fetch(`${base}/api/actors?keys=claude-code:s-1`, { headers: replacement.headers })
+        await fetch(`${base}/api/actors?keys=claude-code:s-1`, {
+          headers: replacement.headers,
+        })
       ).json(),
     ).toEqual([]);
 
@@ -557,7 +610,9 @@ describe("a badge that was lost", () => {
     expect(await orphaned(asked, "cli:never-used")).toEqual([]);
     // Naming no key at all answers nothing, rather than everything.
     expect(
-      await (await fetch(`${base}/api/actors/orphaned`, { headers: asked.headers })).json(),
+      await (
+        await fetch(`${base}/api/actors/orphaned`, { headers: asked.headers })
+      ).json(),
     ).toEqual([]);
   });
 
@@ -588,7 +643,11 @@ describe("a badge that was lost", () => {
       headers: { "Content-Type": "application/json", ...replacement.headers },
       body: JSON.stringify({
         canvasId: null,
-        op: { type: "actor.claim", sessionKey: "claude-code:s-1", as: claimed.envelope.actor.id },
+        op: {
+          type: "actor.claim",
+          sessionKey: "claude-code:s-1",
+          as: claimed.envelope.actor.id,
+        },
       }),
     });
     expect(back.status).toBe(200);
@@ -647,7 +706,9 @@ describe("the claims half is durable", () => {
         method: "POST",
         headers: { "Content-Type": "application/json", ...badge.headers },
         body: JSON.stringify(body),
-      }).then((r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>);
+      }).then(
+        (r) => r.json() as Promise<{ envelope: { actor: { id: string } } }>,
+      );
 
     // 1. Claim a name, say something under it, then rename. The canvas now
     //    carries "Kenny" forever; the registry says "Kenny the Second".
@@ -663,7 +724,11 @@ describe("the claims half is durable", () => {
     });
     await post({
       canvasId: null,
-      op: { type: "actor.claim", sessionKey: "cli:s-1", name: "Kenny the Second" },
+      op: {
+        type: "actor.claim",
+        sessionKey: "cli:s-1",
+        name: "Kenny the Second",
+      },
     });
 
     // 2. Make the claim row go away, under a stopped daemon — the snapshot's
@@ -681,7 +746,9 @@ describe("the claims half is durable", () => {
     //    they renamed themselves to, not what the canvas remembers.
     const fresh = await mintTestBadge(base);
     const read = async (url: string) =>
-      (await fetch(`${base}${url}`, { headers: fresh.headers })).json() as Promise<any>;
+      (
+        await fetch(`${base}${url}`, { headers: fresh.headers })
+      ).json() as Promise<any>;
 
     expect(await read("/api/actors")).toEqual([]); // the claim really is gone
     const names = (await read("/api/names")) as Record<string, string>;
@@ -707,7 +774,9 @@ describe("the pre-badge home", () => {
       p.actorsFile(home),
       JSON.stringify({
         lastSeq: 0,
-        claims: { "isocan:legacy": { id: "usr_kenny", name: "Kenny", boundAt } },
+        claims: {
+          "isocan:legacy": { id: "usr_kenny", name: "Kenny", boundAt },
+        },
         colors: { usr_kenny: "#0f8a80" },
       }),
     );
@@ -720,7 +789,9 @@ describe("the pre-badge home", () => {
 
     // The public half is the registry's, carrying its ORIGINAL timestamp so
     // recency carries over.
-    const actors = JSON.parse(await fs.readFile(p.actorsFile(home), "utf8")) as {
+    const actors = JSON.parse(
+      await fs.readFile(p.actorsFile(home), "utf8"),
+    ) as {
       names: Record<string, { name: string; at: string }>;
       colors: Record<string, string>;
     };
@@ -729,7 +800,9 @@ describe("the pre-badge home", () => {
 
     // The old file is kept as the record of who held what when the desk
     // opened, per house precedent.
-    const kept = JSON.parse(await fs.readFile(p.preBadgeActorsFile(home), "utf8")) as {
+    const kept = JSON.parse(
+      await fs.readFile(p.preBadgeActorsFile(home), "utf8"),
+    ) as {
       claims: Record<string, unknown>;
     };
     expect(Object.keys(kept.claims)).toEqual(["isocan:legacy"]);
@@ -750,24 +823,34 @@ describe("the pre-badge home", () => {
     // claiming collected the row, every upgraded agent's first command would
     // resolve to somebody else.
     const bindings = (await (
-      await fetch(`${base}/api/actors?keys=isocan:legacy`, { headers: returning.headers })
+      await fetch(`${base}/api/actors?keys=isocan:legacy`, {
+        headers: returning.headers,
+      })
     ).json()) as { key: string; actor: { id: string; name: string } }[];
     expect(bindings).toEqual([
-      expect.objectContaining({ key: "isocan:legacy", actor: { id: "usr_kenny", name: "Kenny" } }),
+      expect.objectContaining({
+        key: "isocan:legacy",
+        actor: { id: "usr_kenny", name: "Kenny" },
+      }),
     ]);
 
     // The shelf emptied itself onto the badge.
     const desk = await deskFile();
     expect(desk.shelf).toEqual({});
     expect(desk.badges[returning.badgeId]!.claims).toEqual([
-      expect.objectContaining({ actorId: "usr_kenny", sessionKey: "isocan:legacy" }),
+      expect.objectContaining({
+        actorId: "usr_kenny",
+        sessionKey: "isocan:legacy",
+      }),
     ]);
 
     // First-come: a second client presenting the same key gets nothing, and
     // must come back deliberately with `--as`.
     const latecomer = await mintTestBadge(base);
     const nothing = await (
-      await fetch(`${base}/api/actors?keys=isocan:legacy`, { headers: latecomer.headers })
+      await fetch(`${base}/api/actors?keys=isocan:legacy`, {
+        headers: latecomer.headers,
+      })
     ).json();
     expect(nothing).toEqual([]);
   });
@@ -803,7 +886,9 @@ describe("the pre-badge home", () => {
   it("runs once — a rebooted home does not re-shelf", async () => {
     await seedLegacy(new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
     const returning = await mintTestBadge(base);
-    await fetch(`${base}/api/actors?keys=isocan:legacy`, { headers: returning.headers });
+    await fetch(`${base}/api/actors?keys=isocan:legacy`, {
+      headers: returning.headers,
+    });
     await daemon.close();
     await boot();
     expect((await deskFile()).shelf).toEqual({});
@@ -835,8 +920,7 @@ describe("the door is metered", () => {
       status: res.status,
       retryAfter: res.headers.get("retry-after"),
       json: (await res.json().catch(() => null)) as
-        | (DoorResponse & { error?: string; code?: string })
-        | null,
+        (DoorResponse & { error?: string; code?: string }) | null,
     };
   };
 
@@ -886,14 +970,19 @@ describe("the door is metered", () => {
    */
   it("writes the refusal down, with the chain and the key count", async () => {
     const written: Array<Record<string, unknown>> = [];
-    const log = daemon.app.log as unknown as { warn: (...args: unknown[]) => void };
+    const log = daemon.app.log as unknown as {
+      warn: (...args: unknown[]) => void;
+    };
     const real = log.warn.bind(log);
     // A no-op logger cannot be spied into saying anything, so the spy proves
     // nothing on its own — this is what does: the real method is not `noop`.
     expect(log.warn.name).not.toBe("noop");
     log.warn = (...args: unknown[]) => {
       if (typeof args[0] === "object" && args[0] !== null) {
-        written.push({ ...(args[0] as object), msg: args[1] } as Record<string, unknown>);
+        written.push({ ...(args[0] as object), msg: args[1] } as Record<
+          string,
+          unknown
+        >);
       }
       real(...args);
     };
@@ -903,7 +992,9 @@ describe("the door is metered", () => {
       log.warn = real;
     }
 
-    const refusal = written.find((line) => String(line.msg).includes("metered"));
+    const refusal = written.find((line) =>
+      String(line.msg).includes("metered"),
+    );
     expect(refusal).toBeDefined();
     // The key it was charged to, the chain that key was read out of, and the
     // number that distinguishes a working meter from a collapsed one.
@@ -956,45 +1047,80 @@ describe("the door is metered", () => {
     // A daemon bound wide is the hosted posture: `loopbackBound` is false, so
     // the forwarded chain is what it keys on. SYNTHETIC addresses.
     const wideHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-meter-"));
-    const wide = await startDaemon({ port: 0, home: wideHome, host: "0.0.0.0" });
+    const wide = await startDaemon({
+      port: 0,
+      home: wideHome,
+      host: "0.0.0.0",
+    });
     try {
       const address = wide.app.server.address();
       const wideBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-      const knockAs = async (client: string) =>
-        (
-          await fetch(`${wideBase}${DOOR_ROUTE}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              /**
-               * `<client-ip>, <lb-ip>` — **both entries written by the
-               * infrastructure**, neither one claimed by the caller. Google's
-               * ALB APPENDS the address it saw the connection come from and
-               * then its own, so a visitor who sent no header at all arrives
-               * looking exactly like this, and position 0 here is the genuine
-               * client address rather than anything a caller chose.
-               *
-               * A caller's own claim would be a THIRD entry, to the LEFT of
-               * these two — which is the case `meter.test.ts` covers under
-               * "counts from the RIGHT, so a prepended claim cannot buy a
-               * private bucket". Getting this backwards matters more than a
-               * mislabelled fixture usually would: a reader who believes
-               * position 0 is caller-supplied concludes the bucket is keyed
-               * on a forgeable value, and the obvious repair from there is to
-               * switch to the leftmost entry — which is the actual
-               * vulnerability, introduced while fixing a bug that was never
-               * in the code.
-               */
-              "X-Forwarded-For": `${client}, 192.0.2.1`,
-            },
-            body: JSON.stringify({ carrier: "bearer" }),
-          })
-        ).status;
+      /**
+       * **The status AND what came with it.** This read `.status` alone, and
+       * when it flaked on 29 Aug with a 404 — a code the door handler has no
+       * branch for — the body that would have said WHICH thing answered was
+       * thrown away with the response. See the note below the assertions.
+       */
+      const knockAs = async (client: string) => {
+        const res = await fetch(`${wideBase}${DOOR_ROUTE}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            /**
+             * `<client-ip>, <lb-ip>` — **both entries written by the
+             * infrastructure**, neither one claimed by the caller. Google's
+             * ALB APPENDS the address it saw the connection come from and
+             * then its own, so a visitor who sent no header at all arrives
+             * looking exactly like this, and position 0 here is the genuine
+             * client address rather than anything a caller chose.
+             *
+             * A caller's own claim would be a THIRD entry, to the LEFT of
+             * these two — which is the case `meter.test.ts` covers under
+             * "counts from the RIGHT, so a prepended claim cannot buy a
+             * private bucket". Getting this backwards matters more than a
+             * mislabelled fixture usually would: a reader who believes
+             * position 0 is caller-supplied concludes the bucket is keyed
+             * on a forgeable value, and the obvious repair from there is to
+             * switch to the leftmost entry — which is the actual
+             * vulnerability, introduced while fixing a bug that was never
+             * in the code.
+             */
+            "X-Forwarded-For": `${client}, 192.0.2.1`,
+          },
+          body: JSON.stringify({ carrier: "bearer" }),
+        });
+        if (res.status !== 200 && res.status !== 429) {
+          // Only on a status this route cannot produce, so the ordinary path
+          // stays exactly as cheap as it was.
+          const body = await res.text().catch(() => "<unreadable>");
+          const server = res.headers.get("server") ?? "<none>";
+          throw new Error(
+            `the door answered ${res.status} at ${wideBase}${DOOR_ROUTE} — a status ` +
+              `app.post(DOOR_ROUTE) has no branch for. server: ${server}. body: ${body.slice(0, 400)}`,
+          );
+        }
+        return res.status;
+      };
 
-      for (let i = 0; i < MINT_BURST; i += 1) expect(await knockAs("203.0.113.7")).toBe(200);
+      for (let i = 0; i < MINT_BURST; i += 1)
+        expect(await knockAs("203.0.113.7")).toBe(200);
       expect(await knockAs("203.0.113.7")).toBe(429);
       // A different visitor, same socket, same load balancer: unaffected.
       expect(await knockAs("198.51.100.9")).toBe(200);
+      /**
+       * **This line flaked once, on 29 Aug, with a 404** — a status
+       * `app.post(DOOR_ROUTE)` has no branch for, after the route had answered
+       * correctly a dozen times in the preceding milliseconds. See
+       * `docs/research/2026-08-29-the-flake-family.md`: it rules out
+       * addressing, metering, the badge gate and readiness, and leaves "the
+       * request was answered by something other than that route".
+       *
+       * It did not reproduce in three consecutive runs, so nothing is fixed
+       * here. What IS here is the missing evidence: the assertion above reads
+       * `.status` and discards the body, and one line of body text would say
+       * whether a not-found handler or a foreign listener answered. Next time
+       * it flakes, the failure carries that.
+       */
     } finally {
       await wide.close();
       await fs.rm(wideHome, { recursive: true, force: true });
