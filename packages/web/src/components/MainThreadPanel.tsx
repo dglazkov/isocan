@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
@@ -186,15 +186,39 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
   // exists (someone designated this channel), closed on a virgin canvas.
   // A stored preference from an earlier visit wins either way.
   const initedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!canvas || initedFor.current === canvasId) return;
-    initedFor.current = canvasId;
+  /**
+   * **A remembered rail is restored BEFORE the first paint, not after the
+   * canvas loads.**
+   *
+   * This waited for `canvas` — a network round-trip — so for that whole time
+   * the store said "closed" and everything positioned against the rail was
+   * drawn in the wrong place. When the canvas landed, the rail opened and the
+   * minimap slid 340px across the screen on its 0.22s transition. Reported as
+   * "the minimap icon jumps across from the left on reload", which is exactly
+   * what it was: not a minimap bug, a restore that happened too late.
+   *
+   * The remembered choice needs nothing from the canvas — it is a string in
+   * localStorage — so it is applied synchronously, in a layout effect, before
+   * anything is painted. Only the case where nobody has ever chosen has to
+   * wait, because "open if this canvas already has a Chat" is a question about
+   * the canvas.
+   */
+  useLayoutEffect(() => {
+    if (initedFor.current === canvasId) return;
     const stored = storedPanel(canvasId);
-    // Never chosen here: a canvas that already has a main thread opens with it.
+    if (stored === undefined) return; // never chosen: needs the canvas, below
+    initedFor.current = canvasId;
     // No pan: the viewport being restored was saved WITH this rail open, so
     // it is already correct. Panning here would slide the canvas sideways on
     // every load.
-    openPanel(canvasId, stored === undefined ? (mainThread(canvas) ? "main" : null) : stored, false);
+    openPanel(canvasId, stored, false);
+  }, [canvasId]);
+
+  useEffect(() => {
+    if (!canvas || initedFor.current === canvasId) return;
+    initedFor.current = canvasId;
+    // Never chosen here: a canvas that already has a main thread opens with it.
+    openPanel(canvasId, mainThread(canvas) ? "main" : null, false);
   }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
