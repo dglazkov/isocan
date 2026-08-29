@@ -75,3 +75,43 @@ describe("every stream that is read as text says so first", () => {
     );
   });
 });
+
+/**
+ * **The other half of the flake family, and what is honestly known about it.**
+ *
+ * The split-character bug above is one member, caught and fixed with proof.
+ * The rest — `fetch failed` in a test that runs two daemons, a badge that
+ * will not vouch, two writers racing — are NOT diagnosed. Recorded here
+ * rather than in a commit message nobody will find, because the next person
+ * to see one should start from what is known instead of from scratch.
+ *
+ * What is known, 29 Aug 2026:
+ *
+ * - Seven failures in seven different files over a week, always in tests that
+ *   spin up a daemon, and every one of them passing in isolation afterwards.
+ * - NOT reproducible on demand: four consecutive full runs green, including
+ *   one under twenty spinners on fourteen cores. CPU oversubscription alone
+ *   does not do it, which kills the most obvious hypothesis.
+ * - NOT a shared test home: every suite uses `mkdtemp`.
+ * - NOT port collision by construction: `test/ports.ts` gives each worker a
+ *   private slice below every ephemeral floor, and probes `bindable()` first.
+ * - The suite is KNOWN to be load-sensitive in a different way — `testTimeout`
+ *   was raised from 5s to 30s after five tests failed at 5.0–5.5s under 24×
+ *   oversubscription, which is written up in `vitest.config.ts`.
+ *
+ * The lead worth following next: the failures cluster in tests that run TWO
+ * daemons and have one talk to the other (`grants`, `pass`, `rehome`,
+ * `home`), which is the most timing-sensitive shape in the suite.
+ */
+describe("the next fetch failure will explain itself", () => {
+  it("says which request, which syscall, and how long it tried", () => {
+    // `TypeError: fetch failed` names no address, no code and no duration —
+    // the least useful sentence this suite can produce, and the reason seven
+    // sightings could never be told apart.
+    const setup = readFileSync(fileURLToPath(new URL("./setup.ts", import.meta.url)), "utf8");
+    const giveUp = setup.slice(setup.indexOf("const where ="), setup.indexOf("throw err;", setup.indexOf("const where =")));
+    expect(giveUp, "the address").toMatch(/\$\{where\}/);
+    expect(giveUp, "the syscall and code").toMatch(/cause\?\.syscall/);
+    expect(giveUp, "how long, and how many tries").toMatch(/gave up after \$\{took\}ms/);
+  });
+});
