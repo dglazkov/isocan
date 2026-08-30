@@ -18,7 +18,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "release": "node scripts/release.mjs",
-    "prepare": "node scripts/prepare.mjs"
+    "prepare": "node scripts/prepare.mjs",
+    "board": "node scripts/canvas-board.mjs",
+    "board:brief": "node scripts/canvas-board.mjs --only brief --notify",
+    "hooks": "node scripts/install-hooks.mjs"
   },
   "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan#release` (no publishing) resolves them: a git install installs the root package only. The workspaces themselves are deliberately NOT dependencies — bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall. `workspaces` and `prepare` are why installs come from the release branch and not from here: npm's git installer empties the install directory for any package it thinks it must build first (#47, scripts/release.mjs).",
   "dependencies": {

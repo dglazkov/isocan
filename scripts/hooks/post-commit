@@ -1,0 +1,39 @@
+#!/bin/sh
+# **When code lands, tell the canvas.**
+#
+# The write half of `docs/research/2026-08-30-repo-admin-canvas.md`, for the one
+# place it is buildable today: this machine. CI cannot reach a canvas — no
+# daemon, no badge, no route in — but the machine you commit on is the machine
+# the daemon is running on, so a git hook is the whole mechanism.
+#
+# Installed by `node scripts/install-hooks.mjs`. Removed by deleting
+# `.git/hooks/post-commit`, which is a symlink to this file.
+#
+# Two rules it keeps:
+#
+#   1. **It can never fail your commit.** The commit already happened; a canvas
+#      that was unreachable is not a reason to make you think it did not. Every
+#      path here exits 0.
+#   2. **It never blocks your terminal.** Taking eleven metrics is ~15 seconds,
+#      which is unacceptable in front of a prompt, so the run is detached and
+#      writes to a log you are told the name of. Silent background work is the
+#      thing that gets removed in week two; a named log is why this one stays.
+set -u
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+# No board configured on this machine — nothing to tell, and nothing to say
+# about it. `.isocan/` is git-ignored, so this is per-machine by construction.
+[ -f "$root/.isocan/board.json" ] || exit 0
+
+log="$root/.isocan/board.log"
+{
+  printf '\n── %s  %s  %s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$(git -C "$root" rev-parse --short HEAD)" \
+    "$(git -C "$root" log -1 --pretty=%s)"
+  node "$root/scripts/canvas-board.mjs" --notify 2>&1
+  printf 'exit %s\n' "$?"
+} >>"$log" 2>&1 &
+
+echo "isocan: refreshing the board and telling the Chat → .isocan/board.log"
+exit 0
