@@ -1,8 +1,9 @@
 # Agents on demand — the walk
 
 **30 August 2026.** The order of work for [design.md](design.md), with the
-open decisions from the 30 Aug review parked at the door of the phase that
-forces each one. The rule is the multiuser walk's: a decision at a door is
+design's open decisions parked at the door of the phase that forces each
+one — every door states its question in full, so this doc needs nothing
+outside itself. The rule is the multiuser walk's: a decision at a door is
 made when the phase opens, out loud, with Dimitri driving — not before, and
 not by accident inside a commit. Status lines move as phases close; a clean
 session starts by believing them.
@@ -25,15 +26,14 @@ in `main.ts`) and into the daemon, per actor per canvas, advancing only
 when a turn completes. Nothing else changes; `--since` becomes something
 nobody has to know about.
 
-**At this door — which daemon (review #6, first half).** A thin agent's
-`wait` parks at the HOME with no local daemon; the multiuser walk's phase
-11 closed on exactly that. "The daemon" in the design quietly means "the
+**At this door — which daemon.** A thin agent's `wait` parks at the HOME
+with no local daemon; the multiuser walk's phase 11 closed on exactly that. "The daemon" in the design quietly means "the
 local daemon," and the cursor must live wherever the park actually points —
 the daemon the canvas's home names. Decide the wording and the storage
 before writing it, and correct the design doc in the same change.
 
-**At this door — one cursor, two doors (review #7).** An actor parked via
-`wait` twice, or parked and later also enrolled, shares one per-actor
+**At this door — one cursor, two doors.** An actor parked via `wait`
+twice, or parked and later also enrolled, shares one per-actor
 per-canvas cursor row; advance-on-completion from two readers skips or
 double-fires. Decide: a single-reader rule (the second park refuses, or
 adopts the row), or a cursor per registration rather than per actor.
@@ -56,8 +56,8 @@ rules, cursor }`, written by `wait` when the environment says the agent can
 be reached without a process; exit 3 and the `next` line; `--park` to force
 blocking anyway.
 
-**At this door — who sets `ISOCAN_HOOK`, and what it holds (review #3).**
-The variable has no natural setter in the case that matters: a
+**At this door — who sets `ISOCAN_HOOK`, and what it holds.** The
+variable has no natural setter in the case that matters: a
 terminal-run session's harness sets `CLAUDE_CODE_SESSION_ID`, and nothing
 sets `ISOCAN_HOOK`; the daemon could set it for agents it spawns, but those
 are already enrolled. And for stdio the record's own `harness` +
@@ -69,8 +69,8 @@ being computed from what the record already holds, with the variable
 reserved for the remote shape. Decide before the flag ships — an
 environment variable nobody sets is dead surface on day one.
 
-**At this door — where the record lives (review #6, second half).** Same
-answer as phase 1's cursor, stated once: the enrolment belongs to the
+**At this door — where the record lives.** Same answer as phase 1's
+cursor, stated once: the enrolment belongs to the
 daemon the park would have pointed at, which for a thin agent is the home.
 
 **Outcome:** In a reachable environment, `wait` registers and exits 3 with
@@ -91,8 +91,8 @@ locally. `fs` and `terminal` omitted from client capabilities — the spec
 treats omitted as unsupported — so the agent keeps its own disk and shell
 and does canvas work through the CLI it already knows.
 
-**At this door — cross-launcher resume is a hypothesis; spike it (review
-#5).** `claude-agent-acp` wraps the SDK, not the CLI. Whether a session
+**At this door — cross-launcher resume is a hypothesis; spike it.**
+`claude-agent-acp` wraps the SDK, not the CLI. Whether a session
 born in a terminal can be `session/load`ed through the adapter has never
 been checked, and the design's "resume handle filed under the wrong idea"
 framing rests on it. The spike: start a terminal session, note its id, try
@@ -119,8 +119,8 @@ imported from core, never copied — start a turn carrying what `wait` would
 have returned. The self-wake guard holds; the summoned agent's turn ends
 and the cursor advances per phase 1.
 
-**At this door — what a summons delivers (review #4).** The design says
-two things: "the payload `wait` would have returned, same JSON" and "isocan
+**At this door — what a summons delivers.** The design says two things:
+"the payload `wait` would have returned, same JSON" and "isocan
 composes the prompt — the ~1,045-token brief or the ~15,000-token guide."
 They are different claims about the same moment. Decide the shape: the JSON
 verbatim as the prompt; a composed brief that carries the JSON; or the
