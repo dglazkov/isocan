@@ -2,7 +2,7 @@
 status: built
 since: 2026-08-30
 see: multiuser, on-demand
-note: phase 14 closed, 10.5 paid; 12/12.5/12.7/13 retired 30 Aug — agent-on-demand moved to the on-demand project; phase 11 is the one open phase
+note: every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project
 ---
 # The multiuser journey
 

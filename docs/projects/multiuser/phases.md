@@ -115,8 +115,10 @@ work with no network, because it cannot reach a model, so the queue and the
 bridge had no caller. **Phases 12 and 13 followed the same day** — 12 replaced
 by the [on-demand project](../on-demand/design.md), a project rather than a
 phase of this one; 13 because offline birth shared the airplane's premise,
-leaving re-homing and the twin rule to headings of their own. What remains
-below is phase 11. The one debt that sat outside that is
+leaving re-homing and the twin rule to headings of their own. **Phase 11,
+the last one standing, closed later that day** — Scene 6 played in a real
+cloud workspace against dev, left in public at `prj_hRulnNyXph` — so every
+phase in this walk is now closed or retired. The one debt that sat outside that is
 paid: **phase 10.5 closed 29 Aug 2026**, when Paul and Dion walked
 `development.md`. Nothing on this project is owed to anybody now. Prod's
 sign-in mail is done — magic-link from an aligned sender, proved on a browser
@@ -1387,19 +1389,24 @@ Phases 12 and 13 followed the same day — 12 replaced by the
 [on-demand project](../on-demand/design.md), which owns agent-on-demand
 as a project rather than a phase; 13 because offline birth shared the
 airplane's premise, and re-homing and the twin rule wait for headings of
-their own. Phase 11 is the one still standing.
+their own. Phase 11, the last one standing, closed later the same day when
+Scene 6 played for real — nothing below is open any more.
 
 ## Phase 11 — The thin agent (Scene 6)
 
-**Status: PART-DONE (2026-08-29).** The mechanism is built and unit-proved:
-`--direct`, `ISOCAN_DIRECT`, `config.direct`, the `setup` decision, the
-daemon-verb refusals and `isocan direct` itself, with
+**Status: CLOSED 2026-08-30.** The mechanism was built and unit-proved
+29 Aug: `--direct`, `ISOCAN_DIRECT`, `config.direct`, the `setup` decision,
+the daemon-verb refusals and `isocan direct` itself, with
 `packages/cli/test/direct.test.ts` asserting the negative that matters — no
-daemon is ever started and no store is ever written. The lap was driven by
-hand against a scratch home: name, create, list, park, wake, reply. **What
-is missing is the Proof as named** — Scene 6 in a real cloud workspace,
-against a real home — and the kill test came back with a finding rather
-than a pass (below).
+daemon is ever started and no store is ever written. **The Proof as named
+played 30 Aug**: Scene 6 in a real cloud workspace against the real dev
+home, and the residue is public at
+[dev.isocan.io/p/prj_hRulnNyXph](https://dev.isocan.io/p/prj_hRulnNyXph)
+("Cloud Piiiiii") — see the closing finding. The kill test's finding
+(ring lingers up to five minutes) stands as an open item on the ephemeral
+plane, not on this phase; so does the `repo:` lock-out asymmetry, which
+this closure leaves at nobody's door — recorded below so it is chosen
+rather than discovered.
 
 **Work:** Setup notices what it stands on — headless, ephemeral, home
 address in hand — and skips the daemon; the CLI speaks straight to the
@@ -1489,6 +1496,25 @@ for ring truth.
   dialog resolves it without a guess: choosing "Run an agent in the
   cloud…" says the workspace is disposable, so the line it hands over
   carries `ISOCAN_DIRECT=1` and the person still types nothing.
+- **2026-08-30 — CLOSED by the scene, played over two days and read back
+  from the canvas.** `prj_hRulnNyXph` at dev holds the whole lap in
+  public: a cloud agent ("Charlie", a Pi session) introduced itself
+  parked — "set up on this canvas and parked… summon me here or @Charlie
+  in any thread" — then across 29–30 Aug answered summonses from two
+  people, shipped three HTML cards it argued for in the thread, re-parked
+  after every turn ("Still parked"), and on dismissal ("you can leave the
+  session now and stop isocan wait") left honestly: the thread reads
+  "Nobody is parked — this waits on the thread for the next agent."
+  Verified by reading the canvas in a browser, 30 Aug. That the session
+  ran thin in a real cloud workspace from the dialog's line is Dimitri's
+  attestation as the person who played it.
+- **2026-08-30 — Open, now at nobody's door: `repo:` and the lock-out
+  asymmetry.** The decision this phase's door held (play Scene 6 on the
+  link grant; the committed marker admits only while that grant is on)
+  was not exercised by the closing scene, which entered by pass. With
+  every phase closed or retired, the OAuth access-token custody decision
+  stays with `projects/launch/design.md` and the asymmetry has no phase
+  waiting on it.
 - **2026-08-29 — This worktree was typechecking against the MAIN
   checkout.** No `node_modules/@isocan` of its own, so `@isocan/*`
   resolved up to the main repo's symlinks and a new core export was
