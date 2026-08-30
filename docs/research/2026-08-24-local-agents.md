@@ -1,5 +1,7 @@
 ---
-status: open
+status: noted
+since: 2026-08-30
+note: the finding IS the answer: isocan hands agents a CLI, so any model that can run one joins
 ---
 # Local agents on the canvas
 

@@ -1,5 +1,7 @@
 ---
-status: open
+status: partial
+since: 2026-08-30
+note: `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not
 ---
 # Component libraries, and what survives the trip to a canvas
 

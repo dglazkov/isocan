@@ -1,5 +1,7 @@
 ---
-status: open
+status: noted
+since: 2026-08-30
+note: import/read/skip verdicts recorded per repo
 ---
 # Skills worth stealing: what the ecosystem has built
 

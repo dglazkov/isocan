@@ -1,5 +1,7 @@
 ---
-status: open
+status: noted
+since: 2026-08-30
+note: the category converged on MCP + a skill, which isocan has; edges deliberately declined
 ---
 # Agents on the canvas: what the field shipped in a year
 

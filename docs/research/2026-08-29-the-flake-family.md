@@ -7,8 +7,11 @@ note: 4 of 5 witnesses diagnosed
 
 **29 August 2026**
 
-**Status, end of 29 Aug 2026: four of five witnesses diagnosed, and the fifth
-— the `ETIMEDOUT` family — has had its predicted cause removed.** The split
+**Status, 30 Aug 2026: four of five witnesses diagnosed. The fifth has now
+outlived TWO hypotheses, both killed by measurement rather than argument** — a
+blocked event loop, and a port collision. It recurred on a private port with
+the loop idle, which is the finding, and the next instrument is in place to
+separate the two readings that are left. The split
 UTF-8 chunk, a grader that waited two seconds instead of waiting for the page,
 and a "slow machine" that was a dead process missing `tsx` in a git worktree
 are all fixed at the cause. Nothing this suite listens on sits in the kernel's
@@ -454,6 +457,39 @@ succeeds. Found by mutation-testing the guard rather than by reading it.
 And it **failed on success**: `git grep` exits 1 when it finds nothing, which
 here is the pass, so the bare call threw. That would have been the fifth
 instrument this week to report the opposite of the truth.
+
+### FALSIFIED, the next morning — and that is the instrument working
+
+**30 Aug.** An `ETIMEDOUT` on loopback, on port **20807** — inside the private
+range this fix moved everything into, not the kernel's ephemeral band — with
+the loop measured at **13ms**.
+
+```
+POST http://127.0.0.1:20807/api/ops, connect/ETIMEDOUT,
+  gave up after 7808ms and 1 attempt, loop stalled 13ms during this test
+```
+
+So the port-range hypothesis is **dead**, exactly as the section below said it
+would be if this happened. That is the outcome the change was designed to make
+possible: the collision surface was removed first, so the next occurrence
+means something instead of being another sighting.
+
+**Two hypotheses have now been killed by measurement rather than argument** — a
+blocked event loop, and a port collision — and both were the best available
+reading of the evidence at the time. What is left is narrower and stranger than
+either: on loopback, a connect to a port with no listener is REFUSED, not timed
+out. A timeout means the SYN was **dropped**. Two readings survive:
+
+- **Nothing was listening.** The daemon had already gone, and the SYN went to a
+  port nobody held.
+- **Something was listening and never accepted.** The listener existed and the
+  accept did not happen, despite an idle loop.
+
+**The error cannot tell them apart, which is why two rounds of this ended in a
+guess.** So `retryingFetch` now answers it with one bit: on a connect timeout
+it tries to BIND the port. A successful bind means nothing was there; an
+`EADDRINUSE` means something was there and did not accept. The next occurrence
+arrives with that sentence attached.
 
 ### What is claimed, and what is not
 

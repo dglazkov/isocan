@@ -49,6 +49,30 @@ describe("where a document says it stands", () => {
     expect(statusProblems(docStatus(fm("status: built\nsince: 2026-08-29")))).toEqual([]);
   });
 
+  it("`noted` is a survey that owes nothing, and is not `open`", () => {
+    /**
+     * Nine notes were untriaged until 30 Aug, and four of them were surveys of
+     * what other people shipped — finished the moment they were read. Left in
+     * `open` they read as "nobody has looked", which is a lie once somebody
+     * has; marked `designed` they read as "there is work here", which is a
+     * different one. Both distort the only number the roadmap is for.
+     */
+    const doc = docStatus(fm("status: noted\nsince: 2026-08-30\nnote: the finding IS the answer"));
+    expect(doc.status).toBe("noted");
+    expect(statusProblems(doc), "a note owes no blocker and no successor").toEqual([]);
+  });
+
+  it("neither `noted` nor `superseded` counts as done", () => {
+    // Reading is not building, and the done column must not be flattered by
+    // either.
+    const out = burnDown([
+      { status: "built" as const, see: [] },
+      { status: "noted" as const, see: [] },
+      { status: "superseded" as const, see: [] },
+    ]);
+    expect(out).toMatchObject({ done: 1, left: 0 });
+  });
+
   it("counts what is done and what is left, and superseded is neither", () => {
     const all = [
       { status: "built" as const, see: [] },

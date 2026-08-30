@@ -79,6 +79,7 @@ const left = count("open") + count("designed") + count("partial") + count("block
 
 const LABEL = {
   built: "Built",
+  noted: "Noted — read, owing nothing",
   partial: "Partly built",
   designed: "Designed, not built",
   blocked: "Blocked",
@@ -101,9 +102,13 @@ const lines = [
   "watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has",
   "read lately.",
   "",
+  `${count("noted")} more are \`noted\` — read, absorbed, owing nothing — and`,
+  `${count("superseded")} superseded. Neither counts as done: reading is not building,`,
+  "and the done column should not be flattered by either.",
+  "",
 ];
 
-for (const state of ["blocked", "partial", "designed", "open", "built", "superseded"]) {
+for (const state of ["blocked", "partial", "designed", "open", "built", "noted", "superseded"]) {
   const group = byState[state];
   if (!group || group.length === 0) continue;
   lines.push(`## ${LABEL[state]} <sub>${group.length}</sub>`, "");
