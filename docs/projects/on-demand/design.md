@@ -42,8 +42,8 @@ rule, thread membership, and the `--item` / `--op` filters. All of it runs
 once per agent, inside that agent's own blocked process, against a log the
 daemon already holds. *(Since 30 Aug the predicate itself is `reasonFor` in
 `packages/core/src/inbox.ts`, one function shared by `wait` and the inbox —
-so the daemon imports the rule rather than growing a third copy. What still
-runs in the blocked process is the loop around it.)*
+so the rc imports the rule rather than growing a third copy. What
+still runs in the blocked process is the loop around it.)*
 
 **The cursor is the bug.** In `cli/src/main.ts` the park keeps
 `let cursors: Record<string, number>` in memory. When the process dies the
@@ -122,83 +122,115 @@ foreclose them.
 
 ---
 
-## The mechanism: `isocan wait`, inverted
+## The mechanism: `isocan rc` vends sessions
 
-**No new verb.** The lap's step 6 stays `isocan wait --json --timeout <sec>`.
-What changes is what the command does when the environment says the agent can
-be reached without holding a process open.
+**Revised 2026-08-30, in review with Dimitri.** The first draft of this
+section inverted `isocan wait`: an agent's own park would write the
+registration when an `ISOCAN_HOOK` variable said the agent was reachable,
+a new exit code would tell the loop to stop, and the daemon would spawn
+the turns. Three review questions killed it. Nothing sets the variable in
+the session that matters. "The session ends cleanly" described nothing —
+a harness conversation does not end when a tool call exits. And the
+daemon has never spawned anything, deliberately: a process that serves
+and stores every canvas on the machine is the wrong process to start
+executing as a person. The draft stands here as the record of the shape
+that was withdrawn; what follows replaces it.
+
+**`isocan rc`** — named 2026-08-30, with the CLI's user/agent divide
+drawn in the vocabulary itself: `isocan rc` is what a person types,
+`isocan agent` is the same machinery spoken by an agent, so who may do
+what is legible in what they type — is a long-running command the user
+starts. One process, in a terminal or under launchd, the shape of
+`claude rc` — and bare like it: started in a project directory it takes
+no arguments, because the canvas comes from the directory's binding and
+the roster is the agents already enrolled there. Agents are enrolled by
+explicit gesture — a dialog on the canvas, an ask to an agent you have —
+with personas as the templates those gestures offer, never as standing
+entries the repo pre-declares (that was a first reading, corrected
+2026-08-30: a persona is assigned when an agent is created). You can see
+the `rc`, read it narrate, and kill it, and everything it does follows
+from the fact that you started it. No agent is ever spawned at a distance by
+machinery nobody launched.
+
+The rc parks against the home the way `wait` parks today — the same
+`watchLog` long poll, the same cursors, the same `reasonFor` — on behalf
+of every agent enrolled with it. When an op matches an enrolled agent,
+the rc starts that agent's turn over ACP stdio: its subprocess, its
+custody, the person's credentials because it runs as the person. When
+the turn ends (`stopReason: end_turn`), the session rests. Nothing runs
+in between but the rc itself.
+
+**The summons delivers the payload `wait` would have returned.** Same
+JSON, same `entries`, same `reason`. The contract survives the revision:
+a summoned turn and a parked wake carry identical content, so the
+difference between them is delivery, never information.
+
+**`isocan wait` does not change at all.** No new flag, no new exit code,
+no environment variable. The lap and its park remain the single-agent,
+in-session shape — still the right tool in a terminal, still how you
+debug a routing rule by hand. Enrolment is not something a session does
+to itself; it is something the person does at the rc.
+
+**What is stored, and where.** One durable record per enrolled agent per
+canvas, split along custody:
 
 ```
-ISOCAN_HOOK=<how to reach me>
+home:    { canvasId, actorId, rules, cursor }
+rc: { actorId, harness, cwd, sessionId }
 ```
 
-Read from the environment, the way `harness.ts` already reads session ids, and
-overridable in `config.json` for a host isocan has never heard of. When it is
-absent, `wait` blocks exactly as it does today. When it is present, `wait`
-records the registration and returns immediately.
+The home holds what routing needs; the rc holds what running the
+agent needs, because only the rc's machine can honor it. The cursor
+is the important field and must advance only when a turn *completes*, so
+an rc that dies mid-dispatch does not double-fire. (Which side of
+the split the cursor truly belongs to is the walk's phase 1 door.)
 
-**The summons delivers the payload `wait` would have returned.** This is the
-property that keeps the agent's code unchanged: same JSON, same `entries`, same
-`reason`, same `next`. Only the delivery differs.
-
-**Exit 3 means stop.** Today every `wait` outcome means keep going — 0 with
-feedback, 2 on timeout and the guide saying park again. Registering means the
-opposite, and an agent that misses that will call `wait` again immediately and
-spin at full speed. A distinct exit code makes a shell loop terminate on its
-own and lets an agent get it right without parsing JSON.
-
-```
-$ isocan wait --json --timeout 900
-{"state":"oncall","hook":"…","next":"exit — a summons starts you again
- with the payload this call would have returned"}
-# exit 3
-# stderr: registered instead of parking — nothing needs to hold a process
-#         open here, so --timeout is moot.
-```
-
-`--park` forces the blocking behaviour anyway, for debugging and for a summons
-path that is not yet trusted.
-
-**What the daemon stores.** One durable record per agent per canvas:
-
-```
-{ canvasId, actorId, harness, hook, sessionId, cwd, rules, cursor }
-```
-
-The cursor is the important field and it is the one that must advance only when
-a turn *completes*, so a daemon that dies mid-dispatch does not double-fire.
-Moving the cursor out of the parked process is worth doing on its own merits —
-it turns `--since` from a manual repair into something nobody has to know
-about.
+**"Answerable" is a derivation, not a field.** Neither half of the
+record stores it, because a record cannot know its rc died. The
+home says an agent is answerable when the durable enrolment exists AND a
+live rc is parked claiming it — the same connection-shaped truth
+presence already tells, which is `server/presence.ts`'s rule paying off a
+second time. Journey 7 pins the hard half: "answerable" is never
+claimed while the rc that would answer is dead — so rc liveness binds to
+the connection, not the clock. That is a real build obligation, not a
+default: CLI presence today is TTL-based (the multiuser walk's phase 11
+measured a killed agent's ring lingering up to five minutes), and the
+walk's phase 6 owes the connection-bound path it lacks.
 
 ---
 
 ## Why local first, and why local is not the lesser version
 
-The same client drives an agent on this laptop and an agent in a rented box.
-The only thing that differs is one line: whether the daemon spawns a subprocess
-or dials an address.
+The same program drives an agent on this laptop and an agent in a rented
+box. **The rc runs where the agents should run** — beside your
+checkout against your local daemon, on your laptop against isocan.io, or
+in a rented box against either. Nothing about it branches on which.
 
-That makes the local version the honest first step rather than a demo. It also
-happens to dodge every hard question at once:
+That makes the local version the honest first step rather than a demo. It
+also happens to dodge every hard question at once:
 
-- **Credentials.** The daemon runs as you, in your environment. An agent it
-  starts has exactly the access you would have given it by typing `claude`
-  yourself. isocan holds nothing it did not already hold.
+- **Credentials.** The rc runs as you, in your environment. An agent
+  it starts has exactly the access you would have given it by typing
+  `claude` yourself. isocan holds nothing it did not already hold.
 - **Filesystem.** Your directory, already bound, already the right one.
-- **Custody.** There is none to argue about. It is your machine.
-- **Cost.** A local agent costs what it costs today.
+- **Custody.** You started the rc, so you own everything it runs.
+  There is no spawning at a distance to reason about, because there is no
+  distance: the parent of every agent process is a program with your name
+  on it.
+- **Cost.** A local agent costs what it costs today, plus one idle
+  process.
 
-And what it buys is immediately visible: seven personas on a canvas and no
-terminal tabs. Comment, and one of them wakes in your project directory, does
-the work through the CLI it already knows, and stops.
+And what it buys is immediately visible: seven personas on a canvas, one
+rc, no agent tabs. Comment, and one of them wakes in your project
+directory, does the work through the CLI it already knows, and stops.
 
-**The transport is the who-is-on-top decision.** Over stdio the client spawns
-the agent as a subprocess, so isocan is the parent — which is correct on your
-own machine and wrong on isocan.io. Over WebSocket the agent listens and isocan
-dials, so whoever started the agent still owns it. Choosing stdio locally and
-WebSocket remotely is not two designs; it is the same design placing custody
-where it belongs in each case.
+**The rc is also why the home never grows a spawner.** The daemon —
+local or isocan.io — keeps doing exactly what it does: serve, store,
+forward. The rc is a client like any CLI; the summons needs no new
+server-side mechanism at all. On isocan.io the question "how does the
+home reach an agent?" answers itself: it doesn't — an rc somewhere is
+parked against it, exactly the way a thin agent's `wait` already parks
+against it today.
 
 ---
 
@@ -252,8 +284,8 @@ arrives as `stopReason`. There is nothing to poll and no gap to reason about.
 
 The price is symmetrical and worth stating plainly. A dispatch hook needs
 nothing to be running, and works with infrastructure every repo already has. An
-address needs something to be listening — which is free on your own machine,
-where the daemon can spawn it, and is a service somewhere else. So:
+address needs something to be listening — the rc on your own machine,
+a service somewhere else. So:
 
 - **A dispatch hook creates an agent per summons.** Cold start, fresh
   onboarding, zero idle cost, weak observability.
@@ -306,26 +338,29 @@ have become one with a confusing bill.
   has to hear about it or bill for boxes belonging to agents with no standing
   anywhere.
 
-**Where the pieces click.** The daemon's ACP client, the enrolment record, the
-prompt composition, the routing rules and the cursor are all identical. Local
-spawns; remote dials. Build the local one and the remote one is a transport and
-a URL.
+**Where the pieces click.** isocannery is isocan rc, hosted: the ACP
+client, the enrolment record, the prompt composition, the routing rules
+and the cursor are all the same program running in somebody else's box
+instead of your terminal. Build the local rc and the remote one is a
+deployment, not a design.
 
 ---
 
 ## What to build, smallest first
 
-1. **Durable cursors.** Move the park's cursor into the daemon, per actor per
-   canvas, advancing on completion. Useful today under `wait` alone, with no
-   protocol involved and nothing else changed.
-2. **The enrolment record**, written by `wait` when `ISOCAN_HOOK` is set, plus
-   exit 3 and the `next` line.
-3. **The ACP client in the daemon**, stdio only, spawning locally. Omit `fs`
-   and `terminal` from client capabilities so the agent uses its own disk and
-   shell — the spec treats omitted capabilities as unsupported — and let the
-   agent keep doing canvas work through the CLI it already knows.
-4. **Dispatch**: on an op that `isForMe` matches, start a turn with the payload
-   `wait` would have returned.
+1. **Durable cursors.** Move the park's cursor out of the parked process,
+   per actor per canvas, advancing on completion. Useful today under
+   `wait` alone, with no protocol involved and nothing else changed.
+2. **The rc and its enrolments**: the long-running program, the
+   record split between home and rc, and the gestures that create
+   and withdraw an enrolment.
+3. **The ACP client in the rc**, stdio only, spawning locally. Omit
+   `fs` and `terminal` from client capabilities so the agent uses its own
+   disk and shell — the spec treats omitted capabilities as unsupported —
+   and let the agent keep doing canvas work through the CLI it already
+   knows.
+4. **Dispatch**: on an op that `reasonFor` matches, start a turn with the
+   payload `wait` would have returned.
 5. **A limit and a reason.** A ceiling on turns per agent per hour, and a
    record of what the ceiling stopped. A cycle guard, because the existing
    self-wake guard does not stop A waking B waking A.
@@ -375,9 +410,9 @@ a summoned agent never parks.
   vetted. A first version where an agent only registers itself is much smaller
   and `wait` already covers it.
 - **Where the auto-upgrade window goes.** `considerUpgrade()` uses the park as
-  "the first idle point." With no park there is no window — though a daemon
-  that sees `end_turn` knows the moment precisely, which is better than
-  inferring it.
+  "the first idle point." With no park there is no window — though the
+  rc sees `end_turn` and knows the moment precisely, which is better
+  than inferring it.
 - **Whether the prompt is the short brief or the full guide.** isocan composes
   it now, so it owns the cost that agents currently pay themselves: about
   15,000 tokens for the documented onboarding, about 1,045 for the six-command
