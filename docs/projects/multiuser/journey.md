@@ -190,21 +190,29 @@ the escalation comes from the canvas itself, not from a scrollback. She
 clicks **her own face** in the pile; the menu that owns "how I'm connected
 here" (rename, leave) has one more entry: **"Bring your own agent…"**.
 The dialog explains the one sentence of concept — *your machine gets its
-own copy; your own agent can join* — and shows a single command with a copy
-button:
+own copy; your own agent can join* — and shows a line with a copy button,
+pass included:
 
-```
-npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
-```
+> use isocan. Run this in the current directory to join the canvas:
+> `npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>`
+> Then run `isocan --agent-help` and follow its instructions.
 
-She pastes it into a terminal in an empty directory. One command — Priya's
-three steps collapsed to a line, because the address carries everything
-setup would otherwise ask — skill, CLI, local daemon, marker written with
-id and address; her daemon dials the home, says **"I have nothing,"** and
-replicates the store — oplog streamed, blobs by hash — into her
-`~/.isocan`. The canvas now exists on her machine;
-offline capability arrived as a side effect. Then she launches her agent
-and says "use isocan" — the marker already knows the rest.
+**She pastes it into her own agent, not into a shell** — the same shape
+Scene 6 hands the cloud, for the same reason: the reader is an agent, so the
+paste is the whole instruction rather than a command plus two steps of prose
+about starting an agent afterwards. She starts her agent in the directory she
+wants it to work from, pastes, and the agent runs the line itself. One command
+— Priya's three steps collapsed to a line, because the address carries
+everything setup would otherwise ask — skill, CLI, local daemon, marker written
+with id and address; her daemon dials the home, says **"I have nothing,"** and
+replicates the store — oplog streamed, blobs by hash — into her `~/.isocan`.
+The canvas now exists on her machine; offline capability arrived as a side
+effect. The agent has "use isocan" and the marker, which is the rest.
+
+**No `ISOCAN_DIRECT=1` here, and that is the whole difference from Scene 6's
+line.** This machine is Jordan's own: the daemon, the replica and the marker
+are what the scene is for. The disposable-workspace declaration would throw
+away the local copy she came for.
 
 The `#<pass>` fragment is the quiet payoff: a short-lived, single-use pass
 **minted by her admitted tab, for her actor**. So there is no second door
@@ -218,7 +226,9 @@ rather than being typed inward at doors. (The rule that authenticated
 identity "only changes how an Actor is minted" was built for this moment.)
 Isomorphism holds: the dialog is the button surface, and any admitted
 session can mint the same pass from the CLI — how Priya would enroll her
-own second machine.
+own second machine. `isocan pass` prints the bare `setup` command rather
+than this prompt, and that is not a drift: one pass, wrapped for whoever
+reads it, and Priya at a shell is not an agent.
 
 Her agent claims its own actor against its session id, checks `isocan who
 --all` against the replicated roster — Isaac taken — and names itself Nico.
@@ -257,8 +267,15 @@ session). The dialog says the sentence of concept — *an agent that outlives
 your lid needs to run somewhere that doesn't close* — and hands her a
 copy-able instruction line, pass included:
 
-> use isocan — the canvas is at isocan.io/p/7f3a…#\<pass\>. Park and handle
-> summonses.
+> use isocan. This workspace is disposable, so set up with no local copy:
+> `ISOCAN_DIRECT=1 npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#\<pass\>`
+> Then run `isocan --agent-help` and follow its instructions.
+
+Both lines end at the guide rather than at `isocan wait`, which is one step
+inside it: `setup` installs the skill that points there, but a harness
+enumerates skills when a session starts, and in both scenes the session started
+before setup ran. Neither line repeats what the guide will say — it ships with
+the build that answers it, and a paraphrase here is a copy that can go stale.
 
 isocan never runs compute; the harness does. So she goes to her harness's
 cloud — concretely, claude.ai/code: **New session** → pick the **project

@@ -12,6 +12,7 @@ import {
   parseCanvasAddress,
   setupCommand,
   cloudAgentInstructions,
+  localAgentInstructions,
   splitPassFragment,
 } from "../src/address.ts";
 
@@ -137,6 +138,37 @@ describe("a canvas's address", () => {
     expect(INSTALL_SPEC).toContain("#release");
   });
 
+  it("builds Scene 5's prompt — the same pass, addressed to the agent", () => {
+    const line = localAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
+    // The dialog hands this to the agent the person already has running, so
+    // the paste IS "start it and tell it to use isocan" — which is why the
+    // opening keeps Scene 0's phrase.
+    expect(line).toContain("use isocan");
+    // Read cold by an agent, the instruction has to name WHERE and WHY. An
+    // earlier draft said "set this directory up first", which names no
+    // directory (so an agent may make one) and no outcome (so a failed `setup`
+    // leaves it with nothing to recover toward).
+    expect(line).toContain("current directory");
+    expect(line).toContain("join the canvas");
+    expect(line).toContain("https://isocan.io/p/prj_acme#pss_1.s3cret");
+    // Once, for its sibling's reason: `setup` takes the address, so a second
+    // copy in the prose tells the agent nothing and prints an eighty-character
+    // pass twice in a box a person is asked to read.
+    expect(line.split("https://isocan.io/p/prj_acme")).toHaveLength(2);
+    // It ends at the protocol, and does not paraphrase it. An agent that sets
+    // itself up and exits is not on the canvas — parking is what keeps it
+    // there, and `--agent-help` is where parking is defined, along with the
+    // steps that make it mean anything. `setup` installs the skill that points
+    // there, but skills are enumerated at the start of a session and this one
+    // started before setup ran, so the line has to name the guide itself.
+    expect(line).toContain("isocan --agent-help");
+    expect(line).toContain("#release"); // #47
+    // **The one thing that must never leak in from the cloud sibling.** This
+    // machine is the person's own: direct mode would skip the daemon and the
+    // replica, which is the whole of what Scene 5 gives her.
+    expect(line).not.toContain("ISOCAN_DIRECT");
+  });
+
   it("builds Scene 6's instructions — a prompt for an agent, not a shell command", () => {
     const line = cloudAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
     // The address, with its pass, so the agent arrives admitted.
@@ -156,8 +188,9 @@ describe("a canvas's address", () => {
     // the environment on the person's behalf. Without this, the agent sets up
     // a daemon and a replica in a sandbox that is about to be deleted.
     expect(line).toContain("ISOCAN_DIRECT=1");
-    // It parks. An agent that sets itself up and exits is not on the canvas.
-    expect(line).toContain("isocan wait");
+    // Like its sibling, it ends at the protocol rather than at one step out of
+    // it: `--agent-help` is where parking is defined.
+    expect(line).toContain("isocan --agent-help");
     expect(line).toContain("#release"); // #47, same hazard as its sibling
   });
 
