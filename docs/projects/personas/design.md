@@ -4,9 +4,11 @@ since: 2026-08-29
 see: personas
 note: steps 1-5 built; 6 waits on a second editor
 ---
-# Personas
+# Personas — the design
 
-**29 August 2026.** Unbuilt.
+**Written 29 August 2026. Steps 1–5 built; see [README.md](README.md) for what
+exists today.** This document is the argument, kept as written so the calls can
+be judged; the build records are marked inline where they landed.
 
 A persona is a named role an agent can take on: a lens, a set of skills, a
 goal it is judged against, and a memory of what it has already found. "Percy
