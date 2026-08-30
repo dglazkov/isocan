@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**6 built · 22 still open** — of which 11 partly
-built, 10 designed, 1 blocked, and
+**6 built · 22 still open** — of which 12 partly
+built, 9 designed, 1 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -20,9 +20,9 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | blocked by one unmeasured guess — whether a token with actions:write and no actions:read can dispatch. Needs a credential to create; the other four are measured. · see launch |
+| **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | blocked by guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured. · see launch |
 
-## Partly built <sub>11</sub>
+## Partly built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -33,12 +33,13 @@ and the done column should not be flattered by either.
 | **project** | [context](docs/projects/context/design.md) | 2026-08-29 | stage 1 built · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
+| research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | stages 1, 2 and 4; layout waits on a real map · see mindmap |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>10</sub>
+## Designed, not built <sub>9</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -46,7 +47,6 @@ and the done column should not be flattered by either.
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-29 |  |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
-| research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export recommended and unbuilt; nothing in the tree mentions the format |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |

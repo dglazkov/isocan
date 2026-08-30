@@ -2,7 +2,7 @@
 status: blocked
 since: 2026-08-30
 see: launch
-blockedBy: one unmeasured guess — whether a token with actions:write and no actions:read can dispatch. Needs a credential to create; the other four are measured.
+blockedBy: guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured.
 note: spike run 30 Aug; 4 of 5 guesses answered
 ---
 # Agent-on-demand: what happens when the hook fires
@@ -237,8 +237,19 @@ that decides whether the whole observation design stands: if such a token
 cannot dispatch, the read-only-token argument collapses and the section has to
 be rewritten around a token that can poll.
 
-**The experiment, for whoever holds the token:** create one with exactly that
-scope, then
+**Whose it is:** the token has to be scoped to `dglazkov/isocan`, so it is
+Dimitri's to create. The whole ask, self-contained:
+
+> Make a fine-grained PAT on `dglazkov/isocan` with **Actions** permission.
+> **Look at the dropdown first** — if the only choices are *Read-only* and
+> *Read and write*, with no way to grant write without read, **that is the
+> answer** and nothing needs to be sent: the premise is not expressible, and
+> the read-only-token argument below has to be revisited on those grounds
+> rather than on a 403. If write-without-read IS available, run the request
+> below and report the status line only. A `204` and this design stands; a
+> `403` and it does not.
+
+**The experiment:**
 
 ```sh
 curl -i -X POST -H "Authorization: Bearer $TOKEN" \
