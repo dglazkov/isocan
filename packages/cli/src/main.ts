@@ -158,6 +158,9 @@ import {
   statusProblems,
   toJsonCanvas,
   describeLosses,
+  contextMark,
+  markPatch,
+  markLabel,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -5742,9 +5745,56 @@ program
     }),
   );
 
-program
+const context = program
   .command("context")
   .description("What an agent will actually read when it starts work here")
+  .option("--canvas <canvas>");
+
+/**
+ * **Stage 2's verbs** (`docs/projects/context/design.md`): pin an item into
+ * context, keep one out of it. Both are `item.update` with a property, so this
+ * adds no operation — the same answer `mapParent` reached for edges.
+ */
+function markVerb(name: "pin" | "exclude" | "unmark", mark: "pinned" | "excluded" | null, blurb: string) {
+  context
+    .command(`${name} <item>`)
+    .description(blurb)
+    .option("--canvas <canvas>")
+    .action(
+      run(async (itemRef: string, opts: { canvas?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        if (opts.canvas) ctx.canvasRef = opts.canvas;
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const item = resolveItem(snapshot, itemRef);
+        const was = contextMark(item);
+        if (was === mark) {
+          return console.log(
+            mark === null
+              ? `"${item.title}" was not marked`
+              : `"${item.title}" is already ${markLabel(mark)}`,
+          );
+        }
+        await sendOp(ctx, p.id, {
+          type: "item.update",
+          itemId: item.id,
+          patch: markPatch(mark),
+        });
+        console.log(
+          mark === null
+            ? `"${item.title}" is no longer ${markLabel(was!)}`
+            : `"${item.title}" is ${markLabel(mark)}`,
+        );
+      }),
+    );
+}
+
+markVerb("pin", "pinned", "Say an agent should read this first");
+markVerb("exclude", "excluded", "Say an agent should skip this — it stays on the canvas");
+markVerb("unmark", null, "Take back a pin or an exclusion");
+
+context
+  .command("show", { isDefault: true })
+  .description("The list itself")
   .option("--canvas <canvas>")
   .action(
     run(async (_opts: unknown, cmd: Command) => {

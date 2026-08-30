@@ -30,7 +30,7 @@ and the done column should not be flattered by either.
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | phases 1-2 done; 3-4 not started · see auto-upgrade |
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
-| **project** | [context](docs/projects/context/design.md) | 2026-08-29 | stage 1 built · see context |
+| **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |

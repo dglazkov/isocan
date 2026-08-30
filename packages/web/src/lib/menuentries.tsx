@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { itemKind, itemPath, workbenchItemPath, keyFor} from "@isocan/core";
+import { contextMark, itemKind, itemPath, markPatch, workbenchItemPath, keyFor} from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -12,7 +12,7 @@ import {
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
-import { blobUrl } from "./api.ts";
+import { blobUrl, sendOp } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { useCanvasStore, flashNotice, setNotice } from "../stores/canvasStore.ts";
@@ -130,6 +130,54 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         if (!one || !version) return;
         void downloadItem(blobUrl(ctx.canvasId, version.blobHash), version.filename).catch(
           (err: Error) => setNotice(err.message),
+        );
+      },
+    },
+    { separator: "" },
+    /**
+     * **Stage 2 of the context view, on the surface that is not a terminal.**
+     *
+     * `isocan context pin` and `exclude` act on an item, so the app's home for
+     * them is the item's own menu rather than the Context panel — that panel
+     * lists PIECES, and pinning a piece is not a thing. Without this the CLI
+     * would hold a verb the app does not, which is the gap the whole project
+     * exists to close.
+     *
+     * One entry that toggles, not two that contradict: an item is pinned or it
+     * is not, and a menu offering "Pin" beside "Unpin" makes the reader work
+     * out which one is true.
+     */
+    {
+      label: contextMark(items[0]!) === "pinned" ? "Unpin from context" : "Pin into context",
+      disabled: many,
+      run: () => {
+        const item = items[0];
+        if (!item) return;
+        const next = contextMark(item) === "pinned" ? null : "pinned";
+        void sendOp(ctx.canvasId, ctx.actor, {
+          type: "item.update",
+          itemId: item.id,
+          patch: markPatch(next),
+        });
+        flashNotice(next ? `"${item.title}" is pinned into context` : `"${item.title}" is no longer pinned`);
+      },
+    },
+    {
+      // Excluded is not deleted: the item stays, its versions stay, its
+      // comments stay. Only what a reader assembling context is told changes.
+      label: contextMark(items[0]!) === "excluded" ? "Put back in context" : "Keep out of context",
+      disabled: many,
+      run: () => {
+        const item = items[0];
+        if (!item) return;
+        const next = contextMark(item) === "excluded" ? null : "excluded";
+        void sendOp(ctx.canvasId, ctx.actor, {
+          type: "item.update",
+          itemId: item.id,
+          patch: markPatch(next),
+        });
+        flashNotice(
+          next ? `"${item.title}" is kept out of context — it is still on the canvas` : `"${item.title}" is back in context`,
         );
       },
     },
