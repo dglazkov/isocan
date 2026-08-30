@@ -1,3 +1,7 @@
+---
+status: built
+since: 2026-08-29
+---
 # Where the canvas is janky
 
 **29 August 2026**

@@ -1,3 +1,9 @@
+---
+status: designed
+since: 2026-08-29
+see: extensions
+note: gated on runtime validation for `does`
+---
 # Extending the canvas from inside it
 
 People and agents can make things *on* a canvas. This is about letting them

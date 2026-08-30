@@ -1,3 +1,6 @@
+---
+status: open
+---
 # A story is a URL
 
 **24 August 2026**

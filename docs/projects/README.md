@@ -17,6 +17,12 @@ guides, and the records indexed by time rather than by subject: `changelog/`,
 A project with one design names it `design.md`; a project with several names
 each for what it designs.
 
+**Where each project stands now lives in the project's own primary doc**, in
+front matter, and [`../ROADMAP.md`](../ROADMAP.md) is generated from it — so
+the roadmap cannot disagree with the thing it describes. The third column below
+is prose for a reader; the machine-readable answer is the front matter, and
+`node scripts/roadmap.mjs` is what turns it into a view.
+
 | Project | What it is | Where it stands |
 | --- | --- | --- |
 | [multiuser](multiuser/) | The hosted, multi-user build: sharing a canvas, the identity desk, the innkeeper, homes and replicas. [`journey.md`](multiuser/journey.md) is the ideal and the acceptance suite; [`phases.md`](multiuser/phases.md) is the walk, and its "where we are" line is the one to read first. | **Phase 14 closed, 25 Aug 2026 — isocan.io is live; phase 10.5 closed 29 Aug when Paul and Dion walked `development.md`.** Nothing on this project is owed to anybody now, and what follows is a choice rather than a queue: phases 11, 12, 12.5, 12.7 and 13 are features added to a live home, and real users get a vote on their order. |

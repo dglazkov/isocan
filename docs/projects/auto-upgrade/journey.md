@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: auto-upgrade
+note: phases 1-2 done; 3-4 not started
+---
 # The auto-upgrade journey
 
 This document describes the intended user experience of auto-upgrade as a set

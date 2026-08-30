@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: evals
+note: stage 2's graders exist and are wired to a nightly
+---
 # Evals
 
 How we find out whether isocan is any good at the thing it exists for — and

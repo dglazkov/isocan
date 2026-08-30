@@ -1,3 +1,9 @@
+---
+status: built
+since: 2026-08-29
+see: multiuser
+note: phase 14 closed; 10.5 is the one unpaid debt
+---
 # The multiuser journey
 
 This is the **ideal**: the user journey for sharing an isocan canvas, written

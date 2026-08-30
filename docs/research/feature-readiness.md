@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Eighteen roads out: readiness of the proposed features
 
 **21 August 2026** · [full write-up](https://claude.ai/code/artifact/2754aec1-01e6-4543-bcda-657ff925ed5a)

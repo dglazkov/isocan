@@ -56,3 +56,4 @@ export * from "./itemthread.ts";
 export * from "./claim.ts";
 export * from "./persona.ts";
 export * from "./inbox.ts";
+export * from "./docstatus.ts";

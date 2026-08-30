@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: personas
+note: steps 1-5 built; 6 waits on a second editor
+---
 # Personas
 
 **29 August 2026.** Unbuilt.

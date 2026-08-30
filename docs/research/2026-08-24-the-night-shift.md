@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: evals,personas
+note: step 1 built: nightly grades
+---
 # The night shift
 
 **24 August 2026**

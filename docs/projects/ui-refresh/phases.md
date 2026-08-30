@@ -1,3 +1,9 @@
+---
+status: built
+since: 2026-08-29
+see: ui-refresh
+note: phases 1-6, all acceptances closed
+---
 # The UI refresh — the walk
 
 **28 August 2026.** The canvas `prj_trml8m4Zfh` holds the design: seven

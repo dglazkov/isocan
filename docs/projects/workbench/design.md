@@ -1,3 +1,8 @@
+---
+status: built
+since: 2026-08-29
+see: workbench
+---
 # The workbench
 
 *Drafted 25 Aug 2026, from a five-lens design fan-out and three adversarial

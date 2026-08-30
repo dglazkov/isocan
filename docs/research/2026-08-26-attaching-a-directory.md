@@ -1,11 +1,20 @@
+---
+status: partial
+since: 2026-08-29
+see: workbench
+note: 1-3 built; the hosted case is not
+---
 # Attaching a directory without the CLI
 
 **26 August 2026.** The workbench's files pane, on an unbound canvas, says:
 
-**Where this stands, 29 Aug 2026: not built.** The workbench's files pane
-still answers an unbound canvas with the dead end this document was written
-about — it names a command instead of offering the two things a person can
-actually do.
+**Where this stands is in the front matter above, and is `partial`.** This
+paragraph used to be a second verdict — "not built" — written before the pane
+was fixed and left behind when it was. On 29 Aug this document held BOTH that
+sentence and, a hundred lines down, "1, 2 and 3 are built", dated the same day.
+Neither was lying; one was older, and nothing in the file could tell. That is
+the whole argument for `docs/ROADMAP.md` being derived from one place per
+document rather than written in several.
 
 > no directory is bound to this canvas on this machine (isocan use \<canvas\>)
 

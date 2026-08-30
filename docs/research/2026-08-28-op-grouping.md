@@ -1,3 +1,8 @@
+---
+status: built
+since: 2026-08-29
+see: ui-refresh
+---
 # One gesture, one undo — grouping in the oplog
 
 **28 August 2026.** **Built the same day**, as recommended below and before

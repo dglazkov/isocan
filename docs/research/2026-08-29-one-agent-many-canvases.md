@@ -1,3 +1,8 @@
+---
+status: designed
+since: 2026-08-29
+see: personas
+---
 # One agent, many canvases
 
 **29 August 2026.** Research. Nothing built.
