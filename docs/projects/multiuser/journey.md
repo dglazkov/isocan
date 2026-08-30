@@ -310,6 +310,19 @@ her entire state was always the home's.
 
 ## Scene 7 — Agent-on-demand
 
+**Where this stands, 30 Aug 2026: ASPIRATIONAL, AND NOT VETTED.** Every other
+scene here was walked and argued; this one was sketched and never checked. Do
+not cite it as a decision. In particular its `workflow_dispatch` hook, the
+`spark` state and the pile's two-axis grammar were never agreed, and
+[`innkeeper.md`](innkeeper.md)'s Mechanism 11 inherits that status because it
+opens by naming this scene's registration.
+
+What *is* inherited from Scene 6, which is built: an agent parked in the cloud
+runs all night to be awake for four minutes, and when its session times out
+the ring fades until a person notices. **Always-on was never the requirement;
+always-answerable was.** That sentence is the good part and the rest is up for
+replacement — see [`docs/projects/on-demand/design.md`](../on-demand/design.md).
+
 Scene 6 works, but the bill tells on it: Sonia's sandbox runs all night to
 be awake for four minutes of summonses, and when the harness times out the
 idle session her ring fades until a human notices. Always-on was never the
