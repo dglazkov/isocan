@@ -108,6 +108,19 @@ const marksGlyph = (filled: boolean) => (
   </svg>
 );
 
+/**
+ * A clock with its hand swept back — the canvas's history. Not an arrow and
+ * not a rewind: both of those promise something moves BACKWARDS, and nothing
+ * here does. You stand somewhere; the canvas shows you what stood there.
+ */
+const HISTORY = (
+  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+    <path d="M2.2 2.6v2.6h2.6" />
+    <path d="M8 4.9V8l2.1 1.5" />
+  </svg>
+);
+
 const UPLOAD = (
   <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="12" height="10" rx="1.5" />
@@ -153,6 +166,8 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
   const marksOpen = useUiStore((s) => s.marksOpen);
+  const historyOpen = useUiStore((s) => s.historyOpen);
+  const onHistory = useUiStore((s) => s.setHistoryOpen);
   const hasMarks = useCanvasStore((s) => {
     const items = s.canvas?.items;
     return items
@@ -244,6 +259,18 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         onClick={() => openReactionBar(canvasId, !marksOpen)}
       >
         {marksGlyph(hasMarks)}
+      </button>
+      {/* Beside Reactions, because both are ways of LOOKING at the canvas
+          rather than adding to it — one asks what people marked, the other
+          asks what it was. */}
+      <button
+        className={`tool-btn${historyOpen ? " active" : ""}`}
+        title="History — the canvas as it was"
+        aria-label="History"
+        aria-pressed={historyOpen}
+        onClick={() => onHistory(!historyOpen)}
+      >
+        {HISTORY}
       </button>
       <button
         className="tool-btn"

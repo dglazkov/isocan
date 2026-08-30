@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogEntry } from "../src/ops.ts";
-import { majorLine, majors, track, weightOf } from "../src/timeline.ts";
+import { at, majorLine, majors, span, track, weightOf } from "../src/timeline.ts";
 
 /**
  * `docs/research/2026-08-26-timeline.md`'s one firm rule: the significance
@@ -144,5 +144,102 @@ describe("saying it", () => {
   it("falls back to the op type rather than inventing a phrase", () => {
     const m = { seq: 3, ts: "t", actor: "Kenny", kind: "thread.setMain", weight: 5 };
     expect(majorLine({ ...m, kind: "odd.op" })).toBe("3  Kenny odd.op");
+  });
+});
+
+/**
+ * **The canvas as it stood at a seq.**
+ *
+ * Real envelopes here rather than the `entry` helper above, because this is
+ * the one part of the timeline that runs the actual reducer — a fabricated op
+ * shape would test the fold against a canvas that could never exist.
+ */
+const real = (seq: number, op: Record<string, unknown>): LogEntry =>
+  ({
+    seq,
+    envelope: {
+      id: `op${seq}`,
+      canvasId: "prj_a",
+      actor: { id: "u", name: "Kenny" },
+      ts: `2026-08-30T00:00:${String(seq).padStart(2, "0")}.000Z`,
+      op,
+    },
+    inverse: null,
+  }) as unknown as LogEntry;
+
+const born = real(1, { type: "project.create", canvasId: "prj_a", title: "A canvas" });
+const version = (id: string) => ({
+  id,
+  blobHash: "h".repeat(64),
+  mimeType: "text/plain",
+  filename: `${id}.txt`,
+  size: 4,
+});
+const addOne = real(2, {
+  type: "item.add",
+  itemId: "itm_1",
+  version: version("ver_1"),
+  width: 10,
+  height: 10,
+  placement: { x: 0, y: 0 },
+});
+const addTwo = real(3, {
+  type: "item.add",
+  itemId: "itm_2",
+  version: version("ver_2"),
+  width: 10,
+  height: 10,
+  placement: { x: 20, y: 0 },
+});
+
+describe("the canvas as it stood at a seq", () => {
+  const history = [born, addOne, addTwo];
+
+  it("is nothing before it was born", () => {
+    expect(at(history, 0)).toBeNull();
+  });
+
+  it("holds only what had happened by then", () => {
+    expect(Object.keys(at(history, 1)!.canvas.items)).toHaveLength(0);
+    expect(Object.keys(at(history, 2)!.canvas.items)).toHaveLength(1);
+    expect(Object.keys(at(history, 3)!.canvas.items)).toHaveLength(2);
+  });
+
+  it("stops at the seq, not at the end of the log", () => {
+    const early = at(history, 2);
+    expect(Object.keys(early!.canvas.items)).toEqual(["itm_1"]);
+  });
+
+  it("past the end is simply the present", () => {
+    /* A scrubber dropped at the far right asks for the last seq, and a seq
+       beyond it is the same answer rather than an error — the track's right
+       edge and 'now' are the same place. */
+    expect(Object.keys(at(history, 999)!.canvas.items)).toHaveLength(2);
+  });
+
+  it("replays an undone entry, because at that seq it was still true", () => {
+    /* `majors` skips both ends of an undo pair — a track that ticks for the
+       doing AND the undoing tells a story that did not happen. That is about
+       what to DRAW. This is about what was TRUE: before the undo landed, the
+       undone thing was there, and a fold that skipped it would show a tidied
+       past rather than the real one. */
+    const undone = { ...addTwo, undoneBy: 4 } as unknown as LogEntry;
+    const theUndo = {
+      ...real(4, { type: "item.delete", itemId: "itm_2" }),
+      cause: { kind: "undo", targetSeq: 3 },
+    } as unknown as LogEntry;
+    const withUndo = [born, addOne, undone, theUndo];
+    expect(Object.keys(at(withUndo, 3)!.canvas.items)).toHaveLength(2);
+    expect(Object.keys(at(withUndo, 4)!.canvas.items)).toHaveLength(1);
+  });
+});
+
+describe("the span a scrubber moves over", () => {
+  it("is the first and last entries there are", () => {
+    expect(span([born, addOne, addTwo])).toEqual({ first: 1, last: 3 });
+  });
+
+  it("is null for an empty history, not a track with one end", () => {
+    expect(span([])).toBeNull();
   });
 });

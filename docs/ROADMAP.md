@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**6 built · 24 still open** — of which 13 partly
+**7 built · 23 still open** — of which 12 partly
 built, 11 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,11 +16,10 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>13</sub>
+## Partly built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | phases 1-2 done; 3-4 not started · see auto-upgrade |
@@ -50,10 +49,11 @@ and the done column should not be flattered by either.
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
-## Built <sub>6</sub>
+## Built <sub>7</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |
 | research | [One gesture, one undo — grouping in the oplog](docs/research/2026-08-28-op-grouping.md) | 2026-08-29 |  · see ui-refresh |
 | research | [The ask: what the field built for the moment an agent needs a person](docs/research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |

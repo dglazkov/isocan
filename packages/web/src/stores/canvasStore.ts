@@ -88,6 +88,24 @@ interface CanvasStore {
    * history, and the two would silently disagree forever after.
    */
   confirmed: CanvasState | null;
+  /**
+   * **Where the scrubber is, when it is anywhere** — the canvas as it stood at
+   * `seq`, folded by core's `at` from the log.
+   *
+   * Beside the live replica and never on top of it. The whole point of the
+   * split above is that a VIEW and the home's TRUTH are different things; a
+   * third thing — a past somebody is looking at — is a third thing, and
+   * writing it into `canvas` would mean the tail that lands two seconds later
+   * is folded onto a state from last Tuesday.
+   *
+   * Its presence is also the read-only flag, and that is deliberate rather
+   * than incidental: the door below refuses while this is set. A canvas that
+   * only LOOKS un-editable while scrubbing — pointer-events off, buttons
+   * dimmed — is what this codebase calls a habit rather than a rule, and the
+   * first keyboard shortcut or agent write would go straight through it into
+   * a past that cannot receive it.
+   */
+  past: { seq: number; canvas: CanvasContents } | null;
   /** Writes this tab has made that the home's history has not caught up with
    * — offline ones waiting to be sent, and sent ones waiting for the tail. */
   queue: QueuedWrite[];
@@ -137,6 +155,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   project: null,
   canvas: null,
   confirmed: null,
+  past: null,
   queue: [],
   refused: [],
   notice: null,
@@ -444,6 +463,18 @@ function flushPresence(): void {
  * never re-posted by a flush, retired by `seq` like the rest.
  */
 export async function sendEchoed(canvasId: string, actor: Actor, op: Operation): Promise<void> {
+  /**
+   * **The past does not take writes.** The scrubber is a way of looking, not a
+   * branch: there is no operation that means "and from here it went
+   * differently", and inventing one is a different and much larger feature
+   * than seeing what happened. Refusing at the door rather than in the UI is
+   * the difference between a rule and a habit — every path that changes this
+   * canvas comes through here, including the ones that have no button.
+   */
+  if (useCanvasStore.getState().past) {
+    flashNotice("this is the canvas as it was — return to now to change it");
+    return;
+  }
   const { confirmed } = useCanvasStore.getState();
   // No confirmed state means no queue to join — nothing has been folded yet.
   if (!confirmed) {
@@ -564,6 +595,9 @@ export function connectToCanvas(canvasId: string, actor: Actor): void {
     project: null,
     canvas: null,
     confirmed: null,
+    // A past belongs to the canvas it is a past OF. Carrying one across would
+    // render last Tuesday's items over a canvas that never had them.
+    past: null,
     queue: [],
     refused: [],
     notice: null,
@@ -606,6 +640,22 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
     syncCanvas(canvasId, view?.canvas ?? confirmed.canvas, presenceActor?.id);
   }
   void open(canvasId);
+}
+
+/**
+ * **Stand at a moment.** The fold is core's `at`, run by the caller — this
+ * only holds the answer, because the store is not where a reduce belongs and
+ * because the CLI's `isocan at` calls the identical function with the
+ * identical log.
+ */
+export function enterPast(seq: number, canvas: CanvasContents): void {
+  useCanvasStore.setState({ past: { seq, canvas } });
+}
+
+/** Back to now. The live replica was never touched, so there is nothing to
+ * restore — the view simply stops preferring the past. */
+export function leavePast(): void {
+  useCanvasStore.setState({ past: null });
 }
 
 export function disconnect(): void {

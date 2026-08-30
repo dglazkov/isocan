@@ -1,4 +1,6 @@
 import type { LogEntry } from "./ops.ts";
+import type { CanvasState } from "./model.ts";
+import { applyOperation } from "./reducer.ts";
 
 /**
  * **Where the seams are in a canvas's history.**
@@ -147,17 +149,80 @@ export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[]
 }
 
 /** One line per major, the same sentence on every surface. */
+const WHAT: Record<string, string> = {
+  "item.add": "added something",
+  "item.delete": "deleted something",
+  "items.delete": "deleted several things",
+  "item.restore": "restored something",
+  "items.restore": "restored several things",
+  "item.addVersion": "made a new version",
+  "thread.create": "started a conversation",
+  "thread.setMain": "moved the Chat",
+  "project.create": "made the canvas",
+};
+
+/**
+ * One seam, said in words — "Di added something".
+ *
+ * Separate from `majorLine` because the web scrubber wants the sentence
+ * WITHOUT the seq in front of it (the playhead is already saying where you
+ * are, and saying it twice reads as a stutter). Two surfaces narrating the
+ * same seam differently is the small version of the disagreement this whole
+ * module exists to prevent, so there is one phrasing and both callers take it
+ * from here.
+ */
+export function majorWhat(major: Major): string {
+  return `${major.actor} ${WHAT[major.kind] ?? major.kind}`;
+}
+
 export function majorLine(major: Major): string {
-  const what: Record<string, string> = {
-    "item.add": "added something",
-    "item.delete": "deleted something",
-    "items.delete": "deleted several things",
-    "item.restore": "restored something",
-    "items.restore": "restored several things",
-    "item.addVersion": "made a new version",
-    "thread.create": "started a conversation",
-    "thread.setMain": "moved the Chat",
-    "project.create": "made the canvas",
-  };
-  return `${major.seq}  ${major.actor} ${what[major.kind] ?? major.kind}`;
+  return `${major.seq}  ${majorWhat(major)}`;
+}
+
+/**
+ * **The canvas as it stood at `seq`.**
+ *
+ * The fold, and nothing else: `applyOperation` over every entry up to and
+ * including `seq`, from nothing. This is the whole of "time travel" in a
+ * system whose state is already the reduction of its log — the research called
+ * that out as the reason a timeline is *pure gain* against isocan's grain
+ * rather than across it. It sends nothing, invents no operation, and its
+ * position is a `seq` both surfaces already speak.
+ *
+ * **Undone entries are replayed, not skipped**, and that is the one thing here
+ * worth stating twice. `majors` skips both ends of an undo pair because a
+ * track that ticks for the doing AND the undoing tells a story that did not
+ * happen — but that is a question about what to DRAW. This is a question about
+ * what was TRUE, and at a seq before the undo landed, the undone thing was
+ * still there. An undo is itself an operation somebody performed at a moment;
+ * replaying the log verbatim is what makes the answer the real past rather
+ * than a tidied one.
+ *
+ * Linear from the start rather than stepping backwards through `inverse`.
+ * Inverses are how undo moves one entry at a time against live state; a
+ * scrubber jumps, and a jump of two hundred entries backwards through inverses
+ * is two hundred applications that have to be exactly right in reverse. This
+ * is one fold of the same reducer the daemon runs, which is the code most
+ * exercised in the entire system. Seeking from a snapshot is the optimisation
+ * this leaves room for and does not need yet — measure a long canvas first.
+ */
+export function at(entries: readonly LogEntry[], seq: number): CanvasState | null {
+  let state: CanvasState | null = null;
+  for (const entry of entries) {
+    if (entry.seq > seq) break;
+    state = applyOperation(state, entry.envelope);
+  }
+  return state;
+}
+
+/**
+ * The seq range a scrubber can move over: the first and last entries there
+ * are. Empty history has no positions, and `null` says so rather than
+ * inventing a zero that would render as a track with one end.
+ */
+export function span(entries: readonly LogEntry[]): { first: number; last: number } | null {
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  if (!first || !last) return null;
+  return { first: first.seq, last: last.seq };
 }

@@ -48,7 +48,18 @@ const INK_MIN_STEP = 2;
 
 
 export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.canvas);
+  /**
+   * **The past wins when there is one.** The scrubber folds a moment with
+   * core's `at` and parks it beside the live replica (`canvasStore.past`);
+   * every reader prefers it, so one selector turns the whole canvas into the
+   * canvas as it stood. The live replica keeps streaming underneath and is
+   * never written to — a tail landing while somebody is looking at last
+   * Tuesday must not be folded onto last Tuesday.
+   */
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  /* Only to SAY it is the past — the write door in the store is what
+     actually refuses changes. */
+  const inPast = useCanvasStore((s) => s.past !== null);
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
@@ -666,7 +677,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     >
       <CursorGlow />
       <div
-        className={`world${railPanning ? " rail-panning" : ""}`}
+        className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}
         style={
           {
             transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,

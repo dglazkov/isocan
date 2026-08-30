@@ -152,6 +152,10 @@ interface UiStore {
   followingActorId: string | null;
   /** The marks dock on the right — the canvas grouped by reaction. */
   marksOpen: boolean;
+  /** The history scrubber along the bottom. Whether it is OPEN lives here;
+   * where its playhead is standing lives in `canvasStore.past`, because that
+   * is canvas state and every reader of the canvas has to see it. */
+  historyOpen: boolean;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
    * name in a list and a thing on the surface are visibly the same thing. */
   peekedItemId: string | null;
@@ -206,6 +210,7 @@ interface UiStore {
   setPersonasPanelOpen: (open: boolean) => void;
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
+  setHistoryOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
   /** How wide the docked left panel is, in screen pixels. */
   panelWidth: number;
@@ -400,6 +405,7 @@ export const useUiStore = create<UiStore>((set) => {
     personasPanelOpen: false,
     followingActorId: null,
     marksOpen: false,
+    historyOpen: false,
     peekedItemId: null,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
@@ -470,6 +476,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPersonasPanelOpen: (personasPanelOpen) => set({ personasPanelOpen }),
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
+    setHistoryOpen: (historyOpen) => set({ historyOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     /**
      * Chrome that steps aside for the panel EASES to its new place, which is

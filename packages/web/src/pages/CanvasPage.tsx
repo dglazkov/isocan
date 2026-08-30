@@ -40,6 +40,7 @@ const Workbench = lazy(() =>
 import { FullScreen } from "../components/FullScreen.tsx";
 import { CommandBar } from "../components/CommandBar.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
+import { Scrubber } from "../components/Scrubber.tsx";
 import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
@@ -141,7 +142,9 @@ function CanvasSurface({
   const onWorkbench = wbItemId !== undefined || wbRootMatch !== null;
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
-  const canvas = useCanvasStore((s) => s.canvas);
+  const historyOpen = useUiStore((s) => s.historyOpen);
+  const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
@@ -737,6 +740,14 @@ function CanvasSurface({
           (phase 10). Above the panels for the reason `ArrivalNotice` is:
           it is about the connection, not about what is on the canvas. */}
       <OfflineBar />
+      {/* The history, when somebody asked for it. Mounted here rather than
+          inside the viewport because it is chrome ABOUT the canvas, and
+          unmounted entirely when closed — `Scrubber`'s teardown returns the
+          canvas to now, so there is no way to leave a tab stranded in a past
+          with nothing on screen explaining why it will not take a change. */}
+      {historyOpen && (
+        <Scrubber canvasId={canvasId} onClose={() => setHistoryOpen(false)} />
+      )}
       <HelpPanel />
       <OwnCursor actor={actor} />
       {/* Last, so it covers the panels and the toolbar: full screen means the

@@ -4203,3 +4203,117 @@ button.mt-card:hover { border-color: var(--accent); }
   .canvas-card.just-made { animation: none; }
   .canvas-card.just-made::after { display: none; }
 }
+
+/**
+ * **The scrubber** — the canvas's history as something you can stand in.
+ *
+ * A floating slab on the shared inset, the same chrome language as the rail
+ * and the toolbar: this sits ON the canvas rather than beside it, because
+ * what it changes is the canvas.
+ *
+ * The bar heights come from SIGNIFICANCE, not from raw op count (`core/
+ * timeline`), and a bucket holding a seam is drawn in the accent. That pairing
+ * is the whole reason to draw a track instead of a scrollbar: a tall bar with
+ * no accent under it is a stretch of pure churn, and you can see it at a
+ * glance.
+ */
+.scrubber {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  z-index: var(--z-float);
+  width: min(760px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+}
+.scrubber.quiet {
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 12px;
+}
+.scrub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.scrub-head .spacer { flex: 1; }
+/* The seq is a number you compare against other numbers, so it gets figures
+   that line up rather than ones that jitter as the playhead moves. */
+.scrub-where {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+.scrub-ago { font-weight: 400; color: var(--ink-soft); }
+.scrub-major {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+.scrub-note { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.scrub-note.bad { color: var(--danger); }
+.scrub-rail {
+  position: relative;
+  height: 48px;
+  cursor: ew-resize;
+  touch-action: none;
+  border-radius: 6px;
+}
+.scrub-rail:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.scrub-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+.scrub-bar {
+  flex: 1;
+  min-width: 0;
+  /* 2px, reusing a step the sheet already has rather than inventing a 1px
+     one — `scale.test.ts` is a ratchet, and at this size the difference is
+     invisible anyway. */
+  border-radius: 2px;
+  background: var(--line);
+}
+/* A seam, not a taller bar: significance is already the height, so colour is
+   the second dimension rather than a louder version of the first. */
+.scrub-bar.seam { background: var(--accent); }
+.scrub-head-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.scrub-head-line::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+/**
+ * **The canvas, while you are standing in its past.**
+ *
+ * Desaturated and slightly dimmed — enough to read as "this is not now"
+ * without making the thing you came to look at hard to see. The write door in
+ * `canvasStore` is what actually refuses changes; this only says so.
+ */
+.world.in-past { filter: saturate(0.55) opacity(0.92); }

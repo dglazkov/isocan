@@ -389,6 +389,31 @@ The significance function is in core, so `isocan timeline` and the app mark the
 same seams. Two surfaces disagreeing about what mattered is the one thing this
 architecture does not permit.
 
+`isocan at <seq>` is the other half: the canvas as it stood at that point.
+
+```sh
+isocan timeline               # find a seq worth looking at
+isocan at 50 --items          # what existed then
+```
+
+It is a fold of the same reducer the daemon runs, over the log from the
+beginning, so it is the real past rather than a tidied one — **an undone entry
+is replayed**, because at a seq before the undo landed, the undone thing was
+still there. That is the opposite of what `timeline` does when DRAWING a track,
+where both ends of an undo pair are skipped, and the difference is deliberate:
+one question is what was true, the other is what is worth a tick.
+
+Nothing is sent and no operation is invented. A position in history is a `seq`,
+which both surfaces already speak, which is why the app's scrubber and this
+verb land on the same past by construction. In the app it is the clock in the
+tool rail: the same track, with a playhead you drag, and the canvas becomes
+what it was while you hold it.
+
+**The past does not take writes.** Standing at a seq is a way of LOOKING, not
+a branch — there is no operation meaning "and from here it went differently".
+The app refuses at the door, not in the interface, so an agent write lands the
+same refusal a click does.
+
 ## Saying what matters here
 
 `isocan context` lists what an agent reads before it starts. Two verbs manage
