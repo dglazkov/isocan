@@ -170,16 +170,42 @@ async function waitUntilReady(
   return false;
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
+/**
+ * **A port below every ephemeral floor, like everything else this suite
+ * listens on** — and for the reason the flake family finally gave up.
+ *
+ * This asked the kernel (`listen(0)`), read the number, closed, and handed it
+ * over — which is a guess, and a guess out of exactly the range the kernel is
+ * also allocating to outgoing connections. That is what produced `EADDRINUSE`
+ * on a bind and `ETIMEDOUT` on a LOOPBACK connect, with the event loop
+ * measured idle while it happened.
+ *
+ * `ports.ts` could not help here and still cannot: this runs in globalSetup,
+ * before any worker exists, so there is no `VITEST_POOL_ID` to slice by. So it
+ * takes its own band BELOW the workers' — 19000, under `ports.ts`'s 20000 —
+ * and scans it. Nothing in this run can collide with it, and nothing the OS
+ * hands out can land in it.
+ */
+const EMULATOR_PORT_BASE = 19_000;
+const EMULATOR_PORT_TRIES = 100;
+
+function bindable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
     const probe = net.createServer();
-    probe.once("error", reject);
-    probe.listen({ port: 0, host: "127.0.0.1" }, () => {
-      const address = probe.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      probe.close(() => resolve(port));
-    });
+    probe.once("error", () => resolve(false));
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
   });
+}
+
+export async function freePort(): Promise<number> {
+  for (let i = 0; i < EMULATOR_PORT_TRIES; i += 1) {
+    const port = EMULATOR_PORT_BASE + i;
+    if (await bindable(port)) return port;
+  }
+  throw new Error(
+    `no free port in ${EMULATOR_PORT_BASE}..${EMULATOR_PORT_BASE + EMULATOR_PORT_TRIES - 1} — ` +
+      "something outside this run is holding the whole band",
+  );
 }
 
 function findGcloud(): string | null {

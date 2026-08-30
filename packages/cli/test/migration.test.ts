@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -41,7 +42,7 @@ afterEach(async () => {
 });
 
 async function boot(): Promise<void> {
-  daemon = await startDaemon({ port: 0, home });
+  daemon = await startDaemon({ port: await reservePort(), home });
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
 }

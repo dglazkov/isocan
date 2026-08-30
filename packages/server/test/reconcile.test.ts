@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -42,11 +43,11 @@ const baseOf = (d: Daemon) => {
 beforeEach(async () => {
   homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rc-home-"));
   repDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rc-rep-"));
-  home = await startDaemon({ port: 0, home: homeDir });
+  home = await startDaemon({ port: await reservePort(), home: homeDir });
   homeBadge = await mintTestBadge(baseOf(home));
   await homeBadge.speakAs({ id: "usr_home", name: "Home" });
   replica = await startDaemon({
-    port: 0,
+    port: await reservePort(),
     home: repDir,
     birthHome: baseOf(home),
     homePollMs: 50,

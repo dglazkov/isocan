@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -60,7 +61,7 @@ async function machine(dir: string): Promise<Daemon> {
     path.join(dir, "identity.json"),
     JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
   );
-  return startDaemon({ port: 0, home: dir, birthHome: homeBase, homePollMs: 50 });
+  return startDaemon({ port: await reservePort(), home: dir, birthHome: homeBase, homePollMs: 50 });
 }
 
 beforeEach(async () => {
@@ -69,7 +70,7 @@ beforeEach(async () => {
   secondDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-b-"));
   firstWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-a-"));
   secondWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-2dev-work-b-"));
-  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
+  homeDaemon = await startDaemon({ port: await reservePort(), home: upstreamDir, birthHome: null });
   homeBase = baseOf(homeDaemon);
   first = await machine(firstDir);
   second = null;

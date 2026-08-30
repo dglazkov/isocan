@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -40,7 +41,7 @@ let port: number;
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-claiming-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-claiming-work-"));
-  daemon = await startDaemon({ port: 0, home });
+  daemon = await startDaemon({ port: await reservePort(), home });
   const address = daemon.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   base = `http://127.0.0.1:${port}`;

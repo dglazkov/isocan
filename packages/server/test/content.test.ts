@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -92,7 +93,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
 
   beforeEach(async () => {
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-content-"));
-    daemon = await startDaemon({ port: 0, home });
+    daemon = await startDaemon({ port: await reservePort(), home });
     const address = daemon.app.server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     badge = await mintTestBadge(base);
@@ -213,7 +214,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
 
   it("contentPort 'off' restores today exactly: no listener, null advertised", async () => {
     const offHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-content-off-"));
-    const off = await startDaemon({ port: 0, home: offHome, contentPort: "off" });
+    const off = await startDaemon({ port: await reservePort(), home: offHome, contentPort: "off" });
     try {
       const address = off.app.server.address();
       const offBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;

@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -45,7 +46,7 @@ async function boot(): Promise<void> {
   // set. A developer with a dev home configured in their shell would otherwise
   // watch the no-attester assertions below fail for a reason that has nothing
   // to do with the code — the same courtesy `birthHome: null` extends.
-  daemon = await startDaemon({ port: 0, home, auth: null });
+  daemon = await startDaemon({ port: await reservePort(), home, auth: null });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
@@ -620,7 +621,7 @@ describe("on a replica", () => {
    */
   it("forwards the grant routes to the home rather than editing its own ledger", async () => {
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-grants-replica-"));
-    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: await reservePort(), home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {

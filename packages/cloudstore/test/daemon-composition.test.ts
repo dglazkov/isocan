@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -61,7 +62,7 @@ if (!gate.ok && requireEmulator()) {
     });
 
     test("builds a daemon on CloudStore and CloudDesk, and answers", async () => {
-      daemon = await startDaemon({ port: 0, home });
+      daemon = await startDaemon({ port: await reservePort(), home });
       expect(daemon.store).toBeInstanceOf(CloudStore);
       expect(daemon.desk).toBeInstanceOf(CloudDesk);
 
@@ -74,12 +75,12 @@ if (!gate.ok && requireEmulator()) {
 
     test("refuses to start a cloud home with no bucket, rather than guessing one", async () => {
       delete process.env.ISOCAN_BUCKET;
-      await expect(startDaemon({ port: 0, home })).rejects.toThrow(/ISOCAN_BUCKET/);
+      await expect(startDaemon({ port: await reservePort(), home })).rejects.toThrow(/ISOCAN_BUCKET/);
     });
 
     test("without ISOCAN_STORE it is still a file home — the default never moved", async () => {
       delete process.env.ISOCAN_STORE;
-      daemon = await startDaemon({ port: 0, home });
+      daemon = await startDaemon({ port: await reservePort(), home });
       expect(daemon.store).not.toBeInstanceOf(CloudStore);
       expect(daemon.desk).not.toBeInstanceOf(CloudDesk);
     });

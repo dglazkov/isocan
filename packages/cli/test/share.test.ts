@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -55,13 +56,13 @@ beforeEach(async () => {
   // from whatever the developer's shell has in `ISOCAN_AUTH_PROJECT`. The
   // email refusal below is about a home with no attester, and it must be about
   // that on every machine.
-  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null, auth: null });
+  homeDaemon = await startDaemon({ port: await reservePort(), home: upstreamDir, birthHome: null, auth: null });
   homeBase = baseOf(homeDaemon);
   await fs.writeFile(
     path.join(laptopDir, "identity.json"),
     JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
   );
-  laptop = await startDaemon({ port: 0, home: laptopDir, birthHome: homeBase, homePollMs: 50 });
+  laptop = await startDaemon({ port: await reservePort(), home: laptopDir, birthHome: homeBase, homePollMs: 50 });
 });
 
 afterEach(async () => {

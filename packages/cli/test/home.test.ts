@@ -51,7 +51,7 @@ beforeEach(async () => {
   upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-up-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-verb-work-"));
   port = await reservePort();
-  upstream = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
+  upstream = await startDaemon({ port: await reservePort(), home: upstreamDir, birthHome: null });
   const address = upstream.app.server.address();
   homeBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 });

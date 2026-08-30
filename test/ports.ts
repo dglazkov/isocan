@@ -41,11 +41,12 @@ import net from "node:net";
  * of those, move it. Three CLI test files had kept their own until the day
  * above, which is how one of them was still able to lose this race.
  *
- * `test/emulator.ts` is the one deliberate exception and stays as it is: it
- * runs in globalSetup, before any worker exists, so there is no
- * `VITEST_POOL_ID` to slice by — and it holds its port for the whole run, so a
- * worker that later reached for the same number would simply find it unbindable
- * and take the next.
+ * `test/emulator.ts` still cannot use this — it runs in globalSetup, before
+ * any worker exists, so there is no `VITEST_POOL_ID` to slice by — but it no
+ * longer asks the kernel either. It scans its own band at 19000, below this
+ * one, for the same reason: **nothing this suite listens on may sit in the
+ * range the OS is handing to outgoing connections.** That was the whole of the
+ * flake family's socket half.
  */
 
 const FIRST = 20_000;

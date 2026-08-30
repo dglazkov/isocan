@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -123,7 +124,7 @@ describe("the home's own sweep, on a timer", () => {
     // Milliseconds instead of the hour a real home runs: this is what the
     // injectable interval exists for, and it is the only way a proof that the
     // timer FIRES can be measured rather than argued.
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 20 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 20 });
     base = baseOf(daemon);
     const badge = await mintTestBadge(base);
     await badge.speakAs(alice);
@@ -160,7 +161,7 @@ describe("the home's own sweep, on a timer", () => {
     // is the shape scale-to-zero actually produces: the instance that made the
     // orphan is reaped, the bytes are not, and the collecting has to be done by
     // whichever instance comes next.
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 0 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 0 });
     base = baseOf(daemon);
     const badge = await mintTestBadge(base);
     await badge.speakAs(alice);
@@ -171,7 +172,7 @@ describe("the home's own sweep, on a timer", () => {
     await daemon.close();
 
     daemon = await startDaemon({
-      port: 0,
+      port: await reservePort(),
       home,
       gcIntervalMs: 60 * 60 * 1000,
       gcFirstSweepMs: 25,
@@ -193,7 +194,7 @@ describe("the home's own sweep, on a timer", () => {
   });
 
   it("stops with close(), and never ticks again", async () => {
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 20 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 20 });
     base = baseOf(daemon);
     const badge = await mintTestBadge(base);
     await badge.speakAs(alice);
@@ -221,7 +222,7 @@ describe("the home's own sweep, on a timer", () => {
   it("carries on past a canvas that throws, and ticks again after it", async () => {
     // The daemon's own timer is off (`0`), so the sweeper built below is the
     // only thing collecting anything and every observation belongs to it.
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 0 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 0 });
     base = baseOf(daemon);
     const badge = await mintTestBadge(base);
     await badge.speakAs(alice);
@@ -343,7 +344,7 @@ describe("the sweeper's own lifetime", () => {
     gcCalls = 0;
     finished = 0;
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-gc-life-"));
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 0 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 0 });
     base = baseOf(daemon);
     const badge = await mintTestBadge(base);
     await badge.speakAs(alice);
@@ -400,7 +401,7 @@ describe("POST /api/gc", () => {
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-gc-home-"));
     // No timer: this describe is about what the ROUTE sweeps, and a background
     // sweep collecting the same bytes would make every assertion here ambiguous.
-    daemon = await startDaemon({ port: 0, home, gcIntervalMs: 0 });
+    daemon = await startDaemon({ port: await reservePort(), home, gcIntervalMs: 0 });
     base = baseOf(daemon);
     alice_ = await mintTestBadge(base);
     await alice_.speakAs(alice);

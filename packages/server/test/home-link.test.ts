@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -75,7 +76,7 @@ function baseOf(daemon: Daemon): string {
 /** A replica: its own home directory, pointed at H, polling fast enough that
  * a test does not spend seconds waiting for a canvas list to be re-read. */
 async function replica(dir: string, homeUrl: string): Promise<Daemon> {
-  return startDaemon({ port: 0, home: dir, birthHome: homeUrl, homePollMs: 50 });
+  return startDaemon({ port: await reservePort(), home: dir, birthHome: homeUrl, homePollMs: 50 });
 }
 
 async function node(daemon: Daemon, dir: string, actor: { id: string; name: string }): Promise<Node> {
@@ -89,7 +90,7 @@ beforeEach(async () => {
   homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-home-"));
   aDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-a-"));
   bDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-b-"));
-  H = await node(await startDaemon({ port: 0, home: homeDir }), homeDir, {
+  H = await node(await startDaemon({ port: await reservePort(), home: homeDir }), homeDir, {
     id: "usr_home",
     name: "Home",
   });

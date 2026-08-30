@@ -2,11 +2,14 @@
 
 **29 August 2026**
 
-**Status: one member fixed with proof; five more witnessed in a single
-afternoon; and — after instrumenting the event loop — the leading hypothesis
-KILLED by its first measurement. The evidence now points below the
-application, at test daemons listening on ports inside the kernel's ephemeral
-range.** This note exists because the family had
+**Status, end of 29 Aug 2026: four of five witnesses diagnosed, and the fifth
+— the `ETIMEDOUT` family — has had its predicted cause removed.** The split
+UTF-8 chunk, a grader that waited two seconds instead of waiting for the page,
+and a "slow machine" that was a dead process missing `tsx` in a git worktree
+are all fixed at the cause. Nothing this suite listens on sits in the kernel's
+ephemeral range any more. The blocked-event-loop hypothesis was killed by its
+own first measurement, which is what the instrument was built to be able to
+do. This note exists because the family had
 been chased twice by reasoning and never by observation, and the second kind
 of attempt just produced something the first kind could not.
 
@@ -414,6 +417,67 @@ than a rare one.
 from the private range too, rather than `port: 0`. If the hypothesis holds, the
 `ETIMEDOUT` family stops. If it does not, the cause is below even this, and the
 next place to look is the loopback stack rather than anything isocan wrote.
+
+---
+
+## The fix, applied
+
+**Nothing this suite listens on may sit in the range the OS is handing to
+outgoing connections.** That is the whole rule, and it is now true:
+
+- **75 call sites** across 45 files moved from `startDaemon({ port: 0 })` to
+  `startDaemon({ port: await reservePort() })`. `ports.ts` already answered
+  from a private per-worker slice at 20000–32000; it had simply never been
+  pointed at the in-process daemons, because they never had to TELL anybody
+  the number and so never looked like they were guessing.
+- **`test/emulator.ts` stopped being an exception.** It could not use
+  `ports.ts` — it runs in globalSetup, before any worker exists, so there is
+  no `VITEST_POOL_ID` to slice by — but it was still doing `listen(0) → read →
+  close → hand it over`, which is the same guess out of the same range. It
+  now scans its own band at 19000, below the workers'.
+- **A guard**, because `port: 0` is an ordinary thing to write that reads as
+  "you pick" and is wrong here for a reason nothing in the call site suggests.
+  Seventy-five were converted at once; one written tomorrow would put the
+  family back and look completely reasonable doing it.
+
+### Two bugs in the fixing, both of the week's shape
+
+The guard **passed on a file that had `port: 0` in it.** Its pathspec was
+`packages/*/test`, which matches nothing in git — a search over no files always
+succeeds. Found by mutation-testing the guard rather than by reading it.
+
+And it **failed on success**: `git grep` exits 1 when it finds nothing, which
+here is the pass, so the bare call threw. That would have been the fifth
+instrument this week to report the opposite of the truth.
+
+### What is claimed, and what is not
+
+Four full runs green unloaded, and two under 16 spinners on 14 cores.
+**Zero `EADDRINUSE`, zero `ETIMEDOUT`, across all six** — under exactly the
+load that used to produce them.
+
+**That is consistent with the fix and is not proof.** The family was rare
+enough that four clean runs was never evidence, which is exactly why two
+earlier rounds of "it seems fine now" were wrong. What makes this different
+from those rounds is not the count of green runs; it is that the mechanism was
+identified first and removed, so the next occurrence means something.
+
+**The loaded runs did fail three tests, and they are a different species** —
+worth separating rather than counting as the same thing. All three were the
+browser-driven graders timing out, with no socket error anywhere. One sat for
+**nineteen minutes**: waiting for the page rather than for two seconds was the
+right fix, and it had no deadline, so a starved runner waited all day and then
+failed on vitest's limit with nothing said about what it was waiting for.
+`lessons.md` names that shape — *a hang that never fails is the thing to avoid,
+not a slow test that eventually does* — and `devtoolsEndpoint` in the same file
+already had the discipline. The page load has it now: 60 seconds on the
+condition, and a sentence naming the condition.
+
+What HAS changed is that the hypothesis is now falsifiable in the useful
+direction: **if an `ETIMEDOUT` on loopback appears again, the cause is not the
+port range**, because there is no longer a listener in that range to collide
+with. The next occurrence would move the search below the application — to the
+socket layer or the harness — rather than around it.
 
 ---
 
