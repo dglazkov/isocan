@@ -15,13 +15,17 @@ export type ThemePref = "light" | "dark" | "system";
 const KEY = "isocan.theme";
 const media = window.matchMedia("(prefers-color-scheme: dark)");
 
-export function readThemePref(): ThemePref {
+/** What the person last chose, or `system` when they have not. Read through
+ *  `resolveTheme` rather than directly — the preference is not the theme. */
+function readThemePref(): ThemePref {
   const raw = localStorage.getItem(KEY);
   return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
 }
 
 /** What "system" currently means. */
-export function systemTheme(): "light" | "dark" {
+/** What the OS is asking for right now. Only meaningful under the `system`
+ *  preference, which is why it is not exported. */
+function systemTheme(): "light" | "dark" {
   return media.matches ? "dark" : "light";
 }
 

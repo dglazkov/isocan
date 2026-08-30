@@ -14,7 +14,9 @@
  * The name still rides at the end, where it costs nothing and reads fine in a
  * bookmark or a history list.
  */
-export interface TitleParts {
+/** What the tab's title is assembled from. The shape of `pageTitle`'s only
+ *  argument, and not a type anything else needs to name. */
+interface TitleParts {
   /** The canvas's title, when a canvas is open. */
   canvas?: string | null;
   /** Which cover is up, if any. */

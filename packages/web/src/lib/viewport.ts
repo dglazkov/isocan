@@ -7,13 +7,20 @@ export interface Viewport {
   scale: number;
 }
 
-export const MIN_SCALE = 0.05;
-export const MAX_SCALE = 8;
+/* The zoom floor and ceiling. Not exported: `zoomAt` below is the only
+   thing that may clamp a scale, and a caller reaching for these is a caller
+   about to build a second clamp with its own opinion. */
+const MIN_SCALE = 0.05;
+const MAX_SCALE = 8;
 
+/** World → screen. The canvas stores world coordinates; everything that
+ *  draws or hit-tests needs them here. */
 export function worldToScreen(vp: Viewport, wx: number, wy: number): { x: number; y: number } {
   return { x: wx * vp.scale + vp.tx, y: wy * vp.scale + vp.ty };
 }
 
+/** Screen → world, the inverse. A pointer event arrives in screen space and
+ *  everything it lands on is stored in world space. */
 export function screenToWorld(vp: Viewport, sx: number, sy: number): { x: number; y: number } {
   return { x: (sx - vp.tx) / vp.scale, y: (sy - vp.ty) / vp.scale };
 }
@@ -29,6 +36,8 @@ export function zoomAt(vp: Viewport, cx: number, cy: number, factor: number): Vi
   };
 }
 
+/** Move the viewport by a screen-space delta. Scale is untouched — panning
+ *  is the one canvas gesture that does not change how big anything is. */
 export function pan(vp: Viewport, dx: number, dy: number): Viewport {
   return { ...vp, tx: vp.tx + dx, ty: vp.ty + dy };
 }
