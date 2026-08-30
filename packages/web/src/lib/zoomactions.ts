@@ -32,7 +32,9 @@ export function smoothEase(t: number): number {
  * bearings because you saw which way you went. A second glide cancels the
  * first, and anyone who has asked for less motion gets there immediately.
  */
-export function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
+/** Animate the viewport to `target`. Internal: every caller outside this file
+ *  wants one of the named moves below, which decide WHERE before gliding. */
+function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
   cancelAnimationFrame(gliding);
   const ui = useUiStore.getState();
   const from = ui.viewport;

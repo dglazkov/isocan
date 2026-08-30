@@ -7,13 +7,13 @@ color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash
 goal:
   - name: exports nothing outside their own file uses
-    at most: 134
+    at most: 129
     measured by: node scripts/measure.mjs unused-exports
-    baseline: 134, 2026-08-30, 92e6528
+    baseline: 129, 2026-08-30, 66d9b67
   - name: exports with no comment above them
-    at most: 280
+    at most: 278
     measured by: node scripts/measure.mjs undocumented-exports
-    baseline: 280, 2026-08-30, 92e6528
+    baseline: 278, 2026-08-30, 66d9b67
   - name: CSS rule bodies copied word for word from elsewhere
     at most: 45
     measured by: node scripts/measure.mjs copied-rules

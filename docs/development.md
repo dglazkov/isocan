@@ -336,6 +336,17 @@ the three redundant copies of the header rule, seen directly. The bug never
 appears where the breakage is, so the number has to describe the shape that
 produces it.
 
+**A ratchet only works from zero.** This is the practice that keeps the rest
+working, and it is the one that had lapsed. A standing miss and a fresh
+regression print the same line, so once one bound has been over for a week
+every reading looks like that week — and the report becomes wallpaper. With the
+board at zero misses, the next red can only mean *this push did that*, which is
+a thing somebody will actually act on.
+
+So a miss is fixed or re-baselined **the day it appears**, never left standing.
+Lowering a bound after real work is the ratchet doing its job; raising one to
+silence a report is how it stops being one.
+
 **What a guard cannot do is be unread.** These bounds are reported by
 `scripts/ratchet.mjs` on every push and gate nothing on purpose — a check that
 goes red on hygiene gets turned off in a week. The cost is that news nobody
