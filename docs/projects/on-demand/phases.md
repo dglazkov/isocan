@@ -3,7 +3,11 @@
 **30 August 2026.** The order of work for [design.md](design.md), with the
 design's open decisions parked at the door of the phase that forces each
 one — every door states its question in full, so this doc needs nothing
-outside itself. The rule is the multiuser walk's: a decision at a door is
+outside itself. [journey.md](journey.md) is the acceptance suite: its map
+says which phase closes which journey, and a phase that claims one closes
+only when the journey walks. The map also records the one journey no phase
+owns yet — dismissal (journey 8), to be claimed by phase 2 or phase 6,
+whichever opens first. The rule is the multiuser walk's: a decision at a door is
 made when the phase opens, out loud, with Dimitri driving — not before, and
 not by accident inside a commit. Status lines move as phases close; a clean
 session starts by believing them.
