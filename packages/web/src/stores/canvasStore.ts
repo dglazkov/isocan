@@ -660,6 +660,7 @@ export function leavePast(): void {
 
 export function disconnect(): void {
   currentProjectId = null;
+  stopWatchdog();
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   backoffMs = RECONNECT_MIN_MS;
@@ -724,6 +725,100 @@ function resumeCursor(canvasId: string): number {
  * down is not hammered by every replica on the internet at once. Before phase
  * 10 this was a flat 800ms, which was fine for a blip and wrong for a laptop
  * that has been shut for an hour. */
+/**
+ * **How long silence is allowed to mean nothing.**
+ *
+ * The home beats every 25s (`server/ws.ts`). Two missed beats plus a little
+ * slack is the point at which silence stops being quiet and starts being
+ * suspicious — long enough that an ordinary hiccup or a throttled background
+ * tab does not cause a reconnect, short enough that a person does not sit in
+ * front of a stale canvas wondering why nobody is answering.
+ */
+const SILENCE_MS = 70_000;
+/** Checked often enough that the worst case is `SILENCE_MS` plus this. */
+const WATCHDOG_EVERY_MS = 15_000;
+let lastHeard = 0;
+let watchdog: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * **The bug this exists for: every recovery here is reactive, and a socket
+ * that dies silently delivers no events at all.**
+ *
+ * `onclose` reconnects — but a half-open connection never closes. The seq-gap
+ * check resyncs — but it only runs when a message arrives. The `online` event
+ * dials — but it fires for the network, not for this socket. So a lid closing,
+ * a wifi-to-cellular hop or a proxy reaping an idle connection left the tab
+ * reporting `live`, showing a canvas that had stopped updating, with a reload
+ * as the only way out. Reported exactly that way.
+ *
+ * Detection is the only missing piece: the recovery path underneath is
+ * already correct and already resumes from a cursor. So this watches the one
+ * thing a dead socket cannot fake — messages arriving — and when they stop,
+ * closes the socket, which hands the existing reconnect everything it needs.
+ *
+ * `terminate` is not available to a browser, and `close()` on a half-open
+ * socket can hang waiting for a handshake reply that will never come, so the
+ * ref is dropped FIRST: `stale()` then makes the doomed socket's late events
+ * no-ops, and `retryLater` is called directly rather than waiting for an
+ * `onclose` that may not arrive.
+ */
+function heard(): void {
+  lastHeard = Date.now();
+}
+
+function startWatchdog(canvasId: string): void {
+  stopWatchdog();
+  heard();
+  watchdog = setInterval(() => {
+    if (currentProjectId !== canvasId || !socket) return;
+    if (Date.now() - lastHeard < SILENCE_MS) return;
+    const doomed = socket;
+    socket = null;
+    try {
+      doomed.close();
+    } catch {
+      // A socket too far gone to close is exactly the case this is for.
+    }
+    useCanvasStore.setState({ connection: "reconnecting" });
+    retryLater(canvasId);
+  }, WATCHDOG_EVERY_MS);
+  watchdog.unref?.();
+}
+
+function stopWatchdog(): void {
+  if (watchdog) clearInterval(watchdog);
+  watchdog = null;
+}
+
+/**
+ * **Come back to the tab and find out immediately**, rather than waiting out
+ * a silence window.
+ *
+ * Waking from sleep is the single most likely way to arrive at a dead socket,
+ * and it is also the moment somebody is looking. A browser throttles timers in
+ * a hidden tab, so the watchdog above may not have run for the whole nap; this
+ * asks the question the instant the tab is visible again.
+ *
+ * It does NOT assume the socket is dead — a tab switched away for ten seconds
+ * usually comes back to a perfectly good connection. It only re-arms the
+ * clock, so a connection that is fine proves it with the next beat and one
+ * that is not is closed a beat later instead of never.
+ */
+function wokeUp(): void {
+  if (!currentProjectId) return;
+  if (!socket) {
+    // Nothing is holding the connection: dial now instead of serving out a
+    // backoff that may have been ticking since before the lid closed.
+    backoffMs = RECONNECT_MIN_MS;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    void open(currentProjectId);
+    return;
+  }
+  // Give the connection one beat to prove itself, then let the watchdog rule.
+  lastHeard = Date.now() - (SILENCE_MS - 30_000);
+}
+
 const RECONNECT_MIN_MS = 800;
 const RECONNECT_MAX_MS = 10_000;
 let backoffMs = RECONNECT_MIN_MS;
@@ -783,6 +878,7 @@ function retryLater(canvasId: string): void {
 
 function openSocket(canvasId: string): void {
   const ws = new WebSocket(wsUrl(canvasId, resumeCursor(canvasId)));
+  startWatchdog(canvasId);
   socket = ws;
   /**
    * While a resumed tail is streaming, this is the seq it ends at.
@@ -808,6 +904,9 @@ function openSocket(canvasId: string): void {
 
   ws.onmessage = (event) => {
     if (stale()) return;
+    // ANY message is proof of life, heartbeat or not — the beat exists for
+    // quiet canvases, and a busy one proves itself with its own traffic.
+    heard();
     const message = JSON.parse(event.data as string) as ServerMessage;
     if (message.type === "snapshot") {
       backoffMs = RECONNECT_MIN_MS;
@@ -937,16 +1036,29 @@ function openSocket(canvasId: string): void {
  * anywhere in the app when the wifi comes back.
  */
 if (typeof window !== "undefined") {
+  /**
+   * It used to return early when `socket` was truthy, and that was the bug in
+   * miniature: **the network coming back is the strongest hint available that
+   * the socket you are holding is the one that died while it was away.** A
+   * dead socket object is still an object, so the guard skipped exactly the
+   * case worth acting on. `wokeUp` handles both — dial if nothing is holding
+   * the connection, otherwise make the one we have prove itself.
+   */
   window.addEventListener("online", () => {
-    if (!currentProjectId || socket) return;
     backoffMs = RECONNECT_MIN_MS;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-    void open(currentProjectId);
+    wokeUp();
   });
   // The last reliable moment a tab gets. `unload` is not one, and a laptop
   // lid closing on four queued ops is precisely the scene.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushReplicaWrites();
+    if (document.visibilityState === "hidden") return flushReplicaWrites();
+    // And the FIRST reliable moment it gets back, which had no handler at all.
+    // Coming back to the tab is when somebody is looking, and waking from
+    // sleep is the likeliest way to arrive holding a socket that has died.
+    wokeUp();
   });
+  // A laptop waking does not always change visibility — the tab can be the
+  // one that was in front the whole time — and it does not always fire
+  // `online` either. `pageshow` covers the restore, including bfcache.
+  window.addEventListener("pageshow", () => wokeUp());
 }
