@@ -156,6 +156,8 @@ import {
   namesFor,
   docStatus,
   statusProblems,
+  toJsonCanvas,
+  describeLosses,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -5636,6 +5638,56 @@ doc
       if (status.supersededBy) console.log(`  superseded by ${status.supersededBy}`);
       if (status.see.length) console.log(`  see ${status.see.join(", ")}`);
       for (const problem of problems) console.log(`  ! ${problem}`);
+    }),
+  );
+
+/**
+ * **Export this canvas to JSON Canvas** — jsoncanvas.org, the open format
+ * Obsidian and others read. `docs/research/json-canvas.md` costed it and
+ * recommended export first; `toJsonCanvas` in core is the mapping.
+ *
+ * **Export only.** Import is not here and is not next: the format carries no
+ * versions, no threads, no actors, no properties and no oplog, so reading one
+ * in would mint a canvas whose history begins at import. Pretending a round
+ * trip exists is how somebody loses work.
+ */
+program
+  .command("export <file>")
+  .description("Write this canvas as JSON Canvas (jsoncanvas.org)")
+  .option("--canvas <canvas>", "which canvas")
+  .action(
+    run(async (file: string, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      /**
+       * A site item's URL lives in its BYTES, not in the version record, so
+       * core cannot reach it — the resolver is what turns those items into
+       * real `link` nodes instead of files. Fetched only for the handful of
+       * `text/uri-list` items rather than for the whole canvas: an export that
+       * downloads every blob to read four of them is a slow export.
+       */
+      const bodies = new Map<string, string>();
+      for (const item of Object.values(snapshot.canvas.items)) {
+        const v = item.versions.find((x) => x.id === item.currentVersionId);
+        if (v?.mimeType !== BROWSER_MIME) continue;
+        const bytes = await ctx.client.downloadBlob(p.id, v.blobHash).catch(() => null);
+        if (bytes) bodies.set(item.id, bytes.toString("utf8"));
+      }
+      const { file: out, lost } = toJsonCanvas(snapshot.canvas, {
+        bodyOf: (item) => bodies.get(item.id) ?? null,
+      });
+      await fs.writeFile(path.resolve(process.cwd(), file), JSON.stringify(out, null, 2) + "\n");
+      if (ctx.json) return printJson({ file, nodes: out.nodes.length, edges: out.edges.length, lost });
+      console.log(`${file} — ${out.nodes.length} nodes, ${out.edges.length} edges`);
+      /**
+       * **What did not cross, said out loud.** An export that quietly drops
+       * half a canvas is the worst kind of success: it looks like a backup.
+       */
+      const losses = describeLosses(lost);
+      if (losses.length) {
+        console.log(`the format has no room for ${losses.join(", ")} — this is not a backup`);
+      }
     }),
   );
 

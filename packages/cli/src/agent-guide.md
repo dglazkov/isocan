@@ -391,6 +391,19 @@ derived rather than kept.
 If you finish something a note describes, change its front matter and re-run
 the generator. CI checks the view is current.
 
+## Taking a canvas somewhere else
+
+`isocan export <file>` writes this canvas as [JSON Canvas](https://jsoncanvas.org)
+— the open format Obsidian and others read. The coordinate model is ours almost
+exactly, so geometry crosses unchanged, and a mind map crosses as real edges
+because an edge here is a property rather than an op.
+
+**It is not a backup, and it says so.** The format has no room for versions,
+comment threads, actors, timestamps, properties or the oplog, so the command
+counts what it could not carry and prints it. There is no import: reading one
+back would mint a canvas whose history begins at import, which is a different
+feature and a worse one to discover by accident.
+
 ## What is addressed to you
 
 `isocan inbox` lists every comment addressed to you across every canvas here —

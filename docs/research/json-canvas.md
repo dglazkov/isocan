@@ -1,7 +1,7 @@
 ---
-status: designed
+status: partial
 since: 2026-08-30
-note: export recommended and unbuilt; nothing in the tree mentions the format
+note: export built; import deliberately not, and the edge question is answered
 ---
 # JSON Canvas: what adopting it would mean
 
@@ -98,6 +98,30 @@ the relationships we already have to be visible".
 3. **Edges as a native primitive** (1–2 weeks) — for their own sake, not because
    a file format has a field for them. If it happens, export gets better free,
    which is the correct order of causation.
+
+## Where this stands, 30 Aug 2026 — export BUILT, and edges answered
+
+`isocan export <file>`, `toJsonCanvas` in core. Geometry crosses unchanged.
+
+**The edge question this note left open has been answered by other work.** It
+said edges were "the whole question" because isocan had no relationship
+primitive. Mind maps shipped on 29 Aug and settled it without deciding
+anything about visibility: an edge is a PROPERTY (`mapParent`), so a canvas
+holding a map exports as a real graph. Verified end to end — a map built on a
+scratch canvas came back as two `toEnd: "arrow"` edges — and the product
+decision this note flagged never had to be taken, because the primitive
+arrived from the other direction.
+
+**Import is deliberately not built and is not next.** The format carries no
+versions, no threads, no actors, no timestamps, no properties and no oplog, so
+reading one in would mint a canvas whose history begins at import. That is a
+different feature with a different argument, and the export counts what it
+could not carry and prints it: *"the format has no room for 28 older versions,
+6 comment threads, 4 properties — this is not a backup."* An export that
+quietly drops half a canvas is the worst kind of success, because it looks
+like one.
+
+The `json-canvas` skill this note also recommended importing is untouched.
 
 ## Recommendation
 
