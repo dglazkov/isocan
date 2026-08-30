@@ -20,7 +20,7 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| **project** | [launch](docs/projects/launch/design.md) | 2026-08-29 | blocked by a spike on whether a write-only token can dispatch · see launch |
+| **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | blocked by one unmeasured guess — whether a token with actions:write and no actions:read can dispatch. Needs a credential to create; the other four are measured. · see launch |
 
 ## Partly built <sub>11</sub>
 

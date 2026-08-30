@@ -1,8 +1,9 @@
 ---
 status: blocked
-since: 2026-08-29
+since: 2026-08-30
 see: launch
-blockedBy: a spike on whether a write-only token can dispatch
+blockedBy: one unmeasured guess — whether a token with actions:write and no actions:read can dispatch. Needs a credential to create; the other four are measured.
+note: spike run 30 Aug; 4 of 5 guesses answered
 ---
 # Agent-on-demand: what happens when the hook fires
 
@@ -190,9 +191,68 @@ Three options, and the recommendation:
 **Recommendation: (b).** The button cannot be removed and should not be made
 to work. What it can be is honest.
 
-## What is a guess, and what the spike must measure
+## The spike, run 30 Aug 2026 — four of five measured
 
-Written before the spike, so these are hypotheses with names:
+Against this repository's own Actions API rather than a scratch repo, because
+every question below is about GitHub's behaviour and not about which repo asks.
+**Measured, not read from the docs:**
+
+| # | Guess | What it actually does |
+| --- | --- | --- |
+| 1 | Boot latency | `workflow_dispatch` → job running: **4s, 21s, 34s** (n=3). A `push` on the same repo: **3–4s** (n=7). |
+| 2 | 204 with no run id | **Confirmed.** `HTTP 204 No Content`, no body, and no `Location` or any other header carrying a run id. |
+| 3 | `actions:write` without `actions:read` | **NOT MEASURED.** Needs a fine-grained token, which is a credential to create; see below. |
+| 4 | 404 vs 422 | **Both, and they mean different things.** A workflow that does not exist → `404 {"message":"Not Found"}`. A workflow that exists, addressed with a ref that does not → `422 {"message":"No ref found for: …"}`. |
+| 5 | Inputs in public metadata | **Absent from the API, present in the log.** The run object has no `inputs` key at all, even when inputs were supplied, and `display_title` is the workflow name. But the run's LOG carries them: `ONE: spike-check` appears in the step's environment block. |
+
+### What each one changes
+
+**1 sets `BOOT_DEADLINE`, and the spread is the finding.** A dispatch takes an
+order of magnitude longer to start than a push — 4 to 34 seconds against 3 to 4
+— and three samples is not a distribution. A pass TTL derived from the fast end
+of that range would expire on an ordinary slow start. Whatever number is
+chosen, it should be justified against the SLOW end and re-measured on a cold
+queue, which this sample does not contain.
+
+**4 is better news than the doc hoped for.** "Unreachable" can distinguish a
+missing hook from a mis-addressed one: 404 means the workflow file is not
+there, 422 means it is and the request was wrong. A dead TOKEN is neither —
+401/403 — so three states are separable rather than two. **A disabled workflow
+was not measured**: disabling one is a settings change, and the 404/422 split
+above does not answer what it returns.
+
+**5 is the load-bearing correction, and it sharpens the doc rather than
+contradicting it.** This design already says the payload is not private. It is
+more specific than that: **private in the API, public in the log.** Anyone who
+can read the repository's Actions logs can read every dispatch input, because
+the runner prints the step's environment. So the rule is not "assume the
+payload might leak" — it is "the payload IS readable by every reader of this
+repo's logs", which is a different sentence to design against.
+
+### Guess 3 is still a guess, and it is the load-bearing one
+
+It needs a fine-grained personal access token scoped to `actions:write` and
+NOT `actions:read` — a credential, which is not mine to create. It is the one
+that decides whether the whole observation design stands: if such a token
+cannot dispatch, the read-only-token argument collapses and the section has to
+be rewritten around a token that can poll.
+
+**The experiment, for whoever holds the token:** create one with exactly that
+scope, then
+
+```sh
+curl -i -X POST -H "Authorization: Bearer $TOKEN" \
+  https://api.github.com/repos/<owner>/<repo>/actions/workflows/<file>/dispatches \
+  -d '{"ref":"main"}'
+```
+
+A `204` means the design stands. A `403` means it does not, and the rewrite is
+the whole of "How the home learns anything".
+
+## What was a guess, before the spike
+
+Written before it, so these were hypotheses with names — kept as written so the
+calls can be judged against what the table above found:
 
 1. **Boot latency**, cold and queued, on a GitHub-hosted runner — sets
    `BOOT_DEADLINE` and therefore the pass TTL. *Currently a guess.*
