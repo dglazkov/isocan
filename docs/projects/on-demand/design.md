@@ -359,7 +359,7 @@ deployment, not a design.
    disk and shell — the spec treats omitted capabilities as unsupported —
    and let the agent keep doing canvas work through the CLI it already
    knows.
-4. **Dispatch**: on an op that `reasonFor` matches, start a turn with the
+4. **Dispatch**: on an op the routing rule matches, start a turn with the
    payload `wait` would have returned.
 5. **A limit and a reason.** A ceiling on turns per agent per hour, and a
    record of what the ceiling stopped. A cycle guard, because the existing
@@ -367,7 +367,9 @@ deployment, not a design.
 6. **The roster.** Whatever `isocan who` should say about an agent that is not
    running. Open — see below.
 
-Steps 1 and 2 are worth doing whether or not the rest happens.
+Step 1 is worth doing whether or not the rest happens — it closes useful
+under `wait` alone, which is what journey.md's front matter and phases.md
+both say of phase 1.
 
 The walk is [phases.md](phases.md) — the same six steps as phases, with
 this doc's open decisions parked at the door of the phase that forces each
@@ -395,7 +397,8 @@ that quietly stops answering looks exactly like an agent with nothing to say.
 **Two doors disagreeing.** CLI agents and summoned agents on one canvas at once
 is fine as long as everything lands as ops. Presence is where it could go
 wrong: cursors and status text are modelled on the park-and-wake lifecycle, and
-a summoned agent never parks.
+a summoned agent never parks. The walk's phase 4 owns closing this — journey 2
+shows presence appearing and fading with the summoned session.
 
 ---
 
@@ -403,12 +406,17 @@ a summoned agent never parks.
 
 - **What `isocan who` says about an agent that is not running.** Presence stays
   ephemeral, so this is a second fact read alongside it. The word matters and
-  there is not a good one yet. It may also be that a first version has two
-  states and not three.
-- **Whether an agent may make *another* agent answerable.** Everything about
-  sponsorship and standing mints currently rests on Scene 7, which is not
-  vetted. A first version where an agent only registers itself is much smaller
-  and `wait` already covers it.
+  there is not a good one yet. Only the word is open: journey 7's acceptance
+  requires three distinguishable readings — answerable, running, gone — so
+  the earlier thought that a first version might have two states is withdrawn
+  (2026-08-30, journey review).
+- **Whether an agent may make *another* agent answerable unasked.** Everything
+  about sponsorship and standing mints currently rests on Scene 7, which is
+  not vetted. (The bullet's old closing line — a first version where an agent
+  registers *itself* — described the withdrawn `ISOCAN_HOOK` mechanism; under
+  the `rc`, no agent registers anything on its own. Journey 1's comment door
+  is a person asking, with the agent as the interface, and phase 2's door owes
+  the decision on where the person's word is checked.)
 - **Where the auto-upgrade window goes.** `considerUpgrade()` uses the park as
   "the first idle point." With no park there is no window — though the
   rc sees `end_turn` and knows the moment precisely, which is better
@@ -416,7 +424,9 @@ a summoned agent never parks.
 - **Whether the prompt is the short brief or the full guide.** isocan composes
   it now, so it owns the cost that agents currently pay themselves: about
   15,000 tokens for the documented onboarding, about 1,045 for the six-command
-  brief.
+  brief. Journey 9 bounds the choice: `isocan wait --json` must stay a
+  faithful stand-in for a summons, so the `wait` payload remains the
+  inspectable core and the wrapper is fixed, never varied per summons.
 
 ---
 
