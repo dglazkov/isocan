@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Skills worth stealing: what the ecosystem has built
 
 **22 August 2026** · [full write-up](https://claude.ai/code/artifact/a380ba2c-2cbe-44dc-b3b4-ef0a3ae2b38b)

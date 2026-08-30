@@ -1,3 +1,8 @@
+---
+status: partial
+since: 2026-08-29
+note: 4 of 5 witnesses diagnosed
+---
 # The flake family, and the first one caught in the act
 
 **29 August 2026**

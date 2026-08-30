@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: context
+note: stage 1 built
+---
 # Context and memory — the canvas is the record, never the index
 
 **28 August 2026.** Asked for as: let the user **see** what context a project

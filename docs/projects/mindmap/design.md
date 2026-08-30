@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-08-29
+see: mindmap
+note: stages 1, 2 and 4; layout waits on a real map
+---
 # Mind maps — a real graph on the canvas
 
 **28 August 2026.** Asked for as: riff with an agent, get mind maps that are

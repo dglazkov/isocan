@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Local agents on the canvas
 
 **24 August 2026**

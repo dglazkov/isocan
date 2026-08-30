@@ -1,3 +1,6 @@
+---
+status: open
+---
 # JSON Canvas: what adopting it would mean
 
 **22 August 2026** · [full write-up](https://claude.ai/code/artifact/e764ed1d-0d76-426f-8667-8aff6b648ef2)

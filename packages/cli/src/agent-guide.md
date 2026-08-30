@@ -374,6 +374,23 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## Saying where a document stands
+
+Every note in `docs/research/` and every project's primary doc carries its
+status in front matter — `open`, `designed`, `partial`, `built`, `blocked`,
+`superseded` — and `docs/ROADMAP.md` is **generated** from it by
+`node scripts/roadmap.mjs`. `isocan doc status <file>` prints one, and names
+what is wrong with how it says so: a `blocked` with nothing named, a
+`superseded` with no successor, a verdict with no date.
+
+**Write the status once, in the front matter.** A verdict written twice goes
+stale in one place and nothing can tell which copy is older — which is exactly
+what happened to `2026-08-26-attaching-a-directory.md`, and why the roadmap is
+derived rather than kept.
+
+If you finish something a note describes, change its front matter and re-run
+the generator. CI checks the view is current.
+
 ## What is addressed to you
 
 `isocan inbox` lists every comment addressed to you across every canvas here —

@@ -1,3 +1,7 @@
+---
+status: designed
+since: 2026-08-29
+---
 # Retiring a name
 
 **25 August 2026.** Every measurement here was taken from this home's own desk

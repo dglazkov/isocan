@@ -1,3 +1,9 @@
+---
+status: blocked
+since: 2026-08-29
+see: launch
+blockedBy: a spike on whether a write-only token can dispatch
+---
 # Agent-on-demand: what happens when the hook fires
 
 **29 August 2026.** [innkeeper.md](../multiuser/innkeeper.md)'s mechanism 11

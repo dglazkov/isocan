@@ -10,6 +10,12 @@ assumed.** Every number in here came from an API, a converter, or a test run on
 the day it is dated. Where something is inference rather than evidence, it says
 so.
 
+**Every note carries its status in front matter** — `open`, `designed`,
+`partial`, `built`, `blocked`, `superseded` — and
+[`../ROADMAP.md`](../ROADMAP.md) is generated from it. A verdict written twice
+is a verdict that goes stale in one place: this file's table is prose for a
+reader, and the front matter is what the roadmap reads.
+
 | Date | Research | What it found |
 | --- | --- | --- |
 | 2026-08-29 | [An inbox for the person](2026-08-29-the-inbox.md) | Being told when anybody on any canvas @-mentions you, and answering in one place. The finding: **`isocan wait` is already this feature, for agents** — `addressesMe` plus the main-thread and thread-you-are-in rules is the filter, finished and tested, and any second definition written for the person would be a second answer to a question that has one. What is missing is a place to stand, a channel that is not per-canvas, and one deferred decision: seen-marks live in `localStorage` per canvas per actor, so a count would mean "in this browser" and could not see a mention on a canvas you have never opened. Recommends a per-canvas high-water mark as an op rather than a per-thread read marker — the cheap answer keeps looking free, which is what the ephemeral plane was drawn for. |

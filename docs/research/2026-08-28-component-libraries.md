@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Component libraries, and what survives the trip to a canvas
 
 **28 August 2026**

@@ -1,3 +1,9 @@
+---
+status: designed
+since: 2026-08-29
+see: atlas
+note: both mechanisms designed, neither built
+---
 # The atlas journey
 
 Understanding a system you did not write, on a canvas, with an agent — and

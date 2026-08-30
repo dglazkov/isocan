@@ -1,3 +1,6 @@
+---
+status: open
+---
 # Agents on the canvas: what the field shipped in a year
 
 **23 August 2026**

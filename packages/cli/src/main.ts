@@ -154,6 +154,8 @@ import {
   inboxTally,
   inboxLine,
   namesFor,
+  docStatus,
+  statusProblems,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -5606,6 +5608,37 @@ persona
  * recommends designing before anybody writes it. Until then this says what
  * exists and lets you decide what is new.
  */
+/**
+ * **Where a document stands**, read out of its own front matter.
+ *
+ * Exists so `scripts/roadmap.mjs` has ONE reader — core's `docStatus` — rather
+ * than a second little parser of its own, which is exactly how the roadmap
+ * would come to disagree with the docs it is a view of. That disagreement is
+ * the bug the whole arrangement exists to fix: on the day it was written,
+ * `2026-08-26-attaching-a-directory.md` held two contradictory verdicts, both
+ * dated the same day.
+ */
+const doc = program.command("doc").description("What this repo's own documents say about themselves");
+
+doc
+  .command("status <file>")
+  .description("Where one document stands, and what is wrong with how it says so")
+  .action(
+    run(async (file: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const text = await fs.readFile(path.resolve(process.cwd(), file), "utf8");
+      const status = docStatus(text);
+      const problems = statusProblems(status);
+      if (ctx.json) return printJson({ ...status, problems });
+      console.log(`${status.status}${status.since ? ` since ${status.since}` : ""}`);
+      if (status.note) console.log(`  ${status.note}`);
+      if (status.blockedBy) console.log(`  blocked by ${status.blockedBy}`);
+      if (status.supersededBy) console.log(`  superseded by ${status.supersededBy}`);
+      if (status.see.length) console.log(`  see ${status.see.join(", ")}`);
+      for (const problem of problems) console.log(`  ! ${problem}`);
+    }),
+  );
+
 program
   .command("inbox")
   .description("Comments addressed to you, across every canvas here")
