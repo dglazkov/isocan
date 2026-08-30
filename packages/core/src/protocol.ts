@@ -9,6 +9,29 @@ export const DEFAULT_PORT = 4441;
 // ---- WebSocket ----
 
 export type ServerMessage =
+  /**
+   * **Proof the connection is still there**, sent on a timer whether or not
+   * anything happened.
+   *
+   * A WebSocket that dies without a close frame — a laptop lid, a wifi-to-
+   * cellular hop, a proxy reaping an idle connection — leaves the browser
+   * reporting `readyState === OPEN` forever, because nothing writes to it and
+   * so nothing fails. Every recovery this system has is reactive: `onclose`
+   * reconnects, a seq gap resyncs, the `online` event dials. **A socket that
+   * has silently died delivers none of those events**, so the tab sits there
+   * showing a canvas that stopped updating, saying "live", and only a reload
+   * fixes it. That was reported.
+   *
+   * Silence is therefore the thing that has to become measurable, and this is
+   * the only way to measure it from a browser: the WebSocket API exposes no
+   * protocol-level ping or pong, so liveness has to be an ordinary message.
+   * It carries nothing — a heartbeat that carried state would be a second way
+   * to learn the canvas, and there is exactly one.
+   *
+   * A client too old to know this type ignores it, which is what makes adding
+   * it safe: unknown message types already fall through.
+   */
+  | { type: "heartbeat" }
   | {
       type: "snapshot";
       project: Canvas;

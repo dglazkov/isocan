@@ -275,6 +275,32 @@ export const TEXT_COLUMN: Record<TextStyle, number> = {
   display: 880,
 };
 
+/**
+ * **How far a line may run before it wraps.**
+ *
+ * `TEXT_COLUMN` is where prose SHOULD wrap; this is where it MUST. The
+ * difference exists because the two things people type at these sizes are not
+ * the same thing: body text is paragraphs and wants a readable measure, but a
+ * title is a label, and wrapping "Design system review" onto three lines
+ * because it passed 640 units is not typography, it is a box that was too
+ * small. Reported as "the area should expand to the right if you get to the
+ * edge".
+ *
+ * So the composer grows rightward to fit what is being typed and only wraps
+ * when it reaches here. Prose still wraps — at body size this is a long line
+ * but not an endless one — and a label gets to be one line, which is what a
+ * label is.
+ *
+ * A multiple rather than four more hand-set numbers: the ladder above already
+ * decided how these steps relate, and a second table would drift from it.
+ */
+export const TEXT_COLUMN_MAX: Record<TextStyle, number> = {
+  body: TEXT_COLUMN.body * 2,
+  heading: TEXT_COLUMN.heading * 2,
+  title: TEXT_COLUMN.title * 2,
+  display: TEXT_COLUMN.display * 2,
+};
+
 export function textBox(body: string, style: TextStyle = "body"): { width: number; height: number } {
   const size = TEXT_STYLE_SIZE[style];
   const lines = body.split("\n");

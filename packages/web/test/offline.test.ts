@@ -677,3 +677,93 @@ describe("a gesture commit stays put until its own history carries it", () => {
     expect(useCanvasStore.getState().connection).toBe("offline");
   });
 });
+
+/**
+ * **A socket that dies without saying so.**
+ *
+ * Reported as: asked something in the Chat, nothing happened, reloaded, and an
+ * agent had picked it up minutes ago. The tab said `live` the whole time.
+ *
+ * The cause is that every recovery in this store is REACTIVE to an event a
+ * silently-dead socket never delivers. `onclose` reconnects — a half-open TCP
+ * connection never closes. The seq-gap check resyncs — it only runs when a
+ * message arrives. The `online` event dials — it fires for the network, not
+ * for this socket, and used to return early whenever a socket object existed,
+ * which is exactly the case worth acting on. A lid closing, a wifi-to-cellular
+ * hop or a proxy reaping an idle connection leaves `readyState === OPEN`
+ * forever, because nothing writes to the socket and so nothing fails.
+ *
+ * The recovery underneath was always correct — it resumes from a cursor. What
+ * was missing was DETECTION, and these are the tests for it.
+ */
+describe("a connection that goes quiet", () => {
+  /** Silence, without touching the socket: exactly what a dead one looks like
+   * from in here. */
+  const goQuiet = async (ms: number) => {
+    vi.advanceTimersByTime(ms);
+    await settle();
+  };
+
+  it("gives up on a socket that has said nothing, and dials again", async () => {
+    const { useCanvasStore } = await store();
+    await connected(2);
+    expect(useCanvasStore.getState().connection).toBe("live");
+    const dialled = FakeSocket.opened.length;
+
+    // Past two missed beats and the slack. The socket is never closed by the
+    // fake — the whole point is that a dead one would not close itself.
+    await goQuiet(80_000);
+    // The watchdog closes it; the retry is on a backoff, so let that run too.
+    await goQuiet(2_000);
+
+    expect(FakeSocket.opened.length).toBeGreaterThan(dialled);
+  });
+
+  it("waits, rather than reconnecting over an ordinary quiet minute", async () => {
+    /* A canvas nobody is touching is silent, and a store that treated silence
+       as death would reconnect all day. The beat is 25s; this is inside two. */
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    await goQuiet(45_000);
+    expect(FakeSocket.opened.length).toBe(dialled);
+    expect(useCanvasStore.getState().connection).toBe("live");
+  });
+
+  it("counts a heartbeat as proof of life", async () => {
+    /* The message that exists solely so a quiet canvas can be told from a dead
+       connection. A browser cannot see protocol pings or pongs, so liveness
+       has to arrive as an ordinary message. */
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    for (let i = 0; i < 4; i++) {
+      await goQuiet(20_000);
+      FakeSocket.last.deliver({ type: "heartbeat" });
+      await settle();
+    }
+    expect(FakeSocket.opened.length).toBe(dialled);
+    expect(useCanvasStore.getState().connection).toBe("live");
+  });
+
+  it("counts ordinary traffic as proof of life too", async () => {
+    /* The beat is for quiet canvases; a busy one proves itself with its own
+       work, and a store that only accepted heartbeats would reconnect in the
+       middle of somebody typing. */
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    let seq = 2;
+    for (let i = 0; i < 4; i++) {
+      await goQuiet(20_000);
+      seq += 1;
+      FakeSocket.last.deliver({
+        type: "op-applied",
+        entry: entry({ type: "item.move", itemId: "itm_1", x: seq, y: 0 }, seq, jordan),
+      });
+      await settle();
+    }
+    expect(FakeSocket.opened.length).toBe(dialled);
+    expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(seq);
+  });
+});

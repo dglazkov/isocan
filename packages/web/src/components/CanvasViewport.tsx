@@ -409,10 +409,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       return;
     }
 
-    // The Text tool: click open canvas and a composer opens there. It is one
-    // click and out — like the Comment tool, the mode ends when it has been
-    // used, because the next thing somebody wants after typing is to move
-    // what they typed.
+    // The Text tool: click open canvas and a composer opens there. **The tool
+    // STAYS on**, which is a reversal — it used to drop back to Select on the
+    // grounds that "the next thing somebody wants after typing is to move what
+    // they typed". That is true for one label and wrong for the job people
+    // actually do with it, which is labelling six things in a row; it meant
+    // reaching for the tool again between every one. Reported as exactly that.
+    //
+    // The gesture composes rather than conflicting: pressing on the canvas
+    // while a composer is open commits it (the document-level listener in
+    // `TextComposer` runs in the capture phase, before this) and then opens
+    // the next one here. One press, finish this, start the next — which is
+    // what staying in a tool is supposed to feel like. Escape closes without
+    // committing; V or Select leaves the mode.
     if (isBackground && activeTool === "text" && e.button === 0 && !wantsPan) {
       // The press must NOT do its default focusing, or the browser moves
       // focus to the canvas a beat after the composer mounts and asks for it
@@ -431,7 +440,6 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
       });
-      ui.setActiveTool("select");
       return;
     }
 

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { InkPoint, InkStroke, TextFace, TextStyle } from "@isocan/core";
+import { TEXT_FACES, TEXT_STYLES } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
@@ -336,6 +337,49 @@ function writeFlag(key: string, value: boolean): void {
   }
 }
 
+const TEXT_STEP_KEY = "isocan.text.style";
+const TEXT_FACE_KEY = "isocan.text.face";
+
+/**
+ * **The step and face you last typed in, kept across reloads.**
+ *
+ * They were remembered already — but only in memory, so every reload dropped
+ * back to `body`, and somebody labelling a canvas had to reach for "title"
+ * again and again. Reported as exactly that, in a week where reloading was
+ * also the only cure for a stale socket, which is what made a per-session
+ * memory feel like no memory at all.
+ *
+ * Validated against the closed sets rather than trusted: a hand-edited or
+ * stale key must not be able to open the composer at a step that no longer
+ * exists, and the fallback is the same default a first visit gets.
+ */
+function readTextStyle(): TextStyle {
+  try {
+    const raw = localStorage.getItem(TEXT_STEP_KEY);
+    return TEXT_STYLES.includes(raw as TextStyle) ? (raw as TextStyle) : "body";
+  } catch {
+    return "body";
+  }
+}
+
+function readTextFace(): TextFace {
+  try {
+    const raw = localStorage.getItem(TEXT_FACE_KEY);
+    return TEXT_FACES.includes(raw as TextFace) ? (raw as TextFace) : "sans";
+  } catch {
+    return "sans";
+  }
+}
+
+function writeText(style: TextStyle, face: TextFace): void {
+  try {
+    localStorage.setItem(TEXT_STEP_KEY, style);
+    localStorage.setItem(TEXT_FACE_KEY, face);
+  } catch {
+    // A browser refusing storage is not a reason to refuse the tool.
+  }
+}
+
 /** The ink you last dipped into, if any. Only a literal hex survives the trip
  * back — the value ends up inside a saved SVG. */
 function readInkColor(): string | null {
@@ -380,8 +424,8 @@ export const useUiStore = create<UiStore>((set) => {
     pendingText: null,
     clipboard: null,
     contextMenu: null,
-    lastTextStyle: "body",
-    lastTextFace: "sans",
+    lastTextStyle: readTextStyle(),
+    lastTextFace: readTextFace(),
     sketch: [],
     sketchError: null,
     penSession: false,
@@ -436,7 +480,10 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingText: (pendingText) => set({ pendingText }),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
-    setLastText: (lastTextStyle, lastTextFace) => set({ lastTextStyle, lastTextFace }),
+    setLastText: (lastTextStyle, lastTextFace) => {
+      writeText(lastTextStyle, lastTextFace);
+      set({ lastTextStyle, lastTextFace });
+    },
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),
     setHelpOpen: (helpOpen) => set({ helpOpen }),

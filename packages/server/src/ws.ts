@@ -33,6 +33,55 @@ export function attachWebSockets(
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Set<WebSocket>>();
 
+  /**
+   * **The beat, and the reaping.**
+   *
+   * Two different jobs that happen on the same timer, for two different dead
+   * sockets.
+   *
+   * `heartbeat` is for the CLIENT: a browser cannot see protocol pings or
+   * pongs, so the only way a tab can tell a live-but-quiet connection from a
+   * dead one is an ordinary message arriving on a schedule. Without it a
+   * socket that died without a close frame — a lid closing, a wifi-to-cellular
+   * hop, a proxy reaping an idle connection — leaves the tab reporting itself
+   * live forever, showing a canvas that stopped updating. Reported exactly
+   * that way: "nothing happened, I reloaded, and the agent had been working".
+   *
+   * `ping`/`isAlive` is for the SERVER, and is the mirror image: a room that
+   * keeps a socket nobody is on the other end of goes on broadcasting into it
+   * and holds a presence face up for somebody who left. `ws` answers pings
+   * automatically at protocol level, so a client that is genuinely there stays
+   * marked alive without doing anything, and a client that is not gets
+   * terminated on the next sweep — which fires the same `close` handler a
+   * clean disconnect does, so presence and rooms clean up by the existing
+   * path rather than a second one.
+   *
+   * 25 seconds because the shortest idle timeout worth surviving in front of
+   * this is a proxy's 30, and a beat that only just fits inside one is a beat
+   * that is sometimes late.
+   */
+  const alive = new WeakSet<WebSocket>();
+  const beatMs = 25_000;
+  const heartbeat = JSON.stringify({ type: "heartbeat" } satisfies ServerMessage);
+  const beating = setInterval(() => {
+    for (const socket of wss.clients) {
+      if (!alive.has(socket)) {
+        // Missed the whole window: no pong since the last sweep. Terminate
+        // rather than close — a half-open socket will not answer a handshake
+        // either, and `close()` on one waits for a reply that never comes.
+        socket.terminate();
+        continue;
+      }
+      alive.delete(socket);
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      socket.ping();
+      socket.send(heartbeat);
+    }
+  }, beatMs);
+  // Never hold the process open for a heartbeat: a daemon whose last tab
+  // closed should still exit.
+  beating.unref?.();
+
   function broadcast(canvasId: string, message: ServerMessage): void {
     const room = rooms.get(canvasId);
     if (!room) return;
@@ -401,6 +450,12 @@ export function attachWebSockets(
         .catch(() => {});
     });
 
+    /* Marked alive at birth so the first sweep does not reap a socket that has
+       simply not been asked yet, and on every pong thereafter. `ws` sends the
+       pong itself, so a browser needs no cooperation to stay marked. */
+    alive.add(ws);
+    ws.on("pong", () => void alive.add(ws));
+
     ws.on("close", () => {
       room.delete(ws);
       if (room.size === 0) rooms.delete(canvasId);
@@ -415,6 +470,7 @@ export function attachWebSockets(
   }
 
   return () => {
+    clearInterval(beating);
     for (const timer of pendingRoster.values()) clearTimeout(timer);
     pendingRoster.clear();
     for (const socket of wss.clients) socket.terminate();
