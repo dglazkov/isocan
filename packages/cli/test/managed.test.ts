@@ -133,7 +133,9 @@ describe("the smoke test", () => {
       root,
       expect: "bbbbbbb",
       timeoutMs: 15_000,
-      attempts: 1,
+      // The default of 3 for the reason given below: a build that will not
+      // start is not a race, so this still returns on the first attempt — and
+      // a lost port race gets the retry that makes the operation reliable.
     });
     expect(result.ok).toBe(false);
     expect(result.why).toContain("@isocan/server");
@@ -148,12 +150,24 @@ describe("the smoke test", () => {
     const root = await makeBuild(paths.buildDir(home, "ccccccc"), "ccccccc", {
       claims: "ddddddd",
     });
+    /**
+     * **No `attempts: 1` here, and that is the point.** It was set to keep the
+     * assertion tight, and it removed the very protection that makes this
+     * operation reliable: `freePort` guesses (it must — the child is spawned
+     * and then polled on that port), so a single lost race turns this into
+     * `EADDRINUSE` instead of the verdict under test. Observed on 30 Aug under
+     * a 14-worker run.
+     *
+     * The default of 3 costs this test nothing: a genuine mismatch sets no
+     * `raced`, so `smokeTest` returns on the first attempt regardless. Only a
+     * port race is retried, which is exactly the difference between the thing
+     * being tested and the thing getting in its way.
+     */
     const result = await smokeTest({
       home,
       root,
       expect: "ccccccc",
       timeoutMs: 15_000,
-      attempts: 1,
     });
     expect(result.ok).toBe(false);
     expect(result.why).toContain("ddddddd");

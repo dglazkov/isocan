@@ -38,31 +38,38 @@ import { readConfigFile } from "@isocan/server";
 export type Mode = "direct" | "daemon";
 
 /**
- * **THE DEFAULT, and it is one line on purpose.**
+ * **THE DEFAULT — and the decision is to delete it, not to flip it**
+ * (2026-08-30; the closed entry in `docs/projects/multiuser/phases.md`).
  *
  * What a machine does when nobody has said — no flag, no environment, no
  * config — *and* the canvas it would work lives at a home somewhere else.
  *
- * It is `daemon` today, and the argument for flipping it is live rather than
- * settled. Against the daemon: its headline justification is offline, and
- * offline has never worked for the CLI — `HomeUnreachableError` in
- * `home-link.ts` refuses a replica's CLI write when the home is unreachable,
- * deliberately, and says so. Writes forward synchronously to the home's
- * single-writer pipeline either way, so the replica adds a hop to every write
- * rather than removing one; only reads are served locally. And a machine with
- * no CLI replica has exactly ONE replica (the browser's, from phase 10)
- * instead of two that cannot see each other — which is the entire premise of
- * the local-bridge debt.
+ * **The daemon's last justification was offline, and offline for an agent is
+ * fiction.** An agent works by reaching a model, so an agent with no network
+ * is not an agent whose writes are refused — it is an agent that is not
+ * running. That retired the queue and the bridge (phases 12.5 and 12.7), and
+ * with them the only reason to keep a replica the CLI could write through
+ * while its home was unreachable. `HomeUnreachableError` below never had a
+ * fix coming. What the replica actually buys is a read cache, a blob cache,
+ * and one warm connection — writes forward synchronously either way, so it
+ * adds a hop rather than removing one.
  *
- * For the daemon: fast reads, blobs cached on disk by hash, and the airplane
- * scene the bridge is meant to buy — a person in the browser and their agent
- * in the terminal, one canvas, no network. Flipping this makes that scene
- * impossible-and-honest rather than half-built.
+ * **So why this constant is wrong rather than merely pointed the wrong way.**
+ * It is a machine-wide answer to a question that stopped being machine-wide
+ * in phase 10.3, when the home became a property of the CANVAS — the same
+ * altitude mistake the `homeUrl` → `birthHome` rename fixed. Flipping it also
+ * fails closed: `setup` with no address (`main.ts`, the mode decision) would
+ * resolve to direct with nothing to be direct *to* and throw, on every fresh
+ * install and on this repo's own checkout.
  *
- * **The evidence to decide is a real session, not an argument**, which is why
- * the switch exists before the decision does. When it flips, it flips the way
- * phase 14 flipped the birth default: consulted at `setup` and NEVER for a
- * machine that already holds canvases, with a receipt and a way back.
+ * **What replaces it:** the mode is derived per command from the canvas's
+ * home — direct when the canvas lives elsewhere, the daemon when this machine
+ * IS the home. Phase 14's care then costs nothing to keep, because a machine
+ * holding local canvases is never flipped: its canvases live here.
+ *
+ * Until that derivation lands this stays `daemon`, which is the honest value
+ * for a constant whose replacement is not built yet. Do not flip it on the
+ * way past.
  */
 export const DEFAULT_MODE: Mode = "daemon";
 

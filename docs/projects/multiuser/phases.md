@@ -109,8 +109,10 @@ failure mode was silent from the day it was typed.
 
 **What is next is a choice, not a queue, and now it is only a choice.**
 Everything below is a feature added to a live isocan.io, and its order returns
-to being a hypothesis — real users get a vote on whether the spark (11, 12) or
-the airplane (12.5, 12.7) matters more. The one debt that sat outside that is
+to being a hypothesis — real users get a vote on what matters most. **The
+airplane (12.5, 12.7) is off the list**, retired 2026-08-30: an agent cannot
+work with no network, because it cannot reach a model, so the queue and the
+bridge had no caller. The one debt that sat outside that is
 paid: **phase 10.5 closed 29 Aug 2026**, when Paul and Dion walked
 `development.md`. Nothing on this project is owed to anybody now. Prod's
 sign-in mail is done — magic-link from an aligned sender, proved on a browser
@@ -129,9 +131,10 @@ The launch-first order set 2026-08-24 by Dimitri ran 10.3 → 10.5 → 13.5 → 
 → 14, and has arrived. The cut line was the journey's own built/unbuilt
 boundary: Scenes 0–5 shipped and proven, Scenes 6–7 the entire unbuilt
 remainder, so launching first shipped exactly the journey that exists. The
-two-surfaces problem phase 10 surfaced still has its address — the airplane arc,
-phases 12.5 and 12.7. This line moves as phases close; a clean session starts by
-believing it.
+two-surfaces problem phase 10 surfaced no longer has an address, and no longer
+needs one: the airplane arc (12.5, 12.7) was retired 2026-08-30, and the second
+replica goes away rather than being bridged. This line moves as phases close; a
+clean session starts by believing it.
 
 **Deliberately open.** Things decided *not* to decide yet, kept here
 rather than in a phase because they belong to no phase's Proof and would
@@ -139,55 +142,72 @@ otherwise be discovered instead of chosen. A clean session should read
 this list, not act on it: each entry is open because acting tired on it
 is how it goes wrong.
 
-- **Whether `direct` should be the DEFAULT, opened 2026-08-29 by Dimitri
-  (phase 11).** Phase 11 built the switch; which way it points when nobody
-  has said is `DEFAULT_MODE` in `packages/cli/src/direct.ts`, one line, and
-  it is `daemon` today only because nothing has earned the flip yet. **The
-  case for flipping is stronger than it looks.** The daemon's headline
-  justification is offline, and offline has never worked for the CLI —
-  `HomeUnreachableError` refuses a replica's CLI write when the home is
-  unreachable, deliberately, and says so; phase 12.5 is the unpaid debt to
-  fix it. Writes forward synchronously to the home's single-writer pipeline
-  either way, so the replica **adds** a hop rather than removing one; only
-  reads are served locally. And a machine with no CLI replica has exactly
-  ONE replica — the browser's, from phase 10 — instead of two that cannot
-  see each other, **which is the entire premise of the local-bridge debt
-  below**: flipping this would retire phase 12.7, its Private Network
-  Access dependency and its failure-mode list, by deleting the thing they
-  exist to reconcile. **What it costs** is the airplane thesis, converted
-  from a debt into a decision: "a person in the browser and their agent in
-  the terminal, one canvas, no network" becomes impossible-and-honest
-  rather than half-built-and-silent. Plus fast reads and the on-disk blob
-  cache. **What stops it being unconditional:** a machine that IS the home.
-  A locally-born canvas needs a daemon to hold it, so the honest
-  formulation is *direct when the canvas lives elsewhere, daemon when this
-  machine is the home* — and since phase 14 the first is the common case.
-  **Open because the evidence is a real session, not an argument**, and
-  because flipping it must follow phase 14's care exactly: consulted at
-  `setup`, never under a machine that already holds canvases, with a
-  receipt and `isocan direct --clear` as the way back.
+- **Whether `direct` should be the DEFAULT — CLOSED 2026-08-30 by Dimitri
+  (opened 2026-08-29, phase 11).** Kept as a headstone, because what closed
+  it also closed two phases. It stood open for one day, waiting for "a real
+  session, not an
+  argument", and what settled it was neither: **the daemon's last
+  justification turned out to be fiction.** An agent cannot work with no
+  network, because it cannot reach a model. A queue that let a replica's CLI
+  write while the home was unreachable would let an agent record work it had
+  no way to produce. The local-bridge entry below and phases 12.5 and 12.7
+  are retired the same day and for the same reason.
 
-- **The local bridge, opened 2026-08-24 (phase 10).** Phase 10 gave the
-  browser its own replica and queue, and in doing so made visible that a
-  machine now has **two** replicas that cannot see each other: the tab's,
-  and the daemon's. Offline they queue separately toward a home neither
-  can reach. The design — the tab reaching its local daemon through a
-  same-origin bridge frame, so the agent and the browser share one
-  replica — is written up in
-  [local-bridge.md](local-bridge.md) and is **deliberately
-  not chosen**. It is open because it trades against three things this
-  project holds on purpose: the one-origin rule, "the daemon never serves
-  pages to persons", and `home-link.ts`'s refusal to half-build an offline
-  queue. Choosing it means the daemon learns to queue (which phase 13
-  wants anyway), a browser-policy dependency on Private Network Access,
-  and a framing policy the daemon does not have today. Whoever takes it up
-  should read the failure modes section first: this makes the local daemon
-  a dependency of the browser experience, and a tab silently falling back
-  to a *stale* daemon would be the cheerful-wrong-address bug in its worst
-  form yet. **Scheduled 2026-08-24:** the airplane arc — phase 12.5 builds
-  the queue, phase 12.7 the bridge, both post-launch; this entry stands
-  until the full design is written and the browser hypotheses measured,
-  which gate 12.7.
+  **What the replica actually buys**, once offline is off the table: a read
+  cache, a blob cache, and one warm connection to the home. Writes forward
+  synchronously either way — `forwardSubmit` in `engine.ts` awaits the home,
+  applies its answer, and only then returns — so the replica adds a hop
+  rather than removing one, and the reads it serves come from a copy that
+  lags the home. Measured against isocan.io from a laptop: about 48ms to a
+  completed TLS handshake, about 50ms a round trip after that, against under
+  a millisecond on loopback. That is the whole of the latency argument, and
+  it was overstated in both directions before it was measured.
+
+  **The decision is NOT the constant.** `DEFAULT_MODE` is a machine-wide
+  answer to a question that stopped being machine-wide in phase 10.3, when
+  the home became a property of the canvas — the same altitude mistake the
+  `homeUrl` → `birthHome` rename fixed. Flipping the line also fails closed:
+  at `main.ts:2959` a `setup` with no address resolves to direct with
+  nothing to be direct *to* and throws, which is every fresh install and
+  this repo's own checkout, since `defaultHomeUrl` returns null for one. So
+  the mode is **derived per command from the canvas's home** — direct when
+  the canvas lives elsewhere, the daemon when this machine is the home — and
+  `DEFAULT_MODE` is deleted rather than flipped. Phase 14's care then costs
+  nothing to keep: a machine holding local canvases is never flipped,
+  because its canvases live here.
+
+  **The local home stays, and is not what was retired.** A daemon that holds
+  its own canvases is not a replica. It is the only place offline works for
+  both surfaces at once, it is `npm run dev` and every daemon the suite
+  spawns, and it is what makes innkeeper.md's "an innkeeper, never the
+  innkeeper" a fact rather than an intention. What is retired is the replica
+  role: `home-link.ts`, `home-links.ts`, `sweep.ts` and the tests that drive
+  them, deleted after the derivation lands and nothing reaches them — not
+  before, because deleting is the irreversible half and the code is already
+  paid for.
+
+- **The local bridge — CLOSED 2026-08-30 (opened 2026-08-24, phase 10).**
+  Phase 10 gave the browser its own replica and queue, and in doing so made
+  visible that a machine has **two** replicas that cannot see each other:
+  the tab's, and the daemon's. Offline they queue separately toward a home
+  neither can reach. The design — the tab reaching its local daemon through
+  a same-origin bridge frame — is in [local-bridge.md](local-bridge.md), and
+  it was never chosen.
+
+  **It is retired rather than deferred, because the thing it reconciles
+  stops existing.** Two replicas that cannot see each other only matters
+  offline, and offline is where the agent cannot run at all. Deriving the
+  mode per canvas (entry above) also removes the second replica outright on
+  every machine whose canvases live elsewhere, so there is nothing left to
+  bridge. The Private Network Access dependency, the framing policy the
+  daemon does not have, and the stale-daemon failure mode all go with it.
+
+  **What is worth not losing** is in local-bridge.md's security section and
+  it is kept there: if anything ever frames the daemon, `frame-ancestors`
+  and the `postMessage` origin check both derive from the home of the canvas
+  being shown — `GET /api/homes` per canvas, never a whole-machine value.
+  That correction was phase 10.3's and it stands whether or not a bridge is
+  ever built.
 
 - **Canvas or project — CLOSED 2026-08-24 (phase 13.5).** Kept here as a
   headstone rather than deleted, because what it decided still binds. The
@@ -1355,12 +1375,13 @@ steps, a canvas born at its hosted home.
 
 **After launch: the features.** Everything below ships into a live
 isocan.io through the release promotion, and its order returns to being
-a hypothesis — real users get a vote on whether the spark or the
-airplane matters more. Two arcs are gated on design work that is
-session-shaped rather than phase-shaped, the way identity-desk.md and
-innkeeper.md were written: `projects/launch/design.md` and its dispatch spike
-before phase 12; the completed local-bridge design, its Chrome spike,
-and the journey's missing airplane scene before phase 12.7.
+a hypothesis — real users get a vote on what matters most. The airplane
+arc is no longer one of the candidates: phases 12.5 and 12.7 were retired
+2026-08-30 when the scene they were gated on turned out to be one nobody
+can play, an agent working with no network to reach a model through. One
+arc is still gated on design work that is session-shaped rather than
+phase-shaped, the way identity-desk.md and innkeeper.md were written:
+`projects/launch/design.md` and its dispatch spike, before phase 12.
 
 ## Phase 11 — The thin agent (Scene 6)
 
@@ -1508,61 +1529,47 @@ sweep.
 
 ## Phase 12.5 — The queue
 
-**Status: NOT STARTED.**
+**Status: RETIRED 2026-08-30, unstarted.** Its Outcome was the sentence
+that retired it: *"An agent on a plane can work."* It cannot. An agent
+reaches a model over the network, so a network that is gone takes the agent
+with it, and a queue would only let it record work it had no way to
+produce. The phase was written to pay a debt `home-link.ts` refuses on
+purpose — a durable, ordered, adoptable queue for a replica's CLI writes —
+and there is no caller for it.
 
-**Work:** The daemon learns to queue — the debt `home-link.ts` refuses
-on purpose, payable now because phase 10 already answered every hard
-question in the harder place: client-minted ids, exactly-once replay,
-flush-before-tail, the false-refusal honesty. This ports a proven shape
-into the process that already has an oplog, durability, and an adoption
-path. Deliberately *not* the bridge: after this phase a machine still
-has two queues, both honest.
+**The failure it gets mistaken for is real, and is not this.** A home that
+is down while the model provider is up — a Cloud Run deploy rolling, a cold
+start, a wedged instance at `max-instances=1` — refuses writes with the
+agent working perfectly. That is a reliability gap, and the first answers to
+it are on the home's side (min-instances, a health gate on the rollout), not
+a distributed queue on every client. If it is ever taken up, it should be
+taken up under that heading, with that Outcome, and not this one.
 
-**Outcome:** An agent on a plane can work: a replica's CLI writes
-succeed and queue while the home is unreachable, and land in home order
-on reconnect, before the tail comes down.
-
-**Proof:** Phase 10's actuation, replayed for the other surface: home
-stopped, CLI writes accepted, a second writer raced in first, reconnect
-— the queued ops land after it under the ids they minted offline, and
-replaying one appends nothing.
-
-**Findings:** *none yet.*
+**What phase 13 borrowed from here.** Phase 13's Work says the queue
+"arrives proven from phase 12.5". It does not any more — see the note in
+that phase.
 
 ## Phase 12.7 — The bridge
 
-**Status: NOT STARTED.**
+**Status: RETIRED 2026-08-30, unstarted.** It was gated on a scene the
+journey lacked — a person and their agent, one canvas, no network — and the
+scene was never written because it cannot happen: the agent needs a model,
+and a model needs the network. Its Outcome ("the thesis survives the plane")
+was about a plane nobody can work on.
 
-**Work:** One replica on a machine, not two: the tab reaches the local
-daemon through the same-origin bridge frame of
-[local-bridge.md](local-bridge.md) — taken up only after
-that design is completed and its browser hypotheses measured (the
-127.0.0.1 frame carve-out, and Private Network Access, which browsers
-have been reshaping toward permission prompts; a comment that reasons
-about a browser is a hypothesis). The journey grows the scene it lacks —
-a person and their agent, one canvas, no network — and the failure-mode
-list is the center of the work: stale daemon, wrong home, wrong port,
-unclaimed badge, each refused legibly, because a tab quietly agreeing
-with a stale daemon is the cheerful-wrong-address bug in its worst form
-yet. The "never pages to persons" bend is recorded — and phase
-10.3 already bent it, since a daemon now serves pages for the canvases it
-is the home of, so what 12.7 adds is a frame and not the first exception.
-The frame-ancestors lock and the postMessage origin check derive from the
-served canvas's home; **that correction is made** — phase 10.3 rewrote
-the line in local-bridge.md that said both derive from "one value the
-daemon already holds", and `GET /api/homes` is the route that answers it
-per canvas. Phase 10's browser replica remains the answer when no daemon
-is present.
+**It was also solving a problem that is going away.** The bridge exists to
+reconcile two replicas on one machine. Deriving the mode per canvas leaves
+one — the browser's, from phase 10 — on every machine whose canvases live
+elsewhere. Nothing to bridge.
 
-**Outcome:** The thesis survives the plane: a person in the browser and
-their agent in the terminal see each other's work with no network,
-through one replica and one queue.
-
-**Proof:** The scene, actuated in Chrome with the network gone; the
-no-daemon fallback exercised; the stale-daemon and wrong-home refusals
-driven and read.
-
-**Findings:** *none yet.*
+**What went with it:** the Private Network Access dependency (browser
+policy this project would not have controlled), the framing policy the
+daemon does not have, and the failure-mode list whose worst entry was a tab
+silently agreeing with a stale daemon. **What did not:** the security rule
+in [local-bridge.md](local-bridge.md) — `frame-ancestors` and the
+`postMessage` origin check derive from the home of the canvas being shown,
+per canvas off `GET /api/homes`, never a whole-machine value. Phase 10.3
+made that correction and it holds for anything that ever frames the daemon.
 
 ## Phase 13 — Offline birth, twins, re-homing
 
@@ -1570,11 +1577,22 @@ driven and read.
 
 **Work:** Adoption from seq 1 on first reconnect; first-writer wins
 and the late twin parks whole; re-homing as the generalized push —
-work travels, the guest book stays. Thin now: the queue arrives proven
-from phase 12.5, so what is left is adoption, the twin rule, and the
-push itself. Re-homing's landing also retires the sovereignty caveat
-phase 13.7 wrote into the terms — deleting that sentence is part of
-this phase's outcome.
+work travels, the guest book stays. Re-homing's landing also retires the
+sovereignty caveat phase 13.7 wrote into the terms — deleting that
+sentence is part of this phase's outcome.
+
+**This phase is no longer thin, and half of it may not survive**
+(2026-08-30, unresolved and deliberately not decided here). It said "the
+queue arrives proven from phase 12.5", and 12.5 is retired, so nothing
+arrives. Worse for the first third: **offline birth has the same premise
+problem the airplane had.** A canvas born with no network is born by the
+CLI — journey.md says so outright, "CLI-and-agent only: a browser cannot
+visit a canvas whose origin has never been reachable" — and the agent that
+would birth it cannot run. Re-homing and the twin rule are independent of
+any of that and stand on their own: re-homing is a canvas moving between
+homes on a working network, and twins are what happens when two homes both
+think they hold one. Whoever takes this phase up should split it before
+starting.
 
 **Outcome:** A plane-born canvas adopts its promised home; a twin is
 refused and parked, never merged; a re-homed canvas keeps its authors

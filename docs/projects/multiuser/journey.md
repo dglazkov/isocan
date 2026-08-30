@@ -310,6 +310,19 @@ her entire state was always the home's.
 
 ## Scene 7 — Agent-on-demand
 
+**Where this stands, 30 Aug 2026: ASPIRATIONAL, AND NOT VETTED.** Every other
+scene here was walked and argued; this one was sketched and never checked. Do
+not cite it as a decision. In particular its `workflow_dispatch` hook, the
+`spark` state and the pile's two-axis grammar were never agreed, and
+[`innkeeper.md`](innkeeper.md)'s Mechanism 11 inherits that status because it
+opens by naming this scene's registration.
+
+What *is* inherited from Scene 6, which is built: an agent parked in the cloud
+runs all night to be awake for four minutes, and when its session times out
+the ring fades until a person notices. **Always-on was never the requirement;
+always-answerable was.** That sentence is the good part and the rest is up for
+replacement — see [`docs/projects/on-demand/design.md`](../on-demand/design.md).
+
 Scene 6 works, but the bill tells on it: Sonia's sandbox runs all night to
 be awake for four minutes of summonses, and when the harness times out the
 idle session her ring fades until a human notices. Always-on was never the
@@ -406,22 +419,25 @@ replica durable.
 
 ## Open debts
 
-- **The plane has two surfaces and only one of them works** (opened
+- **The plane has one surface, and it works — CLOSED 2026-08-30** (opened
   2026-08-24 by phase 10; designed, not chosen, in
-  [local-bridge.md](local-bridge.md)). Rule 6 below says
-  offline in the browser is the service worker's job, and phase 10 made
-  that true. What the rule quietly assumes is that the browser is the
-  only surface needing to survive a lost network — and on a machine
-  running a daemon it is not. Offline, a tab keeps working and a
-  replica's CLI writes are refused; worse, the two cannot see each other
-  even on the same laptop, because one is served from the home's origin
-  and the other lives at `127.0.0.1`. Two replicas of one canvas,
-  queueing toward a home neither can reach, invisible to one another.
-  The journey has no scene for this, which is why nobody noticed: "a
-  person in the browser and an agent in the terminal, on one canvas" is
-  the thesis, and it is the half that quietly suspends when the network
-  goes. A scene would force the mechanism, the way every other debt here
-  was forced.
+  [local-bridge.md](local-bridge.md)). The debt said rule 6 quietly assumes
+  the browser is the only surface needing to survive a lost network, and
+  that on a machine running a daemon it is not: offline, a tab keeps working
+  while a replica's CLI writes are refused, and the two cannot see each
+  other even on one laptop. **It was recorded as missing a scene, and the
+  scene is why it closed.** Nobody could write it. An agent works by
+  reaching a model, so an agent with no network is not an agent whose writes
+  are refused — it is an agent that is not running. The unwritten scene was
+  unwritable, and two phases (12.5, 12.7) were waiting on it.
+
+  What survives is the true half: **offline in the browser is the service
+  worker's job**, phase 10 made that true, and it is the whole of what the
+  thesis needs offline. The second replica goes away rather than being
+  bridged — the CLI speaks to the canvas's home directly when the canvas
+  lives elsewhere, so there is one replica on the machine, the tab's. The
+  daemon that IS a canvas's home is untouched by any of this, and is still
+  the one place both surfaces work with no network at all.
 
 - **The identity desk** (three appearances, load-bearing; now **designed**
   in [identity-desk.md](identity-desk.md)): who may enter a

@@ -588,19 +588,22 @@ comes from the object store rather than from the client.
   … hello, badge, offer, replay", and the store it would offer is
   missing exactly the two things a replay needs.
 
-**A road drawn but not taken.** A machine now holds two replicas that
-cannot see each other — the tab's and the daemon's — which only matters
-when there is no network, and matters a lot then.
-[The local bridge](projects/multiuser/local-bridge.md) draws the alternative:
-the tab reaching its local daemon through a same-origin bridge frame, so that a
-person and their agent share one replica and one queue. It is designed and
-deliberately unchosen; if it is ever taken up, the browser replica above
-becomes the fallback for machines with no daemon rather than the only
-answer.
+**A road drawn, and now closed.** A machine holds two replicas that cannot
+see each other — the tab's and the daemon's — which only matters when there
+is no network. [The local bridge](projects/multiuser/local-bridge.md) drew the
+alternative: the tab reaching its local daemon through a same-origin bridge
+frame, so a person and their agent share one replica and one queue. **Retired
+2026-08-30**, because the half that justified it is false: an agent works by
+reaching a model, so an agent with no network is not an agent whose writes are
+refused, it is an agent that is not running. The second replica is being
+removed instead of bridged — the CLI speaks to the canvas's home directly when
+the canvas lives elsewhere — so the browser replica above is the only answer
+and does not need a fallback story.
 
-One line of that design changed under phase 10.3, and it is on the map
-rather than only in the design doc because it is the input phase 12.7
-builds against. The bridge's two locks — `Content-Security-Policy:
+One line of that design changed under phase 10.3, and it stays on the map
+even though the bridge will not be built: it is the rule for anything that
+ever frames the daemon, which has no framing policy at all today. The two
+locks — `Content-Security-Policy:
 frame-ancestors` on the bridge document, and the `event.origin` check on
 every `postMessage` — were drawn deriving from "the home this daemon
 answers to", a whole-daemon value that no longer exists. They derive from

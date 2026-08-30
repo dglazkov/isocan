@@ -1,7 +1,7 @@
 ---
 status: designed
 since: 2026-08-30
-see: launch, personas
+see: launch, personas, on-demand
 note: the wake is the hinge; the history is already a derivation
 ---
 # Standing agents: watching many canvases, woken into one
@@ -117,7 +117,9 @@ Three questions this week end at the same sentence:
   canvas.
 - **Phase 12:** `launch/design.md` designs a home firing a GitHub workflow, and
   explicitly disclaims the local case as *"phase 12.7's own design"*, which
-  does not exist.
+  did not exist when this was written. Later the same day,
+  [`on-demand/design.md`](../projects/on-demand/design.md) took the local case
+  on: the daemon holds the registration and starts turns over ACP stdio.
 
 Something outside a canvas needs to reach in, and something inside needs to
 reach out. **Three doors, one hinge.**
@@ -231,3 +233,4 @@ and is not re-argued here.
 - The vouch gate and the credential: `2026-08-29-one-agent-many-canvases.md`.
 - Backoff and pacing: `2026-08-24-headlong.md`.
 - The local case disclaimed: `docs/projects/launch/design.md`.
+- The local case designed, same day: `docs/projects/on-demand/design.md`.
