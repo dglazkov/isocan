@@ -230,6 +230,17 @@ async function describeListener(url: string): Promise<string> {
       ),
     );
     probe.listen(port, "127.0.0.1", () => done(`; NOTHING was listening on ${port}`));
+    /**
+     * **What this cannot tell you**, recorded where the next reader will be
+     * tempted to trust it: the probe runs AFTER the timeout, by which point
+     * the test has given up, `afterEach` may have closed the daemon, and the
+     * kernel may have handed the port to something else. "Something IS
+     * listening" is true of the probe's moment, not proof it was the same
+     * socket that dropped the SYN.
+     *
+     * The next version should name the HOLDER — its pid, taken at the moment
+     * of the timeout — which is the question the 30 Aug evidence is circling.
+     */
   });
 }
 
