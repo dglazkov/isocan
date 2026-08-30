@@ -1,0 +1,628 @@
+#!/usr/bin/env node
+/**
+ * **The repository's own health, as panels on a canvas.**
+ *
+ * The read half of `docs/research/2026-08-30-repo-admin-canvas.md`, built to
+ * that note's one rule: *every panel is either derived and regenerated, or
+ * decided here and nowhere else — nothing in between.* Everything this script
+ * writes is the first kind. It reads personas, takes their goals' numbers, and
+ * reads git; it decides nothing, and nothing on the canvas is its source.
+ *
+ *   node scripts/canvas-board.mjs                    # refresh every panel
+ *   node scripts/canvas-board.mjs --only status      # one panel
+ *   node scripts/canvas-board.mjs --dry-run          # render, write nothing
+ *   node scripts/canvas-board.mjs --notify           # also say so in the Chat
+ *
+ * **A new VERSION, never a new item.** The note names silting — a fresh item
+ * per run, forty panels by Friday — as the most likely way this goes wrong in
+ * week two, so `publish()` finds the panel by title and `isocan edit`s it.
+ * And it compares the rendered bytes against the version already there: a run
+ * that changed nothing stacks nothing, because a version history where every
+ * entry is identical is not a history.
+ *
+ * **A broken instrument is not a zero.** Same rule as `scripts/persona-run.mjs`,
+ * for the same reason: "0 contrast failures" and "nothing could be measured"
+ * must never render the same. Broken reads amber and says which command failed.
+ */
+import { createHash } from "node:crypto";
+import { execSync, execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repo = fileURLToPath(new URL("..", import.meta.url));
+const argv = process.argv.slice(2);
+const arg = (name, fallback) => {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : fallback;
+};
+const has = (name) => argv.includes(name);
+const DRY = has("--dry-run");
+const ONLY = arg("--only");
+const NOTIFY = has("--notify");
+const cli = path.join(repo, "packages/cli/bin/isocan.js");
+
+/** The canvas these panels live on. The marker in this directory names the
+ *  repo's OWN canvas, which is not necessarily the board's — so the board's is
+ *  configured, and says so when it has not been. */
+const CANVAS =
+  arg("--canvas") ??
+  process.env.ISOCAN_BOARD_CANVAS ??
+  (() => {
+    const f = path.join(repo, ".isocan", "board.json");
+    if (existsSync(f)) return JSON.parse(readFileSync(f, "utf8")).canvas;
+    return undefined;
+  })();
+if (!CANVAS && !DRY) {
+  console.error(
+    "no board canvas — set one and this is remembered:\n" +
+      "  echo '{\"canvas\":\"prj_…\"}' > .isocan/board.json\n" +
+      "or pass --canvas <ref>, or export ISOCAN_BOARD_CANVAS.",
+  );
+  process.exit(2);
+}
+
+const isocan = (...args) =>
+  execFileSync("node", [cli, ...(CANVAS ? ["--canvas", CANVAS] : []), ...args], {
+    cwd: repo,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+const isocanJSON = (...args) => JSON.parse(isocan("--json", ...args));
+const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trimEnd();
+const esc = (s) =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+
+/* ── what the repo says about itself ─────────────────────────────────────── */
+
+const personas = () => isocanJSON("persona", "ls");
+
+/**
+ * Take one goal's number. Copied in spirit from `scripts/persona-run.mjs` — a
+ * command that fails, or prints something that is not a number, is a BROKEN
+ * INSTRUMENT and says so. It is never read as zero.
+ */
+function take(goal) {
+  let out;
+  try {
+    out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (err) {
+    return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 240)}` };
+  }
+  const value = Number(out.trim().split(/\s+/).pop());
+  if (!Number.isFinite(value)) {
+    return { broken: `expected a number on stdout, got ${JSON.stringify(out.trim().slice(0, 80))}` };
+  }
+  return { value };
+}
+const met = (goal, value) =>
+  goal.bound.kind === "at most" ? value <= goal.bound.value : value >= goal.bound.value;
+
+/** green | red | amber | grey — grey is "no goal", which is not the same as fine. */
+function verdictOf(readings, goals) {
+  if (goals.length === 0) return "grey";
+  if (readings.some((r) => r.broken)) return "amber";
+  return readings.every((r) => met(r.goal, r.value)) ? "green" : "red";
+}
+
+/** `43 8 * * *` → `daily 08:43`. Anything cleverer than this belongs in a
+ *  library, and this file has no dependencies on purpose. */
+function cronWords(cron) {
+  const [min, hour, dom, mon, dow] = String(cron).split(/\s+/);
+  const at = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  if (dom === "*" && mon === "*" && dow === "*") return `daily ${at}`;
+  if (dom === "*" && mon === "*") return `weekly ${at}`;
+  return `${cron}`;
+}
+
+/** The newest run page a persona wrote, by the date its filename carries. */
+function latestRun(persona) {
+  const dir = path.join(repo, persona.runs ?? "docs/reviews/");
+  if (!existsSync(dir)) return undefined;
+  const pages = readdirSync(dir)
+    .filter((f) => f.endsWith(`-${persona.name}.md`))
+    .sort();
+  const page = pages.at(-1);
+  return page ? path.relative(repo, path.join(dir, page)) : undefined;
+}
+
+const facts = () => ({
+  commit: git("rev-parse", "--short", "HEAD"),
+  subject: git("log", "-1", "--pretty=%s"),
+  author: git("log", "-1", "--pretty=%an"),
+  when: git("log", "-1", "--pretty=%ad", "--date=iso-strict"),
+  branch: git("rev-parse", "--abbrev-ref", "HEAD"),
+  dirty: git("status", "--porcelain").length > 0,
+});
+
+/** Commits in the last `days`, newest first, with what each one touched. */
+function recentCommits(days = 14) {
+  const raw = git(
+    "log",
+    `--since=${days} days ago`,
+    "--date=short",
+    "--pretty=%H%x1f%h%x1f%ad%x1f%an%x1f%s%x1f%b%x1e",
+    "--shortstat",
+  );
+  return raw
+    .split("\x1e")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [head, ...rest] = chunk.split("\n");
+      const [sha, short, date, author, subject, body] = head.split("\x1f");
+      const stat = rest.join(" ").trim();
+      return { sha, short, date, author, subject, body: (body ?? "").trim(), stat };
+    })
+    .filter((c) => c.short);
+}
+
+/**
+ * The roadmap's own rows, read from the generated view. Parsing the view rather
+ * than re-deriving from every front matter is deliberate: `docs/ROADMAP.md`
+ * IS the derivation, and a second one here would be the exact second-copy bug
+ * the design note is written around.
+ */
+function roadmap() {
+  const file = path.join(repo, "docs/ROADMAP.md");
+  if (!existsSync(file)) return { sections: [], counts: "" };
+  const text = readFileSync(file, "utf8");
+  const sections = [];
+  let current = null;
+  for (const line of text.split("\n")) {
+    const h = line.match(/^## (.+?)(?: <sub>(\d+)<\/sub>)?\s*$/);
+    if (h) {
+      current = { title: h[1], count: Number(h[2] ?? 0), rows: [] };
+      sections.push(current);
+      continue;
+    }
+    if (!current || !line.startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length < 4 || /^-+$/.test(cells[0]) || cells[1] === "What") continue;
+    const link = cells[1].match(/\[(.+?)\]\((.+?)\)/);
+    if (!link) continue;
+    current.rows.push({
+      kind: cells[0].replace(/\*/g, ""),
+      what: link[1],
+      href: link[2],
+      since: cells[2],
+      note: cells[3],
+    });
+  }
+  const counts = (text.match(/\*\*(\d+ built · \d+ still open)\*\*/) ?? [])[1] ?? "";
+  return { sections, counts };
+}
+
+/* ── the look ────────────────────────────────────────────────────────────── */
+
+/**
+ * The app's own tokens, re-valued for `prefers-color-scheme` rather than the
+ * `data-theme` attribute the app stamps on `<html>`. A panel is served in its
+ * own frame, so it never sees that attribute — following the viewer's system
+ * theme is the closest thing to honest, and it is what the artifact rules ask
+ * for anyway.
+ */
+const SHELL = `
+:root {
+  color-scheme: light;
+  --ground:#fbfbf9; --card:#ffffff; --line:#e2e3dd; --line-soft:#eff0ea;
+  --ink:#23262b; --ink-muted:#646d76; --chip:#f0f1ec; --chip-line:#e0e1da;
+  --accent:#1f3fd0; --accent-wash:rgba(31,63,208,0.08);
+  --good:#2e8540; --good-wash:rgba(46,133,64,0.14);
+  --danger:#b3261e; --danger-wash:rgba(179,38,30,0.12);
+  --warn:#a06000; --warn-wash:rgba(160,96,0,0.14);
+  --radius:8px;
+  --shadow-card:0 1px 2px rgba(30,34,40,.08), 0 10px 24px -14px rgba(30,34,40,.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground:#0e0f12; --card:#1b1e23; --line:#2c313a; --line-soft:#23272e;
+    --ink:#e7e9ec; --ink-muted:#8b929d; --chip:#23272e; --chip-line:#2c313a;
+    --accent:#4c6ef5; --accent-wash:rgba(76,110,245,0.14);
+    --good:#56b06a; --good-wash:rgba(86,176,106,0.18);
+    --danger:#e5776f; --danger-wash:rgba(229,119,111,0.16);
+    --warn:#d99a3a; --warn-wash:rgba(217,154,58,0.18);
+    --shadow-card:0 1px 2px rgba(0,0,0,.5), 0 10px 24px -14px rgba(0,0,0,.7);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; padding:20px; background:var(--ground); color:var(--ink);
+  font:14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1 { font-size:19px; line-height:1.25; margin:0; letter-spacing:-0.01em; }
+h2 { font-size:12px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-muted); font-weight:600; }
+a { color:var(--accent); text-decoration:none; }
+code, .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-card); }
+.muted { color:var(--ink-muted); }
+.dot { width:9px; height:9px; border-radius:50%; display:inline-block; flex:none; }
+.dot.green{background:var(--good)} .dot.red{background:var(--danger)}
+.dot.amber{background:var(--warn)} .dot.grey{background:var(--ink-muted); opacity:.45}
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; letter-spacing:.02em; }
+.pill.green{background:var(--good-wash); color:var(--good)}
+.pill.red{background:var(--danger-wash); color:var(--danger)}
+.pill.amber{background:var(--warn-wash); color:var(--warn)}
+.pill.grey{background:var(--chip); color:var(--ink-muted)}
+.chip { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--chip); border:1px solid var(--chip-line); font-size:11px; color:var(--ink-muted); }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-muted); font-weight:600; padding:0 8px 6px 0; border-bottom:1px solid var(--line-soft); }
+td { padding:7px 8px 7px 0; border-bottom:1px solid var(--line-soft); vertical-align:top; font-size:13px; }
+tr:last-child td { border-bottom:0; }
+.num { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; white-space:nowrap; }
+footer { margin-top:14px; padding-top:10px; border-top:1px solid var(--line-soft); font-size:11px; color:var(--ink-muted); }
+footer .mono { font-size:11px; }
+`;
+
+const page = (title, body, derivedFrom) => `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title><style>${SHELL}</style></head>
+<body>
+${body}
+<footer>Derived by <span class="mono">scripts/canvas-board.mjs</span> from ${derivedFrom}.
+Regenerated, never edited here — a panel edited on the canvas and regenerated from the repo is two sources for one fact.</footer>
+</body></html>
+`;
+
+/* ── the panels ──────────────────────────────────────────────────────────── */
+
+function personaPanel(p, readings, verdict, run) {
+  const word = { green: "holding", red: "missed", amber: "instrument broken", grey: "no goal" }[verdict];
+  const rows = readings.length
+    ? readings
+        .map((r) => {
+          const unit = r.goal.unit ?? "";
+          const target = `${r.goal.bound.kind} ${r.goal.bound.value}${unit}`;
+          if (r.broken) {
+            return `<tr><td>${esc(r.goal.name)}</td><td class="num muted">${esc(target)}</td>
+              <td class="num">—</td><td><span class="pill amber">broken</span></td></tr>
+              <tr><td colspan="4" class="muted" style="font-size:11.5px;padding-top:0;border-bottom:0">
+              <span class="mono">${esc(r.goal.measuredBy)}</span> — ${esc(r.broken)}</td></tr>`;
+          }
+          const ok = met(r.goal, r.value);
+          const was = r.goal.baseline?.value;
+          // Against the BASELINE as well as the bound: a number inside its
+          // bound that moved the wrong way is what a pass/fail column hides.
+          const drift =
+            was === undefined || was === r.value
+              ? ""
+              : ` <span class="muted">(was ${was}${unit} ${esc(r.goal.baseline.at)})</span>`;
+          return `<tr><td>${esc(r.goal.name)}</td><td class="num muted">${esc(target)}</td>
+            <td class="num">${r.value}${esc(unit)}${drift}</td>
+            <td><span class="pill ${ok ? "green" : "red"}">${ok ? "held" : "missed"}</span></td></tr>`;
+        })
+        .join("\n")
+    : `<tr><td colspan="4" class="muted">No goal, so a run cannot say whether anything got better or
+        worse. It reports prose or nothing. Give it a number, or take it off the schedule.</td></tr>`;
+
+  const trigger =
+    p.trigger?.kind === "schedule" ? cronWords(p.trigger.cron) : (p.trigger?.kind ?? "manual");
+
+  return page(
+    `${p.name} — ${word}`,
+    `<div style="display:flex;align-items:baseline;gap:9px">
+       <span class="dot ${verdict}" style="position:relative;top:-2px"></span>
+       <h1>${esc(p.name)}</h1>
+       <span class="pill ${verdict}">${esc(word)}</span>
+     </div>
+     <p class="muted" style="margin:9px 0 14px;font-size:13px">${esc(p.description)}</p>
+     <table><thead><tr><th>Goal</th><th>Target</th><th>Now</th><th></th></tr></thead>
+     <tbody>${rows}</tbody></table>
+     <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px">
+       <span class="chip">${esc(p.model ?? "—")} · ${esc(p.effort ?? "—")}</span>
+       <span class="chip">${esc(trigger)}</span>
+       <span class="chip">${(p.tools ?? []).length} tools</span>
+       ${run ? `<span class="chip">last run ${esc(path.basename(run).slice(0, 10))}</span>` : `<span class="chip">no run page</span>`}
+     </div>
+     <div class="mono muted" style="margin-top:10px;font-size:11px">${esc(p.file)}${run ? ` · ${esc(run)}` : ""}</div>`,
+    `<span class="mono">isocan --json persona ls</span> and each goal's own <span class="mono">measured by</span> command`,
+  );
+}
+
+function statusPanel(board, f) {
+  const red = board.filter((b) => b.verdict === "red");
+  const amber = board.filter((b) => b.verdict === "amber");
+  const green = board.filter((b) => b.verdict === "green");
+  const grey = board.filter((b) => b.verdict === "grey");
+  // Amber outranks red: a number nobody could take is worse news than a number
+  // that went the wrong way, because it means the board itself is not reporting.
+  const overall = amber.length ? "amber" : red.length ? "red" : green.length ? "green" : "grey";
+  const headline = amber.length
+    ? `${amber.length} instrument${amber.length === 1 ? "" : "s"} would not run`
+    : red.length
+      ? `${red.length} persona${red.length === 1 ? "" : "s"} past its bound`
+      : "every goal holding";
+
+  const chips = board
+    .map(
+      (b) =>
+        `<span class="chip" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px">
+           <span class="dot ${b.verdict}"></span>${esc(b.persona.name)}</span>`,
+    )
+    .join(" ");
+
+  const misses = board
+    .flatMap((b) =>
+      b.readings
+        .filter((r) => !r.broken && !met(r.goal, r.value))
+        .map(
+          (r) =>
+            `<tr><td>${esc(b.persona.name)}</td><td>${esc(r.goal.name)}</td>
+             <td class="num">${r.value}${esc(r.goal.unit ?? "")}</td>
+             <td class="num muted">${esc(r.goal.bound.kind)} ${r.goal.bound.value}${esc(r.goal.unit ?? "")}</td></tr>`,
+        )
+        .concat(
+          b.readings
+            .filter((r) => r.broken)
+            .map(
+              (r) =>
+                `<tr><td>${esc(b.persona.name)}</td><td>${esc(r.goal.name)}</td>
+                 <td colspan="2" class="muted">instrument broken — <span class="mono">${esc(r.goal.measuredBy)}</span></td></tr>`,
+            ),
+        ),
+    )
+    .join("\n");
+
+  return page(
+    `Tree status — ${headline}`,
+    `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+       <span class="dot ${overall}" style="width:13px;height:13px;position:relative;top:-1px"></span>
+       <h1>${esc(headline)}</h1>
+       <span class="muted" style="font-size:13px">${green.length} holding · ${red.length} missed · ${amber.length} broken · ${grey.length} unmeasured</span>
+     </div>
+     <div style="margin:14px 0 16px;display:flex;flex-wrap:wrap;gap:6px">${chips}</div>
+     ${
+       misses
+         ? `<h2>What is not holding</h2>
+            <table><thead><tr><th>Persona</th><th>Goal</th><th>Now</th><th>Bound</th></tr></thead>
+            <tbody>${misses}</tbody></table>`
+         : `<p class="muted">Every goal inside its bound, every instrument answering. This is the
+            reading to distrust first: check that a metric can still fail —
+            <span class="mono">node scripts/measure.mjs --selftest</span>.</p>`
+     }
+     <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:6px">
+       <span class="chip mono">${esc(f.commit)}</span>
+       <span class="chip">${esc(f.branch)}</span>
+       <span class="chip">${f.dirty ? "working tree dirty" : "working tree clean"}</span>
+     </div>
+     <div class="muted" style="margin-top:8px;font-size:12px">${esc(f.subject)} — ${esc(f.author)}</div>`,
+    `<span class="mono">isocan --json persona ls</span>, each goal's own command, and <span class="mono">git</span> at this commit`,
+  );
+}
+
+function recentlyPanel(commits, f) {
+  const byDay = new Map();
+  for (const c of commits) {
+    if (!byDay.has(c.date)) byDay.set(c.date, []);
+    byDay.get(c.date).push(c);
+  }
+  const days = [...byDay.entries()]
+    .map(
+      ([day, list]) => `
+      <h2 style="margin-top:16px">${esc(day)} <span style="text-transform:none;letter-spacing:0;font-weight:400">·
+        ${list.length} commit${list.length === 1 ? "" : "s"}</span></h2>
+      <table><tbody>${list
+        .map(
+          (c) => `<tr>
+            <td class="num muted" style="width:64px">${esc(c.short)}</td>
+            <td>${esc(c.subject)}
+              ${c.stat ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(c.stat)}</div>` : ""}</td>
+          </tr>`,
+        )
+        .join("")}</tbody></table>`,
+    )
+    .join("\n");
+
+  return page(
+    "Recently",
+    `<h1>Recently</h1>
+     <p class="muted" style="margin:8px 0 4px;font-size:13px">
+       ${commits.length} commit${commits.length === 1 ? "" : "s"} in the last 14 days, newest first.
+       The subject line only — in this repo the argument lives in the commit body, and a summary that
+       flattens it is a summary that loses the reason.</p>
+     ${days || `<p class="muted">Nothing landed in the last 14 days.</p>`}`,
+    `<span class="mono">git log --since='14 days ago'</span> at <span class="mono">${esc(f.commit)}</span>`,
+  );
+}
+
+function briefPanel(commits, board, rm, f, now) {
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "America/Los_Angeles" }).format(now);
+  const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
+  const week = commits.filter((c) => {
+    const age = (now - new Date(`${c.date}T12:00:00Z`)) / 86400000;
+    return age <= 7;
+  });
+  const authors = [...new Set(week.map((c) => c.author))];
+
+  const done = week
+    .slice(0, 12)
+    .map((c) => `<li>${esc(c.subject)} <span class="mono muted">${esc(c.short)}</span></li>`)
+    .join("");
+
+  const section = (name) => rm.sections.find((s) => s.title.toLowerCase().startsWith(name));
+  const onDeck = [
+    ...(section("blocked")?.rows ?? []).map((r) => ({ ...r, why: "blocked" })),
+    ...(section("partly")?.rows ?? []).slice(0, 6).map((r) => ({ ...r, why: "partly built" })),
+    ...(section("designed")?.rows ?? []).slice(0, 6).map((r) => ({ ...r, why: "designed" })),
+  ];
+
+  const misses = board.flatMap((b) =>
+    b.readings
+      .filter((r) => !r.broken && !met(r.goal, r.value))
+      .map((r) => `<li><b>${esc(b.persona.name)}</b> — ${esc(r.goal.name)} is ${r.value}, past ${r.goal.bound.value}</li>`),
+  );
+
+  return page(
+    `Welcome to ${day}`,
+    `<h1>Welcome to ${esc(day)}!</h1>
+     <p class="muted" style="margin:8px 0 18px;font-size:13px">${esc(dateStr)} · at
+       <span class="mono">${esc(f.commit)}</span>${f.dirty ? " · working tree dirty" : ""}</p>
+
+     <h2>Completed in the last seven days</h2>
+     ${
+       week.length
+         ? `<p style="margin:0 0 8px">${week.length} commit${week.length === 1 ? "" : "s"} from
+            ${authors.map((a) => esc(a)).join(", ")}.</p>
+            <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${done}</ul>
+            ${week.length > 12 ? `<p class="muted" style="font-size:12px;margin-top:6px">…and ${week.length - 12} more — see <b>Recently</b>.</p>` : ""}`
+         : `<p class="muted">Nothing landed this week.</p>`
+     }
+
+     <h2 style="margin-top:20px">On deck</h2>
+     ${
+       onDeck.length
+         ? `<table><tbody>${onDeck
+             .map(
+               (r) => `<tr>
+                 <td style="width:96px"><span class="chip">${esc(r.why)}</span></td>
+                 <td>${esc(r.what)}${r.note ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(r.note)}</div>` : ""}</td>
+               </tr>`,
+             )
+             .join("")}</tbody></table>
+            <p class="muted" style="font-size:12px;margin-top:8px">${esc(rm.counts)} — the full list is
+            <span class="mono">docs/ROADMAP.md</span>, itself derived from each doc's front matter.</p>`
+         : `<p class="muted">No roadmap rows to show.</p>`
+     }
+
+     ${
+       misses.length
+         ? `<h2 style="margin-top:20px">Wants a decision</h2>
+            <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${misses.join("")}</ul>
+            <p class="muted" style="font-size:12px;margin-top:6px">A missed goal is news, not a build break —
+            accept it and move the baseline, or reject it and fix the code. Nothing here decides that.</p>`
+         : ""
+     }`,
+    `<span class="mono">git log</span>, <span class="mono">docs/ROADMAP.md</span>, and each goal's own command`,
+  );
+}
+
+/* ── putting them on the canvas ──────────────────────────────────────────── */
+
+const out = DRY ? mkdtempSync(path.join(tmpdir(), "isocan-board-")) : mkdtempSync(path.join(tmpdir(), "isocan-board-"));
+let existing = DRY ? [] : isocanJSON("ls");
+const changed = [];
+
+/**
+ * One panel onto the canvas: created once, then a new VERSION every time its
+ * bytes change — and nothing at all when they have not.
+ *
+ * The comparison is against the current version's `blobHash`, which is the
+ * sha256 of the bytes the canvas is holding. So an unchanged run is genuinely
+ * a no-op rather than an identical version stacked on an identical version,
+ * and the stack that IS there is the history of the repo's health.
+ */
+function publish(slug, title, html, place) {
+  const file = path.join(out, `${slug}.html`);
+  writeFileSync(file, html);
+  if (DRY) {
+    console.log(`would publish "${title}" → ${file}`);
+    return;
+  }
+  const hash = sha256(Buffer.from(html));
+  const item = existing.find((i) => i.title === title);
+  if (!item) {
+    const args = ["add", file, "--title", title];
+    if (place?.at) args.push("--at", place.at);
+    if (place?.size) args.push("--size", place.size);
+    for (const [k, v] of Object.entries(place?.props ?? {})) args.push("--prop", `${k}=${v}`);
+    isocan(...args);
+    changed.push({ title, what: "created" });
+    existing = isocanJSON("ls");
+    return;
+  }
+  const current = item.versions.find((v) => v.id === item.currentVersionId);
+  if (current?.blobHash === hash) return;
+  isocan("edit", item.id, file);
+  changed.push({ title, what: `v${item.versions.length + 1}` });
+}
+
+/* ── the run ─────────────────────────────────────────────────────────────── */
+
+const f = facts();
+const all = personas();
+const wantPanel = (name) => !ONLY || ONLY === name;
+
+const board = all.map((p) => {
+  const readings = p.goals.map((goal) => ({ goal, ...take(goal) }));
+  return { persona: p, readings, verdict: verdictOf(readings, p.goals) };
+});
+
+/* Layout: the status band across the top, its personas in a grid beneath it —
+   `parent` so `isocan format` hangs them under it — and the two prose panels
+   below that. Coordinates are only a starting arrangement: once a person drags
+   one, it stays dragged, because a version never moves an item. */
+const COL = 520, ROW = 460, GUT = 40, PER_ROW = 4;
+const STATUS_TITLE = "Tree status";
+
+if (wantPanel("status")) {
+  publish("tree-status", STATUS_TITLE, statusPanel(board, f), {
+    at: "0,0",
+    size: `${COL * PER_ROW + GUT * (PER_ROW - 1)}x300`,
+  });
+}
+
+const statusId = DRY ? undefined : (isocanJSON("ls").find((i) => i.title === STATUS_TITLE) ?? {}).id;
+
+if (wantPanel("personas")) {
+  board.forEach((b, i) => {
+    const x = (i % PER_ROW) * (COL + GUT);
+    const y = 360 + Math.floor(i / PER_ROW) * (ROW + GUT);
+    publish(
+      `persona-${b.persona.name}`,
+      `Persona · ${b.persona.name}`,
+      personaPanel(b.persona, b.readings, b.verdict, latestRun(b.persona)),
+      { at: `${x},${y}`, size: `${COL}x${ROW}`, props: statusId ? { parent: statusId } : {} },
+    );
+  });
+}
+
+const commits = recentCommits(14);
+if (wantPanel("recent")) {
+  publish("recently", "Recently", recentlyPanel(commits, f), { at: "0,1320", size: "1080x620" });
+}
+if (wantPanel("brief")) {
+  publish("morning-brief", "Morning brief", briefPanel(commits, board, roadmap(), f, new Date()), {
+    at: "1120,1320",
+    size: "1080x620",
+  });
+}
+
+/* ── say what happened ───────────────────────────────────────────────────── */
+
+const reds = board.filter((b) => b.verdict === "red");
+const ambers = board.filter((b) => b.verdict === "amber");
+const line = ambers.length
+  ? `⚠ ${ambers.map((b) => b.persona.name).join(", ")} — instrument would not run`
+  : reds.length
+    ? `${reds.map((b) => b.persona.name).join(", ")} past bound`
+    : "every goal holding";
+
+if (changed.length === 0) {
+  console.log(`board unchanged — ${line}`);
+} else {
+  for (const c of changed) console.log(`${c.what.padEnd(9)} ${c.title}`);
+  console.log(`${changed.length} panel${changed.length === 1 ? "" : "s"} written — ${line}`);
+}
+
+if (NOTIFY && !DRY) {
+  const what = changed.length
+    ? `${changed.length} panel${changed.length === 1 ? "" : "s"} updated`
+    : "no panel changed";
+  isocan(
+    "notify",
+    `\`${f.commit}\` ${f.subject} — ${f.author}. Board: ${line}; ${what}. See #Tree status`,
+  );
+}
+
+/**
+ * **Exit non-zero for one reason only: an instrument that would not run.**
+ * A missed goal is news and must not break a build — a board that goes red
+ * every morning trains everybody to stop looking. A number nobody could take
+ * is the one thing a board must never report as fine.
+ */
+process.exit(ambers.length ? 1 : 0);

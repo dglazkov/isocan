@@ -4150,3 +4150,56 @@ button.mt-card:hover { border-color: var(--accent); }
   text-transform: uppercase; color: var(--ink-soft);
 }
 .context-sep:empty { margin: 4px 6px; }
+
+/**
+ * **The new canvas, introduced.**
+ *
+ * `file-store.ts` sorts canvases oldest-first and the create form is the first
+ * cell in the grid, so a newly made canvas appears at the far end of a list
+ * you are standing at the top of. Reported twice as "create doesn't work" — it
+ * always worked, it just arrived somewhere nobody was looking. The page now
+ * scrolls to the card (`CanvasListPage.tsx`) and this is the part that says
+ * WHICH one, for long enough to see and not long enough to become furniture.
+ *
+ * A travelling sheen rather than a blink: a blink says "error" in almost every
+ * interface a person has used, and this is the opposite of an error. The sweep
+ * runs twice and the ring fades with it.
+ */
+.canvas-card.just-made {
+  position: relative;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  animation: card-settle 2.4s ease-out forwards;
+}
+.canvas-card.just-made::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--accent-wash) 48%,
+    var(--accent-glow) 54%,
+    var(--accent-wash) 60%,
+    transparent 78%
+  );
+  background-size: 260% 100%;
+  animation: card-sheen 1.2s ease-out 2;
+}
+@keyframes card-sheen {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+@keyframes card-settle {
+  0%, 70% { box-shadow: 0 0 0 3px var(--accent-glow); border-color: var(--accent); }
+  100% { box-shadow: 0 0 0 0 transparent; border-color: var(--line); }
+}
+/* The sweep is the decoration; the ring is the information. Reduced motion
+   keeps the ring and drops the travelling light entirely — the card is still
+   unmistakably the one, without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-card.just-made { animation: none; }
+  .canvas-card.just-made::after { display: none; }
+}

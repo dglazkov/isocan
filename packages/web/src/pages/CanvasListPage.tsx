@@ -99,10 +99,85 @@ export function CanvasListPage({
    * and this is a follow-up rather than a silent omission.
    */
   const [creating, setCreating] = useState(false);
+  /**
+   * **The canvas that just arrived, so the page can point at it.**
+   *
+   * The bug this closes was reported twice, and the second time as "I created
+   * a canvas and it didn't work". It worked both times. `file-store.ts` sorts
+   * the list `createdAt` ASCENDING and the create form is the FIRST cell in
+   * the grid — so a new canvas appears in the one place you are not looking,
+   * the far end of a list you are at the top of, while the only thing that
+   * changes where you ARE looking is the field going empty. A create that
+   * succeeds and a create that does nothing looked identical.
+   *
+   * Sorting newest-first would fix the symptom by hiding it: the list's order
+   * is the order these were made, which is a true thing worth keeping, and
+   * every OTHER canvas would move to make this point. So the page keeps its
+   * order and takes responsibility for the introduction instead — it walks you
+   * to the new card and marks it for a moment.
+   */
+  const [justMade, setJustMade] = useState<string | null>(null);
   /** What just happened, when what just happened was not a new card. */
   const [createNote, setCreateNote] = useState<{ kind: "error" | "elsewhere"; text: string } | null>(
     null,
   );
+
+  /**
+   * **Walk to the new card.**
+   *
+   * The class is the marker, and it is the one thing already proven to be on
+   * the right element — the ring is rendered from it. So this asks the
+   * document rather than keeping a second, parallel record of which card is
+   * which; an earlier attempt kept a `Map` of cards by id and that is one more
+   * thing that can fall out of step with the render for no gain.
+   *
+   * An effect rather than the card's own callback ref, and the reason is a
+   * one-render gap: `refresh()` sets the list and returns, `setJustMade` runs
+   * after that await in a later tick, so the card MOUNTS while the mark is
+   * still null. A ref that checks the mark as it attaches is asking a question
+   * whose answer has not arrived. An effect has no such gap.
+   *
+   * `canvases` is in the deps and not incidental: the mark can be set before
+   * the list holding its card has rendered, and this must run again when the
+   * card finally exists.
+   *
+   * `block: "center"` rather than `"nearest"` — the point is not to make the
+   * card technically visible but to put it where somebody is already looking.
+   * Honouring `prefers-reduced-motion` is not decoration: an involuntary
+   * smooth scroll down a long page is exactly the motion that setting exists
+   * to refuse, so it becomes an instant jump. It still arrives.
+   *
+   * **What was actually measured**, since this repo keeps finding instruments
+   * that report healthy: driving the built app, this effect calls
+   * `scrollIntoView` on the element carrying `just-made` with
+   * `{behavior:"smooth",block:"center"}`, and an `auto` scroll to that element
+   * moves the page. The `smooth` scroll itself could NOT be observed there —
+   * smooth scrolling is driven by the compositor, `requestAnimationFrame` does
+   * not tick in a hidden tab, and the harness's pane was hidden. That is a
+   * property of the harness rather than of this code, and it is written down
+   * instead of being quietly counted as a pass.
+   */
+  useEffect(() => {
+    if (!justMade) return;
+    const node = document.querySelector(".canvas-card.just-made");
+    if (!node) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" });
+  }, [justMade, canvases]);
+
+  /**
+   * **The mark is an introduction, not a state.** It says "here it is" and
+   * then stops; a ring that stayed would become a second kind of card, and by
+   * the next visit nobody would remember what it meant. Cleared rather than
+   * left to the animation ending on its own, because the class is what a test
+   * can see and "it fades but the DOM still says just-made" is the sort of
+   * half-truth this codebase keeps getting bitten by.
+   */
+  useEffect(() => {
+    if (!justMade) return;
+    const t = setTimeout(() => setJustMade(null), 2600);
+    return () => clearTimeout(t);
+  }, [justMade]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -132,6 +207,7 @@ export function CanvasListPage({
     setCreating(false);
     if (found.some((canvas) => canvas.id === canvasId)) {
       setTitle("");
+      setJustMade(canvasId);
       return;
     }
     /**
@@ -254,7 +330,10 @@ export function CanvasListPage({
           )}
         </form>
         {(canvases ?? []).map((canvas) => (
-          <div className="canvas-card" key={canvas.id}>
+          <div
+            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
+            key={canvas.id}
+          >
             {editing === canvas.id ? (
               <CanvasEditor
                 title={canvas.title}
