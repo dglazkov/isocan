@@ -61,28 +61,32 @@ describe("no test listens in the kernel's ephemeral range", () => {
      * family back and look completely reasonable doing it.
      */
     /**
-     * `git grep` exits 1 when it finds NOTHING, which here is the pass — so a
-     * bare `execFileSync` throws on success. The first version of this guard
-     * did exactly that and failed green, which would have been the fifth
-     * instrument this week to report the opposite of the truth.
+     * **Read and stripped, not grepped.** `git grep` found this file's own
+     * explanation of the banned string and failed — which is the third time
+     * that shape has appeared today and is already a habit in
+     * `docs/reviews/lessons.md`: a negative assertion must not be tripped by
+     * the comment that explains it. Comments come off first; only code counts.
+     *
+     * (`git grep` also exits 1 when it finds nothing, which here would be the
+     * pass — so the bare call threw on success. Both are gone with it.)
      */
-    let found = "";
-    try {
-      found = execFileSync(
-        "git",
-        // Pathspecs, and NOT `packages/*/test` — which matches nothing here and
-        // made this guard pass on a file that had `port: 0` in it. Found by
-        // mutation-testing the guard; a pathspec that quietly matches no files
-        // is a search that always succeeds.
-        ["grep", "-n", "--", "port: 0", "--", "packages", "test", ":!*/src/*"],
-        { cwd: repo, encoding: "utf8" },
-      ).trim();
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      // 1 is "no matches". Anything else is git failing, which must not read
-      // as a clean tree.
-      if (status !== 1) throw err;
-    }
-    expect(found, "use `port: await reservePort()` — see test/ports.ts").toBe("");
+    const files = execFileSync("git", ["ls-files", "packages", "test"], {
+      cwd: repo,
+      encoding: "utf8",
+    })
+      .split("\n")
+      // Not this file: the guard has to name the string it bans in order to
+      // look for it, so it will always contain one. Stripping comments got
+      // most of the way there and left the search term itself, which is in
+      // CODE and cannot be stripped.
+      .filter((f) => /\.tsx?$/.test(f) && !f.includes("/src/") && f !== "test/ports.test.ts");
+    expect(files.length, "the file list must not be empty").toBeGreaterThan(20);
+    const offenders = files.filter((f) => {
+      const code = readFileSync(`${repo}/${f}`, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      return code.includes("port: 0");
+    });
+    expect(offenders, "use `port: await reservePort()` — see test/ports.ts").toEqual([]);
   }, 30_000);
 });
