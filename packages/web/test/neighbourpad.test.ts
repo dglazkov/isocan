@@ -71,9 +71,17 @@ describe("the neighbour pad", () => {
   it("is a button, and says where it goes and by which key", () => {
     // A control that only describes a shortcut is a footnote; clicking must do
     // what the key does, and resting on it must name the destination.
+    //
+    // The sentence now comes through `label`, which carries the DIRECTION as
+    // well as the destination — the half a 10px arrow glyph cannot say on its
+    // own, and the half somebody hovers to find out. The decision this guard
+    // protects is unchanged: rest on it and you learn where it goes and which
+    // key gets there.
     expect(pad).toContain("navigate(itemPath(");
-    expect(pad).toMatch(/title=\{`\$\{title\} · \$\{key\}`\}/);
-    expect(pad, "and be reachable without a mouse").toMatch(/aria-label=\{`Go to \$\{title\}`\}/);
+    expect(pad).toMatch(/title=\{`\$\{label\} · \$\{key\}`\}/);
+    expect(pad, "and be reachable without a mouse").toMatch(/aria-label=\{`Go \$\{label\}`\}/);
+    // `label` must be built from the direction words, not just the title.
+    expect(pad).toMatch(/neighbourLabel\(where, title,/);
   });
 
   it("shows only in full screen, where those keys flip slides", () => {
@@ -116,5 +124,46 @@ describe("what the pad would offer", () => {
     }
     // …and the pad renders nothing rather than an empty cross.
     expect(pad).toContain("if (neighbours.length === 0) return null;");
+  });
+});
+
+/**
+ * **The hover says which way**, which is the one thing a 10px arrow glyph
+ * cannot carry on its own — and the thing somebody rests on it to find out.
+ * It named the destination and the key and never the direction.
+ */
+describe("resting on an arrow", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/components/NeighbourPad.tsx", import.meta.url)),
+    "utf8",
+  );
+  const bare = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+
+  it("gives every direction words, from the reader's position", () => {
+    /* "up there" and "down here", not "north" or "+y": this is how somebody
+       standing on a slide describes the canvas around them. */
+    for (const words of ["to the left", "to the right", "up there", "down here"]) {
+      expect(bare, words).toContain(`"${words}"`);
+    }
+  });
+
+  it("puts the same sentence on the tooltip and on the label", () => {
+    /* A reader gets the arrow's direction only from the accessible name, so
+       it must not be the thinner of the two. */
+    expect(bare).toMatch(/title=\{`\$\{label\}/);
+    expect(bare).toMatch(/aria-label=\{`Go \$\{label\}`\}/);
+  });
+
+  it("keeps the keystroke on the tooltip, which is how it is taught", () => {
+    expect(bare).toMatch(/\$\{key\}/);
+  });
+
+  it("counts with the same function that decides where the arrow goes", () => {
+    /* Two opinions about which way a thing lies would let an arrow advertise a
+       direction the key does not travel. `countToward` shares `isToward` with
+       `findNextItem` — see `spatialnav.test.ts` for the property that holds
+       them together. */
+    expect(bare).toContain("countToward(current, all, slot.dir)");
+    expect(bare).not.toMatch(/node\.x >= current\.x|node\.y >= current\.y/);
   });
 });

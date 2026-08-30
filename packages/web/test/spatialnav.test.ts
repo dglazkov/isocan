@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findNextItem, nearestToPoint, type Rect } from "../src/lib/spatialnav.ts";
+import { countToward, findNextItem, isToward, nearestToPoint, type Rect } from "../src/lib/spatialnav.ts";
 import { GLIDE_MS, smoothEase } from "../src/lib/zoomactions.ts";
 
 const at = (id: string, x: number, y: number, width = 100, height = 100): Rect => ({
@@ -270,3 +270,62 @@ describe("node travel glide transition", () => {
   });
 });
 
+
+/**
+ * **Counting what lies that way, with the same eyes that walk there.**
+ *
+ * The neighbour pad's hover now says "to the right: Sherwood, and 2 more" —
+ * the direction was the half it never carried, and a 10px arrow glyph is
+ * exactly the thing a person hovers to have named.
+ *
+ * The count needed "is this item that way", which `findNextItem` had answered
+ * inline in a switch. Asking it a second time in the pad would have been a
+ * second opinion about which way a thing lies — an arrow could then advertise
+ * a direction the key does not travel, or count items it would never reach. So
+ * the test is pulled out and both callers use it, and these are the tests that
+ * hold them to the same answer.
+ */
+describe("what lies in a direction", () => {
+  it("agrees with where the arrow would actually go", () => {
+    /* The property that matters: whenever something is counted that way, the
+       key must land on something that way — and when nothing is counted, the
+       key must not move at all. */
+    for (const dir of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const) {
+      const n = countToward(b, row, dir);
+      const next = findNextItem(b, row, dir);
+      expect(n > 0, `${dir}: counted ${n} but the key ${next ? "moves" : "does not"}`).toBe(
+        next !== null,
+      );
+      if (next) expect(isToward(b, next, dir)).toBe(true);
+    }
+  });
+
+  it("counts every item that way, not just the nearest", () => {
+    /* "and 2 more" is the difference between the last slide of a row and the
+       middle of one, which is the question somebody presenting is asking. */
+    expect(countToward(a, row, "ArrowRight")).toBe(3); // b, c, below
+    // a, b AND below — `below` sits at x 220–320, which clears c's left edge
+    // at 400, so it counts. Being lower down does not stop it being to the
+    // left; the pad would offer it, and ⌘← can reach it.
+    expect(countToward(c, row, "ArrowLeft")).toBe(3);
+  });
+
+  it("counts nothing at the edges", () => {
+    expect(countToward(a, row, "ArrowLeft")).toBe(0);
+    expect(countToward(a, row, "ArrowUp")).toBe(0);
+  });
+
+  it("never counts the item you are standing on", () => {
+    expect(countToward(a, [a], "ArrowRight")).toBe(0);
+  });
+
+  it("requires clear space, not merely a bigger coordinate", () => {
+    /* `isToward` tests edge against edge, so an item that OVERLAPS is not
+       "that way" — otherwise the pad would offer a direction that reads as no
+       movement at all. */
+    // b spans x 200–300. An item starting at 250 is still inside it.
+    const overlapping = at("over", 250, 0);
+    expect(isToward(b, overlapping, "ArrowRight")).toBe(false);
+    expect(isToward(b, at("clear", 300, 0), "ArrowRight")).toBe(true);
+  });
+});

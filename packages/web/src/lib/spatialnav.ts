@@ -47,6 +47,71 @@ function orthogonalDistance(aStart: number, aSize: number, bStart: number, bSize
 }
 
 /**
+ * **Is `node` that way from `current`?** — the one place that decides.
+ *
+ * Pulled out of `findNextItem` when the neighbour pad needed to say "and two
+ * more to the right", which cannot be answered without asking this question of
+ * every item. Answering it a second time in the pad would have been a second
+ * opinion about which way a thing lies: the arrow could then appear with the
+ * key doing nothing, or count items the key would never reach. One function,
+ * both callers.
+ */
+export function isToward(current: Rect, node: Rect, direction: Direction): boolean {
+  switch (direction) {
+    case "ArrowRight":
+      return node.x >= current.x + current.width;
+    case "ArrowLeft":
+      return node.x + node.width <= current.x;
+    case "ArrowDown":
+      return node.y >= current.y + current.height;
+    case "ArrowUp":
+      return node.y + node.height <= current.y;
+  }
+}
+
+/** How far along, and how far off to the side — the two distances the score
+ *  weighs against each other. Only meaningful once `isToward` is true. */
+function separation(
+  current: Rect,
+  node: Rect,
+  direction: Direction,
+): { projected: number; orthogonal: number } {
+  switch (direction) {
+    case "ArrowRight":
+      return {
+        projected: node.x - (current.x + current.width),
+        orthogonal: orthogonalDistance(current.y, current.height, node.y, node.height),
+      };
+    case "ArrowLeft":
+      return {
+        projected: current.x - (node.x + node.width),
+        orthogonal: orthogonalDistance(current.y, current.height, node.y, node.height),
+      };
+    case "ArrowDown":
+      return {
+        projected: node.y - (current.y + current.height),
+        orthogonal: orthogonalDistance(current.x, current.width, node.x, node.width),
+      };
+    case "ArrowUp":
+      return {
+        projected: current.y - (node.y + node.height),
+        orthogonal: orthogonalDistance(current.x, current.width, node.x, node.width),
+      };
+  }
+}
+
+/** How many items lie that way — what lets the pad say there is more than the
+ *  one the key would land on. Counted with `isToward`, so it can never
+ *  disagree with where the arrow actually goes. */
+export function countToward(
+  current: Rect,
+  candidates: readonly Rect[],
+  direction: Direction,
+): number {
+  return candidates.filter((n) => n.id !== current.id && isToward(current, n, direction)).length;
+}
+
+/**
  * The item the selection should move to, or null when there is nothing that
  * way. `current` may be the bounding box of a multi-item selection.
  */
@@ -60,35 +125,8 @@ export function findNextItem(
 
   for (const node of candidates) {
     if (node.id === current.id) continue;
-
-    let inDirection = false;
-    let projected = 0;
-    let orthogonal = 0;
-
-    switch (direction) {
-      case "ArrowRight":
-        inDirection = node.x >= current.x + current.width;
-        projected = node.x - (current.x + current.width);
-        orthogonal = orthogonalDistance(current.y, current.height, node.y, node.height);
-        break;
-      case "ArrowLeft":
-        inDirection = node.x + node.width <= current.x;
-        projected = current.x - (node.x + node.width);
-        orthogonal = orthogonalDistance(current.y, current.height, node.y, node.height);
-        break;
-      case "ArrowDown":
-        inDirection = node.y >= current.y + current.height;
-        projected = node.y - (current.y + current.height);
-        orthogonal = orthogonalDistance(current.x, current.width, node.x, node.width);
-        break;
-      case "ArrowUp":
-        inDirection = node.y + node.height <= current.y;
-        projected = current.y - (node.y + node.height);
-        orthogonal = orthogonalDistance(current.x, current.width, node.x, node.width);
-        break;
-    }
-    if (!inDirection) continue;
-
+    if (!isToward(current, node, direction)) continue;
+    const { projected, orthogonal } = separation(current, node, direction);
     const score = projected + orthogonal * ORTHOGONAL_WEIGHT;
     if (score < bestScore) {
       bestScore = score;
