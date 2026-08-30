@@ -1,0 +1,81 @@
+# Review on push — the mechanical half, which is the half that can be certain.
+#
+# Every persona's numbers, taken on the commit that just landed. If one moved
+# the wrong way, this says so as a comment on that commit, naming the number,
+# the bound, what it was, and the command that produced it.
+#
+# **It does not gate anything.** A missed bound is news, not a build break: a
+# check that goes red on hygiene is a check somebody turns off inside a week,
+# and then the numbers drift with nothing watching, which is worse than never
+# having had it. `release.yml` remains the gate; this is the notice.
+#
+# **And it runs no model.** The part of a review that can be certain should not
+# wait for the part that cannot. The judgement pass — reading a diff for stale
+# prose, which is `reviewer`'s real job — is the nightly at 08:43, because
+# running a persona's judgement on every push is the volume failure the night
+# shift research names: a morning of forty items turns sleep into a queue.
+name: review
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Newest commit wins: a burst of six pushes should produce one review of where
+  # the tree ended up, not six reviews of where it passed through.
+  group: review-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # to comment on the commit
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # `bundle-bytes` measures a built artifact; without this it would read a
+      # stale one or none, and a number nobody rebuilt is a lie rather than a
+      # reading.
+      - run: npm run build
+
+      - name: Take every persona's numbers
+        id: ratchet
+        run: |
+          # `|| true` because a miss exits 1 and a miss is NOT a failure here.
+          OUT=$(node scripts/ratchet.mjs --quiet 2>&1) || true
+          if [ -z "$OUT" ]; then
+            echo "every persona's numbers held"
+            echo "moved=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$OUT"
+          echo "moved=yes" >> "$GITHUB_OUTPUT"
+          # Through a file, not an output: the report is multi-line and carries
+          # backticks, and a shell-interpolated multi-line string is how a
+          # workflow ends up executing its own report.
+          printf '%s\n' "$OUT" > /tmp/review.md
+
+      - name: Say so, on the commit that did it
+        if: steps.ratchet.outputs.moved == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "**A number moved the wrong way.**"
+            echo
+            cat /tmp/review.md
+            echo
+            echo "---"
+            echo "These bounds are ratchets set at what they were when the persona was written — they are lines that must not move, not targets to reach. Lower one deliberately by editing the persona's front matter, or put the number back."
+            echo
+            echo "Nothing is blocked: \`release.yml\` is the gate, this is the notice. See \`docs/projects/personas/README.md\`."
+          } > /tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f body="$(cat /tmp/comment.md)"

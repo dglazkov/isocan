@@ -126,6 +126,26 @@ computes a score from it yet, deliberately: an accept rate over five findings
 is noise, and a trust score that governs autonomy before it means anything is a
 way to lose trust in trust.
 
+## Review on push
+
+`.github/workflows/review.yml` fires on every push to `main`, takes every
+persona's numbers, and **comments on the commit** if one moved the wrong way —
+naming the number, the bound, what it was, and the command that produced it.
+
+Two decisions in it are worth knowing:
+
+**It gates nothing.** A missed bound is news, not a build break. A check that
+goes red on hygiene is a check somebody turns off inside a week, and then the
+numbers drift with nothing watching — worse than never having had it.
+`release.yml` remains the gate.
+
+**It runs no model.** The part of a review that can be CERTAIN should not wait
+for the part that cannot, so the numbers go on every push and the judgement
+pass — reading a diff for stale prose, which is `reviewer`'s real job — stays
+on the nightly. Running a persona's judgement on every push is the volume
+failure the night-shift research names: a morning of forty items turns sleep
+into a queue.
+
 ## What is not built
 
 **Step 6 — the canvas as source of truth.** Deliberately gated rather than
