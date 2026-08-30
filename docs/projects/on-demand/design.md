@@ -2,7 +2,7 @@
 status: designed
 since: 2026-08-30
 see: on-demand, launch
-note: AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. Steps 1–2 (durable cursors, the enrolment record) are worth building alone.
+note: AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. The walk is phases.md, open decisions parked at phase doors; phases 1–2 stand alone.
 ---
 # Agents on demand
 
@@ -337,6 +337,10 @@ a URL.
    running. Open — see below.
 
 Steps 1 and 2 are worth doing whether or not the rest happens.
+
+The walk is [phases.md](phases.md) — the same six steps as phases, with the
+30 Aug review's open decisions parked at the door of the phase that forces
+each one, to be made when the phase opens and not before.
 
 ---
 
