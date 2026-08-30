@@ -14,8 +14,9 @@ whose only job is that lens.
 | `market-researcher` | What else exists and what to take from it | **none, honestly** |
 | `performance` | Whether it still feels fast | largest built chunk |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
+| `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports — both **ratchets** |
 
-**Seven, and the count is the discipline rather than a target.** The design
+**Eight, and the count is the discipline rather than a target.** The design
 says four fit in a head and warns against a persona per concern; the gate it
 sets is stricter and is what these pass: *a persona needs a standing number
 nobody else is watching.* `market-researcher` has none and says so out loud in

@@ -44,7 +44,7 @@ You are responsible for whether this still feels fast…
 arrangement the isocan skill already uses. Claude Code sees them as subagents;
 any other harness reads the file directly.
 
-## The seven, and the rule that decided them
+## The eight, and the rule that decided them
 
 | Persona | The lens | Its number |
 | --- | --- | --- |
@@ -55,6 +55,12 @@ any other harness reads the file directly.
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |
 | `performance` | Whether it still feels fast | largest built chunk |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
+| `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports |
+
+**Two of `reviewer`'s bounds are RATCHETS** — set at the number on the day it
+was written, not at zero. Hygiene does not want a cleanup sprint; it wants the
+line never to move the wrong way, so a new unused export fails on the commit
+that added it while the author still remembers why.
 
 **The gate is not "would this lens be useful" — it is *a persona needs a
 standing number nobody else is watching*.** `security` and `docs` were
@@ -70,7 +76,7 @@ it is not worth a made-up metric.
 Never an aspiration. "Keep the design accessible" is not a goal; "zero contrast
 failures at 390, 768 and 1440, measured by `grade.mjs`" is one.
 
-`scripts/measure.mjs` is where those commands live — nine metrics, each
+`scripts/measure.mjs` is where those commands live — eleven metrics, each
 printing a single number on stdout. **Every one declares a way to break it**,
 and `--selftest` breaks each on purpose and fails if the number does not move.
 A metric with no mutation is *refused*, not skipped.
