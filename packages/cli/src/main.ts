@@ -7,6 +7,7 @@ import { Command, Option } from "commander";
 import type {
   Persona,
   RunFinding,
+  InboxEntry,
   Actor,
   BadgeSummary,
   CanvasAddress,
@@ -148,6 +149,11 @@ import {
   personaWarnings,
   runFindings,
   tallyOutcomes,
+  inboxOn,
+  inboxNewestFirst,
+  inboxTally,
+  inboxLine,
+  namesFor,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -5582,6 +5588,71 @@ persona
       const tally = tallyOutcomes(runs.flatMap((r) => r.findings));
       console.log(
         `\n${tally.accepted} accepted · ${tally.rejected} rejected · ${tally.unanswered} unanswered`,
+      );
+    }),
+  );
+
+/**
+ * **Everything addressed to you, wherever it landed.**
+ *
+ * `docs/research/2026-08-29-the-inbox.md`. The rule is `inboxOn` in core —
+ * the same one `isocan wait` has used for weeks to decide whether a comment is
+ * for the agent, moved so the person gets the identical answer rather than a
+ * second one written later.
+ *
+ * **A list, not a count.** Read state lives in the browser's `localStorage`
+ * per canvas per actor, so a count here would either be wrong or would need a
+ * durable read marker — an operation, and one whose cheap form the research
+ * recommends designing before anybody writes it. Until then this says what
+ * exists and lets you decide what is new.
+ */
+program
+  .command("inbox")
+  .description("Comments addressed to you, across every canvas here")
+  .option("--canvas <canvas>", "just this one")
+  .option("--mentions", "only where somebody named you — not the Chat, not threads you are in")
+  .option("-n, --limit <n>", "how many to show (default 20)")
+  .action(
+    run(async (opts: { canvas?: string; mentions?: boolean; limit?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const canvases = opts.canvas
+        ? [await resolveCanvas({ ...ctx, canvasRef: opts.canvas })]
+        : await ctx.client.listCanvases();
+      /**
+       * The names you answer to include the label this session is wearing —
+       * an agent called "Percy" this run is @Percy to everybody on the canvas,
+       * and `wait` has always looked for both.
+       */
+      const session = await readSessionFile(ctx.home, ctx.actor.id).catch(() => null);
+      const names = namesFor(ctx.actor, session?.label ?? null);
+      const entries: InboxEntry[] = [];
+      for (const canvas of canvases) {
+        // One canvas failing to answer must not silence the rest: an inbox
+        // that goes empty because a replica is unreachable is an inbox that
+        // lies in the only direction that matters.
+        const snapshot = await ctx.client.snapshot(canvas.id).catch(() => null);
+        if (!snapshot) continue;
+        entries.push(...inboxOn(snapshot.canvas, ctx.actor, names, canvas.id, canvas.title));
+      }
+      const wanted = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
+      const ordered = inboxNewestFirst(wanted).slice(0, Number(opts.limit ?? 20));
+      if (ctx.json) return printJson(ordered);
+      if (ordered.length === 0) {
+        return console.log(
+          opts.mentions ? "nobody has named you" : "nothing addressed to you",
+        );
+      }
+      for (const entry of ordered) {
+        console.log(inboxLine(entry));
+        console.log(
+          `  ${entry.reason} · ${new Date(entry.comment.createdAt).toLocaleString()}` +
+            `\n  reply: isocan --project ${entry.canvasId} comment reply ${entry.threadId} "…"`,
+        );
+      }
+      const tally = inboxTally(wanted);
+      console.log(
+        `\n${tally.mentioned} named you · ${tally["main-thread"]} in the Chat · ` +
+          `${tally["in-your-thread"]} in threads you are in`,
       );
     }),
   );

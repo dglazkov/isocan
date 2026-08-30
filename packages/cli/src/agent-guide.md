@@ -374,6 +374,25 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## What is addressed to you
+
+`isocan inbox` lists every comment addressed to you across every canvas here —
+newest first, with the command to reply to each. `--mentions` narrows it to
+where somebody actually named you, rather than the Chat being busy.
+
+**It is the same rule `isocan wait` parks on** (`inboxOn` in core): a comment
+is yours when it names you — by actor id, or by a name you answer to including
+your session label — or it lands in the Chat, or it lands in a thread you are
+already part of. Everything else is ether.
+
+The difference is time. `wait` blocks until something arrives; `inbox` says
+what already did. Read it when you come back to a machine, before you park
+again: something addressed to you on another canvas is invisible to a `wait`
+pinned to this one.
+
+**No read state**, deliberately — it is a list, not a count. Nothing marks
+anything as seen, so the same entries appear until they scroll past `--limit`.
+
 ## The roles you can take on
 
 `isocan persona ls` lists the personas this directory holds — `.agents/personas/`.
