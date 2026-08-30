@@ -137,26 +137,42 @@ const facts = () => ({
   dirty: git("status", "--porcelain").length > 0,
 });
 
-/** Commits in the last `days`, newest first, with what each one touched. */
+/**
+ * Commits in the last `days`, newest first, with what each one touched.
+ *
+ * **Two passes, because `--shortstat` and `--pretty` interleave.** Asking for
+ * both at once puts the stat block BETWEEN records, so any parser that reads a
+ * record as "up to the next separator" silently swallows every commit after the
+ * first — which is exactly what the first version of this did, and it looked
+ * fine because "nothing landed in the last 14 days" is a sentence a panel can
+ * say with a straight face. The stats are read separately and joined by sha.
+ */
 function recentCommits(days = 14) {
-  const raw = git(
-    "log",
-    `--since=${days} days ago`,
-    "--date=short",
-    "--pretty=%H%x1f%h%x1f%ad%x1f%an%x1f%s%x1f%b%x1e",
-    "--shortstat",
-  );
-  return raw
+  const since = `--since=${days} days ago`;
+  const stats = new Map();
+  for (const chunk of git("log", since, "--shortstat", "--pretty=%x1e%h")
     .split("\x1e")
-    .map((chunk) => chunk.trim())
+    .map((c) => c.trim())
+    .filter(Boolean)) {
+    const [short, ...rest] = chunk.split("\n");
+    stats.set(short.trim(), rest.join(" ").trim());
+  }
+  return git("log", since, "--date=short", "--pretty=%h%x1f%ad%x1f%an%x1f%s%x1f%b%x1e")
+    .split("\x1e")
+    .map((c) => c.trim())
     .filter(Boolean)
     .map((chunk) => {
-      const [head, ...rest] = chunk.split("\n");
-      const [sha, short, date, author, subject, body] = head.split("\x1f");
-      const stat = rest.join(" ").trim();
-      return { sha, short, date, author, subject, body: (body ?? "").trim(), stat };
+      const [short, date, author, subject, body = ""] = chunk.split("\x1f");
+      return {
+        short: short.trim(),
+        date,
+        author,
+        subject,
+        body: body.trim(),
+        stat: stats.get(short.trim()) ?? "",
+      };
     })
-    .filter((c) => c.short);
+    .filter((c) => c.short && c.date);
 }
 
 /**
@@ -291,7 +307,7 @@ function personaPanel(p, readings, verdict, run) {
           const drift =
             was === undefined || was === r.value
               ? ""
-              : ` <span class="muted">(was ${was}${unit} ${esc(r.goal.baseline.at)})</span>`;
+              : ` <span class="muted">(was ${was}${unit} on ${esc(r.goal.baseline.at)})</span>`;
           return `<tr><td>${esc(r.goal.name)}</td><td class="num muted">${esc(target)}</td>
             <td class="num">${r.value}${esc(unit)}${drift}</td>
             <td><span class="pill ${ok ? "green" : "red"}">${ok ? "held" : "missed"}</span></td></tr>`;
@@ -320,7 +336,7 @@ function personaPanel(p, readings, verdict, run) {
        ${run ? `<span class="chip">last run ${esc(path.basename(run).slice(0, 10))}</span>` : `<span class="chip">no run page</span>`}
      </div>
      <div class="mono muted" style="margin-top:10px;font-size:11px">${esc(p.file)}${run ? ` · ${esc(run)}` : ""}</div>`,
-    `<span class="mono">isocan --json persona ls</span> and each goal's own <span class="mono">measured by</span> command`,
+    `<span class="mono">isocan --json persona ls</span> and each goal’s own measurement command`,
   );
 }
 
@@ -395,108 +411,186 @@ function statusPanel(board, f) {
   );
 }
 
-function recentlyPanel(commits, f) {
-  const byDay = new Map();
+/** Commits per day, newest day first — the shape of the fortnight. */
+function byDay(commits) {
+  const days = new Map();
   for (const c of commits) {
-    if (!byDay.has(c.date)) byDay.set(c.date, []);
-    byDay.get(c.date).push(c);
+    if (!days.has(c.date)) days.set(c.date, []);
+    days.get(c.date).push(c);
   }
-  const days = [...byDay.entries()]
+  return [...days.entries()];
+}
+
+/**
+ * A bar per day, drawn with a div rather than written as fourteen numbers: the
+ * shape of a fortnight is the thing a person actually reads off this panel.
+ */
+function dayBars(days) {
+  const peak = Math.max(1, ...days.map(([, l]) => l.length));
+  return days
     .map(
-      ([day, list]) => `
-      <h2 style="margin-top:16px">${esc(day)} <span style="text-transform:none;letter-spacing:0;font-weight:400">·
-        ${list.length} commit${list.length === 1 ? "" : "s"}</span></h2>
-      <table><tbody>${list
-        .map(
-          (c) => `<tr>
-            <td class="num muted" style="width:64px">${esc(c.short)}</td>
-            <td>${esc(c.subject)}
-              ${c.stat ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(c.stat)}</div>` : ""}</td>
-          </tr>`,
-        )
-        .join("")}</tbody></table>`,
+      ([day, list]) => `<tr>
+        <td class="num muted" style="width:88px">${esc(day)}</td>
+        <td style="width:100%">
+          <span style="display:inline-block;height:9px;border-radius:3px;background:var(--accent);
+            width:${Math.max(2, Math.round((list.length / peak) * 100))}%"></span>
+        </td>
+        <td class="num" style="width:44px;text-align:right">${list.length}</td>
+      </tr>`,
     )
+    .join("");
+}
+
+/**
+ * **Recently** — the fortnight's shape, then the last three days in detail.
+ *
+ * This repository lands hundreds of commits a fortnight, so the first version
+ * of this panel was 470 rows and answered nothing. A cap is fine; a SILENT cap
+ * is not, which is why every bounded count here says what it left out.
+ */
+function recentlyPanel(commits, f) {
+  const days = byDay(commits);
+  const DETAIL_DAYS = 3;
+  const PER_DAY = 12;
+  const authors = [...new Set(commits.map((c) => c.author))];
+  const detail = days
+    .slice(0, DETAIL_DAYS)
+    .map(([day, list]) => {
+      const shown = list.slice(0, PER_DAY);
+      const rest = list.length - shown.length;
+      const rows = shown
+        .map(
+          (c) =>
+            `<tr><td class="num muted" style="width:64px">${esc(c.short)}</td>` +
+            `<td>${esc(c.subject)}` +
+            (c.stat ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(c.stat)}</div>` : "") +
+            `</td></tr>`,
+        )
+        .join("");
+      const more = rest > 0
+        ? `<p class="muted" style="font-size:11.5px;margin:6px 0 0">…and ${rest} more that day, not shown.</p>`
+        : "";
+      return `<h2 style="margin-top:16px">${esc(day)} <span style="text-transform:none;letter-spacing:0;font-weight:400">· ${list.length} commit${list.length === 1 ? "" : "s"}</span></h2>
+        <table><tbody>${rows}</tbody></table>${more}`;
+    })
     .join("\n");
+
+  const shape = days.length ? `<h2>Fourteen days</h2><table><tbody>${dayBars(days)}</tbody></table>` : "";
+  const tail =
+    days.length > DETAIL_DAYS
+      ? `<p class="muted" style="font-size:12px;margin-top:14px">Detail stops at ${DETAIL_DAYS} days; the
+         ${days.length - DETAIL_DAYS} earlier days are counted above and not listed.
+         <span class="mono">git log --since='14 days ago'</span> is the whole of it.</p>`
+      : "";
 
   return page(
     "Recently",
     `<h1>Recently</h1>
-     <p class="muted" style="margin:8px 0 4px;font-size:13px">
-       ${commits.length} commit${commits.length === 1 ? "" : "s"} in the last 14 days, newest first.
-       The subject line only — in this repo the argument lives in the commit body, and a summary that
-       flattens it is a summary that loses the reason.</p>
-     ${days || `<p class="muted">Nothing landed in the last 14 days.</p>`}`,
+     <p class="muted" style="margin:8px 0 16px;font-size:13px">
+       ${commits.length} commit${commits.length === 1 ? "" : "s"} in the last 14 days from
+       ${authors.length} author${authors.length === 1 ? "" : "s"}. Subject lines only — in this repo the
+       argument lives in the commit body, and a summary that flattens it loses the reason.</p>
+     ${shape}
+     ${detail || `<p class="muted">Nothing landed in the last 14 days.</p>`}
+     ${tail}`,
     `<span class="mono">git log --since='14 days ago'</span> at <span class="mono">${esc(f.commit)}</span>`,
   );
 }
 
+/**
+ * **The morning brief** — what got done, what is on deck, what wants a person.
+ *
+ * Every line of it is derived: git for the week, `docs/ROADMAP.md` (itself
+ * derived from each doc's front matter) for what is open, and the personas'
+ * own commands for what is not holding. Nothing here is decided on the canvas,
+ * so nothing here can go stale against the repo.
+ */
 function briefPanel(commits, board, rm, f, now) {
   const day = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "America/Los_Angeles" }).format(now);
   const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
-  const week = commits.filter((c) => {
-    const age = (now - new Date(`${c.date}T12:00:00Z`)) / 86400000;
-    return age <= 7;
-  });
+  const week = commits.filter((c) => (now - new Date(`${c.date}T12:00:00Z`)) / 86400000 <= 7);
   const authors = [...new Set(week.map((c) => c.author))];
+  const days = byDay(week);
+  const SHOWN = 8;
 
-  const done = week
-    .slice(0, 12)
+  const headlines = week
+    .slice(0, SHOWN)
     .map((c) => `<li>${esc(c.subject)} <span class="mono muted">${esc(c.short)}</span></li>`)
     .join("");
+
+  const done = week.length
+    ? `<p style="margin:0 0 10px">${week.length} commit${week.length === 1 ? "" : "s"} from
+         ${authors.map((a) => esc(a)).join(", ")}, over ${days.length} day${days.length === 1 ? "" : "s"}.</p>
+       <table style="margin-bottom:12px"><tbody>${dayBars(days)}</tbody></table>
+       <p class="muted" style="font-size:11.5px;margin:0 0 4px">The ${Math.min(SHOWN, week.length)} most recent:</p>
+       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${headlines}</ul>
+       ${
+         week.length > SHOWN
+           ? `<p class="muted" style="font-size:11.5px;margin-top:6px">The other ${week.length - SHOWN} are
+              counted above and not listed — see <b>Recently</b>.</p>`
+           : ""
+       }`
+    : `<p class="muted">Nothing landed this week.</p>`;
 
   const section = (name) => rm.sections.find((s) => s.title.toLowerCase().startsWith(name));
   const onDeck = [
     ...(section("blocked")?.rows ?? []).map((r) => ({ ...r, why: "blocked" })),
-    ...(section("partly")?.rows ?? []).slice(0, 6).map((r) => ({ ...r, why: "partly built" })),
-    ...(section("designed")?.rows ?? []).slice(0, 6).map((r) => ({ ...r, why: "designed" })),
+    ...(section("partly")?.rows ?? []).slice(0, 5).map((r) => ({ ...r, why: "partly built" })),
+    ...(section("designed")?.rows ?? []).slice(0, 5).map((r) => ({ ...r, why: "designed" })),
   ];
+  const deckRows = onDeck
+    .map(
+      (r) =>
+        `<tr><td style="width:96px"><span class="chip">${esc(r.why)}</span></td>` +
+        `<td>${esc(r.what)}` +
+        (r.note ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(r.note)}</div>` : "") +
+        `</td></tr>`,
+    )
+    .join("");
 
   const misses = board.flatMap((b) =>
     b.readings
       .filter((r) => !r.broken && !met(r.goal, r.value))
-      .map((r) => `<li><b>${esc(b.persona.name)}</b> — ${esc(r.goal.name)} is ${r.value}, past ${r.goal.bound.value}</li>`),
+      .map(
+        (r) =>
+          `<li><b>${esc(b.persona.name)}</b> — ${esc(r.goal.name)} is ${r.value}, past ${r.goal.bound.value}</li>`,
+      ),
   );
+  const broken = board.flatMap((b) =>
+    b.readings
+      .filter((r) => r.broken)
+      .map(
+        (r) =>
+          `<li><b>${esc(b.persona.name)}</b> — <span class="mono">${esc(r.goal.measuredBy)}</span> would not run</li>`,
+      ),
+  );
+
+  const decide =
+    misses.length || broken.length
+      ? `<h2 style="margin-top:20px">Wants a person</h2>
+         <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${broken.join("")}${misses.join("")}</ul>
+         <p class="muted" style="font-size:12px;margin-top:6px">A missed goal is news, not a build break —
+         accept it and move the baseline, or reject it and fix the code. Nothing here decides that, and
+         nothing here should: the outcome of a finding is the one fact this board must never generate.</p>`
+      : "";
 
   return page(
     `Welcome to ${day}`,
     `<h1>Welcome to ${esc(day)}!</h1>
      <p class="muted" style="margin:8px 0 18px;font-size:13px">${esc(dateStr)} · at
        <span class="mono">${esc(f.commit)}</span>${f.dirty ? " · working tree dirty" : ""}</p>
-
      <h2>Completed in the last seven days</h2>
-     ${
-       week.length
-         ? `<p style="margin:0 0 8px">${week.length} commit${week.length === 1 ? "" : "s"} from
-            ${authors.map((a) => esc(a)).join(", ")}.</p>
-            <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${done}</ul>
-            ${week.length > 12 ? `<p class="muted" style="font-size:12px;margin-top:6px">…and ${week.length - 12} more — see <b>Recently</b>.</p>` : ""}`
-         : `<p class="muted">Nothing landed this week.</p>`
-     }
-
+     ${done}
      <h2 style="margin-top:20px">On deck</h2>
      ${
-       onDeck.length
-         ? `<table><tbody>${onDeck
-             .map(
-               (r) => `<tr>
-                 <td style="width:96px"><span class="chip">${esc(r.why)}</span></td>
-                 <td>${esc(r.what)}${r.note ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(r.note)}</div>` : ""}</td>
-               </tr>`,
-             )
-             .join("")}</tbody></table>
-            <p class="muted" style="font-size:12px;margin-top:8px">${esc(rm.counts)} — the full list is
-            <span class="mono">docs/ROADMAP.md</span>, itself derived from each doc's front matter.</p>`
+       deckRows
+         ? `<table><tbody>${deckRows}</tbody></table>
+            <p class="muted" style="font-size:12px;margin-top:8px">${esc(rm.counts)} — the top rows of each
+            section only. The full list is <span class="mono">docs/ROADMAP.md</span>, itself derived from
+            each doc's front matter.</p>`
          : `<p class="muted">No roadmap rows to show.</p>`
      }
-
-     ${
-       misses.length
-         ? `<h2 style="margin-top:20px">Wants a decision</h2>
-            <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${misses.join("")}</ul>
-            <p class="muted" style="font-size:12px;margin-top:6px">A missed goal is news, not a build break —
-            accept it and move the baseline, or reject it and fix the code. Nothing here decides that.</p>`
-         : ""
-     }`,
+     ${decide}`,
     `<span class="mono">git log</span>, <span class="mono">docs/ROADMAP.md</span>, and each goal's own command`,
   );
 }
@@ -511,10 +605,16 @@ const changed = [];
  * One panel onto the canvas: created once, then a new VERSION every time its
  * bytes change — and nothing at all when they have not.
  *
- * The comparison is against the current version's `blobHash`, which is the
- * sha256 of the bytes the canvas is holding. So an unchanged run is genuinely
- * a no-op rather than an identical version stacked on an identical version,
- * and the stack that IS there is the history of the repo's health.
+ * **Identity is a property, not the title.** A panel is found by
+ * `properties.board === <slug>`, so renaming "Recently" on the canvas to
+ * "This week" keeps it the same panel. Title matching is the fallback, used
+ * once per panel to adopt one made before this rule existed — and it stamps the
+ * property as it goes, so the fallback is needed exactly once.
+ *
+ * The bytes are compared against the current version's `blobHash`, which is the
+ * sha256 of what the canvas is holding. So an unchanged run is genuinely a
+ * no-op rather than an identical version stacked on an identical version, and
+ * the stack that IS there is the history of the repo's health.
  */
 function publish(slug, title, html, place) {
   const file = path.join(out, `${slug}.html`);
@@ -524,9 +624,11 @@ function publish(slug, title, html, place) {
     return;
   }
   const hash = sha256(Buffer.from(html));
-  const item = existing.find((i) => i.title === title);
+  const byProp = existing.find((i) => i.properties?.board === slug);
+  const item = byProp ?? existing.find((i) => i.title === title);
+
   if (!item) {
-    const args = ["add", file, "--title", title];
+    const args = ["add", file, "--title", title, "--prop", `board=${slug}`];
     if (place?.at) args.push("--at", place.at);
     if (place?.size) args.push("--size", place.size);
     for (const [k, v] of Object.entries(place?.props ?? {})) args.push("--prop", `${k}=${v}`);
@@ -535,6 +637,10 @@ function publish(slug, title, html, place) {
     existing = isocanJSON("ls");
     return;
   }
+  // Adopting a panel from before identity was a property: stamp it once, and
+  // never match this one by title again.
+  if (!byProp) isocan("set", item.id, "--prop", `board=${slug}`);
+
   const current = item.versions.find((v) => v.id === item.currentVersionId);
   if (current?.blobHash === hash) return;
   isocan("edit", item.id, file);
@@ -583,11 +689,11 @@ if (wantPanel("personas")) {
 
 const commits = recentCommits(14);
 if (wantPanel("recent")) {
-  publish("recently", "Recently", recentlyPanel(commits, f), { at: "0,1320", size: "1080x620" });
+  publish("recently", "Recently", recentlyPanel(commits, f), { at: "0,1400", size: "1080x620" });
 }
 if (wantPanel("brief")) {
   publish("morning-brief", "Morning brief", briefPanel(commits, board, roadmap(), f, new Date()), {
-    at: "1120,1320",
+    at: "1120,1400",
     size: "1080x620",
   });
 }

@@ -164,6 +164,8 @@ import {
   majors,
   majorLine,
   track,
+  at,
+  span,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -7382,6 +7384,68 @@ program
       );
       for (const m of marks.slice(-8)) console.log(`  ${majorLine(m)}`);
       if (marks.length > 8) console.log(`  … ${marks.length - 8} earlier — --majors for all`);
+    }),
+  );
+
+program
+  .command("at <seq>")
+  .description("The canvas as it stood at that point in its history — the scrubber, in words")
+  .option("--items", "list the items that existed then")
+  .action(
+    run(async (seqArg: string, opts: { items?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const seq = Number(seqArg);
+      if (!Number.isFinite(seq) || seq < 0) {
+        throw new Error(`not a seq: ${seqArg} — \`isocan timeline\` shows the range`);
+      }
+      // Archive first, then live — the same contract `timeline` and
+      // `buildRecap` hold, and for the same reason: on a canvas old enough to
+      // have been compacted, the story predates the live log, and folding
+      // from the live log alone would replay a history missing its beginning.
+      const archived = await ctx.client.getArchivedLog(p.id);
+      const live = await ctx.client.getLog(p.id, 0);
+      const entries = [...archived, ...live];
+      const range = span(entries);
+      if (!range) return console.log("nothing has happened here yet");
+      /**
+       * **`at` is the same fold the daemon runs**, from core, so this and the
+       * web scrubber agree about the past by construction rather than by two
+       * implementations staying in step. The research's rule for the
+       * significance function — *"the CLI must mark the same majors the web
+       * does"* — is the same rule one level along: they must also RENDER the
+       * same past.
+       */
+      const state = at(entries, seq);
+      if (ctx.json) return printJson({ seq, span: range, state });
+      if (!state) {
+        return console.log(
+          `nothing yet at #${seq} — this canvas was born at #${range.first}`,
+        );
+      }
+      const items = Object.values(state.canvas.items);
+      const where =
+        seq >= range.last
+          ? "now"
+          : `#${seq} of #${range.last} — ${range.last - seq} entries ago`;
+      printKeyValues({
+        at: where,
+        title: state.project.title,
+        description: state.project.description || "(none)",
+        items: String(items.length),
+        threads: String(Object.keys(state.canvas.threads).length),
+        trash: String(state.canvas.trash.length),
+      });
+      if (!opts.items) return;
+      if (items.length === 0) return console.log("\n(no items yet)");
+      console.log("");
+      printTable(
+        items.map((i) => ({
+          id: i.id,
+          title: truncate(i.title, 40),
+          at: `${Math.round(i.x)},${Math.round(i.y)}`,
+        })),
+      );
     }),
   );
 
