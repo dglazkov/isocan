@@ -299,9 +299,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   one is configuration, so the same build runs on a laptop and at isocan.io.
 - **Escalation**: a thin guest goes thick in one command, and the canvas hands
   it to you — click your own face and pick **"Bring your own agent…"**: one
-  sentence of concept, one command, a copy button, and a clock, because the
-  thing it hands you is single-use and dies in fifteen minutes. The terminal
-  half is the same gesture: from a canvas you are
+  sentence of concept, one line, a copy button, and a clock, because the
+  thing it hands you is single-use and dies in fifteen minutes. What you paste
+  it into is the agent you already have running, not a shell — the line tells
+  it to set the directory up and park, so the paste is the whole instruction.
+  The terminal half is the same gesture with a shell's reader in mind: from a canvas you are
   already on, `isocan pass` mints a short-lived, single-use **pass** and prints
   the whole line to paste on the other machine —
   `npx github:dglazkov/isocan#release setup <address>#<pass>` — and that one

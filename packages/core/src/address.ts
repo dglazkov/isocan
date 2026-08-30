@@ -391,10 +391,71 @@ export function setupCommand(origin: string, canvasId: string, token?: string): 
 }
 
 /**
+ * **Scene 5's line — what Jordan pastes into the prompt box of the agent she
+ * already has running.**
+ *
+ *     use isocan. Run this in the current directory to join the canvas:
+ *       npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
+ *     Then run `isocan --agent-help` and follow its instructions.
+ *
+ * The same pass as {@link setupCommand}, in the shape
+ * {@link cloudAgentInstructions} established: **addressed to an agent, because
+ * that is who reads it.** The dialog used to hand over the bare shell command
+ * and then ask, in prose underneath, for two more things — start your agent in
+ * that directory, tell it to use isocan. Giving the agent the line instead
+ * makes the paste BE those steps, and the paragraph is gone.
+ *
+ * **It ends at the guide, and says nothing the guide says.** Both lines used to
+ * close on "park with `isocan wait`", which is step 6 of a protocol the agent
+ * has not read — and the step most likely to be reached without the ones that
+ * make it mean anything (name yourself, post the receipt, one waiter per name).
+ * `setup` installs the skill that points at `isocan --agent-help`, but skills
+ * are enumerated when a session starts and in both scenes the session started
+ * BEFORE setup ran, so neither agent can be relied on to find it. So the line
+ * names the guide — and then stops, because repeating one of its steps here is
+ * a second copy that can go stale, and the guide ships with the build that
+ * answers it.
+ *
+ * **It says where and it says why, because the reader is cold.** "Set this
+ * directory up first" was the first draft and it fails a plain reading: *which*
+ * directory is never named, so an agent asked to "set up a directory" may well
+ * make one; "set up" is an open-ended task rather than "run the line below";
+ * and with no outcome in the sentence, an agent whose `setup` fails has nothing
+ * to recover toward. "Run this in the current directory to join the canvas"
+ * answers all three in the same breath. The cloud sibling survives the same
+ * verb only because a constraint precedes it — *this workspace is disposable,
+ * so* — which supplies the reason this one had to state.
+ *
+ * **It carries no `ISOCAN_DIRECT=1`, which is the whole difference from its
+ * cloud sibling.** This machine is the person's own, and it wants the daemon,
+ * the replica and the marker — that is what Scene 5 is for. The cloud line
+ * declares direct mode because the workspace it lands in is disposable;
+ * declaring it here would throw away the local copy the scene exists to make.
+ *
+ * **`setupCommand` did not go away, and this is not a second spelling of it.**
+ * `isocan pass` prints that one, and its reader is a person standing at a
+ * shell; this one's reader is an agent. One pass, two wrappers, each shaped
+ * for who reads it. The string that must never be written twice is the install
+ * spec, and neither of them writes it (`INSTALL_SPEC`, #47,
+ * `test/packaging.test.ts`).
+ */
+export function localAgentInstructions(origin: string, canvasId: string, token?: string): string {
+  const address = token ? canvasUrlWithPass(origin, canvasId, token) : canvasUrl(origin, canvasId);
+  return [
+    "use isocan. Run this in the current directory to join the canvas:",
+    "",
+    `  npx ${INSTALL_SPEC} setup ${address}`,
+    "",
+    "Then run `isocan --agent-help` and follow its instructions.",
+  ].join("\n");
+}
+
+/**
  * **Scene 6's line — what Inna pastes into a cloud session's prompt box.**
  *
- *     use isocan — the canvas is at isocan.io/p/7f3a…#<pass>.
- *     Park and handle summonses.
+ *     use isocan. This workspace is disposable, so set up with no local copy:
+ *       ISOCAN_DIRECT=1 npx github:dglazkov/isocan#release setup isocan.io/p/7f3a…#<pass>
+ *     Then run `isocan --agent-help` and follow its instructions.
  *
  * The sibling of {@link setupCommand}, and deliberately a different KIND of
  * artifact. Scene 5's is a shell command for a person at a terminal; this one
@@ -432,6 +493,6 @@ export function cloudAgentInstructions(origin: string, canvasId: string, token?:
     "",
     `  ISOCAN_DIRECT=1 npx ${INSTALL_SPEC} setup ${address}`,
     "",
-    "Then park with `isocan wait` and handle what you are summoned for.",
+    "Then run `isocan --agent-help` and follow its instructions.",
   ].join("\n");
 }

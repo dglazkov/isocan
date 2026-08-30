@@ -74,8 +74,11 @@ describe("what the dialog hands over", () => {
     const line = cloudAgentInstructions("https://isocan.io", "prj_acme", "pss_1.s3cret");
     expect(line).toContain("ISOCAN_DIRECT=1");
     expect(line).toContain("https://isocan.io/p/prj_acme#pss_1.s3cret");
-    // And it parks, because an agent that sets itself up and exits is not on
-    // the canvas — which is the whole thing Inna came here for.
-    expect(line).toContain("isocan wait");
+    // And it ends at the protocol, because an agent that sets itself up and
+    // exits is not on the canvas — which is the whole thing Inna came here
+    // for. `--agent-help` is where parking is defined; the line used to name
+    // `isocan wait` itself and stopped, which paraphrased one step of a guide
+    // that ships with the build.
+    expect(line).toContain("isocan --agent-help");
   });
 });

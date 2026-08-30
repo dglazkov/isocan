@@ -12,7 +12,7 @@ import {
   PASS_SPENT,
   PASS_UNKNOWN,
   passesRoute,
-  setupCommand,
+  localAgentInstructions,
   type MintPassResponse,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
@@ -203,12 +203,13 @@ describe("minting one from the dialog", () => {
     expect(Date.parse(pass.expiresAt)).toBeGreaterThan(Date.now());
     expect(Date.parse(pass.expiresAt)).toBeLessThanOrEqual(Date.now() + 15 * 60 * 1000);
 
-    // The command on screen is built, never spelled: same builder as `isocan
-    // pass`, install spec and all. A hand-rolled one would look perfect and
-    // install an empty directory (#47).
-    const command = setupCommand("https://isocan.io", "prj_acme", token);
-    expect(command).toBe(`npx ${INSTALL_SPEC} setup https://isocan.io/p/prj_acme#${token}`);
-    expect(command).toContain("#release");
+    // What is on screen is built, never spelled — and it is a PROMPT for the
+    // agent the person already has running, not a shell command for the person
+    // (`isocan pass` prints that one; its reader is standing at a shell). A
+    // hand-rolled line would look perfect and install an empty directory (#47).
+    const line = localAgentInstructions("https://isocan.io", "prj_acme", token);
+    expect(line).toContain(`npx ${INSTALL_SPEC} setup https://isocan.io/p/prj_acme#${token}`);
+    expect(line).toContain("#release");
   });
 
   it("refuses to endow somebody else's actor — no second door, no social claim", async () => {
