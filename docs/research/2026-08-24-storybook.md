@@ -1,5 +1,7 @@
 ---
-status: open
+status: designed
+since: 2026-08-30
+note: the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind
 ---
 # A story is a URL
 

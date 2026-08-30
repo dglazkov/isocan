@@ -6,11 +6,15 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**6 built · 27 still open** — of which 10 partly
-built, 7 designed, 1 blocked, and
-**9 with no verdict recorded at all**, which is the number worth
+**6 built · 22 still open** — of which 11 partly
+built, 10 designed, 1 blocked, and
+**0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
+
+4 more are `noted` — read, absorbed, owing nothing — and
+1 superseded. Neither counts as done: reading is not building,
+and the done column should not be flattered by either.
 
 ## Blocked <sub>1</sub>
 
@@ -18,13 +22,14 @@ read lately.
 | --- | --- | --- | --- |
 | **project** | [launch](docs/projects/launch/design.md) | 2026-08-29 | blocked by a spike on whether a write-only token can dispatch · see launch |
 
-## Partly built <sub>10</sub>
+## Partly built <sub>11</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | phases 1-2 done; 3-4 not started · see auto-upgrade |
+| research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
 | **project** | [context](docs/projects/context/design.md) | 2026-08-29 | stage 1 built · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
@@ -33,31 +38,20 @@ read lately.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>7</sub>
+## Designed, not built <sub>10</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-29 |  |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
+| research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export recommended and unbuilt; nothing in the tree mentions the format |
+| research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
-
-## No verdict recorded <sub>9</sub>
-
-| | What | Since | |
-| --- | --- | --- | --- |
-| research | [A story is a URL](docs/research/2026-08-24-storybook.md) | — |  |
-| research | [Agents on the canvas: what the field shipped in a year](docs/research/2026-08-23-agents-on-the-canvas.md) | — |  |
-| research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | — |  |
-| research | [Eighteen roads out: readiness of the proposed features](docs/research/feature-readiness.md) | — |  |
-| research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | — |  |
-| research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | — |  |
-| research | [Local agents on the canvas](docs/research/2026-08-24-local-agents.md) | — |  |
-| research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | — |  |
-| research | [What Headlong knows](docs/research/2026-08-24-headlong.md) | — |  |
 
 ## Built <sub>6</sub>
 
@@ -69,3 +63,18 @@ read lately.
 | **project** | [ui-refresh](docs/projects/ui-refresh/phases.md) | 2026-08-29 | phases 1-6, all acceptances closed · see ui-refresh |
 | research | [Where the canvas is janky](docs/research/2026-08-29-performance.md) | 2026-08-29 |  |
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
+
+## Noted — read, owing nothing <sub>4</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [Agents on the canvas: what the field shipped in a year](docs/research/2026-08-23-agents-on-the-canvas.md) | 2026-08-30 | the category converged on MCP + a skill, which isocan has; edges deliberately declined |
+| research | [Local agents on the canvas](docs/research/2026-08-24-local-agents.md) | 2026-08-30 | the finding IS the answer: isocan hands agents a CLI, so any model that can run one joins |
+| research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
+| research | [What Headlong knows](docs/research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
+
+## Superseded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [Eighteen roads out: readiness of the proposed features](docs/research/feature-readiness.md) | 2026-08-30 |  |

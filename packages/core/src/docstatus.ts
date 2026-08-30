@@ -26,8 +26,19 @@ export const DOC_STATES = [
   /** No verdict recorded. Not a failure — an untriaged doc is a real state and
    *  counting them is half the point of having this at all. */
   "open",
-  /** Written, argued, nothing built. */
+  /** Written, argued, nothing built. Something is OWED. */
   "designed",
+  /**
+   * Read, absorbed, and owing nothing.
+   *
+   * A survey of what other people shipped is finished when it has been read —
+   * its value is the finding, and there is no build behind it to be waiting
+   * for. Without this state such a note sits in `open` forever (which reads as
+   * "nobody has looked at it", and is a lie once somebody has) or gets marked
+   * `designed` (which reads as "there is work here", and is a different lie).
+   * Both distort the only number the roadmap is for.
+   */
+  "noted",
   /** Some of it is built; the doc says which part. */
   "partial",
   /** Built. */
@@ -97,6 +108,9 @@ export function burnDown(all: readonly DocStatus[]): {
   for (const doc of all) byState[doc.status] += 1;
   // `superseded` counts as neither: it is not work and it is not done work.
   const done = byState.built;
+  // `noted` counts as neither, like `superseded`: a survey that owes nothing is
+  // not outstanding work, and calling it "done" would flatter the done column
+  // with reading rather than building.
   const left = byState.open + byState.designed + byState.partial + byState.blocked;
   return { done, left, byState };
 }

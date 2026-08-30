@@ -206,6 +206,33 @@ afterAll(() => {
   worstStall = { ms: 0, test: "" };
 });
 
+/**
+ * Is anything listening there NOW? Asked only when a loopback connect has
+ * timed out, because it is the one question that separates "the daemon was
+ * gone" from "the daemon was there and never accepted".
+ */
+async function describeListener(url: string): Promise<string> {
+  const port = Number(new URL(url).port);
+  if (!Number.isFinite(port) || port === 0) return "";
+  const { createServer } = await import("node:net");
+  return new Promise<string>((resolve) => {
+    const probe = createServer();
+    const done = (verdict: string) => {
+      probe.removeAllListeners();
+      probe.close(() => resolve(verdict));
+    };
+    probe.once("error", (err: NodeJS.ErrnoException) =>
+      // EADDRINUSE: somebody IS on it, and did not accept.
+      resolve(
+        err.code === "EADDRINUSE"
+          ? `; something IS listening on ${port} and did not accept`
+          : `; the port could not be probed (${err.code})`,
+      ),
+    );
+    probe.listen(port, "127.0.0.1", () => done(`; NOTHING was listening on ${port}`));
+  });
+}
+
 const realFetch = globalThis.fetch;
 /**
  * Bounded by the CLOCK, not by a number of attempts — and that distinction was
@@ -280,7 +307,25 @@ globalThis.fetch = async function retryingFetch(input, init) {
            * afternoon gets spent proving they are related. Reported for THIS
            * test, since the histogram is reset before each one.
            */
-          `, loop stalled ${stallMs()}ms during this test`;
+          `, loop stalled ${stallMs()}ms during this test` +
+          /**
+           * **One bit that separates the two explanations left.**
+           *
+           * A loopback connect that TIMES OUT rather than being refused means
+           * the SYN was dropped, not answered — and after the port range was
+           * moved out of the kernel's ephemeral band (30 Aug) and the loop was
+           * measured idle, only two readings survive: either nothing is
+           * listening and the SYN went nowhere, or something IS listening and
+           * is not accepting.
+           *
+           * Binding the port answers it. If the bind succeeds, the daemon was
+           * already gone. If it is refused, the listener is there and the
+           * accept never happened. Neither can be told from the error alone,
+           * which is why two rounds of this investigation ended in a guess.
+           */
+          (cause?.syscall === "connect" && cause.code === "ETIMEDOUT"
+            ? await describeListener(where)
+            : "");
         throw err;
       }
       // Give the stalled loop a moment, and lengthen it — a machine that is

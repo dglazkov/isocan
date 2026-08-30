@@ -1,5 +1,7 @@
 ---
-status: open
+status: designed
+since: 2026-08-30
+note: export recommended and unbuilt; nothing in the tree mentions the format
 ---
 # JSON Canvas: what adopting it would mean
 

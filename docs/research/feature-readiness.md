@@ -1,5 +1,7 @@
 ---
-status: open
+status: superseded
+since: 2026-08-30
+supersededBy: docs/ROADMAP.md
 ---
 # Eighteen roads out: readiness of the proposed features
 
