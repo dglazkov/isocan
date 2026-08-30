@@ -366,6 +366,54 @@ describe("filters: what a watcher agreed to wake for", () => {
   });
 });
 
+describe("what a park calls a summons — the routing rule, pinned", () => {
+  // The rule has lived in two places (wait's own predicate and core's
+  // `inboxOn`); these pin wait's observed behavior so unifying them cannot
+  // quietly change who gets woken.
+  const op = (body: unknown) => post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: body });
+  const thread = (threadId: string, comment: { id: string; body: string }, extra?: object) =>
+    op({ type: "thread.create", threadId, x: 0, y: 0, anchorItemId: null, comment, ...extra });
+
+  beforeEach(async () => {
+    await isocan("session", "start", "--canvas", "prj_1");
+  });
+
+  /** Park an unfiltered wait, let it advertise, then act as somebody else. */
+  async function parkedPlain(act: () => Promise<void>): Promise<Run> {
+    const run = isocan("wait", "--json", "--timeout", "6", "--canvas", "prj_1");
+    await until(sessions, (list) => waiting(list).length === 1, "the wait to advertise");
+    await act();
+    return run;
+  }
+
+  it("a main-thread reply wakes it with no name said", async () => {
+    await thread("th_m", { id: "cmt_m0", body: "the room opens" }, { main: true });
+    const woke = await parkedPlain(() =>
+      op({ type: "thread.reply", threadId: "th_m", comment: { id: "cmt_m1", body: "no names here" } }),
+    );
+    expect(woke.code).toBe(0);
+    expect(JSON.parse(woke.stdout).reason).toBe("summons");
+  }, 20_000);
+
+  it("a reply in a thread it wrote in wakes it", async () => {
+    await thread("th_t", { id: "cmt_t0", body: "a side conversation" });
+    await isocan("--canvas", "prj_1", "comment", "reply", "th_t", "I was here");
+    const woke = await parkedPlain(() =>
+      op({ type: "thread.reply", threadId: "th_t", comment: { id: "cmt_t1", body: "a follow-up" } }),
+    );
+    expect(woke.code).toBe(0);
+    expect(JSON.parse(woke.stdout).reason).toBe("summons");
+  }, 20_000);
+
+  it("a reply in somebody else's thread is ether — it sleeps through", async () => {
+    await thread("th_e", { id: "cmt_e0", body: "not about the agent" });
+    const woke = await parkedPlain(() =>
+      op({ type: "thread.reply", threadId: "th_e", comment: { id: "cmt_e1", body: "still not" } }),
+    );
+    expect(woke.code).toBe(2);
+  }, 20_000);
+});
+
 describe("the loop nudges where an agent decides it is finished", () => {
   it("a timeout says park again, not goodbye", async () => {
     const run = await isocan("wait", "--timeout", "1");

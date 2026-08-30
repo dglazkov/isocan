@@ -41,10 +41,13 @@ That is a handle for starting a conversation again. It is kept as an answer to
 and how the agent is launched turns it into the second thing.
 
 **The routing rules are already written, in the wrong process.** `isocan wait`
-decides which ops are for whom: `addressesMe`, `isForMe`, the main-thread rule,
-thread membership, and the `--item` / `--op` filters. All of it runs once per
-agent, inside that agent's own blocked process, against a log the daemon
-already holds.
+decides which ops are for whom: the is-this-for-me predicate, the main-thread
+rule, thread membership, and the `--item` / `--op` filters. All of it runs
+once per agent, inside that agent's own blocked process, against a log the
+daemon already holds. *(Since 30 Aug the predicate itself is `reasonFor` in
+`packages/core/src/inbox.ts`, one function shared by `wait` and the inbox —
+so the daemon imports the rule rather than growing a third copy. What still
+runs in the blocked process is the loop around it.)*
 
 **The cursor is the bug.** In `cli/src/main.ts` the park keeps
 `let cursors: Record<string, number>` in memory. When the process dies the

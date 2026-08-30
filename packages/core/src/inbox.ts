@@ -1,4 +1,5 @@
 import type { Actor, CanvasContents, Comment, CommentThread } from "./model.ts";
+import type { NewComment } from "./ops.ts";
 import type { MentionCandidate } from "./mentions.ts";
 import { extractMentions } from "./mentions.ts";
 
@@ -58,7 +59,10 @@ export function namesFor(actor: Actor, label?: string | null): MentionCandidate[
  * because a name you answer to NOW (a session label) may not have been
  * resolvable when the comment was written.
  */
-export function addressesActor(comment: Comment, names: readonly MentionCandidate[]): boolean {
+export function addressesActor(
+  comment: NewComment | Comment,
+  names: readonly MentionCandidate[],
+): boolean {
   const self = names[0]?.id;
   if (self && (comment.mentions ?? []).includes(self)) return true;
   return extractMentions(comment.body, names as MentionCandidate[]).length > 0;
@@ -78,6 +82,32 @@ function inYourThread(thread: CommentThread, actorId: string, names: readonly Me
  * of thing a filter forgets: you are in every thread you wrote in, so without
  * this every comment you ever left would come back to you.
  */
+/**
+ * Why one comment is yours, or null when it is ether. THE routing rule,
+ * stated once: named — by id or a name you answer to — or the main thread,
+ * or a conversation you are already in. `inboxOn` folds a canvas with it and
+ * `isocan wait` decides a summons with it, so a parked agent and the inbox
+ * can never disagree about what is for you — and a daemon that summons
+ * agents (`docs/projects/on-demand/design.md`) asks this same function
+ * rather than growing a third copy.
+ *
+ * The comment may be a `NewComment` (an op still in flight, no author yet);
+ * skipping your own words is the caller's job, since only the caller knows
+ * whose they are. A missing thread (an op racing its own snapshot) can still
+ * mention you; it cannot be main or already yours.
+ */
+export function reasonFor(
+  comment: NewComment | Comment,
+  thread: CommentThread | undefined,
+  actorId: string,
+  names: readonly MentionCandidate[],
+): InboxReason | null {
+  if (addressesActor(comment, names)) return "mentioned";
+  if (thread?.main) return "main-thread";
+  if (thread && inYourThread(thread, actorId, names)) return "in-your-thread";
+  return null;
+}
+
 export function inboxOn(
   canvas: CanvasContents,
   actor: Actor,
@@ -87,16 +117,9 @@ export function inboxOn(
 ): InboxEntry[] {
   const out: InboxEntry[] = [];
   for (const thread of Object.values(canvas.threads ?? {})) {
-    const mine = inYourThread(thread, actor.id, names);
     for (const comment of thread.comments) {
       if (comment.author.id === actor.id) continue;
-      const reason: InboxReason | null = addressesActor(comment, names)
-        ? "mentioned"
-        : thread.main
-          ? "main-thread"
-          : mine
-            ? "in-your-thread"
-            : null;
+      const reason = reasonFor(comment, thread, actor.id, names);
       if (!reason) continue;
       out.push({
         canvasId,

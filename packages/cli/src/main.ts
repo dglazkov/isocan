@@ -154,6 +154,7 @@ import {
   inboxTally,
   inboxLine,
   namesFor,
+  reasonFor,
   docStatus,
   statusProblems,
   toJsonCanvas,
@@ -7039,34 +7040,23 @@ command or reply. No \`session start\` needed after a wake.`,
       };
 
       // Names I answer to: identity name, plus my session label if any.
-      const selfNames: MentionCandidate[] = [ctx.actor];
-      if (session?.label) selfNames.push({ id: ctx.actor.id, name: session.label });
-      const addressesMe = (c: NewComment | Comment) =>
-        (c.mentions ?? []).includes(ctx.actor.id) ||
-        extractMentions(c.body, selfNames).length > 0;
+      const selfNames = namesFor(ctx.actor, session?.label ?? null);
 
-      // A comment is for me when it addresses me, lands in the MAIN thread
-      // (the designated agent↔user channel — always actionable), or lands in
-      // a thread I'm part of (wrote in / was mentioned in). Everything else
-      // is ether — not actionable. `snap` is fetched lazily, per canvas per
-      // poll batch.
+      // A comment is for me when core's `reasonFor` says so — mentioned, the
+      // MAIN thread (the designated agent↔user channel), or a thread I'm
+      // part of. Everything else is ether. The rule is THE routing rule the
+      // inbox folds with; it lives in core precisely so this park and
+      // `isocan inbox` cannot drift apart. Snapshot state, not the op,
+      // decides mainness — it also catches the thread.create that BIRTHS the
+      // main thread (op.main or a setMain landing in the same batch). `snap`
+      // is fetched lazily, per canvas per poll batch.
       const isForMe = async (
         op: Operation,
         snap: () => Promise<CanvasSnapshotResponse>,
       ): Promise<boolean> => {
         if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
-        if (addressesMe(op.comment)) return true;
-        // Snapshot state, not the op, decides mainness: it also catches the
-        // thread.create that BIRTHS the main thread (op.main or a setMain
-        // landing in the same batch).
         const thread = (await snap()).canvas.threads[op.threadId];
-        if (thread?.main) return true;
-        if (op.type === "thread.reply") {
-          if (thread?.comments.some((c) => c.author.id === ctx.actor.id || addressesMe(c))) {
-            return true;
-          }
-        }
-        return false;
+        return reasonFor(op.comment, thread, ctx.actor.id, selfNames) !== null;
       };
 
       // Null while the daemon is answering; the moment it stopped, otherwise.
