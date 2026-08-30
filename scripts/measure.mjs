@@ -109,6 +109,56 @@ const METRICS = {
       apply: (t) => t.replace(":root {", ":root {\n    /* selftest */ --x: #abcdef;"),
     },
   },
+  "copied-rules": {
+    what:
+      "CSS rule bodies that already exist word for word elsewhere in the sheet — " +
+      "each one a copy that cannot notice when the next copy is forgotten",
+    /**
+     * **The Personas panel's broken header, as a number.**
+     *
+     * Five dock panels each hand-rolled a `<header>`, and four carried a
+     * private rule to lay it out. Those four rules were byte-identical.
+     * Personas was the fifth and never got a copy, so its header fell back to
+     * `display: block` and its icon sat on its own title.
+     *
+     * Nothing could have caught that by reading the Personas panel, because
+     * nothing there is wrong — what is wrong is four copies of something
+     * elsewhere, none of which can notice a missing fifth. So the thing worth
+     * counting is the copying, not the omission.
+     *
+     * Declarations are sorted before comparing, so reordering does not hide a
+     * duplicate, and bodies under three declarations are ignored: `flex: 1`
+     * and `display: none` are vocabulary rather than structure, and counting
+     * them would bury the signal under noise nobody should act on.
+     */
+    take() {
+      const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
+      const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+      const seen = new Map();
+      let copies = 0;
+      for (const [, body] of bare.matchAll(/\{([^{}]*)\}/g)) {
+        const decls = body
+          .split(";")
+          .map((d) => d.trim().replace(/\s+/g, " "))
+          .filter(Boolean);
+        if (decls.length < 3) continue;
+        const key = decls.sort().join(";");
+        if (seen.has(key)) copies += 1;
+        else seen.set(key, true);
+      }
+      return copies;
+    },
+    breakIt: {
+      file: "packages/web/src/styles.css",
+      // Paste the shared panel header back as a private copy — the exact
+      // shape this metric exists to see.
+      apply: (t) =>
+        t.replace(
+          ".panel-head {",
+          ".selftest-panel header {\n  display: flex; align-items: center; gap: 7px; flex: none;\n  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);\n}\n.panel-head {",
+        ),
+    },
+  },
   "bundle-bytes": {
     what: "the largest built JavaScript chunk, in bytes — what a first visit downloads",
     take() {

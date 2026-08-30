@@ -302,6 +302,49 @@ npm --prefix <checkout> run dev:replica -- setup <home>/p/<id>#<pass>
 
 ## Development practices
 
+### Share the structure, and count the copies
+
+The Personas panel shipped with its icon on top of its own title. Five dock
+panels each hand-rolled a `<header>`; four carried a private CSS rule to lay it
+out, byte-identical to each other. Personas was the fifth and never got a copy.
+
+Nothing could have caught that by reading the Personas panel, because nothing
+there was wrong. **What was wrong was four copies elsewhere, none of which can
+notice a missing fifth** — and each copy was correct on the day it was made,
+which is why review does not catch this and a month later the panel ships
+broken.
+
+Three practices come out of it, in the order they are worth applying.
+
+**1. A shared component cannot half-arrive.** When two surfaces render the same
+shape, the frame goes in one component and the differences become slots. A copy
+is not cheaper; it is a second thing to keep true, and there is nothing anywhere
+that notices when it stops being.
+
+**2. Prefer a derived guard to a listed one.** `panelhead.test.ts` does not list
+the dock panels — it finds them by reading which components render `dock-panel`,
+then requires each to use `PanelHead`. A panel added next month is covered by a
+test written today, with nobody remembering to update it. A guard that lists
+what it checks protects exactly the cases somebody already thought of, which are
+the cases least likely to break.
+
+**3. Count the copying, not the omission.** `node scripts/measure.mjs
+copied-rules` reports CSS rule bodies that already exist word for word elsewhere
+in the sheet, and it is a ratchet on the `reviewer` persona: it may fall and
+never rise. Run against the sheet before the fix it reported 48; after, 45 —
+the three redundant copies of the header rule, seen directly. The bug never
+appears where the breakage is, so the number has to describe the shape that
+produces it.
+
+**What a guard cannot do is be unread.** These bounds are reported by
+`scripts/ratchet.mjs` on every push and gate nothing on purpose — a check that
+goes red on hygiene gets turned off in a week. The cost is that news nobody
+opens is not a guard: `unused-exports` and `undocumented-exports` were over
+their bounds before any of this work, and had been for some time. When you see
+a miss, either fix it or move the baseline **with the reason written down**.
+Silently re-baselining upward is the one move that turns a ratchet back into a
+number.
+
 ### Don't export ISOCAN_* variables
 
 Use `isocan home` to configure the daemon. Don't export `ISOCAN_*` variables in
