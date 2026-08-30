@@ -232,10 +232,11 @@ notably subprocess death leaving a session unusable.
 
 [`launch/design.md`](../launch/design.md) is the operational half of the same
 registration idea, written a day earlier, and it picks a different hook: a
-GitHub `workflow_dispatch`. It is more detailed than this doc and
-[`phases.md`](../multiuser/phases.md) names it as the gate on phase 12. This
-is not a replacement for it. It is a second hook shape, and the two differ on
-one property that doc measures better than this one could:
+GitHub `workflow_dispatch`. It was the gate on the multiuser walk's phase 12
+until that phase retired into this project (2026-08-30); it stands on its own
+now, more detailed than this doc and spiked. This is not a replacement for
+it. It is a second hook shape, and the two differ on one property that doc
+measures better than this one could:
 
 > **204, and no run id.** `workflow_dispatch` answers `204 No Content`. It does
 > not say which run started, and there is no field that could carry one. The
@@ -379,12 +380,17 @@ a summoned agent never parks.
 
 ## Sources
 
-- `cli/src/main.ts` — the `wait` command, its filters, cursors and exit codes
-- `cli/src/agent-guide.md` — the documented lap, and sizing the timeout
-- `cli/src/harness.ts` — built-in harnesses and the `harnessVars` hook
-- `cli/src/identity.ts` — the registry, durable across resume
-- `server/presence.ts` — the ephemeral plane and its TTL
-- `core/src/backing.ts` — canvas facts and machine facts
+- `packages/cli/src/main.ts` — the `wait` command, its filters, cursors and
+  exit codes
+- `packages/cli/src/agent-guide.md` — the documented lap, and sizing the
+  timeout
+- `packages/cli/src/harness.ts` — built-in harnesses and the `harnessVars`
+  hook
+- `packages/cli/src/identity.ts` — the registry, durable across resume
+- `packages/core/src/protocol.ts` — the same agent under another harness is
+  still that agent
+- `packages/server/src/presence.ts` — the ephemeral plane and its TTL
+- `packages/core/src/backing.ts` — canvas facts and machine facts
 - `docs/research/2026-08-24-local-agents.md` — onboarding measured in tokens
 - `docs/projects/multiuser/journey.md` — Scene 6, built; Scene 7, not vetted
 - `docs/projects/launch/design.md` — the other hook shape, and the `204`
