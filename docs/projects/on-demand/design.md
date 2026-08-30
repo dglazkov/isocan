@@ -353,7 +353,9 @@ deployment, not a design.
    `wait` alone, with no protocol involved and nothing else changed.
 2. **The rc and its enrolments**: the long-running program, the
    record split between home and rc, and the gestures that create
-   and withdraw an enrolment.
+   and withdraw an enrolment. The walk takes this in two phases: the
+   records and verbs, then the web doors (the tray and dialog that
+   journeys 1 and 8 walk through).
 3. **The ACP client in the rc**, stdio only, spawning locally. Omit
    `fs` and `terminal` from client capabilities so the agent uses its own
    disk and shell — the spec treats omitted capabilities as unsupported —
@@ -371,9 +373,10 @@ Step 1 is worth doing whether or not the rest happens — it closes useful
 under `wait` alone, which is what journey.md's front matter and phases.md
 both say of phase 1.
 
-The walk is [phases.md](phases.md) — the same six steps as phases, with
-this doc's open decisions parked at the door of the phase that forces each
-one, to be made when the phase opens and not before.
+The walk is [phases.md](phases.md) — the same steps as phases (step 2
+split in two there), with this doc's open decisions parked at the door of
+the phase that forces each one, to be made when the phase opens and not
+before.
 
 ---
 
