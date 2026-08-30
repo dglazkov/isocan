@@ -296,7 +296,7 @@ async function drainQueue(): Promise<boolean> {
     const next = pendingWrites(queue)[0];
     if (!next) return true;
     try {
-      const answer = await postOp(canvasId, next.actor, next.op, next.opId);
+      const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group);
       // Not removed — marked. It retires when the tail reaches its seq, so the
       // view never rewinds between the answer and the history that carries it.
       useCanvasStore.setState({
@@ -462,7 +462,13 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(canvasId: string, actor: Actor, op: Operation): Promise<void> {
+export async function sendEchoed(
+  canvasId: string,
+  actor: Actor,
+  op: Operation,
+  /** One gesture, one undo — carried so a flush re-sends the same grouping. */
+  group?: string,
+): Promise<void> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
    * branch: there is no operation that means "and from here it went
@@ -478,16 +484,16 @@ export async function sendEchoed(canvasId: string, actor: Actor, op: Operation):
   const { confirmed } = useCanvasStore.getState();
   // No confirmed state means no queue to join — nothing has been folded yet.
   if (!confirmed) {
-    await sendOp(canvasId, actor, op);
+    await sendOp(canvasId, actor, op, group);
     return;
   }
   const opId = newOpId();
-  const write: QueuedWrite = { ...newWrite(opId, actor, op), inflight: true };
+  const write: QueuedWrite = { ...newWrite(opId, actor, op, group), inflight: true };
   useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
   render();
   persist();
   try {
-    const answer = await postOp(canvasId, actor, op, opId);
+    const answer = await postOp(canvasId, actor, op, opId, group);
     // Marked, not removed — it retires when the tail reaches its seq, so the
     // view never rewinds between the answer and the history that carries it.
     useCanvasStore.setState({

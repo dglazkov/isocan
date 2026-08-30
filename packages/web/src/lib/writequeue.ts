@@ -1,5 +1,5 @@
-import type { Actor, Operation, CanvasState } from "@isocan/core";
-import { applyOperation } from "@isocan/core";
+import type { Actor, CanvasContents, Operation, CanvasState } from "@isocan/core";
+import { applyOperation, itemsTouchedBy } from "@isocan/core";
 import type { StoredWrite } from "./replica.ts";
 
 /**
@@ -83,6 +83,47 @@ export function unsyncedCount(queue: QueuedWrite[]): number {
 }
 
 /**
+ * **How long a change may be in flight before it is worth mentioning.**
+ *
+ * Not zero, and that is the whole design of the settling treatment. Under a
+ * healthy connection the round trip is tens of milliseconds, so marking every
+ * change the instant it is made would put a flicker on every gesture — and a
+ * signal that fires constantly is one people stop seeing, which means it
+ * cannot work on the day it matters.
+ *
+ * At this threshold the mark means something specific and useful: **this is
+ * taking longer than it should.** Under a good connection nobody ever sees it.
+ * Under a sick one it appears exactly where the work is stuck, which is the
+ * question somebody is actually asking when a canvas stops responding.
+ */
+export const SETTLING_MS = 600;
+
+/**
+ * The items carrying a change the home has not confirmed yet, and has had
+ * longer than `SETTLING_MS` to.
+ *
+ * Pure, and takes `now` rather than reading the clock, so a test can stand at
+ * any moment without waiting — the same reason `retire` takes `lastSeq`.
+ *
+ * A REFUSED write is not settling: it is over, it failed, and the person is
+ * being told so by the refusal banner. Leaving it marked would say "still
+ * working on it" about something that has already stopped.
+ */
+export function settlingItems(
+  queue: QueuedWrite[],
+  now: number,
+  canvas?: CanvasContents | null,
+): Set<string> {
+  const settling = new Set<string>();
+  for (const write of queue) {
+    if (write.seq !== undefined || write.refused) continue;
+    if (now - write.at < SETTLING_MS) continue;
+    for (const id of itemsTouchedBy(write.op, canvas)) settling.add(id);
+  }
+  return settling;
+}
+
+/**
  * Drop the writes the home's own history has now caught up with.
  *
  * `seq <= lastSeq` is the whole test, and it works because the seq came from
@@ -151,8 +192,13 @@ export function queueable(canvasId: string | null, openCanvasId: string | null):
 }
 
 /** Mint the queue's record of one gesture. */
-export function newWrite(opId: string, actor: Actor, op: Operation): QueuedWrite {
-  return { opId, actor, op, at: Date.now() };
+export function newWrite(
+  opId: string,
+  actor: Actor,
+  op: Operation,
+  group?: string,
+): QueuedWrite {
+  return { opId, actor, op, at: Date.now(), ...(group !== undefined ? { group } : {}) };
 }
 
 /**

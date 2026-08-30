@@ -63,10 +63,20 @@ function ItemViewInner({
   item,
   canvasId,
   actor,
+  settling = false,
 }: {
   item: Item;
   canvasId: string;
   actor: Actor;
+  /**
+   * A change to this item has been waiting on the home longer than it should.
+   *
+   * A prop rather than a hook here on purpose: lateness is a function of the
+   * clock, so it needs a ticking timer, and one per item on a canvas of two
+   * hundred would be two hundred timers to say one thing. The viewport keeps
+   * the single timer and hands down the answer.
+   */
+  settling?: boolean;
 }) {
   const navigate = useNavigate();
   const colors = useActorColors();
@@ -454,7 +464,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}`}
       data-item-id={item.id}
       style={{
         left: x,

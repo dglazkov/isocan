@@ -4317,3 +4317,41 @@ button.mt-card:hover { border-color: var(--accent); }
  * `canvasStore` is what actually refuses changes; this only says so.
  */
 .world.in-past { filter: saturate(0.55) opacity(0.92); }
+
+/**
+ * **A change that has not landed yet.**
+ *
+ * Every write is applied optimistically, so the canvas answers the instant you
+ * act — that is the fix for a gesture appearing to do nothing when the socket
+ * is sick. The cost of optimism is that a change which never lands looks
+ * exactly like one that worked, so the view has to be able to say so.
+ *
+ * It waits `SETTLING_MS` first (`lib/writequeue.ts`), and that delay is what
+ * makes the mark mean something: not "this is new" — which would flicker on
+ * every gesture and teach people to ignore it — but **"this is late"**. Under
+ * a healthy connection nobody ever sees this rule.
+ *
+ * Deliberately quiet: a dashed outline and a little less ink, not a colour and
+ * not a spinner. Nothing has gone wrong yet, and a warning would be a lie
+ * about a change that is merely in transit. When something HAS gone wrong the
+ * refusal banner says so in words, which is the honest place for it.
+ */
+.item.settling { opacity: 0.72; }
+.item.settling::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px dashed var(--ink-soft);
+  border-radius: 10px;
+  pointer-events: none;
+}
+/* The pulse says "still working", which is true, and stops entirely for
+   somebody who asked for less motion — the dashed outline carries the whole
+   meaning on its own. */
+@media (prefers-reduced-motion: no-preference) {
+  .item.settling::after { animation: settling-breathe 1.8s ease-in-out infinite; }
+}
+@keyframes settling-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 0.3; }
+}

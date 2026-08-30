@@ -57,6 +57,10 @@ export interface StoredWrite {
   actor: Actor;
   op: Operation;
   at: number;
+  /** The gesture this op was part of, when it was part of one. Stored rather
+   * than re-minted, because a flush is a RE-send: a revise that was three ops
+   * under one group must still be one undo after a reconnect. */
+  group?: string;
   /** Set once the home has answered with a seq; the write retires when the
    * confirmed cursor reaches it. */
   seq?: number;

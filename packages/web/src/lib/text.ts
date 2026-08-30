@@ -13,7 +13,8 @@ import {
   type TextFace,
   type TextStyle,
 } from "@isocan/core";
-import { sendOp, uploadBlob } from "./api.ts";
+import { uploadBlob } from "./api.ts";
+import { sendEchoed } from "../stores/canvasStore.ts";
 
 /**
  * Words typed onto the canvas, committed the same way ink is
@@ -39,7 +40,20 @@ export async function addTextNode(
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
   const itemId = newItemId();
   const box = measured ?? textBox(body, style);
-  await sendOp(canvasId, actor, {
+  /**
+   * **`sendEchoed`, so the thing you just made appears when you make it.**
+   *
+   * This posted with `sendOp`, which has no local echo — the node appeared
+   * only when the home's broadcast came back down the socket. On a healthy
+   * connection that is invisible; on a sick one the gesture does nothing at
+   * all, and it was reported exactly that way: "⌘Enter and nothing is added
+   * to the canvas". The node WAS created. The tab never learned.
+   *
+   * The blob is already uploaded by this line, so the optimistic apply
+   * describes something that genuinely exists at the home. An echo of a
+   * version nobody else could fetch would be a different and much worse idea.
+   */
+  await sendEchoed(canvasId, actor, {
     type: "item.add",
     itemId,
     version: {
@@ -97,7 +111,7 @@ export async function reviseTextNode(
   const group = newGroupId();
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
-  await sendOp(
+  await sendEchoed(
     canvasId,
     actor,
     {
@@ -113,7 +127,7 @@ export async function reviseTextNode(
     },
     group,
   );
-  await sendOp(
+  await sendEchoed(
     canvasId,
     actor,
     {
@@ -137,7 +151,7 @@ export async function reviseTextNode(
     group,
   );
   if (measured && grew) {
-    await sendOp(
+    await sendEchoed(
       canvasId,
       actor,
       { type: "item.resize", itemId, width: measured.width, height: measured.height },
