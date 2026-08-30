@@ -77,7 +77,7 @@ advance does not present the same comment as new.
 
 **Trajectory:** *nothing yet.*
 
-## Phase 2 — `isocan rc` and the enrolments
+## Phase 2 — `isocan rc` and the enrolment records
 
 **Status: NOT STARTED.**
 
@@ -86,13 +86,18 @@ the directory's binding supplies the canvas, the enrolment records supply
 the roster — and quiet at start, the way `claude rc` is: starting it
 spawns nothing and lists nothing, it enables. Its narration is of events
 as they happen — a summons, an addition, a refusal — and the roster is
-read where rosters are read, `isocan who`. The enrolment record in its
+read where rosters are read, `isocan who`. (A summons at this phase is
+recognized and narrated, never answered: `reasonFor` is importable
+today, so the `rc` can say *summons for Sian — no way to start a
+session yet*; dispatch, and the rest of the routing rule, are phase
+4's.) The enrolment record in its
 two halves (`home: { canvasId, actorId, rules, cursor }`,
-`rc: { actorId, harness, cwd, sessionId }`), the gestures that create an
-enrolment, and the gesture that withdraws one. This
-phase owns journey 8 (dismissal): enrolment and withdrawal are one phase,
-so standing can never be granted by a build that has no way to take it
-back.
+`rc: { actorId, harness, cwd, sessionId }`), and the verbs that create
+and withdraw an enrolment. The web doors that journeys 1 and 8 walk
+through are phase 2.5, built on what this phase stores. Withdrawal ships
+beside enrolment at every step — here as the record verb, in 2.5 as the
+tray control — so standing can never be granted by a build that has no
+way to take it back.
 
 **Closed at this door, 2026-08-30 — one binary or two, and the name.**
 Both went at once, by Dimitri's decision: ditch "steward" and split the
@@ -115,54 +120,28 @@ an assumption.) What journey 1 fixes: bare `isocan rc` takes no
 arguments (the binding supplies the canvas, the enrolments supply the
 roster), and **enrolment is a record, not a message to a live process**
 — it works with nothing running, and a running `rc` notices record
-changes without a restart. Journey 1 names enrolment's two doors, and
-journeys 1 and 8 walk through both, so this phase builds both — neither
-is deferrable, and the web half (the agent tray with its rows, the *Add
-an agent* dialog, the per-row *Dismiss*) is this phase's work as much as
-any verb: the web dialog (*Add an agent*
-→ name it, pick a persona template), which decides WHO while the parked
-`rc` supplies WHERE — the two halves of the custody split staying on
-their sides — falling back to handing over a line when no `rc` is
-parked; and a prompt to an agent you already have — a comment on the
-canvas like any other ask, so this door is also the web app. Its
-mechanism is `isocan agent add <name>`, and **the syntax is the
-containment**: the agent's form takes no `--canvas` and no `--dir` —
-both come from where the agent already is — so an agent can only ever
-add an agent beside itself. The flagged, point-anywhere form
-(`isocan rc add`) is a person's, and lives as plumbing rather than a
-journey door. One timing fact, recorded in the journey map too: the ask
-doors — `@Sian add a reviewer`, `@Sian you're done here` — mechanically
-need a summoned turn, so they *walk* when phase 4 lands; what this phase
-delivers is everything the walk will use — the verbs, the records, the
-web doors. Journey 4 adds one more property: routing rules are set in
-the same gesture that adds the agent, defaulted by the persona template
-— never a second thing to remember. How a template declares those
-defaults is decided with the personas project at the table, not by this
-walk alone. The door's hardest question: nothing mechanical separates an
-agent running `isocan agent add` because it was asked from running it
-unasked. The person's word is the gesture, and the walk owes a decision
-on where that word is checked — or an argument for why the `rc`'s
-narration plus the thread's visibility is check enough. Dismissal lives on the canvas (journey 8): the
-agent-tray control, and the ask — `@Sian you're done here`, which is the
-gesture that dismissed Charlie on the phase-11 proof canvas, and which
-mechanically means the agent removes its own standing on the person's
-word. The ask door only works while the agent still answers; the tray is
-how you dismiss one that no longer does. A CLI record verb may exist as
-plumbing, but it is not a journey door: a person at a terminal is looking
-at the `rc`, and the `rc`'s own gesture is the coarse one — Ctrl-C stops
-answering for everyone.
-
-**At this door — what a rule may say.** Journey 4's example rules are
-"only the items Sian owns, only version and comment changes." Op-type
-filters exist today (`--op`), and item filters name specific items
-(`--item`) — "the items Sian owns" is a predicate neither expresses.
-Decide the vocabulary the record's `rules` field may hold: today's
-filters only, and journey 4's example bends to match; or ownership and
-whatever else, defined in core beside `reasonFor` so `wait`, the inbox,
-and the `rc` read one grammar. Journey 4's acceptance adds a surface
-obligation either way: the rules must be readable in one place — ask
-what an agent answers for and why — so the `rules` half of the record
-needs a reader, not only a writer, and this phase owns it.
+changes without a restart. The gestures split across two phases: the
+web doors are phase 2.5's, and this phase builds what they stand on —
+the records and the verbs. The agent's verb is
+`isocan agent add <name>`, and **the syntax is the containment**: it
+takes no `--canvas` and no `--dir` — both come from where the agent
+already is — so an agent can only ever add an agent beside itself. The
+flagged, point-anywhere form (`isocan rc add`) is a person's, and lives
+as plumbing rather than a journey door; so does the withdrawal verb — a
+person at a terminal is looking at the `rc`, and the `rc`'s own gesture
+is the coarse one: Ctrl-C stops answering for everyone. One timing
+fact, recorded in the journey map too: the ask doors —
+`@Sian add a reviewer`, `@Sian you're done here` — mechanically need a
+summoned turn, so they *walk* when phase 4 lands; what this phase
+delivers is the verbs and records the walk will use. The door's hardest
+question: nothing mechanical separates an agent running
+`isocan agent add` because it was asked from running it unasked. The
+person's word is the gesture, and the walk owes a decision on where
+that word is checked — or an argument for why the `rc`'s narration plus
+the thread's visibility is check enough. The record's `rules` half is
+stored here exactly as the gesture hands it over and interpreted by
+nobody yet: what a rule may say is phase 4's door, decided where
+dispatch first reads one.
 
 **Closed at this door, 2026-08-30 — `ISOCAN_HOOK`, kept as a headstone.**
 The first draft enrolled agents from inside their own sessions when this
@@ -172,16 +151,48 @@ person's gesture (or an agent's, on a person's word), nothing needs to
 appear in any agent's environment, and `wait` keeps its exact current
 contract.
 
-**Outcome:** `isocan rc` starts bare and spawns nothing. An agent added
-through the web door appears in the roster, and a withdrawal takes it
+**Outcome:** `isocan rc` starts bare and spawns nothing. An enrolment
+created by verb appears in the roster record, and a withdrawal takes it
 back out — both with or without an `rc` running, a running `rc`
 narrating each as an event. Kill the `rc`; the enrolments survive to its
-next start. (The ask doors walk with phase 4; what `who` calls the added
-agent is phase 6's word.)
+next start. (What `who` calls the added agent is phase 6's word.)
 
 **Proof:** vitest for the record's two halves, the add and withdrawal
-gestures, and survival across restart; the narration asserted, not
+verbs, and survival across restart; the narration asserted, not
 assumed.
+
+**Trajectory:** *nothing yet.*
+
+## Phase 2.5 — The web doors
+
+**Status: NOT STARTED.**
+
+**Work:** The gestures where the people are, built on phase 2's records:
+the agent tray with a row per enrolled agent; *Add an agent* — name it,
+pick a persona template — which decides WHO while the parked `rc`
+supplies WHERE and HOW, the two halves of the custody split staying on
+their sides, falling back to handing over a line when no `rc` is
+parked; and the per-row *Dismiss*. Routing rules are set in the same
+add gesture, defaulted by the persona template — never a second thing
+to remember (journey 4). How a template declares those defaults is
+decided with the personas project at the table, not by this walk alone,
+and what a rule may say is phase 4's door — the dialog stores what the
+template hands it, and journey 4's "adjustable there" finishes at phase
+4 with the vocabulary. Dismissal lives on the canvas (journey 8): the tray
+control, and the ask — `@Sian you're done here`, the gesture that
+dismissed Charlie on the multiuser phase-11 proof canvas — which
+mechanically means the agent removes its own standing on the person's
+word, through phase 2's verb. The ask door only works while the agent
+still answers, which is phase 4's to make true; the tray is how you
+dismiss one that no longer does.
+
+**Outcome:** An agent added from the dialog appears in the roster; with
+no `rc` parked, the dialog hands over the line instead. A tray
+dismissal takes the standing away and leaves the history untouched.
+Journeys 1 and 8 close here, with the caveats their map rows carry.
+
+**Proof:** The dialog and the tray driven in the app against a real
+canvas; the records asserted after each gesture.
 
 **Trajectory:** *nothing yet.*
 
@@ -241,6 +252,19 @@ starts and fade when it ends. The park lands presence on a summons today
 phase owes the equivalent — the design names this seam as a failure mode
 ("two doors disagreeing"), and it closes here or journey 2 does not
 walk.
+
+**At this door — what a rule may say.** Journey 4's example rules are
+"only the items Sian owns, only version and comment changes." Op-type
+filters exist today (`--op`), and item filters name specific items
+(`--item`) — "the items Sian owns" is a predicate neither expresses.
+The record has carried `rules` opaquely since phase 2; this phase is
+the first to read one, so it decides the vocabulary: today's filters
+only, and journey 4's example bends to match; or ownership and whatever
+else, defined in core beside `reasonFor` so `wait`, the inbox, and the
+`rc` read one grammar. Journey 4's acceptance adds a surface obligation
+either way: the rules must be readable in one place — ask what an agent
+answers for and why — so the `rules` half of the record gets its reader
+here.
 
 **At this door — what a summons delivers.** The design says two things:
 "the payload `wait` would have returned, same JSON" and "isocan composes

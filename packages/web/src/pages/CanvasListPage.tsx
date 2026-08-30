@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas } from "@isocan/core";
-import { canvasPath, newCanvasId } from "@isocan/core";
+import {
+  ago,
+  CANVAS_SORTS,
+  CANVAS_SORT_LABEL,
+  canvasPath,
+  filterCanvases,
+  isCanvasSort,
+  newCanvasId,
+  opWords,
+  sortCanvases,
+  type CanvasSort,
+} from "@isocan/core";
 import { fetchHomes, listCanvases, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
@@ -9,6 +20,10 @@ import { CanvasEditor } from "../components/CanvasEditor.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+
+const SORT_KEY = "isocan.canvases.sort";
+/** Above this many canvases, the filter and the sort appear. */
+const BROWSE_FROM = 8;
 
 export function CanvasListPage({
   actor,
@@ -117,6 +132,54 @@ export function CanvasListPage({
    * to the new card and marks it for a moment.
    */
   const [justMade, setJustMade] = useState<string | null>(null);
+
+  /**
+   * **A clock, because "8m ago" is a lie the moment it is painted.**
+   *
+   * Coarse on purpose: every 30s is finer than the smallest thing these labels
+   * say (a minute) and cheap enough to leave running on a page somebody parks
+   * a tab on. It is the whole reason these are relative at all — a stamp does
+   * not need a clock, and a stamp is what this screen had.
+   */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  /**
+   * **At a hundred canvases the order is the feature**, and filtering is what
+   * actually saves somebody — a sort only rearranges the haystack.
+   *
+   * Both remembered, like the text tool's step: a person who works
+   * alphabetically works alphabetically tomorrow too, and re-choosing on every
+   * visit is the kind of small tax that makes a screen feel like it is not
+   * paying attention.
+   */
+  const [sort, setSort] = useState<CanvasSort>(() => {
+    try {
+      const raw = localStorage.getItem(SORT_KEY);
+      return isCanvasSort(raw) ? raw : "recent";
+    } catch {
+      return "recent";
+    }
+  });
+  const [query, setQuery] = useState("");
+  const chooseSort = (next: CanvasSort) => {
+    setSort(next);
+    try {
+      localStorage.setItem(SORT_KEY, next);
+    } catch {
+      // A browser refusing storage is not a reason to refuse the control.
+    }
+  };
+
+  /* Filter first, then sort: sorting what will be thrown away is work nobody
+     sees, and at a hundred canvases the difference is real. */
+  const shown = useMemo(
+    () => sortCanvases(filterCanvases(canvases ?? [], query), sort),
+    [canvases, query, sort],
+  );
   /** What just happened, when what just happened was not a new card. */
   const [createNote, setCreateNote] = useState<{ kind: "error" | "elsewhere"; text: string } | null>(
     null,
@@ -297,6 +360,54 @@ export function CanvasListPage({
           )}
         </div>
       </div>
+      {/**
+       * **Only when the list is big enough to need it.**
+       *
+       * Six canvases do not need a search box and a sort menu; a hundred are
+       * unusable without them. Chrome that appears when it becomes useful is
+       * the whole reason a home screen can serve both, and a filter above four
+       * cards is furniture that makes a small canvas list look like an admin
+       * console.
+       *
+       * The threshold is on the number the person HAS, not the number shown —
+       * otherwise typing a query that matches three canvases would remove the
+       * box you are typing into.
+       */}
+      {(canvases?.length ?? 0) > BROWSE_FROM && (
+        <div className="canvas-browse">
+          <input
+            className="text-input canvas-filter"
+            type="search"
+            placeholder={`Filter ${canvases!.length} canvases…`}
+            aria-label="Filter canvases by name"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="canvas-sorts" role="group" aria-label="Order">
+            {CANVAS_SORTS.map((option) => (
+              <button
+                key={option}
+                className={`btn quiet${option === sort ? " on" : ""}`}
+                aria-pressed={option === sort}
+                onClick={() => chooseSort(option)}
+              >
+                {CANVAS_SORT_LABEL[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Said out loud rather than left as an empty grid: a filter that matches
+          nothing looks exactly like a home with no canvases, and one of those
+          is somebody's whole afternoon missing. */}
+      {query.trim() !== "" && shown.length === 0 && (
+        <p className="canvas-none">
+          Nothing matches “{query.trim()}”.{" "}
+          <button className="btn quiet" onClick={() => setQuery("")}>
+            Clear the filter
+          </button>
+        </p>
+      )}
       <div className="canvas-grid">
         {/* **Making one comes first**, because an empty home is somebody's
             first screen and the one thing they need is the way in. It was
@@ -329,7 +440,7 @@ export function CanvasListPage({
             </p>
           )}
         </form>
-        {(canvases ?? []).map((canvas) => (
+        {shown.map((canvas) => (
           <div
             className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
             key={canvas.id}
@@ -352,8 +463,28 @@ export function CanvasListPage({
                 <Link className="card-open" to={canvasPath(canvas.id)}>
                   <h3>{canvas.title}</h3>
                   {canvas.description && <div className="desc">{canvas.description}</div>}
+                  {/**
+                   * **What last happened here, as a sentence.**
+                   *
+                   * It read `8/17/2026 · Admiral One` — a date and a name,
+                   * which says when somebody was here and nothing about what
+                   * they did. Worse, the date was wrong: `updatedAt` only
+                   * moved on a RENAME, so a canvas worked on all week
+                   * reported the day it was last retitled. The reducer stamps
+                   * every operation now, and this says which one.
+                   *
+                   * The words come from `opWords` in core — the same table
+                   * the timeline's seams read, so a canvas card, a tick on a
+                   * track and `isocan timeline` describe one event with one
+                   * set of words.
+                   */}
                   <div className="meta">
-                    {new Date(canvas.updatedAt).toLocaleDateString()} · {actorNameIn(names, canvas.updatedBy)}
+                    {actorNameIn(names, canvas.updatedBy)}{" "}
+                    {opWords(canvas.lastOp) ?? "did something"}
+                    {" · "}
+                    <span title={new Date(canvas.updatedAt).toLocaleString()}>
+                      {ago(canvas.updatedAt, nowMs) || "just now"}
+                    </span>
                   </div>
                 </Link>
                 <div className="card-more">

@@ -1,4 +1,5 @@
 import type { LogEntry } from "./ops.ts";
+import { opWords } from "./opwords.ts";
 import type { CanvasState } from "./model.ts";
 import { applyOperation } from "./reducer.ts";
 
@@ -149,17 +150,6 @@ export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[]
 }
 
 /** One line per major, the same sentence on every surface. */
-const WHAT: Record<string, string> = {
-  "item.add": "added something",
-  "item.delete": "deleted something",
-  "items.delete": "deleted several things",
-  "item.restore": "restored something",
-  "items.restore": "restored several things",
-  "item.addVersion": "made a new version",
-  "thread.create": "started a conversation",
-  "thread.setMain": "moved the Chat",
-  "project.create": "made the canvas",
-};
 
 /**
  * One seam, said in words — "Di added something".
@@ -172,7 +162,7 @@ const WHAT: Record<string, string> = {
  * from here.
  */
 export function majorWhat(major: Major): string {
-  return `${major.actor} ${WHAT[major.kind] ?? major.kind}`;
+  return `${major.actor} ${opWords(major.kind) ?? major.kind}`;
 }
 
 export function majorLine(major: Major): string {

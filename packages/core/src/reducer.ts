@@ -56,7 +56,25 @@ export function applyOperation(
   const stamp = { updatedAt: ts, updatedBy: actor };
   const { project, canvas } = state;
 
-  const withCanvas = (next: CanvasContents): CanvasState => ({ project, canvas: next });
+  /**
+   * **Every operation stamps the canvas, not just the ones about the canvas's
+   * own name.**
+   *
+   * This returned `project` untouched, so `project.updatedAt` moved only for
+   * `project.update` — and the home screen, which shows exactly that field,
+   * reported when a canvas was last RENAMED while calling it activity. A
+   * canvas worked on all week read as untouched since whenever somebody last
+   * edited its title.
+   *
+   * `lastOp` rides along because the list needs to say WHAT happened and
+   * cannot afford to open a log per canvas to find out.
+   */
+  const touched = { ...project, ...stamp, lastOp: op.type };
+
+  const withCanvas = (next: CanvasContents): CanvasState => ({
+    project: touched,
+    canvas: next,
+  });
 
   const getItem = (itemId: string): Item => {
     const item = canvas.items[itemId];

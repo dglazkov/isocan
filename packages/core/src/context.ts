@@ -1,3 +1,4 @@
+import { ago } from "./elapsed.ts";
 import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
@@ -53,15 +54,6 @@ export interface ContextExtras {
   /** Findings from `design check`, so the view can say whether it passes. */
   designProblems?: number;
 }
-
-const ago = (iso: string, nowMs: number): string => {
-  const ms = nowMs - Date.parse(iso);
-  if (!Number.isFinite(ms) || ms < 0) return "";
-  const h = ms / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
-  if (h < 48) return `${Math.round(h)}h`;
-  return `${Math.round(h / 24)}d`;
-};
 
 /** Items somebody marked — the closest thing the canvas has to "these
  *  matter", and a real signal because a person put it there by hand. */

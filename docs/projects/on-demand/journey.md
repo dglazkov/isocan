@@ -237,14 +237,14 @@ claims a journey closes only when the journey walks.
 
 | Journey | Closed by |
 | --- | --- |
-| 1 — Start `isocan rc` | Phase 2; its comment door (step 3) walks with phase 4, and its roster line finishes with phase 6, which owns `who`'s words |
+| 1 — Start `isocan rc` | Phase 2.5 (the dialog, on phase 2's records); its comment door (step 3) walks with phase 4, and its roster line finishes with phase 6, which owns `who`'s words |
 | 2 — Summon by comment | Phase 4; same phase-6 caveat on its `who` step |
 | 3 — Nothing is lost | Phase 1 (the plain-park half); phase 4 (the `rc` half) |
-| 4 — Route only what matters | Phase 4; the rules-in-the-gesture step and their readable record are phase 2's |
+| 4 — Route only what matters | Phase 4, which owns the rule vocabulary and its readable record; the rules-in-the-gesture step is phase 2.5's |
 | 5 — Failure is loud | Phase 5 |
 | 6 — Runaway agents stay bounded | Phase 5 |
 | 7 — See who answers here | Phase 6 |
-| 8 — Dismiss an agent | Phase 2; its ask door walks with phase 4, which is what lets Sian answer |
+| 8 — Dismiss an agent | Phase 2.5; its ask door walks with phase 4, which is what lets Sian answer |
 | 9 — Watch one happen | Phase 2 (the narration); phase 4 (the payload contract) |
 | 10 — A week on one canvas | The whole walk; this is the project's closing scene. |
 

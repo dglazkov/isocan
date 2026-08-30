@@ -4369,3 +4369,31 @@ button.mt-card:hover { border-color: var(--accent); }
   0%, 100% { opacity: 0.75; }
   50% { opacity: 0.3; }
 }
+
+/**
+ * **Browsing a hundred canvases**, which is a different screen from ten.
+ *
+ * Appears only above `BROWSE_FROM` (`CanvasListPage.tsx`) — a filter above
+ * four cards is furniture that makes a small home look like an admin console.
+ */
+.canvas-browse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+.canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
+.canvas-sorts { display: flex; gap: 2px; flex-wrap: wrap; }
+/* The chosen ordering wears the accent the way a pressed control does
+   everywhere else here — `aria-pressed` carries it for a reader. */
+.canvas-sorts .btn.on {
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.canvas-none {
+  margin: 0 0 6px;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
