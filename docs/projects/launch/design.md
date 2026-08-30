@@ -1,7 +1,7 @@
 ---
 status: blocked
 since: 2026-08-30
-see: launch
+see: launch, on-demand
 blockedBy: guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured.
 note: spike run 30 Aug; 4 of 5 guesses answered
 ---
@@ -292,4 +292,8 @@ doc before phase 12 opens, not a note in a commit.
   12's build; this owns what happens after it fires.
 - **Local-bridge dispatch**, which is phase 12.7's own design and a different
   trust story: a hook that fires something on somebody's laptop has no vendor
-  in it and no readable payload.
+  in it and no readable payload. Written a day after this doc,
+  [on-demand/design.md](../on-demand/design.md) now argues the local shape —
+  the daemon summoning an agent on the same machine, no home involved — and
+  compares the two hooks directly: a dispatch creates an agent per summons; an
+  address wakes one that exists.

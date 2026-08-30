@@ -1,6 +1,7 @@
 ---
 status: designed
 since: 2026-08-30
+see: on-demand
 note: the read half is buildable today; the write half needs the wake mechanism
 ---
 # A canvas that watches its own repository

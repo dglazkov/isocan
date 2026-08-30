@@ -1,3 +1,9 @@
+---
+status: designed
+since: 2026-08-30
+see: on-demand, launch
+note: inverts isocan wait — the daemon summons instead of the agent parking; local first over ACP stdio. Steps 1–2 (durable cursors, the enrolment record) are worth building alone.
+---
 # Agents on demand
 
 **30 August 2026.** Design. Nothing built.
