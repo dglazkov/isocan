@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -1049,7 +1048,7 @@ describe("the door is metered", () => {
     // the forwarded chain is what it keys on. SYNTHETIC addresses.
     const wideHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-meter-"));
     const wide = await startDaemon({
-      port: await reservePort(),
+      port: 0,
       home: wideHome,
       host: "0.0.0.0",
     });

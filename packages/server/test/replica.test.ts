@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
@@ -57,14 +56,14 @@ let upstream: Daemon | null;
 let upstreamHome: string | null;
 
 async function boot(birthHome: string | null): Promise<string> {
-  daemon = await startDaemon({ port: await reservePort(), home, birthHome });
+  daemon = await startDaemon({ port: 0, home, birthHome });
   const address = daemon.app.server.address();
   return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
 
 async function realHome(): Promise<string> {
   upstreamHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-upstream-"));
-  upstream = await startDaemon({ port: await reservePort(), home: upstreamHome, birthHome: null });
+  upstream = await startDaemon({ port: 0, home: upstreamHome, birthHome: null });
   const address = upstream.app.server.address();
   return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
@@ -93,7 +92,7 @@ describe("where a daemon learns where a canvas born here goes", () => {
     // writes the address on purpose — and phase 10.3 is what makes flipping it
     // safe, because a birth default cannot re-point work that already exists.
     expect(await resolveHomeUrl(home)).toBeNull();
-    daemon = await startDaemon({ port: await reservePort(), home });
+    daemon = await startDaemon({ port: 0, home });
     expect(daemon.birthHome).toBeNull();
   });
 

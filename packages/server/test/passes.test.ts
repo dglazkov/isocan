@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -138,7 +137,7 @@ async function waitFor(ready: () => Promise<boolean>, what: string, ms = 5000): 
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-"));
-  daemon = await startDaemon({ port: await reservePort(), home });
+  daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   owner = await mintTestBadge(base);
@@ -448,7 +447,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
     // fallback that matters still holds: a nameless claim on a replica is
     // allocated locally rather than failing.
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-old-"));
-    const replica = await startDaemon({ port: await reservePort(), home: replicaDir, birthHome: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {
@@ -533,7 +532,7 @@ describe("on a replica", () => {
     await revokeLink();
 
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-replica-"));
-    const replica = await startDaemon({ port: await reservePort(), home: replicaDir, birthHome: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {
@@ -597,7 +596,7 @@ describe("on a replica", () => {
 
   it("does not mint passes of its own — the row belongs to the desk that answers the door", async () => {
     const replicaDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-passes-replica2-"));
-    const replica = await startDaemon({ port: await reservePort(), home: replicaDir, birthHome: base, homePollMs: 50 });
+    const replica = await startDaemon({ port: 0, home: replicaDir, birthHome: base, homePollMs: 50 });
     const address = replica.app.server.address();
     const replicaBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     try {

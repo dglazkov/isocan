@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -27,7 +26,7 @@ async function bind(dir: string): Promise<{ status: number; body: any }> {
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-bindhome-"));
   root = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-bind-"));
-  daemon = await startDaemon({ port: await reservePort(), home });
+  daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   badge = await mintTestBadge(base);

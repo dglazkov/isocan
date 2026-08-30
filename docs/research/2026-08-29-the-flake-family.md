@@ -8,7 +8,8 @@ note: 4 of 5 witnesses diagnosed
 **29 August 2026**
 
 **Status, 30 Aug 2026: four of five witnesses diagnosed. The fifth has now
-outlived TWO hypotheses, both killed by measurement rather than argument** — a
+outlived TWO hypotheses — and the second attempt at a fix was REVERTED after
+CI showed it made things worse, which is its own lesson** — a
 blocked event loop, and a port collision. It recurred on a private port with
 the loop idle, which is the finding, and the next instrument is in place to
 separate the two readings that are left. The split
@@ -519,6 +520,48 @@ direction: **if an `ETIMEDOUT` on loopback appears again, the cause is not the
 port range**, because there is no longer a listener in that range to collide
 with. The next occurrence would move the search below the application — to the
 socket layer or the harness — rather than around it.
+
+---
+
+## The fix was wrong twice, and CI said so
+
+**30 Aug, later.** `release.yml` failed on two consecutive commits:
+
+```
+Error: listen EADDRINUSE: address already in use 127.0.0.1:20200
+```
+
+**20200 is inside the private range this change moved everything into** — and
+the old arrangement could not have produced it.
+
+`port: 0` is ATOMIC: the kernel picks a free port and binds it in one call,
+with no window and no wraparound. `reservePort` probes, closes the probe, and
+hands the number over — a race — inside a 100-port slice per worker that
+`offset % SLICE` wraps around. A worker running dozens of daemons across many
+files blows past 100 reservations easily, and then reaches for a port something
+is still holding.
+
+So the change **replaced something safe with something racy, in order to fix
+something it demonstrably did not fix** — the `ETIMEDOUT` had already recurred
+on port 20807, inside the same private range, with the loop measured idle.
+
+**Reverted: all 75 in-process daemons are back on `port: 0`.** What survives is
+the narrow rule `ports.ts` was written for and which is still right — a test
+that must tell ANOTHER PROCESS the number before anything is listening cannot
+use `port: 0`, because it never learns the number. Seven files, and only those.
+
+### What this costs the investigation
+
+The port-range hypothesis is dead twice over now, and the second death is the
+more useful one: it was not merely unhelpful, it was **actively worse**, and
+only CI could tell — four local runs and two under load had all been green.
+That is the whole argument for a gate that runs somewhere other than the
+machine that wrote the change.
+
+The `ETIMEDOUT` family is back to where the loop measurement left it: not the
+application, not the port range. The instrument added for it — binding the port
+on a connect timeout, to separate "nothing was listening" from "something was
+and did not accept" — is untouched and is still the next real evidence.
 
 ---
 
