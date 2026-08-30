@@ -565,6 +565,50 @@ and did not accept" — is untouched and is still the next real evidence.
 
 ---
 
+## The instrument answered, 30 Aug: something WAS listening
+
+The bit added on 29 Aug — bind the port on a connect timeout, to separate the
+two surviving readings — fired for the first time:
+
+```
+POST http://127.0.0.1:59856/api/door, connect/ETIMEDOUT,
+  gave up after 7789ms and 1 attempt, loop stalled 13ms during this test;
+  something IS listening on 59856 and did not accept
+```
+
+**So it is the second reading.** A server socket existed on that port, the event
+loop was idle at 13ms, and the SYN was dropped for nearly eight seconds. Not
+"the daemon had gone" — something was there and did not accept.
+
+Three facts, together, are strange in a way none of them is alone:
+
+- **59856 is ephemeral.** This is after the revert, so the daemon took its port
+  from `port: 0` — kernel-assigned and atomically bound.
+- **The loop measured was idle**, so whatever holds the socket was not the
+  process whose loop was measured — or the accept queue was not being drained
+  by the thing that owns it.
+- **No stale daemon was on this machine** when the run finished (`pgrep`: none),
+  so nothing obviously outlived its test.
+
+### The instrument's own limit, which this exposed
+
+**It probes AFTER the failure.** By the time the bind is tried, the test has
+given up, `afterEach` may have closed the daemon, and the kernel may have handed
+the port to something else. So "something IS listening" is true at the moment of
+the probe and is not proof it was the same socket that dropped the SYN.
+
+That is a real weakness and it is worth naming rather than reading past: the
+next version should capture the listener's identity, not merely its existence —
+the pid holding the port, taken at the moment of the timeout rather than after
+it. `lsof -nP -iTCP:<port>` is one line and would say whether the holder is this
+worker, another worker, or something outside the run entirely, which is the
+question all three facts above are circling.
+
+**Still the most specific evidence this family has produced**, and the first
+that rules a possibility OUT rather than adding one.
+
+---
+
 ## The shape worth keeping
 
 Both times this family gave anything up, it was to **observation rather than
