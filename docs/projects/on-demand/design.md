@@ -1,12 +1,8 @@
----
-status: designed
-since: 2026-08-30
-see: on-demand, launch
-note: AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. The walk is phases.md, open decisions parked at phase doors; phases 1–2 stand alone.
----
 # Agents on demand
 
-**30 August 2026.** Design. Nothing built.
+**30 August 2026.** Design. Nothing built. The project's status lives in
+[journey.md](journey.md)'s front matter — the journeys are the acceptance
+suite, this doc is the argument, [phases.md](phases.md) the walk.
 
 The thesis in one line: **an agent is not a process, and isocan currently
 requires it to be one.**

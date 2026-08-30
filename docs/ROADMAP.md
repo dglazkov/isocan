@@ -43,7 +43,7 @@ and the done column should not be flattered by either.
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
-| **project** | [on-demand](docs/projects/on-demand/design.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. The walk is phases.md, open decisions parked at phase doors; phases 1–2 stand alone. · see on-demand, launch |
+| **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug — the daemon summons over ACP, local first. journey.md is the acceptance suite, design.md the argument, phases.md the walk; phases 1–2 stand alone. · see on-demand, launch |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
