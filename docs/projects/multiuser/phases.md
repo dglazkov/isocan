@@ -112,7 +112,11 @@ Everything below is a feature added to a live isocan.io, and its order returns
 to being a hypothesis — real users get a vote on what matters most. **The
 airplane (12.5, 12.7) is off the list**, retired 2026-08-30: an agent cannot
 work with no network, because it cannot reach a model, so the queue and the
-bridge had no caller. The one debt that sat outside that is
+bridge had no caller. **Phases 12 and 13 followed the same day** — 12 replaced
+by the [on-demand project](../on-demand/design.md), a project rather than a
+phase of this one; 13 because offline birth shared the airplane's premise,
+leaving re-homing and the twin rule to headings of their own. What remains
+below is phase 11. The one debt that sat outside that is
 paid: **phase 10.5 closed 29 Aug 2026**, when Paul and Dion walked
 `development.md`. Nothing on this project is owed to anybody now. Prod's
 sign-in mail is done — magic-link from an aligned sender, proved on a browser
@@ -1378,10 +1382,12 @@ isocan.io through the release promotion, and its order returns to being
 a hypothesis — real users get a vote on what matters most. The airplane
 arc is no longer one of the candidates: phases 12.5 and 12.7 were retired
 2026-08-30 when the scene they were gated on turned out to be one nobody
-can play, an agent working with no network to reach a model through. One
-arc is still gated on design work that is session-shaped rather than
-phase-shaped, the way identity-desk.md and innkeeper.md were written:
-`projects/launch/design.md` and its dispatch spike, before phase 12.
+can play, an agent working with no network to reach a model through.
+Phases 12 and 13 followed the same day — 12 replaced by the
+[on-demand project](../on-demand/design.md), which owns agent-on-demand
+as a project rather than a phase; 13 because offline birth shared the
+airplane's premise, and re-homing and the twin rule wait for headings of
+their own. Phase 11 is the one still standing.
 
 ## Phase 11 — The thin agent (Scene 6)
 
@@ -1408,8 +1414,9 @@ the link grant is on — turn the link off and repo members are locked out
 with the strangers. The lean, to confirm when this phase opens: play
 Scene 6 on the link grant, keep the `repo:` refusal honest, and record
 the lock-out asymmetry as a finding — the OAuth access-token custody
-decision belongs with phase 12's design, which is already in the
-token-custody business.
+decision belongs with [`projects/launch/design.md`](../launch/design.md),
+which is already in the token-custody business (phase 12, which used to
+hold that pointer, retired into the on-demand project).
 
 **Outcome:** Scene 6 plays **from its own door**: the dialog under your
 own face at dev hands over a line, that line pasted into a real cloud
@@ -1492,40 +1499,30 @@ for ring truth.
 
 ## Phase 12 — Agent-on-demand (Scene 7) ⚑ provision
 
-**Status: NOT STARTED.**
+**Status: RETIRED 2026-08-30, unstarted — replaced by the
+[on-demand project](../on-demand/design.md).** The phase was the build
+order for Scene 7, and Scene 7 was never vetted: the journey now says so
+at its head — sketched, never checked, not to be cited as a decision.
+What survives from the scene is one sentence, *always-on was never the
+requirement; always-answerable was*, and the on-demand project owns it as
+a project rather than a phase of this one: the registration as a durable
+record, the summons as a turn started when an op arrives, built local
+first with no service and no account.
 
-**Work:** Registrations per frozen delegation — custody-checked actor,
-KMS-wrapped scoped token, per-summons pass in the dispatch payload;
-the `workflow_dispatch` hook concretely; the spark's tri-state in the
-pile; failure surfaced in the thread. Provisioning: a test repo with
-the workflow file and a token scoped to firing it.
+**The gate is not retired with the phase.**
+[`projects/launch/design.md`](../launch/design.md) was written and its
+spike run — four of five guesses measured, guess 3 waiting on a token
+only Dimitri can mint. It stands as the design of the dispatch hook
+shape, and on-demand names it as the second shape a registration could
+hold. Whether a dispatch hook ever ships is now on-demand's question.
 
-**Gated on a design that does not exist yet.** Frozen delegation
-([innkeeper.md](innkeeper.md), mechanism 11) answers "may the
-home mint this?"; nothing yet answers "what happens when it fires?".
-Before this phase opens, `projects/launch/design.md` must own the operational
-half: the hook contract written down rather than sloganized; how the
-home observes the failure it promises to report — its token reads
-nothing, and `workflow_dispatch` answers 204 with no run id, so
-pass-redemption-within-a-deadline is the candidate signal; the payload
-as a channel that is not private — dispatch inputs are readable by
-anyone with repo read for the pass's TTL; the harness credential — the
-standing secret in CI the design never mentions because it lives outside
-the walls — chosen out loud anyway; a registration's second death, by
-vendor token expiry, which is a spark that lies; and summons concurrency
-plus the re-run button, which replays a spent pass and so can never
-work. With the doc, the spike: fire a real dispatch at a scratch repo
-and measure — a design that reasons about a vendor is a hypothesis.
-
-**Outcome:** An `@`-mention with nobody running boots a real workflow
-that works the lap and exits; a sabotaged hook says "couldn't start"
-where everyone can see it.
-
-**Proof:** The summons fired for real against the test repo; vitest
-for custody rules and the registration's place in the provenance
-sweep.
-
-**Findings:** *none yet.*
+**What travels with the work, wherever it lands.** Phase 11's finding
+about this phase — a registration UI that lives in one clause gets lost;
+name the surface in an Outcome before writing code — applies unchanged to
+on-demand's enrolment record and roster. And frozen delegation
+([innkeeper.md](innkeeper.md), mechanism 11) still inherits Scene 7's
+unvetted status; on-demand's first version deliberately ducks it by
+letting an agent register only itself.
 
 ## Phase 12.5 — The queue
 
@@ -1573,32 +1570,24 @@ made that correction and it holds for anything that ever frames the daemon.
 
 ## Phase 13 — Offline birth, twins, re-homing
 
-**Status: NOT STARTED.**
+**Status: RETIRED 2026-08-30, unstarted.** Its own note from earlier the
+same day said to split it before starting; retiring it is the split, with
+nothing kept as a phase. Offline birth dies the airplane's death: a
+canvas born with no network is born by the CLI — journey.md says so
+outright — and the agent behind the CLI cannot reach a model, so the
+scene cannot be played. The adoption queue it expected ("arrives proven
+from phase 12.5") never arrives, because 12.5 is retired.
 
-**Work:** Adoption from seq 1 on first reconnect; first-writer wins
-and the late twin parks whole; re-homing as the generalized push —
-work travels, the guest book stays. Re-homing's landing also retires the
-sovereignty caveat phase 13.7 wrote into the terms — deleting that
-sentence is part of this phase's outcome.
+**Re-homing and the twin rule are real, and are not this phase.** Both
+run on a working network and stand on their own; if either is taken up,
+it gets its own heading with its own Outcome, the way 12.5's retirement
+already prescribes for the reliability gap it gets mistaken for.
 
-**This phase is no longer thin, and half of it may not survive**
-(2026-08-30, unresolved and deliberately not decided here). It said "the
-queue arrives proven from phase 12.5", and 12.5 is retired, so nothing
-arrives. Worse for the first third: **offline birth has the same premise
-problem the airplane had.** A canvas born with no network is born by the
-CLI — journey.md says so outright, "CLI-and-agent only: a browser cannot
-visit a canvas whose origin has never been reachable" — and the agent that
-would birth it cannot run. Re-homing and the twin rule are independent of
-any of that and stand on their own: re-homing is a canvas moving between
-homes on a working network, and twins are what happens when two homes both
-think they hold one. Whoever takes this phase up should split it before
-starting.
-
-**Outcome:** A plane-born canvas adopts its promised home; a twin is
-refused and parked, never merged; a re-homed canvas keeps its authors
-while the roster re-forms.
-
-**Proof:** Integration tests across scratch homes for all three flows.
-
-**Findings:** *none yet.*
+**Two loose ends now have no scheduled owner**, recorded so they are
+chosen rather than discovered. The sovereignty caveat phase 13.7 wrote
+into the terms — re-homing as one command "is phase 13's and launches
+later" — no longer has a phase behind it; the terms stay honest, since
+sovereignty by replica is already fact, but the caveat's deletion is
+unscheduled. And adoption — moving a pre-10.3 local canvas *to* a home,
+which 10.3 named as "what stays phase 13's" — now stays nobody's.
 

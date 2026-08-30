@@ -60,7 +60,7 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-29 | phase 14 closed; 10.5 is the one unpaid debt · see multiuser |
+| **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | phase 14 closed, 10.5 paid; 12/12.5/12.7/13 retired 30 Aug — agent-on-demand moved to the on-demand project; phase 11 is the one open phase · see multiuser, on-demand |
 | research | [One gesture, one undo — grouping in the oplog](docs/research/2026-08-28-op-grouping.md) | 2026-08-29 |  · see ui-refresh |
 | research | [The ask: what the field built for the moment an agent needs a person](docs/research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |
 | **project** | [ui-refresh](docs/projects/ui-refresh/phases.md) | 2026-08-29 | phases 1-6, all acceptances closed · see ui-refresh |

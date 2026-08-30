@@ -1,8 +1,8 @@
 ---
 status: built
-since: 2026-08-29
-see: multiuser
-note: phase 14 closed; 10.5 is the one unpaid debt
+since: 2026-08-30
+see: multiuser, on-demand
+note: phase 14 closed, 10.5 paid; 12/12.5/12.7/13 retired 30 Aug — agent-on-demand moved to the on-demand project; phase 11 is the one open phase
 ---
 # The multiuser journey
 
