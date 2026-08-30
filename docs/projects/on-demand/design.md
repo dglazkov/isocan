@@ -338,9 +338,9 @@ a URL.
 
 Steps 1 and 2 are worth doing whether or not the rest happens.
 
-The walk is [phases.md](phases.md) — the same six steps as phases, with the
-30 Aug review's open decisions parked at the door of the phase that forces
-each one, to be made when the phase opens and not before.
+The walk is [phases.md](phases.md) — the same six steps as phases, with
+this doc's open decisions parked at the door of the phase that forces each
+one, to be made when the phase opens and not before.
 
 ---
 
