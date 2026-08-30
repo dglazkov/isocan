@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**6 built · 24 still open** — of which 12 partly
-built, 11 designed, 1 blocked, and
+**6 built · 24 still open** — of which 13 partly
+built, 10 designed, 1 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -22,10 +22,11 @@ and the done column should not be flattered by either.
 | --- | --- | --- | --- |
 | **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | blocked by guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured. · see launch |
 
-## Partly built <sub>12</sub>
+## Partly built <sub>13</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | phases 1-2 done; 3-4 not started · see auto-upgrade |
@@ -39,13 +40,12 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>11</sub>
+## Designed, not built <sub>10</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is buildable today; the write half needs the wake mechanism |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
-| research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-29 |  |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |

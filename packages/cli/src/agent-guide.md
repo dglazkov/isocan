@@ -374,6 +374,21 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## Where the seams are
+
+`isocan timeline` draws the canvas's history as a track: a bar per bucket of
+seqs, drawn from SIGNIFICANCE rather than from raw count, with a tick under
+every bucket holding a seam. `--majors` lists the seams alone.
+
+A seam is a structural change — something born, something deleted, a version
+minted, a conversation started, the Chat moving. A run of forty moves is one
+ripple, not forty ticks, which is why a tall bar with no tick under it means
+that stretch was churn.
+
+The significance function is in core, so `isocan timeline` and the app mark the
+same seams. Two surfaces disagreeing about what mattered is the one thing this
+architecture does not permit.
+
 ## Saying what matters here
 
 `isocan context` lists what an agent reads before it starts. Two verbs manage

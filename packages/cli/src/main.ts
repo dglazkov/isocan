@@ -161,6 +161,9 @@ import {
   contextMark,
   markPatch,
   markLabel,
+  majors,
+  majorLine,
+  track,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -7329,6 +7332,56 @@ program
         for (const entry of entries) printEntry(entry);
         if (entries.length > 0) seq = entries[entries.length - 1]!.seq;
       }
+    }),
+  );
+
+program
+  .command("timeline")
+  .description("Where the seams are — the canvas's history as a track you could scrub")
+  .option("-w, --width <n>", "how many buckets to draw (default 48)")
+  .option("--majors", "just the seams, one per line")
+  .action(
+    run(async (opts: { width?: string; majors?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      // Archive first, then live — `buildRecap`'s contract, and for the same
+      // reason: the story predates the live log on any canvas old enough to
+      // have been compacted.
+      const archived = await ctx.client.getArchivedLog(p.id);
+      const live = await ctx.client.getLog(p.id, 0);
+      const entries = [...archived, ...live];
+      if (entries.length === 0) return console.log("nothing has happened here yet");
+      const marks = majors(entries);
+      if (opts.majors) {
+        if (ctx.json) return printJson(marks);
+        for (const m of marks) console.log(majorLine(m));
+        return console.log(`\n${marks.length} seams across ${entries.length} entries`);
+      }
+      const buckets = track(entries, Number(opts.width ?? 48));
+      if (ctx.json) return printJson({ entries: entries.length, buckets });
+      /**
+       * **The bar is drawn from WEIGHT, not from count** — which is the whole
+       * point of the significance function. Forty moves and one birth are not
+       * the same afternoon, and a histogram of raw entries would say they
+       * were.
+       */
+      const peak = Math.max(...buckets.map((b) => b.weight), 1);
+      const BLOCKS = " ▁▂▃▄▅▆▇█";
+      const bar = buckets
+        .map((b) => BLOCKS[Math.min(8, Math.round((b.weight / peak) * 8))])
+        .join("");
+      // A seam gets a tick under its own column, so the two lines read as one
+      // picture rather than as a chart and a legend.
+      const ticks = buckets.map((b) => (b.majors.length > 0 ? "\u2502" : " ")).join("");
+      console.log(bar);
+      console.log(ticks);
+      console.log(
+        `seq ${buckets[0]!.fromSeq}–${buckets[buckets.length - 1]!.toSeq} · ` +
+          `${entries.length} entries · ${marks.length} seams` +
+          (archived.length > 0 ? ` · ${archived.length} from the archive` : ""),
+      );
+      for (const m of marks.slice(-8)) console.log(`  ${majorLine(m)}`);
+      if (marks.length > 8) console.log(`  … ${marks.length - 8} earlier — --majors for all`);
     }),
   );
 
