@@ -609,6 +609,51 @@ that rules a possibility OUT rather than adding one.
 
 ---
 
+## A sixth witness, and this one was a test disabling its own safety net
+
+**30 Aug.** `managed.test.ts > fails a build that runs but is not the build it
+was fetched as` failed with:
+
+```
+expected 'it exited before answering (Error: listen EADDRINUSE:
+  address already in use 127.0.0.1:59382)' to contain 'ddddddd'
+```
+
+`managed.ts`'s `freePort` guesses — probe, close, hand the number over — and it
+**has to**: it spawns a child and then polls health on that port, so it cannot
+use `port: 0` and never learn the number. Same category as `test/ports.ts`'s
+legitimate users, and unavoidable.
+
+**Production already handles this.** `smokeTest` detects the race
+(`/EADDRINUSE|already holds port|is held by something/`) and retries, three
+attempts by default.
+
+**The test had set `attempts: 1`** — to keep the assertion tight, and thereby
+removing the very protection that makes the operation reliable. One lost race
+and it reports a port error instead of the verdict under test.
+
+The fix is to delete the override, and the reasoning is what makes it a fix
+rather than a loosening: **a genuine mismatch sets no `raced`, so `smokeTest`
+returns on the first attempt regardless.** The default costs the test nothing
+and buys back the retry. Only a port race is retried — exactly the difference
+between the thing being tested and the thing getting in its way.
+
+**Worth generalising:** a test that disables a retry to make an assertion crisp
+has moved the flakiness from the product into itself. The question to ask of
+any such override is whether the behaviour under test is even reachable by the
+path being disabled. Here it was not.
+
+### And one that is still unexplained
+
+The run before it failed `passes.test.ts > forwards the redemption, and leaves
+the local ledger correct` — `expected [] to deeply equal [ 'grant' ]`. A
+different shape entirely: an assertion about state, not a socket error. It
+passed three times in isolation and has not recurred. **Recorded rather than
+diagnosed**, because one sighting with no evidence attached is exactly what
+this document exists to stop being the whole story.
+
+---
+
 ## The shape worth keeping
 
 Both times this family gave anything up, it was to **observation rather than

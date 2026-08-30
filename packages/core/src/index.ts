@@ -59,3 +59,4 @@ export * from "./inbox.ts";
 export * from "./docstatus.ts";
 export * from "./jsoncanvas.ts";
 export * from "./contextmark.ts";
+export * from "./timeline.ts";
