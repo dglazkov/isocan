@@ -470,7 +470,8 @@ feature and a worse one to discover by accident.
 newest first, with the command to reply to each. `--mentions` narrows it to
 where somebody actually named you, rather than the Chat being busy.
 
-**It is the same rule `isocan wait` parks on** (`inboxOn` in core): a comment
+**It is the same rule `isocan wait` parks on** — one function, `reasonFor`
+in core, that both call: a comment
 is yours when it names you — by actor id, or by a name you answer to including
 your session label — or it lands in the Chat, or it lands in a thread you are
 already part of. Everything else is ether.
