@@ -1,5 +1,26 @@
 # The local bridge: one replica on a machine, not two
 
+> **RETIRED 2026-08-30, never built. Kept as history and for one section.**
+>
+> The premise below is that a machine has two replicas that cannot see each
+> other, and that this matters because both surfaces need to survive a lost
+> network. The second half is false. An agent works by reaching a model, so
+> an agent with no network is not an agent whose writes are refused — it is
+> an agent that is not running. There was never a plane scene to write, and
+> phases 12.5 and 12.7 were waiting on one.
+>
+> The first half is being answered a different way: the CLI speaks to the
+> canvas's home directly when the canvas lives elsewhere, which leaves one
+> replica on the machine (the tab's) rather than bridging two. See the
+> closed entries in [phases.md](phases.md).
+>
+> **Read "The security rule, which must not be got wrong" anyway.** It is
+> not about the bridge. The daemon still has no framing policy, and if
+> anything ever frames it, `frame-ancestors` and the `postMessage` origin
+> check derive from the home of the canvas being shown — per canvas, off
+> `GET /api/homes`, never a whole-machine value. That rule outlives the
+> design it was written for.
+
 **The debt this discharges.** The [journey](journey.md)'s rule 6
 says people enter through one origin, always — the local daemon serves ops to
 CLIs, never pages to persons — and that *"offline in the browser is the
