@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -59,7 +58,7 @@ beforeEach(async () => {
   upstreamDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-corr-home-"));
   laptopDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-corr-laptop-"));
   work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-corr-work-"));
-  homeDaemon = await startDaemon({ port: await reservePort(), home: upstreamDir, birthHome: null });
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   homeBase = baseOf(homeDaemon);
 
   owner = await mintTestBadge(homeBase);
@@ -77,7 +76,7 @@ beforeEach(async () => {
     path.join(laptopDir, "identity.json"),
     JSON.stringify({ ...isaac, createdAt: new Date().toISOString() }),
   );
-  laptop = await startDaemon({ port: await reservePort(), home: laptopDir, birthHome: homeBase, homePollMs: 50 });
+  laptop = await startDaemon({ port: 0, home: laptopDir, birthHome: homeBase, homePollMs: 50 });
   local = await mintTestBadge(baseOf(laptop));
   /**
    * **Scene 5 first, then Scene 4 — which is the order the journey puts them

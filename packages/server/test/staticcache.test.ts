@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,7 +28,7 @@ describe("what the app server lets a browser keep", () => {
 
   beforeEach(async () => {
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-cache-"));
-    daemon = await startDaemon({ port: await reservePort(), home });
+    daemon = await startDaemon({ port: 0, home });
     const address = daemon.app.server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   });

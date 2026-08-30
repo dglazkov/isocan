@@ -52,41 +52,46 @@ describe("no test listens in the kernel's ephemeral range", () => {
     expect(port).toBeLessThan(20_000);
   }, 30_000);
 
-  it("no test asks the kernel for one instead", () => {
-    /**
-     * The guard, and the reason it is a grep rather than a type: `port: 0` is
-     * a perfectly ordinary thing to write, it reads as "you pick", and it is
-     * wrong here for a reason nothing in the call site suggests. Seventy-five
-     * of them were converted at once; one written tomorrow would put the
-     * family back and look completely reasonable doing it.
-     */
-    /**
-     * **Read and stripped, not grepped.** `git grep` found this file's own
-     * explanation of the banned string and failed — which is the third time
-     * that shape has appeared today and is already a habit in
-     * `docs/reviews/lessons.md`: a negative assertion must not be tripped by
-     * the comment that explains it. Comments come off first; only code counts.
-     *
-     * (`git grep` also exits 1 when it finds nothing, which here would be the
-     * pass — so the bare call threw on success. Both are gone with it.)
-     */
-    const files = execFileSync("git", ["ls-files", "packages", "test"], {
+  /**
+   * **This guard used to ban `port: 0` everywhere, and the ban was wrong.**
+   *
+   * On 30 Aug 2026, 75 in-process `startDaemon({ port: 0 })` calls were moved
+   * onto `reservePort` on the theory that the kernel's ephemeral range was
+   * causing the flake family's `ETIMEDOUT`s. Two things then happened, in this
+   * order:
+   *
+   * 1. An `ETIMEDOUT` recurred on port **20807** — inside the private range —
+   *    with the loop measured idle. The theory was already dead.
+   * 2. CI failed with `EADDRINUSE 127.0.0.1:20200`, which the old arrangement
+   *    could not produce.
+   *
+   * The second is the lesson. `port: 0` is ATOMIC: the kernel picks and binds
+   * in one call, with no window and no wraparound. `reservePort` probes, closes
+   * and hands the number over — a race, and one confined to a 100-port slice
+   * that a worker running dozens of daemons wraps around. **So the change
+   * replaced something safe with something racy, in order to fix something it
+   * demonstrably did not fix.**
+   *
+   * What survives is the narrow, original rule: a test that must tell ANOTHER
+   * PROCESS the number before anything is listening cannot use `port: 0`,
+   * because it never learns the number. Those tests — and only those — use
+   * `reservePort`.
+   */
+  it("is used by the tests that genuinely cannot ask the kernel", () => {
+    const users = execFileSync("git", ["grep", "-l", "reservePort", "--", "packages"], {
       cwd: repo,
       encoding: "utf8",
     })
       .split("\n")
-      // Not this file: the guard has to name the string it bans in order to
-      // look for it, so it will always contain one. Stripping comments got
-      // most of the way there and left the search term itself, which is in
-      // CODE and cannot be stripped.
-      .filter((f) => /\.tsx?$/.test(f) && !f.includes("/src/") && f !== "test/ports.test.ts");
-    expect(files.length, "the file list must not be empty").toBeGreaterThan(20);
-    const offenders = files.filter((f) => {
-      const code = readFileSync(`${repo}/${f}`, "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "");
-      return code.includes("port: 0");
-    });
-    expect(offenders, "use `port: await reservePort()` — see test/ports.ts").toEqual([]);
-  }, 30_000);
+      .filter(Boolean);
+    expect(users.length, "the helper still has real users").toBeGreaterThan(0);
+    for (const file of users) {
+      const src = readFileSync(`${repo}/${file}`, "utf8");
+      // The tell: they hand the number to a spawned process or a URL string,
+      // rather than reading it back off a server they started themselves.
+      expect(src, `${file} should read its own port from server.address() instead`).not.toMatch(
+        /port: await reservePort\(\)/,
+      );
+    }
+  });
 });

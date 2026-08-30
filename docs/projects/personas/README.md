@@ -44,7 +44,7 @@ You are responsible for whether this still feels fast…
 arrangement the isocan skill already uses. Claude Code sees them as subagents;
 any other harness reads the file directly.
 
-## The seven, and the rule that decided them
+## The eight, and the rule that decided them
 
 | Persona | The lens | Its number |
 | --- | --- | --- |
@@ -55,6 +55,12 @@ any other harness reads the file directly.
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |
 | `performance` | Whether it still feels fast | largest built chunk |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
+| `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports |
+
+**Two of `reviewer`'s bounds are RATCHETS** — set at the number on the day it
+was written, not at zero. Hygiene does not want a cleanup sprint; it wants the
+line never to move the wrong way, so a new unused export fails on the commit
+that added it while the author still remembers why.
 
 **The gate is not "would this lens be useful" — it is *a persona needs a
 standing number nobody else is watching*.** `security` and `docs` were
@@ -70,7 +76,7 @@ it is not worth a made-up metric.
 Never an aspiration. "Keep the design accessible" is not a goal; "zero contrast
 failures at 390, 768 and 1440, measured by `grade.mjs`" is one.
 
-`scripts/measure.mjs` is where those commands live — nine metrics, each
+`scripts/measure.mjs` is where those commands live — eleven metrics, each
 printing a single number on stdout. **Every one declares a way to break it**,
 and `--selftest` breaks each on purpose and fails if the number does not move.
 A metric with no mutation is *refused*, not skipped.
@@ -119,6 +125,26 @@ or `unanswered`. That is the only thing a run wants from a person. Nothing
 computes a score from it yet, deliberately: an accept rate over five findings
 is noise, and a trust score that governs autonomy before it means anything is a
 way to lose trust in trust.
+
+## Review on push
+
+`.github/workflows/review.yml` fires on every push to `main`, takes every
+persona's numbers, and **comments on the commit** if one moved the wrong way —
+naming the number, the bound, what it was, and the command that produced it.
+
+Two decisions in it are worth knowing:
+
+**It gates nothing.** A missed bound is news, not a build break. A check that
+goes red on hygiene is a check somebody turns off inside a week, and then the
+numbers drift with nothing watching — worse than never having had it.
+`release.yml` remains the gate.
+
+**It runs no model.** The part of a review that can be CERTAIN should not wait
+for the part that cannot, so the numbers go on every push and the judgement
+pass — reading a diff for stale prose, which is `reviewer`'s real job — stays
+on the nightly. Running a persona's judgement on every push is the volume
+failure the night-shift research names: a morning of forty items turns sleep
+into a queue.
 
 ## What is not built
 

@@ -175,6 +175,49 @@ const METRICS = {
       apply: (t) => t + '\nexport const SELFTEST = <button title="Sorry, something went wrong">x</button>;\n',
     },
   },
+  /**
+   * **Surface area nobody asked for.**
+   *
+   * An `export` is a promise that something outside this file needs it. One
+   * that nothing outside the file uses — not another module, not a test — is a
+   * promise to nobody, and a future reader has to treat it as API before
+   * discovering it is not. This only ever goes up on its own, which is why the
+   * goal against it is a RATCHET at today's number rather than a target of
+   * zero: any new one fails on the commit that added it, while the author
+   * still remembers why.
+   */
+  "unused-exports": {
+    what: "exports that nothing outside their own file uses",
+    take: () => scanExports().unused,
+    breakIt: {
+      file: "packages/core/src/kinds.ts",
+      /**
+       * **The name is assembled rather than written**, and that is not
+       * cleverness. The first version injected a literal
+       * `SELFTEST_UNUSED_EXPORT` — which appears in THIS file, which the scan
+       * reads, so the metric correctly found it "used elsewhere" and did not
+       * move. The selftest caught it: the mutation was wrong, not the metric.
+       */
+      apply: (t) => `${t}\n/** selftest */\nexport const ${["Zq", "Tmp", "Sym"].join("")} = 1;\n`,
+    },
+  },
+  /**
+   * **In this codebase the comments ARE the documentation**, argued at length
+   * and relied on by people and agents alike. An export with nothing above it
+   * is the one place that stops being true.
+   *
+   * Also a ratchet, and deliberately not zero: some exports genuinely do not
+   * need a paragraph, and a persona that nags about every one of them becomes
+   * noise — which is how a persona stops being read.
+   */
+  "undocumented-exports": {
+    what: "exports with no comment above them",
+    take: () => scanExports().bare,
+    breakIt: {
+      file: "packages/core/src/kinds.ts",
+      apply: (t) => `${t}\nexport const SELFTEST_BARE_EXPORT = 2;\n`,
+    },
+  },
   "lint-violations": {
     what: "eslint errors — rules-of-hooks and exhaustive-deps, both at error",
     take() {
@@ -209,6 +252,52 @@ const METRICS = {
     },
   },
 };
+
+
+/**
+ * One walk for both export metrics: which exported names nothing outside their
+ * own file uses, and which carry no comment.
+ *
+ * Deliberately a text scan rather than a type-aware tool. It is wrong at the
+ * edges — a name that is also an ordinary word could be "used" by coincidence —
+ * and it is wrong in the SAFE direction: it under-reports, so the ratchet never
+ * fires on a false positive. A number that cries wolf is a number people turn
+ * off.
+ */
+function scanExports() {
+  const list = (glob) =>
+    execFileSync("git", ["ls-files", ...glob], { cwd: repo, encoding: "utf8" })
+      .split("\n")
+      .filter(Boolean);
+  const sources = list(["packages/core/src", "packages/server/src", "packages/web/src/lib"]).filter(
+    (f) => /\.tsx?$/.test(f) && !f.endsWith("index.ts"),
+  );
+  const everywhere = list(["packages", "test", "scripts"]).filter((f) => /\.(tsx?|mjs)$/.test(f));
+  const bodies = new Map(everywhere.map((f) => [f, readFileSync(path.join(repo, f), "utf8")]));
+
+  let unused = 0;
+  let bare = 0;
+  for (const file of sources) {
+    const src = bodies.get(file) ?? readFileSync(path.join(repo, file), "utf8");
+    const lines = src.split("\n");
+    lines.forEach((line, i) => {
+      const m = /^export (?:async function|function|const|interface|type) (\w+)/.exec(line);
+      if (!m) return;
+      const name = m[1];
+      // A comment on the line above — a block's `*/`, a `//`, or a continuation.
+      const prev = (lines[i - 1] ?? "").trim();
+      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) bare += 1;
+      const word = new RegExp(`\\b${name}\\b`);
+      let usedElsewhere = false;
+      for (const [other, body] of bodies) {
+        if (other === file) continue;
+        if (word.test(body)) { usedElsewhere = true; break; }
+      }
+      if (!usedElsewhere) unused += 1;
+    });
+  }
+  return { unused, bare };
+}
 
 const argv = process.argv.slice(2);
 

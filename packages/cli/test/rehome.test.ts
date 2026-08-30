@@ -1,4 +1,3 @@
-import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -61,10 +60,10 @@ beforeEach(async () => {
     path.join(homeDir, "identity.json"),
     JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
   );
-  home = await startDaemon({ port: await reservePort(), home: upstreamDir, birthHome: null });
+  home = await startDaemon({ port: 0, home: upstreamDir, birthHome: null });
   homeBase = baseOf(home);
   replica = await startDaemon({
-    port: await reservePort(),
+    port: 0,
     home: homeDir,
     birthHome: homeBase,
     homePollMs: 50,
@@ -190,7 +189,7 @@ describe("a marker that disagrees with what this machine recorded", () => {
      * half is the last two lines: **neither home's canvas list changes**.
      */
     const second = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rehome-second-"));
-    const otherHome = await startDaemon({ port: await reservePort(), home: second, birthHome: null });
+    const otherHome = await startDaemon({ port: 0, home: second, birthHome: null });
     try {
       const h2 = baseOf(otherHome);
 
