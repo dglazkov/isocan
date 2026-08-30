@@ -5,6 +5,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "../lib/panels.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { ContextGlyph } from "./Glyphs.tsx";
+import { PanelHead } from "./PanelHead.tsx";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -41,22 +42,14 @@ export function ContextPanel({ canvasId, actor }: { canvasId: string; actor: Act
       style={{ width: panelWidth }}
       aria-label="What an agent reads here"
     >
-      <header>
-        <span className="context-glyph">
-          <ContextGlyph size={13} />
-        </span>
-        <b>Context</b>
-        <i className="context-hint">what an agent reads before it starts</i>
-        <span className="spacer" />
-        <button
-          className="main-close"
-          title="Collapse"
-          aria-label="Close the context view"
-          onClick={() => openPanel(canvasId, null)}
-        >
-          ✕
-        </button>
-      </header>
+      <PanelHead
+        glyph={<ContextGlyph size={13} />}
+        name="Context"
+        hint="what an agent reads before it starts"
+        closeTitle="Collapse"
+        closeLabel="Close the context view"
+        onClose={() => openPanel(canvasId, null)}
+      />
       <div className="context-body">
         {pieces.map((piece) => (
           <div

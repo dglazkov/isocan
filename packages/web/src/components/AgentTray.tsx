@@ -7,6 +7,7 @@ import { openPanel } from "../lib/panels.ts";
 import { AgentRowView } from "./AgentRow.tsx";
 import { AgentsGlyph } from "./Glyphs.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
+import { PanelHead } from "./PanelHead.tsx";
 
 /**
  * **`isocan who`, given a home on the canvas.**
@@ -48,20 +49,14 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
       style={{ width: panelWidth }}
       aria-label="Agents on this canvas"
     >
-      <header>
-        <span className="agents-glyph"><AgentsGlyph size={13} /></span>
-        <b>Agents</b>
-        <i className="agents-hint">who is here, and what they are doing</i>
-        <span className="spacer" />
-        <button
-          className="main-close"
-          title="Collapse"
-          aria-label="Close the agent tray"
-          onClick={() => openPanel(canvasId, null)}
-        >
-          ✕
-        </button>
-      </header>
+      <PanelHead
+        glyph={<AgentsGlyph size={13} />}
+        name="Agents"
+        hint="who is here, and what they are doing"
+        closeTitle="Collapse"
+        closeLabel="Close the agent tray"
+        onClose={() => openPanel(canvasId, null)}
+      />
       <div className="agents-body">
         {rows.length === 0 ? (
           /* The same two-silences empty state the workbench uses: the room

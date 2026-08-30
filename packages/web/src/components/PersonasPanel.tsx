@@ -5,6 +5,7 @@ import { PanelResizer } from "./PanelResizer.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "../lib/panels.ts";
 import { PersonaGlyph } from "./Glyphs.tsx";
+import { PanelHead } from "./PanelHead.tsx";
 
 /**
  * **The roles an agent can take on here.**
@@ -128,22 +129,14 @@ export function PersonasPanel({ canvasId, actor }: { canvasId: string; actor: Ac
       aria-label="The personas in this canvas's directory"
     >
       <PanelResizer />
-      <header>
-        <span className="files-glyph">
-          <PersonaGlyph size={13} />
-        </span>
-        <b>Personas</b>
-        {count > 0 && <span className="files-count">{count}</span>}
-        <span className="spacer" />
-        <button
-          className="main-close"
-          title="Close"
-          aria-label="Close the personas panel"
-          onClick={() => openPersonasPanel(canvasId, false)}
-        >
-          ✕
-        </button>
-      </header>
+      <PanelHead
+        glyph={<PersonaGlyph size={13} />}
+        name="Personas"
+        hint="a lens, its tools, and the number it is judged against"
+        count={count}
+        closeLabel="Close the personas panel"
+        onClose={() => openPersonasPanel(canvasId, false)}
+      />
 
       <div className="files-scroll">
         {state.state === "loading" && <p className="wb-quiet">Reading…</p>}

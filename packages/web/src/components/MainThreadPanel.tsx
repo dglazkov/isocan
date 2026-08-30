@@ -45,6 +45,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 export { PANEL_MIN_WIDTH } from "../stores/uiStore.ts";
 
 import { PanelResizer } from "./PanelResizer.tsx";
+import { PanelHead } from "./PanelHead.tsx";
 
 /**
  * What the message is about: the current selection, shown as chips over the
@@ -413,46 +414,41 @@ function Panel({
       }}
     >
       {docked && <PanelResizer />}
-      <header>
-        <span className="main-glyph"><ChatGlyph size={13} /></span>
-        {/* The same word the button that opens it says. It read "Main
-            thread" under a button that said "Main" — two labels for one panel,
-            and both naming the SLOT (there is one, it is the main one) rather
-            than the thing people do in it. Name and hint, the pattern the
-            stage's panes already use. */}
-        <b>Chat</b>
-        <i className="main-hint" title="Everything posted here reaches every collaborator, agents included, with no @-mention needed — which is what makes it different from a comment pinned to one thing.">everyone here, agents included</i>
-        <span className="spacer" />
-        {/**
-         * **There is no "make it a pin" here, and that is the decision.**
-         *
-         * This button demoted the Chat to an ordinary pin. It was renamed once
-         * (from "back to canvas", which was false for a Chat born as the Chat)
-         * and given a flash notice after somebody pressed it by mistake on a
-         * canvas holding 36 messages. Both were repairs to a button that
-         * should not have been on this header.
-         *
-         * **Because the only thing it does is leave the canvas with NO Chat.**
-         * The reducer already demotes the previous main when another thread is
-         * promoted (`thread.setMain` in `reducer.ts`), so switching the Chat
-         * needs only the promote button on a pin. And undoing a promotion is
-         * what undo is for — which the removed notice itself pointed at.
-         *
-         * What is left is a rare, deliberate act of configuration whose real
-         * consequence the tooltip never mentioned: `isocan wait` wakes on the
-         * main thread, so a canvas without one stops waking parked agents.
-         * That belongs in `isocan comment main --clear`, where it is typed on
-         * purpose, and not one pixel from the ✕ that collapses the panel.
-         */}
-        {/* Deliberately reintroducing it would trip `chrome.test.ts`. */}
-        <button
-          className="main-close"
-          title="Collapse"
-          onClick={() => openMainPanel(canvasId, false)}
-        >
-          ✕
-        </button>
-      </header>
+      {/**
+       * **There is no "make it a pin" here, and that is the decision.**
+       *
+       * This button demoted the Chat to an ordinary pin. It was renamed once
+       * (from "back to canvas", which was false for a Chat born as the Chat)
+       * and given a flash notice after somebody pressed it by mistake on a
+       * canvas holding 36 messages. Both were repairs to a button that should
+       * not have been on this header.
+       *
+       * **Because the only thing it does is leave the canvas with NO Chat.**
+       * The reducer already demotes the previous main when another thread is
+       * promoted (`thread.setMain` in `reducer.ts`), so switching the Chat
+       * needs only the promote button on a pin. And undoing a promotion is
+       * what undo is for.
+       *
+       * What is left is a rare, deliberate act of configuration whose real
+       * consequence the tooltip never mentioned: `isocan wait` wakes on the
+       * main thread, so a canvas without one stops waking parked agents. That
+       * belongs in `isocan comment main --clear`, typed on purpose, and not
+       * one pixel from the ✕ that collapses the panel.
+       *
+       * Deliberately reintroducing it would trip `chrome.test.ts`.
+       */}
+      <PanelHead
+        glyph={<ChatGlyph size={13} />}
+        /* The same word the button that opens it says. It read "Main thread"
+           under a button that said "Main" — two labels for one panel, and both
+           naming the SLOT rather than the thing people do in it. */
+        name="Chat"
+        hint="everyone here, agents included"
+        hintTitle="Everything posted here reaches every collaborator, agents included, with no @-mention needed — which is what makes it different from a comment pinned to one thing."
+        closeTitle="Collapse"
+        closeLabel="Collapse the Chat"
+        onClose={() => openMainPanel(canvasId, false)}
+      />
       <div
         className="main-scroll"
         ref={scrollRef}

@@ -587,7 +587,11 @@ describe("the Chat and the comments say which they are", () => {
     // more, and it was the last thing wearing the old `✳`. What replaced this
     // assertion is `chatglyph.test.ts`, which holds the mark itself.
     expect(read("CreateActions.tsx"), "PanelSwitch is gone").not.toMatch(/PanelSwitch/);
-    expect(read("MainThreadPanel.tsx")).toContain("<b>Chat</b>");
+    /* The word now reaches the header through the shared `PanelHead`, so the
+       assertion follows it there rather than looking for markup this file no
+       longer writes. The decision it guards is unchanged: the panel says the
+       same word as the button that opens it. */
+    expect(read("MainThreadPanel.tsx")).toContain('name="Chat"');
     // The old pair, gone from both: a label naming the slot taught nobody
     // what the panel was for.
     expect(read("CreateActions.tsx")).not.toMatch(/<\/span> Main\b/);
@@ -681,12 +685,13 @@ describe("the Chat and the comments say which they are", () => {
       return /text-transform:\s*uppercase/.test(rule);
     };
     for (const named of [
-      ".main-panel header b",
-      ".files-panel header b",
-      ".agents-panel header b",
+      /* One rule now, where there were three identical copies — see
+         `panelhead.test.ts` for why that consolidation happened. The names
+         still may not shout; there is simply one place to check. */
+      ".panel-head b",
       ".wb-roster h3",
       ".wb-files h3",
-      ".workbench .main-panel header b",
+      ".workbench .main-panel .panel-head b",
     ]) {
       expect(shouts(named), `${named} names a thing — do not shout it`).toBe(false);
     }

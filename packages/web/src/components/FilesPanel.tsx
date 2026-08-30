@@ -15,6 +15,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { railSpan } from "../lib/stage.ts";
 import { FilesGlyph } from "./Glyphs.tsx";
+import { PanelHead } from "./PanelHead.tsx";
 
 /**
  * The files on this canvas, docked like the main thread — because every item
@@ -157,20 +158,13 @@ export function FilesPanel({ canvasId, actor }: { canvasId: string; actor: Actor
   return (
     <aside className="files-panel dock-panel floats" style={{ width: panelWidth }} aria-label="Files on this canvas">
       <PanelResizer />
-      <header>
-        <span className="files-glyph"><FilesGlyph size={13} /></span>
-        <b>Files</b>
-        <span className="files-count">{total}</span>
-        <span className="spacer" />
-        <button
-          className="main-close"
-          title="Close"
-          aria-label="Close the files panel"
-          onClick={() => openFilesPanel(canvasId, false)}
-        >
-          ✕
-        </button>
-      </header>
+      <PanelHead
+        glyph={<FilesGlyph size={13} />}
+        name="Files"
+        count={total}
+        closeLabel="Close the files panel"
+        onClose={() => openFilesPanel(canvasId, false)}
+      />
       <input
         className="files-filter text-input"
         placeholder="Filter by name…"
