@@ -119,7 +119,9 @@ Three questions this week end at the same sentence:
   explicitly disclaims the local case as *"phase 12.7's own design"*, which
   did not exist when this was written. Later the same day,
   [`on-demand/design.md`](../projects/on-demand/design.md) took the local case
-  on: the daemon holds the registration and starts turns over ACP stdio.
+  on — the daemon holds the registration and starts turns over ACP stdio —
+  and that shape was then made authoritative for the wake outright:
+  launch's dispatch design is superseded and stands as the measured record.
 
 Something outside a canvas needs to reach in, and something inside needs to
 reach out. **Three doors, one hinge.**

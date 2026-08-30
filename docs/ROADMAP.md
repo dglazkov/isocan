@@ -6,21 +6,15 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**6 built · 25 still open** — of which 13 partly
-built, 11 designed, 1 blocked, and
+**6 built · 24 still open** — of which 13 partly
+built, 11 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
 4 more are `noted` — read, absorbed, owing nothing — and
-1 superseded. Neither counts as done: reading is not building,
+2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
-
-## Blocked <sub>1</sub>
-
-| | What | Since | |
-| --- | --- | --- | --- |
-| **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | blocked by guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured. · see launch, on-demand |
 
 ## Partly built <sub>13</sub>
 
@@ -44,13 +38,13 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is buildable today; the write half needs the wake mechanism · see on-demand |
+| research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is buildable today; the write half waits on on-demand's ACP wake, authoritative since 30 Aug · see on-demand |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
-| **project** | [on-demand](docs/projects/on-demand/design.md) | 2026-08-30 | inverts isocan wait — the daemon summons instead of the agent parking; local first over ACP stdio. Steps 1–2 (durable cursors, the enrolment record) are worth building alone. · see on-demand, launch |
+| **project** | [on-demand](docs/projects/on-demand/design.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. Steps 1–2 (durable cursors, the enrolment record) are worth building alone. · see on-demand, launch |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
@@ -76,8 +70,9 @@ and the done column should not be flattered by either.
 | research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
 | research | [What Headlong knows](docs/research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
 
-## Superseded <sub>1</sub>
+## Superseded <sub>2</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Eighteen roads out: readiness of the proposed features](docs/research/feature-readiness.md) | 2026-08-30 |  |
+| **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | kept as the measured record of the dispatch shape — spike run 30 Aug, 4 of 5 guesses answered; guess 3 (the fine-grained token) is moot unless a dispatch hook returns · see launch, on-demand |

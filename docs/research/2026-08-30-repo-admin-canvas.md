@@ -2,7 +2,7 @@
 status: designed
 since: 2026-08-30
 see: on-demand
-note: the read half is buildable today; the write half needs the wake mechanism
+note: the read half is buildable today; the write half waits on on-demand's ACP wake, authoritative since 30 Aug
 ---
 # A canvas that watches its own repository
 
@@ -105,8 +105,10 @@ GitHub, because GitHub is the only place it can reach.
 
 **What it cannot do is tell the canvas.** CI has no isocan daemon, no badge,
 and no route in. Every honest version of this panel stops at the same sentence,
-and so does the agent-wake question, and so does phase 12's local-bridge
-dispatch. **Three doors, one hinge**, and it is the subject of the next note.
+and so does the agent-wake question. **Three doors, one hinge**, and the hinge
+now has an authoritative design: the ACP address hook of
+[`on-demand/design.md`](../projects/on-demand/design.md) (decided 2026-08-30;
+phase 12 and its dispatch shape retired the same day).
 
 ### The one thing that must be decided ON the canvas
 

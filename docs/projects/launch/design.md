@@ -1,11 +1,20 @@
 ---
-status: blocked
+status: superseded
 since: 2026-08-30
 see: launch, on-demand
-blockedBy: guess 3 — whether actions:write without actions:read can dispatch. Needs a fine-grained token on dglazkov/isocan, so it is Dimitri's to make. The other four are measured.
-note: spike run 30 Aug; 4 of 5 guesses answered
+supersededBy: the on-demand project's ACP address hook, made authoritative 2026-08-30
+note: kept as the measured record of the dispatch shape — spike run 30 Aug, 4 of 5 guesses answered; guess 3 (the fine-grained token) is moot unless a dispatch hook returns
 ---
 # Agent-on-demand: what happens when the hook fires
+
+**Superseded 2026-08-30, by decision.** The ACP address hook of
+[`on-demand/design.md`](../on-demand/design.md) is now the authoritative
+shape for reaching an agent that is not running. This doc stands as the
+measured record of the dispatch alternative — the spike ran and answered
+four of its five guesses — and nothing below has been rewritten to know
+that. Read it as what a `workflow_dispatch` hook would have been, and what
+it measured; the comparison between the two shapes lives in on-demand's
+"Relationship to `launch/`".
 
 **29 August 2026.** [innkeeper.md](../multiuser/innkeeper.md)'s mechanism 11
 answers *may the home mint this?* — frozen delegation, a registration bounded
