@@ -14,6 +14,10 @@ goal:
     at most: 280
     measured by: node scripts/measure.mjs undocumented-exports
     baseline: 280, 2026-08-30, 92e6528
+  - name: CSS rule bodies copied word for word from elsewhere
+    at most: 45
+    measured by: node scripts/measure.mjs copied-rules
+    baseline: 45, 2026-08-30, a058640
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
