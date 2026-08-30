@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -16,7 +17,7 @@ let badge: TestBadge;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-gc-"));
-  daemon = await startDaemon({ port: 0, home });
+  daemon = await startDaemon({ port: await reservePort(), home });
   base = baseOf(daemon);
   badge = await mintTestBadge(base);
   await badge.speakAs(alice); // a badge speaks only for actors it claims
@@ -216,7 +217,7 @@ describe("blob GC", () => {
     await gc({ keepOps: 1, graceMs: 0 });
 
     await daemon.close();
-    daemon = await startDaemon({ port: 0, home });
+    daemon = await startDaemon({ port: await reservePort(), home });
     base = baseOf(daemon);
 
     const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json();

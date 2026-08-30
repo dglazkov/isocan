@@ -79,7 +79,7 @@ beforeEach(async () => {
     path.join(homeDir, "identity.json"),
     JSON.stringify({ ...priya, createdAt: new Date().toISOString() }),
   );
-  homeDaemon = await startDaemon({ port: 0, home: homeDir, birthHome: null });
+  homeDaemon = await startDaemon({ port: await reservePort(), home: homeDir, birthHome: null });
   const address = homeDaemon.app.server.address();
   homePort = typeof address === "object" && address ? address.port : 0;
   awayPort = await reservePort();

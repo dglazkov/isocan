@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -36,7 +37,7 @@ beforeEach(async () => {
     path.join(home, "identity.json"),
     JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
   );
-  daemon = await startDaemon({ port: 0, home });
+  daemon = await startDaemon({ port: await reservePort(), home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   badge = await mintTestBadge(base);

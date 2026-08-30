@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { generateKeyPairSync, createSign } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -59,7 +60,7 @@ let owner: TestBadge;
 
 async function boot(attester: typeof auth | null): Promise<void> {
   daemon = await startDaemon({
-    port: 0,
+    port: await reservePort(),
     home,
     birthHome: null,
     auth: attester,

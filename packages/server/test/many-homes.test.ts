@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -76,7 +77,7 @@ async function node(daemon: Daemon, dir: string, actor: { id: string; name: stri
  * nothing about this machine says "canvases go to X", and each canvas's home is
  * a fact about that canvas. */
 async function bootD(): Promise<Node> {
-  const daemon = await startDaemon({ port: 0, home: dDir, birthHome: null, homePollMs: 50 });
+  const daemon = await startDaemon({ port: await reservePort(), home: dDir, birthHome: null, homePollMs: 50 });
   return node(daemon, dDir, dion);
 }
 
@@ -84,11 +85,11 @@ beforeEach(async () => {
   h1Dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-h1-"));
   h2Dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-h2-"));
   dDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-d-"));
-  H1 = await node(await startDaemon({ port: 0, home: h1Dir, birthHome: null }), h1Dir, {
+  H1 = await node(await startDaemon({ port: await reservePort(), home: h1Dir, birthHome: null }), h1Dir, {
     id: "usr_h1",
     name: "Acme Home",
   });
-  H2 = await node(await startDaemon({ port: 0, home: h2Dir, birthHome: null }), h2Dir, {
+  H2 = await node(await startDaemon({ port: await reservePort(), home: h2Dir, birthHome: null }), h2Dir, {
     id: "usr_h2",
     name: "Widget Home",
   });
@@ -445,7 +446,7 @@ describe("one daemon, many homes", () => {
     // test would pass against a daemon that had simply broken `isocan badges`.
     await D.daemon.close();
     const decided = await node(
-      await startDaemon({ port: 0, home: dDir, birthHome: H1.base, homePollMs: 50 }),
+      await startDaemon({ port: await reservePort(), home: dDir, birthHome: H1.base, homePollMs: 50 }),
       dDir,
       dion,
     );
@@ -475,7 +476,7 @@ describe("one daemon, many homes", () => {
 describe("a machine that predates all of this", () => {
   /** The pre-10.3 shape: canvases in the store, no rows, no configured home. */
   async function dionsRig(dir: string, birthHome: string | null): Promise<Node> {
-    const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50 });
+    const daemon = await startDaemon({ port: await reservePort(), home: dir, birthHome, homePollMs: 50 });
     return node(daemon, dir, dion);
   }
 

@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import http from "node:http";
@@ -89,7 +90,7 @@ afterEach(async () => {
  * every probe this file counts after boot had a reason other than the timer. */
 async function replica(): Promise<Daemon> {
   daemon = await startDaemon({
-    port: 0,
+    port: await reservePort(),
     home: homeDir,
     birthHome: homeBase,
     homePollMs: 25,

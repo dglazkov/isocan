@@ -79,6 +79,28 @@ describe("the graders are actionable, and right", () => {
   });
 });
 
+describe("a wait that cannot hang", () => {
+  const grader = read("../scripts/grade.mjs");
+
+  /**
+   * Waiting for the page rather than for two seconds fixed a grader that read
+   * a half-built document. Waiting for it FOREVER is a different bug in the
+   * same family: measured under 16 spinners on 14 cores, one grader test sat
+   * for **nineteen minutes** before vitest's own limit ended it, with nothing
+   * said about what it had been waiting for.
+   */
+  it("puts a deadline on the page load, and says what it waited for", () => {
+    expect(grader).toContain("withDeadline");
+    expect(grader).toMatch(/withDeadline\(\s*loaded,\s*\d+/);
+    expect(grader, "the failure must name the condition").toContain("never fired Page.loadEventFired");
+  });
+
+  it("clears the timer either way, so a fast load cannot hold the process open", () => {
+    const fn = grader.slice(grader.indexOf("async function withDeadline"));
+    expect(fn.slice(0, fn.indexOf("\n}"))).toContain("clearTimeout(timer)");
+  });
+});
+
 describe("the selftest is a gate", () => {
   it("release.yml does not let it fail quietly", () => {
     const yml = read("../.github/workflows/release.yml");

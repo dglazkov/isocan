@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
@@ -77,7 +78,7 @@ let base: string;
  */
 beforeAll(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-authaction-"));
-  daemon = await startDaemon({ port: 0, home, birthHome: null });
+  daemon = await startDaemon({ port: await reservePort(), home, birthHome: null });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 });

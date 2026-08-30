@@ -1,3 +1,4 @@
+import { reservePort } from "../../../test/ports.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -59,7 +60,7 @@ beforeEach(async () => {
   await fs.symlink(path.join(repo, "packages", "cli", "bin", "isocan.js"), durableBin);
 
   // A port nobody holds: take one, then let it go.
-  const scout = await startDaemon({ port: 0, home });
+  const scout = await startDaemon({ port: await reservePort(), home });
   const address = scout.app.server.address();
   port = typeof address === "object" && address ? address.port : 0;
   await scout.close();
@@ -144,7 +145,7 @@ describe("the default home a fresh machine gets", () => {
 
   beforeEach(async () => {
     elsewhereHome = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-npx-elsewhere-"));
-    elsewhere = await startDaemon({ port: 0, home: elsewhereHome, birthHome: null });
+    elsewhere = await startDaemon({ port: await reservePort(), home: elsewhereHome, birthHome: null });
     const address = elsewhere.app.server.address();
     const at = typeof address === "object" && address ? address.port : 0;
     elsewhereUrl = `http://127.0.0.1:${at}`;

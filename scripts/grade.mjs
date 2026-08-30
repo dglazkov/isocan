@@ -79,6 +79,23 @@ function chromeOrDie() {
 const WIDTHS = [390, 768, 1440];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** A promise that must answer within `ms`, and says what it was waiting for
+ *  when it does not. The timer is cleared either way so a resolved wait cannot
+ *  hold the process open. */
+async function withDeadline(promise, ms, what) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${what} within ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---- the static half: things visible in the source ----
 
 /** Colour literals where a custom property could be. Not every literal is a
@@ -357,7 +374,25 @@ async function gradeFile(b, file) {
     const loaded = b.once("Page.loadEventFired");
     const nav = await b.send("Page.navigate", { url: `file://${path.resolve(file)}` });
     if (nav.errorText) throw new Error(`could not open ${file}: ${nav.errorText}`);
-    await loaded;
+    /**
+     * **A deadline on the condition, not instead of it.**
+     *
+     * Waiting for the page rather than for two seconds was the fix; waiting
+     * for it FOREVER is a different bug in the same family. Measured on a
+     * machine under 16 spinners on 14 cores: this test sat for **nineteen
+     * minutes** and then failed on vitest's own limit with nothing said about
+     * what it had been waiting for.
+     *
+     * `lessons.md` names the shape: a hang that never fails is the thing to
+     * avoid, not a slow test that eventually does. `devtoolsEndpoint` already
+     * has this discipline — 30 seconds on a condition, and a sentence saying
+     * which condition. This is that, one layer up.
+     *
+     * Generous on purpose: a starved runner loading a local file is slow, not
+     * broken, and a deadline that fires on a merely-busy machine would turn a
+     * true reading into a false failure. What it must not do is wait all day.
+     */
+    await withDeadline(loaded, 60_000, `${path.basename(file)} never fired Page.loadEventFired`);
     try {
       await b.ev(`(async () => {
         await document.fonts.ready;
