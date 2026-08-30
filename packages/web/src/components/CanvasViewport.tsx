@@ -4,6 +4,7 @@ import type { Actor } from "@isocan/core";
 import { parseUriList } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
@@ -60,6 +61,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   /* Only to SAY it is the past — the write door in the store is what
      actually refuses changes. */
   const inPast = useCanvasStore((s) => s.past !== null);
+  /* One timer for the whole canvas — see `useSettling`. The set is usually
+     empty, and when it is, nothing is scheduled at all. */
+  const settling = useSettling();
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
@@ -702,7 +706,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
             the words. */}
         <MapEdges />
         {items.map((item) => (
-          <ItemView key={item.id} item={item} canvasId={canvasId} actor={actor} />
+          <ItemView
+            key={item.id}
+            item={item}
+            canvasId={canvasId}
+            actor={actor}
+            settling={settling.has(item.id)}
+          />
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
           <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />

@@ -16,7 +16,8 @@ import {
   siteFilename,
   siteLabel,
 } from "@isocan/core";
-import { sendOp, uploadBlob } from "./api.ts";
+import { uploadBlob } from "./api.ts";
+import { sendEchoed } from "../stores/canvasStore.ts";
 import { mimeTypeOf } from "./mime.ts";
 
 const MAX_INITIAL_WIDTH = 480;
@@ -95,7 +96,7 @@ export async function addFiles(
     offsetX += width + FILE_GAP;
 
     const itemId = newItemId();
-    await sendOp(canvasId, actor, {
+    await sendEchoed(canvasId, actor, {
       type: "item.add",
       itemId,
       version: {
@@ -132,7 +133,7 @@ export async function addBrowserItem(
   const blob = new Blob([`${site}\n`], { type: BROWSER_MIME });
   const upload = await uploadBlob(canvasId, blob, filename);
   const itemId = newItemId();
-  await sendOp(canvasId, actor, {
+  await sendEchoed(canvasId, actor, {
     type: "item.add",
     itemId,
     version: {
@@ -176,7 +177,7 @@ export async function addDrawing(
   const blob = new Blob([svg], { type: DRAWING_MIME });
   const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
   const itemId = newItemId();
-  await sendOp(canvasId, actor, {
+  await sendEchoed(canvasId, actor, {
     type: "item.add",
     itemId,
     version: {
@@ -215,7 +216,7 @@ export async function addVersionFromFile(
 ): Promise<void> {
   const mimeType = mimeTypeOf(file);
   const upload = await uploadBlob(canvasId, file, file.name);
-  await sendOp(canvasId, actor, {
+  await sendEchoed(canvasId, actor, {
     type: "item.addVersion",
     itemId,
     version: {
