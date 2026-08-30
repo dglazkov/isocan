@@ -4,6 +4,7 @@ import {
   TEXT_FACES,
   TEXT_FACE_STACK,
   TEXT_COLUMN,
+  TEXT_COLUMN_MAX,
   TEXT_FACE_SCALE,
   TEXT_SIZE,
   TEXT_STYLES,
@@ -101,7 +102,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     if (!el) return;
     // A floor, so an empty composer is still a thing you can see and click.
     const width = Math.max(TEXT_STYLE_SIZE[style] * 6, Math.ceil(el.offsetWidth));
-    setFit({ width: Math.min(TEXT_COLUMN[style], width), height: Math.ceil(el.offsetHeight) });
+    // `TEXT_COLUMN_MAX`, not `TEXT_COLUMN`: the box grows to the right as the
+    // words need it and only wraps at the hard limit. The column is still
+    // what prose settles at, because that is where the mirror wraps.
+    setFit({ width: Math.min(TEXT_COLUMN_MAX[style], width), height: Math.ceil(el.offsetHeight) });
   }, [body, key, style, face]);
 
   /**
@@ -240,7 +244,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
         style={{
           fontSize: size,
           fontFamily: TEXT_FACE_STACK[face],
-          maxWidth: TEXT_COLUMN[style],
+          maxWidth: TEXT_COLUMN_MAX[style],
         }}
       >
         {body === "" ? "Type…" : body}
