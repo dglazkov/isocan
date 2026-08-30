@@ -2,7 +2,7 @@
 status: designed
 since: 2026-08-30
 see: on-demand, launch
-note: inverts isocan wait — the daemon summons instead of the agent parking; local first over ACP stdio. Steps 1–2 (durable cursors, the enrolment record) are worth building alone.
+note: AUTHORITATIVE for the wake since 30 Aug (launch's dispatch shape superseded) — inverts isocan wait; the daemon summons over ACP, local first. Steps 1–2 (durable cursors, the enrolment record) are worth building alone.
 ---
 # Agents on demand
 
@@ -233,9 +233,9 @@ notably subprocess death leaving a session unusable.
 [`launch/design.md`](../launch/design.md) is the operational half of the same
 registration idea, written a day earlier, and it picks a different hook: a
 GitHub `workflow_dispatch`. It was the gate on the multiuser walk's phase 12
-until that phase retired into this project (2026-08-30); it stands on its own
-now, more detailed than this doc and spiked. This is not a replacement for
-it. It is a second hook shape, and the two differ on one property that doc
+until that phase retired into this project (2026-08-30), and is now
+superseded — the decision is at the end of this section — but its spike ran
+and its measurements stand. The two hooks differ on one property that doc
 measures better than this one could:
 
 > **204, and no run id.** `workflow_dispatch` answers `204 No Content`. It does
@@ -262,9 +262,13 @@ where the daemon can spawn it, and is a service somewhere else. So:
   some idle cost, exact observability.
 
 They are not competitors so much as the two ends of the same registration, and
-a home that stores "a hook" could hold either. Deciding between them is a real
-choice and this doc does not make it — it argues only that the address shape is
-the one that works locally, and that local is where to start.
+a home that stores "a hook" could hold either.
+
+**Decided 2026-08-30, by Dimitri: the ACP address shape is authoritative.**
+launch/design.md is superseded and stands as the measured record of the
+dispatch alternative. A home that stores "a hook" still could hold either —
+the record's shape does not foreclose a dispatch hook returning one day — but
+the design of record is the address, locally and everywhere else.
 
 ## isocannery, sketched
 
