@@ -2099,10 +2099,7 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   /* `width` is set inline from `uiStore.panelWidth` — this is the floor, and
      what the panel is before React has said otherwise. */
 }
-.main-panel header {
-  display: flex; align-items: center; gap: 7px; flex: none;
-  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
-}
+
 /* **One spelling for the panel's name, on every surface it appears.**
 
    It was Title Case here and UPPERCASE in the workbench, because the same
@@ -2125,8 +2122,6 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    header disagree with the button that opened it three inches away. Reported
    three times before it was believed, which is its own lesson: a casing
    difference is not cosmetic when it is the same word twice. */
-.main-panel header b { font-size: 13px; letter-spacing: -0.01em; }
-.main-panel header .spacer { flex: 1; }
 .main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 /* The panel's one-line "what is this" — the same name-then-quiet-hint pattern
    the stage's pane headers use (`.stage-pane-name i`), because it answers the
@@ -2352,15 +2347,10 @@ button.mt-card:hover { border-color: var(--accent); }
    than inventing one — a name, a quiet hint, a close — because three panels
    in one dock that each announce themselves differently read as three
    different products sharing a hole in the screen. */
-.agents-panel header {
-  display: flex; align-items: center; gap: 7px; flex: none;
-  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
-}
-.agents-panel header b { font-size: 13px; letter-spacing: -0.01em; }
+
 /* The close sits at the far edge, where it does on the other two panels — a
    ✕ that floats next to the subtitle reads as part of the sentence. The hint
    takes the slack instead. */
-.agents-panel header .spacer { flex: 1; }
 .agents-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
 .agents-hint {
   font-style: normal; font-size: 11px; color: var(--ink-soft);
@@ -2437,12 +2427,7 @@ button.mt-card:hover { border-color: var(--accent); }
    The dock's fourth panel, on the agent tray's rhythm — a name, a quiet hint,
    a close. Each row is a fact and, where there is one, the reason it needs
    attention underneath it in the panel's own words. */
-.context-panel header {
-  display: flex; align-items: center; gap: 7px; flex: none;
-  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
-}
-.context-panel header b { font-size: 13px; letter-spacing: -0.01em; }
-.context-panel header .spacer { flex: 1; }
+
 .context-glyph { color: var(--accent-text); display: inline-flex; }
 .context-hint {
   font-style: normal; font-size: 11px; color: var(--ink-soft);
@@ -2536,6 +2521,41 @@ button.mt-card:hover { border-color: var(--accent); }
 .lane-tether {
   stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4;
   opacity: 0.55;
+}
+
+
+/**
+ * **The dock panels' one header** (`components/PanelHead.tsx`).
+ *
+ * This rule existed four times, byte for byte, as `.main-panel header`,
+ * `.agents-panel header`, `.context-panel header` and `.files-panel header`.
+ * The Personas panel was the fifth panel and never got a copy, so its header
+ * fell back to `display: block` and its icon sat on top of its own title. Four
+ * correct copies and no way for any of them to notice the missing fifth is the
+ * whole argument for one rule and one component.
+ *
+ * The glyph takes `--accent-text` rather than `--accent`: it is ink, at 13px,
+ * and `--accent-text` is the token that stays legible on both grounds — which
+ * is why the two most recently written panels had already chosen it.
+ */
+.panel-head {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.panel-head b { font-size: 13px; letter-spacing: -0.01em; }
+.panel-head .spacer { flex: 1; }
+.panel-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; display: inline-flex; }
+/* Truncates rather than wraps: these panels drag down to a narrow column, and
+   a subtitle that pushes the header onto two lines costs more than it says.
+   The full sentence rides on the `title` where there is more of it. */
+.panel-hint {
+  font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  flex: 0 1 auto;
+}
+.panel-count {
+  padding: 0 6px; border-radius: 999px; background: var(--chip);
+  color: var(--ink-muted); font-size: 10.5px; line-height: 16px; flex: none;
 }
 
 /* ---------- the rail, shut ----------
@@ -2821,12 +2841,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- the files panel ---------- */
 /* The canvas as a list of files, in the same dock as the main thread. */
 /* Frame shared with the Chat — see `.dock-panel`. */
-.files-panel header {
-  display: flex; align-items: center; gap: 7px; flex: none;
-  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
-}
-.files-panel header b { font-size: 13px; letter-spacing: -0.01em; }
-.files-panel header .spacer { flex: 1; }
+
 .files-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
 .files-count {
   padding: 0 6px; border-radius: 999px; background: var(--chip);
@@ -3810,7 +3825,6 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Every dock panel scopes its own `.spacer`, so a new one that forgets has a
    header whose close button sits against the title — which is what this did
    until it was looked at. Both rows named here for the same reason. */
-.personas-panel header .spacer { flex: 1; }
 .persona-head { display: flex; align-items: baseline; gap: 8px; }
 .persona-head .spacer { flex: 1; }
 .persona-head b { font-size: 13.5px; letter-spacing: -0.01em; }
@@ -3970,18 +3984,18 @@ button.mt-card:hover { border-color: var(--accent); }
    shared: those are `h3`s in a rail and this is a `b` in a panel header, and
    a selector list spanning both would be one rule pretending two different
    elements are the same element. The values are what agree, not the code. */
-.workbench .main-panel header {
+.workbench .main-panel .panel-head {
   padding: 10px 14px 6px;
   border-bottom: none;
 }
-.workbench .main-panel header b {
+.workbench .main-panel .panel-head b {
   font-size: 11px; font-weight: 600;
   letter-spacing: -0.01em; color: var(--ink-soft);
 }
 /* The glyph and the hint come down with it — a mark sized for a panel title
    beside a section label is the same mismatch one element along. */
-.workbench .main-panel header .main-glyph { font-size: 10.5px; }
-.workbench .main-panel header .main-hint { font-size: 10.5px; }
+.workbench .main-panel .panel-glyph { font-size: 10.5px; }
+.workbench .main-panel .panel-hint { font-size: 10.5px; }
 
 /* ---- Text nodes: words typed straight onto the canvas ------------------
    A text node wears no card, for the same reason ink doesn't (`.item.ink`
