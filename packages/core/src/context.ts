@@ -2,6 +2,7 @@ import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
 import { mapsOn } from "./mindmap.ts";
+import { excludedItems, pinnedItems } from "./contextmark.ts";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -132,6 +133,24 @@ export function contextPieces(
       : {}),
   });
 
+  /**
+   * **Pinned and marked are different acts, and are listed separately.**
+   *
+   * A reaction is a response to a thing; a pin is a decision about what an
+   * agent should read. Stage 1 used reactions as the stand-in for pins because
+   * nothing else existed — collapsing them now that both do would lose exactly
+   * the distinction stage 2 was asked for.
+   */
+  const pinned = pinnedItems(canvas);
+  pieces.push({
+    name: "Pinned items",
+    source: "canvas",
+    present: pinned.length > 0,
+    ...(pinned.length > 0
+      ? { size: pinned.map((item) => item.title).join(", ") }
+      : { fix: "`isocan context pin <item>` to say what an agent should read first" }),
+  });
+
   const marked = markedItems(canvas);
   pieces.push({
     name: "Marked items",
@@ -139,6 +158,20 @@ export function contextPieces(
     present: marked.length > 0,
     ...(marked.length > 0 ? { size: `${marked.length}` } : {}),
   });
+
+  /**
+   * Only when there are any. An "Excluded items: 0" row on every canvas is a
+   * line that has never once been news, and this view is read every session.
+   */
+  const excluded = excludedItems(canvas);
+  if (excluded.length > 0) {
+    pieces.push({
+      name: "Excluded items",
+      source: "canvas",
+      present: true,
+      size: excluded.map((item) => item.title).join(", "),
+    });
+  }
 
   const maps = mapsOn(canvas);
   if (maps.length > 0) {

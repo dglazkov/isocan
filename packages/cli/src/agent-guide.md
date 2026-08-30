@@ -374,6 +374,26 @@ It refuses with a reason rather than a shrug: an item made from nothing has
 nowhere to fold back into, and an item whose source has been deleted since
 says so.
 
+## Saying what matters here
+
+`isocan context` lists what an agent reads before it starts. Two verbs manage
+it:
+
+- `isocan context pin <item>` — read this first. Use it for the brief, the
+  spec, the one screen everything else answers to.
+- `isocan context exclude <item>` — skip this. **It is not a delete**: the item
+  stays on the canvas with its versions and its comments, and only what a
+  reader assembling context is told changes.
+- `isocan context unmark <item>` takes either back.
+
+Both are `item.update` with a property, so they replicate, undo and are visible
+to everybody like any other fact. The same two verbs are on an item's menu in
+the app.
+
+**Pinning is a decision; a reaction is a response.** The list shows both and
+does not merge them — somebody putting 👍 on a screen is real evidence, and it
+is not the same as saying "an agent should read this first".
+
 ## Saying where a document stands
 
 Every note in `docs/research/` and every project's primary doc carries its

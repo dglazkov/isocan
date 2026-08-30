@@ -1,8 +1,8 @@
 ---
 status: partial
-since: 2026-08-29
+since: 2026-08-30
 see: context
-note: stage 1 built
+note: stages 1 and 2 built; the MCP surface is not
 ---
 # Context and memory — the canvas is the record, never the index
 
@@ -201,6 +201,35 @@ The machine facts (a bound directory, the oplog's size, which guide this build
 ships) are passed IN rather than read, so the web does not report the absence
 of things that cannot exist on it.
 
-Stage 2's pins have a stand-in already: items somebody reacted to are the
-canvas's only existing "this matters", and they are counted rather than
-invented.
+Stage 2's pins had a stand-in: items somebody reacted to were the canvas's only
+existing "this matters", and they were counted rather than invented.
+
+## Stage 2 built, 30 Aug 2026
+
+`isocan context pin | exclude | unmark`, and the same two verbs on an item's
+menu in the app. A PROPERTY, not an operation — `item.update` already carries
+properties, so this adds zero new op types, which is the answer `mapParent`
+reached for edges and for the same reason: a fact about an item belongs on the
+item, where it replicates, undoes and is visible by construction.
+
+**The stand-in stayed, beside the real thing rather than replaced by it.** A
+reaction is a response TO something; a pin is a decision about what an agent
+should read. Both are listed, separately, because collapsing them would lose
+exactly the distinction the verb was asked for.
+
+**Excluded is not deleted**, and the wording says so every time: the item keeps
+its versions and its comments and is as visible as it was. Only what a reader
+assembling context is told changes.
+
+### The third verb, and why it is not here
+
+The walk also named *"mark a piece stale"*. It is not built, and the reason is
+this document's own rule: staleness here is always **a reason, never a bare
+flag** — "3 items have changed since it was last written" — because a flag is
+an accusation and a reason is something to act on. A hand-set stale bit is a
+flag with no reason, which is the shape this design already rejected.
+
+The version that would work is a NOTE rather than a flag: somebody says *why*
+a piece is out of date, and that sentence sits beside it. That is a different
+feature — it stores something — and it should be argued for on its own rather
+than smuggled in under a verb that sounded like the other two.
