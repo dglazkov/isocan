@@ -24,3 +24,24 @@ export function elapsedLabel(fromISO: string, toISO: string): string {
 export function workedFor(comment: { createdAt: string; editedAt?: string }): string | null {
   return comment.editedAt ? elapsedLabel(comment.createdAt, comment.editedAt) : null;
 }
+
+/**
+ * **How long ago, in as few characters as possible** — "8m", "3h", "12d".
+ *
+ * Private to `context.ts` until the home screen needed the same words under
+ * every canvas. A second copy would have drifted the first time somebody
+ * decided minutes should round differently, and these two views sit one click
+ * apart.
+ *
+ * Empty string for a time in the future or an unparseable one: a card saying
+ * "in 3h" about something that already happened is worse than a card saying
+ * only who did it.
+ */
+export function ago(iso: string, nowMs: number): string {
+  const ms = nowMs - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const h = ms / 3_600_000;
+  if (h < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
+  if (h < 48) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}

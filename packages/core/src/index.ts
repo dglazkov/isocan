@@ -60,3 +60,5 @@ export * from "./docstatus.ts";
 export * from "./jsoncanvas.ts";
 export * from "./contextmark.ts";
 export * from "./timeline.ts";
+export * from "./opwords.ts";
+export * from "./canvassort.ts";

@@ -167,6 +167,12 @@ import {
   track,
   at,
   span,
+  ago,
+  opWords,
+  sortCanvases,
+  filterCanvases,
+  isCanvasSort,
+  CANVAS_SORTS,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -3584,8 +3590,10 @@ canvas
   .command("list")
   .description("List canvases — in a bound directory, that directory's canvas (--all for every one)")
   .option("--all", "every canvas in the home, not just this directory's")
+  .option("--sort <order>", "recent (default), name, or created")
+  .option("--filter <text>", "only canvases whose title or description matches every word")
   .action(
-    run(async (opts: { all?: boolean }, cmd: Command) => {
+    run(async (opts: { all?: boolean; sort?: string; filter?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const all = await ctx.client.listCanvases();
       // A bound directory shows its own canvas: an agent that landed here
@@ -3598,18 +3606,38 @@ canvas
           `(this directory's canvas only — --all for the other ${all.length - canvases.length})`,
         );
       }
-      if (ctx.json) return printJson(canvases);
+      /**
+       * The same ordering and the same matching the app uses (`core/
+       * canvassort.ts`). A home screen and this command disagreeing about
+       * which canvas is most recent is the drift core exists to prevent — and
+       * at a hundred canvases the order is not a nicety, it is the feature.
+       */
+      if (opts.sort !== undefined && !isCanvasSort(opts.sort)) {
+        throw new Error(`not an order: ${opts.sort} — ${CANVAS_SORTS.join(", ")}`);
+      }
+      const shown = sortCanvases(
+        opts.filter ? filterCanvases(canvases, opts.filter) : canvases,
+        opts.sort ?? "recent",
+      );
+      if (ctx.json) return printJson(shown);
+      if (shown.length === 0 && opts.filter) {
+        return console.log(`nothing matches "${opts.filter}"`);
+      }
       const config = await readConfig(ctx.home);
       // Who touched it last, by the name they go by NOW — a canvas row has no
       // snapshot to carry the registry, so ask for it.
       const names = await ctx.client.actorNames();
+      /* The same sentence the app's cards carry: who, what, how long ago.
+         `updated` was a full ISO stamp, which is a machine's answer to a
+         question a person asked — and it said nothing about WHAT happened. */
+      const nowMs = Date.now();
       printTable(
-        canvases.map((p) => ({
+        shown.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
-          description: truncate(p.description, 40),
-          updated: p.updatedAt,
-          by: actorNameIn(names, p.updatedBy),
+          description: truncate(p.description, 30),
+          last: `${actorNameIn(names, p.updatedBy)} ${opWords(p.lastOp) ?? "did something"}`,
+          when: ago(p.updatedAt, nowMs) || "just now",
         })),
       );
     }),
@@ -7374,6 +7402,73 @@ program
       );
       for (const m of marks.slice(-8)) console.log(`  ${majorLine(m)}`);
       if (marks.length > 8) console.log(`  … ${marks.length - 8} earlier — --majors for all`);
+    }),
+  );
+
+program
+  .command("history [who]")
+  .description("What somebody has been doing across every canvas here — newest first")
+  .option("-n, --limit <n>", "how many acts to show (default 20)")
+  .option("--canvas <ref>", "just one canvas")
+  .action(
+    run(async (who: string | undefined, opts: { limit?: string; canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      /**
+       * **Step one of the standing-agents plan** — the cross-canvas fold over
+       * what is already recorded. No new state: every canvas's log already
+       * says who did what and when, and until now the only way to read it was
+       * one canvas at a time (`isocan activity`), which is the wrong shape for
+       * the question people actually ask about an agent that works in several
+       * places.
+       *
+       * `docs/research/2026-08-30-standing-agents.md` puts this first
+       * deliberately: *"useful immediately, and it is the thing that tells you
+       * whether standing agents are worth the rest of this."*
+       */
+      const canvases = await ctx.client.listCanvases();
+      const only = opts.canvas
+        ? canvases.filter((c) => c.id === opts.canvas || c.title === opts.canvas)
+        : canvases;
+      const names = await ctx.client.actorNames();
+      const wanted = who?.toLowerCase();
+      const acts: Array<{ ts: string; canvas: string; actor: string; op: string }> = [];
+      for (const canvas of only) {
+        for (const entry of await ctx.client.getLog(canvas.id, 0)) {
+          const actor = actorNameIn(names, entry.envelope.actor);
+          // Name or id, and a prefix is enough — an agent's name is a thing
+          // somebody types, not pastes.
+          if (wanted && !actor.toLowerCase().startsWith(wanted) && entry.envelope.actor.id !== who) {
+            continue;
+          }
+          acts.push({
+            ts: entry.envelope.ts,
+            canvas: canvas.title,
+            actor,
+            op: entry.envelope.op.type,
+          });
+        }
+      }
+      acts.sort((a, b) => b.ts.localeCompare(a.ts));
+      const shown = acts.slice(0, Number(opts.limit ?? 20));
+      if (ctx.json) return printJson({ total: acts.length, acts: shown });
+      if (acts.length === 0) {
+        return console.log(who ? `nothing here by "${who}"` : "nothing has happened yet");
+      }
+      const nowMs = Date.now();
+      printTable(
+        shown.map((a) => ({
+          when: ago(a.ts, nowMs) || "just now",
+          who: a.actor,
+          did: opWords(a.op) ?? a.op,
+          canvas: truncate(a.canvas, 28),
+        })),
+      );
+      /* The count is the point of a cross-canvas view: "12 of 340, across 6
+         canvases" is the shape of somebody's week. */
+      const where = new Set(acts.map((a) => a.canvas)).size;
+      console.log(
+        `\n${shown.length} of ${acts.length}, across ${where} canvas${where === 1 ? "" : "es"}`,
+      );
     }),
   );
 

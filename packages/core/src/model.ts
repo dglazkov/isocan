@@ -19,8 +19,35 @@ export interface Canvas {
   properties: Record<string, string>;
   createdAt: string;
   createdBy: Actor;
+  /**
+   * **When anything last happened here, and who did it.**
+   *
+   * These used to move only when the TITLE or DESCRIPTION changed, because the
+   * reducer's `withCanvas` returns the project untouched and every item
+   * operation goes through it. So a canvas worked on all week reported the day
+   * somebody last renamed it — the Lake House card read "17 Aug, Admiral One"
+   * while the last actual operation was twelve days later by somebody else.
+   *
+   * That was not a display bug. The word "updated" on a canvas means the
+   * canvas changed, and adding an item changes the canvas; the home screen was
+   * showing the only number it had and labelling it as the one it wanted.
+   */
   updatedAt: string;
   updatedBy: Actor;
+  /**
+   * The type of that last operation — `item.add`, `thread.create`, and so on.
+   *
+   * Stored rather than derived because the alternative is reading every
+   * canvas's log to draw a list of canvases: one metadata file per canvas is
+   * what `listCanvases` costs today, and a tail read per canvas would make the
+   * home screen O(canvases) log reads — cheap on a laptop, and the wrong shape
+   * on a store where each read is a request.
+   *
+   * Absent on canvases last touched before this existed, and on a canvas whose
+   * only event is its own creation. Renderers say something sensible without
+   * it rather than treating it as required.
+   */
+  lastOp?: string;
 }
 
 export interface ItemVersion {

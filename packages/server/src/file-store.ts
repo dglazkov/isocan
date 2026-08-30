@@ -12,6 +12,7 @@ import {
   extensionFor,
   OpValidationError,
   parseCommandFile,
+  sortCanvases,
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
@@ -68,8 +69,17 @@ export class FileStore implements Store {
       const canvas = await readJson<Canvas>(p.canvasMetaFile(this.home, id));
       if (canvas) canvases.push(canvas);
     }
-    canvases.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return canvases;
+    /**
+     * **Most recently touched first**, which is both the useful default and
+     * the end of a reported bug: this sorted `createdAt` ASCENDING, so every
+     * new canvas landed at the far end of a list somebody was standing at the
+     * top of, and `Create` read as a button that did nothing.
+     *
+     * The ordering itself is `sortCanvases` from core, so this and the app's
+     * own re-sorting cannot disagree about which canvas is most recent — and
+     * a client that wants a different order re-sorts with the same function.
+     */
+    return sortCanvases(canvases, "recent");
   }
 
   async createCanvasDir(id: string): Promise<void> {
@@ -110,6 +120,44 @@ export class FileStore implements Store {
       await this.saveSnapshot(id, state, lastSeq);
     }
     return { state, lastSeq, entries, recoveredSeqs };
+  }
+
+  /**
+   * **Canvases whose metadata predates the stamp, repaired once.**
+   *
+   * `updatedAt`/`updatedBy` used to move only on a rename, and `lastOp` did
+   * not exist. So every canvas made before this reports the day it was last
+   * retitled and has nothing to say about what happened — which would make a
+   * home screen sorted by "recent activity" order the list by something nobody
+   * was thinking about, and quietly, which is the worst way to be wrong.
+   *
+   * Fixing it needs the log's last entry, and reading a log per canvas is
+   * exactly the cost the `lastOp` field exists to avoid on the request path.
+   * So it happens ONCE: only for canvases that are missing the field, off the
+   * request path, and never again for one it has repaired. A home that has
+   * been through it does no reads at all.
+   *
+   * Returns how many it fixed, so the caller can say so rather than doing
+   * unexplained work at boot.
+   */
+  async backfillLastOp(): Promise<number> {
+    let fixed = 0;
+    for (const canvas of await this.listCanvases()) {
+      if (canvas.lastOp !== undefined) continue;
+      const entries = await readJsonLines<LogEntry>(p.oplogFile(this.home, canvas.id));
+      const last = entries[entries.length - 1];
+      // No live log — compacted away, or a canvas that has only ever been
+      // created. Its existing stamp is the best thing known about it.
+      if (!last) continue;
+      await this.saveCanvas({
+        ...canvas,
+        updatedAt: last.envelope.ts,
+        updatedBy: last.envelope.actor,
+        lastOp: last.envelope.op.type,
+      });
+      fixed += 1;
+    }
+    return fixed;
   }
 
   async saveCanvas(canvas: Canvas): Promise<void> {

@@ -91,6 +91,17 @@ export interface Store {
   load(id: string): Promise<LoadedCanvas | null>;
 
   saveCanvas(canvas: Canvas): Promise<void>;
+  /**
+   * Repair canvases whose metadata predates the activity stamp, returning how
+   * many were fixed.
+   *
+   * **Optional, deliberately.** A store that has never held a canvas from
+   * before the stamp has nothing to repair, and a store whose logs are remote
+   * objects may decide the read is not worth it — the home screen degrades to
+   * what it showed yesterday rather than the daemon refusing to start. The
+   * caller treats its absence as "nothing to do".
+   */
+  backfillLastOp?(): Promise<number>;
 
   /**
    * Record the derived state. Called after EVERY op, and a backing is

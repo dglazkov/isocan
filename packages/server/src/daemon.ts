@@ -459,6 +459,30 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * would be racing the boot for no gain. That is also why the boot sweep is a
    * minute out rather than immediate — boot is the busiest the daemon gets.
    */
+  /**
+   * **Repair the stamp on canvases older than it**, once, in the background.
+   *
+   * Not awaited and not on the request path: it reads a log per canvas that
+   * needs it, which is the very cost `lastOp` exists to keep off the home
+   * screen. A daemon should answer its first request immediately and fix its
+   * own history behind that.
+   *
+   * Not in the GC sweeper either, though that also walks every canvas — the
+   * sweep compacts and deletes, this only corrects metadata, and folding a
+   * repair into a job that removes things is how a repair becomes frightening
+   * to reason about.
+   */
+  void Promise.resolve(store.backfillLastOp?.() ?? 0)
+    .then((fixed: number) => {
+      if (fixed > 0) {
+        app.log.info(`stamped last activity on ${fixed} canvas${fixed === 1 ? "" : "es"}`);
+      }
+    })
+    .catch(() => {
+      // A home that cannot repair its own metadata still serves it; the cards
+      // read as they did yesterday rather than the daemon refusing to boot.
+    });
+
   const sweeper = startGcSweeper({
     engine,
     canvases: () => store.listCanvases(),

@@ -414,6 +414,35 @@ a branch — there is no operation meaning "and from here it went differently".
 The app refuses at the door, not in the interface, so an agent write lands the
 same refusal a click does.
 
+## What has been going on
+
+`isocan canvas list` orders by recent activity and says what each canvas last
+did, in words:
+
+```
+TITLE            LAST                          WHEN
+Lake House       Di moved something            41h
+Pen tool check   UIcheck moved something       3h
+```
+
+`--sort name|created`, and `--filter <words>` matches title and description in
+any order — every word must match, so `--filter "lake rules"` finds "Rules of
+the Lake".
+
+`isocan history [who]` is the same question asked of a PERSON rather than a
+canvas: what somebody has been doing across every canvas here, newest first.
+
+```sh
+isocan history            # everyone
+isocan history Kenny -n 8 # one agent, across all their canvases
+```
+
+It ends with the shape of the week — `8 of 286, across 9 canvases` — which is
+the thing a per-canvas view cannot tell you and the reason this verb exists.
+
+Both read the same words from `opWords` in core, so a canvas card in the app, a
+seam on a timeline and these tables describe one event identically.
+
 ## Saying what matters here
 
 `isocan context` lists what an agent reads before it starts. Two verbs manage

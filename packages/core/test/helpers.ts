@@ -106,9 +106,15 @@ export function seedState(): CanvasState {
  * Undo restores content, not audit stamps (the undoer really did perform a
  * mutation), so round-trip comparisons strip updatedAt/updatedBy and the
  * trash's deletedAt/deletedBy.
+ *
+ * `lastOp` joined them when the canvas began recording what its most recent
+ * operation WAS, for the home screen. It is the same kind of fact and answers
+ * the same way: after undoing a move, the last thing that happened to this
+ * canvas is the undo, not the move — so a round trip is not expected to
+ * restore it, and comparing it would assert that history rewinds.
  */
 export function normalize(value: unknown): unknown {
-  const AUDIT_KEYS = new Set(["updatedAt", "updatedBy", "deletedAt", "deletedBy"]);
+  const AUDIT_KEYS = new Set(["updatedAt", "updatedBy", "deletedAt", "deletedBy", "lastOp"]);
   return JSON.parse(
     JSON.stringify(value, (key, v) => (AUDIT_KEYS.has(key) ? undefined : v)),
   );
