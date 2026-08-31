@@ -23,6 +23,10 @@ import { majors } from "@isocan/core";
  */
 const seen = new Map<string, Major[]>();
 
+/**
+ * The seams for one canvas, read the first time `want` turns true and
+ * remembered after — `null` until there is an answer.
+ */
 export function useCardPeek(canvasId: string | null, want: boolean): Major[] | null {
   const [peek, setPeek] = useState<Major[] | null>(
     canvasId ? (seen.get(canvasId) ?? null) : null,
@@ -58,9 +62,4 @@ export function useCardPeek(canvasId: string | null, want: boolean): Major[] | n
   }, [canvasId, want]);
 
   return peek;
-}
-
-/** Forget what was read — the log has moved on. */
-export function forgetPeeks(): void {
-  seen.clear();
 }

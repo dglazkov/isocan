@@ -9,7 +9,6 @@ import {
   type RadarItem,
 } from "../lib/edgeradar.ts";
 import { glideToBox, glideToPoint } from "../lib/zoomactions.ts";
-import { stageInsets } from "../lib/stage.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
 
 /**
@@ -19,14 +18,26 @@ import { ItemThumb } from "./ItemThumb.tsx";
  * answers a different question (where is everything) than this one (what did I
  * just walk away from).
  *
- * A beacon has to TOUCH an edge or it reads as a stray mark floating in the
- * canvas. So the rim is flush, and the insets describe only what actually
- * covers it: the top bar, which is full width and opaque, and a docked panel
- * when one is open — the thread/files dock on the left, the trash on the right.
- * The tool rail, the zoom controls, and the minimap all float
- * with a gutter between them and the edge — a 7px bar lives in that gutter
- * quite happily, and the alternative is a bar hovering in mid-canvas.
+ * **The rim is the WINDOW's rim, not the canvas's.**
+ *
+ * This used to inset by whatever was docked — the top bar, and a panel when
+ * one was open — on the reasoning that a beacon hidden under a panel helps
+ * nobody. In practice it put the bars along the *panel's* edge, a third of the
+ * way into the screen, where they read as marks floating in the middle of the
+ * canvas rather than as a rim. Reported that way: they should be on the top,
+ * bottom, left and right edges of the SCREEN.
+ *
+ * It works because the rim already outranks the docks (`--z-bar` is 30,
+ * `--z-dock` is 25), so a bar on the true left edge draws over an open panel
+ * instead of behind it. A 7px bar over the shoulder of a panel is a smaller
+ * cost than a rim nobody recognises as one.
+ *
+ * `stageInsets` is untouched and still means what it meant: FRAMING has to
+ * avoid parking an item under a panel, because an item you cannot see is not
+ * framed. A beacon is the opposite — it is the thing that says where to look,
+ * so it belongs at the boundary of what you are looking at.
  */
+const RIM: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function EdgeRadar({ canvasId }: { canvasId: string }) {
   const items = useCanvasStore((s) => s.canvas?.items);
@@ -44,8 +55,7 @@ export function EdgeRadar({ canvasId }: { canvasId: string }) {
   const all = Object.values(items);
   if (all.length === 0) return null;
 
-  // The same fact the framing actions use: what the canvas actually has.
-  const insets: Insets = stageInsets();
+  const insets: Insets = RIM;
   const beacons = edgeBeacons(all, viewport, size.width, size.height, insets);
   if (beacons.length === 0) return null;
 
