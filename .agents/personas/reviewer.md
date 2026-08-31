@@ -11,9 +11,9 @@ goal:
     measured by: node scripts/measure.mjs unused-exports
     baseline: 129, 2026-08-30, 66d9b67
   - name: exports with no comment above them
-    at most: 278
+    at most: 277
     measured by: node scripts/measure.mjs undocumented-exports
-    baseline: 278, 2026-08-30, 66d9b67
+    baseline: 277, 2026-08-30, ef7265a
   # Raised from 45 with the reason, which is the only sanctioned way: the two
   # new pairs are a lens roster agreeing with a 404 page's action row, and a
   # lens title agreeing with a share roster's name. Value-coincidence, not

@@ -302,6 +302,35 @@ npm --prefix <checkout> run dev:replica -- setup <home>/p/<id>#<pass>
 
 ## Development practices
 
+### Open the app before you believe it
+
+The suite reads source. That is good at one thing — *this decision is still
+written down* — and blind to *this screen is broken*. On 30 August four bugs
+shipped or nearly shipped through a fully green suite: a card that never
+scrolled into view, ⌘Enter that appeared to add nothing, a panel header
+collapsed to `display: block`, and a reducer that stopped stamping the canvas —
+**that last mutation passed all 2,300 tests.**
+
+`node scripts/journeys.mjs` is the answer: it boots its own daemon on its own
+port in its own temp home, drives the built app through a headless browser, and
+walks the journeys a person actually takes. `.agents/personas/journeys.md` owns
+it, and `journeys.yml` walks it weekly rather than per push — ninety seconds
+against a suite that answers in one, for a class of bug that does not need
+catching within the minute.
+
+**Two rules keep it honest, and both were learned the same afternoon.**
+
+*Never assert that an animation ran.* A headless page throttles
+`requestAnimationFrame` and background timers, so smooth scrolling is a no-op
+and a 90ms interval fires at ~400ms. Assert on state — what is in the DOM, what
+the server holds.
+
+*Drive real input.* A synthetic `PointerEvent` is untrusted and creates no
+active pointer, so `setPointerCapture` throws `NotFoundError` — which reads
+exactly like a crash in the app. The first Pen journey failed that way and
+passed the moment it used Chrome's own input pipeline. **When a journey fails,
+ask whether the harness caused it before reporting a bug.**
+
 ### Share the structure, and count the copies
 
 The Personas panel shipped with its icon on top of its own title. Five dock

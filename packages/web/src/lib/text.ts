@@ -161,7 +161,9 @@ export async function reviseTextNode(
 }
 
 /** What committing a composer should actually do. */
-export type TextCommit =
+/* Not exported: the shape of `textCommit`'s answer, which callers read
+   rather than name. */
+type TextCommit =
   | { do: "nothing"; why: "empty" | "unchanged" }
   | { do: "create"; body: string }
   | { do: "revise"; body: string };
