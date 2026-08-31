@@ -1,5 +1,10 @@
 # The innkeeper
 
+> **This is a record, not a living document.** The multiuser project is
+> complete; this doc says what was designed and why, as of its closing.
+> New design work — even work that extends these mechanisms — starts in
+> a new document and may cite this one, but does not edit it.
+
 The second of the [journey](journey.md)'s open debts, taken
 up. Someone runs the home, pays for it, and answers for uptime, abuse,
 and privacy — and with birth-at-home it holds *unshared* canvases too.

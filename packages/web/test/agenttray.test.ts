@@ -147,25 +147,48 @@ describe("the dock holds one at a time, and everything knows", () => {
 });
 
 /**
- * **The standing-agent doors** (agents-on-demand phase 2.5): the tray is
- * where journey 1 adds an agent and journey 8 dismisses one. What these
- * guard: the gestures go through the SAME ops the CLI verbs send — one
- * record, two doors — and the dialog's rc line is derived from the rc's
- * presence announcement rather than optimism.
+ * **The standing-agent doors** (agents-on-demand phase 2.5, reshaped by
+ * agent-custody 2026-08-31): the tray is where journey 1 adds an agent and
+ * journey 8 dismisses one. What these guard now: adding is an ASK the parked
+ * rc completes — the browser never mints the actor, because an actor minted
+ * on a cookie badge is one the machine running the turns can never vouch for
+ * at the home (issue #83) — and the gesture exists only while an rc is
+ * parked, on the connection-bound fact rather than a presence TTL (issue
+ * #81's decided shape: no rc, no button).
  */
 describe("the tray's standing-agent doors", () => {
   const add = read("components/AddAgent.tsx");
   const row = read("components/AgentRow.tsx");
 
-  it("the dialog claims the actor and sends the enroll op — the CLI's exact moves", () => {
-    expect(add).toMatch(/sessionKey: `agent:\$\{canvasId\}:\$\{wanted\}`/);
-    expect(add).toMatch(/type: "agent\.enroll"/);
+  it("the dialog asks the parked rc, and never mints the actor itself", () => {
+    /**
+     * **This guard used to freeze issue #83.** It asserted the dialog's own
+     * claim-then-enroll — "the CLI's exact moves" — which was true in the
+     * oplog and false at the desk: the claim landed on the BROWSER's badge,
+     * so the laptop relaying the agent's face could never vouch for it and
+     * the home dropped it silently. The custody design inverts the gesture:
+     * the dialog sends a name, the rc claims and enrolls on the machine that
+     * answers, and the records become indistinguishable from `isocan agent
+     * add` at the desk too.
+     */
+    expect(add).toMatch(/askEnrolAgent\(/);
+    expect(add, "minting is the rc's, never the browser's").not.toMatch(/actor\.claim/);
+    expect(add, "the enroll op is sent by the rc, not from here").not.toMatch(
+      /type: "agent\.enroll"/,
+    );
+    // The outcome is the op landing — the dialog watches the roster and has
+    // a countdown, because failure may not be silent.
+    expect(add).toMatch(/canvas\?\.agents/);
+    expect(add).toMatch(/ASK_PATIENCE_MS/);
   });
 
-  it("the dialog's footer tells the truth about the rc, from its announcement", () => {
-    expect(add).toMatch(/s\.kind === "rc"/);
-    // Both worlds have words: an rc parked, and the line to start one.
-    expect(add).toMatch(/isocan rc/);
+  it("no rc, no button — gated on the connection-bound fact", () => {
+    expect(add).toMatch(/useRcParked\(/);
+    expect(add).toMatch(/if \(!parked\) return null/);
+    // Not the presence announcement: an "rc" kind session outlives a killed
+    // rc by its TTL, and a button standing on a TTL is the lie journey 7
+    // forbids for "answerable" wearing different clothes.
+    expect(add).not.toMatch(/kind === "rc"/);
   });
 
   it("dismiss appears exactly on rows with standing, and sends the withdraw op", () => {

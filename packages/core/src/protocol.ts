@@ -82,7 +82,16 @@ export type ServerMessage =
       sessions: PresenceSession[];
       colors: ActorColors;
       names: ActorNames;
-    };
+    }
+  /**
+   * "Someone at the canvas asked to add an agent here" (agent-custody
+   * mechanism 2), sent by the home down the socket of the daemon whose
+   * `rc-relay` said an rc is parked. The daemon hands it to that rc through
+   * the open `/api/rc/hold`; the rc then makes the same moves `isocan agent
+   * add` makes, so the actor is born first-claim on the machine that answers
+   * for it. Carries a NAME and never an actor: minting is the rc's.
+   */
+  | { type: "rc-ask"; askId: string; name: string; from: Actor };
 
 /** Client → server. Presence is the ephemeral plane: daemon memory + WS
  * fan-out only — never the oplog, never storage, never undo. */
@@ -117,7 +126,17 @@ export type ClientMessage =
    * for; the sender's word for who is here is not the sender's word for who it
    * may speak as.
    */
-  | { type: "presence-relay"; sessions: PresenceSession[] };
+  | { type: "presence-relay"; sessions: PresenceSession[] }
+  /**
+   * The rc-liveness half of the daemon's beat (agent-custody mechanism 1):
+   * whether an `isocan rc` currently holds this daemon's `/api/rc/hold` for
+   * this canvas, and which enrolled agents that hold names. Rides the same
+   * socket the faces ride, so the home forgets it the instant the connection
+   * dies — connection-bound at every hop, never a TTL. Bearer only, like
+   * `presence-relay`, and the home checks every actor id against the relaying
+   * badge's claims for the same reason it checks relayed faces.
+   */
+  | { type: "rc-relay"; parked: boolean; actorIds: string[] };
 
 // ---- presence sessions ----
 
@@ -360,6 +379,60 @@ export interface ParkAdvanceRequest {
 /** Another park claimed this actor's cursor row — the caller's lease is dead
  * and it must stand down, not retry. */
 export const PARK_ADOPTED_CODE = "park-adopted";
+
+// ---- the rc's connection-bound liveness, and the web's ask (agent-custody) ----
+
+/**
+ * One "add an agent" request on its way to a parked rc. Born at the home's
+ * ask route, delivered inside an `rc-hold` response (locally, or after an
+ * `rc-ask` hop down the relaying daemon's socket). A name and the asker —
+ * never an actor: the rc mints the actor on the machine that answers for it,
+ * which is the whole design.
+ */
+export interface RcAsk {
+  askId: string;
+  /** The wanted agent name, as typed. The rc's claim judges collisions. */
+  name: string;
+  /** Who asked, for the rc's narration and the enrolment's history. */
+  from: Actor;
+}
+
+export interface RcHoldRequest {
+  canvasId: string;
+  /** The agents this rc currently answers for — answerable while held. */
+  actorIds: string[];
+  waitMs: number;
+}
+
+export interface RcHoldResponse {
+  ok: true;
+  /** Asks that arrived during (or just before) this hold. Empty nearly
+   * always; the rc handles each and keeps holding. */
+  asks: RcAsk[];
+}
+
+/** `GET /api/projects/:id/rc` — who answers here, and whether anything does.
+ * `parked` is the add-agent gate: true while any rc holds a connection for
+ * this canvas, here or (relayed) on a member's machine. */
+export interface RcAnsweringResponse {
+  parked: boolean;
+  actorIds: string[];
+}
+
+export interface RcAskRequest {
+  name: string;
+  from: Actor;
+}
+
+export interface RcAskResponse {
+  ok: true;
+  askId: string;
+}
+
+/** The ask route's refusal when no rc is parked anywhere for the canvas —
+ * the Web UI should not have offered the gesture (the gate), but a gate is a
+ * poll and an rc can die between polls. */
+export const NO_RC_CODE = "no-rc";
 
 // ---- a client older than this home ----
 

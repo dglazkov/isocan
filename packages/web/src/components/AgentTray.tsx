@@ -9,7 +9,7 @@ import { AgentRowView } from "./AgentRow.tsx";
 import { AgentsGlyph } from "./Glyphs.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
-import { useAnswerable } from "../lib/answerable.ts";
+import { useAnswerable, useRcParked } from "../lib/answerable.ts";
 
 /**
  * **`isocan who`, given a home on the canvas.**
@@ -34,6 +34,7 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
   const sessions = useCanvasStore((s) => s.sessions);
   const canvas = useCanvasStore((s) => s.canvas);
   const answerable = useAnswerable(canvasId);
+  const rcParked = useRcParked(canvasId);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const following = useUiStore((s) => s.followingActorId);
@@ -64,13 +65,26 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
         {rows.length === 0 ? (
           /* The same two-silences empty state the workbench uses: the room
              works before anybody is in it, and it says how somebody GETS in
-             rather than shrugging. */
-          <p className="agents-quiet">
-            Nobody is parked here right now. Add an agent below to enrol one
-            that answers when something arrives, or an agent joins with the
-            isocan skill and waits with <code>isocan wait</code>; anything you
-            say in the Chat reaches whoever parks next.
-          </p>
+             rather than shrugging. "Add an agent below" is said only while
+             the button it points at exists (agent-custody: no rc, no
+             button), and the no-rc line names no directory the reader may
+             not have. */
+          rcParked ? (
+            <p className="agents-quiet">
+              Nobody is parked here right now. Add an agent below to enrol one
+              that answers when something arrives, or an agent joins with the
+              isocan skill and waits with <code>isocan wait</code>; anything
+              you say in the Chat reaches whoever parks next.
+            </p>
+          ) : (
+            <p className="agents-quiet">
+              Nobody is parked here right now. An agent joins with the isocan
+              skill and waits with <code>isocan wait</code>, and someone with
+              this project checked out can run <code>isocan rc</code> to
+              answer for enrolled agents; anything you say in the Chat reaches
+              whoever parks next.
+            </p>
+          )
         ) : (
           rows.map((row) => (
             <AgentRowView

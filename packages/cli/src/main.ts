@@ -7539,6 +7539,56 @@ command or reply. No \`session start\` needed after a wake.`,
  */
 
 /** Both add verbs land here; `contained` is the agent spelling's rule. */
+/**
+ * The enrolment's two moves plus its records, shared by the verbs and the
+ * rc's web-ask handler (agent-custody mechanism 2): claim the actor
+ * first-claim on THIS machine's badge, enroll it, seed its cursor at the
+ * enrolment op, write the rc half. Whoever calls this is the machine that
+ * answers for the agent — which is the custody design in one sentence.
+ */
+async function mintAndEnrol(
+  ctx: Ctx,
+  canvasId: string,
+  name: string,
+  opts: { cwd: string; harness: string | null; rules?: unknown },
+): Promise<Actor> {
+  // The actor is minted through the same claim everything else uses, keyed
+  // per enrolment on this badge — so re-enrolling Sian after a withdrawal
+  // hands the same Sian back, history intact, and a worn name is refused by
+  // the registry rather than silently doubled. Phase 3 rebinds the actor to
+  // its adapter-born session key when a session first exists.
+  const claimed = await ctx.client.claimActor({
+    type: "actor.claim",
+    // The SAME key the rc's injected environment will present when this
+    // agent's sessions run (acp.ts `enrolmentKey`): the mint claim IS the
+    // session binding, so a CLI-added agent needs no rebinding, ever.
+    sessionKey: enrolmentKey(canvasId, name),
+    name,
+  });
+  const agent = claimed.envelope.actor;
+  const enrolled = await ctx.client.sendOp(canvasId, ctx.actor, {
+    type: "agent.enroll",
+    agent,
+    ...(opts.rules !== undefined ? { rules: opts.rules } : {}),
+  });
+  // The cursor row is born WITH the standing (phase 4, journey 3): a
+  // comment landing five minutes after this — rc running or not — must
+  // reach the agent's first summons, so the row's floor is the enrolment
+  // op itself, never "whenever something first claimed".
+  await ctx.client
+    .parkClaim({ canvasId, actorId: agent.id, seedAt: enrolled.seq })
+    .catch(() => {});
+  await upsertRcAgent(ctx.home, {
+    canvasId,
+    actorId: agent.id,
+    name: agent.name,
+    harness: opts.harness,
+    cwd: opts.cwd,
+    sessionId: null,
+  });
+  return agent;
+}
+
 async function enrolAgent(
   cmd: Command,
   name: string,
@@ -7557,40 +7607,7 @@ async function enrolAgent(
   // — an agent enrolls an agent like itself — else null, "not yet said".
   const harness = opts.harness ?? ctx.harness ?? null;
   const rules: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : undefined;
-  // The actor is minted through the same claim everything else uses, keyed
-  // per enrolment on this badge — so re-enrolling Sian after a withdrawal
-  // hands the same Sian back, history intact, and a worn name is refused by
-  // the registry rather than silently doubled. Phase 3 rebinds the actor to
-  // its adapter-born session key when a session first exists.
-  const claimed = await ctx.client.claimActor({
-    type: "actor.claim",
-    // The SAME key the rc's injected environment will present when this
-    // agent's sessions run (acp.ts `enrolmentKey`): the mint claim IS the
-    // session binding, so a CLI-added agent needs no rebinding, ever.
-    sessionKey: enrolmentKey(p.id, name),
-    name,
-  });
-  const agent = claimed.envelope.actor;
-  const enrolled = await ctx.client.sendOp(p.id, ctx.actor, {
-    type: "agent.enroll",
-    agent,
-    ...(rules !== undefined ? { rules } : {}),
-  });
-  // The cursor row is born WITH the standing (phase 4, journey 3): a
-  // comment landing five minutes after this — rc running or not — must
-  // reach the agent's first summons, so the row's floor is the enrolment
-  // op itself, never "whenever something first claimed".
-  await ctx.client
-    .parkClaim({ canvasId: p.id, actorId: agent.id, seedAt: enrolled.seq })
-    .catch(() => {});
-  await upsertRcAgent(ctx.home, {
-    canvasId: p.id,
-    actorId: agent.id,
-    name: agent.name,
-    harness,
-    cwd,
-    sessionId: null,
-  });
+  const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, rules });
   if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id });
   console.log(
     `enrolled ${agent.name} — answerable on "${p.title}". A running \`isocan rc\` picks this up without a restart; nothing runs until something arrives.`,
@@ -8012,11 +8029,29 @@ rcCommand.action(
     void (async () => {
       for (;;) {
         try {
-          await ctx.client.rcHold({
+          const held = await ctx.client.rcHold({
             canvasId: p.id,
             actorIds: [...dispatches.keys()],
             waitMs: 10_000,
           });
+          /**
+           * **The handshake's last hop** (agent-custody mechanism 2): the Web
+           * UI's "add an agent" arrives inside the hold, and THIS process —
+           * the one that will answer for the agent — makes the same moves
+           * `isocan agent add` makes, so the actor is born first-claim on
+           * this machine's badge and the relayed face vouches. The web
+           * dialog watches for the enroll op to land; a refusal here (a name
+           * already worn) is narrated where the rc's person is looking and
+           * surfaces at the dialog as its countdown running out.
+           */
+          for (const ask of held.asks ?? []) {
+            console.log(`rc: ${ask.from.name} asked from the canvas to add ${ask.name} — enrolling here`);
+            try {
+              await mintAndEnrol(ctx, p.id, ask.name, { cwd: rcCwd, harness: null });
+            } catch (err) {
+              console.log(`rc: could not enrol ${ask.name} — ${(err as Error).message}`);
+            }
+          }
         } catch {
           await new Promise((r) => setTimeout(r, 400));
         }

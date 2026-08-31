@@ -5,6 +5,7 @@ import { DEFAULT_PORT, healthPath } from "@isocan/core";
 import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
+import { RcHolds } from "./rc-holds.ts";
 import { attachWebSockets } from "./ws.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
@@ -339,11 +340,16 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * everything it holds: the registry is then simply empty, and every caller
    * asks it the same question instead of branching on whether it exists.
    */
+  // The rc hold registry (agent-custody): one instance shared by the routes
+  // (holds and asks), the WS layer (mirrors of what members relay), and the
+  // home-links (relaying this machine's own holds up).
+  const rc = new RcHolds();
   const homes = new HomeLinks({
     home,
     engine,
     presence,
     birthHome,
+    rc,
     ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
     ...(options.homeProbeMs !== undefined ? { probeMs: options.homeProbeMs } : {}),
   });
@@ -383,6 +389,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // The durable park cursor (on-demand phase 1) — a machine-local fact
     // beside homes.json, never behind the Store seam. See park.ts.
     park: new ParkCursors(home),
+    rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
@@ -437,7 +444,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // down a canvas socket is written through the engine, and an engine whose
   // daemon is still coming up is a race for no benefit.
   await homes.start();
-  const closeWebSockets = attachWebSockets(app.server, engine, desk, presence);
+  const closeWebSockets = attachWebSockets(app.server, engine, desk, presence, rc);
 
   /**
    * **The home's own housekeeping** (phase 13.7): every canvas the store

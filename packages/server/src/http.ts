@@ -27,6 +27,7 @@ import type {
   Pass,
   PostOpRequest,
   Canvas,
+  RcAskRequest,
   RedeemPassRequest,
   RedeemPassResponse,
   UndoRedoRequest,
@@ -60,6 +61,7 @@ import {
   newId,
   normalizeSubject,
   NO_ATTESTER,
+  NO_RC_CODE,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -117,6 +119,7 @@ import { buildRoot, buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
+import { RcHolds } from "./rc-holds.ts";
 import { registerContentRoutes } from "./content.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
 import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
@@ -328,6 +331,14 @@ export interface RouteOptions {
    * answer 501 without it rather than inventing a home directory to write in.
    */
   park?: ParkCursors;
+  /**
+   * The rc hold/ask registry (agent-custody). Shared with the WS layer (which
+   * mirrors what member daemons relay) and the home-links (which relay this
+   * daemon's own holds up) — so the daemon supplies one instance; a caller
+   * that wires routes by hand gets a private registry, which is the same
+   * behavior the inline map gave it.
+   */
+  rc?: RcHolds;
 }
 
 export function registerRoutes(
@@ -1931,40 +1942,66 @@ export function registerRoutes(
    * holds can only err toward "not answerable", which is the direction
    * journey 7 permits. In-memory, per process, like presence — a registry
    * that survived its daemon would be the lie again with extra steps.
+   *
+   * The registry moved to `rc-holds.ts` (agent-custody): the same holds now
+   * carry the web's enrol asks back to the rc, and their liveness relays up
+   * the home-link the way faces do.
    */
-  const rcHolds = new Map<string, Map<object, ReadonlySet<string>>>();
+  const rc = options.rc ?? new RcHolds();
   app.post("/api/rc/hold", async (req) => {
     const body = (req.body ?? {}) as { canvasId?: string; actorIds?: string[]; waitMs?: number };
     const canvasId = body.canvasId ?? "";
     const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
-    const token = {};
-    let held = rcHolds.get(canvasId);
-    if (!held) rcHolds.set(canvasId, (held = new Map()));
-    held.set(token, actorIds);
-    try {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.min(Number(body.waitMs) || 0, 55_000));
-        req.raw.on("close", () => {
-          clearTimeout(timer);
-          resolve();
-        });
-      });
-    } finally {
-      held.delete(token);
-      if (held.size === 0) rcHolds.delete(canvasId);
-    }
-    return { ok: true };
+    const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000));
+    req.raw.on("close", hold.release);
+    const asks = await hold.done;
+    return { ok: true, asks };
   });
 
-  /** Who answers here if summoned — the union of every open hold's agents.
-   * Empty exactly when no rc is holding a connection for this canvas. */
+  /** Who answers here if summoned — the union of every open hold's agents,
+   * local and relayed — and `parked`, the Web UI's add-agent gate. */
   app.get("/api/projects/:id/rc", async (req) => {
     const { id } = req.params as { id: string };
-    const actorIds = new Set<string>();
-    for (const agents of rcHolds.get(id)?.values() ?? []) {
-      for (const actorId of agents) actorIds.add(actorId);
+    return rc.answering(id);
+  });
+
+  /**
+   * **The web's add-agent ask** (agent-custody mechanism 2). Carries a NAME
+   * to a parked rc, which mints the actor on the machine that answers for it
+   * — the same two moves `isocan agent add` makes, so the desk needs no new
+   * rule and the relayed face vouches. This route only finds the rc: an open
+   * local hold, or the socket of the member daemon whose `rc-relay` says one
+   * is parked behind it. The dialog learns the outcome the way everything
+   * else does — the `agent.enroll` op lands, or its countdown says nothing
+   * answered.
+   */
+  app.post("/api/projects/:id/agents/ask", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as RcAskRequest;
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 64) {
+      return reply.code(400).send({ error: "an agent needs a name (at most 64 characters)" });
     }
-    return { actorIds: [...actorIds] };
+    if (!body.from?.id || typeof body.from.name !== "string") {
+      return reply.code(400).send({ error: "the ask must say who is asking (`from`)" });
+    }
+    // Mechanism 5, same as an op: the asker must be an actor this badge may
+    // speak as — the rc narrates "<from> asked to add …", and those words
+    // must not be puttable in someone else's mouth.
+    try {
+      await engine.requireActor(req.badge!.badgeId, body.from.id);
+    } catch {
+      return reply.code(403).send({ error: `this badge may not speak as ${body.from.id}` });
+    }
+    const ask = { askId: newId("ask"), name, from: body.from };
+    if (!rc.ask(id, ask)) {
+      return reply.code(409).send({
+        error:
+          "no `isocan rc` is parked on this canvas — someone with the project checked out runs one, and this gesture appears",
+        code: NO_RC_CODE,
+      });
+    }
+    return { ok: true, askId: ask.askId };
   });
 
   app.post("/api/projects/:id/undo", async (req) => {

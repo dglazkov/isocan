@@ -15,6 +15,7 @@ import type { Desk } from "./desk.ts";
 import { admittingGrant } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
+import type { RcHolds } from "./rc-holds.ts";
 
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
@@ -29,6 +30,7 @@ export function attachWebSockets(
   engine: Engine,
   desk: Desk,
   presence: PresenceHub,
+  rc?: RcHolds,
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Set<WebSocket>>();
@@ -422,6 +424,49 @@ export function attachWebSockets(
         })();
         return;
       }
+      /**
+       * The rc-liveness half of the daemon's beat (agent-custody mechanism
+       * 1). Bearer only, for `presence-relay`'s reason. Each relayed actor id
+       * is checked against the badge's claims the way relayed faces are —
+       * "answerable" is a claim about who this machine may speak for, and an
+       * id the badge cannot vouch is dropped, never mirrored. The mirror dies
+       * with the socket, in the close handler below.
+       */
+      if (message.type === "rc-relay") {
+        if (!bearer || !rc) return;
+        const parked = message.parked === true;
+        const ids = Array.isArray(message.actorIds)
+          ? message.actorIds.filter((id): id is string => typeof id === "string")
+          : [];
+        void (async () => {
+          const allowed = new Set<string>();
+          for (const actorId of ids) {
+            if (!vouched.has(actorId)) {
+              const ok = await engine.requireActor(badgeId, actorId).then(
+                () => true,
+                () => false,
+              );
+              if (!ok) continue;
+              vouched.add(actorId);
+            }
+            allowed.add(actorId);
+          }
+          rc.mirror(relayOrigin, canvasId!, {
+            parked,
+            actorIds: allowed,
+            // The return path for an ask: down this socket, to become a local
+            // ask at the daemon whose rc is actually parked.
+            sendAsk: (ask) => {
+              if (ws.readyState !== WebSocket.OPEN) return false;
+              ws.send(
+                JSON.stringify({ type: "rc-ask", askId: ask.askId, name: ask.name, from: ask.from }),
+              );
+              return true;
+            },
+          });
+        })();
+        return;
+      }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
       const actor = message.actor;
       const beat = () => {
@@ -466,6 +511,9 @@ export function attachWebSockets(
       // RING — fade from Jordan's pile". A sleeping laptop's agent cannot
       // wake, so a ring that said "summonable" would lie.
       presence.dropMirror(relayOrigin);
+      // And the rc liveness it relayed: home-side "answerable" dies the
+      // instant the laptop's connection does (agent-custody mechanism 1).
+      rc?.dropMirror(relayOrigin);
     });
   }
 

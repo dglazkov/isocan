@@ -26,6 +26,9 @@ import type {
   Canvas,
   ActorMarks,
   ActorNames,
+  RcAnsweringResponse,
+  RcAskRequest,
+  RcAskResponse,
   RedeemPassResponse,
   ServingResponse,
   SlashCommand,
@@ -367,15 +370,27 @@ export function fetchNews(): Promise<NewsResponse> {
 }
 
 /**
- * **Which enrolled agents a live rc is actually answering for.**
+ * **Which enrolled agents a live rc is actually answering for — and whether
+ * one is parked at all.**
  *
  * Connection-bound, never a TTL: the daemon reports the holds it is holding
- * right now. `roster()` takes this as its fourth argument and downgrades every
- * standing row to `enrolled` without it — which is what the app did until it
- * started asking. See `useAnswerable`.
+ * right now, unioned with what member machines' daemons relay up their
+ * home-link sockets (agent-custody mechanism 1). `roster()` takes the ids as
+ * its fourth argument and downgrades every standing row to `enrolled`
+ * without them; `parked` is the add-agent gate. See `useAnswerable`.
  */
-export function fetchRcAnswering(canvasId: string): Promise<{ actorIds: string[] }> {
+export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
   return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/rc`);
+}
+
+/**
+ * **Ask the parked rc to add an agent** (agent-custody mechanism 2). Carries
+ * a name and the asker; the rc mints the actor on the machine that answers
+ * for it, and the outcome arrives the way everything does — the
+ * `agent.enroll` op lands, or the dialog's countdown says nothing answered.
+ */
+export function askEnrolAgent(canvasId: string, body: RcAskRequest): Promise<RcAskResponse> {
+  return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/agents/ask`, body);
 }
 
 export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {

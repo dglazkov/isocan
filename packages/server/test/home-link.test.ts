@@ -751,6 +751,110 @@ describe("presence, carried both ways and written nowhere", () => {
   }, 20_000);
 });
 
+/**
+ * **The rc's liveness up, and the web's ask back down** (agent-custody
+ * mechanisms 1 and 2): a hold on a replica makes the home say `parked`; an
+ * ask posted at the home comes out of the replica's open hold; both facts die
+ * with the connections that assert them. This is issue #83's missing hand-off
+ * and issue #81's missing truth, walked on real daemons.
+ */
+describe("the rc's liveness and the web's ask, carried across the link", () => {
+  const rcOf = (node: Node) =>
+    get<{ parked: boolean; actorIds: string[] }>(node, `/api/projects/${CANVAS}/rc`);
+
+  /** An rc's hold at A, as the CLI makes it: held open, released by abort. */
+  function holdAtA(actorIds: string[], waitMs = 8_000) {
+    const aborter = new AbortController();
+    const done = fetch(`${A.base}/api/rc/hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...A.badge.headers },
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs }),
+      signal: aborter.signal,
+    });
+    return { done, aborter };
+  }
+
+  it("a hold at A is `parked` at H, and stops being when the hold ends", async () => {
+    await birthAtA();
+    expect((await rcOf(H)).parked).toBe(false);
+
+    const hold = holdAtA([]);
+    await until(() => rcOf(H), (r) => r.parked, "the hold to relay up");
+
+    // The rc dies (its socket to A closes); A's next relay says so, and the
+    // home stops promising an answerer it does not have.
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+    await until(() => rcOf(H), (r) => !r.parked, "the hold's death to relay up");
+  }, 20_000);
+
+  it("an enrolled agent under the hold reads answerable at H — and an id that is not enrolled never does", async () => {
+    await birthAtA();
+    // The enrolment, the CLI's way: claim on A's badge, then the enroll op.
+    const sian = { id: "agt_sian", name: "Sian" };
+    await A.badge.speakAs(sian);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+
+    const hold = holdAtA([sian.id, "agt_nobody"], 12_000);
+    const at = await until(
+      () => rcOf(H),
+      (r) => r.actorIds.includes(sian.id),
+      "Sian to read answerable at the home",
+    );
+    // The hold's word is checked against the enrolment record: an id with no
+    // standing on the canvas is not relayed, however loudly a hold names it.
+    expect(at.actorIds).not.toContain("agt_nobody");
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an ask posted at H comes out of A's open hold", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 12_000);
+    await until(() => rcOf(H), (r) => r.parked, "the hold to relay up");
+
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Sian",
+      from: { id: "usr_home", name: "Home" },
+    });
+    expect(asked.status).toBe(200);
+    const { askId } = (await asked.json()) as { askId: string };
+
+    // The last hop: the ask arrives inside the hold's own response — the
+    // channel the rc is already listening on, and no other.
+    const held = (await (await hold.done).json()) as {
+      asks: { askId: string; name: string; from: { id: string } }[];
+    };
+    expect(held.asks).toMatchObject([{ askId, name: "Sian", from: { id: "usr_home" } }]);
+  }, 20_000);
+
+  it("an ask with nobody parked anywhere is refused, with the code the dialog reads", async () => {
+    await birthAtA();
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Sian",
+      from: { id: "usr_home", name: "Home" },
+    });
+    expect(asked.status).toBe(409);
+    expect(await asked.json()).toMatchObject({ code: "no-rc" });
+  });
+
+  it("an ask may not put words in someone else's mouth", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 8_000);
+    await until(() => rcOf(H), (r) => r.parked, "the hold to relay up");
+    // H's badge does not claim Priya — the narration "Priya asked to add …"
+    // must not be writable by a badge that is not her (mechanism 5, the same
+    // rule an op's actor answers to).
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Sian",
+      from: priya,
+    });
+    expect(asked.status).toBe(403);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+});
+
 describe("blobs follow the ops that name them", () => {
   it("uploads through the replica to the home, and reads back on the other one", async () => {
     await birthAtA();

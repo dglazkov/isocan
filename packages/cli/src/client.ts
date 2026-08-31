@@ -34,6 +34,9 @@ import type {
   ParkClaimRequest,
   ParkClaimResponse,
   ParkDeliveredRequest,
+  RcAnsweringResponse,
+  RcHoldRequest,
+  RcHoldResponse,
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
@@ -692,13 +695,16 @@ export class DaemonClient {
 
   /** The rc's connection-bound liveness (phase 6): held open for `waitMs`,
    * during which these agents read as answerable. Re-issue back-to-back;
-   * the fact dies with the socket, which is the whole point. */
-  rcHold(request: { canvasId: string; actorIds: string[]; waitMs: number }): Promise<{ ok: true }> {
+   * the fact dies with the socket, which is the whole point. The response
+   * carries any web asks that arrived while held (agent-custody) — the rc
+   * enrolls each and keeps holding. */
+  rcHold(request: RcHoldRequest): Promise<RcHoldResponse> {
     return this.request("POST", "/api/rc/hold", request);
   }
 
-  /** Who a live rc answers for on this canvas — empty when none is holding. */
-  rcAnswering(canvasId: string): Promise<{ actorIds: string[] }> {
+  /** Who a live rc answers for on this canvas — and whether any is parked at
+   * all, here or relayed from a member's machine. */
+  rcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
     return this.request("GET", `/api/projects/${canvasId}/rc`);
   }
 
