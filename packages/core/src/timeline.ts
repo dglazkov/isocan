@@ -225,13 +225,70 @@ export function majorLine(major: Major): string {
  * exercised in the entire system. Seeking from a snapshot is the optimisation
  * this leaves room for and does not need yet — measure a long canvas first.
  */
-export function at(entries: readonly LogEntry[], seq: number): CanvasState | null {
+export interface SkippedEntry {
+  seq: number;
+  /** The op that would not apply, for a surface that wants to name it. */
+  kind: string;
+  why: string;
+}
+
+export interface Past {
+  state: CanvasState | null;
+  /**
+   * Entries the reducer refuses TODAY. Empty on every healthy canvas, and the
+   * reason this function exists rather than `at` simply not throwing.
+   */
+  skipped: SkippedEntry[];
+}
+
+/**
+ * **The fold, and what it could not replay.**
+ *
+ * The reducer validates: since `4e70304` an op whose geometry is not a finite
+ * number is refused with `bad-op`. That fixed the WRITE side of #76 and left
+ * the read side worse than it found it — because a canvas that collected a
+ * `"x": null` before the check existed still has it, the oplog is append-only,
+ * and replaying from nothing now throws on an entry that was accepted three
+ * weeks ago.
+ *
+ * Measured on this repo's own canvas: opening the history scrubbed to the
+ * start and the app went white, with `item.move: x must be a finite number,
+ * got null` uncaught. **One bad op made a canvas's whole history
+ * unopenable** — a strictly worse outcome than the blank item the validation
+ * was added to prevent.
+ *
+ * So a refused entry is SKIPPED and named, rather than taking the fold down.
+ * Skipping is a small lie about the past — the op did apply, back when
+ * nothing checked — and it is the honest option available: the alternative is
+ * not "show the true past", it is "show nothing at all, forever, and do not
+ * say why". The names come back with the state so a surface can say what it
+ * could not replay instead of quietly showing a shorter history.
+ *
+ * The daemon is not exposed to this: it replays only the tail past its
+ * snapshot, and a bad op old enough to predate the check is long behind one.
+ * Full replays — the scrubber, `isocan at` — are where it bites.
+ */
+export function past(entries: readonly LogEntry[], seq: number): Past {
   let state: CanvasState | null = null;
+  const skipped: SkippedEntry[] = [];
   for (const entry of entries) {
     if (entry.seq > seq) break;
-    state = applyOperation(state, entry.envelope);
+    try {
+      state = applyOperation(state, entry.envelope);
+    } catch (err) {
+      skipped.push({
+        seq: entry.seq,
+        kind: entry.envelope.op.type,
+        why: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
-  return state;
+  return { state, skipped };
+}
+
+/** The state alone, for callers with nothing to say about a skip. */
+export function at(entries: readonly LogEntry[], seq: number): CanvasState | null {
+  return past(entries, seq).state;
 }
 
 /**

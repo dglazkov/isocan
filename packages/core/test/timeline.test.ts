@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogEntry } from "../src/ops.ts";
-import { at, axisGrain, axisTicks, majorLine, majors, span, track, weightOf } from "../src/timeline.ts";
+import { at, axisGrain, axisTicks, majorLine, majors, past, span, track, weightOf } from "../src/timeline.ts";
 
 /**
  * `docs/research/2026-08-26-timeline.md`'s one firm rule: the significance
@@ -396,5 +396,64 @@ describe("ticks do not overprint each other", () => {
     const ticks = axisTicks(log);
     expect(ticks[0]!.at).toBe(0);
     expect(ticks.at(-1)!.at).toBe(1);
+  });
+});
+
+/**
+ * **A canvas that collected a bad op before the check existed.**
+ *
+ * `4e70304` made the reducer refuse non-finite geometry, which fixed the
+ * write side of #76 and left the read side worse: the oplog is append-only,
+ * so a `"x": null` written three weeks earlier is still there, and replaying
+ * from nothing throws on it. Measured on this repo's own canvas — opening the
+ * history and scrubbing to the start took the whole app white.
+ */
+describe("replaying a history that predates the checks", () => {
+  const poisoned = (seq: number, op: Record<string, unknown>): LogEntry =>
+    ({
+      seq,
+      envelope: { id: `op${seq}`, canvasId: "prj_a", actor: { id: "u", name: "K" },
+        ts: `2026-08-30T00:00:${String(seq).padStart(2, "0")}.000Z`, op },
+      inverse: null,
+    }) as unknown as LogEntry;
+
+  const log = () => [
+    poisoned(1, { type: "project.create", canvasId: "prj_a", title: "P" }),
+    poisoned(2, { type: "item.add", itemId: "itm_1", version: { id: "v1", kind: "text", body: "hi" },
+      width: 10, height: 10, placement: { x: 0, y: 0 } }),
+    // Accepted before the check existed; refused now.
+    poisoned(3, { type: "item.move", itemId: "itm_1", x: null, y: null }),
+    poisoned(4, { type: "item.move", itemId: "itm_1", x: 40, y: 50 }),
+  ];
+
+  it("does not throw, where it used to take the surface down with it", () => {
+    expect(() => past(log(), 4)).not.toThrow();
+  });
+
+  it("keeps replaying past the bad entry", () => {
+    /* The op after it is good and must still land — stopping at the poison
+       would truncate the history at a three-week-old accident. */
+    const { state } = past(log(), 4);
+    const item = state?.canvas.items["itm_1"];
+    expect(item && [item.x, item.y]).toEqual([40, 50]);
+  });
+
+  it("names what it could not replay, rather than quietly showing less", () => {
+    /* A shorter history with no explanation is the instrument reporting
+       healthy while blind — the failure this repo keeps finding. */
+    const { skipped } = past(log(), 4);
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]!.seq).toBe(3);
+    expect(skipped[0]!.kind).toBe("item.move");
+    expect(skipped[0]!.why).toMatch(/finite number/);
+  });
+
+  it("says nothing about a healthy canvas", () => {
+    const clean = [log()[0]!, log()[1]!, log()[3]!];
+    expect(past(clean, 4).skipped).toEqual([]);
+  });
+
+  it("still answers `at` for callers with nothing to say", () => {
+    expect(at(log(), 4)?.canvas.items["itm_1"]?.x).toBe(40);
   });
 });

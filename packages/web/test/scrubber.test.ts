@@ -181,11 +181,16 @@ describe("the scrubber's own source", () => {
     "utf8",
   ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
-  it("folds with core's `at`, so both surfaces land on the same past", () => {
+  it("folds with core, so both surfaces land on the same past", () => {
     /* The whole isomorphism claim. A second fold written here would be a
        second opinion about history, and `isocan at <seq>` would drift from
-       the scrubber with nothing able to tell. */
-    expect(src).toMatch(/\bat\(entries, seq\)/);
+       the scrubber with nothing able to tell.
+
+       It asked for `at(` by name until the fold grew a tolerant sibling —
+       `past`, which skips an entry the reducer refuses today instead of
+       taking the surface down. The FACT is that the fold comes from core;
+       which of the two is a detail this guard should not be pinning. */
+    expect(src).toMatch(/\b(at|past)\(entries, seq\)/);
   });
 
   it("reads the archive as well as the live log", () => {
@@ -210,5 +215,41 @@ describe("the scrubber's own source", () => {
   it("does not offer playback to someone who asked for less motion", () => {
     expect(src).toContain("prefers-reduced-motion");
     expect(src).toMatch(/!still && \(/);
+  });
+});
+
+/**
+ * **A history that predates the reducer's checks must still open.**
+ *
+ * `4e70304` made non-finite geometry a `bad-op`, which fixed the write side
+ * of #76 and left the read side worse: the oplog is append-only, so a canvas
+ * that collected an `"x": null` before the check still carries it, and a full
+ * replay throws on an entry accepted three weeks earlier.
+ *
+ * Measured on this repo's own canvas: opening the history and scrubbing to
+ * the start took the app WHITE, with the error uncaught. One bad op made a
+ * canvas's whole history unopenable — strictly worse than the blank item the
+ * validation was added to prevent.
+ */
+describe("the scrubber survives an entry that will not replay", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/components/Scrubber.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("folds with `past`, which skips rather than throwing", () => {
+    expect(src).toContain("past(entries, seq)");
+    expect(src, "the throwing fold must not be back").not.toMatch(/=\s*at\(entries, seq\)/);
+  });
+
+  it("says how many it could not replay", () => {
+    /* A shorter history with no explanation is the instrument reporting
+       healthy while blind — the shape this repo keeps catching. */
+    expect(src).toMatch(/would not replay/);
+    expect(src).toContain("skipped.length > 0");
+  });
+
+  it("names them, so the sentence is diagnosable rather than decorative", () => {
+    expect(src).toMatch(/#\$\{s2\.seq\} \$\{s2\.kind\}: \$\{s2\.why\}/);
   });
 });
