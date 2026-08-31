@@ -2,79 +2,89 @@
  * **What changed, said to the person who uses this — not to the person who
  * built it.**
  *
- * `docs/changelog/` already exists and is deliberately not this. It is written
- * for whoever has to maintain the thing: it names functions, records the
- * arguments that were had, and keeps the roads not taken. That is the right
- * document and the wrong one to put in front of somebody who just wants to
- * know whether the canvas does anything new today.
+ * This reads `WHATSNEW.md`, which is the ONLY document written for that
+ * reader. `docs/changelog/` is the other one: a page per day for whoever
+ * maintains this, naming functions and keeping the arguments that were had.
  *
- * So a day's entry may carry a `## What's new` section, and this reads it. Two
- * consequences worth stating, because both are the point:
+ * **They are separate files on purpose, and the first attempt had them in
+ * one.** A `## What's new` section inside each day's changelog cannot drift
+ * from the day it describes, which was the argument for it — and it was the
+ * wrong trade twice. It puts user-facing text inside a document full of
+ * internal reasoning, one careless read away from serving the engineering
+ * narrative to everybody; and `docs/` is excluded from the production image
+ * deliberately, so a home could never have read it anyway. The route answered
+ * `{"days":[]}` on prod while working perfectly on a checkout.
  *
- * - **It lives in the same file as the day it describes**, so the two cannot
- *   drift. Writing the day up and saying what a person got out of it is one
- *   act, not two things to remember.
- * - **It is optional.** A day of refactoring, a day of tests, a day spent
- *   chasing a flake — those genuinely have nothing a user would notice, and
- *   the honest thing is for them not to appear. A "what's new" that has an
- *   entry every day is one nobody believes by the second week.
+ * So: one public file, which ships because nothing excludes it, holding
+ * nothing that is not meant to be read.
+ *
+ * **Days with nothing a person would notice are simply absent.** A day of
+ * refactoring or of chasing a flake is a real day's work and an empty notice,
+ * and a what's-new with an entry every day is one nobody believes by the
+ * second week.
  */
 
 export interface NewsDay {
-  /** `YYYY-MM-DD`, from the filename — the sortable half. */
+  /** `YYYY-MM-DD`, derived from the heading — the sortable half. */
   day: string;
-  /** What a person reads: "29 August 2026", from the file's own heading. */
+  /** What a person reads: "29 August 2026", the heading as written. */
   title: string;
   /** One line per thing, in the words a user would use. */
   items: string[];
 }
 
-const HEADING = /^#\s+(.+?)\s*$/m;
-const SECTION = /^##\s+What's new\s*$/im;
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
 
 /**
- * Read one day's file. `null` when the day has nothing to say, which is a
- * normal answer and not a missing one.
+ * `"29 August 2026"` → `"2026-08-29"`.
+ *
+ * The heading is what a person reads, so it stays prose; the sortable form is
+ * derived rather than written twice. A heading that is not a date sorts by its
+ * own text, which keeps an odd entry visible instead of dropping it.
  */
-export function newsFrom(day: string, markdown: string): NewsDay | null {
-  const start = markdown.search(SECTION);
-  if (start === -1) return null;
-  const after = markdown.slice(start);
-  const body = after.slice(after.indexOf("\n") + 1);
-  // Up to the next heading of any level: the section owns its bullets and
-  // nothing below them.
-  const end = body.search(/^#{1,6}\s/m);
-  const items = (end === -1 ? body : body.slice(0, end))
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("- ") || line.startsWith("* "))
-    .map((line) => line.slice(2).trim())
-    .filter(Boolean);
-  if (items.length === 0) return null;
-  return { day, title: markdown.match(HEADING)?.[1]?.trim() ?? day, items };
+export function dayOf(title: string): string {
+  const m = title.trim().match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (!m) return title.trim();
+  const month = MONTHS.indexOf(m[2]!.toLowerCase());
+  if (month < 0) return title.trim();
+  return `${m[3]}-${String(month + 1).padStart(2, "0")}-${m[1]!.padStart(2, "0")}`;
 }
 
-/** Every day that has something to say, newest first. */
-export function news(files: readonly { day: string; markdown: string }[]): NewsDay[] {
-  return files
-    .map((f) => newsFrom(f.day, f.markdown))
-    .filter((d): d is NewsDay => d !== null)
-    .sort((a, b) => b.day.localeCompare(a.day));
+/**
+ * Every day the file names, newest first.
+ *
+ * The file is authored newest-first and this sorts anyway, so an entry added
+ * in the wrong place lands where it belongs rather than where it was typed.
+ */
+export function news(markdown: string): NewsDay[] {
+  const days: NewsDay[] = [];
+  // `## <heading>` starts a day; everything until the next `##` belongs to it.
+  const parts = markdown.split(/^##\s+/m).slice(1);
+  for (const part of parts) {
+    const [heading = "", ...rest] = part.split("\n");
+    const items = rest
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("- ") || line.startsWith("* "))
+      .map((line) => line.slice(2).trim())
+      .filter(Boolean);
+    if (items.length === 0) continue; // a heading with nothing under it is not news
+    days.push({ day: dayOf(heading), title: heading.trim(), items });
+  }
+  return days.sort((a, b) => b.day.localeCompare(a.day));
 }
 
 /**
  * **What somebody has not read yet.**
  *
- * Keyed on the DAY rather than on a count or a hash: days are the unit here,
- * they only ever move forward, and a reader who saw everything up to the 29th
- * has seen it whatever was added to the 29th afterwards. A count would be
- * wrong the moment a day gained a second line; a hash would mark everything
- * unread when a typo was fixed.
+ * Keyed on the DAY rather than on a count or a hash: days only move forward,
+ * and a reader who saw everything up to the 29th has seen it whatever was
+ * added to the 29th afterwards. A count would be wrong the moment a day gained
+ * a second line; a hash would mark everything unread when a typo was fixed.
  *
  * `null` — never read anything — is deliberately not "everything is new". A
- * first-time visitor met with fifty unread notices has been handed a chore,
- * so the caller gets the whole list and decides; `unseen` is for the dot, and
- * a dot on somebody's first visit is a lie about their attention.
+ * first-time visitor met with fifty unread notices has been handed a chore, so
+ * the caller still gets the whole list; what is suppressed is the CLAIM that
+ * they are behind on something never offered to them.
  */
 export function unseen(days: readonly NewsDay[], lastSeenDay: string | null): NewsDay[] {
   if (lastSeenDay === null) return [];

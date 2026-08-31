@@ -402,12 +402,31 @@ img { height: auto; }
 .identity-menu { display: flex; flex-direction: column; gap: 10px; }
 /* The face, left of the name it stands in for — same disc as everywhere else,
    made pressable. */
+/* A rounded square rather than a disc, so it reads as a thing you act on
+   rather than as another face in a roster — and it carries its own edit badge,
+   which is what says so before you click. */
 .identity-mark {
-  flex: none; cursor: pointer; border: none; padding: 0;
-  font-size: 13px; line-height: 1;
+  position: relative; flex: none; cursor: pointer; border: none; padding: 0;
+  font-size: 13px; line-height: 1; border-radius: var(--radius);
+  width: 30px; height: 30px;
 }
 .identity-mark:hover { filter: brightness(1.08); }
-.identity-rename { display: flex; gap: 6px; }
+.identity-mark-edit {
+  position: absolute; right: -3px; bottom: -3px;
+  display: grid; place-items: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  /* On the panel, not on the swatch: it has to read against whatever colour
+     somebody chose, and the panel is the one surface behind it that does not
+     change. */
+  background: var(--card); color: var(--ink-muted);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.identity-mark:hover .identity-mark-edit { color: var(--ink); }
+/* **Centred, because the field is taller than the face.** The row was
+   `flex` with no cross-axis rule, so the disc sat at the TOP of a
+   38px-tall input and read as a bullet beside a paragraph rather than as
+   the field's own avatar. */
+.identity-rename { display: flex; gap: 6px; align-items: center; }
 .identity-rename .text-input { flex: 1; min-width: 0; }
 .identity-menu-head {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
