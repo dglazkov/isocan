@@ -441,15 +441,19 @@ export const JOURNEYS = [
       await makeCanvas(rig, "Lens journey");
       await addText(rig, "made for the lens");
       await rig.go("/lens");
-      await until(rig.b, `document.querySelectorAll(".lens-subjects .btn").length > 0`, "a lens roster");
-      await rig.click(".lens-subjects .btn", "the first lens subject");
+      await until(rig.b, `document.querySelectorAll(".lens-subject").length > 0`, "a lens roster");
+      await rig.click(".lens-subject", "the first lens subject");
       await sleep(1200);
       const seen = await rig.b.ev(`(() => ({
-        rows: document.querySelectorAll(".lens-row").length,
-        hrefs: [...document.querySelectorAll(".lens-row")].map(a => a.getAttribute("href")),
+        rows: document.querySelectorAll(".lens-tile").length,
+        hrefs: [...document.querySelectorAll(".lens-tile")].map(a => a.getAttribute("href")),
         note: document.querySelector(".lens-note")?.textContent ?? "",
+        /* The point of the redesign: tiles show the WORK. A tile with no
+           thumbnail in it is the old list of titles wearing a card. */
+        shots: document.querySelectorAll(".lens-tile .item-thumb").length,
       }))()`);
       if (seen.rows === 0) throw new Error("the lens shows nothing for somebody who made something");
+      if (seen.shots === 0) throw new Error("the lens tiles draw no thumbnails — it is a list again");
       if (!seen.hrefs.every((h) => /^\/p\/[^/]+\/i\/[^/]+$/.test(h ?? ""))) {
         throw new Error("a lens row does not link to where the thing lives");
       }

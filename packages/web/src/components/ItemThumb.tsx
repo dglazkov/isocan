@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { itemKind, isTextItem } from "@isocan/core";
+import { itemKind, isTextItem, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -17,15 +17,28 @@ import { VersionContent } from "./ItemView.tsx";
 export function ItemThumb({
   canvasId,
   itemId,
+  item: given,
   width = 34,
   height = 34,
 }: {
   canvasId: string;
   itemId: string;
+  /**
+   * The item, when the caller already holds it.
+   *
+   * Everything that peeked at an item used to be looking at the canvas that
+   * was OPEN, so the store was the obvious place to find one. The lens is the
+   * first caller holding items from canvases nobody is on — it has them
+   * already, and the store cannot help. Writing a second thumbnail renderer
+   * for that would be two answers to "what does this look like, small", and
+   * the drawing here is the same drawing either way.
+   */
+  item?: Item | undefined;
   width?: number;
   height?: number;
 }) {
-  const item = useCanvasStore((s) => s.canvas?.items[itemId]);
+  const fromStore = useCanvasStore((s) => s.canvas?.items[itemId]);
+  const item = given ?? fromStore;
   if (!item) return null;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   if (!current) return null;

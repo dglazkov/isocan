@@ -4414,33 +4414,115 @@ button.mt-card:hover { border-color: var(--accent); }
 /**
  * **The lens** — what somebody has made, across every canvas.
  *
- * Rows, not cards, and that is the point rather than economy: a grid of tiles
- * would read as a canvas, and this is explicitly not one (`core/lens.ts`). A
- * list of links to where things actually live cannot be mistaken for a surface
- * you could drag them around on.
+ * The first cut was rows of titles, and titles are the one view that tells you
+ * least about visual work: "Sketch, Sketch, Sketch" is three names and no
+ * information, where three thumbnails are three different drawings. So the
+ * work is the interface, and the words are the caption.
+ *
+ * Still deliberately NOT a canvas (`core/lens.ts`). Tiles in a wrapping grid,
+ * each a link to where the thing actually lives — nothing here is positioned,
+ * so there is no drag to get wrong and no coordinate to store.
  */
-.lens-subjects { display: flex; flex-wrap: wrap; gap: 6px; }
-.lens-note { margin: 0 0 8px; color: var(--ink-muted); font-size: 13.5px; }
-.lens-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.lens-note { margin: 0 0 14px; color: var(--ink-muted); font-size: 13.5px; }
+
+/* ---- who there is to look at ---- */
+.lens-subjects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+/* Stacked, not side by side. Squeezing a name and four thumbnails onto one
+   line meant one of them lost, and the first attempt truncated the NAME —
+   "Admira…" beside four legible thumbnails is the wrong trade. Two rows gives
+   each the whole width. */
+.lens-subject {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+}
+.lens-subject:hover { border-color: var(--accent); }
+.lens-face {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent-ink); font-size: 13px; font-weight: 600;
+}
+.lens-face-big { width: 26px; height: 26px; font-size: 12px; }
+.lens-subject-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.lens-subject-who b {
+  font-size: 14px; letter-spacing: -0.012em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* One line, always. "10 things · 1 canvas" wrapping onto two made the cards
+   different heights and the column ragged — and the count is the least of
+   what this card says, so it should be the first thing to give way. */
+.lens-subject-count {
+  color: var(--ink-soft); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Their four most recent, at a glance, in a slot the same size on every card
+   so the names line up down the column. The strip is the flourish; it gives
+   way before the name does. */
+.lens-subject-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Their four most recent, full width beneath the name. */
+.lens-strip { display: flex; gap: 4px; overflow: hidden; }
+.lens-strip .item-thumb { border-radius: 5px; flex: none; }
+
+/* ---- one subject's work ---- */
+.lens-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
 .lens-group h2 {
   margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-  text-transform: none; color: var(--ink-soft);
+  color: var(--ink-soft);
+  display: flex; align-items: center; gap: 7px;
 }
-.lens-rows {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 10px;
-  background: var(--card); overflow: hidden;
+.lens-group-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; max-width: 48ch;
 }
-.lens-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; border-top: 1px solid var(--line-soft);
-  color: inherit; text-decoration: none; font-size: 13.5px;
+.lens-count {
+  padding: 0 6px; border-radius: 999px; background: var(--chip);
+  color: var(--ink-muted); font-size: 10.5px; line-height: 16px; font-weight: 500;
 }
-.lens-row:first-child { border-top: none; }
-.lens-row:hover { background: var(--accent-wash); }
-.lens-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lens-kind, .lens-where, .lens-touched { color: var(--ink-soft); font-size: 11.5px; flex: none; }
-.lens-when {
-  color: var(--ink-soft); font-size: 11.5px; flex: none;
-  font-variant-numeric: tabular-nums; min-width: 3.5ch; text-align: right;
+.lens-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
 }
+.lens-tile {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit; text-decoration: none;
+  box-shadow: var(--shadow-card);
+}
+.lens-tile:hover { border-color: var(--accent); }
+/* The work itself, cropped to a consistent window so a wall of tiles reads as
+   a wall rather than a ragged edge. The thumbnail keeps its own aspect and is
+   cropped at the bottom, the way a screenshot of a long page is: the top of a
+   thing is the part you recognise it by. */
+.lens-shot {
+  display: block; overflow: hidden;
+  height: 128px;
+  border-radius: 7px;
+  background: var(--chip);
+}
+.lens-name {
+  font-size: 13px; font-weight: 500; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lens-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  color: var(--ink-soft); font-size: 11px;
+}
+.lens-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12ch; }
+.lens-touched { color: var(--ink-muted); }
+.lens-when { margin-left: auto; font-variant-numeric: tabular-nums; }
