@@ -629,17 +629,26 @@ of a cancellation and it costs them nothing to hear.`,
   },
   {
     name: "format",
-    description: "Tidy the whole canvas into rows, children under parents",
-    usage: "[note]",
+    description: "Tidy the canvas — grid (default), smart, or your own instructions",
+    usage: "[grid|smart|note]",
     source: "built-in",
     body: `Arrange the canvas.
 
-Run \`isocan format\` — the layout is a core function both surfaces share, so
-it lands every item on the same coordinate whoever asks, and it is ONE
-\`items.move\`, which means one undo. Do not place items by hand with \`mv\`
-unless the note below asks for something the standard arrangement cannot do.
+The layout is a core function both surfaces share, so it lands every item on
+the same coordinate whoever asks, and it is ONE \`items.move\`, which means one
+undo. Do not place items by hand with \`mv\` unless the note below asks for
+something the arrangement cannot do.
 
-What it does, so you can say it back to them:
+**Read the argument first, because it decides which of three things this is.**
+
+**\`/format\` or \`/format grid\`** — run \`isocan format grid\`. It straightens
+the lines and decides nothing: every item on one lattice, uniform gutters,
+columns the width of the widest thing so left edges agree down the canvas. It
+reads no lineage and no kinds. This is the default because "make it neat" is
+the request nine times out of ten, and a tidy that only straightens is one
+somebody can run without wondering what it will decide.
+
+**\`/format smart\`** — run \`isocan format smart\`. This one READS the canvas:
 - Screens go in a row, left to right, keeping the reading order they already had.
 - Anything made FROM a screen hangs in a column beneath it (the \`parent\`
   property — see /variation).
@@ -647,10 +656,17 @@ What it does, so you can say it back to them:
   not slots in the row.
 - Ink that annotates an item is left alone. It travels with what it marks.
 
-If the person added a note, it OVERRIDES the standard arrangement wherever the
-two disagree — they are looking at the canvas and you are not. Do the standard
-format first, then adjust with \`isocan mv\`, \`align\`, and \`distribute\`,
-and say which part of what you did came from the note.
+Then look at what is left and group at a larger scale where the canvas
+obviously asks for it — a cluster that is plainly one feature, a run of
+rejected attempts, a set of references about one screen. Use \`isocan mv\`,
+\`align\` and \`distribute\`, and say what you grouped and why. If nothing
+obviously groups, say that instead of inventing a structure: a canvas with no
+clusters in it is a fine answer.
+
+**\`/format <anything else>\`** — the words are instructions for this one time.
+Start from \`grid\` unless they describe something closer to \`smart\`, then
+adjust to what they asked for, and say which part of what you did came from
+their words. They are looking at the canvas and you are not.
 
 Reply on the thread with what moved and what you left alone. If nothing moved,
 say that too: a canvas that is already formatted is a good answer, not a

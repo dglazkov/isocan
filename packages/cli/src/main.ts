@@ -174,6 +174,9 @@ import {
   filterCanvases,
   isCanvasSort,
   CANVAS_SORTS,
+  FORMAT_MODES,
+  isFormatMode,
+  type FormatMode,
   lensEntries,
   lensGroups,
   lensSubjects,
@@ -5155,19 +5158,32 @@ program
   );
 
 program
-  .command("format")
-  .description("Tidy the whole canvas: screens across, children under parents, images gathered")
+  .command("format [mode]")
+  .description("Tidy the canvas — `grid` straightens the lines (default), `smart` reads it")
   .option("--dry-run", "say what would move, move nothing")
-  .option("--per-row <n>", "images per row in the reference block")
+  .option("--per-row <n>", "how many per row")
   .action(
-    run(async (opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
+    run(async (mode: string | undefined, opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
       if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
         throw new Error(`--per-row wants a number: ${opts.perRow}`);
       }
-      const moves = formatMoves(snapshot.canvas, perRow === undefined ? {} : { perRow });
+      /**
+       * **A bare `format` is a `grid`**, which is the arrangement that reads
+       * nothing into the canvas. `smart` interprets — lineage, kinds, what
+       * belongs under what — and moving somebody's work on an interpretation
+       * should be asked for by name.
+       */
+      if (mode !== undefined && !isFormatMode(mode)) {
+        throw new Error(`not a format: ${mode} — ${FORMAT_MODES.join(", ")}`);
+      }
+      const chosen: FormatMode | undefined = mode;
+      const moves = formatMoves(snapshot.canvas, {
+        ...(chosen ? { mode: chosen } : {}),
+        ...(perRow === undefined ? {} : { perRow }),
+      });
       if (opts.dryRun) {
         if (ctx.json) return printJson(moves);
         if (moves.length === 0) return console.error("already formatted — nothing would move");

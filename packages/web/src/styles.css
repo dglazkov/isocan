@@ -4370,7 +4370,9 @@ button.mt-card:hover { border-color: var(--accent); }
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin: 0 0 4px;
+  /* Room beneath: the filter row sat 4px off the first card and read as part
+     of the grid rather than as the control above it. */
+  margin: 0 0 14px;
 }
 .canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
 .canvas-sorts { display: flex; gap: 2px; flex-wrap: wrap; }
