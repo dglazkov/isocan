@@ -508,6 +508,27 @@ the app.
 does not merge them — somebody putting 👍 on a screen is real evidence, and it
 is not the same as saying "an agent should read this first".
 
+## The slide deck
+
+A canvas gets presented, and full screen is the projector: bare arrows (and a
+clicker's Page Up/Down) flip from item to item, each filling the window. With
+nothing marked they flip through **everything**, in reading order — rows top
+to bottom, left to right. Marking narrows the walk to just the slides:
+
+- `isocan slides add <items...>` — these are slides. Marked items wear 🎬 in
+  their title row, and bare arrows in full screen stop only at them.
+- `isocan slides rm <items...>` — out of the deck. **Not a delete**: the item
+  stays on the canvas.
+- `isocan slides show` — the deck in order, and the address to hand an
+  audience: the first slide's full-screen URL, which is an ordinary item
+  address (`isocan open <item>` opens the same view).
+
+A slide is a property set by `item.update` — the same shape as a context pin —
+so it replicates, undoes, and cannot disagree between the CLI and the app's
+"Make this a slide" menu entry. Order is geometry: lay the deck out in rows
+and the rows are the running order. There is no slide-number to maintain and
+none to drift.
+
 ## Saying where a document stands
 
 Every note in `docs/research/` and every project's primary doc carries its
@@ -1468,6 +1489,8 @@ and `save` back it like anything else),
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens
 that become files**; `--force` overwrites one that changed on disk),
+`slides add|rm|show` (the deck full screen flips through — `show` prints the
+address to hand an audience),
 `present <item>` (a main-thread comment carrying the workbench address —
 inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,

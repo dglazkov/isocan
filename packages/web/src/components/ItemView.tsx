@@ -10,7 +10,9 @@ import {
   annotationsOf,
   isAnnotation,
   isDrawingItem,
+  isSlide,
   isTextItem,
+  SLIDE_EMOJI,
   textFaceOf,
   textDrawSize,
   textIsLegible,
@@ -636,6 +638,14 @@ function ItemViewInner({
          * catching from across a canvas, so it is the one that colours.
          */}
         {backing && <span className={`file-mark ${backing.state}`} title={fileMarkTip(backing)} />}
+        {/* In the deck (#87): the mark that says full screen's arrows stop
+            here. Worn on the item because a deck you cannot see is a deck
+            you cannot arrange. */}
+        {isSlide(item) && (
+          <span className="slide-mark" title="A slide — arrows in full screen flip through these">
+            {SLIDE_EMOJI}
+          </span>
+        )}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : row.name ? (
