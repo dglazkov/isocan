@@ -1,3 +1,4 @@
+import { blobUrl } from "./api.ts";
 import { fetchBlobText } from "./blobtext.ts";
 
 /** Nothing grows past this: a screen that wants 6000px is a screen with a bug,
@@ -23,14 +24,20 @@ const clamp = (n: number) => Math.max(80, Math.min(MAX_FIT, Math.round(n)));
  * the answer out. The content gains nothing it did not already have when it
  * was displayed, and we never have to loosen the sandbox to find out how big
  * something is.
+ *
+ * Takes the version rather than a URL: an image is measured by handing the
+ * blob route to the browser as an `<img src>`, and text is measured by
+ * READING it — two different needs for the same pair, and only one of them
+ * is a fetch that can recover from a 401.
  */
 export async function naturalSize(
-  url: string,
+  canvasId: string,
+  blobHash: string,
   mimeType: string,
 ): Promise<{ width: number; height: number }> {
   if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
     const img = new Image();
-    img.src = url;
+    img.src = blobUrl(canvasId, blobHash);
     try {
       await img.decode();
       return { width: clamp(img.naturalWidth), height: clamp(img.naturalHeight) };
@@ -39,7 +46,12 @@ export async function naturalSize(
     }
   }
   if (mimeType === "text/html" || mimeType === "image/svg+xml") {
-    const measured = await measureInFrame(await fetchBlobText(url), mimeType);
+    /* A read that fails is a size nobody can know, and the fallback is the
+       same one an unmeasurable page already gets — never a fit computed from
+       a refusal's body. */
+    const text = await fetchBlobText(canvasId, blobHash).catch(() => null);
+    if (text === null) return SCREEN_FIT;
+    const measured = await measureInFrame(text, mimeType);
     if (measured) return measured;
   }
   return SCREEN_FIT;

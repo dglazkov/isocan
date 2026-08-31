@@ -222,14 +222,13 @@ export const ACTIONS: readonly Action[] = [
        the worst answer available. */
     available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1,
     run: async (ctx) => {
-      const { blobUrl } = await import("./api.ts");
       const { downloadItem } = await import("./itemactions.ts");
       const { setNotice } = await import("../stores/canvasStore.ts");
       const item = useCanvasStore.getState().canvas?.items[ctx.selection[0]!];
       const version = item?.versions.find((v) => v.id === item.currentVersionId);
       if (!item || !version) return;
-      await downloadItem(blobUrl(ctx.canvasId!, version.blobHash), version.filename).catch(
-        (err: Error) => setNotice(err.message),
+      await downloadItem(ctx.canvasId!, version.blobHash, version.filename).catch((err: Error) =>
+        setNotice(err.message),
       );
     },
   },

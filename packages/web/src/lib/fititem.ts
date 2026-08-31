@@ -2,7 +2,6 @@ import type { Actor } from "@isocan/core";
 import { fitMoves } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 
-import { blobUrl } from "./api.ts";
 import { naturalSize } from "./measure.ts";
 
 /**
@@ -27,7 +26,7 @@ export async function fitToContent(canvasId: string, actor: Actor, itemIds: stri
     if (!item) continue;
     const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
     if (!version) continue;
-    const size = await naturalSize(blobUrl(canvasId, version.blobHash), version.mimeType);
+    const size = await naturalSize(canvasId, version.blobHash, version.mimeType);
     targets.push({ itemId: id, ...size });
   }
   if (targets.length === 0) return;

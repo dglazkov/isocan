@@ -1,5 +1,6 @@
 import type { Actor } from "@isocan/core";
 import { itemUrl } from "@isocan/core";
+import { readBlob } from "./api.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -80,20 +81,27 @@ export function itemAddress(canvasId: string, itemId: string): string {
  * way bytes have come out — and it is the one thing on a context menu that a
  * person expects to be there and would not think to ask for.
  *
- * The blob is fetched and handed over as an object URL rather than linking
- * the API route directly: the route is badged and answers with headers that
- * make a browser display rather than save, and a `download` attribute on a
- * cross-route link is not honoured in every browser. Fetch-then-save is the
+ * The blob is read and handed over as an object URL rather than linking the
+ * API route directly: the route is badged and answers with headers that make
+ * a browser display rather than save, and a `download` attribute on a
+ * cross-route link is not honoured in every browser. Read-then-save is the
  * version that behaves the same everywhere.
+ *
+ * It reads through `readBlob` rather than a bare fetch so a lost badge is
+ * recovered from rather than reported: this used to raise "could not read
+ * foo.png" for a file that was perfectly readable a knock later, and the
+ * three doors onto this act (⇧D, the menu, the palette) all showed that
+ * sentence as the answer.
  */
 export async function downloadItem(
-  url: string,
+  canvasId: string,
+  blobHash: string,
   filename: string,
   doc: Document = document,
 ): Promise<void> {
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) throw new Error(`could not read ${filename}`);
-  const blob = await res.blob();
+  const blob = await readBlob(canvasId, blobHash).catch(() => {
+    throw new Error(`could not read ${filename}`);
+  });
   const href = URL.createObjectURL(blob);
   const link = doc.createElement("a");
   link.href = href;

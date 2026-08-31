@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { blobUrl } from "../lib/api.ts";
+import { readBlobText } from "../lib/api.ts";
 import { addVersionFromFile } from "../lib/upload.ts";
 import { applyEdits, foldEdit, type TextEdit } from "../lib/textPatch.ts";
 
@@ -39,6 +39,11 @@ export function TextEditFrame({
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const frame = useRef<HTMLIFrameElement>(null);
   const [source, setSource] = useState<string | null>(null);
+  /** The read failed. Kept apart from `source`, because the empty string this
+   *  used to fall back to renders as a frozen frame of NOTHING for a document
+   *  that is still there — and a page with no text nodes offers no way to
+   *  find out otherwise. */
+  const [unreadable, setUnreadable] = useState<string | null>(null);
   const [pending, setPending] = useState<TextEdit[]>([]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,10 +54,13 @@ export function TextEditFrame({
     let live = true;
     void (async () => {
       try {
-        const text = await (await fetch(blobUrl(canvasId, current.blobHash))).text();
+        const text = await readBlobText(canvasId, current.blobHash);
         if (live) setSource(text);
       } catch {
-        if (live) setSource("");
+        // Never the file's own bytes, so never an editing surface: a refusal
+        // read as the source would put its json in the frame, and a save
+        // would land THAT as the item's next version.
+        if (live) setUnreadable("Could not read this file to edit it.");
       }
     })();
     return () => {
@@ -231,7 +239,9 @@ export function TextEditFrame({
           </button>
         )}
       </div>
-      {source === null ? (
+      {unreadable ? (
+        <div className="page-note">{unreadable}</div>
+      ) : source === null ? (
         <div className="page-note">Opening…</div>
       ) : (
         /* Same-origin, NO scripts — the measured pair. Both halves are

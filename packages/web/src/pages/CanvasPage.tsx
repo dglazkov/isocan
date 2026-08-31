@@ -19,7 +19,7 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pasteInto } from "../lib/clipboard.ts";
-import { blobUrl, redo, sendOp, undo } from "../lib/api.ts";
+import { redo, sendOp, undo } from "../lib/api.ts";
 import { deleteItems, downloadItem } from "../lib/itemactions.ts";
 import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
@@ -665,8 +665,8 @@ function CanvasSurface({
         const version = item?.versions.find((v) => v.id === item.currentVersionId);
         if (item && version) {
           e.preventDefault();
-          void downloadItem(blobUrl(canvasId!, version.blobHash), version.filename).catch(
-            (err: Error) => setNotice(err.message),
+          void downloadItem(canvasId!, version.blobHash, version.filename).catch((err: Error) =>
+            setNotice(err.message),
           );
         }
       } else if (e.shiftKey && e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {

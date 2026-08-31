@@ -830,6 +830,55 @@ export function blobUrl(canvasId: string, blobHash: string): string {
   return `/api/projects/${canvasId}/blobs/${blobHash}`;
 }
 
+/**
+ * **A version's bytes, read through the door.**
+ *
+ * The third call that cannot use `request` — `uploadBlob` sends bytes,
+ * `readBoundFile` receives a bound file's, and this receives a blob's — so
+ * the 401 recovery is spelled out here for the same reason, and in the same
+ * shape: knock once, re-claim this tab's persona, ask again.
+ *
+ * `blobUrl` stays, and is still the right call for an `<img src>`, a video,
+ * or an iframe: the browser loads those itself and there is no response for
+ * anyone to recover from. What is NOT fine is `fetch(blobUrl(...))`, which
+ * the app did in seven places. Every one of them read a 401 as an ANSWER —
+ * an empty composer over words that still exist, an editor opened on
+ * `{"error":"..."}`, a copy that copies nothing, a text item that looks
+ * blank. The route was spelled once, so the door guard stayed green; the
+ * recovery was missing all seven times, which is the thing that hurt.
+ *
+ * Throws an `ApiError` if the home is still refusing after the knock —
+ * `homeAnswered` tells that apart from never reaching it — so a caller can
+ * say which silence it is instead of rendering empty.
+ */
+async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> {
+  const url = blobUrl(canvasId, blobHash);
+  let res = await fetch(url);
+  if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as any;
+    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+  }
+  return res;
+}
+
+/** A version's bytes. */
+export async function readBlob(canvasId: string, blobHash: string): Promise<Blob> {
+  return (await fetchBlob(canvasId, blobHash)).blob();
+}
+
+/**
+ * A version's bytes as text.
+ *
+ * Only reached on a 2xx, which is load-bearing: a 404's body is the daemon's
+ * own `{"error":"blob not found"}`, and reading THAT as the document is how
+ * that JSON ends up rendered on the canvas — or, worse, opened in an editor
+ * and saved back over the file.
+ */
+export async function readBlobText(canvasId: string, blobHash: string): Promise<string> {
+  return (await fetchBlob(canvasId, blobHash)).text();
+}
+
 /** How this home serves — today, only whether a content origin exists. */
 export function getServing(): Promise<ServingResponse> {
   return request("GET", SERVING_ROUTE);
