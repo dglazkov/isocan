@@ -3,7 +3,15 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
-import type { FreeNameResponse, GrantResponse, GrantsResponse, LogEntry, Canvas } from "@isocan/core";
+import type {
+  FreeNameResponse,
+  GrantResponse,
+  GrantsResponse,
+  LogEntry,
+  Canvas,
+  PresenceWhereResponse,
+} from "@isocan/core";
+import { PRESENCE_WHERE_ROUTE } from "@isocan/core";
 import {
   FREE_NAME_ROUTE,
   grantRoute,
@@ -718,5 +726,57 @@ describe("the one-time migration", () => {
     const jordan = await stranger();
     expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(403);
     expect((await grantsOf(owner)).grants).toEqual([]);
+  });
+});
+
+/**
+ * **The cross-canvas presence read, and the gate it has to pass through.**
+ *
+ * `GET /api/presence/where` exists because the lens asks about a person and
+ * presence is filed by canvas. That inversion is exactly where a leak would
+ * come from: the per-canvas roster is guarded by the socket that carries it,
+ * and a read that walks every room has no socket to be guarded by.
+ *
+ * A canvas list you may not see leaves you uninformed. A roster you may not
+ * see tells you who is working with whom, which is a fact about somebody
+ * else's canvas — so the rooms are filtered before anything about their
+ * occupants is reported, and a room you cannot enter contributes nothing at
+ * all, not even a count.
+ */
+describe("where everybody is, read across canvases", () => {
+  const parkSession = (badge: TestBadge, canvasId: string, kind: "cli" | "rc") =>
+    fetch(`${base}/api/projects/${canvasId}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ actor: priya, kind }),
+    });
+
+  const whereOf = async (badge: TestBadge): Promise<PresenceWhereResponse> =>
+    (await get(badge, PRESENCE_WHERE_ROUTE)).json() as Promise<PresenceWhereResponse>;
+
+  it("reports a room the badge may enter", async () => {
+    await makeCanvas();
+    await parkSession(owner, CANVAS, "cli");
+    const { where } = await whereOf(owner);
+    expect(where.map((w) => [w.canvasId, w.actor.id, w.kind])).toEqual([
+      [CANVAS, priya.id, "cli"],
+    ]);
+  });
+
+  it("says nothing at all about a room the badge may not enter", async () => {
+    await makeCanvas();
+    await parkSession(owner, CANVAS, "cli");
+    await revokeLink(owner);
+    /* Not an empty row, not a count of faces, not the canvas id: "three
+       people somewhere you cannot look" is still somebody else's business. */
+    const { where } = await whereOf(await stranger());
+    expect(where).toEqual([]);
+  });
+
+  it("carries the kind, because standing by is not being there", async () => {
+    await makeCanvas();
+    await parkSession(owner, CANVAS, "rc");
+    const { where } = await whereOf(owner);
+    expect(where[0]!.kind).toBe("rc");
   });
 });

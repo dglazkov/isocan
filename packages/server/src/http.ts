@@ -49,6 +49,9 @@ import {
   HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
   HOMES_ROUTE,
+  PRESENCE_WHERE_ROUTE,
+  type PresenceWhere,
+  type PresenceWhereResponse,
   isLive,
   isOpId,
   newId,
@@ -1056,6 +1059,49 @@ export function registerRoutes(
    * agent runs `isocan status` dozens of times, and a network round trip per
    * home per invocation is a cost nobody asked for.
    */
+  /**
+   * **Where everybody is, in one read** — see `PRESENCE_WHERE_ROUTE`.
+   *
+   * The admission test is the same two-step the canvas list runs, and it
+   * matters more here than there: a canvas list you cannot see leaves you
+   * merely uninformed, while a roster you cannot see tells you who is working
+   * with whom. Rooms are filtered before anything about their occupants is
+   * reported, not after.
+   *
+   * A room the badge may not enter contributes nothing — not an empty entry,
+   * not a count. "Three people somewhere you cannot look" is still a fact
+   * about somebody else's canvas.
+   */
+  app.get(PRESENCE_WHERE_ROUTE, async (req) => {
+    const badge = req.badge!;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const seen = new Map<string, boolean>();
+    const maySee = async (canvasId: string): Promise<boolean> => {
+      const known = seen.get(canvasId);
+      if (known !== undefined) return known;
+      // One grant query per ROOM, not per face: a canvas with nine agents on
+      // it asked nine times before this cache.
+      const allowed =
+        admitted.has(canvasId) || Boolean(await admittingGrant(desk, canvasId, badge));
+      seen.set(canvasId, allowed);
+      return allowed;
+    };
+    const where: PresenceWhere[] = [];
+    for (const { canvasId, session } of presence.everywhere()) {
+      if (!(await maySee(canvasId))) continue;
+      where.push({
+        canvasId,
+        actor: session.actor,
+        kind: session.kind,
+        harness: session.harness,
+        status: session.status,
+        statusSource: session.statusSource,
+        lastSeen: session.lastSeen,
+      });
+    }
+    return { where } satisfies PresenceWhereResponse;
+  });
+
   app.get(HOMES_ROUTE, async () => {
     /**
      * **Every canvas this daemon HOLDS, not every row it has written down.**

@@ -14,6 +14,7 @@ import type {
   GrantsResponse,
   GrantSubject,
   HomesResponse,
+  PresenceWhereResponse,
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
@@ -35,6 +36,7 @@ import {
   grantRoute,
   grantsRoute,
   HOMES_ROUTE,
+  PRESENCE_WHERE_ROUTE,
   newClientId,
   newOpId,
   PASS_REDEEM_ROUTE,
@@ -336,8 +338,54 @@ export function fetchHomes(): Promise<HomesResponse> {
   return request("GET", HOMES_ROUTE);
 }
 
+/**
+ * **Who is on which canvas right now** — one read for a question presence
+ * files the other way round. See `PRESENCE_WHERE_ROUTE`.
+ *
+ * The lens shows one agent across a dozen canvases and holds a socket to none
+ * of them; opening a dozen to keep a dozen dots exact is a cost nobody asked
+ * for, and a dot a few seconds stale is still a dot.
+ */
+export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
+  return request("GET", PRESENCE_WHERE_ROUTE);
+}
+
 export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
   return request("GET", `/api/projects/${canvasId}/canvas`);
+}
+
+/**
+ * **The log, read through the door like everything else.**
+ *
+ * Three surfaces wanted this and all three wrote the route by hand — the
+ * scrubber, the card peek, the lens. A bare `fetch` skips `request`, and what
+ * `request` does here is the whole point: a 401 knocks on the door and comes
+ * back, instead of resolving to nothing.
+ *
+ * Resolving to nothing is the expensive half. A scrubber says so out loud. But
+ * a peek with no majors looks like a canvas where nothing happened, and a lens
+ * with no acts looks like an agent who did nothing — a wrong answer wearing
+ * the same face as a true one. That is worth one function.
+ *
+ * `since=0` because every caller wants the whole log; a caller that wants a
+ * tail can pass one.
+ */
+export function getOplog(canvasId: string, since = 0): Promise<LogEntry[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`);
+}
+
+/**
+ * What was rolled out of the live log. Only the scrubber asks: a history
+ * folded from the live log alone would replay a story missing its beginning.
+ * Absent (or unreadable) is normal — most canvases have never been rolled —
+ * so this answers `[]` rather than throwing, and the caller can fold either
+ * way without a branch.
+ */
+export function getArchivedOplog(canvasId: string): Promise<LogEntry[]> {
+  return request<LogEntry[]>(
+    "GET",
+    `/api/projects/${encodeURIComponent(canvasId)}/oplog/archive`,
+  ).catch(() => []);
 }
 
 /**

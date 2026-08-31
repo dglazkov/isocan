@@ -58,7 +58,12 @@ describe("the lens page", () => {
        the route this build serves, carries the badge, and recovers at the
        door. */
     expect(bare).toContain("listCanvases()");
-    expect(bare).not.toMatch(/fetch\("\/api\//);
+    /* This regex used to only catch a DOUBLE-QUOTED route, so phase 3's
+       `fetch(\`/api/projects/${id}/oplog\`)` walked straight past a guard
+       written to stop exactly that. A template literal is the natural way to
+       write a route with an id in it — which is to say, the only way this
+       mistake was ever going to be made. */
+    expect(bare).not.toMatch(/fetch\(["'`]\/api\//);
   });
 
   it("survives one canvas it cannot read", () => {
@@ -128,5 +133,112 @@ describe("the lens narrows", () => {
        eventually be read as meaning something. */
     expect(bare).toMatch(/function toggle</);
     expect(bare).toMatch(/const \{ \[key\]: _gone, \.\.\.rest \} = filter/);
+  });
+});
+
+/**
+ * **The record** (phase 3) — "Did" reads the log, because a portfolio cannot
+ * show work that was made and then deleted.
+ */
+describe("the lens remembers what it can no longer show", () => {
+  it("folds acts with core, like everything else on this page", () => {
+    expect(bare).toContain("lensActs(logs, subject.id)");
+    expect(bare).toContain("lensShape(acts)");
+  });
+
+  it("reads the logs through the door", () => {
+    /* A log that 401s and resolves to `[]` says "this agent did nothing" —
+       a wrong answer wearing a true answer's face. `getOplog` knocks. */
+    expect(bare).toContain("getOplog(source.canvasId)");
+  });
+
+  it("fetches nothing until somebody asks the second question", () => {
+    /* A log per canvas is the cost this page exists to avoid paying by
+       default — the same bargain the card peek makes. The guard is the
+       early return, because that is the line a refactor deletes. */
+    expect(bare).toMatch(/if \(mode !== "did" \|\| !sources \|\| logs\) return;/);
+  });
+
+  it("says the word the CLI says", () => {
+    /* `opWords` is shared, so "added something" is not this page's phrasing
+       of an op — it is the phrasing. */
+    expect(bare).toMatch(/opWords\(act\.op\)/);
+  });
+
+  it("distinguishes still-loading from genuinely nothing", () => {
+    /* Both are an empty list, and they mean opposite things. */
+    expect(bare).toMatch(/logs === null/);
+    expect(bare).toMatch(/logs !== null && acts\.length === 0/);
+  });
+
+  it("keeps every act reachable, even when the thing is gone", () => {
+    /* An act cannot link to an item that was deleted, so it links to the
+       canvas it happened on. A record you cannot walk back into is trivia. */
+    expect(bare).toMatch(/canvasPath\(act\.canvasId\)/);
+  });
+});
+
+/**
+ * **Presence** (phase 4) — the one present-tense fact on a page that is
+ * otherwise entirely past tense.
+ */
+describe("the lens says who is live", () => {
+  it("folds presence with core, so the CLI agrees about standing by", () => {
+    expect(bare).toContain("lensLive(");
+    expect(bare).toContain("lensLiveList(");
+  });
+
+  it("reads it, rather than opening a socket per canvas", () => {
+    /* Presence rides the per-canvas socket. This page spans a dozen canvases
+       and holds a socket to none of them; a dozen connections to draw a dozen
+       dots is a cost nobody asked for, and a dot a few seconds stale is still
+       a dot. */
+    expect(bare).toContain("fetchPresenceWhere()");
+    expect(bare).not.toMatch(/new WebSocket|subscribe\(/);
+  });
+
+  it("stops polling when the page goes away", () => {
+    /* An interval that outlives its page is a leak that only shows up after
+       somebody has navigated around for an hour. */
+    expect(bare).toMatch(/clearInterval\(timer\)/);
+  });
+
+  it("names the canvas on a subject's page, rather than only counting", () => {
+    /* "On a canvas now" invites exactly one question, and the page could not
+       answer it: the canvas somebody is SITTING on is often not one they have
+       made anything on, so no group heading below is theirs. */
+    expect(bare).toMatch(/lensLiveList\(live\)\.map/);
+    expect(bare).toMatch(/canvasPath\(at\.canvasId\)/);
+  });
+
+  it("never renders a confident 'offline'", () => {
+    /* Absent from every room this daemon can see is not "not working" — an
+       agent busy on a canvas homed elsewhere appears here as nothing. Saying
+       offline would be the instrument reporting its blind spot as a fact
+       about somebody. */
+    expect(bare).not.toMatch(/offline|not working|away\b/i);
+  });
+});
+
+describe("here and standing by do not look alike", () => {
+  const sheet = rules(withoutComments()).filter((r) => /lens-live-dot/.test(r.selector));
+
+  it("has a rule for each state", () => {
+    expect(sheet.some((r) => /\.standby/.test(r.selector))).toBe(true);
+  });
+
+  it("makes the standby dot differ in more than a shade", () => {
+    /* The whole value of presence is that it is honest: a facepile showing
+       six faces on a canvas nobody is working on has stopped meaning
+       anything, and so has a dot that looks the same either way. Filled
+       versus a ring survives a colourblind reader and a greyscale screen;
+       two greens would not. */
+    const standby = sheet.find((r) => /\.standby/.test(r.selector));
+    expect(standby?.body).toMatch(/background:\s*transparent/);
+    expect(standby?.body).toMatch(/inset/);
+  });
+
+  it("takes its colour from a token, like everything else", () => {
+    for (const r of sheet) expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });

@@ -37,12 +37,14 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
+  PresenceWhereResponse,
   ServingResponse,
   SlashCommand,
 } from "@isocan/core";
 import {
   encodeFilename,
   FILENAME_HEADER,
+  PRESENCE_WHERE_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
   grantRoute,
@@ -598,6 +600,12 @@ export class DaemonClient {
    * fetched on its own for commands that print names without one. */
   actorNames(): Promise<ActorNames> {
     return this.request("GET", "/api/names");
+  }
+
+  /** Who is on which canvas right now, across every room this daemon can see
+   * and the caller may enter — see `PRESENCE_WHERE_ROUTE`. */
+  presenceWhere(): Promise<PresenceWhereResponse> {
+    return this.request("GET", PRESENCE_WHERE_ROUTE);
   }
 
   /** Every slash command available here: built-ins under this home's own. */

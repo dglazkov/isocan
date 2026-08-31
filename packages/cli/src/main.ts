@@ -183,8 +183,13 @@ import {
   FORMAT_MODES,
   isFormatMode,
   type FormatMode,
+  lensActs,
   lensEntries,
+  lensLive,
+  lensLiveList,
+  lensLiveWords,
   lensGroups,
+  lensShape,
   lensSubjects,
   lensSubjectLabels,
   filterLens,
@@ -192,6 +197,7 @@ import {
   type LensFilter,
   LENS_REFUSAL,
   type LensBy,
+  type LensLog,
   type LensSource,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
@@ -8478,7 +8484,18 @@ program
         if (subjects.length === 0) return console.log("nobody has made anything here yet");
         console.log("who to look at — `isocan lens <who>`\n");
         const labels = lensSubjectLabels(subjects);
-        for (const s of subjects) console.log(`  ${labels.get(s.id)}`);
+        /* The one present-tense fact in a list of past-tense ones, and the
+           same words the app's roster prints — from `lensLiveWords`, so
+           neither surface invents its own phrasing for "standing by". */
+        /* An older daemon has no such route, and the honest answer to "who
+           is live" from a daemon that cannot say is silence — which is what
+           `lensLiveWords` already renders for an empty set. Not a swallowed
+           error: the same nothing, by the same rule. */
+        const { where } = await ctx.client.presenceWhere().catch(() => ({ where: [] }));
+        for (const s of subjects) {
+          const said = lensLiveWords(lensLive(where, s.id));
+          console.log(`  ${labels.get(s.id)}${said ? ` — ${said}` : ""}`);
+        }
         return;
       }
       const wanted = subjects.find(
@@ -8526,10 +8543,21 @@ program
           );
         }
       }
-      const where = new Set(all.map((e) => e.canvasId)).size;
+      const spread = new Set(all.map((e) => e.canvasId)).size;
+      const live = lensLive(
+        (await ctx.client.presenceWhere().catch(() => ({ where: [] }))).where,
+        wanted.id,
+      );
+      /* Named rather than counted, for the same reason the app names them:
+         "on a canvas now" invites exactly one question, and the canvas
+         somebody is sitting on is often not one of the ones listed above. */
+      const titleOf = new Map(canvases.map((c) => [c.id, c.title]));
+      const at = lensLiveList(live)
+        .map((l) => `${l.state === "here" ? "" : "standing by on "}${titleOf.get(l.canvasId) ?? l.canvasId}`)
+        .join(", ");
       console.log(
         `\n${wanted.name} made ${all.length} thing${all.length === 1 ? "" : "s"} across ` +
-          `${where} canvas${where === 1 ? "" : "es"} — ${LENS_REFUSAL}`,
+          `${spread} canvas${spread === 1 ? "" : "es"}${at ? ` · now on ${at}` : ""} — ${LENS_REFUSAL}`,
       );
     }),
   );
@@ -8560,24 +8588,31 @@ program
         : canvases;
       const names = await ctx.client.actorNames();
       const wanted = who?.toLowerCase();
-      const acts: Array<{ ts: string; canvas: string; actor: string; op: string }> = [];
+      const logs: LensLog[] = [];
       for (const canvas of only) {
-        for (const entry of await ctx.client.getLog(canvas.id, 0)) {
-          const actor = actorNameIn(names, entry.envelope.actor);
-          // Name or id, and a prefix is enough — an agent's name is a thing
-          // somebody types, not pastes.
-          if (wanted && !actor.toLowerCase().startsWith(wanted) && entry.envelope.actor.id !== who) {
-            continue;
-          }
-          acts.push({
-            ts: entry.envelope.ts,
-            canvas: canvas.title,
-            actor,
-            op: entry.envelope.op.type,
-          });
-        }
+        logs.push({
+          canvasId: canvas.id,
+          canvasTitle: canvas.title,
+          entries: await ctx.client.getLog(canvas.id, 0),
+        });
       }
-      acts.sort((a, b) => b.ts.localeCompare(a.ts));
+      /**
+       * The same fold the app's lens runs, from core — this used to be a
+       * second implementation of it, sorted and counted here by hand, which
+       * is the drift the isomorphism law exists to stop. What differs is the
+       * SELECTION, and that is now what gets passed: name or id, and a prefix
+       * is enough, because an agent's name is a thing somebody types, not
+       * pastes. Names resolve against the desk's current roster, so one agent
+       * renamed twice is one agent rather than three.
+       */
+      const acts = lensActs(
+        logs,
+        (actor) =>
+          !wanted ||
+          actorNameIn(names, actor).toLowerCase().startsWith(wanted) ||
+          actor.id === who,
+        (actor) => actorNameIn(names, actor),
+      );
       const shown = acts.slice(0, Number(opts.limit ?? 20));
       if (ctx.json) return printJson({ total: acts.length, acts: shown });
       if (acts.length === 0) {
@@ -8589,12 +8624,14 @@ program
           when: ago(a.ts, nowMs) || "just now",
           who: a.actor,
           did: opWords(a.op) ?? a.op,
-          canvas: truncate(a.canvas, 28),
+          canvas: truncate(a.canvasTitle, 28),
         })),
       );
       /* The count is the point of a cross-canvas view: "12 of 340, across 6
          canvases" is the shape of somebody's week. */
-      const where = new Set(acts.map((a) => a.canvas)).size;
+      /* And the shape from core too, so "across 6 canvases" is counted once
+         rather than agreeing by coincidence with the page that says it. */
+      const { canvases: where } = lensShape(acts);
       console.log(
         `\n${shown.length} of ${acts.length}, across ${where} canvas${where === 1 ? "" : "es"}`,
       );

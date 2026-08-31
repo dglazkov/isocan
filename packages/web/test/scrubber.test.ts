@@ -191,8 +191,14 @@ describe("the scrubber's own source", () => {
   it("reads the archive as well as the live log", () => {
     /* On a canvas old enough to have been compacted the story predates the
        live log; folding from the live log alone replays a history missing its
-       own beginning. */
-    expect(src).toContain("/oplog/archive");
+       own beginning.
+
+       This asked for the literal route until the route moved into `api.ts`,
+       where a 401 can knock on the door. The fact it was always guarding is
+       that BOTH logs are read — so it asks for that instead, and survives the
+       next move too. */
+    expect(src).toContain("getArchivedOplog(canvasId)");
+    expect(src).toContain("getOplog(canvasId)");
   });
 
   it("returns the canvas to now when it unmounts", () => {

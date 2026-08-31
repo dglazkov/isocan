@@ -120,3 +120,38 @@ describe("the agent-facing surface", () => {
     expect(skill.split("\n").length).toBeLessThan(80);
   });
 });
+
+/**
+ * **One fact, one fold** — the other half of "done on both surfaces".
+ *
+ * The command guard above asks whether both surfaces have the VERB. It cannot
+ * see the failure that actually happened: `isocan history` and the app's lens
+ * both answered "what has this agent been doing", from two hand-rolled folds
+ * over the same logs, sorted and counted separately. Nothing was wrong on
+ * either side — which is the point. Two implementations of one fact agree
+ * until the day they don't, and then neither is able to say so.
+ */
+describe("the cross-canvas folds are shared, not re-rolled", () => {
+  const source = readFileSync(path.join(repo, "packages/cli/src/main.ts"), "utf8");
+
+  it("history folds with core, like the lens page does", () => {
+    expect(source).toContain("lensActs(");
+    expect(source).toContain("lensShape(acts)");
+  });
+
+  it("the lens says who is live, on this surface too", () => {
+    /* A dot in the app and nothing in the terminal is the gap the house rule
+       calls a bug: an agent asking "is anybody working on this" would have
+       had to open a browser. Same fold, same words. */
+    expect(source).toContain("lensLive(");
+    expect(source).toContain("lensLiveWords(");
+    expect(source).toContain("lensLiveList(");
+  });
+
+  it("counts canvases once, rather than agreeing by coincidence", () => {
+    /* `new Set(acts.map(a => a.canvas)).size` is the line this replaced. It
+       was correct, and it was a second opinion about a number the page also
+       prints — the shape of the drift, in one expression. */
+    expect(source).not.toMatch(/new Set\(acts\.map\(/);
+  });
+});
