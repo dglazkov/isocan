@@ -703,9 +703,31 @@ sketch you run up is noise.
 
 **What the daemon will refuse, so you can say why:** a path outside the bound
 directory, a dotfile or a secret-shaped name at any segment, anything reached
-through a symlink — and a file that changed on disk since anything the canvas
-ever wrote there. That last one is somebody editing outside the canvas, and
-overwriting it needs `--force`, which means you should ask first.
+through a symlink — and a file that does not match the item's current version.
+
+**That last refusal has two causes and they need different answers.** Either
+somebody edited the file outside the canvas — their work is under your write,
+and `--force` would eat it, so ask first — or the CANVAS moved and the disk is
+simply behind, which is what `version promote` does every time. Check which
+before you reach for `--force`: `isocan versions <item>` shows the stack with
+`▶` on the current one, and if that mark is not on the newest version, the
+file in the tree is stale rather than precious. Saying "your file changed" to
+somebody who only promoted a version is a confusing thing to be told.
+
+**The file on disk is not the item.** `isocan get <item>` hands back the
+version the stack points at — the PROMOTED one, which is **not necessarily
+the newest**. The file in the tree is only ever whatever was last written
+there, and nothing writes it automatically: `save` and the app's save button
+are the only two things that do. So the moment somebody promotes v9 of a
+twelve-version item, `get` gives you v9 and the file still holds v12, and it
+will keep holding v12 until somebody writes it out.
+
+**Read with `isocan get`, not by opening the path.** A human who promotes a
+version is telling you which one they want — that is the whole gesture — and
+an agent that reads the file instead answers with the one they set aside,
+then stacks a new version on top of it and buries the choice. If you do need
+the path (an editor, a build, a test run), write it out first with `isocan
+save <item>` so the two agree before you start.
 
 ## When a canvas's home is somewhere else
 
@@ -1062,7 +1084,11 @@ that woke you, with no `session start` needed.
   look at one thing with the canvas out of the way.
 - **Versions are the medium for iteration.** "Change X on this item" means
   `edit` → new version. Mention "vN on the stack — fan out (F) to compare"
-  in your reply so the human knows the history is there.
+  in your reply so the human knows the history is there. The top of that
+  stack is a CHOICE, not the newest: `version promote` puts any version
+  back on top, `isocan versions <item>` marks it `▶`, and `isocan get`
+  follows it. When you are asked to change "this item", change the version
+  it currently points at — not the last one that happened to land.
 - **Leave the canvas tidy.** What a person does by dragging — edges snapping
   together, gaps evening out — you do with `isocan align <items…> --to
 isocan fit <items...>                  # grow items to the size their content wants, and settle them apart

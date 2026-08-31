@@ -5431,7 +5431,7 @@ program
 const version = program.command("version").description("Version operations");
 version
   .command("promote <item> <versionId>")
-  .description("Bring a version to the top of the stack")
+  .description("Bring a version to the top of the stack — `get` follows it; the disk does not")
   .action(
     run(async (ref: string, versionId: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -5447,6 +5447,18 @@ version
         versionId: match.id,
       });
       console.log(`current version of ${item.id}: ${match.id}`);
+      /**
+       * **Promoting moves the canvas and not the disk**, and a backed item is
+       * the one place that difference bites: `get` follows the stack, the file
+       * in the tree keeps whatever was last written there, and an agent
+       * reading the path instead of the item works from the version the human
+       * just set aside. Nothing writes a file on its own, so the honest thing
+       * is to say which command would.
+       */
+      const backed = fileOf(item);
+      if (backed) {
+        console.log(`  ${backed} still holds whatever was last written — isocan save ${item.id}`);
+      }
     }),
   );
 
