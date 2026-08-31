@@ -7845,9 +7845,20 @@ rcCommand.action(
         void standDownAnnouncement().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
       });
     }
-    // Quiet at start, the way `claude rc` is: one line saying it is on, then
-    // events as they happen. No roster listing, nothing spawned.
-    console.log(`rc: answering on "${p.title}" — quiet until something arrives (Ctrl-C stops answering)`);
+    // Quiet at start, the way `claude rc` is — but never mute about WHERE.
+    // The first real user's first stumble was exactly this: a title with no
+    // address is a place you cannot get to. Two lines: where this is, and
+    // what happens next (with the door named when the roster is empty — a
+    // how-to-add is not a roster listing). Names stay unlisted; `isocan
+    // who` is where rosters are read.
+    const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
+    console.log(`rc: answering on "${p.title}" — ${canvasUrl(origin, p.id)}`);
+    const enrolledCount = Object.keys(opening).length;
+    console.log(
+      enrolledCount === 0
+        ? "rc: nobody is enrolled yet — Add an agent in the tray at that address, or `isocan rc add <name>` here"
+        : `rc: ${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
+    );
 
     /**
      * **Dispatch** (phase 4). One quiet connection, fanned out: the rc holds
