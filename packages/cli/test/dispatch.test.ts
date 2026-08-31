@@ -419,7 +419,14 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     });
     await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 30_000);
     expect(rc.out()).not.toContain("summons for Sian");
-    const all = await threads();
+    // The narration prints BEFORE the system comment's op lands — poll the
+    // thread rather than reading the gap between the two.
+    const all = await until(
+      threads,
+      (t) => (t["th_loop"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the guard's word in the thread",
+      30_000,
+    );
     const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
     expect(guard).toBeDefined();
     expect(guard!.body).toContain("agent-to-agent");
