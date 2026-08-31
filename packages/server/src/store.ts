@@ -100,8 +100,15 @@ export interface Store {
    * objects may decide the read is not worth it — the home screen degrades to
    * what it showed yesterday rather than the daemon refusing to start. The
    * caller treats its absence as "nothing to do".
+   *
+   * **`keepGoing` is asked between canvases**, same as {@link gcCanvases}'s
+   * and for the same reason: this runs in the background behind a serving
+   * daemon, so a shutdown has to be able to cut it short at a canvas
+   * boundary rather than wait out a large home — while still being able to
+   * WAIT, which is what keeps a repair write from landing after `close()`
+   * has resolved.
    */
-  backfillLastOp?(): Promise<number>;
+  backfillLastOp?(keepGoing?: () => boolean): Promise<number>;
 
   /**
    * Record the derived state. Called after EVERY op, and a backing is

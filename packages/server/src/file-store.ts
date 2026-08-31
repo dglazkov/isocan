@@ -144,9 +144,12 @@ export class FileStore implements Store {
    * Returns how many it fixed, so the caller can say so rather than doing
    * unexplained work at boot.
    */
-  async backfillLastOp(): Promise<number> {
+  async backfillLastOp(keepGoing: () => boolean = () => true): Promise<number> {
     let fixed = 0;
     for (const canvas of await this.listCanvases()) {
+      // Asked before the read and the write both, so a daemon on its way
+      // down stops at this canvas rather than finishing the whole home.
+      if (!keepGoing()) break;
       if (canvas.lastOp !== undefined) continue;
       const entries = await readJsonLines<LogEntry>(p.oplogFile(this.home, canvas.id));
       const last = entries[entries.length - 1];

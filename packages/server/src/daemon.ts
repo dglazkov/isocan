@@ -476,7 +476,26 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * repair into a job that removes things is how a repair becomes frightening
    * to reason about.
    */
-  void Promise.resolve(store.backfillLastOp?.() ?? 0)
+  /**
+   * **Tracked and stoppable, because a background writer that `close()` does
+   * not cover is a write racing process exit.**
+   *
+   * This was `void`-ed and forgotten, and that is the third time this file has
+   * paid for the same shape: the sockets, the writes `engine.settled()` exists
+   * to catch, and now this. `backfillLastOp` walks the home rewriting
+   * `project.json` through `writeFileAtomic`, which drops a `.tmp-*` beside
+   * the file it is replacing — so a daemon that said it was shut was still
+   * dropping files into `projects/<id>/` milliseconds later. Under test that
+   * surfaced as `ENOTEMPTY … rmdir …/projects/prj_acme` from the teardown of
+   * whichever test happened to be standing there (`replica.test.ts`, which
+   * boots a SECOND daemon over a home that already holds canvases — the one
+   * arrangement that gives the backfill anything to do). It is the same defect
+   * the desk had, and it gets the same two-part answer the GC sweeper already
+   * has: a flag that cuts the loop short at a canvas boundary, and a promise
+   * `close()` can await.
+   */
+  let backfilling = true;
+  const backfilled = Promise.resolve(store.backfillLastOp?.(() => backfilling) ?? 0)
     .then((fixed: number) => {
       if (fixed > 0) {
         app.log.info(`stamped last activity on ${fixed} canvas${fixed === 1 ? "" : "es"}`);
@@ -508,6 +527,13 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // is on its way down; awaiting it means the tick already running has
     // finished asking for any.
     await sweeper.stop();
+    // The metadata repair, on the same terms and for the same reason: it is a
+    // writer, so shutdown may not race past it. Setting the flag first cuts it
+    // short at the next canvas instead of making `close()` wait out a large
+    // home; awaiting it means the canvas it was already on is finished and its
+    // `.tmp-*` renamed away before anything below tears the store down.
+    backfilling = false;
+    await backfilled;
     // The home connections first, and before the store: they are the one thing
     // here that is still WRITING (an entry may be mid-apply), and a socket
     // left open is a process that never exits — which phase 4's finding
