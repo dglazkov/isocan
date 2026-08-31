@@ -495,6 +495,34 @@ describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
   );
 });
 
+describe("a wake that lands mid-turn is never starved", () => {
+  it("a summons consumed while its agent is busy dispatches after the turn — with no further ops", async () => {
+    // The race the instrumented CI failure exposed (both cascade replies
+    // landing inside 23ms while both agents were mid-turn, then nothing
+    // for 39 seconds): entries consumed into pending during a busy turn,
+    // and every later lap EMPTY — no ops, so no snapshot, so a lap-scoped
+    // roster read as {} and dispatch skipped every agent forever. Pinned
+    // deterministically: one slow turn, one comment landing inside it,
+    // then total silence — the second summons must still happen.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc({ FAKE_ACP_SLOW_MS: "3000", FAKE_ACP_REPLY: "0" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up", 30_000);
+
+    await summon("th_busy1", "@Sian first");
+    await until(async () => rc.out(), (o) => o.includes("session started"), "the turn to start", 30_000);
+    // Lands mid-turn; nothing else will ever be posted.
+    await summon("th_busy2", "@Sian second");
+    await until(
+      async () => rc.out(),
+      (o) => (o.match(/summons for Sian/g) ?? []).length >= 2 && (o.match(/turn ended/g) ?? []).length >= 2,
+      "the mid-turn summons dispatched after the turn, unprompted",
+      45_000,
+    );
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 90_000);
+});
+
 describe("the roster tells the truth (journey 7, phase 6)", () => {
   const whoStanding = async (): Promise<Array<{ actor: { name: string }; state: string }>> => {
     const run = await isocan("--json", "who");
