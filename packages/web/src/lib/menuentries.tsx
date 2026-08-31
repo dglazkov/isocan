@@ -8,6 +8,7 @@ import {
   ContextGlyph,
   PersonaGlyph,
   FilesGlyph,
+  HistoryGlyph,
   MinimapGlyph,
   TrashGlyph,
   WorkbenchGlyph,
@@ -286,6 +287,7 @@ export function chromeMenu(ctx: {
   mainOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
+  historyOpen: boolean;
   minimapOpen: boolean;
   /** Navigation belongs to the caller: this module builds entries and has no
    *  business holding a router. */
@@ -328,6 +330,22 @@ export function chromeMenu(ctx: {
       run: () => ctx.toWorkbench(),
     },
     { separator: "" },
+    {
+      /**
+       * **History was reachable and not findable**, which are different
+       * things. It had a clock in the tool rail and a ⌘K entry, and a person
+       * who has not gone looking for either has no reason to know the canvas
+       * remembers anything at all.
+       *
+       * Here rather than beside Workbench because this and Trash ask the same
+       * question — what was here before — and they read as a pair. The label
+       * says "History timeline" rather than "History" so the row promises the
+       * thing you get: a track you scrub, not a list you read.
+       */
+      label: ctx.historyOpen ? "Hide history timeline" : "History timeline",
+      icon: <HistoryGlyph size={14} />,
+      run: () => ui().setHistoryOpen(!ctx.historyOpen),
+    },
     {
       label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
       icon: <TrashGlyph size={14} />,

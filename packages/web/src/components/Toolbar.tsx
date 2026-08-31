@@ -35,6 +35,7 @@ export function Toolbar({
   const contextOpen = useUiStore((s) => s.contextPanelOpen);
   const personasOpen = useUiStore((s) => s.personasPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
+  const historyOpen = useUiStore((s) => s.historyOpen);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
@@ -95,6 +96,7 @@ export function Toolbar({
                   personasOpen,
                   trashOpen,
                   trashCount,
+                  historyOpen,
                   minimapOpen,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogEntry } from "../src/ops.ts";
-import { at, majorLine, majors, span, track, weightOf } from "../src/timeline.ts";
+import { at, axisGrain, axisTicks, majorLine, majors, span, track, weightOf } from "../src/timeline.ts";
 
 /**
  * `docs/research/2026-08-26-timeline.md`'s one firm rule: the significance
@@ -142,7 +142,7 @@ describe("saying it", () => {
   });
 
   it("falls back to the op type rather than inventing a phrase", () => {
-    const m = { seq: 3, ts: "t", actor: "Kenny", kind: "thread.setMain", weight: 5 };
+    const m = { seq: 3, ts: "t", actor: "Kenny", kind: "thread.setMain", weight: 5, itemId: null };
     expect(majorLine({ ...m, kind: "odd.op" })).toBe("3  Kenny odd.op");
   });
 });
@@ -241,5 +241,160 @@ describe("the span a scrubber moves over", () => {
 
   it("is null for an empty history, not a track with one end", () => {
     expect(span([])).toBeNull();
+  });
+});
+
+/**
+ * **The axis: a date under the bars, at the grain the span deserves.**
+ */
+describe("the date axis", () => {
+  /**
+   * An entry at an explicit moment — the axis is entirely about time, so the
+   * helper above (which packs seq into seconds) cannot express these.
+   *
+   * **Local, at midday, on purpose.** The axis reads a timestamp in the
+   * reader's own timezone, because "the day I did that" is a local fact and an
+   * axis in UTC would put a Denver evening on the following day. That makes a
+   * test written with `Z` timestamps machine-dependent: `2025-08-01T00:00Z` is
+   * 31 July here and 1 August in Berlin, and the first version of the year
+   * test duly failed with `Jul 2025`. So these are built from local
+   * components, at noon, where no offset on earth can move the date.
+   */
+  const on = (seq: number, y: number, m: number, d: number, h = 12): LogEntry =>
+    at_(seq, new Date(y, m - 1, d, h).toISOString());
+  const at_ = (seq: number, iso: string): LogEntry =>
+    ({
+      seq,
+      envelope: { id: `op${seq}`, canvasId: "prj_a", actor: { id: "u", name: "Kenny" }, ts: iso, op: { type: "item.add" } },
+      inverse: null,
+    }) as unknown as LogEntry;
+
+  it("picks the grain from the span, not from a preference", () => {
+    expect(axisGrain(6 * 3600_000)).toBe("hour");
+    expect(axisGrain(9 * 24 * 3600_000)).toBe("day");
+    expect(axisGrain(300 * 24 * 3600_000)).toBe("month");
+    expect(axisGrain(6 * 365 * 24 * 3600_000)).toBe("year");
+  });
+
+  it("ticks where the unit turns over, not at even intervals", () => {
+    /* Three entries on one day and one the next is TWO ticks, not four —
+       the axis marks changes, which is what makes it readable at sixty
+       columns. */
+    const log = [on(1, 2026, 8, 19, 9), on(2, 2026, 8, 19, 11), on(3, 2026, 8, 19, 15), on(9, 2026, 8, 27, 10)];
+    const ticks = axisTicks(log);
+    expect(ticks.map((t) => t.label)).toEqual(["19 Aug", "27 Aug"]);
+  });
+
+  it("places a tick by SEQ, because the rail is laid out by seq", () => {
+    /* A long quiet gap must not become a season of empty rail. The second
+       day is 8 of 8 seqs along, so its tick sits at the far end. */
+    const log = [on(1, 2026, 8, 19, 9), on(9, 2026, 8, 27, 10)];
+    expect(axisTicks(log).map((t) => t.at)).toEqual([0, 1]);
+  });
+
+  it("says which year once the span crosses one", () => {
+    /* "Aug" alone is a lie on a canvas that has seen two Augusts. */
+    const log = [on(1, 2025, 8, 1), on(40, 2026, 2, 1)];
+    const labels = axisTicks(log).map((t) => t.label);
+    expect(labels[0]).toBe("Aug 2025");
+    expect(labels.at(-1)).toBe("Feb 2026");
+  });
+
+  it("thins to the cap but keeps both ends", () => {
+    /* An axis missing its ends gives no sense of the whole, which is the
+       only reason to draw one. */
+    const log = Array.from({ length: 40 }, (_, i) =>
+      on(i + 1, 2026, 1 + Math.floor(i / 20), (i % 20) + 1),
+    );
+    const ticks = axisTicks(log, 5);
+    expect(ticks.length).toBeLessThanOrEqual(5);
+    expect(ticks[0]!.seq).toBe(1);
+    expect(ticks.at(-1)!.seq).toBe(40);
+  });
+
+  it("has nothing to say about an empty log", () => {
+    expect(axisTicks([])).toEqual([]);
+  });
+});
+
+describe("a bucket knows when it was", () => {
+  it("carries the first and last moment that fell in it", () => {
+    /* The rail is laid out by seq and stays that way; the timestamps are so a
+       surface can put a date under it without re-walking the log. */
+    const log = [entry(1, "item.add"), entry(2, "item.add"), entry(3, "item.add")];
+    const [only] = track(log, 1);
+    expect(only!.fromTs).toBe("2026-08-30T00:00:01.000Z");
+    expect(only!.toTs).toBe("2026-08-30T00:00:03.000Z");
+  });
+
+  it("leaves an empty bucket saying null rather than guessing", () => {
+    const log = [entry(1, "item.add"), entry(20, "item.add")];
+    const empty = track(log, 10).filter((b) => b.count === 0);
+    expect(empty.length).toBeGreaterThan(0);
+    for (const b of empty) expect(b.fromTs).toBeNull();
+  });
+});
+
+describe("the axis reaches both ends", () => {
+  const on2 = (seq: number, y: number, m: number, d: number, h = 12): LogEntry =>
+    ({
+      seq,
+      envelope: { id: `op${seq}`, canvasId: "prj_a", actor: { id: "u", name: "K" },
+        ts: new Date(y, m - 1, d, h).toISOString(), op: { type: "item.add" } },
+      inverse: null,
+    }) as unknown as LogEntry;
+
+  it("ends at the last entry, not at the last time the day turned", () => {
+    /* The final day begins early and runs on. Without an end tick the axis
+       stopped where that day STARTED, two thirds along, and the reader could
+       not tell what the right-hand end of the rail meant. */
+    const log = [on2(1, 2026, 8, 18, 9), on2(2, 2026, 8, 20, 9), on2(30, 2026, 8, 20, 18)];
+    const ticks = axisTicks(log);
+    expect(ticks.at(-1)!.at).toBe(1);
+    expect(ticks.at(-1)!.seq).toBe(30);
+  });
+
+  it("does not print the same day twice to do it", () => {
+    /* The dropped one is the turn, not the end: they are the same day and the
+       one that belongs at the edge is the edge. */
+    const log = [on2(1, 2026, 8, 18, 9), on2(2, 2026, 8, 20, 9), on2(30, 2026, 8, 20, 18)];
+    const labels = axisTicks(log).map((t) => t.label);
+    expect(labels).toEqual([...new Set(labels)]);
+    expect(labels).toEqual(["18 Aug", "20 Aug"]);
+  });
+
+  it("starts at the first entry", () => {
+    const log = [on2(5, 2026, 8, 18, 9), on2(40, 2026, 8, 25, 9)];
+    expect(axisTicks(log)[0]!.at).toBe(0);
+  });
+});
+
+describe("ticks do not overprint each other", () => {
+  const on3 = (seq: number, y: number, m: number, d: number, h = 12): LogEntry =>
+    ({
+      seq,
+      envelope: { id: `op${seq}`, canvasId: "prj_a", actor: { id: "u", name: "K" },
+        ts: new Date(y, m - 1, d, h).toISOString(), op: { type: "item.add" } },
+      inverse: null,
+    }) as unknown as LogEntry;
+
+  it("drops a middle tick that cannot fit beside its neighbour", () => {
+    /* Measured on a real history: "24 Aug" and "30 Aug" landed within a few
+       pixels and printed as "24 A30 Aug". Three days crammed into two seqs at
+       the start, then a long tail. */
+    const log = [on3(1, 2026, 8, 1), on3(2, 2026, 8, 2), on3(3, 2026, 8, 3), on3(100, 2026, 9, 1)];
+    const ticks = axisTicks(log);
+    for (let i = 1; i < ticks.length; i += 1) {
+      expect(ticks[i]!.at - ticks[i - 1]!.at).toBeGreaterThanOrEqual(0.08);
+    }
+  });
+
+  it("keeps both ends even when everything is crowded", () => {
+    /* The ends are the reason the axis exists; a crowded middle is not a
+       reason to lose the extent. */
+    const log = [on3(1, 2026, 8, 1), on3(2, 2026, 8, 2), on3(3, 2026, 8, 3)];
+    const ticks = axisTicks(log);
+    expect(ticks[0]!.at).toBe(0);
+    expect(ticks.at(-1)!.at).toBe(1);
   });
 });

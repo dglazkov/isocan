@@ -67,6 +67,16 @@ export interface Major {
   /** The op type, for a surface that wants to draw by kind. */
   kind: string;
   weight: number;
+  /**
+   * The item this seam is about, when it is about one.
+   *
+   * `majorWhat` says "Di added something" and cannot say WHICH something,
+   * which is fine in a terminal and thin under a pointer — a surface that
+   * wants to show the thing needs a handle on it. Null for the seams that are
+   * about the canvas rather than a thing in it (`project.create`), and for
+   * ops whose shape carries no item.
+   */
+  itemId: string | null;
 }
 
 /**
@@ -85,12 +95,14 @@ export function majors(entries: readonly LogEntry[], minWeight = 4): Major[] {
     if (entry.cause) continue;
     const weight = weightOf(entry);
     if (weight < minWeight) continue;
+    const op = entry.envelope.op as { itemId?: unknown };
     out.push({
       seq: entry.seq,
       ts: entry.envelope.ts,
       actor: entry.envelope.actor.name,
       kind: entry.envelope.op.type,
       weight,
+      itemId: typeof op.itemId === "string" ? op.itemId : null,
     });
   }
   return out;
@@ -120,6 +132,19 @@ export interface TrackBucket {
   weight: number;
   /** The majors that fall in here, for a surface that draws ticks over bars. */
   majors: Major[];
+  /**
+   * When this bucket covers — the first and last entry in it, or `null` for a
+   * bucket nothing fell into.
+   *
+   * The track is laid out by SEQ and always has been, which is right: a rail
+   * where a quiet fortnight takes the same width as a busy afternoon is a rail
+   * you cannot point at. But a person reads a history in dates, and the bucket
+   * had no idea when it was — so a surface wanting to say "19 Aug" under the
+   * bars had nowhere to get it. Recorded here rather than re-derived, because
+   * the fold is already walking every entry.
+   */
+  fromTs: string | null;
+  toTs: string | null;
 }
 
 export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[] {
@@ -136,7 +161,7 @@ export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[]
   for (let i = 0; i < n; i += 1) {
     const fromSeq = Math.round(first + i * size);
     const toSeq = i === n - 1 ? last : Math.round(first + (i + 1) * size) - 1;
-    out.push({ fromSeq, toSeq, count: 0, weight: 0, majors: [] });
+    out.push({ fromSeq, toSeq, count: 0, weight: 0, majors: [], fromTs: null, toTs: null });
   }
   const bucketFor = (seq: number) =>
     Math.min(n - 1, Math.max(0, Math.floor((seq - first) / size)));
@@ -144,6 +169,10 @@ export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[]
     const b = out[bucketFor(entry.seq)]!;
     b.count += 1;
     b.weight += weightOf(entry);
+    // Entries arrive oldest-first, so the first one to land sets `fromTs` and
+    // every one after it moves `toTs`.
+    b.fromTs ??= entry.envelope.ts;
+    b.toTs = entry.envelope.ts;
   }
   for (const mark of marks) out[bucketFor(mark.seq)]!.majors.push(mark);
   return out;
@@ -215,4 +244,160 @@ export function span(entries: readonly LogEntry[]): { first: number; last: numbe
   const last = entries[entries.length - 1];
   if (!first || !last) return null;
   return { first: first.seq, last: last.seq };
+}
+
+/**
+ * **A date under the bars, at whatever grain the span deserves.**
+ *
+ * A rail with no dates on it says how much happened and never when. The
+ * obvious fix — a label per bucket — is unreadable at sixty columns, and a
+ * fixed grain is wrong at both ends: "19 Aug 14:00" repeated forty times
+ * across an afternoon, or "Aug" alone across three years.
+ *
+ * So the grain is chosen from the span, the way an axis on any chart is:
+ * hours within a day, days within a season, months within a few years, years
+ * beyond that. The labels are the CHANGES — a tick appears where the day (or
+ * month, or year) turns over — which is why they are unevenly spaced and
+ * should be. A canvas worked on for three days in March and once in August
+ * has an axis that says so.
+ *
+ * **Positioned by seq, not by time.** The rail is laid out by sequence and
+ * must stay that way, so a tick sits where its moment actually falls among
+ * the entries. That means a long quiet gap is one tick's width apart from its
+ * neighbour rather than a season of empty rail — the honest reading, since
+ * the rail's whole job is to be pointed at.
+ */
+export type AxisGrain = "hour" | "day" | "month" | "year";
+
+export interface AxisTick {
+  /** Where along the rail, 0..1 of the seq span. */
+  at: number;
+  label: string;
+  seq: number;
+  ts: string;
+}
+
+/** How close two ticks may sit, as a fraction of the rail. Roughly a short
+ *  date label's width at the rail's usual size. */
+const MIN_TICK_GAP = 0.09;
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** The grain a span of milliseconds deserves. Thresholds are where a reader
+ *  stops caring about the finer unit, not round numbers for their own sake. */
+export function axisGrain(spanMs: number): AxisGrain {
+  if (spanMs <= 2 * DAY) return "hour";
+  if (spanMs <= 120 * DAY) return "day";
+  if (spanMs <= 3 * 365 * DAY) return "month";
+  return "year";
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/** The bucket a moment belongs to at this grain — two moments share a key
+ *  exactly when they should share a tick. */
+function grainKey(d: Date, grain: AxisGrain): string {
+  const y = d.getFullYear();
+  if (grain === "year") return `${y}`;
+  if (grain === "month") return `${y}-${d.getMonth()}`;
+  if (grain === "day") return `${y}-${d.getMonth()}-${d.getDate()}`;
+  return `${y}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+}
+
+function grainLabel(d: Date, grain: AxisGrain, showYear: boolean): string {
+  const month = MONTHS[d.getMonth()]!;
+  if (grain === "year") return `${d.getFullYear()}`;
+  if (grain === "month") return showYear ? `${month} ${d.getFullYear()}` : month;
+  if (grain === "day") return `${d.getDate()} ${month}`;
+  return `${String(d.getHours()).padStart(2, "0")}:00`;
+}
+
+/**
+ * Ticks for the rail: one per turn of the chosen unit, plus the ends.
+ *
+ * `max` is a cap, not a target — a span with three days in it gets three
+ * ticks. When the turns outnumber the cap they are thinned evenly rather than
+ * truncated, so the axis still spans the whole rail instead of stopping
+ * halfway.
+ */
+export function axisTicks(entries: readonly LogEntry[], max = 8): AxisTick[] {
+  if (entries.length === 0) return [];
+  const first = entries[0]!;
+  const last = entries[entries.length - 1]!;
+  const span = Math.max(1, last.seq - first.seq);
+  const spanMs = Math.max(0, Date.parse(last.envelope.ts) - Date.parse(first.envelope.ts));
+  const grain = axisGrain(spanMs);
+  // A month axis that never says which year is a lie on any canvas older than
+  // one — so the year rides along exactly when the span crosses one.
+  const crossesYear =
+    new Date(first.envelope.ts).getFullYear() !== new Date(last.envelope.ts).getFullYear();
+
+  const turns: AxisTick[] = [];
+  let seen: string | null = null;
+  for (const entry of entries) {
+    const d = new Date(entry.envelope.ts);
+    const key = grainKey(d, grain);
+    if (key === seen) continue;
+    seen = key;
+    turns.push({
+      at: (entry.seq - first.seq) / span,
+      label: grainLabel(d, grain, crossesYear),
+      seq: entry.seq,
+      ts: entry.envelope.ts,
+    });
+  }
+  /**
+   * **The right-hand end is the END, not the last time the day changed.**
+   *
+   * Turns alone leave the axis stopping wherever the final day happened to
+   * begin — on a canvas whose last burst ran all afternoon, the rightmost
+   * label sat two thirds along and the reader had no idea what the rail
+   * reached. The first turn is always the first entry, so the left end comes
+   * out right on its own; the right one has to be said.
+   *
+   * A turn carrying the same label is dropped rather than the end tick: they
+   * are the same day, and the one that belongs at the edge is the edge.
+   */
+  const endLabel = grainLabel(new Date(last.envelope.ts), grain, crossesYear);
+  const withEnd =
+    turns.at(-1)?.seq === last.seq
+      ? turns
+      : [
+          ...turns.filter((t) => t.label !== endLabel),
+          { at: 1, label: endLabel, seq: last.seq, ts: last.envelope.ts },
+        ];
+
+  /**
+   * **Ticks are placed by seq, so two turns can land on top of each other.**
+   *
+   * Thinning by COUNT alone does not prevent it: four ticks across a rail is
+   * comfortable unless three of them share the same busy afternoon, which is
+   * exactly what a canvas worked on in bursts produces. Measured on a real
+   * 13-day history, "24 Aug" and "30 Aug" overprinted into "24 A30 Aug".
+   *
+   * So a minimum separation, as a fraction of the rail. The ends are kept
+   * whatever happens — they are the reason the axis exists — and a middle
+   * tick that cannot fit is dropped rather than moved, because a date nudged
+   * along the rail is pointing at the wrong entries.
+   */
+  const kept: AxisTick[] = [];
+  for (const t of withEnd) {
+    const previous = kept.at(-1);
+    const isEnd = t.at === 1;
+    if (previous && !isEnd && t.at - previous.at < MIN_TICK_GAP) continue;
+    // The end always goes in; if it crowds its neighbour, the NEIGHBOUR gives
+    // way, since the edge label is the one carrying the extent.
+    if (isEnd && previous && t.at - previous.at < MIN_TICK_GAP && kept.length > 1) kept.pop();
+    kept.push(t);
+  }
+
+  if (kept.length <= max) return kept;
+  const withEnd2 = kept;
+  // Thin evenly, and always keep the first and last: an axis whose ends are
+  // missing gives no sense of the whole, which is the reason for having one.
+  const step = (withEnd2.length - 1) / (max - 1);
+  const thinned: AxisTick[] = [];
+  for (let i = 0; i < max; i += 1) thinned.push(withEnd2[Math.round(i * step)]!);
+  return thinned.filter((t, i, all) => i === 0 || t.seq !== all[i - 1]!.seq);
 }

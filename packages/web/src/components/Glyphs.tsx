@@ -150,6 +150,26 @@ export function ShareGlyph({ size = 15 }: { size?: number }) {
 }
 
 
+/**
+ * **History: a clock wound backwards.**
+ *
+ * Not a new drawing. This is the mark the toolbar's History button has always
+ * worn, moved here verbatim when the `···` drawer needed it — the same lesson
+ * `MinimapGlyph` below records the hard way: a second picture of one thing,
+ * invented rather than found, is how a row and the surface it opens stop
+ * looking like each other.
+ */
+export function HistoryGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+      <path d="M2.2 2.6v2.6h2.6" />
+      <path d="M8 4.9V8l2.1 1.5" />
+    </svg>
+  );
+}
+
 /** The trash: a bin with a lid, drawn open-topped so it reads at 14px where a
  *  closed one turns into a filled rectangle. */
 export function TrashGlyph({ size = 15 }: { size?: number }) {

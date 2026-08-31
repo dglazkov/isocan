@@ -4220,7 +4220,9 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px 12px;
+  /* The extra bottom padding is the axis's room: it hangs below the rail at
+     `top: 100%`, and without this it fell outside the panel. */
+  padding: 10px 12px 28px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--card);
@@ -4282,6 +4284,63 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A seam, not a taller bar: significance is already the height, so colour is
    the second dimension rather than a louder version of the first. */
 .scrub-bar.seam { background: var(--accent); }
+/* The bar under the pointer, so the card and its subject are visibly one
+   thing. Brightness rather than a border: a bar is 3px wide and an outline at
+   that size is the whole bar. */
+.scrub-bar.peeked { filter: brightness(1.35); }
+
+/* **The axis.** Absolutely positioned under the bars — the ticks are placed by
+   seq, so they cannot be a flex row. `translateX(-50%)` centres each label on
+   its moment; the two ends pull back inside the rail instead, because a label
+   centred on 0% or 100% hangs half outside it. */
+.scrub-axis {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: 16px;
+  pointer-events: none;
+}
+.scrub-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.scrub-tick[data-edge="first"] { transform: none; }
+.scrub-tick[data-edge="last"] { transform: translateX(-100%); }
+
+/* **The hover card.** Above the rail, because the rail is at the bottom of the
+   window and a card below it would be off-screen. */
+.scrub-peek {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  z-index: 3;
+}
+.scrub-peek-when {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11.5px; font-weight: 600; color: var(--ink);
+  padding-bottom: 5px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.scrub-peek-count { font-weight: 400; color: var(--ink-soft); }
+.scrub-peek-row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; padding: 2px 0; min-width: 0;
+}
+.scrub-peek-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scrub-peek-when-row { color: var(--ink-soft); font-size: 10.5px; flex: none; }
+.scrub-peek-more { font-size: 10.5px; color: var(--ink-soft); padding-top: 3px; }
 .scrub-head-line {
   position: absolute;
   top: -2px;

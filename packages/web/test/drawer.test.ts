@@ -34,6 +34,7 @@ const menu = (over = {}) =>
     mainOpen: false,
     trashOpen: false,
     trashCount: 0,
+    historyOpen: false,
     minimapOpen: true,
     toWorkbench: () => {},
     ...over,
@@ -109,5 +110,43 @@ describe("the drawer holds everything it took", () => {
     expect(labels(menu({ minimapOpen: true }))).toContain("Hide minimap");
     expect(labels(menu({ minimapOpen: false }))).toContain("Show minimap");
     expect(labels(menu({ trashOpen: true }))).toContain("Hide trash");
+  });
+});
+
+/**
+ * **History was reachable and not findable**, which are different things.
+ *
+ * It had a clock in the tool rail and an entry in ⌘K, and neither is a door
+ * somebody finds without already suspecting the room is there. A canvas that
+ * remembers everything and never says so is a feature that gets rebuilt by
+ * the next person who wants it.
+ */
+describe("the drawer offers the canvas's own past", () => {
+  it("names the history timeline, and toggles it", () => {
+    expect(labels(menu())).toContain("History timeline");
+    expect(labels(menu({ historyOpen: true }))).toContain("Hide history timeline");
+  });
+
+  it("wears the mark the tool rail already wears", () => {
+    /* `MinimapGlyph` records what happens otherwise: a second drawing of one
+       thing, invented for this menu rather than found, so the row and the
+       surface it opens stop looking like each other. The toolbar's local
+       `HISTORY` const is gone — there is one picture now. */
+    const tools = readFileSync(
+      fileURLToPath(new URL("../src/components/CanvasTools.tsx", import.meta.url)),
+      "utf8",
+    );
+    expect(tools).toContain("<HistoryGlyph");
+    expect(tools, "a second drawing of the clock came back").not.toMatch(/const HISTORY = \(/);
+  });
+
+  it("sits with Trash, because they ask the same question", () => {
+    /* Both are "what was here before". A history entry filed next to the
+       panels would read as a fourth panel, which it is not. */
+    const shown = labels(menu());
+    const history = shown.findIndex((l) => /history timeline/i.test(l));
+    const trash = shown.findIndex((l) => l.startsWith("Trash"));
+    expect(history).toBeGreaterThan(-1);
+    expect(trash).toBe(history + 1);
   });
 });
