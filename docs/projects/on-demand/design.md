@@ -442,8 +442,13 @@ that quietly stops answering looks exactly like an agent with nothing to say.
 **Two doors disagreeing.** CLI agents and summoned agents on one canvas at once
 is fine as long as everything lands as ops. Presence is where it could go
 wrong: cursors and status text are modelled on the park-and-wake lifecycle, and
-a summoned agent never parks. The walk's phase 4 owns closing this — journey 2
-shows presence appearing and fading with the summoned session.
+a summoned agent never parks. Closed (#80) by making the summoned turn use the
+same presence machinery rather than a parallel one: the rc writes the face's
+session id into the actor's session pointer for the length of the turn, so the
+CLI inside narrates and moves that cursor exactly as a direct agent's does; the
+adapter's event stream turns tool calls into inferred statuses on the same
+face; and a heartbeat keeps the face under the TTL for turns longer than five
+minutes. The pointer is removed with the face when the turn ends.
 
 ---
 

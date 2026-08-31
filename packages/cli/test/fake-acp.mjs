@@ -105,6 +105,21 @@ function handle(msg) {
       // way a real summoned agent would — the reply lands as the enrolled
       // actor because the injected environment says who is speaking.
       const slow = Number(process.env.FAKE_ACP_SLOW_MS ?? 0);
+      // A tool call mid-linger, on request: what the liveliness tests watch
+      // the rc turn into a presence beat.
+      const toolAt = Number(process.env.FAKE_ACP_TOOL_MS ?? 0);
+      if (toolAt > 0) {
+        setTimeout(() => {
+          send({
+            jsonrpc: "2.0",
+            method: "session/update",
+            params: {
+              sessionId: params.sessionId,
+              update: { sessionUpdate: "tool_call", toolCallId: "tool_live", title: "Bash: isocan comment reply" },
+            },
+          });
+        }, toolAt);
+      }
       if (slow > 0) await new Promise((r) => setTimeout(r, slow));
       if (process.env.FAKE_ACP_REPLY === "1" && process.env.FAKE_ACP_CLI) {
         const threadId = promptText.match(/"threadId":\s*"([^"]+)"/)?.[1];

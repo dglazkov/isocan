@@ -198,9 +198,9 @@ describe("the doorbell works (journey 2)", () => {
     await rc.done;
   }, 40_000);
 
-  it("presence appears when the turn starts and fades because the session ended", async () => {
+  it("presence appears when the turn starts, works visibly, and fades because the session ended", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    const rc = startRc({ FAKE_ACP_SLOW_MS: "4000" });
+    const rc = startRc({ FAKE_ACP_SLOW_MS: "6000", FAKE_ACP_TOOL_MS: "3000" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
     await summon("th_p", "@Sian have a look?");
@@ -215,14 +215,37 @@ describe("the doorbell works (journey 2)", () => {
     const face = during.find((s) => s.actor.name === "Sian")!;
     expect(face.status).toBe("reading your comment…");
     expect(face.onThread).toBe("th_p");
+    // The face ANIMATES: the turn lands as working-on-the-thread, the field
+    // the canvas renders as a busy cursor (#80's fix, half one).
+    expect(face.activity).toEqual({ kind: "working", threadId: "th_p" });
+
+    // Half two: the rc loaned the face's id to Sian's session pointer, so
+    // the CLI inside the turn narrates and moves this very cursor.
+    const pointerDir = path.join(home, "sessions");
+    const listPointers = () => fs.readdir(pointerDir).catch(() => [] as string[]);
+    const pointers = await until(listPointers, (files) => files.length === 1, "the loaned session pointer");
+    const pointer = JSON.parse(await fs.readFile(path.join(pointerDir, pointers[0]!), "utf8"));
+    expect(pointer).toMatchObject({ canvasId: "prj_1", sessionId: face.sessionId });
+
+    // The adapter's tool call becomes an inferred status — the face keeps
+    // saying what the turn is doing instead of freezing on its first line.
+    const busy = await until(
+      sessions,
+      (list) => list.some((s) => s.actor.name === "Sian" && s.status === "Bash: isocan comment reply"),
+      "the tool call narrated on the face",
+    );
+    expect(busy.find((s) => s.actor.name === "Sian")!.statusSource).toBe("inferred");
 
     await until(async () => rc.out(), (o) => o.includes("turn ended"), "the turn to end");
-    // Gone because the session ENDED, not because a TTL expired.
+    // Gone because the session ENDED, not because a TTL expired — and the
+    // loaned pointer went with it, so Sian's next direct command cannot
+    // revive a face nobody is behind.
     await until(
       sessions,
       (list) => !list.some((s) => s.actor.name === "Sian" && s.kind === "cli"),
       "Sian's presence to fade",
     );
+    await expect(fs.readdir(pointerDir)).resolves.toHaveLength(0);
     rc.child.kill("SIGINT");
     await rc.done;
   }, 40_000);
