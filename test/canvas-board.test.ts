@@ -9,13 +9,39 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
 const board = readFileSync(fileURLToPath(new URL("../scripts/canvas-board.mjs", import.meta.url)), "utf8");
 const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", import.meta.url)), "utf8");
 
-const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+/**
+ * **A synchronous exec cannot be interrupted, so its deadline is a wish.**
+ *
+ * Every child here is spawned with `execFileSync`, which blocks the worker
+ * thread — vitest's timer cannot run, so the `120_000` budget on these tests
+ * is unenforceable. Measured on 31 Aug under 16 spinners: this file's
+ * "NO SIGNAL" test ran for **2,025,845ms, 2,218,012ms and 2,502,849ms** — 34,
+ * 37 and 42 minutes — and then reported `Test timed out in 120000ms`, which
+ * is true of when the deadline passed and wrong by a factor of seventeen
+ * about what happened. Three of four loaded suite runs were dominated by one
+ * test nobody could see was running.
+ *
+ * `lessons.md` #6 names the shape: *a hang that never fails is the thing to
+ * avoid, not a slow test that eventually does.* The child gets the deadline
+ * instead, under the test's own budget so the useful message wins the race —
+ * a killed child raises with the command in it, rather than vitest raising
+ * with a number that is not the elapsed time.
+ *
+ * Not a speed fix. The passing case still takes ~30s on a saturated machine,
+ * and that is honest; what changes is that the failing case stops being
+ * unbounded.
+ */
+const CHILD_BUDGET_MS = 90_000;
+
+const git = (...args: string[]) =>
+  execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 20_000 }).trim();
 
 /** Render a panel without touching a canvas, and hand back its HTML. */
 const render = (only: string) => {
   const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
     cwd: repo,
     encoding: "utf8",
+    timeout: CHILD_BUDGET_MS,
   });
   const path = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
   expect(path, `no panel rendered for --only ${only}`).toBeTruthy();
@@ -156,6 +182,7 @@ describe("measurement is taken once, and only when something asks", () => {
     const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "recent"], {
       cwd: repo,
       encoding: "utf8",
+      timeout: CHILD_BUDGET_MS,
     });
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
@@ -185,7 +212,12 @@ describe("the Build signal", () => {
     const out = execFileSync(
       "node",
       [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "build"],
-      { cwd: repo, encoding: "utf8", env: { ...process.env, PATH: `${shim}:${process.env.PATH}` } },
+      {
+        cwd: repo,
+        encoding: "utf8",
+        timeout: CHILD_BUDGET_MS,
+        env: { ...process.env, PATH: `${shim}:${process.env.PATH}` },
+      },
     );
     const file = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
     const html = readFileSync(file as string, "utf8");
