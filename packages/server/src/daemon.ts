@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { DEFAULT_PORT, healthPath } from "@isocan/core";
 import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
+import { ParkCursors } from "./park.ts";
 import { attachWebSockets } from "./ws.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
@@ -379,6 +380,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     homes,
     auth,
     contentBase: null as string | null,
+    // The durable park cursor (on-demand phase 1) — a machine-local fact
+    // beside homes.json, never behind the Store seam. See park.ts.
+    park: new ParkCursors(home),
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);

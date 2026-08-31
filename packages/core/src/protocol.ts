@@ -266,6 +266,10 @@ export interface WatchedLogEntry extends LogEntry {
   canvasId: string;
   /** The canvas's title, so a waiter can name where it was summoned. */
   canvasTitle: string;
+  /** Set by `wait` on an entry that was handed to a previous park whose turn
+   * left no trace — it is being delivered AGAIN, and the turn reading it may
+   * already have answered. Never set by the daemon's watch route itself. */
+  redelivered?: boolean;
 }
 
 export interface WatchLogResponse {
@@ -274,6 +278,66 @@ export interface WatchLogResponse {
   /** Feed straight back into the next request. */
   cursors: Record<string, number>;
 }
+
+// ---- the durable park cursor (on-demand phase 1) ----
+
+/**
+ * The park's cursor, moved out of the parked process. One row per actor per
+ * canvas, held by the daemon the park polls — the home when the canvas is
+ * local, the replica when it is not, and either way a row of HOME seqs,
+ * because a replica writes the home's seqs verbatim. A killed park resumes
+ * from its stored row; `--since` becomes a repair tool nobody has to know
+ * about.
+ *
+ * Claiming ADOPTS the row: one reader per row, newest wins. The `parkId` in
+ * the response is a lease — the daemon refuses a delivery or advance carrying
+ * a stale one with `PARK_ADOPTED_CODE`, which is how a displaced park learns
+ * to stand down instead of double-delivering the same comment as new.
+ */
+export interface ParkClaimRequest {
+  canvasId: string;
+  actorId: string;
+  /** Reset the row to this seq — what `wait --since` means now. */
+  since?: number;
+}
+
+export interface ParkClaimResponse {
+  /** The lease. Present it on every delivery and advance. */
+  parkId: string;
+  /** Where to read from — everything at or before this seq is settled. */
+  cursor: number;
+  /**
+   * Entries at or before this seq (and after `cursor`) were handed to a
+   * previous park whose turn left no trace, so they are being handed AGAIN:
+   * present them marked redelivered, never as new — the turn may already
+   * have answered. Null when nothing is outstanding.
+   */
+  redeliverUpTo: number | null;
+}
+
+/** A wake handed entries out: record the high-water WITHOUT advancing the
+ * cursor. The cursor advances only when the turn's completion shows — see
+ * the claim's state machine in `server/src/park.ts`. */
+export interface ParkDeliveredRequest {
+  canvasId: string;
+  actorId: string;
+  parkId: string;
+  /** The batch's tip — the watch response's cursor for this canvas. */
+  tip: number;
+}
+
+/** A lap matched nothing for this actor: everything up to `to` was noise,
+ * safe to settle without a turn. */
+export interface ParkAdvanceRequest {
+  canvasId: string;
+  actorId: string;
+  parkId: string;
+  to: number;
+}
+
+/** Another park claimed this actor's cursor row — the caller's lease is dead
+ * and it must stand down, not retry. */
+export const PARK_ADOPTED_CODE = "park-adopted";
 
 // ---- a client older than this home ----
 

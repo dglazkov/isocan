@@ -154,6 +154,7 @@ import {
   inboxTally,
   inboxLine,
   namesFor,
+  PARK_ADOPTED_CODE,
   reasonFor,
   docStatus,
   statusProblems,
@@ -6961,7 +6962,10 @@ program
     [],
   )
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
-  .option("--since <seq>", "wake on anything after this oplog position instead of now")
+  .option(
+    "--since <seq>",
+    "start from this oplog position instead of your stored cursor (a repair tool — it also resets the stored cursor)",
+  )
   .addHelpText(
     "after",
     `
@@ -6991,6 +6995,16 @@ Size --timeout to the longest call your harness allows. Exit 2 is silence,
 not dismissal: park again. A wait that expires never means the collaboration
 is over — only the human saying so does.
 
+Your place in the log outlives the process: the daemon keeps a cursor per
+actor per canvas, so a park that is killed — mid-gap, mid-turn, however —
+resumes exactly where it left off when you park again. Nothing lands in a
+gap unseen, and --since is a repair tool, not something to remember. An
+entry handed to a turn that died before finishing comes back flagged
+\`redelivered\` — you may already have answered it; check the thread before
+answering twice. One park per actor per canvas: parking again adopts the
+cursor, and the older park exits 3 ("another park adopted this actor's
+cursor") — that exit means stand down, not park again.
+
 While parked, the cursor you left on the canvas says "waiting for you…";
 waking on a summons then moves your presence for you: your cursor lands on
 the thread that woke you, showing "reading your comment…" until your next
@@ -7019,11 +7033,49 @@ command or reply. No \`session start\` needed after a wake.`,
       const wantedTypes = opts.op;
       const filtered = wantedItems.length > 0 || wantedTypes.length > 0;
       const seeded = (await ctx.client.watchLog({ only: [p.id] })).cursors;
-      let cursors: Record<string, number> = {
-        [p.id]:
-          opts.since !== undefined
-            ? Number(opts.since)
-            : (seeded[p.id] ?? (await ctx.client.snapshot(p.id)).lastSeq),
+      /**
+       * **The durable cursor** (on-demand phase 1). The daemon keeps one row
+       * per actor per canvas, so the park's place in the log is no longer a
+       * `let` that dies with the process — a killed park resumes exactly, and
+       * `--since` is a repair tool rather than required knowledge. Claiming
+       * ADOPTS the row (one reader, newest wins): the lease below is what a
+       * delivery or advance must carry, and a refusal means another park has
+       * taken over and this one stands down (exit 3).
+       *
+       * `redeliverUpTo` is the third door's mechanism: entries a previous
+       * park handed to a turn that left no trace come back FLAGGED, never as
+       * new — the turn may already have answered them.
+       */
+      let lease: string | null = null;
+      let redeliverUpTo: number | null = null;
+      let start =
+        opts.since !== undefined
+          ? Number(opts.since)
+          : (seeded[p.id] ?? (await ctx.client.snapshot(p.id)).lastSeq);
+      try {
+        const claim = await ctx.client.parkClaim({
+          canvasId: p.id,
+          actorId: ctx.actor.id,
+          ...(opts.since !== undefined ? { since: Number(opts.since) } : {}),
+        });
+        lease = claim.parkId;
+        start = claim.cursor;
+        redeliverUpTo = claim.redeliverUpTo;
+      } catch (err) {
+        // A daemon from before the row existed: park the old way — the
+        // in-process cursor — rather than refusing to park at all.
+        if (!(err instanceof ApiError && err.status === 404)) throw err;
+      }
+      let cursors: Record<string, number> = { [p.id]: start };
+      // Called with `return` from inside the loop, so the presence teardown
+      // in the `finally` below still runs — a displaced park must not leave
+      // a "waiting" cursor behind on its way out.
+      const standDown = () => {
+        console.error(
+          "wait: another park adopted this actor's cursor — it is answering now. " +
+            "Standing down; do not park again unless that park is yours to replace.",
+        );
+        process.exitCode = 3;
       };
       const deadline = opts.timeout ? Date.now() + Number(opts.timeout) * 1000 : null;
 
@@ -7255,6 +7307,36 @@ command or reply. No \`session start\` needed after a wake.`,
             if (opts.allOps) matches.push(entry);
           }
           if (matches.length > 0) {
+            // Record the delivery BEFORE anything is shown or advertised: a
+            // lease refusal here means another park owns this actor's cursor
+            // now, and this one must vanish without emitting a single entry —
+            // two parks both presenting the same comment as new is the exact
+            // failure the row exists to prevent. Any other failure is fatal
+            // for the same reason in mirror: a wake the row never heard about
+            // would come back unmarked next time.
+            if (lease) {
+              try {
+                await ctx.client.parkDelivered({
+                  canvasId: p.id,
+                  actorId: ctx.actor.id,
+                  parkId: lease,
+                  tip: cursors[p.id] ?? 0,
+                });
+              } catch (err) {
+                if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
+                  return standDown();
+                }
+                throw err;
+              }
+            }
+            // Entries a previous park handed to a turn that died carry the
+            // flag: the turn may already have answered them.
+            const flagged =
+              redeliverUpTo === null
+                ? matches
+                : matches.map((m) =>
+                    m.seq <= redeliverUpTo ? { ...m, redelivered: true } : m,
+                  );
             // A summons (a comment for me) lands presence on its canvas
             // automatically — cursor on the thread, "reading your comment…"
             // — so the canvas never goes silent between wake and first op.
@@ -7276,7 +7358,7 @@ command or reply. No \`session start\` needed after a wake.`,
             if (ctx.json) {
               return printJson({
                 cursors,
-                entries: matches,
+                entries: flagged,
                 reason: summoned ? "summons" : "change",
                 /**
                  * **The wake carries the upgrade** (auto-upgrade phase 4), in
@@ -7292,8 +7374,11 @@ command or reply. No \`session start\` needed after a wake.`,
               });
             }
             if (upgraded) console.error(upgraded);
-            for (const entry of matches) {
-              console.log(describeEntry(entry));
+            for (const entry of flagged) {
+              const again = entry.redelivered
+                ? " (delivered before — you may already have answered; check the thread)"
+                : "";
+              console.log(`${describeEntry(entry)}${again}`);
               const op = entry.envelope.op;
               if (op.type === "thread.create" || op.type === "thread.reply") {
                 console.log(`  → isocan comment reply ${op.threadId} "…"`);
@@ -7306,6 +7391,23 @@ command or reply. No \`session start\` needed after a wake.`,
               );
             }
             return;
+          }
+          // Nothing matched: settle the noise so no future park re-reads it.
+          // A lease refusal is the displaced park finding out; any other
+          // failure is survivable — the next claim merely re-scans noise.
+          if (lease) {
+            try {
+              await ctx.client.parkAdvance({
+                canvasId: p.id,
+                actorId: ctx.actor.id,
+                parkId: lease,
+                to: cursors[p.id] ?? 0,
+              });
+            } catch (err) {
+              if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
+                return standDown();
+              }
+            }
           }
           await say("waiting for you…"); // heartbeat between polls
         }

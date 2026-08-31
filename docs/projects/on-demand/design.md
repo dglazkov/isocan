@@ -183,7 +183,10 @@ The home holds what routing needs; the rc holds what running the
 agent needs, because only the rc's machine can honor it. The cursor
 is the important field and must advance only when a turn *completes*, so
 an rc that dies mid-dispatch does not double-fire. (Which side of
-the split the cursor truly belongs to is the walk's phase 1 door.)
+the split the cursor truly belongs to was the walk's phase 1 door,
+closed 2026-08-30: it lives with the daemon the park polls — the home
+itself when the canvas is local, the replica when it is not — see the
+door record in phases.md and `server/src/park.ts`.)
 
 **"Answerable" is a derivation, not a field.** Neither half of the
 record stores it, because a record cannot know its rc died. The

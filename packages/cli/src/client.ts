@@ -30,6 +30,10 @@ import type {
   Canvas,
   RedeemPassResponse,
   UpdateSessionRequest,
+  ParkAdvanceRequest,
+  ParkClaimRequest,
+  ParkClaimResponse,
+  ParkDeliveredRequest,
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
@@ -645,6 +649,25 @@ export class DaemonClient {
    * daemon long-polls until an op lands on any canvas. */
   watchLog(request: WatchLogRequest): Promise<WatchLogResponse> {
     return this.request("POST", "/api/oplog/watch", request);
+  }
+
+  // ---- the durable park cursor (on-demand phase 1) ----
+
+  /** Adopt (or create) this actor's cursor row on a canvas. The returned
+   * `parkId` is the lease every delivery and advance must carry. */
+  parkClaim(request: ParkClaimRequest): Promise<ParkClaimResponse> {
+    return this.request("POST", "/api/park/claim", request);
+  }
+
+  /** A wake handed entries out — record the high-water. Refused with
+   * `PARK_ADOPTED_CODE` when another park has adopted the row. */
+  parkDelivered(request: ParkDeliveredRequest): Promise<{ ok: true }> {
+    return this.request("POST", "/api/park/delivered", request);
+  }
+
+  /** A lap matched nothing — settle the noise without a turn. Same refusal. */
+  parkAdvance(request: ParkAdvanceRequest): Promise<{ ok: true }> {
+    return this.request("POST", "/api/park/advance", request);
   }
 
   undo(canvasId: string, actor: Actor): Promise<LogEntry> {
