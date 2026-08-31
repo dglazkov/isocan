@@ -871,11 +871,18 @@ witness's *shape* does not fit its *client*. Three hypotheses have now been
 killed by measurement in this note — a blocked loop, a port range, and this —
 and the third took an hour, which is the instrument doing its job.
 
-**A limit of that check, recorded rather than glossed:** it ran against a bare
-`http.createServer`, not the real daemon. A Fastify server with a short
-keep-alive timeout could close idle connections and reintroduce churn, so
-"undici pools by default" is not yet "the daemon's clients pool". That is the
-cheap next check.
+**That check had a limit, and the limit was then closed.** It first ran against
+a bare `http.createServer`, so "undici pools by default" was not yet "the
+daemon's clients pool" — a Fastify server with a short keep-alive could have
+closed idle connections and put the churn back. Run against the real daemon:
+
+```
+200 sequential fetch() to the daemon  → 0 TIME_WAIT
+a 100-wide concurrent burst           → 0 TIME_WAIT
+```
+
+Neither shape the suite has produces socket churn. The branch is dead with no
+caveat left standing.
 
 **What the door witness actually leaves standing** is stranger than either
 branch. `incqlen` read **1**: a SYN sitting in the INCOMPLETE queue at the
