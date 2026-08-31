@@ -243,6 +243,7 @@ async function rig() {
       const codes = {
         Enter: { windowsVirtualKeyCode: 13, key: "Enter", text: "\r" },
         k: { windowsVirtualKeyCode: 75, key: "k", code: "KeyK" },
+        Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
       };
       const k = codes[key];
       if (!k) throw new Error(`journeys cannot press ${key} yet`);
@@ -433,6 +434,52 @@ export const JOURNEYS = [
         if (!(head.between > 0)) {
           throw new Error(`${name}'s glyph and title are touching (${head.between}px apart)`);
         }
+      }
+    },
+  },
+  {
+    name: "delete-is-immediate",
+    /**
+     * Reported as: "I selected a screen, hit delete, nothing happened. I did
+     * it again. Then I reloaded and it was gone."
+     *
+     * The cause was a write with no local echo, so the item stayed until the
+     * home's broadcast arrived — invisible on a fast connection, which is why
+     * it shipped. So this journey does not test delete; it tests delete WITH
+     * THE POST STALLED, because a gesture that only works when the network is
+     * quick is the bug wearing a disguise.
+     */
+    what: "a delete leaves the screen at once, even when the home is slow",
+    async run(rig) {
+      await makeCanvas(rig, "Delete journey");
+      await addText(rig, "about to be deleted");
+      await until(rig.b, `document.querySelectorAll(".item").length === 1`, "one item to delete");
+      // Hold the op POST for longer than anybody would wait.
+      await rig.b.ev(`(() => {
+        const real = window.fetch;
+        window.__realFetch = real;
+        window.fetch = async (...a) => {
+          const url = typeof a[0] === "string" ? a[0] : a[0]?.url;
+          if (String(url).endsWith("/api/ops") && a[1]?.method === "POST") {
+            await new Promise(r => setTimeout(r, 9000));
+          }
+          return real(...a);
+        };
+        return true;
+      })()`);
+      /* V rather than clicking the rail: the Select tool is where a presence
+         face can overlap the button, which is a separate question from
+         whether delete is immediate. */
+      await rig.type("v");
+      await sleep(300);
+      await rig.click(".item", "the item");
+      await until(rig.b, `document.querySelectorAll(".item.selected").length === 1`, "a selection");
+      await rig.press("Delete");
+      await sleep(400);
+      const left = await rig.b.ev(`document.querySelectorAll(".item").length`);
+      await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
+      if (left !== 0) {
+        throw new Error("the item is still on screen 400ms after Delete — the write has no echo");
       }
     },
   },

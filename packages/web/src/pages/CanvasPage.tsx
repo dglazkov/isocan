@@ -20,7 +20,7 @@ import {
 import { useUiStore } from "../stores/uiStore.ts";
 import { pasteInto } from "../lib/clipboard.ts";
 import { blobUrl, redo, sendOp, undo } from "../lib/api.ts";
-import { downloadItem } from "../lib/itemactions.ts";
+import { deleteItems, downloadItem } from "../lib/itemactions.ts";
 import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
@@ -553,15 +553,24 @@ function CanvasSurface({
         const ids = ui.selectedItemIds;
         if (ids.length > 0) {
           e.preventDefault();
-          // Batch delete = one undo step for the whole selection.
-          void sendOp(
-            canvasId!,
-            actor,
-            ids.length === 1
-              ? { type: "item.delete", itemId: ids[0]! }
-              : { type: "items.delete", itemIds: ids },
-          );
-          ui.select(null);
+          /**
+           * **Through `deleteItems`, not a second copy of it.**
+           *
+           * This built the same op inline and posted it with `sendOp` — so the
+           * KEY had no local echo while the context menu did, and the item sat
+           * on screen until the home's broadcast arrived. Reported as "I
+           * selected a screen, hit delete, nothing happened, I did it again,
+           * then I reloaded and it was gone", which is exactly what that
+           * looks like on a slow post.
+           *
+           * Fixing `deleteItems` alone did not fix the key, because the key
+           * was never calling it — two doors onto one act, with two
+           * implementations behind them, and only one of them repaired. It is
+           * one door now: the batching (one undo for a whole selection) and
+           * the deselect live in `deleteItems` where the menu already found
+           * them.
+           */
+          void deleteItems(canvasId!, actor, ids);
         }
       } else if (e.key === "F2") {
         // Rename the selection, the way a file manager would.

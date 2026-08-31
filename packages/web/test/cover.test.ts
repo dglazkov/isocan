@@ -65,7 +65,11 @@ describe("the handler is wired through the rule", () => {
   it("found the handler at all (the slice below would otherwise assert on nothing)", () => {
     expect(start).toBeGreaterThan(-1);
     expect(registered).toBeGreaterThan(-1);
-    expect(effect).toContain('"item.delete"'); // the branch the gate protects
+    // The branch the gate protects. It used to build the op inline; it calls
+    // `deleteItems` now, so the KEY and the context menu go through one door
+    // — the key had no local echo while the menu did, and a delete looked like
+    // it did nothing until the home answered.
+    expect(effect).toContain("deleteItems("); // the branch the gate protects
   });
 
   it("imports the rule from its one home rather than restating it", () => {
@@ -86,7 +90,7 @@ describe("the handler is wired through the rule", () => {
     // FIRST, not merely present: a gate that lets one dispatch run before it
     // is half a gate. The rule itself decides what crosses, so nothing in the
     // handler may be consulted earlier.
-    for (const later of ['"k"', "isTyping(", '"item.delete"', "NUDGES[", '"F2"', "setFanned("]) {
+    for (const later of ['"k"', "isTyping(", "deleteItems(", "NUDGES[", '"F2"', "setFanned("]) {
       const at = effect.indexOf(later);
       expect(at, `${later} missing from the handler`).toBeGreaterThan(-1);
       expect(gate, `gate must come before ${later}`).toBeLessThan(at);

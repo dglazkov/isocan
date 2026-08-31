@@ -1,7 +1,6 @@
 import type { Actor } from "@isocan/core";
 import { itemUrl } from "@isocan/core";
-import { sendOp } from "./api.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
 /**
@@ -16,14 +15,28 @@ import { useUiStore } from "../stores/uiStore.ts";
  * place that says which key. Nothing here knows about a menu.
  */
 
-/** Move a selection to the trash — one undo for the whole selection. */
+/**
+ * Move a selection to the trash — one undo for the whole selection.
+ *
+ * **`sendEchoed`, so the thing goes when you press the key.** This posted with
+ * `sendOp`, which has no local echo: the item stayed on screen until the
+ * home's broadcast came back down the socket. On a fast connection that is
+ * invisible, which is exactly why it survived — and reported as "I selected a
+ * screen, hit delete, nothing happened, I did it again, then I reloaded and it
+ * was gone". Reproduced by stalling the POST: the item sits there for three
+ * seconds while the server takes the delete.
+ *
+ * Pressing it twice is the other half of the cost. The second delete is a
+ * second op on an item already in the trash — the home refuses it, and a
+ * person who saw nothing happen has no way to know the first one worked.
+ */
 export async function deleteItems(
   canvasId: string,
   actor: Actor,
   ids: string[],
 ): Promise<void> {
   if (ids.length === 0) return;
-  await sendOp(
+  await sendEchoed(
     canvasId,
     actor,
     ids.length === 1
