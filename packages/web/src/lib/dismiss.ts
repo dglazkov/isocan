@@ -24,7 +24,26 @@ export function useDismissOnOutside<T extends HTMLElement>(
     if (!open) return;
     function onPointerDown(event: PointerEvent) {
       const node = ref.current;
-      if (node && !node.contains(event.target as Node)) latest.current();
+      if (!node) return;
+      const target = event.target as Node;
+      if (node.contains(target)) return;
+      /**
+       * **A portalled surface belongs to whoever opened it.**
+       *
+       * `contains` asks about the TREE, and a popover the menu opened may not
+       * be in it: the emoji picker portals to `document.body` deliberately, to
+       * escape the overflow and transform of whatever it hangs off. So an
+       * emoji click read as "outside", the identity menu closed, and the
+       * picker unmounted before its own `onPick` could run — the click
+       * dismissed the menu and chose nothing, every time.
+       *
+       * Anything marked `data-owned-popover` is treated as inside. It is an
+       * attribute rather than a class list so the rule is about INTENT — this
+       * surface belongs to something — and not about which component happens
+       * to be portalling this month.
+       */
+      if ((target as Element)?.closest?.("[data-owned-popover]")) return;
+      latest.current();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);

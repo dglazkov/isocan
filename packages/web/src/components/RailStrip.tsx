@@ -1,5 +1,5 @@
 import type { Actor } from "@isocan/core";
-import { mainThread, sessionState } from "@isocan/core";
+import { mainThread, sessionState, faceMark} from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUnreadStore } from "../stores/unreadStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -9,6 +9,7 @@ import { facesFor } from "../lib/facepile.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openPanel } from "../lib/panels.ts";
 import { AgentsGlyph, ChatGlyph } from "./Glyphs.tsx";
+import { useActorMarks } from "../lib/marks.ts";
 
 /**
  * **The rail when it is shut.**
@@ -33,6 +34,7 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
   const sessions = useCanvasStore((s) => s.sessions);
   const seen = useUnreadStore((s) => s.seen);
   const colors = useActorColors();
+  const marks = useActorMarks();
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
 
@@ -117,7 +119,7 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
                decorative, which is the thing phase 3 was trying to avoid. */
             onClick={() => openPanel(canvasId, "agents")}
           >
-            {face.label.trim().charAt(0).toUpperCase()}
+            {faceMark(marks, face.actor, face.label)}
           </button>
         );
       })}

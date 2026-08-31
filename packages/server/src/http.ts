@@ -820,6 +820,17 @@ export function registerRoutes(
     if (!body.actor) {
       return reply.status(400).send({ error: "actor is required", code: "bad-op" });
     }
+    if (body.op?.type === "actor.setMark") {
+      // Home-scoped like the colour beside it: the registry changes, not a
+      // canvas, so it takes the same route and never reaches a reducer.
+      const entry = await engine.setActorMark({
+        op: body.op,
+        actor: body.actor,
+        badgeId: req.badge!.badgeId,
+        ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
+      });
+      return { seq: entry.seq, envelope: entry.envelope };
+    }
     if (body.op?.type === "actor.setColor") {
       // Home-scoped like a claim: the registry, not a canvas, is what changes.
       const entry = await engine.setActorColor({
@@ -948,6 +959,10 @@ export function registerRoutes(
   /** Current names, for clients rendering words somebody wrote under a name
    * they no longer use — the canvases page paints them too. */
   app.get("/api/names", async () => engine.actorNames());
+  /* The marks, beside the names, because they answer the same question: what
+     goes in the disc. Kept a separate route rather than folded into `/names`
+     so an older client reading names is unaffected. */
+  app.get("/api/marks", async () => engine.actorMarks());
 
   /** How this home serves — today, only whether a content origin exists.
    * See `SERVING_ROUTE` in core for the contract and `content.ts` for the

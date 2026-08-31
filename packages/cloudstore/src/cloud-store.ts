@@ -11,6 +11,7 @@ import type {
 } from "@isocan/core";
 import {
   applyActorColor,
+  applyActorMark,
   applyOperation,
   bindName,
   COMMAND_NAME,
@@ -405,6 +406,8 @@ export class CloudStore implements Store {
         registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts });
       } else if (op.type === "actor.setColor") {
         registry = applyActorColor(registry, op);
+      } else if (op.type === "actor.setMark") {
+        registry = applyActorMark(registry, op);
       } else {
         continue;
       }

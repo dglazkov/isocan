@@ -116,6 +116,30 @@ export type Operation =
       actorId: string;
       color: string | null;
     }
+  | {
+      /**
+       * **The mark you wear instead of your initial.**
+       *
+       * A face is a coloured disc with the first letter of a name in it, which
+       * is fine until a canvas has a Di, a Dion and a Dimitri on it. An emoji
+       * is the thing people actually reach for — presence labels have carried
+       * one by convention for a while ("Kenny 🤖") — and this makes it a fact
+       * rather than a habit inside a string.
+       *
+       * **A field and not a prefix on the name**, for the reason `mapParent`
+       * is not `parent`: a name is matched on (`isocan history di` takes a
+       * prefix), listed, and sorted, and a name that sometimes begins with a
+       * pictograph breaks all three in ways nobody would connect to the emoji
+       * they picked.
+       *
+       * Home-scoped and not undoable, exactly like `actor.setColor`: null puts
+       * you back on your initial, so "no row" and "derived" are one state.
+       */
+      type: "actor.setMark";
+      actorId: string;
+      /** One emoji, or null to go back to the initial. */
+      mark: string | null;
+    }
   // ---- canvases ----
   //
   // **`project.*` is a deliberate holdout** (phase 13.5's rename). Everything

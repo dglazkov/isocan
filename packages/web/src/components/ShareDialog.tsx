@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Grant, SweepReport } from "@isocan/core";
-import { canvasUrl, collectCanvasActors, grantSubjectOf, LINK, roster } from "@isocan/core";
+import { canvasUrl, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
 import type { RowState } from "@isocan/core";
 import { useAnswerable } from "../lib/answerable.ts";
 import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
@@ -8,6 +8,7 @@ import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 /**
  * **Who may be here** — the facepile's twin, and Scenes 1–2's whole gesture.
@@ -56,6 +57,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const sessions = useCanvasStore((s) => s.sessions);
   const answerable = useAnswerable(record?.id ?? null);
   const colors = useActorColors();
+  const marks = useActorMarks();
   const names = useActorNames();
   const [grants, setGrants] = useState<Grant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -370,7 +372,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
               className="face-mark"
               style={{ background: actorColorIn(colors, who.actor.id) }}
             >
-              {actorNameIn(names, who.actor).charAt(0).toUpperCase()}
+              {faceMark(marks, who.actor, actorNameIn(names, who.actor))}
             </span>
             <span className="share-roster-name">{actorNameIn(names, who.actor)}</span>
             <span className="share-roster-kind">{who.kind}</span>

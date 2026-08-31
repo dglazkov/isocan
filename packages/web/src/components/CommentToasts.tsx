@@ -1,3 +1,4 @@
+import { faceMark } from "@isocan/core";
 import { useEffect } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -6,6 +7,7 @@ import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 const LIFETIME_MS = 12_000; // long enough to read, short enough to forgive
 
@@ -43,6 +45,7 @@ export function CommentToasts() {
 
 function Toast({ notice }: { notice: CommentNotice }) {
   const colors = useActorColors();
+  const marks = useActorMarks();
   const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas?.threads[notice.threadId];
@@ -68,7 +71,7 @@ function Toast({ notice }: { notice: CommentNotice }) {
     <div className="toast">
       <button className="toast-body" onClick={jump} title="Show me where">
         <span className="toast-avatar" style={{ background: actorColorIn(colors, notice.author.id) }}>
-          {actorNameIn(names, notice.author).charAt(0).toUpperCase()}
+          {faceMark(marks, notice.author, actorNameIn(names, notice.author))}
         </span>
         <span className="toast-text">
           <span className="toast-who">

@@ -125,6 +125,17 @@ export function EmojiPicker({
     <div
       className="react-picker"
       role="menu"
+      /**
+       * Portalled to the body to escape overflow and transforms — this says it
+       * still BELONGS to whatever opened it.
+       *
+       * The `stopPropagation` below is not enough on its own and it is worth
+       * knowing why: `useDismissOnOutside` listens on the CAPTURE phase, so it
+       * has already run by the time a bubble-phase handler here could stop
+       * anything. A menu that opened this picker was closing itself before the
+       * click could choose an emoji.
+       */
+      data-owned-popover=""
       ref={box}
       // Hidden for the one frame between mounting (to be measured) and being
       // placed — otherwise it flashes at the top-left corner first.

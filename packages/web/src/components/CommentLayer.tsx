@@ -8,7 +8,7 @@ import {
   extractMentions,
   newCommentId,
   newThreadId,
-  workedFor, itemThread, atCorner} from "@isocan/core";
+  workedFor, itemThread, atCorner, faceMark} from "@isocan/core";
 
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { type PendingComment, useUiStore } from "../stores/uiStore.ts";
@@ -26,6 +26,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.tsx";
 import { OnIt } from "./OnIt.tsx";
 import { liveActorIds } from "../lib/presence.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -52,6 +53,7 @@ export function makeComment(body: string): NewComment {
 export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const viewport = useUiStore((s) => s.viewport);
+  const marks = useActorMarks();
   const drag = useUiStore((s) => s.drag);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
@@ -176,6 +178,7 @@ function ThreadPin({
 }) {
   const colors = useActorColors();
   const names = useActorNames();
+  const marks = useActorMarks();
   // A ring says somebody is here now. Without it a face on a pin looks the
   // same whether they are reading this or asleep, and "who can I ask" is the
   // question a pin is usually being looked at to answer.
@@ -298,7 +301,7 @@ function ThreadPin({
           key={author.id}
           style={{ background: actorColorIn(colors, author.id) }}
         >
-          {actorNameIn(names, author).charAt(0).toUpperCase()}
+          {faceMark(marks, author, actorNameIn(names, author))}
         </span>
       ))}
       {overflow > 0 && <span className="pin-avatar pin-more">+{overflow}</span>}
@@ -455,6 +458,7 @@ function ComposePopover({
 }) {
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.canvas);
+  const marks = useActorMarks();
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
