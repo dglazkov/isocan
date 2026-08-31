@@ -14,7 +14,15 @@ import type {
   SlashCommand,
 } from "@isocan/core";
 import { applyOperation, newOpId, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
-import { ApiError, CLIENT_ID, homeAnswered, knockOnDoor, postOp, sendOp } from "../lib/api.ts";
+import {
+  ApiError,
+  CLIENT_ID,
+  getBacking,
+  homeAnswered,
+  knockOnDoor,
+  postOp,
+  sendOp,
+} from "../lib/api.ts";
 import {
   flushReplicaWrites,
   forgetReplica,
@@ -536,20 +544,26 @@ export async function sendEchoed(
  */
 /**
  * Ask this machine's daemon what its disk says about the canvas's backed
- * items. Called when a canvas opens and after a save, because those are the
- * two moments the answer can change; nothing polls, and nothing watches the
- * filesystem — the same "every crossing is a gesture" line `＋` draws.
+ * items — `getBacking` has the route, and why nothing polls for it.
  */
 export async function loadBacking(canvasId: string): Promise<void> {
   try {
-    const res = await fetch(`/api/projects/${canvasId}/backing`);
-    if (!res.ok) return;
-    const backing = (await res.json()) as { bound: boolean; onDisk: Record<string, string> };
+    const backing = await getBacking(canvasId);
     // Only if this is still the canvas we are on: a fast flip between two
     // canvases would otherwise leave one machine's answer on the other.
     if (useCanvasStore.getState().canvasId === canvasId) useCanvasStore.setState({ backing });
   } catch {
-    // No answer is `bound: false`, which is already the resting state.
+    // Staying silent is right for every refusal this route makes: a hosted
+    // canvas, a machine with no checkout, a daemon that did not answer are
+    // all `bound: false`, which is already the resting state.
+    //
+    // One refusal was NOT that, and this is where it was swallowed. A 401 —
+    // one cleared cookie — landed on the resting state and stayed there, so a
+    // canvas opened with a checkout right underneath it showed every backed
+    // item as `unbound` — and `unbound` is the one state where the Save
+    // button does not render at all, so the failure removed the very control
+    // that would have shown it. `getBacking` goes to the door and comes back
+    // before it gets here.
   }
 }
 
