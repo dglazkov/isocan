@@ -86,7 +86,7 @@ export function AgentRowView({
   // liveness derivation phase 6 owes. The one control it carries is the one
   // journey 8 puts here: Dismiss, which withdraws the standing and touches
   // nothing else.
-  if (row.state === "enrolled") {
+  if (row.state === "enrolled" || row.state === "answerable") {
     return (
       <div
         className="wb-row away enrolled"
@@ -113,12 +113,14 @@ export function AgentRowView({
           <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
           <span className="wb-row-name">
             <b>{row.name}</b>
-            <i>enrolled</i>
+            <i>{row.state}</i>
           </span>
           <span className="wb-row-line">
-            {row.lastAct
-              ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
-              : "enrolled to answer here"}
+            {row.state === "answerable"
+              ? "answers if you comment"
+              : row.lastAct
+                ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
+                : "enrolled — nobody is listening right now"}
           </span>
           {onDismiss && (
             <button

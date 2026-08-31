@@ -70,7 +70,7 @@ async function post(url: string, body: unknown): Promise<any> {
   return res.json().catch(() => null);
 }
 
-async function threads(): Promise<Record<string, { comments: Array<{ author: { name: string }; body: string }> }>> {
+async function threads(): Promise<Record<string, { comments: Array<{ author: { id: string; name: string }; body: string }> }>> {
   const res = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
   return ((await res.json()) as any).canvas.threads;
 }
@@ -441,6 +441,75 @@ describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
     },
     300_000,
   );
+});
+
+describe("the roster tells the truth (journey 7, phase 6)", () => {
+  const whoStanding = async (): Promise<Array<{ actor: { name: string }; state: string }>> => {
+    const run = await isocan("--json", "who");
+    return (JSON.parse(run.stdout) as { standing: Array<{ actor: { name: string }; state: string }> })
+      .standing;
+  };
+
+  it("answerable is the connection, and only the connection — a dead rc reads enrolled at once", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    // Nothing running: enrolled, and the roster says nobody is listening.
+    expect(await whoStanding()).toEqual([
+      { actor: expect.objectContaining({ name: "Sian" }), state: "enrolled" },
+    ]);
+
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    // The rc's hold makes Sian answerable — derived from the open
+    // connection, not from any record.
+    await until(
+      whoStanding,
+      (rows) => rows.some((r) => r.state === "answerable"),
+      "answerable while the rc holds",
+    );
+
+    // kill -9: no goodbye, no teardown. The socket closes with the process,
+    // so the claim dies with it — no five-minute TTL lingering, which is
+    // exactly the lie journey 7 forbids.
+    rc.child.kill("SIGKILL");
+    await until(
+      whoStanding,
+      (rows) => rows.every((r) => r.state === "enrolled"),
+      "the claim dying with the connection",
+      10_000,
+    );
+  }, 40_000);
+
+  it("a mid-turn agent is a live row, not a standing one — three readings, distinguishable", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Percy", "--harness", "fake");
+    const rc = startRc({ FAKE_ACP_SLOW_MS: "4000", FAKE_ACP_REPLY: "0" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await until(
+      whoStanding,
+      (rows) => rows.filter((r) => r.state === "answerable").length === 2,
+      "both answerable",
+    );
+
+    await summon("th_w", "@Sian have a look?");
+    // Mid-turn: Sian holds a live session (a session row, not standing);
+    // Percy is still answerable — the three readings side by side.
+    await until(
+      async () => {
+        const run = await isocan("--json", "who");
+        return JSON.parse(run.stdout) as {
+          sessions: Array<{ actor: { name: string }; kind: string }>;
+          standing: Array<{ actor: { name: string }; state: string }>;
+        };
+      },
+      (w) =>
+        w.sessions.some((s) => s.actor.name === "Sian" && s.kind === "cli") &&
+        w.standing.some((r) => r.actor.name === "Percy" && r.state === "answerable") &&
+        !w.standing.some((r) => r.actor.name === "Sian"),
+      "running beside answerable",
+    );
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
 });
 
 describe("the rules are readable in one place (journey 4)", () => {

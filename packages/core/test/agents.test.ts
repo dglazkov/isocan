@@ -131,6 +131,16 @@ describe("the roster shows the record (phase 2.5)", () => {
     expect(rows[0]!.state).toBe("enrolled");
   });
 
+  it("answerable is the caller's derivation, never the record's claim (phase 6)", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    // A caller that can see the connection-bound holds passes the set…
+    const seen = roster([], s.canvas, Date.now(), new Set([sian.id]));
+    expect(seen.find((r) => r.actorId === sian.id)!.state).toBe("answerable");
+    // …and one that cannot (the web on a replica) under-claims, safely.
+    const blind = roster([], s.canvas, Date.now());
+    expect(blind.find((r) => r.actorId === sian.id)!.state).toBe("enrolled");
+  });
+
   it("a parked rc's announcement is a process fact, never a roster row", () => {
     const person: Actor = { id: "usr_dimitri", name: "Dimitri" };
     const s = seedState();

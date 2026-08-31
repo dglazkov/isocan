@@ -11,16 +11,19 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: phases 1 through 5 are closed (2026-08-30) — the
-doorbell works, bounded and loud.** The park's cursor is durable (1);
-enrolment is a record with verbs in both spellings and a narrating rc
-(2); the tray and dialog are live (2.5, personas deferred); the ACP
-client speaks to real adapters with sessions that genuinely resume (3);
-dispatch answers — a real summoned Claude replied in a thread, presence
-included (4); and the limits hold with every stop visible, spoken by the
-new SYSTEM VOICE — isocan itself can talk (5, Dimitri's addition). Phase
-6 (the roster's words, connection-bound) is the walk's last. Before the
-walk began, the mechanism was revised once already.
+**Where we are: THE WALK IS COMPLETE (2026-08-30) — all phases closed
+in one day.** The park's cursor is durable (1); enrolment is a record
+with verbs in both spellings and a narrating rc (2); the tray and dialog
+are live (2.5, personas deferred); the ACP client speaks to real
+adapters with sessions that genuinely resume (3); dispatch answers — a
+real summoned Claude replied in a thread, presence included (4); the
+limits hold with every stop visible, spoken by the new SYSTEM VOICE (5,
+Dimitri's addition); and `isocan who` tells answerable from running from
+gone, connection-bound (6). Journey 10 — a week on one canvas — is now a
+matter of living with it rather than building it; the deferred residue
+is personas (the templates, the rules-defaulting) and the web tray's
+answerable relay. Before the walk began, the mechanism was revised once
+already.
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
 Withdrawn 30 Aug in review — see the mechanism section of design.md for
@@ -572,7 +575,27 @@ words). Scope any future machinery-speaks moment to it.
 
 ## Phase 6 — The roster
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Journey 7 walks: `isocan who` tells the
+three readings apart, and "answerable" dies with the rc's socket —
+`kill -9` the rc and the very next `who` says `enrolled`, no window, no
+TTL. Proven in `cli/test/dispatch.test.ts` ("the roster tells the
+truth"), including running-beside-answerable in one view.
+
+**Closed at this door, 2026-08-30 — the word: `answerable` /
+`enrolled`.** The rc-alive state earns the design doc's own word, because
+it is finally derived from a connection: the rc holds a request open
+against the daemon (`POST /api/rc/hold`, ten-second holds re-issued
+back-to-back), the daemon counts its agents answerable exactly while a
+hold is open, and the microsecond gap between holds can only err toward
+"not answerable" — the direction journey 7 permits. The rc-gone state
+keeps the record's word, `enrolled`, with the line saying the hard part
+out loud: "nobody is listening right now." `roster()` takes the
+answerable set as a parameter; a caller that cannot see the holds (the
+web app on a replica — a remote rc's connection is at another daemon)
+passes nothing and under-claims to `enrolled`, safely. One derivation,
+two knowledge levels, honest at both. The registry is in-memory per
+daemon, like presence — a registry that survived its daemon would be the
+TTL lie again with extra steps.
 
 **Work:** What `isocan who` says about an agent that is not running.
 Presence stays ephemeral; this is a second, durable fact read alongside
@@ -598,11 +621,17 @@ without a fresh look.
 
 **Outcome:** `isocan who` distinguishes a running agent, an answerable
 agent, and an absent one — including "enrolled, but the `rc` is gone, so
-nobody is coming." All three, per journey 7's acceptance.
+nobody is coming." All three, per journey 7's acceptance. *(Holds:
+`who`'s table appends standing rows, and `--json` answers
+`{sessions, standing}`.)*
 
 **Proof:** vitest for `who`'s output in all states, dead `rc` included.
+*(Done — the dead-rc case is a real `SIGKILL`, and the claim was gone on
+the next read.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned; journey 7 had
+already decided the hard half, and the mechanism bent to it as the
+journeys' rule requires.*
 
 ## Deliberately not in the walk
 

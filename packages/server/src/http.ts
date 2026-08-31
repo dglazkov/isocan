@@ -1822,6 +1822,52 @@ export function registerRoutes(
     });
   });
 
+  /**
+   * **Connection-bound rc liveness** (agents-on-demand phase 6). Journey 7
+   * pinned the hard half: "answerable" is never claimed while the rc that
+   * would answer is dead — no window, no TTL lie. So the fact is the
+   * CONNECTION: an rc holds this request open, its agents are answerable
+   * exactly while a hold is open, and a dead rc's socket closes instantly.
+   * The rc re-issues the hold back-to-back; the microsecond gap between
+   * holds can only err toward "not answerable", which is the direction
+   * journey 7 permits. In-memory, per process, like presence — a registry
+   * that survived its daemon would be the lie again with extra steps.
+   */
+  const rcHolds = new Map<string, Map<object, ReadonlySet<string>>>();
+  app.post("/api/rc/hold", async (req) => {
+    const body = (req.body ?? {}) as { canvasId?: string; actorIds?: string[]; waitMs?: number };
+    const canvasId = body.canvasId ?? "";
+    const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
+    const token = {};
+    let held = rcHolds.get(canvasId);
+    if (!held) rcHolds.set(canvasId, (held = new Map()));
+    held.set(token, actorIds);
+    try {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, Math.min(Number(body.waitMs) || 0, 55_000));
+        req.raw.on("close", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    } finally {
+      held.delete(token);
+      if (held.size === 0) rcHolds.delete(canvasId);
+    }
+    return { ok: true };
+  });
+
+  /** Who answers here if summoned — the union of every open hold's agents.
+   * Empty exactly when no rc is holding a connection for this canvas. */
+  app.get("/api/projects/:id/rc", async (req) => {
+    const { id } = req.params as { id: string };
+    const actorIds = new Set<string>();
+    for (const agents of rcHolds.get(id)?.values() ?? []) {
+      for (const actorId of agents) actorIds.add(actorId);
+    }
+    return { actorIds: [...actorIds] };
+  });
+
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;

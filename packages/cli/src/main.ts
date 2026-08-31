@@ -6774,9 +6774,27 @@ program
           known.map((n) => ({ name: n.name, id: n.id, live: n.live ? "yes" : "—" })),
         );
       }
-      if (ctx.json) return printJson(sessions);
-      printTable(
-        sessions.map((s) => ({
+      /**
+       * **The roster tells the truth about absent agents** (phase 6,
+       * journey 7). Standing agents get rows beside the live sessions —
+       * `answerable` exactly when a live rc holds a connection claiming
+       * them (the daemon's connection-bound fact, never a TTL), `enrolled`
+       * when the record stands but nobody is listening. Three readings,
+       * distinguishable without knowing how any of it works.
+       */
+      const answering = new Set(
+        (await ctx.client.rcAnswering(p.id).catch(() => ({ actorIds: [] as string[] }))).actorIds,
+      );
+      const liveActorIds = new Set(sessions.filter((s) => s.kind !== "rc").map((s) => s.actor.id));
+      const standing = Object.values(canvas.agents ?? {})
+        .filter((a) => !liveActorIds.has(a.actor.id))
+        .map((a) => ({
+          actor: a.actor,
+          state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
+        }));
+      if (ctx.json) return printJson({ sessions, standing });
+      printTable([
+        ...sessions.map((s) => ({
           who: s.label ?? s.actor.name,
           // `kind` says cli-or-web; `harness` says WHICH agent. Two agents in
           // one terminal are two `cli` rows, and telling them apart is the
@@ -6793,7 +6811,20 @@ program
           status: s.status ?? "—",
           seen: s.lastSeen,
         })),
-      );
+        ...standing.map((a) => ({
+          who: a.actor.name,
+          kind: "agent",
+          state: a.state,
+          cursor: "—",
+          selection: "—",
+          activity: "—",
+          status:
+            a.state === "answerable"
+              ? "answers if you comment"
+              : "enrolled — nobody is listening right now",
+          seen: "—",
+        })),
+      ]);
     }),
   );
 
@@ -7915,6 +7946,30 @@ rcCommand.action(
       }
     };
     for (const actorId of Object.keys(opening)) await claimAgent(actorId);
+
+    /**
+     * **The connection IS the fact** (phase 6). This hold, re-issued
+     * back-to-back forever, is what makes the roster's `answerable` true:
+     * the daemon counts these agents answerable exactly while a hold is
+     * open, and a dead rc's socket closes instantly — no window, no TTL
+     * lie, per journey 7. Ten-second holds so a fresh enrolment joins the
+     * claim within seconds; the microsecond gap between holds can only err
+     * toward "not answerable", the permitted direction.
+     */
+    void (async () => {
+      for (;;) {
+        try {
+          await ctx.client.rcHold({
+            canvasId: p.id,
+            actorIds: [...dispatches.keys()],
+            waitMs: 10_000,
+          });
+        } catch {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    })();
+
 
     /**
      * **The auto-upgrade window, restored** (the design's open question,
