@@ -32,25 +32,45 @@ const SRC = fileURLToPath(new URL("../src", import.meta.url));
 /**
  * **The api lib is the allowlist, and it is one file long.**
  *
- * Not an exemption — it is the door. `request` lives there, and so do the two
- * calls that cannot use it because they do not speak json (`uploadBlob` sends
- * bytes, `readBoundFile` receives them); both spell the 401 recovery out by
- * hand, in that file, where the next reader meets all three together.
+ * Not an exemption — it is the door. `request` lives there, and so do the
+ * three calls that cannot use it because they do not speak json (`uploadBlob`
+ * sends bytes, `readBoundFile` and `fetchBlob` receive them); each spells the
+ * 401 recovery out by hand, in that file, where the next reader meets all
+ * four together.
  */
 const HOME = "lib/api.ts";
 
 /**
  * The rule is about the SPELLING, not about `fetch`, and deliberately so.
  *
- * A dozen calls read blob bytes with a bare `fetch(blobUrl(...))`, and they
- * are not what this is for: the route is still spelled once, in the api lib,
- * and those calls want bytes rather than json. Asking about `fetch` instead
- * would have to allowlist all of them and would still miss a route built into
- * a variable, passed to a helper, or dropped into an `src=`. Every one of
- * those is a second place that knows the URL, which is the thing that goes
- * wrong.
+ * Asking about `fetch` would miss a route built into a variable, passed to a
+ * helper, or dropped into an `src=`. Every one of those is a second place
+ * that knows the URL, which is the thing that goes wrong.
+ *
+ * The cost of that choice is the second rule below. Seven calls read blob
+ * bytes with a bare `fetch(blobUrl(...))` and this one stayed green through
+ * every one of them — the route WAS spelled once, in the api lib, and the
+ * recovery was missing all the same.
  */
 const ROUTE = /["'`]\/api\//;
+
+/**
+ * **`blobUrl` is for a `src`. Reading bytes goes through the api lib too.**
+ *
+ * The blob route is the one a caller legitimately needs the URL of: an
+ * `<img>`, a `<video>`, an iframe. The browser loads those itself and there
+ * is no response for anybody to recover from — so `blobUrl` stays exported
+ * and those calls are right.
+ *
+ * `fetch(blobUrl(...))` is the other thing, and it went wrong in the way the
+ * route guard was written to catch and could not see. Seven of them, in six
+ * files, each reading a 401 as an ANSWER: an empty composer over words that
+ * still exist, an editor opened on `{"error":"..."}` and one ⌘S from saving
+ * it over the file, a cross-canvas paste that pasted nothing and said
+ * nothing. `readBlob` and `readBlobText` knock on the door; this keeps the
+ * shape from coming back.
+ */
+const RAW_BLOB = /\bfetch\(\s*blobUrl\b/;
 
 /** Code, numbered from 1, with comments blanked out — prose ABOUT the rule is
  *  not a breach of it, and half these route names appear in comments
@@ -78,6 +98,18 @@ describe("the app talks to its daemon through one door", () => {
     expect(
       offenders,
       "one route, one spelling, one place: put it in lib/api.ts and call it from here",
+    ).toEqual([]);
+  });
+
+  it("reads a blob's bytes through the api lib, not through its URL", () => {
+    const offenders = files.flatMap((rel) =>
+      codeLines(rel)
+        .filter(([, line]) => RAW_BLOB.test(line))
+        .map(([n, line]) => `src/${rel}:${n} — ${line.trim()}`),
+    );
+    expect(
+      offenders,
+      "a bare fetch of a blob has no 401 recovery: use readBlob / readBlobText",
     ).toEqual([]);
   });
 

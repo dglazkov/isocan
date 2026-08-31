@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DOOR_ROUTE } from "@isocan/core";
-import { onReBadge, sendOp } from "../src/lib/api.ts";
+import { homeAnswered, onReBadge, readBlob, readBlobText, sendOp } from "../src/lib/api.ts";
 import { enterAs, reclaimIdentity } from "../src/lib/identity.ts";
 
 /**
@@ -166,5 +166,112 @@ describe("a tab whose badge was deleted", () => {
     badged = true;
     const me = await enterAs("Kenny");
     expect(me).toEqual({ id: persona.id, name: persona.name });
+  });
+});
+
+/**
+ * **The same landmine, on the reads that carry BYTES.**
+ *
+ * `request` grew the recovery above and seven calls never got it, because
+ * they wanted a file rather than json and so wrote the fetch by hand:
+ * `fetch(blobUrl(...))`. The route was still spelled once in the api lib, so
+ * the door guard passed — and every one of those calls read a 401 as the
+ * file. An empty composer over words that still exist. An editor opened on
+ * `{"error":"..."}`, one ⌘S from saving that over the file. A cross-canvas
+ * paste that pasted nothing and said nothing.
+ *
+ * A cleared cookie is the ordinary way in: nothing about it says the file is
+ * gone, and the recovery costs one knock. What this pins is that the bytes
+ * that come back are the FILE's — and that when the home is still refusing
+ * after the knock, the caller is told so rather than handed emptiness.
+ */
+describe("a blob read whose badge was deleted", () => {
+  const BLOB = "/api/projects/prj_1/blobs/blb_abc";
+
+  /** A home that hands over bytes, and only to a badge it knows. */
+  function fakeBlobHome(bytes = "the file's own words"): void {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      seen.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === DOOR_ROUTE) {
+        badged = true;
+        return new Response(JSON.stringify({ badgeId: "bdg_new" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (!badged) {
+        return new Response(JSON.stringify({ code: "no-badge", error: "a badge is required" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(bytes, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    }) as typeof fetch;
+  }
+
+  it("knocks on the door and comes back with the file, not the refusal", async () => {
+    fakeBlobHome();
+    await expect(readBlobText("prj_1", "blb_abc")).resolves.toBe("the file's own words");
+    // The same order the ops path keeps, for the same reason: the door hands
+    // out a badge holding no claims, so the persona is re-claimed before the
+    // read is replayed.
+    expect(seen).toEqual([
+      `GET ${BLOB}`, // refused: no badge
+      `POST ${DOOR_ROUTE}`,
+      "POST /api/ops", // the re-claim
+      `GET ${BLOB}`, // and now the bytes
+    ]);
+  });
+
+  it("hands over bytes the same way", async () => {
+    fakeBlobHome("bytes");
+    const blob = await readBlob("prj_1", "blb_abc");
+    expect(await blob.text()).toBe("bytes");
+  });
+
+  it("refuses out loud when the knock did not help — never with the file's bytes", async () => {
+    /* The half that made every caller wrong. A read that cannot recover has
+       to REFUSE: an empty string here is what an editor opens on, what a copy
+       copies, and what a text item renders as blank. And the refusal has to
+       be the home's own, so `homeAnswered` can tell "it said no" from "it
+       never answered". */
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return new Response(JSON.stringify({ code: "no-blob", error: "blob not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const err = await readBlobText("prj_1", "blb_gone").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(homeAnswered(err)).toBe(true);
+    expect((err as Error).message).toBe("blob not found");
+  });
+
+  it("knocks exactly once, and never loops", async () => {
+    // A door that mints a badge the home still will not take is the shape a
+    // retry loop is made of — one knock per read, then the refusal is the
+    // caller's to hear.
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      seen.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === DOOR_ROUTE) {
+        return new Response(JSON.stringify({ badgeId: "bdg_new" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ code: "no-badge", error: "a badge is required" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    await expect(readBlobText("prj_1", "blb_abc")).rejects.toThrow(/a badge is required/);
+    // Twice: the read, and the one replay. A third would be a loop.
+    expect(seen.filter((r) => r === `GET ${BLOB}`)).toHaveLength(2);
   });
 });

@@ -33,21 +33,21 @@ import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
  * repo's own `contrastRatio`, so a palette that cannot carry text says so here
  * rather than in an audit three weeks later.
  */
-function DesignSystemViewInner({ url }: { url: string }) {
+function DesignSystemViewInner({ canvasId, blobHash }: { canvasId: string; blobHash: string }) {
   const [load, setLoad] = useState<TextLoad>(() => {
-    const cached = peekBlobText(url);
+    const cached = peekBlobText(canvasId, blobHash);
     return cached === undefined ? null : { text: cached };
   });
 
   useEffect(() => {
     let cancelled = false;
-    fetchBlobText(url)
+    fetchBlobText(canvasId, blobHash)
       .then((body) => !cancelled && setLoad({ text: body }))
       .catch((err: Error) => !cancelled && setLoad({ failed: err.message }));
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [canvasId, blobHash]);
 
   /**
    * **Parsed once per document, not once per frame.**

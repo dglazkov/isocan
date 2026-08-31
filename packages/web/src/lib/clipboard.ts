@@ -6,8 +6,8 @@ import {
   newItemId,
   newVersionId,
 } from "@isocan/core";
-import { blobUrl, uploadBlob } from "./api.ts";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { readBlob, uploadBlob } from "./api.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
  * **Copy and paste, including into a different canvas.**
@@ -52,6 +52,7 @@ export async function pasteInto(
   // group keeps its shape, and finds ground that is clear here.
   const placements = duplicatePlacements(canvas, clipboard.items, want);
   const made: string[] = [];
+  let skipped = 0;
   for (const { item, x, y } of placements) {
     const version = item.versions.find((v) => v.id === item.currentVersionId);
     if (!version) continue;
@@ -60,14 +61,22 @@ export async function pasteInto(
       /**
        * A blob is addressed per canvas, so the bytes have to be put where
        * the new item will look for them. Read through the app origin's
-       * badged route — this is a chrome read, not a frame, so it uses the
-       * same URL every other chrome read uses (content-origin invariant 3).
+       * badged route — this is a chrome read, not a frame, so it goes the
+       * way every other chrome read goes (content-origin invariant 3).
+       *
+       * Skipping an item whose bytes are gone is still the right answer, and
+       * still not a reason to fail the other four. What was wrong is that it
+       * used to be SILENT, and that a lost badge took the same branch: a
+       * cross-canvas paste on a tab with a cleared cookie skipped every item
+       * and looked like a paste of nothing. `readBlob` knocks first, so a
+       * skip now means the source really is gone — and the count below says
+       * so out loud either way.
        */
-      const res = await fetch(blobUrl(clipboard.canvasId, version.blobHash), {
-        credentials: "include",
-      });
-      if (!res.ok) continue; // the source is gone; skip it rather than fail the paste
-      const bytes = await res.blob();
+      const bytes = await readBlob(clipboard.canvasId, version.blobHash).catch(() => null);
+      if (bytes === null) {
+        skipped++;
+        continue;
+      }
       const up = await uploadBlob(canvasId, bytes, version.filename);
       blobHash = up.blobHash;
     }
@@ -95,6 +104,11 @@ export async function pasteInto(
       group,
     );
     made.push(itemId);
+  }
+  if (skipped > 0) {
+    setNotice(
+      `${skipped} item${skipped === 1 ? "" : "s"} could not be pasted — the copied bytes could not be read.`,
+    );
   }
   return made;
 }

@@ -10,8 +10,8 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { isocanSyntax } from "../lib/cmtheme.ts";
-import { sendEchoed } from "../stores/canvasStore.ts";
-import { blobUrl, uploadBlob } from "../lib/api.ts";
+import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
+import { readBlobText, uploadBlob } from "../lib/api.ts";
 
 /**
  * The stage's Edit mode: the artifact's text, and ⌘S lands a VERSION.
@@ -75,6 +75,17 @@ export function StageEditor({
   // a version landing while you type must not re-key your draft.
   const baseVersion = useRef(current.id);
   const [loaded, setLoaded] = useState(false);
+  /**
+   * The saved file could not be read, and there was no draft to fall back on.
+   *
+   * Its own state rather than an empty buffer, because an empty buffer here
+   * is not a smaller failure — it is a WRONG one. The read used to take
+   * whatever came back and put it in the editor: a 401's
+   * `{"error":"lost badge"}` opened as the file's contents, one ⌘S from being
+   * saved over the file. The catch beside it opened a blank document for a
+   * file that is still on disk, which is the same lie with less text in it.
+   */
+  const [unreadable, setUnreadable] = useState<string | null>(null);
   const [dirty, setDirtyState] = useState(false);
   // The keymap's closure is created once; it reads the ref, the bar reads
   // the state — one setter keeps the two from drifting.
@@ -96,20 +107,23 @@ export function StageEditor({
     let live = true;
     const key = draftKey(canvasId, item.id, baseVersion.current);
     void (async () => {
-      let text: string;
-      try {
-        text = await (await fetch(blobUrl(canvasId, current.blobHash))).text();
-      } catch {
-        text = "";
-      }
+      const text = await readBlobText(canvasId, current.blobHash).catch(() => null);
       let restored: string | null = null;
       try {
         restored = localStorage.getItem(key);
       } catch {
         // Storage denied is not a reason to refuse to edit.
       }
-      if (!live || !host.current) return;
-      const opening = restored ?? text;
+      if (!live) return;
+      // A draft is the person's OWN words and stands on its own — an
+      // unreadable file is no reason to throw those away. With no draft
+      // there is nothing honest to open, so the pane says so instead.
+      if (text === null && restored === null) {
+        setUnreadable("Could not read this file — its bytes did not arrive. Try again in a moment.");
+        return;
+      }
+      if (!host.current) return;
+      const opening = restored ?? text ?? "";
       view.current = new EditorView({
         parent: host.current,
         state: EditorState.create({
@@ -210,7 +224,14 @@ export function StageEditor({
       /* nothing to clear is fine */
     }
     void (async () => {
-      const text = await (await fetch(blobUrl(canvasId, current.blobHash))).text();
+      // The buffer is only replaced by text we actually have. A revert that
+      // could not read the file used to overwrite the draft with whatever
+      // came back — a refusal's json — and then call the buffer clean.
+      const text = await readBlobText(canvasId, current.blobHash).catch(() => null);
+      if (text === null) {
+        setNotice("Could not read the saved version — your draft is still here.");
+        return;
+      }
       view.current?.dispatch({
         changes: { from: 0, to: view.current.state.doc.length, insert: text },
       });
@@ -218,6 +239,28 @@ export function StageEditor({
       onDraft(text);
       setDirty(false);
     })();
+  }
+
+  if (unreadable) {
+    return (
+      <div className="stage-editor">
+        <div className="stage-editor-bar">
+          <span className="stage-editor-file">{current.filename}</span>
+          <span className="spacer" />
+          {onFold && (
+            <button
+              className="stage-pane-fold"
+              onClick={onFold}
+              title="Fold the editor away — the rail brings it back"
+              aria-label="Collapse the editor"
+            >
+              «
+            </button>
+          )}
+        </div>
+        <div className="page-note">{unreadable}</div>
+      </div>
+    );
   }
 
   return (

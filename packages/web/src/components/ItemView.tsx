@@ -20,7 +20,7 @@ import {
   parseUriList,
   renamedFilename,
 } from "@isocan/core";
-import { blobUrl } from "../lib/api.ts";
+import { blobUrl, readBlobText } from "../lib/api.ts";
 import { contentBase } from "../lib/contentBase.ts";
 import { itemFrame } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
@@ -394,13 +394,17 @@ function ItemViewInner({
    */
   async function openTextEditor() {
     const ui = useUiStore.getState();
-    let body = "";
+    let body: string;
     try {
-      const res = await fetch(blobUrl(canvasId, current.blobHash), { credentials: "include" });
-      if (res.ok) body = await res.text();
+      body = await readBlobText(canvasId, current.blobHash);
     } catch {
-      // An unreachable daemon should not open an empty composer over words
-      // that still exist — that turns a network blip into a wipe.
+      // A daemon that will not hand the words over should not open an empty
+      // composer over words that still exist — that turns a network blip
+      // into a wipe. This read used to check `res.ok` and fall through with
+      // `body = ""` when it was false, so a cleared cookie did exactly that
+      // wipe, silently. `readBlobText` knocks on the door first and throws
+      // for anything still refusing after, so the only way past here is with
+      // the real text in hand.
       setNotice("Could not read that text to edit it.");
       return;
     }
@@ -890,10 +894,17 @@ export function VersionContent({
 }) {
   const url = blobUrl(canvasId, blobHash);
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
-    return <DesignSystemView url={url} />;
+    return <DesignSystemView canvasId={canvasId} blobHash={blobHash} />;
   }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
-    return <MarkdownView url={url} plain={mimeType === "text/plain"} breaks={textNode === true} />;
+    return (
+      <MarkdownView
+        canvasId={canvasId}
+        blobHash={blobHash}
+        plain={mimeType === "text/plain"}
+        breaks={textNode === true}
+      />
+    );
   }
   if (mimeType.startsWith("image/")) {
     return <img className="img-view" src={url} alt={filename} draggable={false} />;
@@ -902,7 +913,7 @@ export function VersionContent({
     return <video className="video-view" src={url} controls={entered} muted loop playsInline />;
   }
   if (mimeType === BROWSER_MIME) {
-    return <BrowserView blobUrl={url} reloadToken={reloadToken} />;
+    return <BrowserView canvasId={canvasId} blobHash={blobHash} reloadToken={reloadToken} />;
   }
   if (mimeType === "text/html") {
     // Security boundary: src and sandbox are built as a pair by `itemFrame`,
@@ -938,21 +949,29 @@ export function VersionContent({
  * projecting this app's own origin onto itself, which is the user
  * projecting their own tool — not a boundary this sandbox is defending.
  */
-function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: number }) {
+function BrowserView({
+  canvasId,
+  blobHash,
+  reloadToken,
+}: {
+  canvasId: string;
+  blobHash: string;
+  reloadToken: number;
+}) {
   const [load, setLoad] = useState<TextLoad>(() => {
-    const cached = peekBlobText(blobUrl);
+    const cached = peekBlobText(canvasId, blobHash);
     return cached === undefined ? null : { text: cached };
   });
 
   useEffect(() => {
     let cancelled = false;
-    fetchBlobText(blobUrl)
+    fetchBlobText(canvasId, blobHash)
       .then((body) => !cancelled && setLoad({ text: body }))
       .catch((err: Error) => !cancelled && setLoad({ failed: err.message }));
     return () => {
       cancelled = true;
     };
-  }, [blobUrl]);
+  }, [canvasId, blobHash]);
 
   if (load === null) return <div className="file-view">…</div>;
   if ("failed" in load) return <BlobError reason={load.failed} />;
@@ -979,21 +998,31 @@ function BrowserView({ blobUrl, reloadToken }: { blobUrl: string; reloadToken: n
  * what commits is not what they typed, which is the one thing this tool must
  * never do. (Chat and comment bodies made the same call long before this.)
  */
-function MarkdownViewInner({ url, plain, breaks }: { url: string; plain: boolean; breaks?: boolean }) {
+function MarkdownViewInner({
+  canvasId,
+  blobHash,
+  plain,
+  breaks,
+}: {
+  canvasId: string;
+  blobHash: string;
+  plain: boolean;
+  breaks?: boolean;
+}) {
   const [load, setLoad] = useState<TextLoad>(() => {
-    const cached = peekBlobText(url);
+    const cached = peekBlobText(canvasId, blobHash);
     return cached === undefined ? null : { text: cached };
   });
 
   useEffect(() => {
     let cancelled = false;
-    fetchBlobText(url)
+    fetchBlobText(canvasId, blobHash)
       .then((body) => !cancelled && setLoad({ text: body }))
       .catch((err: Error) => !cancelled && setLoad({ failed: err.message }));
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [canvasId, blobHash]);
 
   if (load === null) return <div className="file-view">…</div>;
   if ("failed" in load) return <BlobError reason={load.failed} />;

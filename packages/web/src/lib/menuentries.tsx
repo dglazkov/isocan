@@ -12,7 +12,6 @@ import {
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
-import { blobUrl } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -131,8 +130,8 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       disabled: !one || !version,
       run: () => {
         if (!one || !version) return;
-        void downloadItem(blobUrl(ctx.canvasId, version.blobHash), version.filename).catch(
-          (err: Error) => setNotice(err.message),
+        void downloadItem(ctx.canvasId, version.blobHash, version.filename).catch((err: Error) =>
+          setNotice(err.message),
         );
       },
     },
