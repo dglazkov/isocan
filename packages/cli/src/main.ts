@@ -8171,12 +8171,17 @@ rcCommand.action(
     };
     const startTip = (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
     cursors = { [p.id]: lapFrom() };
+    let lastRoster = opening;
     let offlineSince: number | null = null;
     for (;;) {
       considerUpgrade();
       let batch;
       try {
-        batch = await ctx.client.watchLog({ cursors, waitMs: 30_000, only: [p.id] });
+        // A held or busy agent must not wait a full poll window for its
+        // next chance: an op is not the only thing that changes the answer
+        // — a turn ending does too, and the log says nothing about that.
+        const eager = [...dispatches.values()].some((d) => d.busy || d.pending.length > 0);
+        batch = await ctx.client.watchLog({ cursors, waitMs: eager ? 2_000 : 30_000, only: [p.id] });
         if (offlineSince !== null) {
           console.log(`rc: daemon back after ${Math.round((Date.now() - offlineSince) / 1000)}s — nothing missed`);
           offlineSince = null;
@@ -8206,8 +8211,17 @@ rcCommand.action(
       }
       const lapTip = batch.cursors[p.id] ?? 0;
       const snapshot = batch.entries.length > 0 ? await ctx.client.snapshot(p.id) : null;
-      const roster = snapshot?.canvas.agents ?? {};
-      if (snapshot) for (const [id, row] of Object.entries(roster)) known.set(id, row.actor.name);
+      // The roster survives quiet laps. The instrumented CI failure that
+      // forced this: both agents mid-turn, both replies landing in ONE lap
+      // — consumed into pending — and every later lap empty, so a
+      // lap-scoped roster read as {} and the dispatch loop below skipped
+      // every agent forever. A quiet machine staggers the replies and
+      // never meets this; a loaded one meets it in one run out of four.
+      if (snapshot) {
+        lastRoster = snapshot.canvas.agents ?? {};
+        for (const [id, row] of Object.entries(lastRoster)) known.set(id, row.actor.name);
+      }
+      const roster = lastRoster;
       for (const entry of batch.entries) {
         const op = entry.envelope.op;
         const by = entry.envelope.actor;

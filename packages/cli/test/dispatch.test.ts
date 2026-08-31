@@ -419,7 +419,14 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     });
     await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 30_000);
     expect(rc.out()).not.toContain("summons for Sian");
-    const all = await threads();
+    // The narration prints BEFORE the system comment's op lands — poll the
+    // thread rather than reading the gap between the two.
+    const all = await until(
+      threads,
+      (t) => (t["th_loop"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the guard's word in the thread",
+      30_000,
+    );
     const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
     expect(guard).toBeDefined();
     expect(guard!.body).toContain("agent-to-agent");
@@ -493,6 +500,34 @@ describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
     },
     300_000,
   );
+});
+
+describe("a wake that lands mid-turn is never starved", () => {
+  it("a summons consumed while its agent is busy dispatches after the turn — with no further ops", async () => {
+    // The race the instrumented CI failure exposed (both cascade replies
+    // landing inside 23ms while both agents were mid-turn, then nothing
+    // for 39 seconds): entries consumed into pending during a busy turn,
+    // and every later lap EMPTY — no ops, so no snapshot, so a lap-scoped
+    // roster read as {} and dispatch skipped every agent forever. Pinned
+    // deterministically: one slow turn, one comment landing inside it,
+    // then total silence — the second summons must still happen.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc({ FAKE_ACP_SLOW_MS: "3000", FAKE_ACP_REPLY: "0" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up", 30_000);
+
+    await summon("th_busy1", "@Sian first");
+    await until(async () => rc.out(), (o) => o.includes("session started"), "the turn to start", 30_000);
+    // Lands mid-turn; nothing else will ever be posted.
+    await summon("th_busy2", "@Sian second");
+    await until(
+      async () => rc.out(),
+      (o) => (o.match(/summons for Sian/g) ?? []).length >= 2 && (o.match(/turn ended/g) ?? []).length >= 2,
+      "the mid-turn summons dispatched after the turn, unprompted",
+      45_000,
+    );
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 90_000);
 });
 
 describe("the roster tells the truth (journey 7, phase 6)", () => {
