@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: mindmap
-note: stages 1, 2 and 4; layout waits on a real map
+note: all four stages built; tidy lays a map out on demand
 ---
 # Mind maps — a real graph on the canvas
 
@@ -162,12 +162,23 @@ Stage 2 came free with the `map` property: `map ls` treats a map as one thing
 because the set is a query, not a structure to maintain. Stage 4's projection
 is `map show`, derived every time, which is why it cannot drift.
 
-**Stage 3 (layout) is deliberately partial.** A child lands to the right of
-its parent and stacks under its siblings — enough that an agent building
-thirty nodes produces something legible rather than a pile, which was the
-stated risk. A radial or balanced tree layout is still unbuilt, and the honest
-reason to wait is that nobody has yet dragged a real map into a shape that
-says what the automatic one should have been.
+**Stage 3 (layout) was deliberately partial, and is now built.** A child lands
+to the right of its parent and stacks under its siblings — enough that an
+agent building thirty nodes produces something legible rather than a pile,
+which was the stated risk. What that cannot do is record the SHAPE: it records
+the order things were typed, so a parent sits level with its first child while
+its last is four rows down, and the eye reads a ladder instead of a fork.
+
+`tidyMap` (31 Aug) is the pass, run on demand rather than on every add:
+depth chooses the column, a post-order sweep chooses the row, and a parent is
+centred on the band its descendants occupy. `isocan map tidy` and the ⌘K
+launcher both send ONE `items.move`, so it is one undo.
+
+The wait was for the right reason and ended the right way — *"nobody has yet
+dragged a real map into a shape that says what the automatic one should have
+been"* — and the map that ended it was a 31-node holiday map somebody looked
+at and called ugly. A radial layout is still unbuilt and still has no case
+behind it.
 
 **Two things the design did not anticipate, both found by running it:**
 

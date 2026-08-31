@@ -28,7 +28,7 @@ and the done column should not be flattered by either.
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
-| **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | stages 1, 2 and 4; layout waits on a real map · see mindmap |
+| **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
