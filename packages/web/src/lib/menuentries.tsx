@@ -9,6 +9,7 @@ import {
   PersonaGlyph,
   FilesGlyph,
   HistoryGlyph,
+  NewsGlyph,
   MinimapGlyph,
   TrashGlyph,
   WorkbenchGlyph,
@@ -288,6 +289,8 @@ export function chromeMenu(ctx: {
   trashOpen: boolean;
   trashCount: number;
   historyOpen: boolean;
+  /** Days of release notes this reader has not seen — 0 hides the count. */
+  unreadNews: number;
   minimapOpen: boolean;
   /** Navigation belongs to the caller: this module builds entries and has no
    *  business holding a router. */
@@ -357,6 +360,15 @@ export function chromeMenu(ctx: {
       run: () => ui().setMinimapOpen(!ctx.minimapOpen),
     },
     { separator: "" },
+    {
+      /* Release notes belong beside the shortcut list: both are things you
+         consult about the product rather than about this canvas. The count is
+         the notification — a number that is there when something is unread and
+         gone when it is not, rather than a badge that has to be dismissed. */
+      label: ctx.unreadNews > 0 ? `What's new (${ctx.unreadNews})` : "What's new",
+      icon: <NewsGlyph size={14} />,
+      run: () => ui().setNewsOpen(true),
+    },
     {
       label: "Keyboard shortcuts",
       /* The key IS this row's mark, so it goes in the icon column with the

@@ -180,6 +180,8 @@ interface UiStore {
    * them.
    */
   hoveredItemId: string | null;
+  /** The What's new panel. */
+  newsOpen: boolean;
   /** Session being followed: the camera tracks their locus until the user
    * takes the wheel back (any manual pan/zoom/jump, or Esc). */
   followSessionId: string | null;
@@ -235,6 +237,7 @@ interface UiStore {
   setPaletteOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
   setHoveredItem: (itemId: string | null) => void;
+  setNewsOpen: (open: boolean) => void;
   /** How wide the docked left panel is, in screen pixels. */
   panelWidth: number;
   setPanelWidth: (width: number) => void;
@@ -475,6 +478,7 @@ export const useUiStore = create<UiStore>((set) => {
     paletteOpen: false,
     peekedItemId: null,
     hoveredItemId: null,
+    newsOpen: false,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
     // zoom buttons, a jump) — each one hands the camera back to the user.
@@ -551,6 +555,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     setHoveredItem: (hoveredItemId) => set({ hoveredItemId }),
+    setNewsOpen: (newsOpen) => set({ newsOpen }),
     /**
      * Chrome that steps aside for the panel EASES to its new place, which is
      * right when the panel opens or closes — one step, and a thing that

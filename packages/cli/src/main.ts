@@ -132,6 +132,7 @@ import {
   mapChildren,
   mapOf,
   mapOutline,
+  tidyMap,
   mapsOn,
   newMapId,
   importDesign,
@@ -4592,6 +4593,37 @@ map
   );
 
 map
+  .command("tidy [map]")
+  .description("Lay the map out as a tree — one column per depth, parents centred on their children")
+  .option("--canvas <canvas>")
+  .option("--dry-run", "say what would move, and move nothing")
+  .action(
+    run(async (ref: string | undefined, opts: { dryRun?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const mapId = resolveMap(snapshot, ref);
+      const moves = tidyMap(snapshot.canvas, mapId);
+      if (ctx.json) return printJson({ mapId, moves });
+      if (moves.length === 0) return console.log("already tidy — nothing moved");
+      if (opts.dryRun) {
+        for (const m of moves) {
+          const node = snapshot.canvas.items[m.itemId];
+          console.log(`  ${truncate(node?.title ?? m.itemId, 30).padEnd(30)} ${node?.x},${node?.y} → ${m.x},${m.y}`);
+        }
+        return console.log(`\n${moves.length} would move — run without --dry-run to do it`);
+      }
+      /**
+       * **One op, so it is one undo.** The first thing anybody does after an
+       * automatic layout is decide they preferred it before, and a tidy that
+       * arrived as forty separate moves would need forty ⌘Zs to take back.
+       */
+      await sendOp(ctx, p.id, { type: "items.move", moves });
+      console.log(`tidied ${moves.length} node${moves.length === 1 ? "" : "s"} — \`isocan undo\` puts them back`);
+    }),
+  );
+
+map
   .command("ls")
   .description("Every map on this canvas")
   .option("--canvas <canvas>")
@@ -8122,19 +8154,63 @@ rcCommand.action(
       const face = await ctx.client
         .createSession(p.id, record.actor, undefined, row.harness ?? "agent")
         .catch(() => null);
-      if (face && firstComment) {
-        const op = firstComment.envelope.op as { threadId: string };
+      // Where the summons points, so the face lands somewhere rather than
+      // floating unplaced: the summoning thread, or (a routed change) the
+      // first changed item. `working` is re-asserted on every beat below —
+      // it is what animates the cursor, and each applied op retires it.
+      const threadId = firstComment
+        ? (firstComment.envelope.op as { threadId: string }).threadId
+        : null;
+      const changedItemId = (flagged[0]?.envelope.op as { itemId?: string }).itemId ?? null;
+      let working: import("@isocan/core").PresenceActivity | null = null;
+      if (face) {
         const snapshot = await ctx.client.snapshot(p.id).catch(() => null);
-        const thread = snapshot?.canvas.threads[op.threadId];
+        const thread = threadId ? snapshot?.canvas.threads[threadId] : undefined;
+        const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
+        working = threadId
+          ? { kind: "working", threadId }
+          : item
+            ? { kind: "working", itemId: item.id }
+            : null;
         await ctx.client
           .updateSession(p.id, face.sessionId, {
-            status: "reading your comment…",
+            status: threadId ? "reading your comment…" : "looking at what changed…",
             statusSource: "lifecycle",
-            onThread: op.threadId,
+            ...(working ? { activity: working } : {}),
+            ...(threadId ? { onThread: threadId } : {}),
             ...(snapshot && thread ? { cursor: threadLocus(snapshot, thread) } : {}),
+            ...(item ? { cursor: itemCenter(item) } : {}),
           })
           .catch(() => {});
+        // The face's id goes into the actor's session pointer file — the
+        // loan that makes the agent's OWN CLI commands presence-visible
+        // inside the turn: `narrate` finds a session and speaks, and every
+        // op carries a clientId, so the cursor traces the real work. This
+        // is the same wiring `session start` does for a direct agent; a
+        // summoned one just has it done for it. Taken back in the finally
+        // below: a dangling pointer would have the actor's NEXT direct
+        // command revive a face nobody ended.
+        const before = await readSessionFile(ctx.home, record.actor.id);
+        if (before && !(before.canvasId === p.id && before.sessionId === face.sessionId)) {
+          await ctx.client.endSession(before.canvasId, before.sessionId).catch(() => {});
+        }
+        await writeSessionFile(ctx.home, record.actor.id, {
+          canvasId: p.id,
+          sessionId: face.sessionId,
+          ...(threadId ? { onThread: threadId, onThreadAt: new Date().toISOString() } : {}),
+        }).catch(() => {});
       }
+      const beat = (patch: import("@isocan/core").UpdateSessionRequest): void => {
+        if (!face) return;
+        void ctx.client
+          .updateSession(p.id, face.sessionId, { actor: record.actor, ...patch })
+          .catch(() => {});
+      };
+      // A turn's ceiling (10 min) outlives the presence TTL (5), so a face
+      // with no beats would be swept away mid-work — the "mostly idle" bug's
+      // silent half. The interval is the floor under everything else.
+      const heartbeat = setInterval(() => beat({}), 60_000);
+      heartbeat.unref?.();
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
         env: adapterEnv(p.id, record.actor.name),
@@ -8145,11 +8221,26 @@ rcCommand.action(
         console.log(
           `rc: ${record.actor.name}'s session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`,
         );
+        // The event stream the adapter is already sending, spent on the face:
+        // each tool call becomes an inferred status (so it never displaces
+        // anything the agent said with `--say`) and re-asserts `working`.
+        // Throttled — a busy turn fires tools faster than a status is worth
+        // repainting.
+        let lastToolBeat = 0;
         const turn = await agent.prompt(
           session.sessionId,
           summonsPrompt(record.actor.name, { reason, entries: flagged }),
           (event) => {
             if (event.kind === "permission") console.log(`rc: [${record.actor.name}] permission: ${event.detail}`);
+            if (event.kind === "tool" && event.detail && Date.now() - lastToolBeat >= 2_000) {
+              lastToolBeat = Date.now();
+              const title = event.detail.length > 80 ? `${event.detail.slice(0, 79)}…` : event.detail;
+              beat({
+                status: title,
+                statusSource: "inferred",
+                ...(working ? { activity: working } : {}),
+              });
+            }
           },
         );
         console.log(`rc: ${record.actor.name}'s turn ended — stopReason ${turn.stopReason}`);
@@ -8162,7 +8253,19 @@ rcCommand.action(
           })
           .catch(() => {});
       } finally {
+        clearInterval(heartbeat);
         agent.close();
+        // The loan comes back: whatever session the pointer names on this
+        // canvas ends with the turn (the CLI inside may have revived an
+        // expired face under a NEW id — end that one too, not just ours),
+        // and the pointer itself is removed so nothing dangles.
+        const left = await readSessionFile(ctx.home, record.actor.id);
+        if (left && left.canvasId === p.id) {
+          if (face && left.sessionId !== face.sessionId) {
+            await ctx.client.endSession(p.id, left.sessionId).catch(() => {});
+          }
+          await writeSessionFile(ctx.home, record.actor.id, null).catch(() => {});
+        }
         if (face) await ctx.client.endSession(p.id, face.sessionId).catch(() => {});
       }
     };
@@ -8709,6 +8812,28 @@ program
           at: `${Math.round(i.x)},${Math.round(i.y)}`,
         })),
       );
+    }),
+  );
+
+program
+  .command("whatsnew")
+  .description("What changed, for the person using this — one entry per day, newest first")
+  .option("-n, --days <n>", "how many days to show (default 5)")
+  .action(
+    run(async (opts: { days?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { days } = await ctx.client.news();
+      if (ctx.json) return printJson({ days });
+      if (days.length === 0) {
+        /* Not an error. A home with no notes is a home with nothing to say,
+           and the same sentence covers a stripped install that shipped no
+           docs — both are "nothing to tell you" rather than a failure. */
+        return console.log("nothing noted yet");
+      }
+      for (const day of days.slice(0, Number(opts.days ?? 5))) {
+        console.log(`\n${day.title}`);
+        for (const item of day.items) console.log(`  · ${item}`);
+      }
     }),
   );
 

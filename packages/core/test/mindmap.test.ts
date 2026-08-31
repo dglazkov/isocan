@@ -12,6 +12,7 @@ import {
   edgeAnchors,
 } from "../src/mindmap.ts";
 import { PARENT_PROP } from "../src/lineage.ts";
+import { tidyMap, type MapMove } from "../src/mindmap.ts";
 
 /**
  * **A mind map is items and properties, and that is the whole design.**
@@ -215,5 +216,91 @@ describe("a branch leaves the way it points", () => {
   it("keeps saying it when the line runs backwards", () => {
     expect(edgeAnchors(box(200, 0), box(0, 0)).axis).toBe("x");
     expect(edgeAnchors(box(0, 300), box(0, 0)).axis).toBe("y");
+  });
+});
+
+/**
+ * **Stage 3 — the tidy pass.**
+ *
+ * Placement so far has been incremental: a child lands right of its parent and
+ * stacks under the lowest sibling, decided once and never revisited. That is
+ * legible for thirty nodes typed in order and it records the ORDER rather than
+ * the SHAPE — a parent level with its first child while its last is four rows
+ * down, so the eye reads a ladder instead of a fork.
+ */
+describe("tidying a map", () => {
+  /** A node with a real size, since the layout is about geometry. */
+  const box = (id: string, parent: string | null, w = 100, h = 40): Item =>
+    ({
+      ...node(id, id, parent ? { [MAP_PROP]: MAP, [MAP_PARENT_PROP]: parent } : { [MAP_PROP]: MAP }),
+      width: w,
+      height: h,
+    }) as unknown as Item;
+
+  const at = (moves: ReturnType<typeof tidyMap>, id: string) => moves.find((m) => m.itemId === id);
+
+  it("centres a parent on its children, which is the whole point", () => {
+    /* Three children in a column; the parent belongs level with the MIDDLE
+       one, not with the first. That single difference is what turns a ladder
+       back into a fork. */
+    const canvas = canvasOf([box("r", null), box("a", "r"), box("b", "r"), box("c", "r")]);
+    const moves = tidyMap(canvas, MAP);
+    const [a, b, c] = ["a", "b", "c"].map((id) => at(moves, id)!) as [MapMove, MapMove, MapMove];
+    expect(a.y).toBeLessThan(b.y);
+    expect(b.y).toBeLessThan(c.y);
+    expect(at(moves, "r")!.y).toBe(b.y);
+  });
+
+  it("puts each depth in its own column", () => {
+    const canvas = canvasOf([box("r", null), box("a", "r"), box("a1", "a")]);
+    const moves = tidyMap(canvas, MAP);
+    const x = (id: string) => at(moves, id)?.x ?? canvas.items[id]!.x;
+    expect(x("a")).toBeGreaterThan(x("r"));
+    expect(x("a1")).toBeGreaterThan(x("a"));
+  });
+
+  it("sizes a column to its widest node, not to a constant", () => {
+    /* A long label reaching into the next column is the failure that makes an
+       automatic layout look worse than the pile it replaced. */
+    const canvas = canvasOf([box("r", null, 400), box("a", "r", 50), box("a1", "a", 50)]);
+    const moves = tidyMap(canvas, MAP);
+    /* A node already in the right place is not in `moves` — see "reports only
+       what actually moves" — so read through to where it actually is. */
+    const x = (id: string) => at(moves, id)?.x ?? canvas.items[id]!.x;
+    expect(x("a") - x("r")).toBeGreaterThanOrEqual(400);
+  });
+
+  it("never overlaps two leaves", () => {
+    const canvas = canvasOf([
+      box("r", null), box("a", "r"), box("b", "r"),
+      box("a1", "a"), box("a2", "a"), box("b1", "b"),
+    ]);
+    const moves = tidyMap(canvas, MAP);
+    const rows = ["a1", "a2", "b1"].map((id) => at(moves, id)!).sort((p, q) => p.y - q.y);
+    for (let i = 1; i < rows.length; i += 1) {
+      expect(rows[i]!.y - rows[i - 1]!.y).toBeGreaterThanOrEqual(40);
+    }
+  });
+
+  it("reports only what actually moves", () => {
+    /* A tidy that reports every node makes an undo step out of nothing and a
+       diff nobody can read. Tidying twice is a no-op. */
+    const canvas = canvasOf([box("r", null), box("a", "r"), box("b", "r")]);
+    const first = tidyMap(canvas, MAP);
+    for (const m of first) Object.assign(canvas.items[m.itemId]!, { x: m.x, y: m.y });
+    expect(tidyMap(canvas, MAP)).toEqual([]);
+  });
+
+  it("does not hang on a map that made two nodes each other's parent", () => {
+    /* `mapParent` is a string, so two `item.update`s can do this. The outline
+       already survives it; a layout that recursed forever would take the
+       surface down instead. */
+    const a = box("a", "b");
+    const b = box("b", "a");
+    expect(() => tidyMap(canvasOf([a, b]), MAP)).not.toThrow();
+  });
+
+  it("has nothing to say about a map that is not there", () => {
+    expect(tidyMap(canvasOf([]), MAP)).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves } from "@isocan/core";
+import { formatMoves, mapOf, mapsOn, tidyMap } from "@isocan/core";
 
 /**
  * **The things the app does itself.**
@@ -203,6 +203,16 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
+    id: "tidy-map",
+    name: "Tidy the mind map",
+    hint: "a column per depth, parents centred on their children",
+    group: "Canvas",
+    /* Offered only where there is one to tidy: a menu that lists what it
+       cannot do teaches people to stop reading it. */
+    available: (ctx) => onCanvas(ctx) && mapsHere().length > 0,
+    run: (ctx) => runTidy(ctx),
+  },
+  {
     id: "full-screen",
     name: "Full screen this",
     hint: "the selected item, filling the screen",
@@ -252,6 +262,39 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas || !ctx.canvasId) return;
   const moves = formatMoves(canvas, { mode });
+  if (moves.length === 0) return;
+  await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
+}
+
+/** The maps on the canvas in front of us, for the availability check and for
+ *  deciding which one a tidy means. */
+function mapsHere() {
+  const canvas = useCanvasStore.getState().canvas;
+  return canvas ? mapsOn(canvas) : [];
+}
+
+/**
+ * **Tidy the map the selection is in, or the only one there is.**
+ *
+ * Ambiguity is refused rather than guessed, the same rule `resolveMap` follows
+ * in the CLI: with two maps on a canvas and nothing selected, tidying one of
+ * them at random rearranges work somebody did not ask about.
+ *
+ * One `items.move`, so one undo — the first thing anybody does after an
+ * automatic layout is decide they preferred it before.
+ */
+async function runTidy(ctx: ActionContext): Promise<void> {
+  const canvas = useCanvasStore.getState().canvas;
+  if (!canvas || !ctx.canvasId) return;
+  const maps = mapsOn(canvas);
+  const selected = useUiStore.getState().selectedItemIds;
+  const fromSelection = selected
+    .map((id) => canvas.items[id])
+    .map((item) => (item ? mapOf(item) : null))
+    .find((mapId): mapId is string => mapId !== null);
+  const mapId = fromSelection ?? (maps.length === 1 ? maps[0]!.id : null);
+  if (!mapId) return;
+  const moves = tidyMap(canvas, mapId);
   if (moves.length === 0) return;
   await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
 }

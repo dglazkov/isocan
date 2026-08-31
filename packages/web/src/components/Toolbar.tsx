@@ -5,6 +5,7 @@ import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { useUnreadNews } from "./WhatsNew.tsx";
 import { chromeMenu } from "../lib/menuentries.tsx";
 import { HomeGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
@@ -36,6 +37,7 @@ export function Toolbar({
   const personasOpen = useUiStore((s) => s.personasPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const historyOpen = useUiStore((s) => s.historyOpen);
+  const unreadNews = useUnreadNews();
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
@@ -97,6 +99,7 @@ export function Toolbar({
                   trashOpen,
                   trashCount,
                   historyOpen,
+                  unreadNews,
                   minimapOpen,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),

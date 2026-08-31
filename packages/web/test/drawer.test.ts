@@ -35,6 +35,7 @@ const menu = (over = {}) =>
     trashOpen: false,
     trashCount: 0,
     historyOpen: false,
+    unreadNews: 0,
     minimapOpen: true,
     toWorkbench: () => {},
     ...over,
@@ -148,5 +149,31 @@ describe("the drawer offers the canvas's own past", () => {
     const trash = shown.findIndex((l) => l.startsWith("Trash"));
     expect(history).toBeGreaterThan(-1);
     expect(trash).toBe(history + 1);
+  });
+});
+
+/**
+ * **Release notes, and the notification that there are new ones.**
+ *
+ * `docs/changelog/` is the other document and is deliberately not this: it is
+ * written for whoever maintains this and names functions. What's new is what
+ * a person got.
+ */
+describe("the drawer says when something is new", () => {
+  it("offers the notes, beside the shortcut list", () => {
+    /* Both are things you consult about the PRODUCT rather than about this
+       canvas, which is why they are a pair and neither sits with Trash. */
+    const shown = labels(menu());
+    const news = shown.findIndex((l) => l.startsWith("What's new"));
+    expect(news).toBeGreaterThan(-1);
+    expect(shown[news + 1]).toBe("Keyboard shortcuts");
+  });
+
+  it("carries the count only when something is unread", () => {
+    /* The count IS the notification. A badge that has to be dismissed is a
+       chore; a number that is simply absent when there is nothing to say
+       needs no dismissing. */
+    expect(labels(menu({ unreadNews: 0 }))).toContain("What's new");
+    expect(labels(menu({ unreadNews: 2 }))).toContain("What's new (2)");
   });
 });

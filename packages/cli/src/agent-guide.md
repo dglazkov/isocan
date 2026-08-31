@@ -599,6 +599,18 @@ thing worth knowing, and it is often yours.
 amending what you asked is still asking. That is why "I'll just add a bit more
 detail" never accidentally marks you unblocked.
 
+## What changed
+
+`isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
+in the words somebody using the canvas would use. It is not the changelog:
+`docs/changelog/` is written for whoever maintains this and names functions
+and arguments, which is the right document and the wrong one to quote at
+somebody asking what is new. Days with nothing a user would notice do not
+appear at all, on purpose.
+
+The notes come from the home you are talking to, so what it lists is what that
+home is running.
+
 ## Mind maps
 
 Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts
@@ -606,6 +618,14 @@ one with a root node; `isocan map add "Booking" --to <node>` hangs a child off
 it; `isocan map link <node> <parent>` moves a branch somewhere else. `isocan
 map show` prints the whole thing as a tree, and `isocan map ls` names every
 map on the canvas.
+
+**`isocan map tidy` lays it out.** Nodes land where they are added — right of
+the parent, under the last sibling — which is legible as you build and records
+the ORDER you typed rather than the SHAPE of the tree. Tidy gives each depth
+its own column and centres every parent on its children. It arrives as one
+`items.move`, so one `isocan undo` puts it back; `--dry-run` says what would
+move without moving it. Worth running once a map has grown past the shape you
+imagined for it.
 
 ```
 Lake house

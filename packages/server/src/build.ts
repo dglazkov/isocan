@@ -65,6 +65,10 @@ interface ManifestStamp {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
+/** The package root, for anything else that has to find a file this build
+ *  shipped with — `docs/changelog` is one. */
+export const buildRoot = (): string => root;
+
 /** Files present in a checkout and in an install alike. */
 const WITNESSES = [
   "package.json",

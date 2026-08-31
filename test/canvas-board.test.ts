@@ -36,13 +36,72 @@ const CHILD_BUDGET_MS = 90_000;
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 20_000 }).trim();
 
-/** Render a panel without touching a canvas, and hand back its HTML. */
-const render = (only: string) => {
-  const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
+/**
+ * **A `gh` on PATH that answers whatever this test needs**, so no test in this
+ * file reaches GitHub.
+ *
+ * `--only build` is the one panel that shells out to `gh run list`, and it did
+ * so for real: a live network call with a 20-second budget, which is why that
+ * test took ~20s alone and was the flakiest thing in the suite. Worse than
+ * slow, it was NON-DETERMINISTIC — the panel showed whatever CI happened to
+ * say at that moment, so a test asserting on the build signal was asserting on
+ * the weather.
+ *
+ * The technique was already in this file: the NO-SIGNAL test below has always
+ * written a refusing `gh` onto PATH. This lifts it out so both cases can use
+ * it, and so the success path is exercised on purpose rather than by luck.
+ */
+function ghSaying(stdout: string, exit = 0): NodeJS.ProcessEnv {
+  const shim = mkdtempSync(path.join(tmpdir(), "gh-shim-"));
+  writeFileSync(
+    path.join(shim, "gh"),
+    // Single-quoted heredoc: the JSON goes through verbatim, whatever is in it.
+    `#!/bin/sh
+cat <<'ISOCAN_GH_JSON'
+${stdout}
+ISOCAN_GH_JSON
+exit ${exit}
+`,
+    { mode: 0o755 },
+  );
+  return { ...process.env, PATH: `${shim}:${process.env.PATH}` };
+}
+
+/**
+ * A CI reading where everything passed **on the commit you are standing on**.
+ *
+ * The sha matters: the panel compares the newest sha GitHub has SEEN against
+ * local HEAD, and reports AMBER when they differ — which is right, and which
+ * the first version of this fixture tripped over by using forty zeros. A
+ * green light for somebody else's commit is exactly the lie that check
+ * exists to prevent.
+ */
+const allGreen = () =>
+  JSON.stringify(
+    ["release", "review"].map((name) => ({
+      name,
+      status: "completed",
+      conclusion: "success",
+      headSha: git("rev-parse", "HEAD"),
+      createdAt: "2026-08-31T08:00:00Z",
+    })),
+  );
+
+/**
+ * **The one place this file starts the board**, so the `gh` shim is not
+ * something a new test can forget. Returns what the script SAID.
+ */
+const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) =>
+  execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
     cwd: repo,
     encoding: "utf8",
     timeout: CHILD_BUDGET_MS,
+    env,
   });
+
+/** Render a panel without touching a canvas, and hand back its HTML. */
+const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
+  const out = runBoard(only, env);
   const path = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
   expect(path, `no panel rendered for --only ${only}`).toBeTruthy();
   return readFileSync(path as string, "utf8");
@@ -179,11 +238,7 @@ describe("measurement is taken once, and only when something asks", () => {
 
   it("does not claim every goal is holding when it measured none", () => {
     expect(render("recent")).toBeTruthy();
-    const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "recent"], {
-      cwd: repo,
-      encoding: "utf8",
-      timeout: CHILD_BUDGET_MS,
-    });
+    const out = runBoard("recent");
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
   }, 120_000);
@@ -201,26 +256,32 @@ describe("the Build signal", () => {
     for (const word of ["GREEN", "AMBER", "RED", "NO SIGNAL"]) expect(html).toContain(word);
   }, 120_000);
 
+  it("reports the runs it was given, and does not claim no signal", () => {
+    /**
+     * The positive half, and it could not be asserted at all before: this
+     * panel called the real `gh`, so what it showed was whatever CI happened
+     * to say while the suite ran — a test about a status light that was
+     * really a test about the weather.
+     *
+     * **It asserts the CI reading, not the WORD.** The first version of this
+     * expected GREEN and got AMBER, which was the panel being right: `signal`
+     * goes amber when any persona goal on the board is missed, so the word
+     * folds in measurements that have nothing to do with `gh`. Pinning it
+     * would have coupled this test to board state on disk that no fixture
+     * here controls.
+     */
+    const html = render("build", ghSaying(allGreen()));
+    expect(html, "a supplied reading is not an absent one").not.toContain("no signal");
+    for (const workflow of ["release", "review"]) expect(html).toContain(workflow);
+  }, 120_000);
+
   it("shows NO SIGNAL — never GREEN — when CI cannot be reached", () => {
     /**
      * Forced for real, with a `gh` on PATH that refuses: "nothing failed" and
      * "nothing was asked" are different facts, and the failure mode of every
      * status light ever built is rendering them the same.
      */
-    const shim = mkdtempSync(path.join(tmpdir(), "no-gh-"));
-    writeFileSync(path.join(shim, "gh"), "#!/bin/sh\necho 'not logged in' >&2\nexit 1\n", { mode: 0o755 });
-    const out = execFileSync(
-      "node",
-      [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "build"],
-      {
-        cwd: repo,
-        encoding: "utf8",
-        timeout: CHILD_BUDGET_MS,
-        env: { ...process.env, PATH: `${shim}:${process.env.PATH}` },
-      },
-    );
-    const file = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
-    const html = readFileSync(file as string, "utf8");
+    const html = render("build", ghSaying("not logged in", 1));
     const shown = html.match(/letter-spacing:-0\.03em;[\s\S]*?>\s*([A-Z ]+)<\/div>/)?.[1]?.trim();
     expect(shown).toBe("NO SIGNAL");
   }, 120_000);
@@ -379,5 +440,32 @@ describe("the grid fits however many personas there are", () => {
         }
       }
     }
+  });
+});
+
+/**
+ * **No test in this file may reach GitHub**, and that has to be checked
+ * rather than remembered.
+ *
+ * `--only build` shells out to `gh run list`. It used to do so for real: a
+ * live network call with a 20-second budget, which made this the slowest and
+ * flakiest file in the suite, and — worse — made the build-signal assertions
+ * depend on what CI happened to say at that moment.
+ */
+describe("the board's tests answer their own `gh`", () => {
+  const src = readFileSync(fileURLToPath(new URL("./canvas-board.test.ts", import.meta.url)), "utf8");
+
+  it("spawns the board through one helper, which supplies a gh", () => {
+    /* Every invocation going through `render` is what makes the shim
+       unavoidable; a second `execFileSync` of the script would be a second
+       route to the network. */
+    const spawns = [...src.matchAll(/execFileSync\(\s*"node",\s*\[`\$\{repo\}\/scripts\/canvas-board\.mjs`/g)];
+    expect(spawns.length, "more than one route to the board script").toBe(1);
+    expect(src).toMatch(/const runBoard = \(only: string, env: NodeJS\.ProcessEnv = ghSaying\(/);
+  });
+
+  it("puts the shim ahead of the real one on PATH", () => {
+    /* Behind it and the real `gh` wins, which is the bug wearing a fix. */
+    expect(src).toMatch(/PATH: `\$\{shim\}:\$\{process\.env\.PATH\}`/);
   });
 });
