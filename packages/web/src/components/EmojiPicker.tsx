@@ -191,10 +191,12 @@ export function EmojiPicker({
       <div className="react-grid react-results">
         {showing.map((entry) => option(entry.emoji, entry.name))}
         {results?.length === 0 && (
-          <p className="react-none">
-            Nothing matches “{query.trim()}”. Any emoji works from the CLI —
-            <code>isocan react</code> takes whatever you type.
-          </p>
+          /* Just the fact. The second sentence used to point at
+             `isocan react`, which is a true thing to say and the wrong place
+             to say it: somebody searching a picker in the app is not about to
+             open a terminal, and a web surface that answers a dead end with a
+             command line is telling you your tool is the wrong one. */
+          <p className="react-none">Nothing matches “{query.trim()}”.</p>
         )}
       </div>
     </div>,

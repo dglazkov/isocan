@@ -1103,22 +1103,26 @@ export function registerRoutes(
    * a staleness bug in a feature whose entire job is saying what is current.
    */
   app.get(NEWS_ROUTE, async () => {
-    const dir = path.join(buildRoot(), "docs", "changelog");
-    let files: string[] = [];
-    try {
-      files = (await fs.readdir(dir)).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f));
-    } catch {
-      // A build without the docs directory has no news, which is a normal
-      // answer for a stripped install rather than an error to raise.
-      return { days: [] } satisfies NewsResponse;
-    }
-    const read = await Promise.all(
-      files.map(async (f) => ({
-        day: f.replace(/\.md$/, ""),
-        markdown: await fs.readFile(path.join(dir, f), "utf8").catch(() => ""),
-      })),
-    );
-    return { days: news(read) } satisfies NewsResponse;
+    /**
+     * `WHATSNEW.md` at the package root — the one document written for the
+     * person using this, and the only one that ships.
+     *
+     * The first version read `docs/changelog/`, and it was wrong twice.
+     * `docs` is excluded from the production image on purpose, so the route
+     * answered `{"days":[]}` on prod while working on a checkout; and even if
+     * it had shipped, it would have put a document full of internal reasoning
+     * one careless read away from being served.
+     *
+     * Read per request rather than cached: the file changes when a build
+     * changes, a build change restarts the process, and a cache would be a
+     * staleness bug in a feature whose whole job is saying what is current.
+     */
+    const text = await fs
+      .readFile(path.join(buildRoot(), "WHATSNEW.md"), "utf8")
+      .catch(() => "");
+    // A build without the file has no news, which is a normal answer for a
+    // stripped install rather than an error to raise.
+    return { days: news(text) } satisfies NewsResponse;
   });
 
   app.get(PRESENCE_WHERE_ROUTE, async (req) => {

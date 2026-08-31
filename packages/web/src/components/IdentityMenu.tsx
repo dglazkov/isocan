@@ -150,6 +150,17 @@ export function IdentityMenu({
           onClick={() => setPicking((was) => !was)}
         >
           {faceMark(marks, actor, name)}
+          {/* The badge is the affordance. A coloured disc beside a text field
+              reads as decoration — a label for the row, not a control — and
+              nothing about it says it can be changed until you happen to
+              click it. A pencil in the corner is the convention for exactly
+              that, and it costs one span. */}
+          <span className="identity-mark-edit" aria-hidden>
+            <svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11.5 2.5a2.1 2.1 0 0 1 3 3L6 14l-4 1 1-4z" />
+            </svg>
+          </span>
         </button>
         {picking && (
           <EmojiPicker
