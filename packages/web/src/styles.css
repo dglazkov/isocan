@@ -4359,6 +4359,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .scrub-peek-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scrub-peek-when-row { color: var(--ink-soft); font-size: 10.5px; flex: none; }
 .scrub-peek-more { font-size: 10.5px; color: var(--ink-soft); padding-top: 3px; }
+/* Said quietly but said: a history missing entries with no explanation is the
+   instrument reporting healthy while blind. */
+.scrub-refused { font-size: 11px; color: var(--warn); cursor: help; }
 .scrub-head-line {
   position: absolute;
   top: -2px;

@@ -173,6 +173,7 @@ import {
   majorLine,
   track,
   at,
+  past,
   span,
   ago,
   opWords,
@@ -8667,8 +8668,8 @@ program
        * does"* — is the same rule one level along: they must also RENDER the
        * same past.
        */
-      const state = at(entries, seq);
-      if (ctx.json) return printJson({ seq, span: range, state });
+      const { state, skipped } = past(entries, seq);
+      if (ctx.json) return printJson({ seq, span: range, state, skipped });
       if (!state) {
         return console.log(
           `nothing yet at #${seq} — this canvas was born at #${range.first}`,
@@ -8687,6 +8688,17 @@ program
         threads: String(Object.keys(state.canvas.threads).length),
         trash: String(state.canvas.trash.length),
       });
+      /**
+       * **What would not replay, named.**
+       *
+       * A canvas that collected non-finite geometry before the reducer
+       * checked still carries those entries, and the fold skips them rather
+       * than throwing. Saying nothing would make this print a slightly wrong
+       * past with total confidence — the shape `lessons.md` keeps catching.
+       */
+      for (const s2 of skipped) {
+        console.log(`  skipped #${s2.seq} (${s2.kind}) — ${s2.why}`);
+      }
       if (!opts.items) return;
       if (items.length === 0) return console.log("\n(no items yet)");
       console.log("");

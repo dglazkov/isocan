@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Item, LogEntry, Major, TrackBucket } from "@isocan/core";
-import { ago, at, axisTicks, majors, majorWhat, span, track } from "@isocan/core";
+import type { Item, LogEntry, Major, SkippedEntry, TrackBucket } from "@isocan/core";
+import { ago, axisTicks, majors, majorWhat, past, span, track } from "@isocan/core";
 import { ItemThumb } from "./ItemThumb.tsx";
 import { getArchivedOplog, getOplog } from "../lib/api.ts";
 import { enterPast, leavePast, useCanvasStore } from "../stores/canvasStore.ts";
@@ -86,10 +86,21 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
    * you watching the canvas rather than pinned to a snapshot of this instant
    * that would go stale as soon as somebody else moved something.
    */
+  /**
+   * What the fold could not replay, so the rail can say so.
+   *
+   * A canvas that collected non-finite geometry before the reducer checked
+   * for it still carries those entries — the oplog is append-only — and
+   * `past` skips them rather than throwing, which is what used to take this
+   * whole surface white. A shorter history with no explanation would be the
+   * instrument reporting healthy while blind, so it is said out loud.
+   */
+  const [skipped, setSkipped] = useState<SkippedEntry[]>([]);
   useEffect(() => {
     if (!entries || seq === null || !range) return leavePast();
     if (seq >= range.last) return leavePast();
-    const state = at(entries, seq);
+    const { state, skipped: refused } = past(entries, seq);
+    setSkipped(refused);
     if (state) enterPast(seq, state.canvas);
   }, [entries, seq, range]);
 
@@ -208,6 +219,14 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
           {!atNow && <span className="scrub-ago"> · {range.last - here} ago</span>}
         </span>
         {nearest && <span className="scrub-major">{majorWhat(nearest)}</span>}
+        {skipped.length > 0 && (
+          <span
+            className="scrub-refused"
+            title={skipped.map((s2) => `#${s2.seq} ${s2.kind}: ${s2.why}`).join("\n")}
+          >
+            {skipped.length} entr{skipped.length === 1 ? "y" : "ies"} would not replay
+          </span>
+        )}
         <span className="spacer" />
         {!still && (
           <button
