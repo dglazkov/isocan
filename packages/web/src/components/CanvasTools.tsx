@@ -6,6 +6,7 @@ import { checkFrameable } from "../lib/api.ts";
 import { siteLabel } from "@isocan/core";
 import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
+import { HistoryGlyph } from "./Glyphs.tsx";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -113,14 +114,6 @@ const marksGlyph = (filled: boolean) => (
  * not a rewind: both of those promise something moves BACKWARDS, and nothing
  * here does. You stand somewhere; the canvas shows you what stood there.
  */
-const HISTORY = (
-  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
-    <path d="M2.2 2.6v2.6h2.6" />
-    <path d="M8 4.9V8l2.1 1.5" />
-  </svg>
-);
-
 const UPLOAD = (
   <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="12" height="10" rx="1.5" />
@@ -270,7 +263,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         aria-pressed={historyOpen}
         onClick={() => onHistory(!historyOpen)}
       >
-        {HISTORY}
+        <HistoryGlyph size={17} />
       </button>
       <button
         className="tool-btn"
