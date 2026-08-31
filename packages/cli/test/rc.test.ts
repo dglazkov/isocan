@@ -115,12 +115,40 @@ function isocan(...args: string[]): Promise<Run> {
   return collect(spawnCli(args));
 }
 
+/**
+ * **A deadline under the test's own, and a message that says what it saw.**
+ *
+ * This was ten seconds flat, and `vitest.config.ts` already records what that
+ * costs: *"a hard 5s line straight through the middle of the distribution —
+ * so a test passed alone, passed on a fast laptop, and failed on a shared
+ * runner, which is the most expensive kind of failure there is because it
+ * teaches people to re-run."* Same shape, one level down. These tests start
+ * an rc, an ACP adapter and a daemon; on a two-core CI box that is seconds
+ * before anything is asked. "a web add gets its rc half from the parked rc"
+ * failed twice on CI at 10.9s, on two unrelated commits, passing 3/3 locally
+ * each time.
+ *
+ * Twenty seconds sits under the 30s the tests declare, so a genuinely wedged
+ * wait still fails HERE — with the name of what it was waiting for — rather
+ * than as vitest's anonymous timeout.
+ *
+ * And it says what it last saw. "timed out waiting for the adoption" tells you
+ * nothing about whether the adoption half-happened; the tail does, and this is
+ * the same fix `dispatch.test.ts` got for the same reason.
+ */
 async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: string): Promise<T> {
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + 20_000;
+  let last: T | undefined;
   for (;;) {
     const value = await fn();
+    last = value;
     if (ok(value)) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) {
+      const saw = typeof last === "string" ? last : JSON.stringify(last);
+      throw new Error(
+        `timed out waiting for ${what} after 20s. What it saw:\n${String(saw).slice(-1200)}`,
+      );
+    }
     await new Promise((r) => setTimeout(r, 50));
   }
 }
