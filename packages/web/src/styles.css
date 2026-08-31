@@ -2019,6 +2019,15 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 /* .comment renders in the thread popover AND the main-thread panel. */
 .comment { margin-bottom: 8px; overflow-wrap: anywhere; }
 .comment .who { font-weight: 700; font-size: 11px; }
+/* The system voice (phase 5): machinery reporting — a fixed chip, no actor
+   color, a quiet tint on the whole message, so "Sian couldn't answer" can
+   never be misread as Sian answering. */
+.comment.system .body { color: var(--ink-muted); font-style: italic; }
+.who.system-voice {
+  color: var(--ink-soft); font-weight: 600;
+  border: 1px solid var(--chip-line); background: var(--chip);
+  border-radius: 999px; padding: 0 6px;
+}
 .comment .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
 /* Comment bodies render as markdown — same idiom as .md-view, sized down. */
 .comment .body { margin: 2px 0 0; }

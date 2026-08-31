@@ -12,6 +12,28 @@ export interface Actor {
   name: string;
 }
 
+/**
+ * **The system voice** (agents-on-demand phase 5, decided 2026-08-30 by
+ * Dimitri): isocan itself can talk. A machinery fact that must land where
+ * people are looking — "Sian couldn't answer", "the ceiling held this turn"
+ * — is a comment authored by THIS actor, never words in a dead agent's
+ * mouth and never a person's name on sentences no person wrote.
+ *
+ * It is a voice, not a participant: no registry row, no face, no roster
+ * presence, unmentionable (`mentions.ts` skips it), and the engine accepts
+ * it for COMMENT ops only — machinery reports, it does not edit the canvas.
+ * Any badge may speak as it, deliberately: a system message carries no
+ * person's authority, so there is no authority to steal; what it says is
+ * trusted exactly as far as the machinery that said it, like presence.
+ */
+export const SYSTEM_ACTOR: Actor = { id: "sys_isocan", name: "isocan" };
+
+/** The system voice, and anything shaped like it — one prefix, so a second
+ * system voice never needs a second special case. */
+export function isSystemActor(actorId: string): boolean {
+  return actorId.startsWith("sys_");
+}
+
 export interface Canvas {
   id: string;
   title: string;

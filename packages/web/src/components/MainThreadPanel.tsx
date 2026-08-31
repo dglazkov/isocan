@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -468,10 +468,22 @@ function Panel({
             </div>
           )}
           {thread?.comments.map((comment) => (
-            <div className="comment" key={comment.id}>
-              <span className="who" style={{ "--who": actorColorIn(colors, comment.author.id) } as CSSProperties}>
-                {actorNameIn(names, comment.author)}
-              </span>
+            <div
+              className={`comment${isSystemActor(comment.author.id) ? " system" : ""}`}
+              key={comment.id}
+            >
+              {/* The system voice (phase 5): machinery reporting, never a
+                  participant — no actor color, a fixed chip instead of a
+                  name, so it can never be mistaken for someone answering. */}
+              {isSystemActor(comment.author.id) ? (
+                <span className="who system-voice" title="isocan itself — machinery reporting, not a participant">
+                  ⚙ {comment.author.name}
+                </span>
+              ) : (
+                <span className="who" style={{ "--who": actorColorIn(colors, comment.author.id) } as CSSProperties}>
+                  {actorNameIn(names, comment.author)}
+                </span>
+              )}
               <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
               {workedFor(comment) && (
                 <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>

@@ -280,6 +280,139 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
   }, 40_000);
 });
 
+describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
+  it("a session that never starts is loud in the thread it failed for — in the system voice", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc({ FAKE_ACP_CRASH: "boot" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await summon("th_f", "@Sian can you take a look?");
+    await until(async () => rc.out(), (o) => o.includes("turn FAILED"), "the failure narrated");
+    const all = await until(
+      threads,
+      (t) => (t["th_f"]?.comments.length ?? 0) > 1,
+      "the refusal in the thread",
+    );
+    const refusal = all["th_f"]!.comments[1]!;
+    // The system voice: isocan itself, never the agent that never ran and
+    // never a person who wrote no such sentence.
+    expect(refusal.author.name).toBe("isocan");
+    expect((refusal.author as { id: string }).id).toBe("sys_isocan");
+    expect(refusal.body).toContain("Sian couldn't answer");
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
+
+  it("a session that dies mid-turn reaches the thread the same way", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc({ FAKE_ACP_CRASH: "turn" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await summon("th_d", "@Sian still there?");
+    await until(async () => rc.out(), (o) => o.includes("turn FAILED"), "the death narrated");
+    const all = await until(
+      threads,
+      (t) => (t["th_d"]?.comments.length ?? 0) > 1,
+      "the refusal in the thread",
+    );
+    expect(all["th_d"]!.comments[1]!.body).toContain("Sian couldn't answer");
+    // …and the system's own report never re-summons the agent it is about.
+    await new Promise((r) => setTimeout(r, 800));
+    expect(rc.out().match(/summons for Sian/g)).toHaveLength(1);
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
+
+  it("the ceiling stops a turn visibly, and nothing is dropped", async () => {
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({
+        acpAdapters: { fake: [process.execPath, fakeAcp] },
+        rcLimits: { turnsPerHour: 1 },
+      }),
+    );
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await summon("th_c1", "@Sian first");
+    await until(async () => rc.out(), (o) => o.includes("turn ended"), "the first turn");
+    await summon("th_c2", "@Sian second");
+    await until(async () => rc.out(), (o) => o.includes("at its ceiling"), "the ceiling narrated");
+    const all = await until(
+      threads,
+      (t) => (t["th_c2"]?.comments.length ?? 0) > 1,
+      "the ceiling's trace in the thread",
+    );
+    expect(all["th_c2"]!.comments[1]!.author.name).toBe("isocan");
+    expect(all["th_c2"]!.comments[1]!.body).toContain("ceiling");
+    // Held, not dropped: the batch is still pending in the narration's
+    // words, and the ceiling message is said once, not once per lap.
+    expect(rc.out().match(/at its ceiling/g)).toHaveLength(1);
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
+
+  it("two agents wake each other a bounded number of times, then a person's word resumes", async () => {
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({
+        acpAdapters: { fake: [process.execPath, fakeAcp] },
+        rcLimits: { agentChain: 1 },
+      }),
+    );
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Percy", "--harness", "fake");
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+
+    // A person lights the fuse; the agents' replies keep summoning each
+    // other through the shared thread until the chain guard holds one.
+    await summon("th_loop", "@Sian please coordinate with @Percy on this");
+    await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 40_000);
+    const all = await threads();
+    const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
+    expect(guard).toBeDefined();
+    expect(guard!.body).toContain("agent-to-agent turns");
+    expect(guard!.body).toContain("a human word resumes it");
+
+    // The person speaks; the held agent dispatches again.
+    const turnsBefore = (rc.out().match(/turn ended/g) ?? []).length;
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "thread.reply", threadId: "th_loop", comment: { id: "cmt_human", body: "thanks both — Sian, wrap it up" } },
+    });
+    await until(
+      async () => rc.out(),
+      (o) => (o.match(/turn ended/g) ?? []).length > turnsBefore,
+      "the human word lifting the hold",
+      40_000,
+    );
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 90_000);
+
+  it("the system voice may only comment — the engine refuses it the canvas", async () => {
+    const reply = await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: { id: "sys_isocan", name: "isocan" },
+      op: {
+        type: "thread.create",
+        threadId: "th_sys",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_sys", body: "machinery reporting" },
+      },
+    });
+    expect(reply.seq).toBeGreaterThan(0);
+    const refused = await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: { id: "sys_isocan", name: "isocan" },
+      op: { type: "item.move", itemId: "itm_x", x: 1, y: 1 },
+    });
+    expect(refused.code ?? refused.error).toBeDefined();
+  }, 30_000);
+});
+
 describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
   it.runIf(process.env.ISOCAN_REAL_ACP === "1")(
     "a real Claude, summoned by a comment, replies in the thread",

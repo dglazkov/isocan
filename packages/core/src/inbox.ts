@@ -2,6 +2,7 @@ import type { Actor, CanvasContents, Comment, CommentThread } from "./model.ts";
 import type { NewComment, Operation } from "./ops.ts";
 import type { MentionCandidate } from "./mentions.ts";
 import { extractMentions } from "./mentions.ts";
+import { isSystemActor } from "./model.ts";
 import { opMatchesFilters } from "./touches.ts";
 
 /**
@@ -166,6 +167,10 @@ export function dispatchReason(
   canvas: CanvasContents | null | undefined,
 ): InboxReason | "change" | null {
   if (authorId === agent.actorId) return null;
+  // The system voice reports outcomes; it never summons. Without this,
+  // "Sian couldn't answer" landing in Sian's own thread would re-summon
+  // Sian — the failure message waking the failure, forever (phase 5).
+  if (isSystemActor(authorId)) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names);

@@ -1,5 +1,6 @@
 import type { ActorNames } from "./identity.ts";
 import type { Actor, CanvasContents } from "./model.ts";
+import { isSystemActor } from "./model.ts";
 
 /**
  * @-mentions. A mention is resolved at AUTHORING time against the actors the
@@ -136,14 +137,19 @@ function* canvasActors(canvas: CanvasContents): Generator<Actor> {
     ...Object.values(canvas.items),
     ...canvas.trash.map((entry) => entry.item),
   ];
+  // The system voice is a voice, not a participant: its comments must not
+  // make "@isocan" resolvable or put a machinery face in any roster.
+  const person = function* (actor: Actor) {
+    if (!isSystemActor(actor.id)) yield actor;
+  };
   for (const item of items) {
-    yield item.createdBy;
-    yield item.updatedBy;
-    for (const version of item.versions) yield version.createdBy;
+    yield* person(item.createdBy);
+    yield* person(item.updatedBy);
+    for (const version of item.versions) yield* person(version.createdBy);
   }
   for (const thread of Object.values(canvas.threads)) {
-    yield thread.createdBy;
-    for (const comment of thread.comments) yield comment.author;
+    yield* person(thread.createdBy);
+    for (const comment of thread.comments) yield* person(comment.author);
   }
 }
 
