@@ -1,0 +1,86 @@
+# The journeys — the app, opened and used.
+#
+# **Weekly, not on every push, and that is a cost decision made on purpose.**
+# This boots a daemon and drives a headless browser through the real app: about
+# ninety seconds, against a suite that answers in one. The value is not in
+# catching a regression the minute it lands — `review.yml` does that for
+# everything mechanical — it is in catching the class of bug the whole suite is
+# blind to, which does not need to be caught within the minute.
+#
+# **It does not gate anything**, for the same reason `review.yml` does not: a
+# check that goes red is a check somebody turns off, and a browser walk has more
+# ways to go red than a unit test. `release.yml` remains the gate; this is the
+# notice, and it says which journey and why.
+name: journeys
+
+on:
+  schedule:
+    # 07:17 UTC on Mondays — an hour before the nightly grades, on a day
+    # nothing else here runs, so a slow browser walk never races them.
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "One journey by name. Blank = all of them."
+        required: false
+
+concurrency:
+  group: journeys
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to comment on the commit it walked
+
+jobs:
+  walk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # The journeys drive the BUILT app, which is the only version anybody
+      # ever uses. Walking a dev server would be walking something else.
+      - run: npm run build
+
+      # Proves the runner can report a failure before believing it when it
+      # reports none — the shape of every silent-zero this repo has had.
+      - name: The runner can fail
+        run: node scripts/journeys.mjs --selftest
+
+      - name: Walk them
+        id: walk
+        run: |
+          ONLY=""
+          if [ -n "${{ inputs.only }}" ]; then ONLY="--only ${{ inputs.only }}"; fi
+          # `|| true` because a failing journey is news here, not a broken build.
+          OUT=$(node scripts/journeys.mjs $ONLY 2>&1) || true
+          echo "$OUT"
+          printf '%s\n' "$OUT" > /tmp/journeys.txt
+          if echo "$OUT" | grep -q "^FAIL"; then
+            echo "failing=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "failing=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Say so, on the commit it walked
+        if: steps.walk.outputs.failing == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "**A journey did not walk.**"
+            echo
+            echo '```'
+            cat /tmp/journeys.txt
+            echo '```'
+            echo
+            echo "---"
+            echo "Reproduce with \`node scripts/journeys.mjs --only <name>\`. Before reporting a bug, check whether the harness caused it: a headless page throttles rAF and timers, and synthetic pointer events are untrusted — see the rule in \`.agents/personas/journeys.md\`."
+            echo
+            echo "Nothing is blocked: \`release.yml\` is the gate, this is the notice."
+          } > /tmp/comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f body="$(cat /tmp/comment.md)"

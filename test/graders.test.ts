@@ -24,7 +24,14 @@ import { fileURLToPath } from "node:url";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
 describe("the graders can actually start", () => {
-  const grader = read("../scripts/grade.mjs");
+  /**
+   * The plumbing moved to `scripts/lib/browser.mjs` when the journeys runner
+   * needed the same headless browser — one copy rather than two, for the
+   * reason `docs/development.md` gives. These assertions follow it there: the
+   * decision they protect is unchanged, and it now protects both callers at
+   * once rather than only this one.
+   */
+  const grader = read("../scripts/lib/browser.mjs");
 
   it("looks for Chrome in more than one place, on both platforms", () => {
     expect(grader).toContain("CHROME_PATH");
@@ -184,6 +191,8 @@ describe("the grader waits for conditions, never for a clock", () => {
   });
 
   it("lets Chrome choose its own debugging port", () => {
+    // Reads the shared plumbing, where the spawn now lives.
+    const grader = read("../scripts/lib/browser.mjs");
     // `9500 + (pid % 400)` collided two ways: two graders 400 pids apart, and
     // a Chrome left behind by an aborted run still holding the port — where
     // the next grader would attach to somebody else's browser and drive it.

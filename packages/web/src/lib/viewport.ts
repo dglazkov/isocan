@@ -63,6 +63,8 @@ export function threadWorldPos(
   return item ? { x: item.x + thread.x, y: item.y + thread.y } : { x: thread.x, y: thread.y };
 }
 
+/** A world-space rectangle by its edges, which is what fitting wants —
+ *  `x/y/width/height` would make every caller do the same two additions. */
 export interface Box {
   minX: number;
   minY: number;
@@ -100,6 +102,8 @@ export function fitInto(
   return { ...at, tx: at.tx + stage.x, ty: at.ty + stage.y };
 }
 
+/** The viewport that puts `box` on screen with a margin — the arithmetic
+ *  behind every "fit", "reveal" and "zoom to selection". */
 export function fitBounds(
   box: Box,
   viewWidth: number,

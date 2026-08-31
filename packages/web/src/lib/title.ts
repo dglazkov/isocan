@@ -29,6 +29,8 @@ interface TitleParts {
 
 const APP = "isocan";
 
+/** The tab's title: the most specific thing you are looking at, then where
+ *  it lives, with any unread count in front so it survives truncation. */
 export function pageTitle({ canvas, cover, item, unread = 0 }: TitleParts): string {
   const parts: string[] = [];
   // A screen you are looking at full size is the most specific thing on

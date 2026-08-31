@@ -44,6 +44,8 @@ interface ThemeState {
   setPref: (pref: ThemePref) => void;
 }
 
+/** Light or dark, resolved: the person's choice when they made one, and the
+ *  OS's answer when they left it on `system`. */
 export const useTheme = create<ThemeState>((set) => {
   const pref = readThemePref();
   return {
