@@ -1,7 +1,7 @@
 import type { Actor } from "@isocan/core";
 import { fitMoves } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
-import { sendOp } from "./api.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+
 import { blobUrl } from "./api.ts";
 import { naturalSize } from "./measure.ts";
 
@@ -39,11 +39,11 @@ export async function fitToContent(canvasId: string, actor: Actor, itemIds: stri
   const { resizes, moves } = fitMoves(fresh, targets);
 
   for (const r of resizes) {
-    await sendOp(canvasId, actor, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
+    await sendEchoed(canvasId, actor, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
   }
   // One op for the lot, so settling the group is one undo step rather than
   // six — the same bargain `items.delete` already makes.
   if (moves.length > 0) {
-    await sendOp(canvasId, actor, { type: "items.move", moves });
+    await sendEchoed(canvasId, actor, { type: "items.move", moves });
   }
 }

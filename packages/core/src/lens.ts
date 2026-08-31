@@ -153,3 +153,71 @@ export function lensSubjects(sources: readonly LensSource[]): Actor[] {
   }
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/**
+ * **Narrowing a lens** (phase 2).
+ *
+ * At thirty things the gallery is the answer; at three hundred it is a wall,
+ * and the questions somebody actually arrives with are narrower than "show me
+ * everything this agent ever made". Three of them, and no more:
+ *
+ * - *what kind* — screens, or drawings, or the documents
+ * - *how recently* — this week, rather than since the canvas began
+ * - *is it still as I left it* — the things nobody else has touched
+ *
+ * Each is a predicate over what `lensEntries` already returns, so nothing is
+ * fetched twice and the filters compose. Kept in core beside the fold for the
+ * usual reason: `isocan lens --kind screen` and the app's chip have to mean the
+ * same thing, or the two surfaces disagree about what an agent has been doing.
+ */
+export interface LensFilter {
+  /** Only this kind of thing. */
+  kind?: string;
+  /** Only what was made within this many hours. */
+  withinHours?: number;
+  /** Only what nobody else has touched since. */
+  untouched?: boolean;
+}
+
+/** The entries that survive every narrowing asked for. */
+export function filterLens(
+  entries: readonly LensEntry[],
+  filter: LensFilter,
+  nowMs: number,
+): LensEntry[] {
+  return entries.filter((entry) => {
+    if (filter.kind !== undefined && entry.kind !== filter.kind) return false;
+    if (filter.untouched === true && entry.editedSince) return false;
+    if (filter.withinHours !== undefined) {
+      const age = nowMs - Date.parse(entry.at);
+      /* An unparseable date is not "recent" — a filter that lets unknowns
+         through is a filter somebody stops trusting the first time one shows
+         up under "today". */
+      if (!Number.isFinite(age) || age > filter.withinHours * 3_600_000) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * The kinds present, with how many of each — so a chooser offers only what is
+ * actually there.
+ *
+ * A filter listing kinds nobody has made is a menu of dead ends, and the count
+ * is what makes the choice worth making: "screen 41" earns a click in a way
+ * that a bare "screen" does not.
+ */
+export function lensKinds(entries: readonly LensEntry[]): Array<{ kind: string; count: number }> {
+  const tally = new Map<string, number>();
+  for (const entry of entries) tally.set(entry.kind, (tally.get(entry.kind) ?? 0) + 1);
+  return [...tally.entries()]
+    .map(([kind, count]) => ({ kind, count }))
+    .sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
+}
+
+/** The windows a lens offers, in the words somebody would choose them by. */
+export const LENS_WINDOWS: ReadonlyArray<{ label: string; hours: number }> = [
+  { label: "Today", hours: 24 },
+  { label: "This week", hours: 24 * 7 },
+  { label: "This month", hours: 24 * 30 },
+];

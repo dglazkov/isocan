@@ -187,6 +187,9 @@ import {
   lensGroups,
   lensSubjects,
   lensSubjectLabels,
+  filterLens,
+  lensKinds,
+  type LensFilter,
   LENS_REFUSAL,
   type LensBy,
   type LensSource,
@@ -233,7 +236,7 @@ import {
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
 import { harnessSessions } from "./harness.ts";
-import { adoptRcAgent, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
+import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
 import {
   checkoutState,
@@ -7845,9 +7848,20 @@ rcCommand.action(
         void standDownAnnouncement().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
       });
     }
-    // Quiet at start, the way `claude rc` is: one line saying it is on, then
-    // events as they happen. No roster listing, nothing spawned.
-    console.log(`rc: answering on "${p.title}" — quiet until something arrives (Ctrl-C stops answering)`);
+    // Quiet at start, the way `claude rc` is — but never mute about WHERE.
+    // The first real user's first stumble was exactly this: a title with no
+    // address is a place you cannot get to. Two lines: where this is, and
+    // what happens next (with the door named when the roster is empty — a
+    // how-to-add is not a roster listing). Names stay unlisted; `isocan
+    // who` is where rosters are read.
+    const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
+    console.log(`rc: answering on "${p.title}" — ${canvasUrl(origin, p.id)}`);
+    const enrolledCount = Object.keys(opening).length;
+    console.log(
+      enrolledCount === 0
+        ? "rc: nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart"
+        : `rc: ${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
+    );
 
     /**
      * **Dispatch** (phase 4). One quiet connection, fanned out: the rc holds
@@ -8262,48 +8276,45 @@ rcCommand.action(
         if (!record) continue;
 
         /**
-         * **A limit and a reason** (phase 5). Two guards, and every stop
-         * leaves a trace where somebody is looking — the thread gets the
-         * system voice, the narration gets the same fact, and nothing is
-         * dropped: a held batch stays pending and dispatches the moment the
-         * limit lifts.
+         * **A limit and a reason** (phase 5). The decision is `gateTurn` in
+         * rc.ts — pure arithmetic, unit-tested there — and this loop only
+         * gathers the inputs and obeys: every hold leaves its trace where
+         * somebody is looking (the system voice in the thread, the same
+         * fact in the narration, once per hold), and nothing is dropped —
+         * a held batch stays pending and dispatches the moment the limit
+         * lifts.
          */
         const enrolledIds = new Set(Object.keys(roster));
         const hasPersonWord = dispatch.pending.some(
           (e) => !enrolledIds.has(e.envelope.actor.id) && !isSystemActor(e.envelope.actor.id),
         );
-        // The cycle guard: A waking B waking A ends here. A person's word —
-        // anywhere in the batch — resets the chain and lifts the hold.
-        if (!hasPersonWord && dispatch.agentChain >= AGENT_CHAIN) {
-          if (dispatch.held !== "cycle") {
-            dispatch.held = "cycle";
-            const line = `${record.actor.name} paused after ${dispatch.agentChain} agent-to-agent turns with no person in the conversation — a human word resumes it.`;
+        const wasHeld = dispatch.held !== null;
+        const verdict = gateTurn(
+          dispatch,
+          hasPersonWord,
+          { turnsPerHour: TURNS_PER_HOUR, agentChain: AGENT_CHAIN },
+          Date.now(),
+        );
+        if (verdict.verdict === "hold-cycle") {
+          if (verdict.announce) {
+            const line = `${record.actor.name} paused after ${dispatch.agentChain} agent-to-agent ${dispatch.agentChain === 1 ? "turn" : "turns"} with no person in the conversation — a human word resumes it.`;
             console.log(`rc: ${line}`);
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
         }
-        // The ceiling: turns per agent per hour. The stop is recorded, the
-        // batch waits for the window, and a person can read what didn't run.
-        const hourAgo = Date.now() - 3_600_000;
-        dispatch.turnTimes = dispatch.turnTimes.filter((t) => t > hourAgo);
-        if (dispatch.turnTimes.length >= TURNS_PER_HOUR) {
-          const freesAt = dispatch.turnTimes[0]! + 3_600_000;
-          dispatch.retryAfter = Math.min(freesAt, Date.now() + 60_000);
-          if (dispatch.held !== "ceiling") {
-            dispatch.held = "ceiling";
-            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((freesAt - Date.now()) / 60_000))} min).`;
+        if (verdict.verdict === "hold-ceiling") {
+          dispatch.retryAfter = verdict.retryAfter;
+          if (verdict.announce) {
+            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - Date.now()) / 60_000))} min).`;
             console.log(`rc: ${line}`);
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
         }
-        if (dispatch.held) {
+        if (wasHeld) {
           console.log(`rc: ${record.actor.name}'s hold lifted — dispatching what waited`);
-          dispatch.held = null;
         }
-        dispatch.turnTimes.push(Date.now());
-        dispatch.agentChain = hasPersonWord ? 0 : dispatch.agentChain + 1;
         const failedThread = threadOf(dispatch.pending);
         dispatch.busy = true;
         void runSummons(record, dispatch)
@@ -8420,9 +8431,16 @@ program
   .command("lens [who]")
   .description("What somebody has MADE, across every canvas — grouped, and read-only")
   .option("--by <how>", "canvas (default), day, or kind")
+  .option("--kind <kind>", "only this kind of thing")
+  .option("--within <hours>", "only what was made in the last N hours")
+  .option("--untouched", "only what nobody else has touched since")
   .option("-n, --limit <n>", "how many things to show (default 40)")
   .action(
-    run(async (who: string | undefined, opts: { by?: string; limit?: string }, cmd: Command) => {
+    run(async (
+      who: string | undefined,
+      opts: { by?: string; limit?: string; kind?: string; within?: string; untouched?: boolean },
+      cmd: Command,
+    ) => {
       const ctx = await ctxOf(cmd);
       /**
        * **A lens, and deliberately not a canvas.**
@@ -8457,7 +8475,30 @@ program
       if (!["canvas", "day", "kind"].includes(by)) {
         throw new Error(`not an arrangement: ${by} — canvas, day, kind`);
       }
-      const all = lensEntries(sources, wanted.id);
+      /**
+       * The same three narrowings the app offers, from the same function —
+       * `isocan lens --kind screen` and the app's chip have to mean one thing
+       * or the surfaces disagree about what an agent has been doing.
+       */
+      const within = opts.within === undefined ? undefined : Number(opts.within);
+      if (within !== undefined && (!Number.isFinite(within) || within <= 0)) {
+        throw new Error(`--within wants hours: ${opts.within}`);
+      }
+      const filter: LensFilter = {
+        ...(opts.kind ? { kind: opts.kind } : {}),
+        ...(within === undefined ? {} : { withinHours: within }),
+        ...(opts.untouched ? { untouched: true } : {}),
+      };
+      const everything = lensEntries(sources, wanted.id);
+      const all = filterLens(everything, filter, Date.now());
+      if (all.length === 0 && everything.length > 0) {
+        // A narrowed lens that matches nothing reads exactly like an agent who
+        // has made nothing, and the kinds that ARE there is the useful half.
+        const kinds = lensKinds(everything).map((k) => `${k.kind} (${k.count})`);
+        return console.log(
+          `nothing of ${wanted.name}'s matches that — they have ${kinds.join(", ")}`,
+        );
+      }
       const groups = lensGroups(all.slice(0, Number(opts.limit ?? 40)), by);
       if (ctx.json) return printJson({ actor: wanted, total: all.length, groups });
       if (all.length === 0) return console.log(`${wanted.name} has not made anything here`);

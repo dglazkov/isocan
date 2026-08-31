@@ -201,8 +201,12 @@ describe("the running rc — quiet start, events narrated", () => {
     const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
 
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
-    // Quiet start: it enables, it does not list — one line, no roster.
-    expect(out.trim().split("\n")).toHaveLength(1);
+    // Quiet start: it enables, it does not list — where this is, what
+    // happens next, and no agent names. (The address line was the first
+    // real user's first stumble: a title with no way to get there.)
+    await until(async () => out, (o) => o.includes("http"), "the address line");
+    expect(out.trim().split("\n").length).toBeLessThanOrEqual(2);
+    expect(out).toContain("/p/prj_1");
 
     // An enrolment created by verb, noticed by the running rc — no restart.
     await isocan("agent", "add", "Sian");

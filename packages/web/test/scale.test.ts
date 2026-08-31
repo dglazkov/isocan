@@ -168,7 +168,9 @@ describe("the parser can still see the stylesheet", () => {
  * now has to decide whether to match.
  */
 describe("spacing", () => {
-  const SPACING_STEPS = 24;
+  /* 24 → 22 when the ⌘K message bar was removed and took its two private
+     steps with it. Lowering is the record of the fix, as the message says. */
+  const SPACING_STEPS = 22;
 
   it("invents no new step", () => {
     expect(

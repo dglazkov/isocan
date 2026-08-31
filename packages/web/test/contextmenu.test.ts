@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Actor, Item } from "@isocan/core";
-import { keyFor } from "@isocan/core";
+import { keyFor, SHORTCUTS } from "@isocan/core";
 import { canvasMenu, itemMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
@@ -117,3 +119,64 @@ describe("the canvas menu", () => {
     expect(labels(canvasMenu(ctx))).toContain("Write text here");
   });
 });
+
+/**
+ * **⇧D, in all three places somebody might look for it.**
+ *
+ * A shortcut nobody can discover is a shortcut nobody has. The accelerator is
+ * declared ONCE in core's `SHORTCUTS` and read from there by the shortcuts
+ * modal and by the context menu (`shortcutFor`), so a rebound key cannot leave
+ * one of them telling somebody the old one. The launcher shows it too — that
+ * is most of what a launcher is for.
+ */
+describe("Download has a key, and every surface knows it", () => {
+  const row = SHORTCUTS.find((s) => s.does === "Download");
+
+  it("is in the one registry", () => {
+    expect(row, "no SHORTCUTS row for Download").toBeDefined();
+    expect(row!.keys).toContain("⇧D");
+  });
+
+  it("is bound on the canvas, and shifted rather than bare", () => {
+    /* The unshifted letters are the tools. A canvas where `d` writes to your
+       disk is a canvas where a mistyped tool saves a file. */
+    const page = read("pages/CanvasPage.tsx");
+    expect(page).toMatch(/e\.shiftKey && e\.key\.toLowerCase\(\) === "d"/);
+    expect(page).toContain("downloadItem(");
+  });
+
+  it("calls the same function the menu calls", () => {
+    /* Two doors onto one act, never two implementations of it — the second
+       would be the one that forgets the filename. */
+    expect(read("lib/menuentries.tsx")).toContain("downloadItem(");
+    expect(read("lib/actions.ts")).toContain("downloadItem(");
+  });
+
+  it("shows the key in the menu by lookup, not by spelling it", () => {
+    const menu = read("lib/menuentries.tsx");
+    const entry = menu.slice(menu.indexOf('label: "Download"'), menu.indexOf('label: "Download"') + 260);
+    expect(entry).toContain('shortcutFor: "Download"');
+    expect(entry).not.toContain("⇧D");
+  });
+
+  it("is offered by the launcher, with the key shown", () => {
+    const actions = read("lib/actions.ts");
+    const entry = actions.slice(actions.indexOf('id: "download"'), actions.indexOf('id: "download"') + 300);
+    expect(entry).toContain('keys: "⇧D"');
+  });
+
+  it("is offered only for a single item, everywhere that offers it", () => {
+    /* A "download" of six is a different feature. Quietly saving the first of
+       them is the worst answer available, so all three refuse rather than
+       guess. */
+    const actions = read("lib/actions.ts");
+    const entry = actions.slice(actions.indexOf('id: "download"'), actions.indexOf('id: "download"') + 400);
+    expect(entry).toMatch(/selection\.length === 1/);
+    expect(read("pages/CanvasPage.tsx")).toMatch(/ids\.length === 1 \? canvas\?\.items/);
+  });
+});
+
+/** The web sources, for the guards that read them. */
+function read(rel: string): string {
+  return readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), "utf8");
+}

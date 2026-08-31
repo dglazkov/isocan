@@ -6,8 +6,8 @@ import {
   newItemId,
   newVersionId,
 } from "@isocan/core";
-import { blobUrl, sendOp, uploadBlob } from "./api.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { blobUrl, uploadBlob } from "./api.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
  * **Copy and paste, including into a different canvas.**
@@ -72,7 +72,7 @@ export async function pasteInto(
       blobHash = up.blobHash;
     }
     const itemId = newItemId();
-    await sendOp(
+    await sendEchoed(
       canvasId,
       actor,
       {

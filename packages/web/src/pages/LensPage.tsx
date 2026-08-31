@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Actor, LensBy, LensEntry, LensGroup, LensSource } from "@isocan/core";
+import type { Actor, LensBy, LensEntry, LensFilter, LensGroup, LensSource } from "@isocan/core";
 import {
   ago,
+  filterLens,
+  LENS_WINDOWS,
+  lensKinds,
   itemPath,
   LENS_REFUSAL,
   lensEntries,
@@ -39,6 +42,26 @@ function countWhere(entries: readonly LensEntry[]): string {
   const n = new Set(entries.map((e) => e.canvasId)).size;
   return `${n} canvas${n === 1 ? "" : "es"}`;
 }
+
+/**
+ * Press the chip that is on and it turns off — by DELETING the key rather than
+ * setting it to `undefined`, which `exactOptionalPropertyTypes` refuses and
+ * which would anyway leave a filter carrying a field that means nothing.
+ */
+function toggle<K extends keyof LensFilter>(
+  filter: LensFilter,
+  key: K,
+  value: NonNullable<LensFilter[K]>,
+): LensFilter {
+  if (filter[key] === value) {
+    const { [key]: _gone, ...rest } = filter;
+    return rest;
+  }
+  return { ...filter, [key]: value };
+}
+
+/** Above this many things, the narrowing appears. */
+const NARROW_FROM = 12;
 
 const BY: LensBy[] = ["canvas", "day", "kind"];
 const BY_LABEL: Record<LensBy, string> = {
@@ -108,10 +131,16 @@ export function LensPage() {
   const subject: Actor | undefined = actorId
     ? subjects.find((s) => s.id === actorId)
     : undefined;
-  const entries = useMemo<LensEntry[]>(
+  const [filter, setFilter] = useState<LensFilter>({});
+  const all = useMemo<LensEntry[]>(
     () => (sources && subject ? lensEntries(sources, subject.id) : []),
     [sources, subject],
   );
+  /* Kinds are offered from what is ACTUALLY there — a chooser listing kinds
+     nobody has made is a menu of dead ends. Counted before filtering, so
+     choosing one does not empty the list you chose it from. */
+  const kinds = useMemo(() => lensKinds(all), [all]);
+  const entries = useMemo(() => filterLens(all, filter, Date.now()), [all, filter]);
   const groups = useMemo<LensGroup[]>(() => lensGroups(entries, by), [entries, by]);
   const nowMs = Date.now();
 
@@ -206,6 +235,65 @@ export function LensPage() {
           {/* Said once, at the top, rather than discovered by trying: this
               looks like a canvas and is not one, and the difference is a drag
               that has nowhere true to land. */}
+          {/**
+           * **The narrowing, offered only where it earns its space.**
+           *
+           * A row of chips above thirty tiles is chrome nobody asked for; the
+           * same row above three hundred is the difference between a gallery
+           * and a wall. The threshold counts what the subject HAS, not what is
+           * showing — otherwise choosing a filter that matches a few things
+           * would remove the controls you chose it with.
+           */}
+          {all.length > NARROW_FROM && (
+            <div className="lens-narrow" role="group" aria-label="Narrow">
+              <button
+                className={`btn quiet${Object.keys(filter).length === 0 ? " on" : ""}`}
+                aria-pressed={Object.keys(filter).length === 0}
+                onClick={() => setFilter({})}
+              >
+                Everything
+              </button>
+              {kinds.map(({ kind, count }) => (
+                <button
+                  key={kind}
+                  className={`btn quiet${filter.kind === kind ? " on" : ""}`}
+                  aria-pressed={filter.kind === kind}
+                  onClick={() => setFilter((f) => toggle(f, "kind", kind))}
+                >
+                  {kind} <span className="lens-tally">{count}</span>
+                </button>
+              ))}
+              {LENS_WINDOWS.map((w) => (
+                <button
+                  key={w.label}
+                  className={`btn quiet${filter.withinHours === w.hours ? " on" : ""}`}
+                  aria-pressed={filter.withinHours === w.hours}
+                  onClick={() => setFilter((f) => toggle(f, "withinHours", w.hours))}
+                >
+                  {w.label}
+                </button>
+              ))}
+              {/* "Still as I left it" rather than "untouched": the question is
+                  about the reader's own work, not about the item's state. */}
+              <button
+                className={`btn quiet${filter.untouched ? " on" : ""}`}
+                aria-pressed={filter.untouched === true}
+                onClick={() => setFilter((f) => toggle(f, "untouched", true))}
+              >
+                Untouched since
+              </button>
+            </div>
+          )}
+          {/* Said out loud, because a narrowed lens that matches nothing looks
+              exactly like an agent who has made nothing. */}
+          {all.length > 0 && entries.length === 0 && (
+            <p className="canvas-none">
+              Nothing here matches that.{" "}
+              <button className="btn quiet" onClick={() => setFilter({})}>
+                Show everything
+              </button>
+            </p>
+          )}
           <p className="lens-note">
             {entries.length} thing{entries.length === 1 ? "" : "s"} across{" "}
             {countWhere(entries)} — {LENS_REFUSAL}.

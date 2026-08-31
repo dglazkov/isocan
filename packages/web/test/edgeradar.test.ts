@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   MIN_SPAN,
@@ -210,5 +212,59 @@ describe("formatDistance", () => {
   it("reads the way a person would say it", () => {
     expect(formatDistance(1400)).toBe("1,400px away");
     expect(formatDistance(42)).toBe("42px away");
+  });
+});
+
+/**
+ * **The rim is the WINDOW's rim.**
+ *
+ * It used to inset by whatever was docked, so with a panel open the bars ran
+ * down the PANEL's edge — a third of the way into the screen, where they read
+ * as marks floating in the canvas rather than as a rim. Reported that way:
+ * they belong on the top, bottom, left and right edges of the screen.
+ */
+describe("the rim hugs the window, not the chrome", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/components/EdgeRadar.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("uses zero insets", () => {
+    expect(src).toMatch(/const RIM: Insets = \{ top: 0, right: 0, bottom: 0, left: 0 \}/);
+    expect(src).toContain("const insets: Insets = RIM;");
+  });
+
+  it("does not inset by the docks", () => {
+    /* `stageInsets` answers a different question and must not creep back in
+       here — but the comment above the rim EXPLAINS why it is not used, and a
+       guard that cannot tell prose from code fails on its own explanation.
+       This repo has been bitten by that three times. */
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toContain("stageInsets");
+  });
+
+  it("still outranks the docks, or a bar on the true edge would hide behind one", () => {
+    /* The whole change rests on this: `--z-bar` (the rim) above `--z-dock`
+       (the panels). If that inverted, every left-edge beacon would be drawn
+       underneath an open Chat. */
+    const css = readFileSync(
+      fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+      "utf8",
+    );
+    const value = (name: string) => Number(new RegExp(`--z-${name}:\\s*(\\d+)`).exec(css)?.[1]);
+    expect(value("bar")).toBeGreaterThan(value("dock"));
+    expect(css).toMatch(/\.edge-radar \{[^}]*z-index: var\(--z-bar\)/);
+  });
+
+  it("leaves framing alone — an item under a panel is not framed", () => {
+    /* The opposite requirement, and the reason `stageInsets` still exists:
+       framing must avoid parking an item where a panel covers it. A beacon is
+       the thing that says where to look, so it belongs at the boundary of what
+       you are looking at. */
+    const stage = readFileSync(
+      fileURLToPath(new URL("../src/lib/stage.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(stage).toContain("export function stageInsets");
   });
 });

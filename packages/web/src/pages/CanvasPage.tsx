@@ -11,6 +11,7 @@ import {
 import {
   connectToCanvas,
   disconnect,
+  setNotice,
   loadBacking,
   publishSelection,
   setPresenceActor,
@@ -18,7 +19,8 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pasteInto } from "../lib/clipboard.ts";
-import { redo, sendOp, undo } from "../lib/api.ts";
+import { blobUrl, redo, sendOp, undo } from "../lib/api.ts";
+import { deleteItems, downloadItem } from "../lib/itemactions.ts";
 import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
@@ -38,9 +40,20 @@ const Workbench = lazy(() =>
   import("../components/Workbench.tsx").then((m) => ({ default: m.Workbench })),
 );
 import { FullScreen } from "../components/FullScreen.tsx";
-import { CommandBar } from "../components/CommandBar.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { Scrubber } from "../components/Scrubber.tsx";
+/**
+ * **Loaded when it is opened, not when the canvas is.**
+ *
+ * The launcher is a modal most sessions never open, and it carried the whole
+ * action registry with it — `bundle-bytes` went over its bound the moment it
+ * landed, which is exactly the question that ratchet exists to ask. Splitting
+ * it is the answer the bound was asking for; raising the bound would have been
+ * the answer it was trying to prevent.
+ */
+const CommandPalette = lazy(() =>
+  import("../components/CommandPalette.tsx").then((m) => ({ default: m.CommandPalette })),
+);
 import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
@@ -143,6 +156,8 @@ function CanvasSurface({
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
+  const paletteOpen = useUiStore((s) => s.paletteOpen);
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   // The canvas's own title, for the tab. Subscribed separately from the
@@ -444,10 +459,22 @@ function CanvasSurface({
         });
         return;
       }
+      /**
+       * **⌘K is the launcher now, not a third composer.**
+       *
+       * It opened a bar for messaging your emissary — which the Chat panel and
+       * every comment pin already do, so the keystroke was spent on the third
+       * way to do one thing. It reaches everything instead: fit the screen,
+       * arm a tool, open a panel, run a format, or pick a slash command and
+       * have it typed into the Chat for you.
+       *
+       * Messaging is not lost; it is one row in the list (`Open Chat`), which
+       * is the right weight for something two other surfaces already offer.
+       */
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         const ui = useUiStore.getState();
-        ui.setCommandBarOpen(!ui.commandBarOpen);
+        ui.setPaletteOpen(!ui.paletteOpen);
         return;
       }
       /**
@@ -526,15 +553,24 @@ function CanvasSurface({
         const ids = ui.selectedItemIds;
         if (ids.length > 0) {
           e.preventDefault();
-          // Batch delete = one undo step for the whole selection.
-          void sendOp(
-            canvasId!,
-            actor,
-            ids.length === 1
-              ? { type: "item.delete", itemId: ids[0]! }
-              : { type: "items.delete", itemIds: ids },
-          );
-          ui.select(null);
+          /**
+           * **Through `deleteItems`, not a second copy of it.**
+           *
+           * This built the same op inline and posted it with `sendOp` — so the
+           * KEY had no local echo while the context menu did, and the item sat
+           * on screen until the home's broadcast arrived. Reported as "I
+           * selected a screen, hit delete, nothing happened, I did it again,
+           * then I reloaded and it was gone", which is exactly what that
+           * looks like on a slow post.
+           *
+           * Fixing `deleteItems` alone did not fix the key, because the key
+           * was never calling it — two doors onto one act, with two
+           * implementations behind them, and only one of them repaired. It is
+           * one door now: the batching (one undo for a whole selection) and
+           * the deselect live in `deleteItems` where the menu already found
+           * them.
+           */
+          void deleteItems(canvasId!, actor, ids);
         }
       } else if (e.key === "F2") {
         // Rename the selection, the way a file manager would.
@@ -608,6 +644,30 @@ function CanvasSurface({
         if (ids.length === 1 && canvas && (canvas.items[ids[0]!]?.versions.length ?? 0) > 1) {
           e.preventDefault();
           ui.setFanned(ui.fannedItemId === ids[0] ? null : ids[0]!);
+        }
+      } else if (e.shiftKey && e.key.toLowerCase() === "d" && !e.metaKey && !e.ctrlKey) {
+        /**
+         * ⇧D downloads the selected item's current version.
+         *
+         * Shifted rather than bare `D`, because the unshifted letters are the
+         * tools and a canvas where `d` saves a file is a canvas where a
+         * mistyped tool writes to your disk. It calls the same
+         * `downloadItem` the context menu does — the menu and the key are two
+         * doors onto one act, never two implementations of it.
+         *
+         * One item only. "Download" of a multi-selection is a different
+         * feature (a zip, a naming scheme, a progress bar), and silently
+         * downloading the first of six would be the worst answer available.
+         */
+        const ids = ui.selectedItemIds;
+        const canvas = useCanvasStore.getState().canvas;
+        const item = ids.length === 1 ? canvas?.items[ids[0]!] : undefined;
+        const version = item?.versions.find((v) => v.id === item.currentVersionId);
+        if (item && version) {
+          e.preventDefault();
+          void downloadItem(blobUrl(canvasId!, version.blobHash), version.filename).catch(
+            (err: Error) => setNotice(err.message),
+          );
         }
       } else if (e.shiftKey && e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         // ⇧C comments on WHAT IS SELECTED, rather than on wherever you next
@@ -712,7 +772,6 @@ function CanvasSurface({
       <div style={{ visibility: itemId || onWorkbench ? "hidden" : "visible" }}>
         <CanvasViewport canvasId={canvasId} actor={actor} />
       </div>
-      <CommandBar canvasId={canvasId} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
@@ -739,6 +798,18 @@ function CanvasSurface({
       {/* Offline, refusals, and anything that could not be done at all
           (phase 10). Above the panels for the reason `ArrivalNotice` is:
           it is about the connection, not about what is on the canvas. */}
+      {/* No fallback: the chunk arrives in a few milliseconds from the same
+          origin, and a spinner that flashes for one frame is worse than the
+          palette simply appearing. */}
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            canvasId={canvasId}
+            actor={actor}
+            onClose={() => setPaletteOpen(false)}
+          />
+        </Suspense>
+      )}
       <OfflineBar />
       {/* The history, when somebody asked for it. Mounted here rather than
           inside the viewport because it is chrome ABOUT the canvas, and

@@ -117,7 +117,24 @@ async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: s
   for (;;) {
     const value = await fn();
     if (ok(value)) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) {
+      /**
+       * **What it DID see, not only what it wanted.**
+       *
+       * "timed out waiting for the cycle guard" names the one thing that did
+       * not happen and nothing about what did — and these waits watch an rc
+       * narrating its own work, so the answer is usually sitting in that
+       * output. On CI the process is gone by the time anybody reads the log,
+       * so it is the only account there will ever be.
+       *
+       * It earned itself the day it went in: a captured failure showed both
+       * agents' replies landing 23ms apart and then nothing, which is what
+       * ruled the fake adapter out and pointed at routing instead.
+       */
+      const saw = typeof value === "string" ? value : JSON.stringify(value);
+      const tail = saw.length > 1200 ? `…${saw.slice(-1200)}` : saw;
+      throw new Error(`timed out waiting for ${what} after ${ms}ms. What it saw:\n${tail}`);
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
 }
@@ -350,45 +367,80 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     await rc.done;
   }, 40_000);
 
-  it("two agents wake each other a bounded number of times, then a person's word resumes", async () => {
+  it("an agent's word alone cannot start a turn past the bound; a person's word can", async () => {
+    // The journey-6 scene at its smallest deterministic shape. The first
+    // version ran a real four-turn cascade — adapters replying through the
+    // CLI, cross-summoning — and flaked on every loaded CI box: an
+    // end-to-end pretending to be a unit test (the chain ARITHMETIC lives
+    // in guards.test.ts now). Here the agent-to-agent summons is POSTED as
+    // the enrolled Percy, so the guard's whole path — agent-only batch,
+    // hold, system voice in the thread, a human word lifting it — runs
+    // with zero cascading turns.
     await fs.writeFile(
       path.join(home, "config.json"),
       JSON.stringify({
-        acpAdapters: { fake: [process.execPath, fakeAcp] },
-        rcLimits: { agentChain: 1 },
+        // Both spellings of the adapter key: Sian enrols with --harness
+        // fake; Percy arrives the web way (harness unsaid → claude-code).
+        acpAdapters: {
+          fake: [process.execPath, fakeAcp],
+          "claude-code": [process.execPath, fakeAcp],
+        },
+        rcLimits: { agentChain: 0 },
       }),
     );
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    await isocan("rc", "add", "Percy", "--harness", "fake");
-    const rc = startRc();
-    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
-
-    // A person lights the fuse; the agents' replies keep summoning each
-    // other through the shared thread until the chain guard holds one.
-    await summon("th_loop", "@Sian please coordinate with @Percy on this");
-    await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 40_000);
-    const all = await threads();
-    const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
-    expect(guard).toBeDefined();
-    expect(guard!.body).toContain("agent-to-agent turns");
-    expect(guard!.body).toContain("a human word resumes it");
-
-    // The person speaks; the held agent dispatches again.
-    const turnsBefore = (rc.out().match(/turn ended/g) ?? []).length;
+    // Percy is enrolled the web dialog's way — his actor minted on THIS
+    // badge, so this badge may speak as him (the CLI's Percy would be one
+    // actor wearing two faces, and the desk rightly refuses that).
+    const percy = { id: "usr_percy", name: "Percy" };
+    await badge.speakAs(percy);
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
-      op: { type: "thread.reply", threadId: "th_loop", comment: { id: "cmt_human", body: "thanks both — Sian, wrap it up" } },
+      op: { type: "agent.enroll", agent: percy },
     });
+
+    const rc = startRc({ FAKE_ACP_REPLY: "0" });
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up", 30_000);
+
+    // Percy (an enrolled agent) summons Sian: agent-only batch, bound 0 —
+    // held before any turn starts.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: percy,
+      op: {
+        type: "thread.create",
+        threadId: "th_loop",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_agent", body: "@Sian your turn" },
+      },
+    });
+    await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 30_000);
+    expect(rc.out()).not.toContain("summons for Sian");
+    const all = await threads();
+    const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
+    expect(guard).toBeDefined();
+    expect(guard!.body).toContain("agent-to-agent");
+    expect(guard!.body).toContain("a human word resumes it");
+
+    // The person speaks; the held batch dispatches.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "thread.reply", threadId: "th_loop", comment: { id: "cmt_human", body: "go ahead, Sian" } },
+    });
+    await until(async () => rc.out(), (o) => o.includes("hold lifted"), "the human word lifting the hold", 30_000);
     await until(
       async () => rc.out(),
-      (o) => (o.match(/turn ended/g) ?? []).length > turnsBefore,
-      "the human word lifting the hold",
-      40_000,
+      (o) => o.includes("summons for Sian") && o.includes("turn ended"),
+      "the dispatched turn",
+      30_000,
     );
     rc.child.kill("SIGINT");
     await rc.done;
-  }, 90_000);
+  }, 120_000);
 
   it("the system voice may only comment — the engine refuses it the canvas", async () => {
     const reply = await post("/api/ops", {

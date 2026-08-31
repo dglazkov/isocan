@@ -128,7 +128,6 @@ interface UiStore {
   /** The Share dialog, beside the pile — who may be here, next to who is. */
   shareOpen: boolean;
   /** The ⌘K command bar: the friction-free lane to your emissary. */
-  commandBarOpen: boolean;
   /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
@@ -153,6 +152,18 @@ interface UiStore {
   followingActorId: string | null;
   /** The marks dock on the right — the canvas grouped by reaction. */
   marksOpen: boolean;
+  /**
+   * Text the Chat should open with, put there by something else.
+   *
+   * The launcher picks a slash command and does NOT post it: most take an
+   * argument — `/variation 3 layouts` is a different request from
+   * `/variation` — so it opens the Chat with the command typed and the caret
+   * after it, which is the half somebody has not written yet. Cleared by the
+   * composer once it has taken it, so it cannot re-apply on the next render.
+   */
+  pendingChat: string | null;
+  /** The ⌘K launcher. */
+  paletteOpen: boolean;
   /** The history scrubber along the bottom. Whether it is OPEN lives here;
    * where its playhead is standing lives in `canvasStore.past`, because that
    * is canvas state and every reader of the canvas has to see it. */
@@ -202,7 +213,6 @@ interface UiStore {
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
   setShareOpen: (open: boolean) => void;
-  setCommandBarOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
   setMinimapOpen: (open: boolean) => void;
   setFilesPanelOpen: (open: boolean) => void;
@@ -212,6 +222,8 @@ interface UiStore {
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
+  setPendingChat: (text: string | null) => void;
+  setPaletteOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
   /** How wide the docked left panel is, in screen pixels. */
   panelWidth: number;
@@ -436,7 +448,6 @@ export const useUiStore = create<UiStore>((set) => {
     trashOpen: false,
     identityOpen: false,
     shareOpen: false,
-    commandBarOpen: false,
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
     panelWidth: readPanelWidth(),
@@ -450,6 +461,8 @@ export const useUiStore = create<UiStore>((set) => {
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
+    pendingChat: null,
+    paletteOpen: false,
     peekedItemId: null,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
@@ -515,7 +528,6 @@ export const useUiStore = create<UiStore>((set) => {
     // one closes the other rather than letting them stack.
     setIdentityOpen: (identityOpen) => set({ identityOpen, ...(identityOpen ? { shareOpen: false } : {}) }),
     setShareOpen: (shareOpen) => set({ shareOpen, ...(shareOpen ? { identityOpen: false } : {}) }),
-    setCommandBarOpen: (commandBarOpen) => set({ commandBarOpen }),
     setMainPanelOpen: (mainPanelOpen) => set({ mainPanelOpen }),
     setFilesPanelOpen: (filesPanelOpen) => set({ filesPanelOpen }),
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
@@ -524,6 +536,8 @@ export const useUiStore = create<UiStore>((set) => {
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setHistoryOpen: (historyOpen) => set({ historyOpen }),
+    setPendingChat: (pendingChat) => set({ pendingChat }),
+    setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     /**
      * Chrome that steps aside for the panel EASES to its new place, which is

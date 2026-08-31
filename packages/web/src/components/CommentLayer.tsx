@@ -9,8 +9,8 @@ import {
   newCommentId,
   newThreadId,
   workedFor, itemThread, atCorner} from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { type PendingComment, useUiStore } from "../stores/uiStore.ts";
 import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -114,7 +114,6 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
 
 const GUTTER = 12; // breathing room from the window edges
 const TOOLBAR_H = 48; // popovers must clear the toolbar
-
 
 /**
  * Screen placement for a popover hanging off a pin: capped to a height that
@@ -254,7 +253,7 @@ function ThreadPin({
     // this release is about to fire.
     const dx = (e.clientX - start.x) / scale;
     const dy = (e.clientY - start.y) / scale;
-    void sendOp(canvasId, actor, {
+    void sendEchoed(canvasId, actor, {
       type: "thread.setAnchor",
       threadId: thread.id,
       anchorItemId: null,
@@ -385,7 +384,7 @@ function ThreadPopover({
           const body = reply.trim();
           if (!body) return;
           setReply("");
-          await sendOp(canvasId, actor, {
+          await sendEchoed(canvasId, actor, {
             type: "thread.reply",
             threadId: thread.id,
             comment: makeComment(body),
@@ -419,7 +418,7 @@ function ThreadPopover({
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
             openMainPanel(canvasId, true);
-            await sendOp(canvasId, actor, { type: "thread.setMain", threadId: thread.id });
+            await sendEchoed(canvasId, actor, { type: "thread.setMain", threadId: thread.id });
           }}
         >
           Make this the Chat
@@ -427,7 +426,7 @@ function ThreadPopover({
         <button
           onClick={async () => {
             useUiStore.getState().setOpenThread(null);
-            await sendOp(canvasId, actor, { type: "thread.delete", threadId: thread.id });
+            await sendEchoed(canvasId, actor, { type: "thread.delete", threadId: thread.id });
           }}
         >
           Delete comment
@@ -485,7 +484,7 @@ function ComposePopover({
           const trimmed = body.trim();
           if (!trimmed) return;
           useUiStore.getState().setPendingComment(null);
-          await sendOp(canvasId, actor, {
+          await sendEchoed(canvasId, actor, {
             type: "thread.create",
             threadId: newThreadId(),
             x: pending.x,

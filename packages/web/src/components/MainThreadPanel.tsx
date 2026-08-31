@@ -364,6 +364,24 @@ function Panel({
   const thread = canvas ? mainThread(canvas) : null;
   useLaneFollow(canvas, thread);
   const [draft, setDraft] = useState("");
+
+  /**
+   * A command the launcher picked, handed over rather than posted.
+   *
+   * ⌘K does not send it, because most commands take an argument —
+   * `/variation 3 layouts` is a different request from `/variation` — and
+   * sending the bare word would be guessing at the half nobody has typed yet.
+   * So it arrives here, in the field, with the caret after it.
+   *
+   * Taken once and cleared: leaving it in the store would re-apply it over
+   * whatever somebody typed next, on the next render that happened to run.
+   */
+  const pendingChat = useUiStore((s) => s.pendingChat);
+  useEffect(() => {
+    if (pendingChat === null) return;
+    setDraft((current) => (current.trim() === "" ? pendingChat : current));
+    useUiStore.getState().setPendingChat(null);
+  }, [pendingChat]);
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const commands = useCommands();
@@ -381,8 +399,9 @@ function Panel({
   const commentCount = thread?.comments.length ?? 0;
   useEffect(() => {
     if (docked && thread) markRead(thread.id);
-    // Identity and count, not the object — see the same narrowing in
-    // CommandBar. A fresh snapshot per op would re-mark on unrelated traffic.
+    // Identity and count, not the object: a fresh snapshot per op would
+    // re-mark on unrelated traffic. (The ⌘K bar that shared this narrowing is
+    // gone — the launcher replaced it.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docked, thread?.id, commentCount]);
 

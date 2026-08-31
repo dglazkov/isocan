@@ -87,3 +87,46 @@ describe("the lens's stylesheet", () => {
     }
   });
 });
+
+/**
+ * **Narrowing** (phase 2) — the gallery is the answer at thirty things and a
+ * wall at three hundred.
+ */
+describe("the lens narrows", () => {
+  it("filters with the shared function, so the CLI agrees", () => {
+    /* `isocan lens --kind screen` and the app's chip have to mean one thing,
+       or the surfaces disagree about what an agent has been doing. */
+    expect(bare).toContain("filterLens(all, filter,");
+  });
+
+  it("offers only the kinds that are actually there", () => {
+    /* A chooser listing kinds nobody has made is a menu of dead ends. */
+    expect(bare).toContain("lensKinds(all)");
+  });
+
+  it("counts kinds BEFORE filtering", () => {
+    /* Otherwise choosing a kind empties the list you chose it from, and the
+       counts shrink to whatever you last picked. */
+    expect(bare).toMatch(/lensKinds\(all\), \[all\]/);
+  });
+
+  it("shows the controls only when there are enough things to need them", () => {
+    /* And counts what the subject HAS, not what is showing — otherwise a
+       narrow filter removes the controls you narrowed with. */
+    expect(bare).toMatch(/all\.length > NARROW_FROM/);
+    expect(bare).not.toMatch(/entries\.length > NARROW_FROM/);
+  });
+
+  it("says so when a filter matches nothing", () => {
+    /* A narrowed lens matching nothing looks exactly like an agent who has
+       made nothing. */
+    expect(bare).toMatch(/Nothing here matches that/);
+  });
+
+  it("turns a chip off by removing the key, not by nulling it", () => {
+    /* A filter carrying a field that means nothing is a filter that will
+       eventually be read as meaning something. */
+    expect(bare).toMatch(/function toggle</);
+    expect(bare).toMatch(/const \{ \[key\]: _gone, \.\.\.rest \} = filter/);
+  });
+});
