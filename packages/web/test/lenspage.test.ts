@@ -58,12 +58,11 @@ describe("the lens page", () => {
        the route this build serves, carries the badge, and recovers at the
        door. */
     expect(bare).toContain("listCanvases()");
-    /* This regex used to only catch a DOUBLE-QUOTED route, so phase 3's
-       `fetch(\`/api/projects/${id}/oplog\`)` walked straight past a guard
-       written to stop exactly that. A template literal is the natural way to
-       write a route with an id in it — which is to say, the only way this
-       mistake was ever going to be made. */
-    expect(bare).not.toMatch(/fetch\(["'`]\/api\//);
+    /* The other half of this — that no hand-written route appears here at all
+       — moved to `throughthedoor.test.ts`, which asks it of every file in the
+       app rather than of this one. It was asked here because this is where
+       the mistake was made that day, and asking it here was how seven more
+       hand-written routes lived in five other files with this test green. */
   });
 
   it("survives one canvas it cannot read", () => {

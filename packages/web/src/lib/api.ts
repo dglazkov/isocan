@@ -8,6 +8,7 @@ import type {
   BadgesResponse,
   BlobUploadResponse,
   CanvasSnapshotResponse,
+  DirClaim,
   GcReport,
   GcRequest,
   GrantResponse,
@@ -19,6 +20,7 @@ import type {
   LogEntry,
   MintPassResponse,
   Operation,
+  Persona,
   PostOpResponse,
   Canvas,
   ActorNames,
@@ -499,6 +501,194 @@ export async function uploadBlob(
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
   return json as BlobUploadResponse;
+}
+
+// ---- the owner's own machine, and its disk (the workbench's routes) ----
+//
+// Six routes that answer on exactly ONE daemon: the canvas's home, on its
+// owner's machine, over loopback, with a directory bound. Everywhere else
+// each of them 404s with a sentence saying so — and that sentence is not an
+// error. It is the answer, and every caller below renders it as one.
+//
+// Which is why these were the last routes still written by hand, and why
+// writing them by hand was expensive here in particular. A pane that already
+// knows how to say "no directory is bound to this canvas on this machine"
+// says a LOST BADGE the same way: same grey text, same shape, in a panel that
+// looks like it worked. A bare `fetch` cannot tell those apart, because it
+// never asks — it reads a 401's body and shows whatever is in it, or shows
+// nothing at all.
+//
+// `request` asks. A 401 knocks on the door, re-claims this tab's persona and
+// comes back with the real answer, so the sentence a person reads is about
+// their disk rather than about their cookie. What reaches a caller is then
+// one of two things, and `homeAnswered` tells them apart: an `ApiError`
+// carrying the daemon's own refusal (show it — it names the rule, which is
+// what lets somebody fix the path they typed), or anything else, which means
+// the daemon never answered at all.
+
+/** One row of a bound directory's listing. */
+export interface TreeEntry {
+  path: string;
+  kind: "file" | "dir";
+  size: number;
+}
+
+export interface TreeResponse {
+  roots: Array<{ root: string; entries: TreeEntry[]; truncated: boolean }>;
+}
+
+/**
+ * The bound directory's listing. `isocan tree` prints this same answer from
+ * this same route — one derivation, two surfaces.
+ *
+ * `roots` is plural because a canvas can be bound in more than one place on
+ * one machine (a clone, a worktree). The pane shows the first, as the write
+ * does; which one a listing means when there are two is a question nobody has
+ * asked yet.
+ */
+export function getTree(canvasId: string): Promise<TreeResponse> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/tree`);
+}
+
+/**
+ * One file's BYTES, on their way to becoming an item — the ＋'s first half.
+ *
+ * Bypasses `request` for `uploadBlob`'s reason: the route answers
+ * octet-stream and `request` reads json. So the recovery is spelled out here
+ * instead, because skipping it made the same silence in the same place — the
+ * ＋ on a tab whose cookie had been cleared did nothing at all, and did
+ * nothing again on the second press.
+ */
+export async function readBoundFile(canvasId: string, path: string): Promise<ArrayBuffer> {
+  const url = `/api/projects/${encodeURIComponent(canvasId)}/tree/file?path=${encodeURIComponent(path)}`;
+  let res = await fetch(url);
+  if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as any;
+    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+  }
+  return res.arrayBuffer();
+}
+
+export interface PickListing {
+  dir: string;
+  up: string | null;
+  entries: Array<{ name: string; path: string; bound: boolean; claim?: DirClaim }>;
+}
+
+/**
+ * Directories to pick from — one level, names only, jailed to `$HOME`.
+ *
+ * `at` is where to look; null asks for the starting place. Every refusal here
+ * is deliberately ONE sentence at the daemon — absent, outside the jail, a
+ * symlink, a file are all "there is nothing to list here" — because a picker
+ * that enumerated its refusals would be describing a disk the caller cannot
+ * see.
+ */
+export function pickDirectories(canvasId: string, at: string | null): Promise<PickListing> {
+  const where = at ? `?at=${encodeURIComponent(at)}` : "";
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/pick${where}`);
+}
+
+export interface BindResponse {
+  root: string;
+  marker: string;
+  /** The directory already carried this canvas's marker — a cloned repo whose
+   *  binding this machine was simply missing. */
+  adopted: boolean;
+}
+
+/**
+ * Bind a directory to this canvas — what `isocan use` does, without a
+ * terminal.
+ *
+ * The browser cannot do this itself and not for want of an API: a
+ * `FileSystemHandle` exposes `kind` and `name` and never a path, by design,
+ * so a directory picked in a page can never become a binding the CLI or an
+ * agent can see. The daemon is the only party that can name a directory.
+ *
+ * Unlike the picker above, every refusal here is its OWN sentence (nothing at
+ * that path, a file rather than a directory, a home directory that would
+ * claim every canvas beneath it, already bound elsewhere) — the caller is the
+ * person who typed the path, and which rule refused them is exactly what they
+ * need in order to type a better one.
+ */
+export function bindDirectory(canvasId: string, path: string): Promise<BindResponse> {
+  return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/bind`, { path });
+}
+
+export interface PersonaFile {
+  file: string;
+  persona: Persona;
+  /** The file verbatim. An editor showing a re-rendering of what we
+   *  understood is an editor that silently drops what we did not. */
+  text: string;
+}
+
+export interface PersonasResponse {
+  root: string;
+  personas: PersonaFile[];
+}
+
+/**
+ * The personas in this canvas's directory, parsed by core — so this panel and
+ * `isocan persona ls` cannot disagree about what a persona says.
+ */
+export function getPersonas(canvasId: string): Promise<PersonasResponse> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/personas`);
+}
+
+/**
+ * Save one, whole. The name is a stem the daemon jails; the text is the file,
+ * front matter and all. There is no merge and there should not be — the file
+ * is small, one person is editing it, and a clever merge is a way to lose a
+ * line nobody noticed.
+ */
+export function savePersona(
+  canvasId: string,
+  name: string,
+  text: string,
+): Promise<{ ok: true; file: string }> {
+  return request(
+    "PUT",
+    `/api/projects/${encodeURIComponent(canvasId)}/personas/${encodeURIComponent(name)}`,
+    { text },
+  );
+}
+
+export interface BackingResponse {
+  bound: boolean;
+  /** Path relative to the root → the content hash found there. */
+  onDisk: Record<string, string>;
+}
+
+/**
+ * What this machine's disk says about the canvas's tracked items — the
+ * derived half of `backingOf`, which this app and `isocan ls` both render.
+ *
+ * Asked when a canvas opens and after a save, because those are the two
+ * moments the answer can change. Nothing polls and nothing watches the
+ * filesystem: every crossing is a gesture.
+ */
+export function getBacking(canvasId: string): Promise<BackingResponse> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/backing`);
+}
+
+/**
+ * Write an item out to the directory bound here — the other direction from
+ * `＋`, and the same call `isocan save` makes.
+ *
+ * `force` is a person deciding to overwrite work the canvas did not do: a
+ * file matching none of the item's versions drifted outside the canvas, and
+ * the daemon refuses it with a 409 the first time so that the second press is
+ * a decision rather than an accident.
+ */
+export function writeItem(
+  canvasId: string,
+  itemId: string,
+  force = false,
+): Promise<{ root: string; path: string; wrote: string }> {
+  return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/write`, { itemId, force });
 }
 
 // ---- who may enter this canvas (the Share dialog's three calls) ----

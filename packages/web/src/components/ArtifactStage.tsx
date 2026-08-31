@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
 import { backingOf, editableText, isDesignSystem, isTextItem } from "@isocan/core";
+import { homeAnswered, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
@@ -472,19 +473,21 @@ function SaveToDisk({
     if (busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/projects/${canvasId}/write`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, force }),
-      });
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setRefused(res.ok ? null : (body?.error ?? "that could not be written"));
-      // The disk just changed; ask it again so every mark on the canvas
-      // stops saying what used to be true.
-      await loadBacking(canvasId);
-    } catch {
-      setRefused("the daemon did not answer");
+      await writeItem(canvasId, itemId, force);
+      setRefused(null);
+    } catch (err) {
+      // Shown verbatim, because the daemon's sentences are the interesting
+      // ones: `drifted` is the whole two-press design, and the others name
+      // the rule (outside the root, a dotfile, a symlink) rather than saying
+      // "no". A refusal with no answer behind it gets the only sentence this
+      // side can honestly write.
+      setRefused(homeAnswered(err) ? err.message : "the daemon did not answer");
     } finally {
+      // The disk may just have changed, so ask it again — every mark on the
+      // canvas should stop saying what used to be true. Including after a
+      // refusal: `drifted` IS news about the disk, and it is the state the
+      // second press reads to know it is an overwrite.
+      await loadBacking(canvasId);
       setBusy(false);
     }
   }

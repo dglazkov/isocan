@@ -10,6 +10,14 @@ import {
   takenSentence,
   workbenchItemPath,
 } from "@isocan/core";
+import type { TreeEntry } from "../lib/api.ts";
+import {
+  bindDirectory,
+  getTree,
+  homeAnswered,
+  pickDirectories,
+  readBoundFile,
+} from "../lib/api.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -38,12 +46,6 @@ import { ItemPeek } from "./ItemThumb.tsx";
  * the stage instead.
  */
 
-interface TreeEntry {
-  path: string;
-  kind: "file" | "dir";
-  size: number;
-}
-
 type TreeState =
   | { state: "loading" }
   | { state: "none"; note: string }
@@ -71,20 +73,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
     let live = true;
     void (async () => {
       try {
-        const res = await fetch(`/api/projects/${canvasId}/tree`);
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          if (live) {
-            setTree({
-              state: "none",
-              note: body?.error ?? "this canvas has no bound directory here",
-            });
-          }
-          return;
-        }
-        const { roots } = (await res.json()) as {
-          roots: Array<{ root: string; entries: TreeEntry[]; truncated: boolean }>;
-        };
+        const { roots } = await getTree(canvasId);
         const first = roots[0];
         if (live) {
           setTree(
@@ -93,8 +82,19 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
               : { state: "none", note: "no directory is bound to this canvas here" },
           );
         }
-      } catch {
-        if (live) setTree({ state: "none", note: "the tree could not be read" });
+      } catch (err) {
+        // **The daemon's own sentence, and only it.** Both of this route's
+        // refusals are the pane's actual content — "the files live with its
+        // home daemon" is what a teammate's canvas looks like, and the bind
+        // form below reads that very sentence to decide whether to offer
+        // itself. A refusal with no answer behind it gets a sentence that
+        // says so instead of borrowing one of those.
+        if (live) {
+          setTree({
+            state: "none",
+            note: homeAnswered(err) ? err.message : "the tree could not be read",
+          });
+        }
       }
     })();
     return () => {
@@ -119,11 +119,13 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
     if (adding) return;
     setAdding(entry.path);
     try {
-      const res = await fetch(
-        `/api/projects/${canvasId}/tree/file?path=${encodeURIComponent(entry.path)}`,
-      );
-      if (!res.ok) return;
-      const bytes = await res.arrayBuffer();
+      const bytes = await readBoundFile(canvasId, entry.path).catch(() => null);
+      // Still silent, and still the weakest thing on this pane: there is
+      // nowhere to put a sentence without replacing the listing somebody is
+      // reading. What changed is the commonest reason it was silent — a
+      // cleared cookie now goes to the door inside `readBoundFile` and comes
+      // back, instead of making the ＋ a button that does nothing twice.
+      if (!bytes) return;
       const name = entry.path.split("/").pop()!;
       const { viewport } = useUiStore.getState();
       const ids = await addFiles(
@@ -311,22 +313,15 @@ function BindDirectory({
     setBusy(true);
     setRefusal(null);
     try {
-      const res = await fetch(`/api/projects/${canvasId}/bind`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
-      });
-      const body = (await res.json().catch(() => null)) as
-        | { error?: string; root?: string }
-        | null;
-      if (!res.ok) {
-        setRefusal(body?.error ?? "that directory could not be bound");
-        return;
-      }
+      await bindDirectory(canvasId, path);
       setPath("");
       onBound();
-    } catch {
-      setRefusal("the daemon did not answer");
+    } catch (err) {
+      // Every refusal this route makes is its own sentence and names the rule
+      // — nothing at that path, a file rather than a directory, a home
+      // directory, already bound elsewhere. The person typed the path; which
+      // rule refused them is what lets them type a better one.
+      setRefusal(homeAnswered(err) ? err.message : "the daemon did not answer");
     } finally {
       setBusy(false);
     }
@@ -447,16 +442,19 @@ function Picker({
   useEffect(() => {
     let live = true;
     void (async () => {
-      const url = where ? `?at=${encodeURIComponent(where)}` : "";
-      const res = await fetch(`/api/projects/${canvasId}/pick${url}`);
-      if (!live) return;
-      if (!res.ok) {
-        setNote("there is nothing to list here");
+      try {
+        const listing = await pickDirectories(canvasId, where);
+        if (!live) return;
+        setNote(null);
+        setListing(listing);
+      } catch (err) {
+        // This had no `catch` at all: a daemon that stopped answering threw
+        // out of a floating promise and left the picker on "Looking…"
+        // forever, with the rejection in the console and nothing on screen.
+        if (!live) return;
+        setNote(homeAnswered(err) ? err.message : "that could not be listed");
         setListing(null);
-        return;
       }
-      setNote(null);
-      setListing(await res.json());
     })();
     return () => {
       live = false;

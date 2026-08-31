@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Actor, Persona } from "@isocan/core";
+import type { Actor } from "@isocan/core";
 import { goalLine, personaWarnings } from "@isocan/core";
+import type { PersonaFile } from "../lib/api.ts";
+import { getPersonas, homeAnswered, savePersona } from "../lib/api.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "../lib/panels.ts";
@@ -33,16 +35,10 @@ export function openPersonasPanel(canvasId: string, open: boolean): void {
   openPanel(canvasId, open ? "personas" : null);
 }
 
-interface Loaded {
-  file: string;
-  persona: Persona;
-  text: string;
-}
-
 type State =
   | { state: "loading" }
   | { state: "none"; note: string }
-  | { state: "ready"; root: string; personas: Loaded[] };
+  | { state: "ready"; root: string; personas: PersonaFile[] };
 
 export function PersonasPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.personasPanelOpen);
@@ -61,21 +57,21 @@ export function PersonasPanel({ canvasId, actor }: { canvasId: string; actor: Ac
     let live = true;
     void (async () => {
       try {
-        const res = await fetch(`/api/projects/${canvasId}/personas`);
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          if (live) {
-            setState({
-              state: "none",
-              note: body?.error ?? "personas live with this canvas's own daemon",
-            });
-          }
-          return;
-        }
-        const body = (await res.json()) as { root: string; personas: Loaded[] };
+        const body = await getPersonas(canvasId);
         if (live) setState({ state: "ready", ...body });
-      } catch {
-        if (live) setState({ state: "none", note: "that could not be read" });
+      } catch (err) {
+        // The refusal is this panel's content on every canvas but the
+        // owner's own — "these live with the home daemon" is the honest
+        // empty state, and an empty LIST in its place would read as "you
+        // have no personas". Which is exactly what a 401 used to make it
+        // read as, one cleared cookie at a time; `getPersonas` goes to the
+        // door and comes back with the real answer first.
+        if (live) {
+          setState({
+            state: "none",
+            note: homeAnswered(err) ? err.message : "that could not be read",
+          });
+        }
       }
     })();
     return () => {
@@ -100,23 +96,15 @@ export function PersonasPanel({ canvasId, actor }: { canvasId: string; actor: Ac
     setSaving(true);
     setRefusal(null);
     try {
-      const res = await fetch(`/api/projects/${canvasId}/personas/${editing.name}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: editing.text }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        // Every refusal is its own sentence and is shown verbatim: being told
-        // "no" without being told WHICH no is how somebody ends up guessing
-        // at their own file.
-        setRefusal(body?.error ?? "that could not be saved");
-        return;
-      }
+      await savePersona(canvasId, editing.name, editing.text);
       setEditing(null);
       reload();
-    } catch {
-      setRefusal("the daemon did not answer");
+    } catch (err) {
+      // Every refusal is its own sentence and is shown verbatim: being told
+      // "no" without being told WHICH no is how somebody ends up guessing at
+      // their own file. "The daemon did not answer" is a different fact and
+      // gets its own sentence — the box still holds the text either way.
+      setRefusal(homeAnswered(err) ? err.message : "the daemon did not answer");
     } finally {
       setSaving(false);
     }
