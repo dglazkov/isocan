@@ -680,7 +680,24 @@ img { height: auto; }
    `999px` rather than a computed inner radius: at this height a capsule IS
    the concentric answer (26px tall → a 13px arc, against the pill's 18 less
    the 4px inset = 14), and it stays right if the pill's radius changes. */
-.bar-cluster .btn {
+/**
+ * **The cluster flattens ORDINARY buttons, not ones that have declared
+ * themselves.**
+ *
+ * `.bar-cluster .btn` and `.btn.primary` are both (0,2,0), so source order
+ * decides and this — being later — won. A primary button placed in the bar
+ * lost its fill and its border while KEEPING `--accent-ink`, which is white:
+ * the Rename button in the identity menu was white text on a white panel,
+ * invisible until you hovered, at which point `:hover` painted `--chip`
+ * behind it and it became white on pale grey. Both halves of what a person
+ * sees, from one specificity tie.
+ *
+ * The previous fix re-added the fill for `.active` on the next line down,
+ * which worked and left `.primary` to be discovered by somebody looking at
+ * it. Excluding the variants is the version that covers the one nobody has
+ * added yet.
+ */
+.bar-cluster .btn:not(.primary):not(.active) {
   background: none; border-color: transparent;
   /* The border comes off as well as the padding. `box-sizing: border-box`
      means the pill's 34 INCLUDES its hairline, so subtracting only the inset
@@ -717,8 +734,14 @@ img { height: auto; }
    the leading side, and a trailing space here would double the gap the faces
    are meant to sit against. */
 .presence-cluster .conn { margin-right: 0; }
-.bar-cluster .btn:hover { background: var(--chip); }
-.bar-cluster .btn.active { background: var(--accent); border-color: var(--accent); }
+/* Hover is the same story: a flat button gets a chip behind it, and one that
+   already carries a fill keeps its own — otherwise `--accent-ink` ends up on
+   `--chip`, which is white on pale grey. */
+.bar-cluster .btn:not(.primary):not(.active):hover { background: var(--chip); }
+/* `.bar-cluster .btn.active` used to sit here, re-adding the fill the rule
+   above had just taken away. That was the same tie fixed one variant at a
+   time; excluding the variants upstream makes it dead, and `.btn.active`
+   already says everything it said. */
 /* Nothing in the bar breaks its own label in half.
    Under width pressure a flex row shrinks its children, and a button whose
    text wraps is unreadable long before it is unclickable — "+ Site" has been
