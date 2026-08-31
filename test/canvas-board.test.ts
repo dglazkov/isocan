@@ -36,13 +36,72 @@ const CHILD_BUDGET_MS = 90_000;
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 20_000 }).trim();
 
-/** Render a panel without touching a canvas, and hand back its HTML. */
-const render = (only: string) => {
-  const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
+/**
+ * **A `gh` on PATH that answers whatever this test needs**, so no test in this
+ * file reaches GitHub.
+ *
+ * `--only build` is the one panel that shells out to `gh run list`, and it did
+ * so for real: a live network call with a 20-second budget, which is why that
+ * test took ~20s alone and was the flakiest thing in the suite. Worse than
+ * slow, it was NON-DETERMINISTIC — the panel showed whatever CI happened to
+ * say at that moment, so a test asserting on the build signal was asserting on
+ * the weather.
+ *
+ * The technique was already in this file: the NO-SIGNAL test below has always
+ * written a refusing `gh` onto PATH. This lifts it out so both cases can use
+ * it, and so the success path is exercised on purpose rather than by luck.
+ */
+function ghSaying(stdout: string, exit = 0): NodeJS.ProcessEnv {
+  const shim = mkdtempSync(path.join(tmpdir(), "gh-shim-"));
+  writeFileSync(
+    path.join(shim, "gh"),
+    // Single-quoted heredoc: the JSON goes through verbatim, whatever is in it.
+    `#!/bin/sh
+cat <<'ISOCAN_GH_JSON'
+${stdout}
+ISOCAN_GH_JSON
+exit ${exit}
+`,
+    { mode: 0o755 },
+  );
+  return { ...process.env, PATH: `${shim}:${process.env.PATH}` };
+}
+
+/**
+ * A CI reading where everything passed **on the commit you are standing on**.
+ *
+ * The sha matters: the panel compares the newest sha GitHub has SEEN against
+ * local HEAD, and reports AMBER when they differ — which is right, and which
+ * the first version of this fixture tripped over by using forty zeros. A
+ * green light for somebody else's commit is exactly the lie that check
+ * exists to prevent.
+ */
+const allGreen = () =>
+  JSON.stringify(
+    ["release", "review"].map((name) => ({
+      name,
+      status: "completed",
+      conclusion: "success",
+      headSha: git("rev-parse", "HEAD"),
+      createdAt: "2026-08-31T08:00:00Z",
+    })),
+  );
+
+/**
+ * **The one place this file starts the board**, so the `gh` shim is not
+ * something a new test can forget. Returns what the script SAID.
+ */
+const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) =>
+  execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
     cwd: repo,
     encoding: "utf8",
     timeout: CHILD_BUDGET_MS,
+    env,
   });
+
+/** Render a panel without touching a canvas, and hand back its HTML. */
+const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
+  const out = runBoard(only, env);
   const path = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
   expect(path, `no panel rendered for --only ${only}`).toBeTruthy();
   return readFileSync(path as string, "utf8");
@@ -179,11 +238,7 @@ describe("measurement is taken once, and only when something asks", () => {
 
   it("does not claim every goal is holding when it measured none", () => {
     expect(render("recent")).toBeTruthy();
-    const out = execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "recent"], {
-      cwd: repo,
-      encoding: "utf8",
-      timeout: CHILD_BUDGET_MS,
-    });
+    const out = runBoard("recent");
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
   }, 120_000);
@@ -201,26 +256,32 @@ describe("the Build signal", () => {
     for (const word of ["GREEN", "AMBER", "RED", "NO SIGNAL"]) expect(html).toContain(word);
   }, 120_000);
 
+  it("reports the runs it was given, and does not claim no signal", () => {
+    /**
+     * The positive half, and it could not be asserted at all before: this
+     * panel called the real `gh`, so what it showed was whatever CI happened
+     * to say while the suite ran — a test about a status light that was
+     * really a test about the weather.
+     *
+     * **It asserts the CI reading, not the WORD.** The first version of this
+     * expected GREEN and got AMBER, which was the panel being right: `signal`
+     * goes amber when any persona goal on the board is missed, so the word
+     * folds in measurements that have nothing to do with `gh`. Pinning it
+     * would have coupled this test to board state on disk that no fixture
+     * here controls.
+     */
+    const html = render("build", ghSaying(allGreen()));
+    expect(html, "a supplied reading is not an absent one").not.toContain("no signal");
+    for (const workflow of ["release", "review"]) expect(html).toContain(workflow);
+  }, 120_000);
+
   it("shows NO SIGNAL — never GREEN — when CI cannot be reached", () => {
     /**
      * Forced for real, with a `gh` on PATH that refuses: "nothing failed" and
      * "nothing was asked" are different facts, and the failure mode of every
      * status light ever built is rendering them the same.
      */
-    const shim = mkdtempSync(path.join(tmpdir(), "no-gh-"));
-    writeFileSync(path.join(shim, "gh"), "#!/bin/sh\necho 'not logged in' >&2\nexit 1\n", { mode: 0o755 });
-    const out = execFileSync(
-      "node",
-      [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", "build"],
-      {
-        cwd: repo,
-        encoding: "utf8",
-        timeout: CHILD_BUDGET_MS,
-        env: { ...process.env, PATH: `${shim}:${process.env.PATH}` },
-      },
-    );
-    const file = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
-    const html = readFileSync(file as string, "utf8");
+    const html = render("build", ghSaying("not logged in", 1));
     const shown = html.match(/letter-spacing:-0\.03em;[\s\S]*?>\s*([A-Z ]+)<\/div>/)?.[1]?.trim();
     expect(shown).toBe("NO SIGNAL");
   }, 120_000);
@@ -379,5 +440,175 @@ describe("the grid fits however many personas there are", () => {
         }
       }
     }
+  });
+});
+
+/**
+ * **The board made its own channel unreadable.** Posting to the Chat on every
+ * run put 80 of that thread's 96 messages there overnight — every one of which
+ * wakes every parked agent, and between which no person could get a word in.
+ * And half of them were doubled, because the hook and the watcher both react
+ * to a commit.
+ */
+describe("the board does not flood the Chat", () => {
+  it("posts when the news changes and edits a standing note otherwise", () => {
+    expect(board).toContain("function tellTheChat");
+    expect(board).toContain('isocan("comment", "edit"');
+    expect(board).toMatch(/if \(state\.news === news && state\.commentId\)/);
+  });
+
+  it("treats the signal and the goals as the news — not the commit", () => {
+    // A commit is not news about the repository's health; it is just a commit.
+    expect(board).toMatch(/const news = `\$\{word \?\? "\?"\} \| \$\{summary\}`/);
+  });
+
+  it("shows the same word in the Chat as on the panel", () => {
+    // Two readings of `ci()` could disagree, and a status light that argues
+    // with its own announcement is worse than either alone.
+    expect(board).toContain("signalWord = signal(c, readBoard()).word");
+    expect(board).toContain("tellTheChat(signalWord");
+  });
+});
+
+/**
+ * A run costs ~15s of measurement. Paying it again for a commit already
+ * handled is waste, and the hook plus the watcher both reacting made it
+ * routine.
+ */
+describe("the board does not redo work it has already done", () => {
+  it("fingerprints more than the commit", () => {
+    // Three things move the panels with no commit at all: the tree going
+    // dirty, CI finishing, and the repo's own canvas changing.
+    expect(board).toContain("function fingerprint");
+    expect(board).toMatch(/commit: f\.commit/);
+    expect(board).toMatch(/dirty: f\.dirty/);
+    expect(board).toMatch(/ci: c\.unknown/);
+  });
+
+  it("gates before any measurement is taken", () => {
+    // The whole point is not paying for them, so the gate must come first.
+    const gate = board.indexOf("if (seenBefore)");
+    const measure = board.indexOf("signalWord = signal(");
+    expect(gate).toBeGreaterThan(0);
+    expect(gate).toBeLessThan(measure);
+  });
+
+  it("says plainly that it took no measurement, rather than reporting a stale one", () => {
+    /**
+     * The skip path must not look like a run. An earlier version of this test
+     * ran a `--dry-run` first and then asserted a string — the exec proved
+     * nothing about the gate and only made the test look like it had done
+     * work. The honest check is the message and the ordering; the fifteen
+     * seconds against one is a claim measured by hand and written in the note.
+     */
+    expect(board).toContain("no measurement taken, no panel touched");
+    expect(board).not.toContain("every goal holding — nothing moved");
+  });
+
+  it("lets --force through", () => {
+    expect(board).toContain('const FORCE = has("--force");');
+    expect(board).toMatch(/if \(FORCE \|\| DRY \|\| ONLY\) return false;/);
+  });
+});
+
+/** Two reactors to one commit is a double announcement; two watchers is worse. */
+describe("only one thing reacts to a commit", () => {
+  const watch = readFileSync(fileURLToPath(new URL("../scripts/board-watch.mjs", import.meta.url)), "utf8");
+  const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", import.meta.url)), "utf8");
+
+  it("the watcher claims the job with a pidfile it also drops", () => {
+    expect(watch).toContain("board-watch.pid");
+    expect(watch).toContain("process.on(sig, () =>");
+    expect(watch).toContain('process.on("exit", dropPid)');
+  });
+
+  it("the hook stands down for a LIVE watcher, not merely a pidfile", () => {
+    // A stale pidfile from a killed watcher must not silence the hook forever.
+    expect(hook).toContain('kill -0 "$pid"');
+  });
+
+  it("a second watcher refuses before it attaches anything", () => {
+    // A guard that runs after the watchers are up has already done the thing
+    // it exists to prevent: two waiters on one name.
+    const guard = watch.indexOf("a board watcher is already running");
+    const attaches = watch.indexOf("watch(gitDir");
+    const parks = watch.indexOf("watchCanvas(repoCanvas)");
+    expect(guard).toBeGreaterThan(0);
+    expect(guard).toBeLessThan(attaches);
+    expect(guard).toBeLessThan(parks);
+  });
+
+  it("forces a refresh only for a canvas op, which no local read can see", () => {
+    expect(watch).toContain('why.some((r) => r.includes("op"))');
+    expect(watch).toContain('...(fromCanvas ? ["--force"] : [])');
+  });
+});
+
+/**
+ * **The guard that lives in the file being swapped cannot defend the swap.**
+ *
+ * Two commits landed in the same second; the hook fired twice; and the
+ * committing routine rewrote these scripts on disk *while they were running*,
+ * so one invocation executed a stale copy that had no stand-down in it. Both
+ * runs published concurrently and stacked versions on the same panels.
+ */
+describe("only one board run at a time", () => {
+  it("takes the lock atomically, so two starting together cannot both win", () => {
+    // `wx` fails if the file exists. A read-then-write check would let two
+    // processes in the same millisecond both see "no lock".
+    expect(board).toContain('writeFileSync(LOCK, String(process.pid), { flag: "wx" })');
+  });
+
+  it("stands down rather than racing", () => {
+    expect(board).toContain("another board run is in progress");
+  });
+
+  it("takes over a dead holder's lock rather than being blocked forever", () => {
+    // A crashed run must not lock the board out. Liveness is `kill(pid, 0)`;
+    // the file existing proves nothing.
+    expect(board).toContain("process.kill(holder, 0)");
+    expect(board).toMatch(/The holder is gone\. Its lock is not\./);
+  });
+
+  it("releases only its OWN lock", () => {
+    // A run that overran and was taken over must not delete the lock of the
+    // run that replaced it.
+    expect(board).toContain('readFileSync(LOCK, "utf8").trim() === String(process.pid)');
+  });
+
+  it("locks before it measures or publishes anything", () => {
+    const lock = board.indexOf("if (!DRY && !takeLock())");
+    const gate = board.indexOf("if (seenBefore)");
+    const publishes = board.indexOf('publish("build"');
+    expect(lock).toBeGreaterThan(0);
+    expect(lock).toBeLessThan(gate);
+    expect(lock).toBeLessThan(publishes);
+  });
+});
+
+/**
+ * **No test in this file may reach GitHub**, and that has to be checked
+ * rather than remembered.
+ *
+ * `--only build` shells out to `gh run list`. It used to do so for real: a
+ * live network call with a 20-second budget, which made this the slowest and
+ * flakiest file in the suite, and — worse — made the build-signal assertions
+ * depend on what CI happened to say at that moment.
+ */
+describe("the board's tests answer their own `gh`", () => {
+  const src = readFileSync(fileURLToPath(new URL("./canvas-board.test.ts", import.meta.url)), "utf8");
+
+  it("spawns the board through one helper, which supplies a gh", () => {
+    /* Every invocation going through `render` is what makes the shim
+       unavoidable; a second `execFileSync` of the script would be a second
+       route to the network. */
+    const spawns = [...src.matchAll(/execFileSync\(\s*"node",\s*\[`\$\{repo\}\/scripts\/canvas-board\.mjs`/g)];
+    expect(spawns.length, "more than one route to the board script").toBe(1);
+    expect(src).toMatch(/const runBoard = \(only: string, env: NodeJS\.ProcessEnv = ghSaying\(/);
+  });
+
+  it("puts the shim ahead of the real one on PATH", () => {
+    /* Behind it and the real `gh` wins, which is the bug wearing a fix. */
+    expect(src).toMatch(/PATH: `\$\{shim\}:\$\{process\.env\.PATH\}`/);
   });
 });
