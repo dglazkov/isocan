@@ -383,7 +383,60 @@ inside the door's own frame.*
 
 ## Phase 4 — Dispatch
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The scene played for real: a genuine
+Claude, summoned by `@Sian` on a canvas where nothing ran, oriented cold
+from the brief and replied in the thread through the CLI as Sian —
+`cli/test/dispatch.test.ts`'s opt-in real-adapter test, green in 12s. The
+mechanics are pinned CI-side against the scripted adapter: the reply in
+the thread, presence appearing with the turn and fading because the
+session ended, bulk noise starting zero turns, the mention through the
+filter, the self-wake guard, and the overnight batch delivered whole.
+
+**Closed at this door, 2026-08-30 — what a rule may say: today's
+filters, in core.** The grammar is `AgentRules` (`{items?, ops?}`, with
+`item.*` families and `["*"]` as all-ops), defined in `core/src/inbox.ts`
+beside `reasonFor`, and the whole composition is ONE function —
+`dispatchReason`: self never wakes, a summons pierces any filter, a
+change is taken when the rules ask, empty rules mean comments-only.
+`wait`'s loop now imports it (the hoisting the phase demanded), so the
+park and the rc cannot drift. Journey 4's "items Sian owns" bends to
+"the items the rule names"; ownership joins the grammar in core when
+something can write it. The reader: `isocan agent rules [name]` — the
+stored rules in words, plus the standing truths (mentions always come
+through; your own ops never wake you).
+
+**Closed at this door, 2026-08-30 — what a summons delivers: a fixed
+brief around the wait-shaped payload.** One wrapper, identical for fresh
+and loaded sessions: orientation (who you are, where, what this is), the
+working instructions (the CLI, the guide pointer, reply on the thread,
+and do NOT park — the session rests at end of turn), then the payload —
+`{reason, entries}`, the same entries and reason a `wait --json` wake
+carries, `redelivered` flags included. The `cursors` and `next` fields
+are delivery bookkeeping, not content, and stay with their deliveries.
+Cold arrival is carried by the brief and the guide pointer, never by
+inlining the 15k-token onboarding. The auto-upgrade window is settled
+here too: the rc IS the parked process now, and it runs `wait`'s same
+idle-point consideration on its quiet laps.
+
+**Closed at this door, 2026-08-30 — phase 2's word-check, revisited as
+promised: narration + visibility stays, now with teeth.** A dispatched
+agent's `isocan agent add` happens inside a turn a person's comment
+started, in a thread everyone reads, as an op the log keeps, narrated
+live by the rc — and withdrawal is one gesture. No intent-parsing of the
+person's words; phase 5's ceiling bounds what an unasked add could cost.
+The ask doors (journeys 1 and 8) are mechanically open now — a summoned
+session holds the agent spelling of the verbs and its identity binds by
+environment — with phase 5's guardrails the remaining walk.
+
+**One more thing this phase found and fixed — the seedAt floor.** A
+first-ever cursor claim seeded at "now", so a comment landing between
+enrolment and the rc's first claim would have been silently missed —
+journey 3's acceptance violated for exactly the web-add-then-start-rc
+shape. `parkClaim` now takes `seedAt`, a floor used only when CREATING a
+row (never a rewind): the enrol verb passes the enrolment op's seq, the
+rc passes it when adopting, and the overnight-batch test walks the
+repaired path — enrol, three comments with nothing running at all, rc
+starts, one summons carries all three.
 
 **Work:** On an op that the routing rule matches for an enrolled agent,
 the `rc` starts a turn carrying what `wait` would have returned. The
@@ -439,12 +492,17 @@ exactly.
 **Outcome:** A comment addressed to an enrolled, not-running agent
 produces a reply in the thread, the canvas showed the agent while it
 worked, and the only process anyone started by hand is `isocan rc`.
+*(Holds — with the real adapter, once, and with the scripted one in CI.)*
 
 **Proof:** The scene, played on a real canvas, presence included; vitest
 for the dispatch-on-match path, the mention-through-any-filter path, and
-the self-wake guard.
+the self-wake guard. *(All in `cli/test/dispatch.test.ts`; the
+composition's arithmetic in `core/test/agents.test.ts`.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** one addition the walk forced: the `seedAt` floor on
+`parkClaim` (the door record above) — journey 3's "nothing was running
+when it landed" turned out to have an unwalked case phase 1 could not
+see, because enrolment did not exist yet when phase 1 closed.
 
 ## Phase 5 — A limit and a reason
 

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Actor, PresenceSession } from "../src/index.ts";
 import {
   collectCanvasNames,
+  dispatchReason,
   extractMentions,
   invertOperation,
   OpValidationError,
   roster,
+  rulesOf,
 } from "../src/index.ts";
 import { apply, seedState } from "./helpers.ts";
 
@@ -96,6 +98,7 @@ describe("the roster shows the record (phase 2.5)", () => {
       status: null,
       statusSource: null,
       activity: null,
+      onThread: null,
       lastSeen: new Date().toISOString(),
     }) as PresenceSession;
 
@@ -132,5 +135,55 @@ describe("the roster shows the record (phase 2.5)", () => {
     const s = seedState();
     const rows = roster([rcSession(person)], s.canvas, Date.now());
     expect(rows.find((r) => r.actorId === person.id && r.state !== "away")).toBeUndefined();
+  });
+});
+
+describe("dispatchReason — THE routing composition (phase 4)", () => {
+  const sianCtx = (rules?: unknown) => ({
+    actorId: sian.id,
+    names: [{ id: sian.id, name: sian.name }],
+    rules: rules === undefined ? null : (rules as { items?: string[]; ops?: string[] }),
+  });
+  const comment = (body: string, threadId = "th_x") =>
+    ({
+      type: "thread.create",
+      threadId,
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      comment: { id: "cmt_x", body },
+    }) as const;
+
+  it("your own ops never wake you, mention or not", () => {
+    const s = seedState();
+    expect(dispatchReason(comment("@Sian hi"), sian.id, sianCtx(), s.canvas)).toBeNull();
+  });
+
+  it("a mention pierces any filter; unmatched noise stays noise", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    const ctx = sianCtx({ ops: ["item.move"] });
+    expect(dispatchReason(comment("@Sian look"), "usr_alice", ctx, s.canvas)).toBe("mentioned");
+    expect(
+      dispatchReason({ type: "item.move", itemId: "itm_1", x: 1, y: 2 }, "usr_alice", ctx, s.canvas),
+    ).toBe("change");
+    expect(
+      dispatchReason({ type: "item.resize", itemId: "itm_1", width: 9, height: 9 }, "usr_alice", ctx, s.canvas),
+    ).toBeNull();
+  });
+
+  it("empty rules mean comments only — the enrolled default", () => {
+    const s = seedState();
+    expect(
+      dispatchReason({ type: "item.move", itemId: "itm_1", x: 1, y: 2 }, "usr_alice", sianCtx({}), s.canvas),
+    ).toBeNull();
+    expect(
+      dispatchReason({ type: "item.move", itemId: "itm_1", x: 1, y: 2 }, "usr_alice", sianCtx({ ops: ["*"] }), s.canvas),
+    ).toBe("change");
+  });
+
+  it("rulesOf reads the opaque field tolerantly", () => {
+    expect(rulesOf(null)).toEqual({});
+    expect(rulesOf("nonsense")).toEqual({});
+    expect(rulesOf({ items: ["a", 3], ops: "not-an-array", extra: true })).toEqual({ items: ["a"] });
   });
 });

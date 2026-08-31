@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import type {
+  AgentRules,
+  EnrolledAgent,
   Persona,
   RunFinding,
   InboxEntry,
@@ -155,7 +157,8 @@ import {
   inboxLine,
   namesFor,
   PARK_ADOPTED_CODE,
-  reasonFor,
+  dispatchReason,
+  rulesOf,
   docStatus,
   statusProblems,
   toJsonCanvas,
@@ -7152,22 +7155,16 @@ command or reply. No \`session start\` needed after a wake.`,
       // Names I answer to: identity name, plus my session label if any.
       const selfNames = namesFor(ctx.actor, session?.label ?? null);
 
-      // A comment is for me when core's `reasonFor` says so — mentioned, the
-      // MAIN thread (the designated agent↔user channel), or a thread I'm
-      // part of. Everything else is ether. The rule is THE routing rule the
-      // inbox folds with; it lives in core precisely so this park and
-      // `isocan inbox` cannot drift apart. Snapshot state, not the op,
-      // decides mainness — it also catches the thread.create that BIRTHS the
-      // main thread (op.main or a setMain landing in the same batch). `snap`
-      // is fetched lazily, per canvas per poll batch.
-      const isForMe = async (
-        op: Operation,
-        snap: () => Promise<CanvasSnapshotResponse>,
-      ): Promise<boolean> => {
-        if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
-        const thread = (await snap()).canvas.threads[op.threadId];
-        return reasonFor(op.comment, thread, ctx.actor.id, selfNames) !== null;
-      };
+      // The flags, restated as the rule grammar core's `dispatchReason`
+      // reads — the same `AgentRules` an enrolment stores, so this park and
+      // the rc's dispatch apply ONE composition: mentioned / main-thread /
+      // in-your-thread pierces any filter, your own ops never wake you, and
+      // filters narrow the changes. `--all-ops` is the `["*"]` spelling.
+      const waitRules: AgentRules | undefined = filtered
+        ? { items: wantedItems, ops: wantedTypes }
+        : opts.allOps
+          ? { ops: ["*"] }
+          : undefined;
 
       // Null while the daemon is answering; the moment it stopped, otherwise.
       let offlineSince: number | null = null;
@@ -7316,25 +7313,26 @@ command or reply. No \`session start\` needed after a wake.`,
           const matches: WatchedLogEntry[] = [];
           let summoned = false;
           for (const entry of batch.entries) {
-            // Your own ops never wake you — otherwise an agent that writes
-            // what it was watching for wakes itself, forever.
-            if (entry.envelope.actor.id === ctx.actor.id) continue;
             const op = entry.envelope.op;
-            // A summons comes through any filter: the human reaching you is
-            // never the noise you asked to be spared.
-            if (await isForMe(op, snapOf(entry.canvasId))) {
-              summoned = true;
-              matches.push(entry);
-              continue;
-            }
-            if (filtered) {
-              const canvas = (await snapOf(entry.canvasId)()).canvas;
-              if (opMatchesFilters(op, { items: wantedItems, types: wantedTypes }, canvas)) {
-                matches.push(entry);
-              }
-              continue;
-            }
-            if (opts.allOps) matches.push(entry);
+            // THE routing composition, imported (core's `dispatchReason`,
+            // phase 4): self never wakes, a summons pierces any filter, a
+            // change is taken when the rules ask. The snapshot is fetched
+            // only when the decision needs canvas state — a comment's
+            // thread, or an item filter.
+            const needCanvas =
+              op.type === "thread.create" ||
+              op.type === "thread.reply" ||
+              (waitRules?.items?.length ?? 0) > 0;
+            const canvas = needCanvas ? (await snapOf(entry.canvasId)()).canvas : null;
+            const reason = dispatchReason(
+              op,
+              entry.envelope.actor.id,
+              { actorId: ctx.actor.id, names: selfNames, rules: waitRules },
+              canvas,
+            );
+            if (!reason) continue;
+            if (reason !== "change") summoned = true;
+            matches.push(entry);
           }
           if (matches.length > 0) {
             // Record the delivery BEFORE anything is shown or advertised: a
@@ -7497,11 +7495,18 @@ async function enrolAgent(
     name,
   });
   const agent = claimed.envelope.actor;
-  await ctx.client.sendOp(p.id, ctx.actor, {
+  const enrolled = await ctx.client.sendOp(p.id, ctx.actor, {
     type: "agent.enroll",
     agent,
     ...(rules !== undefined ? { rules } : {}),
   });
+  // The cursor row is born WITH the standing (phase 4, journey 3): a
+  // comment landing five minutes after this — rc running or not — must
+  // reach the agent's first summons, so the row's floor is the enrolment
+  // op itself, never "whenever something first claimed".
+  await ctx.client
+    .parkClaim({ canvasId: p.id, actorId: agent.id, seedAt: enrolled.seq })
+    .catch(() => {});
   await upsertRcAgent(ctx.home, {
     canvasId: p.id,
     actorId: agent.id,
@@ -7571,6 +7576,45 @@ agentCommand
   .command("remove <name>")
   .description("Withdraw an agent's standing here — on a person's word")
   .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, true)));
+
+agentCommand
+  .command("rules [name]")
+  .description("What an agent answers for here, and why — the routing rules, readable in one place")
+  .action(
+    run(async (name: string | undefined, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const agents = Object.values((await ctx.client.snapshot(p.id)).canvas.agents ?? {});
+      const wanted = name
+        ? agents.filter((a) => a.actor.name.toLowerCase() === name.toLowerCase() || a.actor.id === name)
+        : agents;
+      if (name && wanted.length === 0) throw new Error(`no standing agent "${name}" on "${p.title}"`);
+      if (ctx.json) {
+        return printJson(
+          wanted.map((a) => ({ actor: a.actor, rules: rulesOf(a.rules) })),
+        );
+      }
+      if (wanted.length === 0) {
+        console.log(`nobody is enrolled on "${p.title}"`);
+        return;
+      }
+      for (const a of wanted) {
+        const rules = rulesOf(a.rules);
+        const parts: string[] = [];
+        if (rules.items?.length) parts.push(`changes touching ${rules.items.join(", ")}`);
+        if (rules.ops?.length) parts.push(`ops: ${rules.ops.join(", ")}`);
+        console.log(
+          `${a.actor.name} — ${parts.length > 0 ? parts.join("; ") : "comments addressed to them (the default)"}`,
+        );
+      }
+      // The standing truths, once — they hold through every rule set, and
+      // "readable in one place" means the exceptions are readable too.
+      console.log(
+        "(always: a comment naming an agent — or landing in the Chat, or in a thread they are part of — " +
+          "comes through any rule set; an agent's own ops never wake it)",
+      );
+    }),
+  );
 
 const rcCommand = program
   .command("rc")
@@ -7771,11 +7815,255 @@ rcCommand.action(
     // events as they happen. No roster listing, nothing spawned.
     console.log(`rc: answering on "${p.title}" — quiet until something arrives (Ctrl-C stops answering)`);
 
-    let cursors: Record<string, number> = {
-      [p.id]: (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0,
+    /**
+     * **Dispatch** (phase 4). One quiet connection, fanned out: the rc holds
+     * a phase-1 cursor row per enrolled agent (adopting it — a plain `wait`
+     * park as the same actor is displaced, per the phase-1 door), reads the
+     * log once per lap from the earliest of them, and applies core's
+     * `dispatchReason` per agent — the same composition `wait` imports, so
+     * the park and the dispatcher cannot drift. A summons carries every
+     * pending matched entry; ops landing mid-turn sit behind the cursor and
+     * become the next summons when the turn completes. The rc sees
+     * `end_turn` directly, so completion is an explicit advance, not the
+     * park's inferred evidence.
+     */
+    interface AgentDispatch {
+      parkId: string;
+      cursor: number;
+      redeliverUpTo: number | null;
+      /** Matched entries awaiting a turn, in log order. */
+      pending: WatchedLogEntry[];
+      scannedTip: number;
+      busy: boolean;
+      /** After a failed turn: hold the pending batch until this passes —
+       * phase 5 owes the ceiling and the thread-visible refusal; this keeps
+       * a broken adapter from a hot loop meanwhile. */
+      retryAfter: number;
+    }
+    const dispatches = new Map<string, AgentDispatch>();
+    // Where each standing began — the floor for a cursor row that does not
+    // exist yet (a web add with no rc parked, and nothing to claim it since).
+    // One log read at start; the enrol verb and the live enroll event carry
+    // their own seqs.
+    const enrolSeqs = new Map<string, number>();
+    for (const entry of await ctx.client.getLog(p.id, 0)) {
+      if (entry.envelope.op.type === "agent.enroll") {
+        enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
+      }
+    }
+    const claimAgent = async (actorId: string, seedAt?: number): Promise<void> => {
+      if (dispatches.has(actorId)) return;
+      try {
+        const floor = seedAt ?? enrolSeqs.get(actorId);
+        const claim = await ctx.client.parkClaim({
+          canvasId: p.id,
+          actorId,
+          ...(floor !== undefined ? { seedAt: floor } : {}),
+        });
+        dispatches.set(actorId, {
+          parkId: claim.parkId,
+          cursor: claim.cursor,
+          redeliverUpTo: claim.redeliverUpTo,
+          pending: [],
+          scannedTip: claim.cursor,
+          busy: false,
+          retryAfter: 0,
+        });
+      } catch (err) {
+        console.log(`rc: could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`);
+      }
     };
+    for (const actorId of Object.keys(opening)) await claimAgent(actorId);
+
+    /**
+     * **The auto-upgrade window, restored** (the design's open question,
+     * settled at phase 4's door): `considerUpgrade` lost its park when
+     * summoned sessions stopped parking — but the rc IS the parked process
+     * now, and its quiet laps are the idle point. Same machinery as `wait`'s:
+     * concurrent, never blocking the poll.
+     */
+    const install = await whichInstall(path.resolve(myRoot()), ctx.home);
+    const parkedOn = shaOfRoot(ctx.home, myRoot());
+    let upgraded: string | null = null;
+    let upgrading = false;
+    const considerUpgrade = () => {
+      if (upgrading || upgraded) return;
+      upgrading = true;
+      void (async () => {
+        const health = await ctx.client.healthz().catch(() => null);
+        upgraded = await autoUpgrade({
+          home: ctx.home,
+          install,
+          health,
+          spec: INSTALL_SPEC,
+          ...(parkedOn ? { protect: [parkedOn] } : {}),
+        });
+        if (upgraded) console.log(`rc: ${upgraded}`);
+      })()
+        .catch(() => {})
+        .finally(() => {
+          upgrading = false;
+        });
+    };
+
+    /** The fixed brief around the wait-shaped payload (phase 4's door):
+     * identical for fresh and loaded sessions — delivery differs, content
+     * never does — with orientation and the guide pointer carrying the
+     * cold-arrival weight instead of 15k inlined tokens. */
+    const summonsPrompt = (
+      agentName: string,
+      payload: { reason: string; entries: WatchedLogEntry[] },
+    ): string =>
+      `You are ${agentName}, an agent enrolled on the isocan canvas "${p.title}". ` +
+      `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
+      `Work from this directory through the \`isocan\` CLI — \`isocan --agent-help\` is the full ` +
+      `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
+      `Address what the payload below carries, reply on its thread, and then simply finish your ` +
+      `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
+      `summons you again.\n\n` +
+      `The payload (the same shape \`isocan wait --json\` returns):\n` +
+      JSON.stringify(payload, null, 2);
+
+    /** One summoned turn: adapter up, session loaded-or-new, presence on
+     * while it runs and gone when it ends (journey 2's acceptance — the
+     * summoned equivalent of the park's `landPresence`). */
+    const runSummons = async (record: EnrolledAgent, dispatch: AgentDispatch): Promise<void> => {
+      const entries = dispatch.pending.splice(0);
+      const tip = dispatch.scannedTip;
+      try {
+        await runSummonsInner(record, dispatch, entries, tip);
+      } catch (err) {
+        // The batch goes back on the shelf: in-process it retries after the
+        // pause below; across a crash the un-advanced cursor row redelivers
+        // it marked. Either way nothing is silently dropped.
+        dispatch.pending.unshift(...entries);
+        throw err;
+      }
+    };
+
+    const runSummonsInner = async (
+      record: EnrolledAgent,
+      dispatch: AgentDispatch,
+      entries: WatchedLogEntry[],
+      tip: number,
+    ): Promise<void> => {
+      const flagged =
+        dispatch.redeliverUpTo === null
+          ? entries
+          : entries.map((e) => (e.seq <= dispatch.redeliverUpTo! ? { ...e, redelivered: true } : e));
+      dispatch.redeliverUpTo = null;
+      const summoned = flagged.some(
+        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
+      );
+      const reason = summoned ? "summons" : "change";
+      const from = flagged[0]?.envelope.actor.name ?? "someone";
+      console.log(
+        `rc: summons for ${record.actor.name} (${reason}, from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"}) — starting a session`,
+      );
+      try {
+        await ctx.client.parkDelivered({
+          canvasId: p.id,
+          actorId: record.actor.id,
+          parkId: dispatch.parkId,
+          tip,
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
+          console.log(`rc: another park adopted ${record.actor.name}'s cursor — standing down for it`);
+          dispatches.delete(record.actor.id);
+          return;
+        }
+        throw err;
+      }
+      const row =
+        (await readRcAgents(ctx.home)).find(
+          (r) => r.canvasId === p.id && r.actorId === record.actor.id,
+        ) ?? {
+          canvasId: p.id,
+          actorId: record.actor.id,
+          name: record.actor.name,
+          harness: null,
+          cwd: rcCwd,
+          sessionId: null,
+        };
+      const spec = await adapterFor(ctx.home, row.harness);
+      if (!spec) {
+        throw new Error(`no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`);
+      }
+      // The binding (phase 3): idempotent for CLI-added agents, the one
+      // rebinding a web-added one needs.
+      await ctx.client.claimActor({
+        type: "actor.claim",
+        sessionKey: enrolmentKey(p.id, record.actor.name),
+        as: record.actor.id,
+      });
+      // Presence: the summoned session is SEEN — it appears when the turn
+      // starts and fades when it ends, because the session ends, not a TTL.
+      const firstComment = flagged.find(
+        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
+      );
+      const face = await ctx.client
+        .createSession(p.id, record.actor, undefined, row.harness ?? "agent")
+        .catch(() => null);
+      if (face && firstComment) {
+        const op = firstComment.envelope.op as { threadId: string };
+        const snapshot = await ctx.client.snapshot(p.id).catch(() => null);
+        const thread = snapshot?.canvas.threads[op.threadId];
+        await ctx.client
+          .updateSession(p.id, face.sessionId, {
+            status: "reading your comment…",
+            statusSource: "lifecycle",
+            onThread: op.threadId,
+            ...(snapshot && thread ? { cursor: threadLocus(snapshot, thread) } : {}),
+          })
+          .catch(() => {});
+      }
+      const agent = await AcpAgentProcess.spawn(spec, {
+        cwd: row.cwd,
+        env: adapterEnv(p.id, record.actor.name),
+      });
+      try {
+        const session = await agent.ensureSession(row.cwd, row.sessionId);
+        await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
+        console.log(
+          `rc: ${record.actor.name}'s session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`,
+        );
+        const turn = await agent.prompt(
+          session.sessionId,
+          summonsPrompt(record.actor.name, { reason, entries: flagged }),
+          (event) => {
+            if (event.kind === "permission") console.log(`rc: [${record.actor.name}] permission: ${event.detail}`);
+          },
+        );
+        console.log(`rc: ${record.actor.name}'s turn ended — stopReason ${turn.stopReason}`);
+        // Completion, explicitly: the rc SAW the turn end, so the cursor
+        // advances now rather than waiting for the park's inferred evidence.
+        await ctx.client
+          .parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip })
+          .then(() => {
+            dispatch.cursor = tip;
+          })
+          .catch(() => {});
+      } finally {
+        agent.close();
+        if (face) await ctx.client.endSession(p.id, face.sessionId).catch(() => {});
+      }
+    };
+
+    let cursors: Record<string, number> = { [p.id]: 0 };
+    const lapFrom = () => {
+      // One shared read from the earliest cursor any agent still needs;
+      // narration (enrolments, withdrawals) keys off startTip below so old
+      // history is never re-told.
+      let from = startTip;
+      for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
+      return from;
+    };
+    const startTip = (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
+    cursors = { [p.id]: lapFrom() };
     let offlineSince: number | null = null;
     for (;;) {
+      considerUpgrade();
       let batch;
       try {
         batch = await ctx.client.watchLog({ cursors, waitMs: 30_000, only: [p.id] });
@@ -7806,49 +8094,89 @@ rcCommand.action(
           if (again) announced.sessionId = again.sessionId;
         });
       }
-      if (batch.entries.length === 0) continue;
-      const snapshot = await ctx.client.snapshot(p.id);
-      const roster = snapshot.canvas.agents ?? {};
-      for (const [id, row] of Object.entries(roster)) known.set(id, row.actor.name);
+      const lapTip = batch.cursors[p.id] ?? 0;
+      const snapshot = batch.entries.length > 0 ? await ctx.client.snapshot(p.id) : null;
+      const roster = snapshot?.canvas.agents ?? {};
+      if (snapshot) for (const [id, row] of Object.entries(roster)) known.set(id, row.actor.name);
       for (const entry of batch.entries) {
         const op = entry.envelope.op;
         const by = entry.envelope.actor;
         if (op.type === "agent.enroll") {
           known.set(op.agent.id, op.agent.name);
-          console.log(`rc: ${by.name} enrolled ${op.agent.name} — answerable here`);
-          // The web decided WHO; this rc supplies WHERE and HOW. A verb run
-          // on this machine already wrote the row, and then this is a no-op.
-          const adopted = await adoptRcAgent(ctx.home, {
-            canvasId: p.id,
-            actorId: op.agent.id,
-            name: op.agent.name,
-            harness: null,
-            cwd: rcCwd,
-            sessionId: null,
-          });
-          if (adopted) {
-            console.log(`rc: supplying where and how for ${op.agent.name} — ${rcCwd}`);
+          if (entry.seq > startTip) {
+            console.log(`rc: ${by.name} enrolled ${op.agent.name} — answerable here`);
+            const adopted = await adoptRcAgent(ctx.home, {
+              canvasId: p.id,
+              actorId: op.agent.id,
+              name: op.agent.name,
+              harness: null,
+              cwd: rcCwd,
+              sessionId: null,
+            });
+            if (adopted) console.log(`rc: supplying where and how for ${op.agent.name} — ${rcCwd}`);
+            await claimAgent(op.agent.id, entry.seq);
           }
           continue;
         }
-        if (op.type === "agent.withdraw") {
+        if (op.type === "agent.withdraw" && entry.seq > startTip) {
           console.log(`rc: ${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`);
           await removeRcAgent(ctx.home, p.id, op.actorId);
+          dispatches.delete(op.actorId);
           continue;
         }
-        if (op.type !== "thread.create" && op.type !== "thread.reply") continue;
-        const thread = snapshot.canvas.threads[op.threadId];
-        for (const row of Object.values(roster)) {
-          if (by.id === row.actor.id) continue; // an agent's own words never summon it
-          const reason = reasonFor(op.comment, thread, row.actor.id, [
-            { id: row.actor.id, name: row.actor.name },
-          ]);
-          if (!reason) continue;
-          // Recognized, narrated, never answered: dispatch is phase 4's.
-          console.log(
-            `rc: summons for ${row.actor.name} (${reason}, from ${by.name}) — no way to start a session yet`,
+        // Route to every enrolled agent whose composition matches — the
+        // same `dispatchReason` a `wait` park applies.
+        for (const record of Object.values(roster)) {
+          const dispatch = dispatches.get(record.actor.id);
+          if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
+          const reason = dispatchReason(
+            op,
+            by.id,
+            {
+              actorId: record.actor.id,
+              names: [{ id: record.actor.id, name: record.actor.name }],
+              rules: rulesOf(record.rules),
+            },
+            snapshot?.canvas ?? null,
           );
+          if (reason) dispatch.pending.push(entry);
         }
+      }
+      // Every agent has now been shown everything up to the lap tip — the
+      // evaluated watermark moves for busy agents too, or a long turn would
+      // re-read (and re-queue) the same entries every lap. The park ROW
+      // settles only for quiet, idle agents; a busy agent's row advances at
+      // its turn's end.
+      for (const [actorId, dispatch] of dispatches) {
+        const before = dispatch.scannedTip;
+        dispatch.scannedTip = Math.max(dispatch.scannedTip, lapTip);
+        if (!dispatch.busy && dispatch.pending.length === 0 && dispatch.scannedTip > before) {
+          await ctx.client
+            .parkAdvance({ canvasId: p.id, actorId, parkId: dispatch.parkId, to: dispatch.scannedTip })
+            .then(() => {
+              dispatch.cursor = dispatch.scannedTip;
+            })
+            .catch(() => {});
+        }
+      }
+      for (const [actorId, dispatch] of dispatches) {
+        if (dispatch.busy || dispatch.pending.length === 0) continue;
+        if (Date.now() < dispatch.retryAfter) continue;
+        const record = roster[actorId];
+        if (!record) continue;
+        dispatch.busy = true;
+        void runSummons(record, dispatch)
+          .catch((err) => {
+            // Loud in the narration; phase 5 owes the thread. The batch is
+            // not advanced, so an rc restart redelivers it marked; in
+            // process, a minute's pause keeps a broken adapter off a hot
+            // loop.
+            console.log(`rc: ${record.actor.name}'s turn FAILED — ${(err as Error).message} (retrying in 60s)`);
+            dispatch.retryAfter = Date.now() + 60_000;
+          })
+          .finally(() => {
+            dispatch.busy = false;
+          });
       }
     }
   }),

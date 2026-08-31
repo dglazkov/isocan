@@ -105,6 +105,10 @@ export class ParkCursors {
     actorId: string,
     opts: {
       since?: number | undefined;
+      /** Floor for a row being CREATED — an enrolled agent's standing began
+       * at its enrolment op, not at its first claim (journey 3). Ignored
+       * when the row exists: it is a birth fact, never a rewind. */
+      seedAt?: number | undefined;
       seed: () => Promise<number>;
       actorSpoke: (afterSeq: number) => Promise<boolean>;
     },
@@ -115,7 +119,7 @@ export class ParkCursors {
     let row = rows[key];
 
     if (opts.since !== undefined || !row) {
-      const at = opts.since ?? (await opts.seed());
+      const at = opts.since ?? opts.seedAt ?? (await opts.seed());
       row = { cursor: at, delivered: at, rehanded: at, parkId };
       rows[key] = row;
       await this.save();

@@ -265,6 +265,7 @@ asks you to set one up — `@You add a reviewer here` — do it with:
 ```sh
 isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
 isocan agent remove <name>  # withdraw its standing (the history stays)
+isocan agent rules [name]   # what an agent answers for here, and why
 ```
 
 The syntax is the containment: no `--canvas`, no `--dir` — the agent you add

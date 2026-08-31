@@ -1786,6 +1786,7 @@ export function registerRoutes(
     const body = req.body as import("@isocan/core").ParkClaimRequest;
     const claim = await park.claim(body.canvasId, body.actorId, {
       since: body.since,
+      seedAt: body.seedAt,
       seed: async () => (await engine.getSnapshot(body.canvasId)).lastSeq,
       actorSpoke: async (afterSeq) => {
         const entries = await engine.getLog(body.canvasId, afterSeq);

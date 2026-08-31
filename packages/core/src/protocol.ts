@@ -312,6 +312,14 @@ export interface ParkClaimRequest {
   actorId: string;
   /** Reset the row to this seq — what `wait --since` means now. */
   since?: number;
+  /**
+   * Where a row that does not exist yet begins — ignored entirely when one
+   * does. An enrolled agent's first claim must not seed at "now": journey 3
+   * promises nothing is missed because nothing was running, and the moment
+   * standing began is the enrolment op's seq, which the enrol verb and the
+   * rc both know and pass here (phase 4).
+   */
+  seedAt?: number;
 }
 
 export interface ParkClaimResponse {

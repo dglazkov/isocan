@@ -462,16 +462,14 @@ shows presence appearing and fading with the summoned session.
   the `rc`, no agent registers anything on its own. Journey 1's comment door
   is a person asking, with the agent as the interface, and phase 2's door owes
   the decision on where the person's word is checked.)
-- **Where the auto-upgrade window goes.** `considerUpgrade()` uses the park as
-  "the first idle point." With no park there is no window — though the
-  rc sees `end_turn` and knows the moment precisely, which is better
-  than inferring it.
-- **Whether the prompt is the short brief or the full guide.** isocan composes
-  it now, so it owns the cost that agents currently pay themselves: about
-  15,000 tokens for the documented onboarding, about 1,045 for the six-command
-  brief. Journey 9 bounds the choice: `isocan wait --json` must stay a
-  faithful stand-in for a summons, so the `wait` payload remains the
-  inspectable core and the wrapper is fixed, never varied per summons.
+- **Where the auto-upgrade window goes.** *Settled at phase 4's door
+  (2026-08-30): the rc is the parked process, and its quiet laps run the
+  same idle-point consideration `wait`'s park does.*
+- **Whether the prompt is the short brief or the full guide.** *Settled at
+  phase 4's door (2026-08-30): a fixed brief around the wait-shaped
+  payload — orientation and the guide pointer carry cold arrival; the
+  15k onboarding is never inlined. The wrapper is identical for fresh
+  and loaded sessions, per journey 9's bound.*
 
 ---
 

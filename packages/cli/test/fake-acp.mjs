@@ -11,6 +11,7 @@
 // makes the first session/load of a process fail the way a violently killed
 // session transiently does, to exercise the client's retry.
 import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 const STORE = "fake-acp-sessions.json";
 const known = () => {
@@ -92,9 +93,31 @@ function handle(msg) {
         ],
       },
     });
-    void answered.then((outcome) => {
+    void answered.then(async (outcome) => {
+      const promptText = params.prompt?.[0]?.text ?? "";
+      // The dispatch tests' turn: linger (so presence can be observed
+      // mid-turn), then answer the summoning thread THROUGH THE CLI, the
+      // way a real summoned agent would — the reply lands as the enrolled
+      // actor because the injected environment says who is speaking.
+      const slow = Number(process.env.FAKE_ACP_SLOW_MS ?? 0);
+      if (slow > 0) await new Promise((r) => setTimeout(r, slow));
+      if (process.env.FAKE_ACP_REPLY === "1" && process.env.FAKE_ACP_CLI) {
+        const threadId = promptText.match(/"threadId":\s*"([^"]+)"/)?.[1];
+        const canvasId = promptText.match(/"canvasId":\s*"([^"]+)"/)?.[1];
+        if (threadId && canvasId) {
+          try {
+            execFileSync(
+              process.execPath,
+              [process.env.FAKE_ACP_CLI, "--canvas", canvasId, "comment", "reply", threadId, "summoned: on it"],
+              { stdio: "ignore" },
+            );
+          } catch {
+            // The turn still ends; the missing reply is the test's failure.
+          }
+        }
+      }
       const text =
-        `echo:${params.prompt?.[0]?.text ?? ""} ` +
+        `echo:${promptText} ` +
         `env:${process.env.ISOCAN_HARNESS ?? ""}:${process.env.ISOCAN_SESSION_ID ?? ""} ` +
         `resumed:${loaded.has(params.sessionId)} ` +
         `permission:${outcome?.outcome?.optionId ?? "?"}`;
