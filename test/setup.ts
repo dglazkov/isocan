@@ -212,6 +212,91 @@ afterAll(() => {
  * gone" from "the daemon was there and never accepted".
  */
 /**
+ * **How many finished connections to this port are still in TIME_WAIT.**
+ *
+ * The second demonstrated way to get this symptom, and the one the 31 Aug
+ * `door.test.ts` witness actually fits. That failure came from `flood`, which
+ * knocks on the door N times **sequentially** — not a burst — and its accept
+ * queue read `1/1/128`, nowhere near full. So overflow, reproduced though it
+ * is, does not explain that one.
+ *
+ * What sequential-and-rapid does produce is a pile of 4-tuples:
+ *
+ * ```
+ * 300 sequential connects to one port → 517 TIME_WAIT entries for it
+ * ```
+ *
+ * A SYN arriving for a 4-tuple still in TIME_WAIT is **dropped rather than
+ * refused** — the same signature as a full queue, from the opposite cause.
+ * Both are "the listener is there and the SYN went nowhere", which is why the
+ * bind probe alone could never have separated them.
+ *
+ * So the sentence now carries both readings, and the next witness discriminates:
+ * a high queue depth points at the burst, a large TIME_WAIT count at the churn.
+ */
+async function timeWaits(port: number): Promise<string> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)("netstat", ["-an"], { timeout: 5000 });
+    const n = stdout
+      .split("\n")
+      .filter((l) => new RegExp(`\\.${port}\\b`).test(l) && /TIME_WAIT/.test(l)).length;
+    return n > 0 ? `; ${n} TIME_WAIT on ${port}` : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * **How full the listener's accept queue is** — the reading that decides it.
+ *
+ * On 31 Aug the symptom was reproduced deterministically, which no earlier
+ * round of this investigation managed. A loopback listener that EXISTS and
+ * does not accept, with its queue overflowed:
+ *
+ * ```
+ * connects: 400, failed: 305 — all ETIMEDOUT at 7823ms
+ * slow successes: 1085, 2047, 2048, 3968, 5890, 5892ms
+ * ```
+ *
+ * 7823ms against witnesses at 7791, 7803, 7808, 7813, 7819 and 7848, and the
+ * slow successes tracing a SYN retransmit ladder. A full queue makes the
+ * kernel DROP the SYN, which is precisely a connect that times out instead of
+ * being refused.
+ *
+ * The control matters as much: a listener whose loop is blocked for nine
+ * seconds but whose queue has room answers `CONNECTED after 9002ms`. The
+ * kernel completes the handshake itself and accept merely happens late. **So
+ * a busy server is not enough — the queue has to actually fill**, and
+ * `kern.ipc.somaxconn` is 128 here while `daemon.test.ts`'s hundred-item move
+ * — one of the two witnesses that day — issues 100 concurrent POSTs.
+ *
+ * What is still missing is the depth at a real failure, which is this.
+ * `netstat -L` prints `qlen/incqlen/maxqlen`.
+ *
+ * **Read it with the same caution the bind probe carries.** This samples
+ * AFTER the connect gave up, by which point the queue has had eight seconds
+ * to drain — measured on a deliberately overflowed listener, it printed
+ * `0/0/1`, having already emptied. So `qlen` is a snapshot and its being low
+ * proves nothing; `maxqlen` is the solid half, and a `maxqlen` the burst
+ * could plausibly exceed is what makes the case. A HIGH `qlen` here would be
+ * strong evidence; a low one is simply no evidence either way.
+ */
+async function queueDepth(port: number): Promise<string> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)("netstat", ["-L", "-a", "-n"], { timeout: 4000 });
+    const row = stdout.split("\n").find((l) => new RegExp(`\\.${port}\\b`).test(l));
+    const depth = row?.trim().split(/\s+/)[0];
+    return `${depth ? `; accept queue ${depth} (qlen/incqlen/maxqlen)` : ""}${await timeWaits(port)}`;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * **Which process holds a port, at the moment we ask.**
  *
  * The bind probe below says whether ANYTHING is there; two rounds of this
@@ -232,14 +317,9 @@ async function whoHolds(port: number): Promise<string> {
     const { promisify } = await import("node:util");
     // -nP: no DNS, no port-name lookup — both can block for seconds, which is
     // the last thing a diagnostic for a timeout should do.
-    // NOT filtered to LISTEN. The listener is half the tuple; the other half
-    // is the connecting socket, and its SOURCE PORT is the next thing this
-    // investigation needs. Five of the recorded witnesses — 59382, 59772,
-    // 59856, 59863, 59866 — sit within ~500 of each other in a 16000-wide
-    // range, and one port has now appeared three times in separate runs.
-    // That is not what a uniform rotating counter looks like, and a
-    // self-connect (source port landing on the destination) would explain
-    // both the clustering and a SYN that is dropped rather than refused.
+    // NOT filtered to LISTEN: the listener is half the picture and the
+    // connecting sockets are the other half. `queueDepth` below adds the
+    // reading that actually decides it.
     const { stdout } = await promisify(execFile)("lsof", ["-nP", `-iTCP:${port}`], {
       timeout: 4000,
     });
@@ -251,9 +331,13 @@ async function whoHolds(port: number): Promise<string> {
       .filter((cols) => cols.length > 8)
       // command[pid] name (state) — `name` carries src->dst, which is the tuple.
       .map((cols) => `${cols[0]}[${cols[1]}] ${cols[8]}${cols[9] ? ` ${cols[9]}` : ""}`);
-    if (rows.length === 0) return "";
+    const depth = await queueDepth(port);
+    if (rows.length === 0) return depth;
     const mine = rows.some((r) => r.includes(`[${process.pid}]`));
-    return ` (on ${port} now: ${[...new Set(rows)].join("; ")}${mine ? " — THIS process is among them" : ""})`;
+    return (
+      ` (on ${port} now: ${[...new Set(rows)].join("; ")}` +
+      `${mine ? " — THIS process is among them" : ""})${depth}`
+    );
   } catch {
     return "";
   }
@@ -371,19 +455,25 @@ globalThis.fetch = async function retryingFetch(input, init) {
            */
           `, loop stalled ${stallMs()}ms during this test` +
           /**
-           * **One bit that separates the two explanations left.**
+           * **Everything known about a dropped SYN, in one sentence.**
            *
            * A loopback connect that TIMES OUT rather than being refused means
-           * the SYN was dropped, not answered — and after the port range was
-           * moved out of the kernel's ephemeral band (30 Aug) and the loop was
-           * measured idle, only two readings survive: either nothing is
-           * listening and the SYN went nowhere, or something IS listening and
-           * is not accepting.
+           * the SYN was dropped. The bind probe first separated the two
+           * readings — nothing there, or something there that never accepted
+           * — and on 31 Aug it answered: something IS listening, and it is
+           * this very process.
            *
-           * Binding the port answers it. If the bind succeeds, the daemon was
-           * already gone. If it is refused, the listener is there and the
-           * accept never happened. Neither can be told from the error alone,
-           * which is why two rounds of this investigation ended in a guess.
+           * The mechanism was then reproduced deliberately. A listener with an
+           * overflowed accept queue fails 305 of 400 connects, every one at
+           * 7823ms, against witnesses at 7791-7848ms. The control rules out
+           * the weaker story: a listener whose LOOP is blocked for nine
+           * seconds but whose queue has room answers `CONNECTED after 9002ms`,
+           * because the kernel completes the handshake itself.
+           *
+           * So the sentence carries three things now — is anything there, WHO
+           * (the holder's pid), and how deep the queue is. What is still
+           * unmeasured is the depth at the instant of a real failure; see
+           * `queueDepth` for why a low reading is not evidence against.
            */
           (cause?.syscall === "connect" && cause.code === "ETIMEDOUT"
             ? await describeListener(where)
