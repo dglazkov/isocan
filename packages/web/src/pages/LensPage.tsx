@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Actor, LensBy, LensEntry, LensFilter, LensGroup, LensSource } from "@isocan/core";
+import type { Actor, LensAct, LensBy, LensEntry, LensFilter, LensGroup, LensLog, LensSource } from "@isocan/core";
 import {
   ago,
   filterLens,
   LENS_WINDOWS,
+  lensActs,
   lensKinds,
+  lensShape,
+  opWords,
+  canvasPath,
   itemPath,
   LENS_REFUSAL,
   lensEntries,
@@ -13,7 +17,7 @@ import {
   lensSubjectLabels,
   lensSubjects,
 } from "@isocan/core";
-import { getSnapshot, listCanvases } from "../lib/api.ts";
+import { getOplog, getSnapshot, listCanvases } from "../lib/api.ts";
 import { actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { ItemThumb } from "../components/ItemThumb.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
@@ -132,6 +136,46 @@ export function LensPage() {
     ? subjects.find((s) => s.id === actorId)
     : undefined;
   const [filter, setFilter] = useState<LensFilter>({});
+  /**
+   * **Two questions, and only one of them is a portfolio.**
+   *
+   * "Made" reads the canvas: what is there now. "Did" reads the LOG, which
+   * remembers the half a portfolio cannot show — work that was made and then
+   * deleted. An agent that made nine screens and removed eight looks, in a
+   * portfolio, like an agent that made one.
+   *
+   * The logs are fetched only when somebody asks for them, for the reason the
+   * card peek is lazy: a log per canvas is the cost this page is built to
+   * avoid paying by default.
+   */
+  const [mode, setMode] = useState<"made" | "did">("made");
+  const [logs, setLogs] = useState<LensLog[] | null>(null);
+  useEffect(() => {
+    if (mode !== "did" || !sources || logs) return;
+    let live = true;
+    (async () => {
+      const loaded = await Promise.all(
+        sources.map(async (source) => ({
+          canvasId: source.canvasId,
+          canvasTitle: source.canvasTitle,
+          /* One shut canvas is not a reason for a blank record — the same
+             bargain the entries make above, and for a stronger reason: a log
+             that reads as empty looks like an agent who did nothing. */
+          entries: await getOplog(source.canvasId).catch(() => []),
+        })),
+      );
+      if (live) setLogs(loaded);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [mode, sources, logs]);
+
+  const acts = useMemo<LensAct[]>(
+    () => (logs && subject ? lensActs(logs, subject.id) : []),
+    [logs, subject],
+  );
+  const shape = useMemo(() => lensShape(acts), [acts]);
   const all = useMemo<LensEntry[]>(
     () => (sources && subject ? lensEntries(sources, subject.id) : []),
     [sources, subject],
@@ -168,6 +212,21 @@ export function LensPage() {
         </div>
         <span className="spacer" />
         {subject && (
+          <div className="canvas-sorts" role="group" aria-label="What to show">
+            {/* Two different questions, not two views of one — see `mode`. */}
+            {(["made", "did"] as const).map((option) => (
+              <button
+                key={option}
+                className={`btn quiet${option === mode ? " on" : ""}`}
+                aria-pressed={option === mode}
+                onClick={() => setMode(option)}
+              >
+                {option === "made" ? "Made" : "Did"}
+              </button>
+            ))}
+          </div>
+        )}
+        {subject && mode === "made" && (
           <div className="canvas-sorts" role="group" aria-label="Arrangement">
             {BY.map((option) => (
               <button
@@ -294,11 +353,45 @@ export function LensPage() {
               </button>
             </p>
           )}
-          <p className="lens-note">
-            {entries.length} thing{entries.length === 1 ? "" : "s"} across{" "}
-            {countWhere(entries)} — {LENS_REFUSAL}.
-          </p>
-          {groups.map((group) => (
+          {mode === "made" ? (
+            <p className="lens-note">
+              {entries.length} thing{entries.length === 1 ? "" : "s"} across{" "}
+              {countWhere(entries)} — {LENS_REFUSAL}.
+            </p>
+          ) : (
+            /* The count says whether they were busy; "mostly" says doing what,
+               which is the question actually asked of an agent nobody watched. */
+            <p className="lens-note">
+              {shape.acts} act{shape.acts === 1 ? "" : "s"} across {shape.canvases} canvas
+              {shape.canvases === 1 ? "" : "es"}
+              {shape.mostly ? `, mostly ${opWords(shape.mostly) ?? shape.mostly}` : ""} — including
+              work that no longer exists.
+            </p>
+          )}
+          {mode === "did" && (
+            <>
+              {logs === null && <p className="canvas-none">Reading every log…</p>}
+              {logs !== null && acts.length === 0 && (
+                <p className="canvas-none">Nothing recorded for {labels.get(subject.id)}.</p>
+              )}
+              {acts.length > 0 && (
+                <div className="lens-rows">
+                  {acts.slice(0, 200).map((act, i) => (
+                    <span className="lens-act" key={`${act.ts}-${act.canvasId}-${i}`}>
+                      <span className="lens-act-what">
+                        {opWords(act.op) ?? act.op}
+                      </span>
+                      <Link className="lens-act-where" to={canvasPath(act.canvasId)}>
+                        {act.canvasTitle}
+                      </Link>
+                      <span className="lens-when">{ago(act.ts, nowMs)}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {mode === "made" && groups.map((group) => (
             <section key={group.key} className="lens-group">
               {/* A title is whatever somebody typed, and this view renders
                   data it did not author — from canvases it has never opened,

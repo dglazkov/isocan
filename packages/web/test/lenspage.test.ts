@@ -58,10 +58,11 @@ describe("the lens page", () => {
        the route this build serves, carries the badge, and recovers at the
        door. */
     expect(bare).toContain("listCanvases()");
-    /* This asked only about a DOUBLE-QUOTED route, which is not how anybody
-       writes a route with an id in it. Three surfaces reached for the oplog
-       with a template literal and all three walked past a guard written to
-       stop exactly that. */
+    /* This regex used to only catch a DOUBLE-QUOTED route, so phase 3's
+       `fetch(\`/api/projects/${id}/oplog\`)` walked straight past a guard
+       written to stop exactly that. A template literal is the natural way to
+       write a route with an id in it — which is to say, the only way this
+       mistake was ever going to be made. */
     expect(bare).not.toMatch(/fetch\(["'`]\/api\//);
   });
 
@@ -132,5 +133,47 @@ describe("the lens narrows", () => {
        eventually be read as meaning something. */
     expect(bare).toMatch(/function toggle</);
     expect(bare).toMatch(/const \{ \[key\]: _gone, \.\.\.rest \} = filter/);
+  });
+});
+
+/**
+ * **The record** (phase 3) — "Did" reads the log, because a portfolio cannot
+ * show work that was made and then deleted.
+ */
+describe("the lens remembers what it can no longer show", () => {
+  it("folds acts with core, like everything else on this page", () => {
+    expect(bare).toContain("lensActs(logs, subject.id)");
+    expect(bare).toContain("lensShape(acts)");
+  });
+
+  it("reads the logs through the door", () => {
+    /* A log that 401s and resolves to `[]` says "this agent did nothing" —
+       a wrong answer wearing a true answer's face. `getOplog` knocks. */
+    expect(bare).toContain("getOplog(source.canvasId)");
+  });
+
+  it("fetches nothing until somebody asks the second question", () => {
+    /* A log per canvas is the cost this page exists to avoid paying by
+       default — the same bargain the card peek makes. The guard is the
+       early return, because that is the line a refactor deletes. */
+    expect(bare).toMatch(/if \(mode !== "did" \|\| !sources \|\| logs\) return;/);
+  });
+
+  it("says the word the CLI says", () => {
+    /* `opWords` is shared, so "added something" is not this page's phrasing
+       of an op — it is the phrasing. */
+    expect(bare).toMatch(/opWords\(act\.op\)/);
+  });
+
+  it("distinguishes still-loading from genuinely nothing", () => {
+    /* Both are an empty list, and they mean opposite things. */
+    expect(bare).toMatch(/logs === null/);
+    expect(bare).toMatch(/logs !== null && acts\.length === 0/);
+  });
+
+  it("keeps every act reachable, even when the thing is gone", () => {
+    /* An act cannot link to an item that was deleted, so it links to the
+       canvas it happened on. A record you cannot walk back into is trivia. */
+    expect(bare).toMatch(/canvasPath\(act\.canvasId\)/);
   });
 });

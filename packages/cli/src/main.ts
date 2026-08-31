@@ -183,8 +183,10 @@ import {
   FORMAT_MODES,
   isFormatMode,
   type FormatMode,
+  lensActs,
   lensEntries,
   lensGroups,
+  lensShape,
   lensSubjects,
   lensSubjectLabels,
   filterLens,
@@ -192,6 +194,7 @@ import {
   type LensFilter,
   LENS_REFUSAL,
   type LensBy,
+  type LensLog,
   type LensSource,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
@@ -8560,24 +8563,31 @@ program
         : canvases;
       const names = await ctx.client.actorNames();
       const wanted = who?.toLowerCase();
-      const acts: Array<{ ts: string; canvas: string; actor: string; op: string }> = [];
+      const logs: LensLog[] = [];
       for (const canvas of only) {
-        for (const entry of await ctx.client.getLog(canvas.id, 0)) {
-          const actor = actorNameIn(names, entry.envelope.actor);
-          // Name or id, and a prefix is enough — an agent's name is a thing
-          // somebody types, not pastes.
-          if (wanted && !actor.toLowerCase().startsWith(wanted) && entry.envelope.actor.id !== who) {
-            continue;
-          }
-          acts.push({
-            ts: entry.envelope.ts,
-            canvas: canvas.title,
-            actor,
-            op: entry.envelope.op.type,
-          });
-        }
+        logs.push({
+          canvasId: canvas.id,
+          canvasTitle: canvas.title,
+          entries: await ctx.client.getLog(canvas.id, 0),
+        });
       }
-      acts.sort((a, b) => b.ts.localeCompare(a.ts));
+      /**
+       * The same fold the app's lens runs, from core — this used to be a
+       * second implementation of it, sorted and counted here by hand, which
+       * is the drift the isomorphism law exists to stop. What differs is the
+       * SELECTION, and that is now what gets passed: name or id, and a prefix
+       * is enough, because an agent's name is a thing somebody types, not
+       * pastes. Names resolve against the desk's current roster, so one agent
+       * renamed twice is one agent rather than three.
+       */
+      const acts = lensActs(
+        logs,
+        (actor) =>
+          !wanted ||
+          actorNameIn(names, actor).toLowerCase().startsWith(wanted) ||
+          actor.id === who,
+        (actor) => actorNameIn(names, actor),
+      );
       const shown = acts.slice(0, Number(opts.limit ?? 20));
       if (ctx.json) return printJson({ total: acts.length, acts: shown });
       if (acts.length === 0) {
@@ -8589,12 +8599,14 @@ program
           when: ago(a.ts, nowMs) || "just now",
           who: a.actor,
           did: opWords(a.op) ?? a.op,
-          canvas: truncate(a.canvas, 28),
+          canvas: truncate(a.canvasTitle, 28),
         })),
       );
       /* The count is the point of a cross-canvas view: "12 of 340, across 6
          canvases" is the shape of somebody's week. */
-      const where = new Set(acts.map((a) => a.canvas)).size;
+      /* And the shape from core too, so "across 6 canvases" is counted once
+         rather than agreeing by coincidence with the page that says it. */
+      const { canvases: where } = lensShape(acts);
       console.log(
         `\n${shown.length} of ${acts.length}, across ${where} canvas${where === 1 ? "" : "es"}`,
       );

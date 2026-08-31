@@ -1,4 +1,5 @@
 import type { Actor, CanvasContents, Item } from "./model.ts";
+import type { LogEntry } from "./ops.ts";
 import { itemKind } from "./kinds.ts";
 
 /**
@@ -221,3 +222,105 @@ export const LENS_WINDOWS: ReadonlyArray<{ label: string; hours: number }> = [
   { label: "This week", hours: 24 * 7 },
   { label: "This month", hours: 24 * 30 },
 ];
+
+/**
+ * **What somebody DID, rather than what still exists** (phase 3).
+ *
+ * `lensEntries` reads the canvas: the things that are there now, with the
+ * actor who made each. That is a portfolio, and a portfolio is silent about
+ * the half of the work that matters most on a bad day — **what was made and
+ * then deleted**. An agent that created nine screens and removed eight of them
+ * looks, in a portfolio, like an agent that made one.
+ *
+ * So this reads the LOG instead. Every act stays in the oplog whatever
+ * happened to the item afterwards, which is the whole reason the log is the
+ * record and the snapshot is a convenience.
+ *
+ * The words come from `opWords`, so an act here reads exactly as it reads on a
+ * canvas card, on a timeline tick and in `isocan canvas list`.
+ */
+export interface LensAct {
+  ts: string;
+  canvasId: string;
+  canvasTitle: string;
+  /** The actor's name as the log recorded it. */
+  actor: string;
+  /** The operation type — a caller phrases it with `opWords`. */
+  op: string;
+}
+
+export interface LensLog {
+  canvasId: string;
+  canvasTitle: string;
+  entries: readonly LogEntry[];
+}
+
+/**
+ * Everything `actorId` did, newest first, across every log given.
+ *
+ * **Undo pairs are kept, unlike a timeline's seams.** `majors` skips both ends
+ * because a track that ticks for the doing AND the undoing tells a story that
+ * did not happen — but this is a record of what somebody DID, and undoing
+ * something is a thing they did. A history that quietly dropped it would be
+ * the tidied version, which is the one nobody can trust.
+ */
+export function lensActs(
+  logs: readonly LensLog[],
+  /**
+   * An actor id, or a predicate for the selections an id cannot express.
+   *
+   * The two surfaces choose differently and both are right: the app has a
+   * subject in hand and wants exactly them, while `isocan history di` matches
+   * a name PREFIX — an agent's name is a thing somebody types, not pastes —
+   * and `isocan history` with no argument wants everyone. That difference is
+   * in the SELECTION, not in the fold, which is why it is a parameter here
+   * rather than a second implementation over there.
+   */
+  who: string | ((actor: Actor) => boolean),
+  /**
+   * What to call them. Defaults to the name the log recorded, which is what
+   * the app wants: the name at the time is the honest label on an old act.
+   * The CLI passes a resolver against the desk's current roster, because a
+   * table listing one agent under three old names reads as three agents.
+   */
+  naming?: (actor: Actor) => string,
+): LensAct[] {
+  const wanted = typeof who === "string" ? (a: Actor) => a.id === who : who;
+  const acts: LensAct[] = [];
+  for (const log of logs) {
+    for (const entry of log.entries) {
+      const actor = entry.envelope.actor;
+      if (!wanted(actor)) continue;
+      acts.push({
+        ts: entry.envelope.ts,
+        canvasId: log.canvasId,
+        canvasTitle: log.canvasTitle,
+        actor: naming ? naming(actor) : actor.name,
+        op: entry.envelope.op.type,
+      });
+    }
+  }
+  return acts.sort((a, b) => b.ts.localeCompare(a.ts) || a.canvasId.localeCompare(b.canvasId));
+}
+
+/**
+ * The shape of somebody's stretch of work: how much, over how many canvases,
+ * and what they mostly did.
+ *
+ * The count alone answers "were they busy"; the commonest act answers "doing
+ * what", which is the question actually being asked of an agent nobody watched.
+ */
+export function lensShape(acts: readonly LensAct[]): {
+  acts: number;
+  canvases: number;
+  mostly: string | null;
+} {
+  const tally = new Map<string, number>();
+  for (const act of acts) tally.set(act.op, (tally.get(act.op) ?? 0) + 1);
+  const top = [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return {
+    acts: acts.length,
+    canvases: new Set(acts.map((a) => a.canvasId)).size,
+    mostly: top ? top[0] : null,
+  };
+}

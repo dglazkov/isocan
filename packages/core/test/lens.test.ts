@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
+import type { LogEntry } from "../src/ops.ts";
 import {
   filterLens,
   LENS_REFUSAL,
@@ -9,6 +10,8 @@ import {
   lensKinds,
   lensSubjects,
   type LensEntry,
+  lensActs,
+  lensShape,
   type LensSource,
 } from "../src/lens.ts";
 
@@ -245,5 +248,110 @@ describe("narrowing a lens", () => {
   it("names its windows in the words somebody would choose them by", () => {
     expect(LENS_WINDOWS.map((w) => w.label)).toEqual(["Today", "This week", "This month"]);
     expect(LENS_WINDOWS.every((w) => w.hours > 0)).toBe(true);
+  });
+});
+
+/**
+ * **What somebody DID** (phase 3) — the half a portfolio cannot show.
+ *
+ * `lensEntries` reads the canvas, so it can only ever show what is still
+ * there. An agent that made nine screens and deleted eight looks, in a
+ * portfolio, like an agent that made one. The log remembers all nine.
+ */
+describe("what somebody did, from the log", () => {
+  const act = (seq: number, actorId: string, type: string, ts: string): LogEntry =>
+    ({
+      seq,
+      envelope: {
+        id: `op${seq}`,
+        canvasId: "prj_1",
+        actor: { id: actorId, name: actorId === "usr_ada" ? "Ada" : "Bo" },
+        ts,
+        op: { type },
+      },
+      inverse: null,
+    }) as unknown as LogEntry;
+
+  const logs = [
+    {
+      canvasId: "prj_1",
+      canvasTitle: "One",
+      entries: [
+        act(1, "usr_ada", "item.add", "2026-08-01T00:00:00Z"),
+        act(2, "usr_bo", "item.add", "2026-08-02T00:00:00Z"),
+        act(3, "usr_ada", "item.delete", "2026-08-03T00:00:00Z"),
+      ],
+    },
+    {
+      canvasId: "prj_2",
+      canvasTitle: "Two",
+      entries: [act(1, "usr_ada", "item.add", "2026-08-04T00:00:00Z")],
+    },
+  ];
+
+  it("shows work that no longer exists", () => {
+    /* The point of reading the log. `item.delete` is in Ada's history — a
+       portfolio would show neither the deleted thing nor the deleting. */
+    const acts = lensActs(logs, "usr_ada");
+    expect(acts.map((a) => a.op)).toContain("item.delete");
+  });
+
+  it("is newest first, across every canvas at once", () => {
+    expect(lensActs(logs, "usr_ada").map((a) => a.canvasTitle)).toEqual(["Two", "One", "One"]);
+  });
+
+  it("is only that actor's acts", () => {
+    expect(lensActs(logs, "usr_bo")).toHaveLength(1);
+    expect(lensActs(logs, "usr_nobody")).toEqual([]);
+  });
+
+  it("keeps an undo, unlike a timeline's seams", () => {
+    /* `majors` skips both ends of an undo pair, because a TRACK that ticks for
+       the doing and the undoing tells a story that did not happen. A record of
+       what somebody DID is the other question: undoing something is a thing
+       they did, and dropping it would be the tidied version. */
+    const undone = [
+      {
+        canvasId: "prj_1",
+        canvasTitle: "One",
+        entries: [
+          { ...act(1, "usr_ada", "item.add", "2026-08-01T00:00:00Z"), undoneBy: 2 },
+          { ...act(2, "usr_ada", "item.delete", "2026-08-01T00:01:00Z"), cause: { kind: "undo", targetSeq: 1 } },
+        ] as unknown as LogEntry[],
+      },
+    ];
+    expect(lensActs(undone, "usr_ada")).toHaveLength(2);
+  });
+
+  it("says the shape of the stretch: how much, where, and mostly what", () => {
+    /* The count answers "were they busy"; the commonest act answers "doing
+       what", which is what somebody actually asks of an agent nobody watched. */
+    expect(lensShape(lensActs(logs, "usr_ada"))).toEqual({
+      acts: 3,
+      canvases: 2,
+      mostly: "item.add",
+    });
+  });
+
+  it("has a shape for nothing at all", () => {
+    expect(lensShape([])).toEqual({ acts: 0, canvases: 0, mostly: null });
+  });
+
+  it("takes a predicate, for the selections an id cannot express", () => {
+    /* `isocan history di` matches a name prefix and `isocan history` with no
+       argument wants everyone. Neither is an id, and neither is a reason for
+       a second fold — which is what the CLI had until this existed. */
+    const byPrefix = lensActs(logs, (a) => a.name.toLowerCase().startsWith("ad"));
+    expect(byPrefix.map((a) => a.actor)).toEqual(["Ada", "Ada", "Ada"]);
+    expect(lensActs(logs, () => true)).toHaveLength(4);
+  });
+
+  it("can be told what to call somebody, when the log's name is stale", () => {
+    /* An agent renamed twice has three names in the log and is one agent. The
+       app wants the name AT THE TIME — an honest label on an old act — so
+       that stays the default; a CLI table wants one row per person. */
+    const renamed = lensActs(logs, "usr_ada", () => "Ada Lovelace");
+    expect(new Set(renamed.map((a) => a.actor))).toEqual(new Set(["Ada Lovelace"]));
+    expect(lensActs(logs, "usr_ada")[0]!.actor).toBe("Ada");
   });
 });
