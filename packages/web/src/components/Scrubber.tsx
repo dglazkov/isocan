@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntry, Major } from "@isocan/core";
 import { at, majors, majorWhat, span, track } from "@isocan/core";
+import { getArchivedOplog, getOplog } from "../lib/api.ts";
 import { enterPast, leavePast, useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
@@ -43,11 +44,8 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
     (async () => {
       try {
         const [archived, recent] = await Promise.all([
-          fetch(`/api/projects/${canvasId}/oplog/archive`).then((r) => (r.ok ? r.json() : [])),
-          fetch(`/api/projects/${canvasId}/oplog?since=0`).then((r) => {
-            if (!r.ok) throw new Error(`the history could not be read (${r.status})`);
-            return r.json();
-          }),
+          getArchivedOplog(canvasId),
+          getOplog(canvasId),
         ]);
         if (live) setEntries([...archived, ...recent]);
       } catch (err) {

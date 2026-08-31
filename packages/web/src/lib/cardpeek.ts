@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { LogEntry, Major } from "@isocan/core";
 import { majors } from "@isocan/core";
 
+import { getOplog } from "./api.ts";
+
 /**
  * **The last few seams on a canvas, fetched when somebody asks to see them.**
  *
@@ -42,9 +44,7 @@ export function useCardPeek(canvasId: string | null, want: boolean): Major[] | n
     let live = true;
     (async () => {
       try {
-        const entries: LogEntry[] = await fetch(
-          `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=0`,
-        ).then((r) => (r.ok ? r.json() : []));
+        const entries: LogEntry[] = await getOplog(canvasId);
         /* Newest first, because a peek is read downward and the thing somebody
            wants is at the top. The track reads oldest-first for the opposite
            reason: it is a timeline. */

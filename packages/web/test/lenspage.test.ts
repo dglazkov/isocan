@@ -58,7 +58,11 @@ describe("the lens page", () => {
        the route this build serves, carries the badge, and recovers at the
        door. */
     expect(bare).toContain("listCanvases()");
-    expect(bare).not.toMatch(/fetch\("\/api\//);
+    /* This asked only about a DOUBLE-QUOTED route, which is not how anybody
+       writes a route with an id in it. Three surfaces reached for the oplog
+       with a template literal and all three walked past a guard written to
+       stop exactly that. */
+    expect(bare).not.toMatch(/fetch\(["'`]\/api\//);
   });
 
   it("survives one canvas it cannot read", () => {

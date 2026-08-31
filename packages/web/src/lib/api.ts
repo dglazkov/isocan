@@ -341,6 +341,40 @@ export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
 }
 
 /**
+ * **The log, read through the door like everything else.**
+ *
+ * Three surfaces wanted this and all three wrote the route by hand — the
+ * scrubber, the card peek, the lens. A bare `fetch` skips `request`, and what
+ * `request` does here is the whole point: a 401 knocks on the door and comes
+ * back, instead of resolving to nothing.
+ *
+ * Resolving to nothing is the expensive half. A scrubber says so out loud. But
+ * a peek with no majors looks like a canvas where nothing happened, and a lens
+ * with no acts looks like an agent who did nothing — a wrong answer wearing
+ * the same face as a true one. That is worth one function.
+ *
+ * `since=0` because every caller wants the whole log; a caller that wants a
+ * tail can pass one.
+ */
+export function getOplog(canvasId: string, since = 0): Promise<LogEntry[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`);
+}
+
+/**
+ * What was rolled out of the live log. Only the scrubber asks: a history
+ * folded from the live log alone would replay a story missing its beginning.
+ * Absent (or unreadable) is normal — most canvases have never been rolled —
+ * so this answers `[]` rather than throwing, and the caller can fold either
+ * way without a branch.
+ */
+export function getArchivedOplog(canvasId: string): Promise<LogEntry[]> {
+  return request<LogEntry[]>(
+    "GET",
+    `/api/projects/${encodeURIComponent(canvasId)}/oplog/archive`,
+  ).catch(() => []);
+}
+
+/**
  * **Undo is the home's, and offline it says so** (phase 10's honesty problem,
  * second half).
  *
