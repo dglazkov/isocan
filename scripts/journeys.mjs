@@ -144,9 +144,109 @@ async function rig() {
     localStorage.setItem("isocan.identity", JSON.stringify(j.envelope.actor));
     return true;
   })()`);
+    /**
+   * **A real click, on whatever is actually on top at that point.**
+   *
+   * `element.click()` is not this. It fires the handler directly and
+   * bypasses hit-testing entirely, so it succeeds on a control covered by an
+   * overlay, sized to zero, or under `pointer-events: none` — a journey
+   * built on it cannot tell "this works" from "this is there but nobody can
+   * press it", which is a whole class of interface bug.
+   *
+   * So: find the control, take its centre, check the browser agrees that
+   * point belongs to it, and press THERE. When it does not agree, the thing
+   * on top is named in the failure, because "the button did not respond" and
+   * "something is sitting over the button" are different bugs.
+   */
+  const rigClick = async (selector, what = selector) => {
+    const box = await b.ev(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return { zero: true };
+      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      const top = document.elementFromPoint(x, y);
+      /* Containment one way only: the point may land on a CHILD of the
+         target, and a button's inner glyph is not an obstruction.
+
+         The reverse test was here too and was exactly backwards — an ancestor
+         always contains its descendant, so a full-page overlay on the body
+         satisfied it and every covered control passed. Found by covering the
+         whole page and watching the journey fail somewhere else instead: the
+         check that proves a checker works has to be RUN, not assumed.
+         (No backticks in here: this comment lives inside a template literal,
+          and the first one closed it.) */
+      return { x, y, hit: el === top || el.contains(top),
+               over: top ? (top.className?.toString?.() || top.tagName) : "nothing" };
+    })()`);
+    if (!box) throw new Error(`no ${what} to press`);
+    if (box.zero) throw new Error(`${what} has no size — nothing to press`);
+    if (!box.hit) throw new Error(`${what} is covered by ${box.over} — a person could not press it`);
+    await b.send("Input.dispatchMouseEvent", {
+      type: "mousePressed", x: box.x, y: box.y, button: "left", buttons: 1, clickCount: 1,
+    });
+    await b.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased", x: box.x, y: box.y, button: "left", buttons: 0, clickCount: 1,
+    });
+    await sleep(250);
+  };
+
   return {
     origin,
     b,
+    click: rigClick,
+    /**
+     * The same real press, on the first element matching `selector` whose text
+     * starts with `text` — menus and rosters have no stable selector of their
+     * own, and finding by the words a person reads is closer to what they do
+     * than counting children.
+     */
+    clickText: async (selector, text, what = `"${text}"`) => {
+      const mark = await b.ev(`(() => {
+        const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
+          .find(e => e.textContent.trim().startsWith(${JSON.stringify(text)}));
+        if (!el) return null;
+        el.setAttribute("data-journey-target", "1");
+        return true;
+      })()`);
+      if (!mark) throw new Error(`no ${what} to press`);
+      try {
+        await rigClick("[data-journey-target]", what);
+      } finally {
+        await b.ev(`(() => { document.querySelector("[data-journey-target]")?.removeAttribute("data-journey-target"); return true; })()`);
+      }
+    },
+    /**
+     * Arm a tool by its accessible name, with a real press, and insist it
+     * actually armed. A rail button that renders and does not select is the
+     * exact failure `.click()` cannot see.
+     */
+    clickTool: async (label) => {
+      const sel = `.tool-btn[aria-label="${label}"]`;
+      await rigClick(sel, `the ${label} tool`);
+      await until(
+        b,
+        `/active|on/.test(document.querySelector(${JSON.stringify(sel)})?.className ?? "")`,
+        `the ${label} tool to arm`,
+        4000,
+      );
+    },
+    /** Type, key by key, through the browser's own keyboard pipeline. */
+    type: async (text) => {
+      for (const ch of text) {
+        await b.send("Input.dispatchKeyEvent", { type: "keyDown", text: ch });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp" });
+      }
+    },
+    /** A modifier chord — ⌘Enter and friends, as the browser delivers them. */
+    press: async (key, { meta = false } = {}) => {
+      const codes = { Enter: { windowsVirtualKeyCode: 13, key: "Enter", text: "\r" } };
+      const k = codes[key];
+      const mods = meta ? 4 : 0;
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: mods, ...k });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: mods, ...k });
+      await sleep(600);
+    },
     /**
      * A press, some moves and a release, through Chrome's own input pipeline.
      * `Input.dispatchMouseEvent` produces trusted events with a real active
@@ -191,9 +291,9 @@ async function makeCanvas(rig, title) {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     set.call(i, ${JSON.stringify(title)});
     i.dispatchEvent(new Event("input", { bubbles: true }));
-    document.querySelector(".canvas-card.create button[type=submit]").click();
     return true;
   })()`);
+  await rig.click(".canvas-card.create button[type=submit]", "the Create button");
   await until(
     rig.b,
     `[...document.querySelectorAll(".canvas-card h3")].some(h => h.textContent === ${JSON.stringify(title)})`,
@@ -274,11 +374,7 @@ export const JOURNEYS = [
     async run(rig) {
       await makeCanvas(rig, "Pen journey");
       rig.b.takeErrors();
-      await rig.b.ev(`(() => {
-        [...document.querySelectorAll(".tool-btn")].find(b => b.getAttribute("aria-label") === "Pen").click();
-        return true;
-      })()`);
-      await sleep(400);
+      await rig.clickTool("Pen");
       const armed = await rig.b.ev(
         `[...document.querySelectorAll(".tool-btn")].some(b => b.getAttribute("aria-label") === "Pen" && /active|on/.test(b.className))`,
       );
@@ -314,19 +410,8 @@ export const JOURNEYS = [
     async run(rig) {
       await makeCanvas(rig, "Panel journey");
       for (const name of ["Chat", "Files", "Agents", "Context", "Personas"]) {
-        await rig.b.ev(`(() => {
-          [...document.querySelectorAll("button")].find(b => b.getAttribute("aria-label") === "More")?.click();
-          return true;
-        })()`);
-        await sleep(350);
-        const opened = await rig.b.ev(`(() => {
-          const e = [...document.querySelectorAll(".menu-entry,[role=menuitem],.ctx-entry")]
-            .find(e => e.textContent.trim().startsWith(${JSON.stringify(name)}));
-          if (!e) return false;
-          e.click();
-          return true;
-        })()`);
-        if (!opened) throw new Error(`no way to open ${name}`);
+        await rig.click('button[aria-label="More"]', "the ··· menu");
+        await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", name, `the ${name} entry`);
         await sleep(600);
         const head = await rig.b.ev(`(() => {
           const h = document.querySelector(".panel-head");
@@ -357,7 +442,7 @@ export const JOURNEYS = [
       await addText(rig, "made for the lens");
       await rig.go("/lens");
       await until(rig.b, `document.querySelectorAll(".lens-subjects .btn").length > 0`, "a lens roster");
-      await rig.b.ev(`(() => { document.querySelector(".lens-subjects .btn").click(); return true; })()`);
+      await rig.click(".lens-subjects .btn", "the first lens subject");
       await sleep(1200);
       const seen = await rig.b.ev(`(() => ({
         rows: document.querySelectorAll(".lens-row").length,
@@ -375,27 +460,21 @@ export const JOURNEYS = [
 
 /** Put a text node on the open canvas the way a person does. */
 async function addText(rig, words) {
-  await rig.b.ev(`(() => {
-    [...document.querySelectorAll(".tool-btn")].find(b => b.getAttribute("aria-label") === "Text").click();
-    return true;
-  })()`);
-  await sleep(300);
-  await rig.b.ev(`(() => {
-    const s = document.elementFromPoint(240, 240) ?? document.querySelector(".world");
-    s.dispatchEvent(new PointerEvent("pointerdown",
-      { clientX: 240, clientY: 240, bubbles: true, cancelable: true, pointerId: 3, button: 0, buttons: 1, isPrimary: true }));
-    return true;
-  })()`);
+  await rig.clickTool("Text");
+  /* A real press on empty canvas — the gesture that opens a composer. */
+  await rig.stroke([[240, 240]]);
   await until(rig.b, `!!document.querySelector(".text-composer textarea")`, "the text composer");
-  await rig.b.ev(`(() => {
-    const t = document.querySelector(".text-composer textarea");
-    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
-    set.call(t, ${JSON.stringify(words)});
-    t.dispatchEvent(new Event("input", { bubbles: true }));
-    t.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
-    return true;
-  })()`);
-  await sleep(1200);
+  /* Typed key by key through the browser, then a real ⌘Enter. Setting
+     `.value` would skip whatever the composer does per keystroke, which is
+     where its measuring and growing live. */
+  await rig.type(words);
+  await until(
+    rig.b,
+    `document.querySelector(".text-composer textarea")?.value === ${JSON.stringify(words)}`,
+    "the typed words to reach the composer",
+  );
+  await rig.press("Enter", { meta: true });
+  await sleep(900);
 }
 
 async function main() {

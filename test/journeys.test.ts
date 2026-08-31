@@ -53,6 +53,33 @@ describe("the journeys runner", () => {
     expect(runner).toMatch(/const raced = .*EADDRINUSE/);
   });
 
+  it("presses where a person would, and checks the browser agrees", () => {
+    /**
+     * `element.click()` fires the handler directly and bypasses hit-testing,
+     * so it succeeds on a control covered by an overlay, sized to zero, or
+     * under `pointer-events: none`. A journey built on it cannot tell "this
+     * works" from "this is there but nobody can press it".
+     *
+     * Proven rather than asserted: covering the page with a transparent sheet
+     * makes `make-a-canvas` fail with "the Create button is covered by BODY —
+     * a person could not press it".
+     */
+    expect(runner).toContain("elementFromPoint");
+    expect(runner).toMatch(/covered by \$\{box\.over\}/);
+    expect(runner).toMatch(/has no size/);
+    // Containment ONE WAY. The reverse is true for every ancestor, so a
+    // full-page overlay on <body> satisfied it and every covered control
+    // passed — the bug this test exists to keep out.
+    expect(runner).toMatch(/hit: el === top \|\| el\.contains\(top\)/);
+    expect(runner).not.toMatch(/top\.contains\(el\)/);
+  });
+
+  it("does not fire handlers directly in a journey", () => {
+    /* Comments may discuss `.click()`; the journeys may not use it. */
+    const code = runner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/\.click\(\)/);
+  });
+
   it("drives real input rather than synthetic events", () => {
     /* A hand-made PointerEvent is untrusted and creates no active pointer, so
        `setPointerCapture` throws — which reads exactly like the reported Pen
