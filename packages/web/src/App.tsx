@@ -9,6 +9,7 @@ import { adoptIdentity } from "./lib/identity.ts";
 import { faceFor } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
+import { LensPage } from "./pages/LensPage.tsx";
 import { TermsPage } from "./pages/TermsPage.tsx";
 import { CanvasListPage } from "./pages/CanvasListPage.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
@@ -88,6 +89,10 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
                 SPA fallback answers every path with the app shell and a 200, so
                 without a route here a mistyped or doc-shaped share link renders
                 a blank page: no error, no 404, no redirect, nothing to read. */}
+            {/* A lens over every canvas — see `LensPage` and `core/lens.ts`
+                for why it is deliberately not called a canvas. */}
+            <Route path="/lens" element={<LensPage />} />
+            <Route path="/lens/:actorId" element={<LensPage />} />
             <Route path="*" element={<NotHerePage />} />
           </Routes>
         )}

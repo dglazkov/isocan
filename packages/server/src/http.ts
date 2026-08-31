@@ -57,6 +57,7 @@ import {
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
+  PARK_ADOPTED_CODE,
   parseCommandFile,
   AMBIGUOUS_HOME,
   normalizeHomeUrl,
@@ -109,6 +110,7 @@ import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
+import type { ParkCursors } from "./park.ts";
 import { registerContentRoutes } from "./content.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
 import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
@@ -310,6 +312,13 @@ export interface RouteOptions {
    * for why this is configuration and what it buys.
    */
   signingKeys?: SigningKeys;
+  /**
+   * The durable park cursor (on-demand phase 1) — one row per actor per
+   * canvas, adopted by the newest park. Absent only in a caller that wired
+   * the routes by hand; the daemon always supplies one, and the park routes
+   * answer 501 without it rather than inventing a home directory to write in.
+   */
+  park?: ParkCursors;
 }
 
 export function registerRoutes(
@@ -1757,6 +1766,59 @@ export function registerRoutes(
     } finally {
       unsubscribe();
     }
+  });
+
+  // ---- the durable park cursor (on-demand phase 1) ----
+  //
+  // Three verbs on one row per actor per canvas — claim (adopt + read),
+  // delivered (record a wake's high-water), advance (settle a quiet lap).
+  // The state machine and the custody argument live in park.ts; what lives
+  // here is only the wiring: the engine supplies "now" for a first park and
+  // the completion evidence (did the actor author anything after the
+  // delivery — the reply is the proof). Like the watch route these take the
+  // canvas in the body, and like it they trust the caller about who they
+  // park as — the same local-daemon posture, to be revisited with the same
+  // multi-tenant narrowing the watch route's comment records.
+
+  app.post("/api/park/claim", async (req, reply) => {
+    const park = options.park;
+    if (!park) return reply.code(501).send({ error: "this daemon holds no park cursors" });
+    const body = req.body as import("@isocan/core").ParkClaimRequest;
+    const claim = await park.claim(body.canvasId, body.actorId, {
+      since: body.since,
+      seed: async () => (await engine.getSnapshot(body.canvasId)).lastSeq,
+      actorSpoke: async (afterSeq) => {
+        const entries = await engine.getLog(body.canvasId, afterSeq);
+        return entries.some((entry) => entry.envelope.actor.id === body.actorId);
+      },
+    });
+    return claim;
+  });
+
+  app.post("/api/park/delivered", async (req, reply) => {
+    const park = options.park;
+    if (!park) return reply.code(501).send({ error: "this daemon holds no park cursors" });
+    const body = req.body as import("@isocan/core").ParkDeliveredRequest;
+    if (await park.delivered(body.canvasId, body.actorId, body.parkId, body.tip)) {
+      return { ok: true };
+    }
+    return reply.code(409).send({
+      error: "another park adopted this actor's cursor — stand down, it is answering now",
+      code: PARK_ADOPTED_CODE,
+    });
+  });
+
+  app.post("/api/park/advance", async (req, reply) => {
+    const park = options.park;
+    if (!park) return reply.code(501).send({ error: "this daemon holds no park cursors" });
+    const body = req.body as import("@isocan/core").ParkAdvanceRequest;
+    if (await park.advance(body.canvasId, body.actorId, body.parkId, body.to)) {
+      return { ok: true };
+    }
+    return reply.code(409).send({
+      error: "another park adopted this actor's cursor — stand down, it is answering now",
+      code: PARK_ADOPTED_CODE,
+    });
   });
 
   app.post("/api/projects/:id/undo", async (req) => {

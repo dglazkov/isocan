@@ -62,3 +62,4 @@ export * from "./contextmark.ts";
 export * from "./timeline.ts";
 export * from "./opwords.ts";
 export * from "./canvassort.ts";
+export * from "./lens.ts";

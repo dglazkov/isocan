@@ -204,11 +204,19 @@ event forwarding, not something to paper over with a detached supervisor.
 - **Exit 2 means nothing came.** It is the quiet half of a conversation, not
   the end of one: park again. Never invent work out of a timeout, and never
   read one as permission to leave.
-- **One waiter per NAME.** Two parked processes speaking as the same actor
-  race for the same wake, and one of them does invisible work. Start your own
+- **One waiter per NAME — enforced.** The daemon keeps one cursor row per
+  actor per canvas, and the newest park adopts it: an older park speaking as
+  the same actor exits 3 with "another park adopted this actor's cursor",
+  delivering nothing. Exit 3 means stand down, not park again. Start your own
   next `wait` only after the work is done and the receipt is posted. (Two
   parked processes with two different names is a different thing entirely —
   see below, and it is allowed.)
+- **Your place in the log survives you.** The cursor lives with the daemon,
+  per actor per canvas: a park that is killed — mid-gap, mid-turn — resumes
+  exactly where it left off on the next `wait`, with everything from the gap
+  delivered. You never need `--since`. An entry that was already handed to a
+  turn that died arrives flagged `redelivered: true` — you may have answered
+  it before you died, so check the thread before answering twice.
 - **The daemon is allowed to die under you.** A park survives a restart: it
   retries, starts the daemon again if nobody else has, and resumes at the
   same cursor, so nothing that landed meanwhile is missed. If it has been
@@ -442,6 +450,20 @@ the thing a per-canvas view cannot tell you and the reason this verb exists.
 
 Both read the same words from `opWords` in core, so a canvas card in the app, a
 seam on a timeline and these tables describe one event identically.
+
+`isocan lens [who]` is the third view of the same facts: what somebody has
+**made**, across every canvas, grouped.
+
+```sh
+isocan lens                    # who there is to look at
+isocan lens Kenny --by day     # or --by canvas (default), --by kind
+```
+
+**It is a lens and not a canvas, and that is a decision rather than a name.**
+An item's x/y belong to the canvas it is on, so a view gathering work from five
+canvases holds REFERENCES and cannot hold the items — the arrangement is
+derived, nothing is stored, and there is no drag to get wrong. The app has the
+same thing at `/lens`, from the same functions in core.
 
 ## Saying what matters here
 

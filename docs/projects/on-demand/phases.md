@@ -11,7 +11,10 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: nothing built, and the mechanism revised once already.**
+**Where we are: phase 1 is closed (2026-08-30) — the park's cursor is
+durable, per actor per canvas, held by the daemon the park polls, and
+`--since` is a repair tool nobody has to know about. Phase 2 is next.
+Before that, the mechanism was revised once already.**
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
 Withdrawn 30 Aug in review — see the mechanism section of design.md for
@@ -32,50 +35,71 @@ useful under `wait` alone.
 
 ## Phase 1 — Durable cursors
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Journey 3's plain-park half walks: the
+outcome's `kill -9` scene is driven end to end in
+`cli/test/wait-cursor.test.ts` against a real daemon and a real spawned
+park, and every proof below is a passing test.
 
 **Work:** Move the park's cursor out of the parked process (`let cursors`
 in `main.ts`), per actor per canvas, advancing only when a turn completes.
 Nothing else changes; `--since` becomes something nobody has to know
 about.
 
-**At this door — cursor custody.** The design splits the enrolment record
-along custody: the home holds what routing needs, the `rc` holds what
-running the agent needs. The cursor could live on either side. At the
-home, it survives the `rc`'s death and a replacement resumes exactly; at
-the `rc`, the home stays untouched and two `rc`s can never fight over one
-row. Decide which — and whether today's plain `wait` park uses the same
-storage, which is what makes this phase useful before any `rc` exists.
-One mechanism fact to carry into the decision: journey 3 allows the whole
-roster exactly one quiet connection, so an `rc` parks once and fans out —
-the storage must let several per-actor cursors advance independently off
-one shared read, not assume one park per cursor.
+**Closed at this door, 2026-08-30 — cursor custody: the daemon the park
+polls.** Not the true home and not a CLI-side file: the row lives with
+the local daemon, beside its other machine-local facts (`server/src/
+park.ts`, `park-cursors.json` next to `homes.json`), never behind the
+`Store` seam and never replicated. The deciding facts: `wait`'s one
+address is `127.0.0.1`, so the row is reachable exactly when a park can
+poll — including with the home link down, which is precisely when parks
+resume; a replica writes the home's seqs verbatim, so the row means the
+same thing wherever the canvas is homed; and a replacement `rc` is
+same-machine anyway, because `cwd` and harness are machine facts, so
+true-home custody bought a cross-machine resume nothing can use. For a
+locally-homed canvas the daemon IS the home, so the design's `home:
+{ …cursor }` sketch survives; moving custody later is a data move, not a
+semantic change. Plain `wait` uses this storage today — the phase's value
+before any `rc` exists — and the rows are per actor off one shared read,
+the shape journey 3's one-quiet-connection fact requires.
 
-**At this door — one cursor, two doors.** An actor parked via `wait`
-while also enrolled with an `rc` — or parked twice — shares one per-actor
-per-canvas cursor row; advance-on-completion from two readers skips or
-double-fires. Decide: a single-reader rule (the second reader refuses, or
-adopts the row), or a cursor per registration rather than per actor.
+**Closed at this door, 2026-08-30 — one cursor, one reader, newest
+adopts.** One row per actor per canvas; every claim mints a lease
+(`parkId`), and a delivery or advance carrying a stale lease is refused
+with `park-adopted`. The displaced park learns at the exact moment it
+would have double-delivered — before emitting anything — and exits 3,
+which the help text and agent guide define as "stand down", not "park
+again". Refusing the second reader was rejected because a `kill -9`'d
+park would leave a lease that blocks the resume this phase exists for
+(unless a TTL un-blocks it, the clock-based lie journey 7 bans
+elsewhere); a cursor per registration was rejected because two live rows
+deliver the same comment twice as new by construction.
 
-**At this door — redelivered is not new.** Journey 3 promises both
-halves: nothing in a gap is missed, and the same comment is never
-delivered twice as new. Advance-on-completion alone is at-least-once
-delivery — a park that dies after the agent replied but before the cursor
-advanced redelivers that comment on resume. Decide how the second promise
-is kept: a delivery record beside the cursor, a mark on redelivered
-entries so the turn knows it may already have answered, or an argument
-for why the reply already in the thread is the check. "Never twice as
-new" is acceptance, not aspiration; the door owes a mechanism.
+**Closed at this door, 2026-08-30 — redelivered is not new: a delivery
+record beside the cursor, and a machine-checked mark.** The row is three
+watermarks, `cursor ≤ rehanded ≤ delivered`: a wake records `delivered`
+without advancing; the cursor advances only on completion evidence at the
+next claim. The evidence, in order: the actor authored an op after the
+delivery (the reply is the proof — the daemon checks the log, the agent
+is not trusted to remember), or the actor came back to park after the
+batch was already re-handed once marked. Absent both, the batch goes out
+again with `redelivered: true` on each entry — never as new — so an
+entry is handed at most twice, the second time flagged, then settled.
+The bound is deliberate: a batch whose two turns both died is committed
+rather than redelivered forever, because an agent whose correct response
+to a change-wake is "nothing" must be able to park through it.
 
 **Outcome:** `kill -9` a parked agent mid-gap, park again: nothing in the
-gap is missed, and `--since` was never typed.
+gap is missed, and `--since` was never typed. *(Holds — the first test in
+`wait-cursor.test.ts` is this scene verbatim.)*
 
 **Proof:** vitest — a wake advances the cursor only on completion; a
 killed park resumes from its stored cursor; two readers on one actor
 behave as the door decision says; a death after the reply but before the
-advance does not present the same comment as new.
+advance does not present the same comment as new. All four in
+`cli/test/wait-cursor.test.ts`; the row's arithmetic pinned at the unit
+in `server/test/park.test.ts`.
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned.*
 
 ## Phase 2 — `isocan rc` and the enrolment records
 

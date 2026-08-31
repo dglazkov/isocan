@@ -336,6 +336,16 @@ the three redundant copies of the header rule, seen directly. The bug never
 appears where the breakage is, so the number has to describe the shape that
 produces it.
 
+**A rise in `copied-rules` is a question, not a verdict.** It counts
+value-coincidence, which is evidence of copying and not proof. `styles.css`
+holds the opposite case explicitly — two rules whose values agree because the
+things they style happen to want the same treatment, where *"a selector list
+spanning both would be one rule pretending two different elements are the same
+element."* Four identical panel headers were one thing written four times, and
+merging them was right; a lens roster agreeing with a 404 page's action row is
+two things that agree, and merging those would be the mistake. When it is the
+second kind, raise the bound and write down which it was.
+
 **A ratchet only works from zero.** This is the practice that keeps the rest
 working, and it is the one that had lapsed. A standing miss and a fresh
 regression print the same line, so once one bound has been over for a week
