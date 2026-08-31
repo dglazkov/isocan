@@ -114,10 +114,28 @@ function handle(msg) {
             execFileSync(
               process.execPath,
               [process.env.FAKE_ACP_CLI, "--canvas", canvasId, "comment", "reply", threadId, "summoned: on it"],
-              { stdio: "ignore" },
+              // `pipe`, not `ignore`: the CLI's own words about why it could
+              // not reply are the only account of this failure that exists.
+              { stdio: ["ignore", "pipe", "pipe"] },
             );
-          } catch {
-            // The turn still ends; the missing reply is the test's failure.
+          } catch (err) {
+            /**
+             * **The turn still ends, but the failure is no longer silent.**
+             *
+             * This was a bare `catch {}` under a comment saying "the missing
+             * reply is the test's failure" — and it made that failure
+             * unreadable. A reply that does not land stops the chain dead, so
+             * the cycle guard never fires and the test times out saying
+             * "timed out waiting for the cycle guard": the one thing that was
+             * not wrong. `dispatch.test.ts` has been failing that way on CI
+             * for a week with no way to tell a stalled chain from a broken
+             * reply.
+             *
+             * To stderr, because the rc's output is what the test captures and
+             * what CI prints.
+             */
+            const why = err?.stderr?.toString?.().trim() || err?.message || String(err);
+            process.stderr.write(`fake-acp: the reply to ${threadId} did not land — ${why}\n`);
           }
         }
       }

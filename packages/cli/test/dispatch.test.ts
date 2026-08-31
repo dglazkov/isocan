@@ -117,7 +117,24 @@ async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: s
   for (;;) {
     const value = await fn();
     if (ok(value)) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) {
+      /**
+       * **What it DID see, not only what it wanted.**
+       *
+       * "timed out waiting for the cycle guard" names the one thing that did
+       * not happen and nothing about what did — and these waits watch an rc
+       * narrating its own work, so the answer is usually sitting in that
+       * output. On CI the process is gone by the time anybody reads the log,
+       * so it is the only account there will ever be.
+       *
+       * It earned itself the day it went in: a captured failure showed both
+       * agents' replies landing 23ms apart and then nothing, which is what
+       * ruled the fake adapter out and pointed at routing instead.
+       */
+      const saw = typeof value === "string" ? value : JSON.stringify(value);
+      const tail = saw.length > 1200 ? `…${saw.slice(-1200)}` : saw;
+      throw new Error(`timed out waiting for ${what} after ${ms}ms. What it saw:\n${tail}`);
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
 }
