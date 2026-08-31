@@ -68,6 +68,28 @@ describe("isocan --agent-help", () => {
     expect(stderr).toBe("");
   });
 
+  it("tells an agent that the promoted version is not the newest one", async () => {
+    /**
+     * Reported by a human whose agent kept working from the wrong version:
+     * twelve versions on an item, #9 promoted, and the agent answered with
+     * #12. Nothing in the code was picking the newest — `isocan get` follows
+     * `currentVersionId` and always did. What was missing was anywhere in
+     * the guide SAYING that the file in the tree does not follow it, and
+     * that nothing writes that file on its own. An agent that reads the path
+     * instead of the item gets the version the human just set aside, stacks
+     * a new one on top, and buries the choice they made.
+     *
+     * The guide is how an agent learns this; there is no other channel.
+     */
+    const guide = await fs.readFile(guideFile, "utf8");
+    expect(guide).toContain("The file on disk is not the item.");
+    expect(guide).toContain("not necessarily\nthe newest");
+    expect(guide).toContain("Read with `isocan get`, not by opening the path.");
+    // The refusal has two causes, and the guide used to name only one.
+    expect(guide).toContain("That last refusal has two causes");
+    expect(guide).not.toContain("That last one is somebody editing outside the canvas");
+  });
+
   it("is advertised in `isocan --help`, where an agent looks first", async () => {
     const { stdout } = await isocan("--help");
     expect(stdout).toContain("--agent-help");

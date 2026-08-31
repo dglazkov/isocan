@@ -17,7 +17,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionRoster, useMentionRoster } from "../lib/mentions.ts";
 import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
-import { submitOnCmdEnter } from "../lib/submit.ts";
+import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { pastSlop } from "../lib/gesture.ts";
 import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
@@ -381,7 +381,17 @@ function ThreadPopover({
               />
       </div>
       <form
-        onKeyDown={submitOnCmdEnter}
+        /**
+         * The same two keys the Chat takes, because these are the same
+         * gesture in two places. Reported as "I hit ENTER expecting to get a
+         * newline": this field was a bare `<input>` while every other
+         * composer in the app grows, so a reply could not hold a second line
+         * at all and Enter had nowhere to go but submit.
+         */
+        onKeyDown={(e) => {
+          submitOnEnter(e);
+          submitOnCmdEnter(e);
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           const body = reply.trim();
@@ -396,6 +406,10 @@ function ThreadPopover({
       >
         <MentionField
           placeholder="Reply…"
+          // Grows, like the Chat's. An `<input>` cannot hold a newline, so
+          // Shift+Enter had nothing to make and the field could never show
+          // more than one line of what somebody wrote.
+          grow
           value={reply}
           onChange={setReply}
           candidates={candidates}

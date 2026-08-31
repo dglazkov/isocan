@@ -74,7 +74,7 @@ import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
-import { crossesCover, isTyping } from "../lib/keys.ts";
+import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
@@ -427,11 +427,23 @@ function CanvasSurface({
        * point. The clipboard is the app's own (`lib/clipboard.ts`), so it
        * survives navigating from one canvas to another in this tab.
        *
-       * Only when nothing is being typed into: a ⌘C in the Chat composer is
-       * the browser's, copying the words somebody selected, and stealing it
-       * would be the app breaking the one shortcut everybody knows.
+       * Only when nothing is being typed into, AND nothing is selected as
+       * text: a ⌘C in the Chat composer is the browser's, copying the words
+       * somebody selected, and stealing it would be the app breaking the one
+       * shortcut everybody knows.
+       *
+       * `isTyping` alone was not enough, and the gap was reported: selecting
+       * the words of a COMMENT and pressing ⌘C copied the selected item. A
+       * rendered comment is a `<p>`, so nothing was being typed into — the
+       * caret was nowhere. What matters is whether the browser already has
+       * something to copy, which is `hasTextSelection`.
        */
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && !isTyping(e.target)) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key.toLowerCase() === "c" &&
+        !isTyping(e.target) &&
+        !hasTextSelection()
+      ) {
         const ui = useUiStore.getState();
         // From the STORE, not the closure. This effect's deps are
         // `[canvasId, actor, itemId, onWorkbench]`, so a `canvas` captured
@@ -520,7 +532,16 @@ function CanvasSurface({
         zoomToFit();
         return;
       }
-      if (isTyping(e.target)) return;
+      /**
+       * The EVENT's target and the FOCUSED element, because they are not
+       * always the same one. A field that re-renders under your hands — the
+       * mention menu completing a name, a composer clearing after a send —
+       * can hand the keystroke to an ancestor while the caret is still in a
+       * panel, and then a single letter meant for a comment reaches the
+       * canvas. Asking both is cheap; a shortcut firing over somebody's
+       * typing is not.
+       */
+      if (isTyping(e.target) || isTyping(document.activeElement)) return;
       const ui = useUiStore.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
