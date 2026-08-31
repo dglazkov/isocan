@@ -40,13 +40,16 @@ describe("the map's lines", () => {
     expect(view).toMatch(/Math\.min\(\.\.\.xs\) - PAD/);
   });
 
-  it("is drawn in the world, unlike the lane's tether", () => {
+  it("is drawn in the world, so it needs no listener to stay in step", () => {
     /**
-     * The opposite call from `LaneTethers`, and the reason is worth keeping:
-     * a tether joins a chip in a PANEL to a thing on the canvas — two
-     * coordinate systems, so it must be screen space or one end scales away.
-     * Both ends of a map edge are items, so drawing in the world means they
-     * pan, zoom and scale with the nodes for free, with no listener at all.
+     * This used to be phrased against `LaneTethers`, which has been removed —
+     * it joined a chip in a PANEL to a thing on the canvas, two coordinate
+     * systems, so it had to be screen space and re-measured on every pan, and
+     * it read as a puzzle rather than a connection.
+     *
+     * The reason it was contrasted with survives it: both ends of a map edge
+     * are items, so drawing in the world means they pan, zoom and scale with
+     * the nodes for free, with nothing listening at all.
      */
     const viewport = readFileSync(
       fileURLToPath(new URL("../src/components/CanvasViewport.tsx", import.meta.url)),

@@ -10,12 +10,14 @@ import { useUiStore } from "../stores/uiStore.ts";
  * makes a link follow a drag, and it means there is no edge geometry that can
  * fall out of step with the nodes.
  *
- * **World space, inside `.world`** — and this is the opposite call from the
- * lane's tether, for a reason worth stating. A tether joins a chip in a panel
- * to a thing on the canvas: two coordinate systems, so it must be drawn in
- * screen space or one end would scale away. Both ends of a map edge are
- * items. Drawing them in the world means they pan, zoom and scale with the
- * nodes for free, and no listener is needed to keep them in step.
+ * **World space, inside `.world`**, and the reason is worth keeping now that
+ * the thing it used to be contrasted with is gone. A line whose ends live in
+ * two coordinate systems — a chip in a panel and an item on the canvas — has
+ * to be drawn in screen space and re-measured, or one end scales away; that
+ * was the lane tether, removed because it read as a puzzle rather than a
+ * connection. Both ends of a map edge are items, so drawing them in the world
+ * means they pan, zoom and scale with the nodes for free, and nothing has to
+ * listen to keep them in step.
  *
  * **Under the items**, because a node is chromeless text and a line drawn
  * over it would strike through the words.
