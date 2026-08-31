@@ -169,7 +169,7 @@ describe("where a line meets a node", () => {
     // Centre to centre would run the line visibly through the words at both
     // ends — a text node is chromeless and has nothing to hide it.
     const a = edgeAnchors(box(0, 0), box(200, 0));
-    expect(a).toEqual({ x1: 100, y1: 20, x2: 200, y2: 20 });
+    expect(a).toEqual({ x1: 100, y1: 20, x2: 200, y2: 20, axis: "x" });
   });
 
   it("meets the top and bottom when one is below the other", () => {
@@ -178,7 +178,7 @@ describe("where a line meets a node", () => {
     // what keeps the drawing sensible after somebody rearranges by hand,
     // which is the whole point of making it draggable.
     const a = edgeAnchors(box(0, 0), box(0, 300));
-    expect(a).toEqual({ x1: 50, y1: 40, x2: 50, y2: 300 });
+    expect(a).toEqual({ x1: 50, y1: 40, x2: 50, y2: 300, axis: "y" });
   });
 
   it("works in both directions", () => {
@@ -194,6 +194,26 @@ describe("where a line meets a node", () => {
     // Reachable: drag a child exactly onto its parent. A NaN here would take
     // the whole SVG layer down, not just this line.
     const a = edgeAnchors(box(0, 0), box(0, 0));
-    for (const n of Object.values(a)) expect(Number.isFinite(n)).toBe(true);
+    const { axis, ...points } = a;
+    expect(axis === "x" || axis === "y").toBe(true);
+    for (const n of Object.values(points)) expect(Number.isFinite(n)).toBe(true);
+  });
+});
+
+describe("a branch leaves the way it points", () => {
+  const box = (x: number, y: number) => ({ x, y, width: 100, height: 40 });
+
+  it("says which side it left by, so a curve can bulge the right way", () => {
+    /* The points alone cannot say it: (100,20)->(200,20) could be a line
+       leaving a right edge or crossing a gap between two stacked nodes. A
+       curve that bulges on the wrong axis enters the node side-on and reads
+       as a stray stroke rather than a branch. */
+    expect(edgeAnchors(box(0, 0), box(200, 0)).axis).toBe("x");
+    expect(edgeAnchors(box(0, 0), box(0, 300)).axis).toBe("y");
+  });
+
+  it("keeps saying it when the line runs backwards", () => {
+    expect(edgeAnchors(box(200, 0), box(0, 0)).axis).toBe("x");
+    expect(edgeAnchors(box(0, 300), box(0, 0)).axis).toBe("y");
   });
 });
