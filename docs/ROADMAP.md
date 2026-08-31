@@ -12,7 +12,7 @@ built, 11 designed, 0 blocked, and
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
-4 more are `noted` — read, absorbed, owing nothing — and
+5 more are `noted` — read, absorbed, owing nothing — and
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
@@ -61,12 +61,13 @@ and the done column should not be flattered by either.
 | research | [Where the canvas is janky](docs/research/2026-08-29-performance.md) | 2026-08-29 |  |
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 
-## Noted — read, owing nothing <sub>4</sub>
+## Noted — read, owing nothing <sub>5</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Agents on the canvas: what the field shipped in a year](docs/research/2026-08-23-agents-on-the-canvas.md) | 2026-08-30 | the category converged on MCP + a skill, which isocan has; edges deliberately declined |
 | research | [Local agents on the canvas](docs/research/2026-08-24-local-agents.md) | 2026-08-30 | the finding IS the answer: isocan hands agents a CLI, so any model that can run one joins |
+| research | [React Flow and tldraw, measured rather than remembered](docs/research/2026-08-31-react-flow-and-tldraw.md) | 2026-08-31 | measured both libraries; React Flow is a real option for the map only, tldraw collides with the oplog · see mindmap, ui-refresh |
 | research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
 | research | [What Headlong knows](docs/research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
 
