@@ -38,6 +38,14 @@ describe("the emoji a picker offers", () => {
     expect(EMOJI_GROUPS[0]!.name).toBe("Verdicts");
   });
 
+  it("carries the identity half as well as the verdict half", () => {
+    // A mark is worn on every face in the app, not just pressed onto an item.
+    const names = EMOJI_GROUPS.map((group) => group.name);
+    for (const group of ["Nature", "Food", "Travel", "Activity", "Symbols", "Flags"]) {
+      expect(names, `no ${group} group`).toContain(group);
+    }
+  });
+
   it("gives every mark at least one word that is not its own name", () => {
     for (const entry of ALL_EMOJI) {
       expect(entry.keywords.length, `${entry.emoji} has no keywords`).toBeGreaterThan(0);
@@ -89,6 +97,41 @@ describe("finding a mark by typing", () => {
 
   it("comes back empty on a miss, and does not throw", () => {
     expect(searchEmoji("zzzznotathing")).toEqual([]);
+  });
+
+  it("prefers a word matched whole over one merely started", () => {
+    // Reported the other way round: the picker had no flags at all, and when
+    // it got them "uk" answered 🇺🇦 — Ukraine's name simply begins with the
+    // two letters somebody meant as the whole name of a country. Exactness
+    // has to outrank prefix-ness or every short query lands on a near-miss.
+    expect(top("uk")).toBe("🇬🇧");
+    expect(top("japan")).toBe("🇯🇵");
+    expect(top("plane")).toBe("✈️");
+  });
+
+  it("finds a mark whose name is a proper noun", () => {
+    // Every curated name was lowercase until the flags arrived, so search
+    // compared a lowercased query against a capital "U" and matched nothing.
+    // "united kingdom" returned an empty panel for the one entry named it.
+    expect(top("united kingdom")).toBe("🇬🇧");
+    expect(top("new zealand")).toBe("🇳🇿");
+  });
+
+  it("finds a country by its two-letter code as well as its name", () => {
+    // Somebody reaching for their own flag types either one.
+    expect(top("gb")).toBe("🇬🇧");
+    expect(top("nz")).toBe("🇳🇿");
+    expect(top("br")).toBe("🇧🇷");
+  });
+
+  it("reaches the marks that are about who you are, not what you think", () => {
+    // The set was eight groups of verdicts, which is the reaction question.
+    // A mark is also a face, and "I wanted an anchor, and a UK flag" is the
+    // other question — neither is a verdict on anything.
+    expect(top("anchor")).toBe("⚓");
+    expect(top("pizza")).toBe("🍕");
+    expect(top("guitar")).toBe("🎸");
+    expect(top("mountain")).toBe("🏔️");
   });
 
   it("honours the limit", () => {
