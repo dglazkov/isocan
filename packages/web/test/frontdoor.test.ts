@@ -162,8 +162,24 @@ describe("the front door", () => {
     expect(html).not.toContain("the app, for");
   });
 
-  it("meets a stranger on a canvas with the door, as it always has", () => {
+  /**
+   * Since #88 the door on a canvas address stands behind ONE question — "may
+   * this badge only look?" — asked of the home before any name is asked of
+   * the person, because a viewer has nothing a name would attach to. This
+   * render has no effects and no network, so what it proves is the beat a
+   * stranger actually sees first: the gate's own sentence, and neither the
+   * name prompt nor the front page. The gate falling back to the door on an
+   * edit answer is `ViewerGate`'s effect, which needs a browser to run.
+   */
+  it("meets a stranger on a canvas with the gate — the door's question, before the name", () => {
     const html = meet("/p/prj_acme", null);
+    expect(html).toContain("Letting you in…");
+    expect(html).not.toContain("Pick a name");
+    expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+  });
+
+  it("still meets a stranger at a non-canvas address with the door itself", () => {
+    const html = meet("/nothing/at/all", null);
     expect(html).toContain("Pick a name");
     expect(html).not.toContain(SKILL_INSTALL_COMMAND);
   });

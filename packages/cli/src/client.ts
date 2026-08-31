@@ -10,6 +10,7 @@ import type {
   ActorClaimOp,
   BadgesResponse,
   BlobUploadResponse,
+  Capability,
   CanvasSnapshotResponse,
   CreateSessionResponse,
   GcReport,
@@ -480,8 +481,16 @@ export class DaemonClient {
     return this.request("GET", grantsRoute(canvasId));
   }
 
-  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
-    return this.request("POST", grantsRoute(canvasId), { subject });
+  createGrant(
+    canvasId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+  ): Promise<GrantResponse> {
+    return this.request("POST", grantsRoute(canvasId), {
+      subject,
+      // Sent only when it narrows, so an older home never meets the field.
+      ...(capability === "view" ? { capability } : {}),
+    });
   }
 
   /** No body, deliberately: a DELETE that declares `application/json` and

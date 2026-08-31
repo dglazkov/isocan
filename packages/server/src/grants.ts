@@ -1,12 +1,14 @@
 import {
   attestationSatisfying,
+  capabilityOf,
   GRANTED_BY_HOME,
   isLive,
   LINK,
   newId,
   NOT_ADMITTED,
+  VIEW_ONLY,
 } from "@isocan/core";
-import type { Grant } from "@isocan/core";
+import type { Capability, Grant } from "@isocan/core";
 import type { BadgeRecord, Desk } from "./desk.ts";
 
 /**
@@ -75,6 +77,13 @@ export class NotAdmittedError extends Error {
  * Which is the design's whole sentence about not expelling the people who
  * were invited by name, arriving as a consequence of two lines rather than as
  * a special case.
+ *
+ * **Since #88, capability outranks age.** An edit grant beats a view grant
+ * however young it is, because "which row let you in" now also decides what
+ * you may do — a person invited by name to edit, entering a canvas whose link
+ * can only view, must be rooted at her invitation and not at the link that
+ * would demote her. Among grants of one capability the old ordering stands
+ * unchanged, which is every canvas that predates the field.
  */
 export async function admittingGrant(
   desk: Desk,
@@ -82,7 +91,10 @@ export async function admittingGrant(
   badge: BadgeRecord,
 ): Promise<Grant | null> {
   const grants = await desk.grantsFor(canvasId);
-  const live = grants.filter(isLive).sort((a, b) => a.at.localeCompare(b.at));
+  const rank = (grant: Grant) => (capabilityOf(grant) === "edit" ? 0 : 1);
+  const live = grants
+    .filter(isLive)
+    .sort((a, b) => rank(a) - rank(b) || a.at.localeCompare(b.at));
   for (const grant of live) {
     if (grant.subject === LINK) return grant;
     if (attestationSatisfying(grant.subject, badge.attestations ?? [])) return grant;
@@ -93,6 +105,71 @@ export async function admittingGrant(
     // door offers the attesters".
   }
   return null;
+}
+
+/**
+ * A write met a view admission (#88). 403 with its own code, for
+ * `NotAdmittedError`'s reason moved one notch: this caller is badged AND
+ * admitted, so neither "go to the door" nor "ask for the link" helps — the
+ * remedy is to be shared with for editing, and only a distinguishable refusal
+ * lets a client say that.
+ */
+export class ViewOnlyError extends Error {
+  readonly code = VIEW_ONLY;
+  constructor(readonly canvasId: string) {
+    super(
+      `you may look at ${canvasId} but not change it — ask whoever shared it to ` +
+        "share it for editing",
+    );
+    this.name = "ViewOnlyError";
+  }
+}
+
+/**
+ * What this badge's admission lets it do HERE, or null when it holds none.
+ *
+ * Read off the admission and never off the grants: the door test
+ * short-circuits on `canvasId ∈ admissions`, so the admission is the record
+ * that is actually consulted per request — which is exactly why the door
+ * copies the capability onto it. Absent means edit, as everywhere.
+ */
+export function capabilityIn(badge: BadgeRecord, canvasId: string): Capability | null {
+  const admission = badge.admissions.find((a) => a.canvasId === canvasId);
+  if (!admission) return null;
+  return admission.capability ?? "edit";
+}
+
+/**
+ * The held capability, RE-ASKED when it is `view` — the upgrade path.
+ *
+ * An admitted badge is answered by its admission and the grants are never
+ * consulted again, which is right for an editor (nothing above edit exists)
+ * and a trap for a viewer: prove your email after entering by a view link and
+ * the invitation that names you would never take effect, because the door
+ * stopped asking. So a view admission re-runs the door test on every ask, and
+ * an edit grant that now admits re-roots the badge there — the same motion
+ * the sweep makes, in the other direction. Costs one desk read per request,
+ * for viewers only; editors stay on the short-circuit.
+ *
+ * The in-memory record is updated too, so the rest of THIS request sees what
+ * the desk now says.
+ */
+export async function heldCapability(
+  desk: Desk,
+  canvasId: string,
+  badge: BadgeRecord,
+): Promise<Capability | null> {
+  const held = capabilityIn(badge, canvasId);
+  if (held !== "view") return held;
+  const grant = await admittingGrant(desk, canvasId, badge);
+  if (!grant || capabilityOf(grant) !== "edit") return held;
+  await desk.reroot(badge.badgeId, canvasId, { root: "grant", grantId: grant.id }, "edit");
+  badge.admissions = badge.admissions.map((a) =>
+    a.canvasId === canvasId
+      ? { canvasId: a.canvasId, at: a.at, provenance: { root: "grant", grantId: grant.id } }
+      : a,
+  );
+  return "edit";
 }
 
 /**

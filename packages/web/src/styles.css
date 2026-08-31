@@ -474,6 +474,9 @@ img { height: auto; }
 }
 .share-switch.on .share-knob { transform: translateX(12px); }
 .share-link-text { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+/* The link's capability, indented under the toggle it qualifies: it is a
+   property of the link, not a fourth sharing control. */
+.share-link-mode { display: flex; gap: 6px; padding-left: 8px; }
 .share-link-note { color: var(--ink-muted); font-size: 11.5px; line-height: 1.35; }
 /* The "who" field's absence, said out loud. Phase 9 replaces this line with
    the control it describes; until then a sentence is the honest shape. */

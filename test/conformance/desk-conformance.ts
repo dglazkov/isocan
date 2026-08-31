@@ -169,6 +169,31 @@ export function deskConformance(
     );
 
     test(
+      "capability rides the admission, and a re-root rewrites it (#88)",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        // Stored only when it narrows: `view` is written, and an admission
+        // written without one reads as edit (an absent field, not "edit").
+        await desk.admit("bdg_1", "prj_a", { root: "grant", grantId: "gnt_v" }, "view");
+        let badge = await desk.badge("bdg_1");
+        expect(badge!.admissions[0]!.capability).toBe("view");
+
+        // A re-root REWRITES the capability with the provenance — the new
+        // reason says what it admits to, entirely. Rewriting with none must
+        // drop the old `view`, or an upgraded viewer stays read-only.
+        await desk.reroot("bdg_1", "prj_a", { root: "grant", grantId: "gnt_e" }, "edit");
+        badge = await desk.badge("bdg_1");
+        expect(badge!.admissions[0]!.provenance).toEqual({ root: "grant", grantId: "gnt_e" });
+        expect(badge!.admissions[0]!.capability).toBeUndefined();
+
+        // And back down, for the other direction of the link's toggle.
+        await desk.reroot("bdg_1", "prj_a", { root: "grant", grantId: "gnt_v2" }, "view");
+        badge = await desk.badge("bdg_1");
+        expect(badge!.admissions[0]!.capability).toBe("view");
+      }),
+    );
+
+    test(
       "grants: written per canvas, read back by canvas, and nothing else's",
       withDesk(async ({ desk }) => {
         // A canvas nobody has granted anything admits NOBODY. This is the

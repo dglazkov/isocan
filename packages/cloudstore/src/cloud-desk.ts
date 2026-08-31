@@ -1,5 +1,5 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Attestation, Grant } from "@isocan/core";
+import type { ActorClaim, Attestation, Capability, Grant } from "@isocan/core";
 import { SHELF, upsertAttestation } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
@@ -192,10 +192,22 @@ export class CloudDesk implements Desk {
     return rows;
   }
 
-  async admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+  async admit(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void> {
     await this.mutate(badgeId, (badge) => {
       if (badge.admissions.some((a) => a.canvasId === canvasId)) return null;
-      const admission: Admission = { canvasId, provenance, at: new Date().toISOString() };
+      // Spread-in only when it narrows: absent means edit everywhere, and
+      // Firestore refuses an explicit `undefined` besides.
+      const admission: Admission = {
+        canvasId,
+        provenance,
+        at: new Date().toISOString(),
+        ...(capability === "view" ? { capability } : {}),
+      };
       return { ...badge, admissions: [...badge.admissions, admission] };
     });
   }
@@ -221,13 +233,28 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => toRecord(doc.data()));
   }
 
-  async reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+  async reroot(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void> {
     await this.mutate(badgeId, (badge) => {
       if (!badge.admissions.some((a) => a.canvasId === canvasId)) return null;
       return {
         ...badge,
         admissions: badge.admissions.map((a) =>
-          a.canvasId === canvasId ? { ...a, provenance } : a,
+          a.canvasId === canvasId
+            ? // Rebuilt, not spread: the new root says what it admits to, and a
+              // stale `capability` surviving an upgrade would keep a re-rooted
+              // editor read-only.
+              {
+                canvasId: a.canvasId,
+                at: a.at,
+                provenance,
+                ...(capability === "view" ? { capability } : {}),
+              }
+            : a,
         ),
       };
     });

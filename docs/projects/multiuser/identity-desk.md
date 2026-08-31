@@ -522,10 +522,24 @@ surfaces do instead is say so before the click.
 **Since decided elsewhere:** which attesters ship first — the
 [architecture](../../architecture.md) borrows Firebase Auth as the bench:
 magic-link email (the floor — it borrows only an inbox), Google, and
-GitHub. **Not yet decided here:** whether grants may carry roles
-(viewer/editor) — the journey never played a read-only member, so that
-waits for a scene that forces it; and the registry-scope question (10),
-which admissions narrow but do not settle.
+GitHub. **The roles question, decided (#88):** the scene that forced it was
+a presentation (#87) whose viewers must not walk in and start moving
+things. The answer is the minimal one — a grant may carry a `capability`,
+`edit` or `view`, absent meaning `edit` everywhere so every row and every
+admission from before the field keeps its meaning. The door copies the
+capability onto the admission it writes (the door test short-circuits on
+admissions, so the copy is what gets enforced); the sweep re-roots at the
+new root's capability, which is how replacing the edit link with a view
+link demotes the people inside instead of expelling them; a view admission
+re-asks the door per request, so proving an email after entering by a view
+link lets a named invitation take effect. Enforcement is server-side at the
+op chokepoint and the one canvas-route hook — a client-side-only "read
+only" would be a habit, not a rule. What `view` buys the journey is the
+viewer face: no name asked (nothing a name would attach to), the deck full
+screen, no exit into editing chrome. Roles beyond two words — per-email
+role pickers, owner, admin — remain refused until a scene forces them.
+**Still not decided here:** the registry-scope question (10), which
+admissions narrow but do not settle.
 
 ## Mechanism 5, designed: actor binding
 

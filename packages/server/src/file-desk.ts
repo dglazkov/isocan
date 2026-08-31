@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import type { ActorClaim, Attestation, Grant } from "@isocan/core";
+import type { ActorClaim, Attestation, Capability, Grant } from "@isocan/core";
 import { SHELF, upsertAttestation } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
@@ -219,10 +219,22 @@ export class FileDesk implements Desk {
     return rows;
   }
 
-  async admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+  async admit(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void> {
     const badge = this.live(badgeId);
     if (!badge || badge.admissions.some((a) => a.canvasId === canvasId)) return;
-    const admission: Admission = { canvasId, provenance, at: new Date().toISOString() };
+    const admission: Admission = {
+      canvasId,
+      provenance,
+      at: new Date().toISOString(),
+      // Stored only when it narrows: absent has meant "edit" since before the
+      // field existed, and both backings keep that reading.
+      ...(capability === "view" ? { capability } : {}),
+    };
     badge.admissions = [...badge.admissions, admission];
     await this.enqueue(() => this.writeSnapshot());
   }
@@ -238,13 +250,28 @@ export class FileDesk implements Desk {
       .map((badge) => ({ ...badge }));
   }
 
-  async reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void> {
+  async reroot(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void> {
     await this.enqueue(async () => {
       const badge = this.live(badgeId);
       const admission = badge?.admissions.find((a) => a.canvasId === canvasId);
       if (!badge || !admission) return;
       badge.admissions = badge.admissions.map((a) =>
-        a.canvasId === canvasId ? { ...a, provenance } : a,
+        a.canvasId === canvasId
+          ? // Rebuilt rather than spread, so a stale `capability` from the old
+            // root cannot survive an upgrade — the new reason says what it
+            // admits to, entirely.
+            {
+              canvasId: a.canvasId,
+              at: a.at,
+              provenance,
+              ...(capability === "view" ? { capability } : {}),
+            }
+          : a,
       );
       await this.writeSnapshot();
     });

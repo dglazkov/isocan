@@ -7,6 +7,7 @@ import type {
   ActorColors,
   BadgesResponse,
   BlobUploadResponse,
+  Capability,
   CanvasSnapshotResponse,
   DirClaim,
   GcReport,
@@ -739,8 +740,16 @@ export function listGrants(canvasId: string): Promise<GrantsResponse> {
  * has borrowed, and a home that has borrowed none refuses with `no-attester`
  * — the dialog shows that refusal rather than hiding it behind a disabled
  * control. */
-export function createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
-  return request("POST", grantsRoute(canvasId), { subject });
+export function createGrant(
+  canvasId: string,
+  subject: GrantSubject,
+  capability?: Capability,
+): Promise<GrantResponse> {
+  return request("POST", grantsRoute(canvasId), {
+    subject,
+    // Sent only when it narrows (#88), so an older home never meets the field.
+    ...(capability === "view" ? { capability } : {}),
+  });
 }
 
 /**

@@ -43,6 +43,11 @@ export type ServerMessage =
       /** Current names (actor id → name), so a rename reaches the words
        * somebody wrote before it. Absent entries keep the stamped name. */
       names: ActorNames;
+      /** Present only when this connection's admission is view-only (#88), so
+       * the client can wear the viewer face instead of discovering the fact
+       * as a refusal per gesture. Absent means edit — every hello from before
+       * the field, and every editing admission since. */
+      capability?: "view";
     }
   /**
    * The other half of the connect handshake: "you already have through
@@ -70,6 +75,8 @@ export type ServerMessage =
       lastSeq: number;
       colors: ActorColors;
       names: ActorNames;
+      /** As on `snapshot`: present only for a view-only admission (#88). */
+      capability?: "view";
     }
   | { type: "op-applied"; entry: LogEntry }
   | { type: "canvas-deleted" }
@@ -723,6 +730,10 @@ export interface CanvasSnapshotResponse {
   /** Current names (actor id → name); absent entries keep the name that
    * was stamped on the comment or op being rendered. */
   names: ActorNames;
+  /** Present only when the CALLER's admission is view-only (#88) — the one
+   * fact about the reader that rides on the read, so a client can wear the
+   * viewer face before its first refused write. Absent means edit. */
+  capability?: "view";
 }
 
 /**

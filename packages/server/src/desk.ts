@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, Grant, Pass } from "@isocan/core";
+import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, Pass } from "@isocan/core";
 
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
@@ -115,6 +115,18 @@ export interface Admission {
   canvasId: string;
   provenance: Provenance;
   at: string;
+  /**
+   * What this admission lets the holder DO (#88) — copied from the admitting
+   * grant at the door, because the door test short-circuits on `canvasId ∈
+   * admissions` and never consults the grant again: a capability that lived
+   * only on the grant row would be read once and then never enforced.
+   *
+   * Written only when it NARROWS (`view`); absent is `edit`, which is what
+   * every admission written before the field meant. `created` and `pass`
+   * roots never narrow — making a canvas is editing it, and a pass endows
+   * what its minter had.
+   */
+  capability?: Capability;
 }
 
 /**
@@ -292,8 +304,14 @@ export interface Desk {
 
   /** Record that this badge has been in this canvas. No longer policy-free:
    * from phase 7 the door decides whether this is called at all, and the
-   * provenance it passes is what phase 9's sweep grips. */
-  admit(badgeId: string, canvasId: string, provenance: Provenance): Promise<void>;
+   * provenance it passes is what phase 9's sweep grips. `capability` is
+   * stored only when it narrows (`view`, #88); omitted means edit. */
+  admit(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void>;
 
   // ---- revocation's grip: the sweep, and kill-a-badge (phase 9) ----
 
@@ -325,7 +343,17 @@ export interface Desk {
    * in a browser and an agent at a terminal revoking two grants at once) must
    * not resurrect an admission one of them has just dropped.
    */
-  reroot(badgeId: string, canvasId: string, provenance: Provenance): Promise<void>;
+  /** The capability is REWRITTEN with the provenance, not carried over: a
+   * re-root means "here for a new reason", and the new reason's grant says
+   * what it admits to — a viewer re-rooted onto an edit grant is an editor
+   * now, and the reverse downgrade is how "the link can only view now"
+   * reaches the people already inside. */
+  reroot(
+    badgeId: string,
+    canvasId: string,
+    provenance: Provenance,
+    capability?: Capability,
+  ): Promise<void>;
 
   /** Drop one admission — the expulsion itself. Idempotent: expelling a badge
    * that is not here is what the second of two racing sweeps does, and it is

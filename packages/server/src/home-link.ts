@@ -7,6 +7,7 @@ import type {
   AttestResponse,
   BadgesResponse,
   BlobUploadResponse,
+  Capability,
   CanvasLinkState,
   FreeNameResponse,
   GrantResponse,
@@ -218,7 +219,11 @@ export interface HomeConnection {
    * for the world. These three go up for the same reason writes do.
    */
   grants(canvasId: string): Promise<GrantsResponse>;
-  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse>;
+  createGrant(
+    canvasId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+  ): Promise<GrantResponse>;
   revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse>;
   /**
    * Your surfaces at the HOME, and ending one there — forwarded for the grant
@@ -1534,8 +1539,17 @@ export class HomeLink implements HomeConnection {
     return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
   }
 
-  createGrant(canvasId: string, subject: GrantSubject): Promise<GrantResponse> {
-    return this.api<GrantResponse>("POST", grantsRoute(canvasId), { subject });
+  createGrant(
+    canvasId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+  ): Promise<GrantResponse> {
+    return this.api<GrantResponse>("POST", grantsRoute(canvasId), {
+      subject,
+      // Forwarded only when it narrows, so an older home never sees a field
+      // it would not know how to read.
+      ...(capability === "view" ? { capability } : {}),
+    });
   }
 
   revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
