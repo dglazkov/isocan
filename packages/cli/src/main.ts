@@ -7856,7 +7856,7 @@ rcCommand.action(
     const enrolledCount = Object.keys(opening).length;
     console.log(
       enrolledCount === 0
-        ? "rc: nobody is enrolled yet — Add an agent in the tray at that address, or `isocan rc add <name>` here"
+        ? "rc: nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart"
         : `rc: ${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
     );
 
