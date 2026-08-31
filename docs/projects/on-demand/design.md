@@ -188,6 +188,13 @@ closed 2026-08-30: it lives with the daemon the park polls — the home
 itself when the canvas is local, the replica when it is not — see the
 door record in phases.md and `server/src/park.ts`.)
 
+*Built, phase 2 (2026-08-30): the home half is canvas state, written by
+`agent.enroll` / `agent.withdraw` — in canvas state and not a side table
+because mention candidates derive from canvas state, so any other home
+would leave an enrolled-but-never-spoken agent unmentionable and
+unsummonable. The rc half is `~/.isocan/rc-agents.json`. Phases.md's
+phase 2 doors carry the full argument.*
+
 **"Answerable" is a derivation, not a field.** Neither half of the
 record stores it, because a record cannot know its rc died. The
 home says an agent is answerable when the durable enrolment exists AND a

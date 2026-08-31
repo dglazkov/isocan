@@ -226,6 +226,8 @@ import {
   writeIdentity,
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
+import { harnessSessions } from "./harness.ts";
+import { removeRcAgent, upsertRcAgent } from "./rc.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -6906,6 +6908,10 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
       return op.threadId
         ? `${who} made ${op.threadId} the main thread`
         : `${who} cleared the main thread`;
+    case "agent.enroll":
+      return `${who} enrolled ${op.agent.name} — answerable on this canvas`;
+    case "agent.withdraw":
+      return `${who} dismissed ${op.actorId} — no longer answering here`;
     default: {
       const target =
         (op as { itemId?: string }).itemId ?? (op as { threadId?: string }).threadId ?? "";
@@ -7441,6 +7447,249 @@ command or reply. No \`session start\` needed after a wake.`,
       }
     }),
   );
+
+/**
+ * **Standing agents** (agents-on-demand phase 2). Two spellings of one
+ * machinery, and the split IS the vocabulary (decided 2026-08-30): `isocan
+ * rc` is what a person types, `isocan agent` is what an agent types — same
+ * verbs, different words, so who may do what is legible in what they type.
+ *
+ * The agent's verb is the containment: `isocan agent add` takes no --canvas
+ * and no --dir, both come from where the agent already stands, so an agent
+ * can only ever add an agent beside itself. Where the person's word for an
+ * add is checked (decided 2026-08-30): in the open — every add is an op in
+ * the log with the adding agent as author, narrated live by a running rc,
+ * and withdrawal is one gesture away; a mechanical gate waits for phase 4,
+ * where a summoned turn gives it something real to anchor to.
+ */
+
+/** Both add verbs land here; `contained` is the agent spelling's rule. */
+async function enrolAgent(
+  cmd: Command,
+  name: string,
+  opts: { dir?: string; harness?: string; rules?: string },
+  contained: boolean,
+): Promise<void> {
+  const ctx = await ctxOf(cmd);
+  if (contained && ctx.canvasRef !== undefined) {
+    throw new Error(
+      "`isocan agent add` enrolls beside itself — no --canvas. Pointing anywhere is a person's gesture: `isocan rc add`.",
+    );
+  }
+  const p = await resolveCanvas(ctx);
+  const cwd = path.resolve(opts.dir ?? process.cwd());
+  // The rc half's harness: a flag (rc add), else the enrolling caller's own
+  // — an agent enrolls an agent like itself — else null, "not yet said".
+  const harness = opts.harness ?? ctx.harness ?? null;
+  const rules: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : undefined;
+  // The actor is minted through the same claim everything else uses, keyed
+  // per enrolment on this badge — so re-enrolling Sian after a withdrawal
+  // hands the same Sian back, history intact, and a worn name is refused by
+  // the registry rather than silently doubled. Phase 3 rebinds the actor to
+  // its adapter-born session key when a session first exists.
+  const claimed = await ctx.client.claimActor({
+    type: "actor.claim",
+    sessionKey: `agent:${p.id}:${name}`,
+    name,
+  });
+  const agent = claimed.envelope.actor;
+  await ctx.client.sendOp(p.id, ctx.actor, {
+    type: "agent.enroll",
+    agent,
+    ...(rules !== undefined ? { rules } : {}),
+  });
+  await upsertRcAgent(ctx.home, {
+    canvasId: p.id,
+    actorId: agent.id,
+    name: agent.name,
+    harness,
+    cwd,
+    sessionId: null,
+  });
+  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id });
+  console.log(
+    `enrolled ${agent.name} — answerable on "${p.title}". A running \`isocan rc\` picks this up without a restart; nothing runs until something arrives.`,
+  );
+}
+
+/** Both remove verbs land here — the standing goes, the history stays. */
+async function withdrawAgent(cmd: Command, name: string, contained: boolean): Promise<void> {
+  const ctx = await ctxOf(cmd);
+  if (contained && ctx.canvasRef !== undefined) {
+    throw new Error(
+      "`isocan agent remove` withdraws beside itself — no --canvas. Pointing anywhere is a person's gesture: `isocan rc remove`.",
+    );
+  }
+  const p = await resolveCanvas(ctx);
+  const snapshot = await ctx.client.snapshot(p.id);
+  const agents = snapshot.canvas.agents ?? {};
+  const row = Object.values(agents).find(
+    (a) => a.actor.id === name || a.actor.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!row) {
+    const standing = Object.values(agents).map((a) => a.actor.name);
+    throw new Error(
+      `no standing agent "${name}" on "${p.title}"` +
+        (standing.length > 0 ? ` — standing here: ${standing.join(", ")}` : " — nobody is enrolled here"),
+    );
+  }
+  await ctx.client.sendOp(p.id, ctx.actor, { type: "agent.withdraw", actorId: row.actor.id });
+  await removeRcAgent(ctx.home, p.id, row.actor.id);
+  if (ctx.json) return printJson({ withdrawn: row.actor, canvasId: p.id });
+  console.log(
+    `dismissed ${row.actor.name} — the standing is withdrawn, the history untouched.`,
+  );
+}
+
+const agentCommand = program
+  .command("agent")
+  .description("Standing agents, spoken by an agent — add or dismiss one beside yourself")
+  .addHelpText(
+    "after",
+    `
+The agent spelling of \`isocan rc\`'s verbs, and the syntax is the
+containment: no --canvas, no --dir — the agent you add lives on THIS
+directory's canvas, beside you. Add one when a person asks you to; the add
+is an op everyone can read, and a running \`isocan rc\` narrates it.`,
+  );
+
+agentCommand
+  .command("add <name>")
+  .description("Enrol an agent beside yourself — on this canvas, in this directory")
+  .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
+  .action(
+    run(async (name: string, opts: { rules?: string }, cmd: Command) =>
+      enrolAgent(cmd, name, opts, true),
+    ),
+  );
+
+agentCommand
+  .command("remove <name>")
+  .description("Withdraw an agent's standing here — on a person's word")
+  .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, true)));
+
+const rcCommand = program
+  .command("rc")
+  .description("Answer for this canvas's enrolled agents — a person's long-running command")
+  .addHelpText(
+    "after",
+    `
+Bare \`isocan rc\` takes no arguments: the directory's binding supplies the
+canvas, the enrolment records supply the roster. Starting it spawns nothing
+— it enables. It narrates events as they happen (an enrolment, a
+withdrawal, a summons); the roster is read where rosters are read,
+\`isocan who\`. Ctrl-C stops answering for everyone; the enrolments survive
+to its next start.
+
+An agent never starts an rc — inside a harness session this refuses, and
+the agent's spelling of the verbs is \`isocan agent\`.`,
+  );
+
+rcCommand
+  .command("add <name>")
+  .description("Enrol an agent — the person's point-anywhere form")
+  .option("--dir <path>", "the agent's working directory (default: here)")
+  .option("--harness <name>", "how its sessions start (default: yours, else unsaid)")
+  .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
+  .action(
+    run(async (name: string, opts: { dir?: string; harness?: string; rules?: string }, cmd: Command) =>
+      enrolAgent(cmd, name, opts, false),
+    ),
+  );
+
+rcCommand
+  .command("remove <name>")
+  .description("Withdraw an agent's standing on this canvas")
+  .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, false)));
+
+rcCommand.action(
+  run(async (_opts: unknown, cmd: Command) => {
+    const ctx = await ctxOf(cmd);
+    /**
+     * The user/agent divide, enforced (the naming door's residue, decided
+     * 2026-08-30): an rc inside a harness session would block the tool call
+     * until the harness kills it, while standing up a parent-of-agents no
+     * person started. The divide lives in the vocabulary; this is the
+     * vocabulary holding.
+     */
+    const sessions = await harnessSessions(ctx.home);
+    if (sessions.length > 0) {
+      throw new Error(
+        "`isocan rc` is a person's verb, and this is a harness session — a bare rc here would block " +
+          "this turn until the harness kills it. Your spelling of its verbs is `isocan agent`.",
+      );
+    }
+    const p = await resolveCanvas(ctx);
+    const rosterOf = async () => {
+      const snapshot = await ctx.client.snapshot(p.id);
+      return snapshot.canvas.agents ?? {};
+    };
+    // Names for the withdraw narration: state drops the row before the op is
+    // read here, so remember every name this process has seen.
+    const known = new Map<string, string>();
+    for (const [id, row] of Object.entries(await rosterOf())) known.set(id, row.actor.name);
+    // Quiet at start, the way `claude rc` is: one line saying it is on, then
+    // events as they happen. No roster listing, nothing spawned.
+    console.log(`rc: answering on "${p.title}" — quiet until something arrives (Ctrl-C stops answering)`);
+
+    let cursors: Record<string, number> = {
+      [p.id]: (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0,
+    };
+    let offlineSince: number | null = null;
+    for (;;) {
+      let batch;
+      try {
+        batch = await ctx.client.watchLog({ cursors, waitMs: 30_000, only: [p.id] });
+        if (offlineSince !== null) {
+          console.log(`rc: daemon back after ${Math.round((Date.now() - offlineSince) / 1000)}s — nothing missed`);
+          offlineSince = null;
+        }
+      } catch (err) {
+        // The same pause-not-end rule the park earned: a daemon restart
+        // severs the poll under a process that did nothing wrong.
+        if (err instanceof ApiError) throw err;
+        if (offlineSince === null) {
+          offlineSince = Date.now();
+          console.log("rc: the daemon stopped answering — retrying, and starting it if it is gone");
+        }
+        await ctx.client.ensureDaemon().catch(() => {});
+        await new Promise((r) => setTimeout(r, 400));
+        continue;
+      }
+      cursors = batch.cursors;
+      if (batch.entries.length === 0) continue;
+      const snapshot = await ctx.client.snapshot(p.id);
+      const roster = snapshot.canvas.agents ?? {};
+      for (const [id, row] of Object.entries(roster)) known.set(id, row.actor.name);
+      for (const entry of batch.entries) {
+        const op = entry.envelope.op;
+        const by = entry.envelope.actor;
+        if (op.type === "agent.enroll") {
+          known.set(op.agent.id, op.agent.name);
+          console.log(`rc: ${by.name} enrolled ${op.agent.name} — answerable here`);
+          continue;
+        }
+        if (op.type === "agent.withdraw") {
+          console.log(`rc: ${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`);
+          continue;
+        }
+        if (op.type !== "thread.create" && op.type !== "thread.reply") continue;
+        const thread = snapshot.canvas.threads[op.threadId];
+        for (const row of Object.values(roster)) {
+          if (by.id === row.actor.id) continue; // an agent's own words never summon it
+          const reason = reasonFor(op.comment, thread, row.actor.id, [
+            { id: row.actor.id, name: row.actor.name },
+          ]);
+          if (!reason) continue;
+          // Recognized, narrated, never answered: dispatch is phase 4's.
+          console.log(
+            `rc: summons for ${row.actor.name} (${reason}, from ${by.name}) — no way to start a session yet`,
+          );
+        }
+      }
+    }
+  }),
+);
 
 program
   .command("tail")

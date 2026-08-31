@@ -258,6 +258,42 @@ export type Operation =
       // internal: inverse of thread.delete
       type: "thread.restore";
       thread: CommentThread;
+    }
+  // ---- standing agents (agents-on-demand phase 2) ----
+  //
+  // An agent is a durable record; a session is an instance. These two ops are
+  // the record's home half — WHICH agents answer on THIS canvas — living in
+  // canvas state because everything that must see it already reads canvas
+  // state: `@Sian` resolves through `mentions.ts`, the web tray reads the
+  // snapshot, a parked `isocan rc` hears the op land, and the record survives
+  // anything because the oplog does. The rc half (harness, cwd, sessionId) is
+  // a machine fact and never appears in an op. NOT undoable, like
+  // `actor.claim`: standing is granted and withdrawn deliberately, never by a
+  // casual ⌘Z — and withdrawal removes the standing, not the history, which
+  // is the oplog's nature.
+  | {
+      /**
+       * Grant an actor standing to answer on this canvas. Carries the whole
+       * `Actor` (not just the id) so an enrolled-but-never-spoken agent is
+       * visible to every derivation that walks canvas state for actors —
+       * mention candidates above all. Re-enrolling an enrolled actor updates
+       * the record in place (the rules change; the standing was already
+       * there).
+       */
+      type: "agent.enroll";
+      agent: Actor;
+      /**
+       * The routing half, stored EXACTLY as the gesture hands it over and
+       * interpreted by nobody yet — what a rule may say is phase 4's door,
+       * decided where dispatch first reads one.
+       */
+      rules?: unknown;
+    }
+  | {
+      /** Take the standing back. The enrolment row goes; the log keeps the
+       * whole story, which is journey 8's "history untouched". */
+      type: "agent.withdraw";
+      actorId: string;
     };
 
 export type OperationType = Operation["type"];

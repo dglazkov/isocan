@@ -35,6 +35,13 @@ export function invertOperation(
     case "actor.setColor":
       return null; // home-scoped and never undoable; never reaches a canvas
 
+    case "agent.enroll":
+    case "agent.withdraw":
+      // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
+      // — an undo that silently re-armed (or silently silenced) an agent
+      // would be exactly the invisible standing change journey 8 refuses.
+      return null;
+
     case "project.update":
       return { type: "project.update", patch: invertMetaPatch(project, op.patch) };
 

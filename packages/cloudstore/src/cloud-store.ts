@@ -94,6 +94,10 @@ interface SnapshotObject {
   items: CanvasState["canvas"]["items"];
   threads: CanvasState["canvas"]["threads"];
   trash: CanvasState["canvas"]["trash"];
+  /** Standing agents (agents-on-demand phase 2). Absent in snapshots written
+   * before the field — those predate any `agent.enroll` op, so absent means
+   * empty, never lost. */
+  agents?: CanvasState["canvas"]["agents"];
 }
 
 /**
@@ -228,7 +232,12 @@ export class CloudStore implements Store {
     let state: CanvasState = {
       project: record,
       canvas: snapshot
-        ? { items: snapshot.items, threads: snapshot.threads, trash: snapshot.trash }
+        ? {
+            items: snapshot.items,
+            threads: snapshot.threads,
+            trash: snapshot.trash,
+            agents: snapshot.agents ?? {},
+          }
         : { ...emptyCanvas(), trash: [] },
     };
     let lastSeq = snapshot?.lastSeq ?? 0;
@@ -675,6 +684,7 @@ export class CloudStore implements Store {
       items: state.canvas.items,
       threads: state.canvas.threads,
       trash: state.canvas.trash,
+      agents: state.canvas.agents ?? {},
     };
     await this.objects.put(snapshotKey(id), Buffer.from(JSON.stringify(snapshot), "utf8"), {
       contentType: "application/json",

@@ -142,10 +142,29 @@ export interface TrashEntry {
   deletedBy: Actor;
 }
 
+/**
+ * An agent with standing to answer on this canvas — the enrolment record's
+ * home half (agents-on-demand phase 2). A record, not a process: the row
+ * exists whether or not anything runs, and "answerable" is a DERIVATION
+ * (enrolment + a live `rc` claiming it), never a field here — a record
+ * cannot know its rc died. The rc half (harness, cwd, sessionId) is a
+ * machine fact and lives with the rc's machine, never in canvas state.
+ */
+export interface EnrolledAgent {
+  /** The whole actor, so an enrolled-but-never-spoken agent reaches every
+   * derivation that walks canvas state — mention candidates above all. */
+  actor: Actor;
+  /** Opaque until phase 4 defines the vocabulary; stored as handed over. */
+  rules?: unknown;
+}
+
 export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
   trash: TrashEntry[];
+  /** Standing agents by actor id. Optional because snapshots older than the
+   * field exist on disk; read it through `?? {}`. */
+  agents?: Record<string, EnrolledAgent>;
 }
 
 /**
@@ -165,7 +184,7 @@ export interface CanvasState {
 }
 
 export function emptyCanvas(): CanvasContents {
-  return { items: {}, threads: {}, trash: [] };
+  return { items: {}, threads: {}, trash: [], agents: {} };
 }
 
 /** The designated main thread, if the canvas has one. */

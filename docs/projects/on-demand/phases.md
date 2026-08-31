@@ -11,10 +11,12 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: phase 1 is closed (2026-08-30) — the park's cursor is
-durable, per actor per canvas, held by the daemon the park polls, and
-`--since` is a repair tool nobody has to know about. Phase 2 is next.
-Before that, the mechanism was revised once already.**
+**Where we are: phases 1 and 2 are closed (2026-08-30).** The park's
+cursor is durable (phase 1); enrolment is a record in canvas state with
+its rc half beside the machine, the verbs exist in both spellings, and a
+bare `isocan rc` parks and narrates — enrolments, withdrawals, and
+summonses it cannot yet answer (phase 2). Phase 2.5 (the web doors) is
+next. Before the walk began, the mechanism was revised once already.
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
 Withdrawn 30 Aug in review — see the mechanism section of design.md for
@@ -103,7 +105,53 @@ in `server/test/park.test.ts`.
 
 ## Phase 2 — `isocan rc` and the enrolment records
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Every outcome below is a passing test in
+`cli/test/rc.test.ts` (the verbs, both record halves, survival across
+restart, the narration asserted against a real spawned `rc`) and
+`core/test/agents.test.ts` (the record's shape and the mentionability it
+was stored for).
+
+**Closed at this door, 2026-08-30 — where the home half lives: canvas
+state, written by ops.** `agent.enroll` and `agent.withdraw` join the op
+vocabulary; the record is `canvas.agents` (`EnrolledAgent` in core's
+`model.ts`), non-undoable like `actor.claim` — standing never moves on a
+casual ⌘Z. The deciding fact, found in the code: mention candidates
+derive from canvas state (`mentions.ts`), so an enrolled-but-never-spoken
+Sian was UNMENTIONABLE under any other storage — no `@Sian`, no summons,
+ever. With the record in canvas state, everything this phase and 2.5 need
+falls out of the isomorphism: `@Sian` resolves, the web tray reads the
+snapshot it already has, a running `rc` notices record changes through
+the watchLog park it already holds, the record replicates to remote
+homes, survives restarts because the oplog does, and withdrawal removes
+the row while the log keeps the story — journey 8's acceptance by
+construction. The rc half (`harness`, `cwd`, `sessionId`) is a machine
+fact and lives in `~/.isocan/rc-agents.json` (`cli/src/rc.ts`), the same
+canvas-fact/machine-fact split `backing.ts` draws for files. The enrolled
+actor is minted through the ordinary `actor.claim`, keyed
+`agent:<canvasId>:<name>` on the enrolling machine's badge — so a worn
+name is refused by the registry rather than silently doubled, and
+re-enrolling Sian after a withdrawal hands the same Sian back; phase 3
+rebinds the actor to its adapter-born session key when a session first
+exists.
+
+**Closed at this door, 2026-08-30 — the residue: `isocan rc` refuses
+inside a harness session.** One line, naming the right verb (`isocan
+agent`). A bare rc in a tool call would block the turn until the harness
+killed it, while standing up a parent-of-agents no person started; the
+naming door drew the divide in the vocabulary, and the refusal is that
+divide holding mechanically.
+
+**Closed at this door, 2026-08-30 — where the person's word is checked:
+in the open, for now.** An agent's `isocan agent add` is an op in the log
+with the adding agent as author, narrated live by a running `rc`, visible
+in the tray 2.5 builds, and withdrawal is one gesture away — an unasked
+add cannot be quiet, and this phase's agents cannot act (no dispatch
+until phase 4), so today's exposure is a record, not a running process.
+The decision is explicitly provisional: phase 4's door revisits it with
+the mechanical context phase 2 structurally lacks — a summoned turn knows
+whether a person's comment started it. `isocan agent add` also refuses
+`--canvas` outright: the syntax is the containment, and the flagged
+point-anywhere form is a person's (`isocan rc add`).
 
 **Work:** The long-running command itself: started by the person, bare —
 the directory's binding supplies the canvas, the enrolment records supply
@@ -180,12 +228,17 @@ created by verb appears in the roster record, and a withdrawal takes it
 back out — both with or without an `rc` running, a running `rc`
 narrating each as an event. Kill the `rc`; the enrolments survive to its
 next start. (What `who` calls the added agent is phase 6's word.)
+*(All hold — `cli/test/rc.test.ts`, including the summons narrated as
+"no way to start a session yet".)*
 
 **Proof:** vitest for the record's two halves, the add and withdrawal
 verbs, and survival across restart; the narration asserted, not
-assumed.
+assumed. *(Done — plus the two refusals: rc inside a harness session,
+and `agent add --canvas`.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned.* (The facts that
+decided the storage door are recorded in the door itself, where they
+belong.)
 
 ## Phase 2.5 — The web doors
 

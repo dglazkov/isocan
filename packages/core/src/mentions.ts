@@ -127,6 +127,11 @@ function isWordChar(ch: string): boolean {
  * creators/editors and version authors (live and trashed), thread starters
  * and comment authors. */
 function* canvasActors(canvas: CanvasContents): Generator<Actor> {
+  // Standing agents first: an enrolled agent that has never spoken must
+  // still be mentionable — `@Sian` resolving is what makes a summons
+  // possible at all — and first means the enrolment's name wins the
+  // first-name-used rule below over any older stamp.
+  for (const enrolled of Object.values(canvas.agents ?? {})) yield enrolled.actor;
   const items = [
     ...Object.values(canvas.items),
     ...canvas.trash.map((entry) => entry.item),

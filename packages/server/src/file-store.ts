@@ -42,6 +42,10 @@ interface CanvasSnapshotFile {
   lastSeq: number;
   items: CanvasState["canvas"]["items"];
   threads: CanvasState["canvas"]["threads"];
+  /** Standing agents (agents-on-demand phase 2). Absent in snapshots written
+   * before the field — those predate any `agent.enroll` op, so absent means
+   * empty, never lost. */
+  agents?: CanvasState["canvas"]["agents"];
 }
 
 export class FileStore implements Store {
@@ -100,7 +104,7 @@ export class FileStore implements Store {
     let state: CanvasState = {
       project: record,
       canvas: snapshot
-        ? { items: snapshot.items, threads: snapshot.threads, trash }
+        ? { items: snapshot.items, threads: snapshot.threads, trash, agents: snapshot.agents ?? {} }
         : { ...emptyCanvas(), trash },
     };
     let lastSeq = snapshot?.lastSeq ?? 0;
@@ -169,6 +173,7 @@ export class FileStore implements Store {
       lastSeq,
       items: state.canvas.items,
       threads: state.canvas.threads,
+      agents: state.canvas.agents ?? {},
     };
     await writeFileAtomic(p.canvasFile(this.home, id), pretty(snapshot));
     await writeFileAtomic(p.trashFile(this.home, id), pretty(state.canvas.trash));
