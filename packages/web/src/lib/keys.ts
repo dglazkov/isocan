@@ -32,6 +32,28 @@ export function isTyping(target: EventTarget | KeyTarget | null | undefined): bo
 }
 
 /**
+ * **Has the person selected words the browser is about to copy?**
+ *
+ * `isTyping` answers "is the caret in a field", which is a different
+ * question and the one ⌘C used to ask. Selecting the text OF A COMMENT and
+ * pressing ⌘C copied the selected ITEM instead: a rendered comment is a
+ * `<p>`, not an input, so nothing was being "typed into" and the canvas
+ * shortcut fired over the top of the most familiar gesture in the browser.
+ *
+ * The honest condition is whether the browser already has something to copy.
+ * Canvas items carry `user-select: none`, so a live selection can only have
+ * come from a panel — the Chat, a comment, a dialog — and in every one of
+ * those the words are what somebody meant.
+ *
+ * Takes the selection as an argument so the rule can be tested without a DOM.
+ */
+export function hasTextSelection(selection?: { isCollapsed?: boolean; toString(): string } | null): boolean {
+  const sel = selection === undefined ? globalThis.getSelection?.() : selection;
+  if (!sel || sel.isCollapsed) return false;
+  return sel.toString().trim() !== "";
+}
+
+/**
  * Does this keystroke cross a cover?
  *
  * A cover route (`itemPath` — FullScreen today, the workbench next)
