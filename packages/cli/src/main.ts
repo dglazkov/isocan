@@ -227,7 +227,7 @@ import {
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
 import { harnessSessions } from "./harness.ts";
-import { removeRcAgent, upsertRcAgent } from "./rc.ts";
+import { adoptRcAgent, readRcAgents, removeRcAgent, upsertRcAgent } from "./rc.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -7624,10 +7624,53 @@ rcCommand.action(
       const snapshot = await ctx.client.snapshot(p.id);
       return snapshot.canvas.agents ?? {};
     };
+    const rcCwd = process.cwd();
+    // The rc supplies WHERE and HOW for enrolments that arrived without an
+    // rc half — the web's adds, and any it missed while down. Quiet: this is
+    // record housekeeping, not an event. The home half stays authoritative:
+    // rc rows for this canvas with no standing enrolment are dead, reaped.
+    const reconcile = async (roster: Record<string, import("@isocan/core").EnrolledAgent>) => {
+      for (const record of Object.values(roster)) {
+        await adoptRcAgent(ctx.home, {
+          canvasId: p.id,
+          actorId: record.actor.id,
+          name: record.actor.name,
+          harness: null,
+          cwd: rcCwd,
+          sessionId: null,
+        });
+      }
+      for (const row of await readRcAgents(ctx.home)) {
+        if (row.canvasId === p.id && !roster[row.actorId]) {
+          await removeRcAgent(ctx.home, p.id, row.actorId);
+        }
+      }
+    };
     // Names for the withdraw narration: state drops the row before the op is
     // read here, so remember every name this process has seen.
     const known = new Map<string, string>();
-    for (const [id, row] of Object.entries(await rosterOf())) known.set(id, row.actor.name);
+    const opening = await rosterOf();
+    for (const [id, row] of Object.entries(opening)) known.set(id, row.actor.name);
+    await reconcile(opening);
+    /**
+     * The parked rc announces itself: a presence session of kind "rc" —
+     * rendered nowhere (no cursor, no face, no roster row), it exists so the
+     * add-agent dialog can say "an rc is parked here" instead of guessing.
+     * TTL retires it if this process dies rudely; the heartbeat below keeps
+     * it alive while parked. This is a convenience signal, NOT the
+     * "answerable" truth — that is phase 6's, connection-bound.
+     */
+    const announced = await ctx.client
+      .createSession(p.id, ctx.actor, undefined, undefined, "rc")
+      .catch(() => null);
+    const standDownAnnouncement = async () => {
+      if (announced) await ctx.client.endSession(p.id, announced.sessionId).catch(() => {});
+    };
+    for (const signal of ["SIGINT", "SIGTERM"] as const) {
+      process.once(signal, () => {
+        void standDownAnnouncement().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
+      });
+    }
     // Quiet at start, the way `claude rc` is: one line saying it is on, then
     // events as they happen. No roster listing, nothing spawned.
     console.log(`rc: answering on "${p.title}" — quiet until something arrives (Ctrl-C stops answering)`);
@@ -7657,6 +7700,16 @@ rcCommand.action(
         continue;
       }
       cursors = batch.cursors;
+      // The announcement's heartbeat, every lap (≤30s against a 5-minute
+      // TTL) — and re-made when a daemon restart took the session with it.
+      if (announced) {
+        await ctx.client.updateSession(p.id, announced.sessionId, {}).catch(async () => {
+          const again = await ctx.client
+            .createSession(p.id, ctx.actor, undefined, undefined, "rc")
+            .catch(() => null);
+          if (again) announced.sessionId = again.sessionId;
+        });
+      }
       if (batch.entries.length === 0) continue;
       const snapshot = await ctx.client.snapshot(p.id);
       const roster = snapshot.canvas.agents ?? {};
@@ -7667,10 +7720,24 @@ rcCommand.action(
         if (op.type === "agent.enroll") {
           known.set(op.agent.id, op.agent.name);
           console.log(`rc: ${by.name} enrolled ${op.agent.name} — answerable here`);
+          // The web decided WHO; this rc supplies WHERE and HOW. A verb run
+          // on this machine already wrote the row, and then this is a no-op.
+          const adopted = await adoptRcAgent(ctx.home, {
+            canvasId: p.id,
+            actorId: op.agent.id,
+            name: op.agent.name,
+            harness: null,
+            cwd: rcCwd,
+            sessionId: null,
+          });
+          if (adopted) {
+            console.log(`rc: supplying where and how for ${op.agent.name} — ${rcCwd}`);
+          }
           continue;
         }
         if (op.type === "agent.withdraw") {
           console.log(`rc: ${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`);
+          await removeRcAgent(ctx.home, p.id, op.actorId);
           continue;
         }
         if (op.type !== "thread.create" && op.type !== "thread.reply") continue;

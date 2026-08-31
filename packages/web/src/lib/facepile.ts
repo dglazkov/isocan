@@ -90,6 +90,9 @@ export function facesFor(
   };
 
   for (const session of sessions) {
+    // A parked rc is a process fact, not a participant — and first-push-wins
+    // means letting it through would eat its person's real face.
+    if (session.kind === "rc") continue;
     push({
       actor: session.actor,
       sessionId: session.sessionId,

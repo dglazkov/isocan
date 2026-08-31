@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Actor } from "../src/index.ts";
+import type { Actor, PresenceSession } from "../src/index.ts";
 import {
   collectCanvasNames,
   extractMentions,
   invertOperation,
   OpValidationError,
+  roster,
 } from "../src/index.ts";
 import { apply, seedState } from "./helpers.ts";
 
@@ -79,5 +80,57 @@ describe("an enrolled agent is mentionable before it ever speaks", () => {
     let s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
     s = apply(s, { type: "agent.withdraw", actorId: sian.id })!;
     expect(extractMentions("@Sian still there?", collectCanvasNames(s.canvas))).toEqual([]);
+  });
+});
+
+describe("the roster shows the record (phase 2.5)", () => {
+  const rcSession = (actor: Actor): PresenceSession =>
+    ({
+      sessionId: "ses_rc",
+      actor,
+      kind: "rc",
+      harness: null,
+      label: null,
+      cursor: null,
+      selection: [],
+      status: null,
+      statusSource: null,
+      activity: null,
+      lastSeen: new Date().toISOString(),
+    }) as PresenceSession;
+
+  it("an enrolled agent is a row with no session at all — that is the point", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    const rows = roster([], s.canvas, Date.now());
+    const row = rows.find((r) => r.actorId === sian.id);
+    expect(row).toMatchObject({ name: "Sian", state: "enrolled", primary: null });
+  });
+
+  it("an enrolled agent never doubles into the away half", () => {
+    // Give Sian history (a thread), then withdraw-free: enrolled + activity
+    // must still be ONE row.
+    let s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    s = apply(
+      s,
+      {
+        type: "thread.create",
+        threadId: "th_s",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_s", body: "here" },
+      },
+      sian,
+    )!;
+    const rows = roster([], s.canvas, Date.now()).filter((r) => r.actorId === sian.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.state).toBe("enrolled");
+  });
+
+  it("a parked rc's announcement is a process fact, never a roster row", () => {
+    const person: Actor = { id: "usr_dimitri", name: "Dimitri" };
+    const s = seedState();
+    const rows = roster([rcSession(person)], s.canvas, Date.now());
+    expect(rows.find((r) => r.actorId === person.id && r.state !== "away")).toBeUndefined();
   });
 });

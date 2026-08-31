@@ -1841,7 +1841,10 @@ export function registerRoutes(
     const body = req.body as import("@isocan/core").CreateSessionRequest;
     // A face is an assertion about who is here, so it is checked like an op.
     await engine.requireActor(req.badge!.badgeId, body.actor.id);
-    const session = presence.createSession(id, body.actor, "cli", {
+    // "rc" is a parked `isocan rc` announcing itself (phase 2.5) — a process
+    // fact riding the presence plane; "web" cannot be asked for here, browser
+    // sessions are born on the socket.
+    const session = presence.createSession(id, body.actor, body.kind === "rc" ? "rc" : "cli", {
       ...(body.label !== undefined ? { label: body.label } : {}),
       ...(body.harness !== undefined ? { harness: body.harness } : {}),
     });

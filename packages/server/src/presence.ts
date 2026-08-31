@@ -77,7 +77,7 @@ export class PresenceHub {
   createSession(
     canvasId: string,
     actor: Actor,
-    kind: "web" | "cli",
+    kind: PresenceSession["kind"],
     options: { label?: string; sessionId?: string; harness?: string } = {},
   ): PresenceSession {
     const session = blankSession(actor, kind, options);
@@ -122,7 +122,7 @@ export class PresenceHub {
    * after its agent has left. `kind` narrows the sweep so a CLI leaving
    * cannot take down the same person's live browser tabs.
    */
-  endActorSessions(actorId: string, kind?: "web" | "cli"): number {
+  endActorSessions(actorId: string, kind?: PresenceSession["kind"]): number {
     let ended = 0;
     for (const [canvasId, room] of this.rooms) {
       let changed = false;
@@ -305,7 +305,7 @@ function stripped(session: SessionState): PresenceSession {
 
 function blankSession(
   actor: Actor,
-  kind: "web" | "cli",
+  kind: PresenceSession["kind"],
   options: { label?: string; sessionId?: string; harness?: string },
 ): SessionState {
   return {

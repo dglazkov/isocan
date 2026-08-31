@@ -230,6 +230,95 @@ describe("the running rc — quiet start, events narrated", () => {
   }, 30_000);
 });
 
+describe("the web doors' mechanics (phase 2.5)", () => {
+  const sessions = async (): Promise<Array<{ kind: string }>> => {
+    const res = await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers });
+    return (await res.json()) as Array<{ kind: string }>;
+  };
+
+  it("a parked rc announces itself on the presence plane, and stands down on Ctrl-C", async () => {
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    // The announcement the add dialog's footer reads: kind "rc", no cursor.
+    await until(sessions, (list) => list.some((s) => s.kind === "rc"), "the announcement");
+
+    rc.kill("SIGINT");
+    await done;
+    // Ended deliberately, not left to the TTL: the dialog must stop saying
+    // "an rc is parked here" the moment nobody is.
+    await until(sessions, (list) => !list.some((s) => s.kind === "rc"), "the announcement gone");
+  }, 30_000);
+
+  it("a web add (the same enroll op) gets its rc half from the parked rc", async () => {
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+
+    // The dialog's exact record write: agent.enroll over HTTP. No CLI verb
+    // ran on this machine, so no rc half exists — the rc supplies it.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } },
+    });
+    await until(async () => out, (o) => o.includes("supplying where and how for Sian"), "the adoption");
+    const rows = await rcRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      canvasId: "prj_1",
+      actorId: "usr_sian",
+      harness: null,
+      cwd: await fs.realpath(home),
+      sessionId: null,
+    });
+
+    // The tray's Dismiss — the same withdraw op — reaps the rc half too.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "agent.withdraw", actorId: "usr_sian" },
+    });
+    await until(rcRows, (r) => r.length === 0, "the rc half reaped");
+
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+
+  it("an rc that starts late reconciles the enrolments it missed", async () => {
+    // Enrolled from the web while NO rc ran — the record works with nothing
+    // running; the rc supplies where and how at its next start.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "agent.enroll", agent: { id: "usr_percy", name: "Percy" } },
+    });
+    expect(await rcRows()).toEqual([]);
+
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    await until(rcRows, (r) => r.length === 1, "the missed enrolment reconciled");
+    expect(rows0(await rcRows())).toMatchObject({ actorId: "usr_percy", harness: null });
+
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+});
+
+function rows0<T>(rows: T[]): T {
+  return rows[0]!;
+}
+
 describe("the vocabulary divide, enforced", () => {
   it("bare `isocan rc` refuses inside a harness session and names the right verb", async () => {
     const run = await collect(spawnCli(["rc"], { ISOCAN_SESSION_ID: "sess-1" }));

@@ -2361,6 +2361,28 @@ button.mt-card:hover { border-color: var(--accent); }
 .agents-quiet { margin: 10px 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .agents-quiet code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
 
+/* Add an agent (agents-on-demand phase 2.5): the tray's standing-agent door.
+   A footer rather than a modal — the gesture is one field, and the note it
+   leaves (rc parked, or the line to start one) reads in place. */
+.add-agent { flex: none; padding: 8px; border-top: 1px solid var(--line); }
+.add-agent-open { width: 100%; font-size: 12px; }
+.add-agent form { display: flex; flex-direction: column; gap: 6px; }
+.add-agent .text-input { width: 100%; box-sizing: border-box; font-size: 12px; }
+.add-agent-actions { display: flex; gap: 6px; }
+.add-agent-note {
+  margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+}
+.add-agent-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.add-agent .identity-warning { margin: 8px 0 0; }
+
+/* Dismiss, on the enrolled row: withdrawal is one small deliberate click —
+   quiet until hovered, never a red alarm; the history it leaves is the point. */
+.wb-dismiss {
+  flex: none; border: none; background: none; cursor: pointer;
+  color: var(--ink-soft); font-size: 11px; padding: 2px 4px; border-radius: 4px;
+}
+.wb-dismiss:hover { color: var(--ink); background: var(--chip); }
+
 /* Follow's toggle, in the Chat's own header because that is what it follows.
    Quiet when off and wearing the accent when on: this moves the canvas on
    somebody's behalf, so whether it is armed has to be readable at a glance

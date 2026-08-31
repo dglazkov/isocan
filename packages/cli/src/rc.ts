@@ -57,6 +57,23 @@ export async function upsertRcAgent(home: string, row: RcAgentRow): Promise<void
   await writeRcAgents(home, kept);
 }
 
+/**
+ * The rc's reconciliation write (phase 2.5, decided 2026-08-30): an agent
+ * added from the web has a home half but no rc half — a browser cannot write
+ * this file — so the parked rc supplies WHERE and HOW itself: its own
+ * directory, harness unsaid. Writes only when the row is missing (a verb run
+ * on this machine already said more than the rc can guess) and returns
+ * whether it wrote, so the caller can narrate an adoption and stay quiet
+ * about a no-op.
+ */
+export async function adoptRcAgent(home: string, row: RcAgentRow): Promise<boolean> {
+  const rows = await readRcAgents(home);
+  if (rows.some((r) => r.canvasId === row.canvasId && r.actorId === row.actorId)) return false;
+  rows.push(row);
+  await writeRcAgents(home, rows);
+  return true;
+}
+
 /** Withdrawal takes the rc half with it; the oplog keeps the history. */
 export async function removeRcAgent(
   home: string,

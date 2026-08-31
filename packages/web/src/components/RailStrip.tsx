@@ -8,7 +8,7 @@ import { unreadByAuthor } from "../lib/facepile.ts";
 import { facesFor } from "../lib/facepile.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { openPanel } from "../lib/panels.ts";
-import { ChatGlyph } from "./Glyphs.tsx";
+import { AgentsGlyph, ChatGlyph } from "./Glyphs.tsx";
 
 /**
  * **The rail when it is shut.**
@@ -85,6 +85,21 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
             {unread > 99 ? "99+" : unread}
           </span>
         )}
+      </button>
+      {/* The tray's standing door (agents-on-demand phase 2.5). The faces
+          below only exist while agents are LIVE, which made the tray
+          unreachable on exactly the canvas journey 1 starts on — no agents
+          yet, and the Add-an-agent gesture behind a door that never appears.
+          This button is always there: the room, before anybody is in it. */}
+      <button
+        className="strip-chat strip-agents"
+        title="Agents — who answers here, and Add an agent"
+        aria-label="Open the agent tray"
+        onClick={() => openPanel(canvasId, "agents")}
+      >
+        <span className="strip-glyph">
+          <AgentsGlyph size={14} />
+        </span>
       </button>
       {agents.length > 0 && <div className="strip-sep" />}
       {agents.map((face) => {

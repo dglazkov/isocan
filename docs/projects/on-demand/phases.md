@@ -11,11 +11,14 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: phases 1 and 2 are closed (2026-08-30).** The park's
-cursor is durable (phase 1); enrolment is a record in canvas state with
-its rc half beside the machine, the verbs exist in both spellings, and a
-bare `isocan rc` parks and narrates — enrolments, withdrawals, and
-summonses it cannot yet answer (phase 2). Phase 2.5 (the web doors) is
+**Where we are: phases 1, 2 and 2.5 are closed (2026-08-30).** The
+park's cursor is durable (phase 1); enrolment is a record in canvas
+state with its rc half beside the machine, the verbs exist in both
+spellings, and a bare `isocan rc` parks, announces itself on the
+presence plane, and narrates — enrolments, withdrawals, and summonses it
+cannot yet answer (phase 2); the tray and the *Add an agent* dialog are
+live, with dismissal on the row and the rc supplying where-and-how for
+web adds (phase 2.5, personas deferred). Phase 3 (the ACP client) is
 next. Before the walk began, the mechanism was revised once already.
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
@@ -242,7 +245,40 @@ belong.)
 
 ## Phase 2.5 — The web doors
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The dialog and the tray were driven in
+the real app against a real canvas — add with no rc (the line handed
+over), add with an rc parked (narrated live, rc half supplied), dismiss
+from the row (narrated, rc half reaped) — and the mechanics are pinned in
+`cli/test/rc.test.ts` ("the web doors' mechanics"), `core/test/
+agents.test.ts` (the roster rows), and `web/test/agenttray.test.ts` (the
+gestures go through the same ops the CLI sends).
+
+**Closed at this door, 2026-08-30 — how the dialog knows an rc is
+parked: a presence-plane announcement.** The rc holds a session of a new
+kind, `"rc"` — no cursor, no face, no roster row, filtered from every
+rendering — so the existing machinery pays three times: the web already
+receives presence over WS, home-links already relay it to remote homes,
+and the TTL already retires a crashed rc. Ctrl-C stands the announcement
+down deliberately. This is the dialog's convenience signal and
+explicitly NOT the "answerable" truth — phase 6 still owes the
+connection-bound derivation, and the roster's word here is `enrolled`,
+never `answerable` (a web test forbids the word in rendering code).
+
+**Closed at this door, 2026-08-30 — the rc supplies WHERE and HOW.** A
+web add writes only the home half (a browser cannot touch
+`~/.isocan`); the parked rc, hearing `agent.enroll` — and once at start,
+for enrolments it missed — writes the missing rc-half row itself: its
+own directory, harness unsaid. The home half is authoritative: rc rows
+with no standing enrolment are dead and reaped at reconcile. A verb run
+on the machine already said more than the rc can guess, so adoption
+writes only when the row is absent.
+
+**Closed at this door, 2026-08-30 — personas: deferred entirely, by
+Dimitri.** No picker, no field on the record — "let's defer that until
+personas machinery is fully fleshed out." The dialog is name-only.
+Journey 1's step 2 therefore walks with a caveat: the persona-template
+half of the gesture (and journey 4's rules-defaulted-by-template) waits
+on the personas project, and whoever takes it up starts here.
 
 **Work:** The gestures where the people are, built on phase 2's records:
 the agent tray with a row per enrolled agent; *Add an agent* — name it,
@@ -267,11 +303,21 @@ dismiss one that no longer does.
 no `rc` parked, the dialog hands over the line instead. A tray
 dismissal takes the standing away and leaves the history untouched.
 Journeys 1 and 8 close here, with the caveats their map rows carry.
+*(All hold, driven live — plus the persona caveat above.)*
 
 **Proof:** The dialog and the tray driven in the app against a real
-canvas; the records asserted after each gesture.
+canvas; the records asserted after each gesture. *(Done — screenshots in
+the session, records asserted in `rc.test.ts` through the same ops the
+dialog sends.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** one discovery changed the build, not the course: the
+agent tray had NO standing door — it opened only from the rail strip's
+faces, which exist only while agents are live, so the canvas journey 1
+starts on (no agents yet) could never reach *Add an agent*. The rail
+strip now carries a permanent agents button. And one decision narrowed
+scope: personas are out of this phase entirely (the door above), so the
+walk hands the personas project a starting point rather than a
+half-built picker.
 
 ## Phase 3 — The ACP client in the `rc`
 

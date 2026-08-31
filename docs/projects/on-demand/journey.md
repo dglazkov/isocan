@@ -237,10 +237,10 @@ claims a journey closes only when the journey walks.
 
 | Journey | Closed by |
 | --- | --- |
-| 1 — Start `isocan rc` | Phase 2.5 (the dialog, on phase 2's records); its comment door (step 3) walks with phase 4, and its roster line finishes with phase 6, which owns `who`'s words |
+| 1 — Start `isocan rc` | Phase 2.5 (the dialog, on phase 2's records) — with step 2's persona picker deferred to the personas project (2026-08-30, Dimitri: the dialog is name-only until templates can say what they default); its comment door (step 3) walks with phase 4, and its roster line finishes with phase 6, which owns `who`'s words |
 | 2 — Summon by comment | Phase 4; same phase-6 caveat on its `who` step |
 | 3 — Nothing is lost | Phase 1 (the plain-park half); phase 4 (the `rc` half) |
-| 4 — Route only what matters | Phase 4, which owns the rule vocabulary and its readable record; the rules-in-the-gesture step is phase 2.5's |
+| 4 — Route only what matters | Phase 4, which owns the rule vocabulary and its readable record; the rules-in-the-gesture step was phase 2.5's and deferred with personas (rules were to be defaulted by the template — no templates, no defaults; the verbs' `--rules` plumbing stores opaquely today) |
 | 5 — Failure is loud | Phase 5 |
 | 6 — Runaway agents stay bounded | Phase 5 |
 | 7 — See who answers here | Phase 6 |

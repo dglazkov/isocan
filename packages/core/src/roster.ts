@@ -49,7 +49,20 @@ export const QUIET_AFTER_MS = 35_000;
  * - `away`: no session; the canvas remembers the actor. A message waits on
  *   the thread for the next wake.
  */
-export type RowState = "blocked" | "working" | "parked" | "quiet" | "here" | "away";
+/** `enrolled` (agents-on-demand phase 2.5): a standing agent from
+ * `canvas.agents` with no live session — a record, present whether or not
+ * anything runs. Deliberately NOT called "answerable": that word is a
+ * derivation (enrolment + a live rc claiming it) that phase 6 owes,
+ * connection-bound, and claiming it from a record alone would be exactly the
+ * lie journey 7 forbids. Phase 6 owns the final vocabulary. */
+export type RowState =
+  | "blocked"
+  | "working"
+  | "parked"
+  | "quiet"
+  | "here"
+  | "enrolled"
+  | "away";
 
 /** An open question: the last `/ask` in a thread with no reply from anyone
  * but the asker after it. The-ask research's derivation, verbatim: state the
@@ -182,7 +195,8 @@ export function roster(
     parked: 2,
     quiet: 3,
     here: 4,
-    away: 5,
+    enrolled: 5,
+    away: 6,
   };
   live.sort((a, b) => {
     if (ORDER[a.state] !== ORDER[b.state]) return ORDER[a.state] - ORDER[b.state];
@@ -192,9 +206,30 @@ export function roster(
 
   if (!canvas) return live;
 
+  // Standing agents (agents-on-demand phase 2.5): a row per enrolment, the
+  // record made visible — present with no session at all, which is the
+  // record's whole point. A live session for the same actor wins the row
+  // (the live loop above already made one), and an enrolled actor never
+  // repeats in the away half below.
+  const enrolled: AgentRow[] = [];
+  for (const record of Object.values(canvas.agents ?? {})) {
+    if (byActor.has(record.actor.id)) continue;
+    enrolled.push({
+      actorId: record.actor.id,
+      name: record.actor.name,
+      state: "enrolled",
+      primary: null,
+      others: [],
+      harness: null,
+      lastAct: recentActivity(canvas, record.actor.id, 1)[0] ?? null,
+    });
+  }
+  enrolled.sort((a, b) => a.name.localeCompare(b.name));
+
   const away: AgentRow[] = [];
   for (const actor of collectCanvasActors(canvas)) {
     if (byActor.has(actor.id)) continue;
+    if (canvas.agents?.[actor.id]) continue; // already a standing row above
     const lastAct = recentActivity(canvas, actor.id, 1)[0];
     if (!lastAct) continue; // claimed a name, did nothing — not a row
     away.push({
@@ -208,7 +243,7 @@ export function roster(
     });
   }
   away.sort((a, b) => (b.lastAct?.at ?? "").localeCompare(a.lastAct?.at ?? ""));
-  return [...live, ...away.slice(0, AWAY_ROWS)];
+  return [...live, ...enrolled, ...away.slice(0, AWAY_ROWS)];
 }
 
 /** The last thing said in the thread a session is answering — the expanded
