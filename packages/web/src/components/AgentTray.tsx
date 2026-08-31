@@ -9,6 +9,7 @@ import { AgentRowView } from "./AgentRow.tsx";
 import { AgentsGlyph } from "./Glyphs.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
+import { useAnswerable } from "../lib/answerable.ts";
 
 /**
  * **`isocan who`, given a home on the canvas.**
@@ -32,6 +33,7 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
   const open = useUiStore((s) => s.agentsPanelOpen);
   const sessions = useCanvasStore((s) => s.sessions);
   const canvas = useCanvasStore((s) => s.canvas);
+  const answerable = useAnswerable(canvasId);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const following = useUiStore((s) => s.followingActorId);
@@ -40,7 +42,7 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
   // The store filters your own session out of presence, so without this you
   // appear in the away half — "away" printed on the screen you are looking at.
   // The same guard the workbench column carries, and for the same reason.
-  const rows = roster(sessions, canvas, Date.now()).filter(
+  const rows = roster(sessions, canvas, Date.now(), answerable).filter(
     (row) => !(row.state === "away" && row.actorId === actor.id),
   );
 

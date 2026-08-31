@@ -458,6 +458,14 @@ img { height: auto; }
 /* Dimming is a claim about ONE person, never about the room — so it hangs off
    `.away` and nothing else, the same rule the facepile follows. */
 .share-roster-row.away .face-mark { opacity: 0.55; }
+/* Three tiers, weakest last. `answerable` is the only one you can reach right
+   now, so it is the only one that gets the live colour; `enrolled` is a
+   standing record with nothing listening, which is nearer to away than to
+   here — and still not away, because the record is a fact about the canvas
+   rather than about somebody who wandered off. */
+.share-roster-row.answerable .face-mark { opacity: 0.75; }
+.share-roster-row.answerable .share-roster-kind { color: var(--good); }
+.share-roster-row.enrolled .face-mark { opacity: 0.6; }
 .share-roster-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .share-roster-kind { color: var(--ink-soft); font-size: 11px; }
 
@@ -1991,6 +1999,14 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
 /* Not here, but they left something behind. */
 .face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
+/* **Standing by is its own thing, and must not read as here.** A solid ring
+   says somebody is at the canvas; a dashed one says something is listening for
+   them. Neither the full-strength face of a participant nor the greyed-out one
+   of somebody who has gone. */
+.face.available .face-mark {
+  opacity: 0.7;
+  box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--live-wash);
+}
 .face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
 .face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }

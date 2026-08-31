@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { grantRoute, grantsRoute, LINK } from "@isocan/core";
 import { ApiError, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
@@ -110,5 +112,48 @@ describe("the Share dialog's endpoint", () => {
     // room, and re-badging would mint credentials forever to be refused the
     // same way. Exactly one request went out.
     expect(seen).toHaveLength(1);
+  });
+});
+
+/**
+ * **The roster in this dialog had its own fold, and the fold invented an
+ * occupant.**
+ *
+ * It walked `sessions` and pushed every one as live, spelling the kind
+ * `session.kind === "cli" ? "terminal" : "here"` — so a parked `rc`, a process
+ * fact that renders nowhere else in the app (no cursor, no face, no roster
+ * row), arrived in the one dialog you open to see who you are sharing with,
+ * labelled as a person who is here.
+ *
+ * Source-scanned rather than rendered, because the failure is structural: it
+ * is not that the words came out wrong, it is that a fourth derivation of "who
+ * is on this canvas" existed at all.
+ */
+describe("the share roster reads the same fold as everything else", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/components/ShareDialog.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("asks core, and asks who is answering", () => {
+    expect(src).toMatch(/roster\(sessions, canvas, Date\.now\(\), answerable\)/);
+    expect(src).toContain("useAnswerable(");
+  });
+
+  it("does not decide for itself what a session's kind means", () => {
+    /* The exact expression that mislabelled the rc, pinned so it cannot come
+       back wearing a different variable name. */
+    expect(src).not.toMatch(/kind:\s*\w+\.kind === "cli" \? "terminal" : "here"/);
+    expect(src).not.toMatch(/live:\s*true/);
+  });
+
+  it("has a word for every state core can hand it", () => {
+    /* A `Record<RowState, string>` fails to compile when core grows a state,
+       which is the point: a missing case would render `undefined` beside
+       somebody's name. */
+    expect(src).toMatch(/const KIND_WORD: Record<RowState, string>/);
+    for (const state of ["answerable", "enrolled", "blocked", "working", "parked", "quiet"]) {
+      expect(src, `no word for ${state}`).toContain(`${state}:`);
+    }
   });
 });

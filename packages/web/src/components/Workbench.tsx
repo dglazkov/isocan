@@ -25,6 +25,7 @@ import { goStage } from "../lib/goStage.ts";
 import { AgentRowView } from "./AgentRow.tsx";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
+import { useAnswerable } from "../lib/answerable.ts";
 
 /**
  * The workbench: the same canvas, flipped to the agent room.
@@ -228,13 +229,14 @@ function Roster({
 }) {
   const sessions = useCanvasStore((s) => s.sessions);
   const canvas = useCanvasStore((s) => s.canvas);
+  const answerable = useAnswerable(canvasId);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [rosterH, setRosterH] = useSectionHeight("isocan.wb.roster.h", 220);
   // The store filters YOUR OWN session out of presence (the facepile's
   // duplicate fix), so without this the person reading the panel appears in
   // its away half — "away" printed on the screen they are looking at. The
   // viewer is never away.
-  const rows = roster(sessions, canvas, Date.now()).filter(
+  const rows = roster(sessions, canvas, Date.now(), answerable).filter(
     (row) => !(row.state === "away" && row.actorId === viewer),
   );
 

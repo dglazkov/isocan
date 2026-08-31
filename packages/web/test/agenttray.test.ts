@@ -22,12 +22,31 @@ const tray = read("components/AgentTray.tsx");
 
 describe("the tray shows what the terminal would print", () => {
   it("asks core's roster, the same one `isocan who` and the workbench use", () => {
-    expect(tray).toMatch(/roster\(sessions, canvas, Date\.now\(\)\)/);
+    expect(tray).toMatch(/roster\(sessions, canvas, Date\.now\(\), answerable\)/);
     expect(read("components/Workbench.tsx"), "the workbench still asks the same one").toMatch(
-      /roster\(sessions, canvas, Date\.now\(\)\)/,
+      /roster\(sessions, canvas, Date\.now\(\), answerable\)/,
     );
     // No local opinion about state. `sessionState` is roster's own business.
     expect(tray, "the tray must not decide what working means").not.toMatch(/sessionState\(/);
+  });
+
+  it("passes the fourth argument, without which a standing agent cannot be answerable", () => {
+    /**
+     * **This guard used to freeze the bug.** It asserted the exact call
+     * `roster(sessions, canvas, Date.now())` — three arguments, matching what
+     * the app did — and the fourth is the connection-bound set of actors a
+     * live rc is answering for. Omit it and `roster()` downgrades every
+     * standing row to `enrolled`, so the app said "nobody is listening right
+     * now" beside an agent that was listening, while `isocan who` on the same
+     * canvas said `answerable`. `AgentRow` had the branch written and nothing
+     * could reach it.
+     *
+     * A guard pinned to a call's exact shape guards the shape. This one asks
+     * for the FACT: the liveness set is fetched, and it goes to the fold.
+     */
+    for (const file of ["components/AgentTray.tsx", "components/Workbench.tsx"]) {
+      expect(read(file), `${file} must ask who is answering`).toMatch(/useAnswerable\(/);
+    }
   });
 
   it("draws a row with the component the workbench draws one with", () => {
