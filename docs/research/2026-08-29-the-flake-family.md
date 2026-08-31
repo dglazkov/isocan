@@ -15,8 +15,12 @@ the loop idle, which is the finding, and the next instrument is in place to
 separate the two readings that are left. The split
 UTF-8 chunk, a grader that waited two seconds instead of waiting for the page,
 and a "slow machine" that was a dead process missing `tsx` in a git worktree
-are all fixed at the cause. Nothing this suite listens on sits in the kernel's
-ephemeral range any more. The blocked-event-loop hypothesis was killed by its
+are all fixed at the cause. **The in-process daemons are back on `port: 0`,
+and so back in the kernel's ephemeral range** — this header said otherwise
+until 31 Aug, having been written while the fix stood and never revised when
+CI reverted it three sections below. The rule survives only where it was
+always right: the seven files that must tell another process a number before
+anything is listening. The blocked-event-loop hypothesis was killed by its
 own first measurement, which is what the instrument was built to be able to
 do. This note exists because the family had
 been chased twice by reasoning and never by observation, and the second kind
