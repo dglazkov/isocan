@@ -174,6 +174,13 @@ import {
   filterCanvases,
   isCanvasSort,
   CANVAS_SORTS,
+  lensEntries,
+  lensGroups,
+  lensSubjects,
+  lensSubjectLabels,
+  LENS_REFUSAL,
+  type LensBy,
+  type LensSource,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
 import {
@@ -7504,6 +7511,69 @@ program
       );
       for (const m of marks.slice(-8)) console.log(`  ${majorLine(m)}`);
       if (marks.length > 8) console.log(`  … ${marks.length - 8} earlier — --majors for all`);
+    }),
+  );
+
+program
+  .command("lens [who]")
+  .description("What somebody has MADE, across every canvas — grouped, and read-only")
+  .option("--by <how>", "canvas (default), day, or kind")
+  .option("-n, --limit <n>", "how many things to show (default 40)")
+  .action(
+    run(async (who: string | undefined, opts: { by?: string; limit?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      /**
+       * **A lens, and deliberately not a canvas.**
+       *
+       * `docs/research/2026-08-30-standing-agents.md` is blunt about why: an
+       * item's x/y belong to the canvas it is on, so a view gathering an
+       * agent's work from five canvases holds REFERENCES and cannot hold the
+       * items. Position is derived here — by canvas, by day, by kind — and
+       * nothing is stored, which is what makes it safe to regenerate and
+       * impossible to drag into an inconsistent state.
+       */
+      const canvases = await ctx.client.listCanvases();
+      const sources: LensSource[] = [];
+      for (const canvas of canvases) {
+        const snap = await ctx.client.snapshot(canvas.id);
+        sources.push({ canvasId: canvas.id, canvasTitle: canvas.title, canvas: snap.canvas });
+      }
+      const subjects = lensSubjects(sources);
+      if (!who) {
+        if (ctx.json) return printJson(subjects);
+        if (subjects.length === 0) return console.log("nobody has made anything here yet");
+        console.log("who to look at — `isocan lens <who>`\n");
+        const labels = lensSubjectLabels(subjects);
+        for (const s of subjects) console.log(`  ${labels.get(s.id)}`);
+        return;
+      }
+      const wanted = subjects.find(
+        (s) => s.id === who || s.name.toLowerCase().startsWith(who.toLowerCase()),
+      );
+      if (!wanted) throw new Error(`nobody here called "${who}" has made anything`);
+      const by = (opts.by ?? "canvas") as LensBy;
+      if (!["canvas", "day", "kind"].includes(by)) {
+        throw new Error(`not an arrangement: ${by} — canvas, day, kind`);
+      }
+      const all = lensEntries(sources, wanted.id);
+      const groups = lensGroups(all.slice(0, Number(opts.limit ?? 40)), by);
+      if (ctx.json) return printJson({ actor: wanted, total: all.length, groups });
+      if (all.length === 0) return console.log(`${wanted.name} has not made anything here`);
+      const nowMs = Date.now();
+      for (const group of groups) {
+        console.log(`\n${group.label}`);
+        for (const e of group.entries) {
+          const touched = e.editedSince ? " ·edited since" : "";
+          console.log(
+            `  ${truncate(e.title, 34).padEnd(34)} ${e.kind.padEnd(9)} ${ago(e.at, nowMs).padStart(4)}${touched}`,
+          );
+        }
+      }
+      const where = new Set(all.map((e) => e.canvasId)).size;
+      console.log(
+        `\n${wanted.name} made ${all.length} thing${all.length === 1 ? "" : "s"} across ` +
+          `${where} canvas${where === 1 ? "" : "es"} — ${LENS_REFUSAL}`,
+      );
     }),
   );
 

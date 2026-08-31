@@ -22,6 +22,7 @@ import type { Canvas } from "./model.ts";
  */
 export type CanvasSort = "recent" | "name" | "created";
 
+/** Every ordering there is, in the order a chooser should offer them. */
 export const CANVAS_SORTS: readonly CanvasSort[] = ["recent", "name", "created"];
 
 /** What each ordering is called where somebody has to choose one. */
@@ -31,6 +32,8 @@ export const CANVAS_SORT_LABEL: Record<CanvasSort, string> = {
   created: "Newest first",
 };
 
+/** Whether a stored preference or a `--sort` argument names a real ordering.
+ *  Both surfaces take this from outside themselves, so neither may trust it. */
 export function isCanvasSort(value: unknown): value is CanvasSort {
   return typeof value === "string" && (CANVAS_SORTS as readonly string[]).includes(value);
 }

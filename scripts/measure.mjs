@@ -130,6 +130,19 @@ const METRICS = {
      * duplicate, and bodies under three declarations are ignored: `flex: 1`
      * and `display: none` are vocabulary rather than structure, and counting
      * them would bury the signal under noise nobody should act on.
+     *
+     * **What this number is NOT.** It counts value-coincidence, which is
+     * evidence of copying rather than proof of it. `styles.css` holds an
+     * explicit position on the other case — two rules whose values agree
+     * because the things they style happen to want the same treatment, where
+     * *"a selector list spanning both would be one rule pretending two
+     * different elements are the same element. The values are what agree, not
+     * the code."*
+     *
+     * So a rise is a question, not a verdict: is this one thing written twice,
+     * or two things that agree? Merging the second kind is the mistake the
+     * sheet names, and the right answer there is to raise the bound WITH THE
+     * REASON — which is what happened at 47.
      */
     take() {
       const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");

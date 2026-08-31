@@ -451,6 +451,20 @@ the thing a per-canvas view cannot tell you and the reason this verb exists.
 Both read the same words from `opWords` in core, so a canvas card in the app, a
 seam on a timeline and these tables describe one event identically.
 
+`isocan lens [who]` is the third view of the same facts: what somebody has
+**made**, across every canvas, grouped.
+
+```sh
+isocan lens                    # who there is to look at
+isocan lens Kenny --by day     # or --by canvas (default), --by kind
+```
+
+**It is a lens and not a canvas, and that is a decision rather than a name.**
+An item's x/y belong to the canvas it is on, so a view gathering work from five
+canvases holds REFERENCES and cannot hold the items — the arrangement is
+derived, nothing is stored, and there is no drag to get wrong. The app has the
+same thing at `/lens`, from the same functions in core.
+
 ## Saying what matters here
 
 `isocan context` lists what an agent reads before it starts. Two verbs manage

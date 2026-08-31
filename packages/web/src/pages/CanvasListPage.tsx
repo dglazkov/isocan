@@ -335,6 +335,13 @@ export function CanvasListPage({
           <h1>isocan</h1>
         </div>
         <span className="spacer" />
+        {/* The way to the lens. On the home screen because the question it
+            answers — what has this agent been doing — is asked ABOUT the
+            canvases rather than inside one, and there is nowhere else it
+            belongs. */}
+        <Link className="btn quiet" to="/lens">
+          Lens
+        </Link>
         <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}

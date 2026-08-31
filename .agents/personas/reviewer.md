@@ -14,10 +14,15 @@ goal:
     at most: 278
     measured by: node scripts/measure.mjs undocumented-exports
     baseline: 278, 2026-08-30, 66d9b67
+  # Raised from 45 with the reason, which is the only sanctioned way: the two
+  # new pairs are a lens roster agreeing with a 404 page's action row, and a
+  # lens title agreeing with a share roster's name. Value-coincidence, not
+  # copies — and `styles.css` holds the position that merging those would be
+  # "one rule pretending two different elements are the same element".
   - name: CSS rule bodies copied word for word from elsewhere
-    at most: 45
+    at most: 47
     measured by: node scripts/measure.mjs copied-rules
-    baseline: 45, 2026-08-30, a058640
+    baseline: 47, 2026-08-30, bb3f98c
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
