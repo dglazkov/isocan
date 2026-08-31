@@ -41,6 +41,10 @@ describe("the changelog", () => {
     const said = execFileSync("node", ["scripts/changelog-day.mjs", day], {
       cwd: repo,
       encoding: "utf8",
+      // A sync exec blocks the worker, so vitest's deadline cannot fire —
+      // the child carries its own. See `canvas-board.test.ts` for the
+      // 42-minute measurement that made this a rule.
+      timeout: 60_000,
     });
     expect(said).toContain("already written");
     expect(await fs.readFile(path.join(dir, first), "utf8")).toBe(before);
@@ -50,6 +54,7 @@ describe("the changelog", () => {
     const said = execFileSync("node", ["scripts/changelog-day.mjs", "2001-01-01"], {
       cwd: repo,
       encoding: "utf8",
+      timeout: 60_000,
     });
     expect(said).toContain("nothing landed");
     expect(await entries()).not.toContain("2001-01-01.md");

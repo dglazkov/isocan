@@ -211,6 +211,54 @@ afterAll(() => {
  * timed out, because it is the one question that separates "the daemon was
  * gone" from "the daemon was there and never accepted".
  */
+/**
+ * **Which process holds a port, at the moment we ask.**
+ *
+ * The bind probe below says whether ANYTHING is there; two rounds of this
+ * investigation ended needing the next word — *what*. The readings it
+ * separates are the ones actually on the table: another vitest worker's
+ * daemon means a cross-worker collision; this same process means a listener
+ * that exists and never accepted; a stranger means the port was reused by
+ * something outside the run.
+ *
+ * `lsof` costs ~100ms and runs only on the failure path, after a connect has
+ * already spent nearly eight seconds. It is best-effort by construction —
+ * absent on a stripped machine, and racing the same teardown the probe races
+ * — so every failure here is silent and simply adds nothing to the sentence.
+ */
+async function whoHolds(port: number): Promise<string> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    // -nP: no DNS, no port-name lookup — both can block for seconds, which is
+    // the last thing a diagnostic for a timeout should do.
+    // NOT filtered to LISTEN. The listener is half the tuple; the other half
+    // is the connecting socket, and its SOURCE PORT is the next thing this
+    // investigation needs. Five of the recorded witnesses — 59382, 59772,
+    // 59856, 59863, 59866 — sit within ~500 of each other in a 16000-wide
+    // range, and one port has now appeared three times in separate runs.
+    // That is not what a uniform rotating counter looks like, and a
+    // self-connect (source port landing on the destination) would explain
+    // both the clustering and a SYN that is dropped rather than refused.
+    const { stdout } = await promisify(execFile)("lsof", ["-nP", `-iTCP:${port}`], {
+      timeout: 4000,
+    });
+    const rows = stdout
+      .trim()
+      .split("\n")
+      .slice(1)
+      .map((line) => line.split(/\s+/))
+      .filter((cols) => cols.length > 8)
+      // command[pid] name (state) — `name` carries src->dst, which is the tuple.
+      .map((cols) => `${cols[0]}[${cols[1]}] ${cols[8]}${cols[9] ? ` ${cols[9]}` : ""}`);
+    if (rows.length === 0) return "";
+    const mine = rows.some((r) => r.includes(`[${process.pid}]`));
+    return ` (on ${port} now: ${[...new Set(rows)].join("; ")}${mine ? " — THIS process is among them" : ""})`;
+  } catch {
+    return "";
+  }
+}
+
 async function describeListener(url: string): Promise<string> {
   const port = Number(new URL(url).port);
   if (!Number.isFinite(port) || port === 0) return "";
@@ -221,11 +269,13 @@ async function describeListener(url: string): Promise<string> {
       probe.removeAllListeners();
       probe.close(() => resolve(verdict));
     };
-    probe.once("error", (err: NodeJS.ErrnoException) =>
-      // EADDRINUSE: somebody IS on it, and did not accept.
+    probe.once("error", async (err: NodeJS.ErrnoException) =>
+      // EADDRINUSE: somebody IS on it, and did not accept. Which somebody is
+      // the question the 30 Aug evidence is circling, so ask.
       resolve(
         err.code === "EADDRINUSE"
-          ? `; something IS listening on ${port} and did not accept`
+          ? `; something IS listening on ${port} and did not accept` +
+            (await whoHolds(port))
           : `; the port could not be probed (${err.code})`,
       ),
     );
@@ -238,8 +288,9 @@ async function describeListener(url: string): Promise<string> {
      * listening" is true of the probe's moment, not proof it was the same
      * socket that dropped the SYN.
      *
-     * The next version should name the HOLDER — its pid, taken at the moment
-     * of the timeout — which is the question the 30 Aug evidence is circling.
+     * `whoHolds` below answers the question this note asked for next — WHICH
+     * process — and inherits the same caveat, which is why it is reported as
+     * "held now by", not "the socket that dropped it".
      */
   });
 }

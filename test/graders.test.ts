@@ -214,7 +214,13 @@ describe.skipIf(!chrome)("--json carries its own verdicts", () => {
     const grader = fileURLToPath(new URL("../scripts/grade.mjs", import.meta.url));
     const fixture = fileURLToPath(new URL("./fixtures/deliberately-bad.html", import.meta.url));
     const out = JSON.parse(
-      execFileSync("node", [grader, "--file", fixture, "--json"], { encoding: "utf8" }),
+      // Under the test's own 120s budget, because a SYNC exec blocks the
+      // worker and vitest's deadline never runs. This grader drives a
+      // browser; the flake note records one sitting for nineteen minutes.
+      execFileSync("node", [grader, "--file", fixture, "--json"], {
+        encoding: "utf8",
+        timeout: 90_000,
+      }),
     ) as Array<{ checks?: Record<string, boolean> }>;
     expect(out).toHaveLength(1);
     const checks = out[0]!.checks;
@@ -233,7 +239,10 @@ describe.skipIf(!chrome)("--json carries its own verdicts", () => {
     const grader = fileURLToPath(new URL("../scripts/grade.mjs", import.meta.url));
     const page = fileURLToPath(new URL("../docs/index.html", import.meta.url));
     const out = JSON.parse(
-      execFileSync("node", [grader, "--file", page, "--json"], { encoding: "utf8" }),
+      execFileSync("node", [grader, "--file", page, "--json"], {
+        encoding: "utf8",
+        timeout: 90_000,
+      }),
     ) as Array<{ checks: Record<string, boolean> }>;
     const failed = Object.entries(out[0]!.checks).filter(([, ok]) => !ok).map(([n]) => n);
     expect(failed).toEqual([]);

@@ -81,6 +81,7 @@ describe("no test listens in the kernel's ephemeral range", () => {
     const users = execFileSync("git", ["grep", "-l", "reservePort", "--", "packages"], {
       cwd: repo,
       encoding: "utf8",
+      timeout: 30_000,
     })
       .split("\n")
       .filter(Boolean);

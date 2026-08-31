@@ -21,6 +21,7 @@ describe("the roadmap is derived, not written", () => {
     const out = execFileSync("node", [`${repo}/scripts/roadmap.mjs`, "--check"], {
       cwd: repo,
       encoding: "utf8",
+      timeout: 60_000,
     });
     expect(out).toContain("is current");
   }, 120_000);

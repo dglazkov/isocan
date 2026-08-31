@@ -668,3 +668,95 @@ attempt count on give-up) is what made the failure readable at all.
 
 The next round should add to what a failure RECORDS, not to what we believe
 about it.
+
+---
+
+## A sixth witness, and the instrument finally names the holder
+
+**31 Aug.** Four suite runs under 16 spinners on 14 cores, then one unloaded
+run. Two socket witnesses, and the second arrived with the sentence the last
+round of this note asked for.
+
+```
+POST http://127.0.0.1:59772/api/ops, connect/ETIMEDOUT,
+  gave up after 7819ms and 1 attempt (budget 3000ms), loop stalled 20ms during this test;
+  something IS listening on 59772 and did not accept
+```
+
+```
+POST http://127.0.0.1:59866/api/door, connect/ETIMEDOUT,
+  gave up after 7791ms and 1 attempt (budget 3000ms), loop stalled 17ms during this test;
+  something IS listening on 59866 and did not accept (held now by node[39067] — including THIS process)
+```
+
+**Of the two readings left, it is the second: the listener exists and the
+accept never happened.** And the holder is not another worker, not a stray
+daemon, not a stranger — it is *the very process that cannot connect to it*,
+with its own event loop measured idle at 17ms.
+
+### The clustering nobody had looked at
+
+Every port this investigation has recorded, with today's two added:
+
+| Port | Occurrences |
+| --- | --- |
+| 59866 | **3** (blobs.test.ts twice, identity.test.ts once — all separate runs) |
+| 59863 | 2 |
+| 59772 | 1 |
+| 59856 | 1 |
+| 59382 | 1 |
+| 62903, 20200, 20807 | 1 each |
+
+Five socket witnesses sit within roughly 500 of each other inside a
+16,000-wide range, and one port has now come up three times in independent
+runs. **That is not what a uniform rotating counter looks like**, and the
+earlier note read the 59866 repeat as the counter merely landing twice in the
+same place. Three times says something else.
+
+### The mechanism, measured in three lines
+
+```
+dest port: 63301 | client source port: 63302
+  node[39821] 127.0.0.1:63301 (LISTEN)
+  node[39821] 127.0.0.1:63302->127.0.0.1:63301 (ESTABLISHED)
+```
+
+Bind a listener with `port: 0` and immediately connect to it, and the client's
+source port is **the very next number** — both come from the same rotating
+counter, moments apart. So a test daemon and the connection to it are always
+neighbours in that counter.
+
+**Which makes a self-connect reachable.** When the counter wraps or the timing
+aligns so the source port lands *on* the destination port, the socket is
+connecting to itself: a TCP simultaneous open to its own address. That is a
+SYN that is **dropped rather than refused**, which is the exact shape this
+investigation has been unable to explain — and it fits every fact at once:
+
+- the connect times out instead of being refused (a SYN nobody answers),
+- ~7.8 seconds every time (a retransmit schedule, not a load curve),
+- the loop is idle (nothing in the application is involved),
+- the holder is THIS process (it is the same socket at both ends),
+- the witnesses cluster (they are all in the band the counter was crossing).
+
+**It also explains why the private range did not save us.** Moving listeners
+to 20000–32000 left the CLIENT's source port in the kernel's ephemeral band,
+so it changed which neighbours were possible without removing the collision —
+and 20807 duly failed anyway. The reverted fix was aimed at the right family
+and at the wrong half of the tuple.
+
+### Claimed and not claimed
+
+**Not proven.** No witness has yet shown a source port equal to its
+destination; the mechanism is demonstrated to be *reachable*, not observed in
+the act. The instrument now captures the whole tuple rather than just the
+holder — `lsof` without the `LISTEN` filter, so a `SYN_SENT` row and its
+source port are in the sentence — and the next occurrence either shows
+`59866->59866` or kills this too.
+
+**If it is right**, the fix is not a port range. It is to stop the two ends
+being neighbours: bind listeners from a range the kernel never assigns as a
+source port, which is what `ports.ts` does for the seven files that already
+use it, and which failed last time only because the reservation was racy.
+A non-racy version — bind, hold the socket, hand the LISTENER over rather
+than the number — has neither problem.
+

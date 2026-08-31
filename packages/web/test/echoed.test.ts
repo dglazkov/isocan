@@ -21,6 +21,7 @@ const repo = fileURLToPath(new URL("../../..", import.meta.url));
 const files = execFileSync("git", ["ls-files", "packages/web/src"], {
   cwd: repo,
   encoding: "utf8",
+  timeout: 30_000,
 })
   .split("\n")
   .filter((f) => /\.tsx?$/.test(f));
