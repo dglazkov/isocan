@@ -855,3 +855,36 @@ in a specific direction rather than merely absent.
   ordinary ways for loopback to drop one. Both are now on the table with a
   measurement behind them.
 
+
+### And the TIME_WAIT branch dies within the hour
+
+The section above proposed it and the obvious check kills it. The 517-entry
+measurement used raw `net.connect`. **The suite does not connect that way** —
+`flood` uses `fetch`, and undici keeps a pooled connection alive:
+
+```
+200 sequential fetch() POSTs to one port → 0 TIME_WAIT for that port
+```
+
+So there is no socket churn to collide with, and the mechanism that fit the
+witness's *shape* does not fit its *client*. Three hypotheses have now been
+killed by measurement in this note — a blocked loop, a port range, and this —
+and the third took an hour, which is the instrument doing its job.
+
+**A limit of that check, recorded rather than glossed:** it ran against a bare
+`http.createServer`, not the real daemon. A Fastify server with a short
+keep-alive timeout could close idle connections and reintroduce churn, so
+"undici pools by default" is not yet "the daemon's clients pool". That is the
+cheap next check.
+
+**What the door witness actually leaves standing** is stranger than either
+branch. `incqlen` read **1**: a SYN sitting in the INCOMPLETE queue at the
+moment of asking, eight seconds after it was sent. Not dropped — *arrived, and
+never answered with a SYN-ACK*, on loopback, by a process whose loop was idle
+at 16ms and whose accept queue had 127 free slots.
+
+That is a narrower question than this investigation has ever had, and it is
+the one to take next: **not why a SYN was dropped, but why a SYN that arrived
+was not completed.** The instrument reports everything needed to recognise it
+again.
+
