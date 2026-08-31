@@ -233,7 +233,7 @@ import {
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
 import { harnessSessions } from "./harness.ts";
-import { adoptRcAgent, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
+import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
 import {
   checkoutState,
@@ -8273,48 +8273,45 @@ rcCommand.action(
         if (!record) continue;
 
         /**
-         * **A limit and a reason** (phase 5). Two guards, and every stop
-         * leaves a trace where somebody is looking — the thread gets the
-         * system voice, the narration gets the same fact, and nothing is
-         * dropped: a held batch stays pending and dispatches the moment the
-         * limit lifts.
+         * **A limit and a reason** (phase 5). The decision is `gateTurn` in
+         * rc.ts — pure arithmetic, unit-tested there — and this loop only
+         * gathers the inputs and obeys: every hold leaves its trace where
+         * somebody is looking (the system voice in the thread, the same
+         * fact in the narration, once per hold), and nothing is dropped —
+         * a held batch stays pending and dispatches the moment the limit
+         * lifts.
          */
         const enrolledIds = new Set(Object.keys(roster));
         const hasPersonWord = dispatch.pending.some(
           (e) => !enrolledIds.has(e.envelope.actor.id) && !isSystemActor(e.envelope.actor.id),
         );
-        // The cycle guard: A waking B waking A ends here. A person's word —
-        // anywhere in the batch — resets the chain and lifts the hold.
-        if (!hasPersonWord && dispatch.agentChain >= AGENT_CHAIN) {
-          if (dispatch.held !== "cycle") {
-            dispatch.held = "cycle";
-            const line = `${record.actor.name} paused after ${dispatch.agentChain} agent-to-agent turns with no person in the conversation — a human word resumes it.`;
+        const wasHeld = dispatch.held !== null;
+        const verdict = gateTurn(
+          dispatch,
+          hasPersonWord,
+          { turnsPerHour: TURNS_PER_HOUR, agentChain: AGENT_CHAIN },
+          Date.now(),
+        );
+        if (verdict.verdict === "hold-cycle") {
+          if (verdict.announce) {
+            const line = `${record.actor.name} paused after ${dispatch.agentChain} agent-to-agent ${dispatch.agentChain === 1 ? "turn" : "turns"} with no person in the conversation — a human word resumes it.`;
             console.log(`rc: ${line}`);
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
         }
-        // The ceiling: turns per agent per hour. The stop is recorded, the
-        // batch waits for the window, and a person can read what didn't run.
-        const hourAgo = Date.now() - 3_600_000;
-        dispatch.turnTimes = dispatch.turnTimes.filter((t) => t > hourAgo);
-        if (dispatch.turnTimes.length >= TURNS_PER_HOUR) {
-          const freesAt = dispatch.turnTimes[0]! + 3_600_000;
-          dispatch.retryAfter = Math.min(freesAt, Date.now() + 60_000);
-          if (dispatch.held !== "ceiling") {
-            dispatch.held = "ceiling";
-            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((freesAt - Date.now()) / 60_000))} min).`;
+        if (verdict.verdict === "hold-ceiling") {
+          dispatch.retryAfter = verdict.retryAfter;
+          if (verdict.announce) {
+            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - Date.now()) / 60_000))} min).`;
             console.log(`rc: ${line}`);
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
         }
-        if (dispatch.held) {
+        if (wasHeld) {
           console.log(`rc: ${record.actor.name}'s hold lifted — dispatching what waited`);
-          dispatch.held = null;
         }
-        dispatch.turnTimes.push(Date.now());
-        dispatch.agentChain = hasPersonWord ? 0 : dispatch.agentChain + 1;
         const failedThread = threadOf(dispatch.pending);
         dispatch.busy = true;
         void runSummons(record, dispatch)
