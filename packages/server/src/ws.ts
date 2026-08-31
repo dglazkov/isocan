@@ -1,7 +1,8 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
+import type { Capability, ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
 import {
+  capabilityOf,
   newId,
   staleClientRefusal,
   WS_BAD_ORIGIN,
@@ -12,7 +13,7 @@ import {
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
-import { admittingGrant } from "./grants.ts";
+import { admittingGrant, heldCapability } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
 import type { RcHolds } from "./rc-holds.ts";
@@ -185,7 +186,7 @@ export function attachWebSockets(
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer);
+        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability);
       });
     })();
   });
@@ -211,7 +212,10 @@ export function attachWebSockets(
   async function admitted(
     request: IncomingMessage,
     canvasId: string | null,
-  ): Promise<{ badgeId: string; bearer: boolean } | { code: number; reason: string }> {
+  ): Promise<
+    | { badgeId: string; bearer: boolean; capability: Capability }
+    | { code: number; reason: string }
+  > {
     const presented = presentedBadge(request.headers);
     if (presented?.carrier !== "bearer") {
       const secure = isSecureRequest(
@@ -233,20 +237,34 @@ export function attachWebSockets(
     const badge = await resolveBadge(desk, presented);
     if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
     await desk.touch(badge.badgeId, new Date().toISOString());
+    let capability: Capability = "edit";
     if (canvasId && !badge.admissions.some((a) => a.canvasId === canvasId)) {
       const grant = await admittingGrant(desk, canvasId, badge);
       if (grant) {
         // Provenance is revocation's grip: the grant that actually admitted
-        // this socket, so phase 9's sweep can find it.
-        await desk.admit(badge.badgeId, canvasId, { root: "grant", grantId: grant.id });
+        // this socket, so phase 9's sweep can find it. The capability rides
+        // with it (#88), because the door test short-circuits on the
+        // admission ever after.
+        capability = capabilityOf(grant);
+        await desk.admit(
+          badge.badgeId,
+          canvasId,
+          { root: "grant", grantId: grant.id },
+          capability,
+        );
       } else if (await engine.getSnapshot(canvasId).then(() => true, () => false)) {
         return { code: WS_NOT_ADMITTED, reason: "not admitted" };
       }
       // No grant and no such canvas here: fall through to `handleConnection`,
       // which closes 4404. A replica dialling a canvas its home has deleted
       // takes this path, and 4404 is what makes it stop dialling.
+    } else if (canvasId) {
+      // Already admitted — the same re-ask a view admission gets at the HTTP
+      // door, so a socket opened after proving an email connects as the
+      // editor the invitation makes them (see `heldCapability`).
+      capability = (await heldCapability(desk, canvasId, badge)) ?? "edit";
     }
-    return { badgeId: badge.badgeId, bearer: presented?.carrier === "bearer" };
+    return { badgeId: badge.badgeId, bearer: presented?.carrier === "bearer", capability };
   }
 
   async function handleConnection(
@@ -255,6 +273,7 @@ export function attachWebSockets(
     badgeId: string,
     since: number,
     bearer: boolean,
+    capability: Capability,
   ): Promise<void> {
     // Without a listener, an abrupt client death (ECONNRESET) raises an
     // unhandled 'error' event on the EventEmitter and would crash the daemon.
@@ -317,6 +336,10 @@ export function attachWebSockets(
         since <= snapshot.lastSeq &&
         since + tail.length >= snapshot.lastSeq &&
         tail.every((entry, index) => entry.seq === since + index + 1);
+      // The viewer face's one fact, on the hello (#88): stated only when it
+      // narrows, so a client from before the field reads the hello it always
+      // read.
+      const narrowed = capability === "view" ? { capability } : {};
       const hello: ServerMessage = resumable
         ? {
             type: "resumed",
@@ -326,8 +349,9 @@ export function attachWebSockets(
             lastSeq: tail.length > 0 ? tail[tail.length - 1]!.seq : since,
             colors: snapshot.colors,
             names: snapshot.names,
+            ...narrowed,
           }
-        : { type: "snapshot", ...snapshot };
+        : { type: "snapshot", ...snapshot, ...narrowed };
       ws.send(JSON.stringify(hello));
       if (resumable) {
         for (const entry of tail) {
@@ -387,6 +411,14 @@ export function attachWebSockets(
       } catch {
         return;
       }
+      /**
+       * A view-only connection is fan-out and nothing up (#88). The viewer
+       * face sends no beats, so anything arriving here is a client asserting
+       * a presence its admission does not carry — dropped with the same
+       * forgiveness an unvouched actor gets below, rather than a closed
+       * socket: the socket is doing its legitimate job, which is watching.
+       */
+      if (capability === "view") return;
       /**
        * A whole roster, from a daemon speaking for several people.
        *

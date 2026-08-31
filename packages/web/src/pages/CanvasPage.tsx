@@ -40,6 +40,7 @@ const Workbench = lazy(() =>
   import("../components/Workbench.tsx").then((m) => ({ default: m.Workbench })),
 );
 import { FullScreen } from "../components/FullScreen.tsx";
+import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { Scrubber } from "../components/Scrubber.tsx";
 import { WhatsNew } from "../components/WhatsNew.tsx";
@@ -165,6 +166,7 @@ function CanvasSurface({
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
+  const capability = useCanvasStore((s) => s.capability);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
   const followedLabel = useCanvasStore((s) => {
@@ -780,6 +782,17 @@ function CanvasSurface({
         </div>
       </div>
     );
+  }
+
+  /**
+   * A view admission gets the viewer face, whoever is holding it (#88). This
+   * branch is what a NAMED person meets when they follow a view link — the
+   * stranger's path never reaches this page (`Doorway` hands them to the
+   * viewer before identity is asked). After the hooks, deliberately: the
+   * socket above is the very connection whose hello said "view".
+   */
+  if (capability === "view") {
+    return <Viewer canvasId={canvasId} itemId={itemId ?? null} />;
   }
 
   return (

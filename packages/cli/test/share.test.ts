@@ -162,11 +162,25 @@ describe("isocan share", () => {
     expect(again.stdout).toMatch(/link\s+off —/);
   }, 60_000);
 
-  it("refuses --link with anything that is not on or off", async () => {
+  it("refuses --link with anything that is not on, off or view", async () => {
     await bornCanvas();
     const bad = await cli("share", "--link", "maybe");
     expect(bad.code).toBe(1);
-    expect(bad.stderr).toMatch(/on or off/);
+    expect(bad.stderr).toMatch(/on, off or view/);
+  }, 60_000);
+
+  /** The #88 verb: the same link row, narrowed. The mechanism is the home's
+   * (`view-only.test.ts` pins it); what the CLI owes is the round trip and a
+   * status line that says which link is on. */
+  it("turns the link view-only with --link view, and back on with --link on", async () => {
+    await bornCanvas();
+    const narrowed = await cli("share", "--link", "view");
+    expect(narrowed.code, narrowed.stderr).toBe(0);
+    expect(narrowed.stdout).toMatch(/link\s+view-only —/);
+    expect(narrowed.stdout).toMatch(/change nothing/);
+    const widened = await cli("share", "--link", "on");
+    expect(widened.code, widened.stderr).toBe(0);
+    expect(widened.stdout).toMatch(/link\s+on —/);
   }, 60_000);
 
   it("hands back the HOME's refusal for an email — a home with no attester, not a stub", async () => {

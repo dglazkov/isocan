@@ -150,6 +150,14 @@ interface CanvasStore {
   /** The slash-command menu, from the daemon. Null = not asked yet; the
    * built-ins stand in until it lands (lib/commands.ts). */
   commands: SlashCommand[] | null;
+  /**
+   * What this tab's admission lets it do here (#88), read off the socket's
+   * hello. `edit` until the home says otherwise — which is what every home
+   * from before the field says by omission. The HOME enforces this; what the
+   * flag is for is wearing the viewer face instead of offering gestures that
+   * would each come back refused.
+   */
+  capability: "edit" | "view";
 }
 
 /**
@@ -174,6 +182,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   actorNames: {},
   backing: { bound: false, onDisk: {} },
   commands: null,
+  capability: "edit",
 }));
 
 // ---- the confirmed state, the queue, and the view over both (phase 10) ----
@@ -606,7 +615,14 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentProjectId: string | null = null;
 
-export function connectToCanvas(canvasId: string, actor: Actor): void {
+/**
+ * `actor: null` is the VIEWER's connection (#88): the socket opens and the
+ * canvas streams, but there is nobody to announce — `flushPresence` already
+ * declines to beat without an actor, so a viewer casts no cursor and takes no
+ * seat in the roster. The home drops a view socket's beats anyway; null here
+ * is the client not asserting what its admission cannot carry.
+ */
+export function connectToCanvas(canvasId: string, actor: Actor | null): void {
   disconnect();
   currentProjectId = canvasId;
   presenceActor = actor;
@@ -624,6 +640,10 @@ export function connectToCanvas(canvasId: string, actor: Actor): void {
     lastSeq: 0,
     connection: "connecting",
     sessions: [],
+    // Edit until THIS canvas's hello says otherwise: the flag is per
+    // admission, and carrying a previous canvas's "view" across would dress
+    // an editor in the viewer face until the socket answered.
+    capability: "edit",
   });
   void restoreThenOpen(canvasId);
 }
@@ -936,6 +956,7 @@ function openSocket(canvasId: string): void {
         connection: "live",
         actorColors: message.colors,
         actorNames: message.names,
+        capability: message.capability === "view" ? "view" : "edit",
       });
       // Through `confirm`, like every other move of the truth: the snapshot IS
       // the home's state at `lastSeq`, and anything this tab has queued past it
@@ -962,6 +983,7 @@ function openSocket(canvasId: string): void {
         connection: "live",
         actorColors: message.colors,
         actorNames: message.names,
+        capability: message.capability === "view" ? "view" : "edit",
       });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {

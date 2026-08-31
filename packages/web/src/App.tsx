@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { CANVAS_ROUTE, ITEM_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
+import { getSnapshot } from "./lib/api.ts";
+import { Viewer } from "./components/Viewer.tsx";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";
@@ -153,7 +155,62 @@ export function Doorway({
   if (face === "terms") return <TermsPage />;
   if (face === "here" && actor) return <>{children(actor)}</>;
   if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
+  /**
+   * A stranger at a canvas address may be a VIEWER (#88), and a viewer is not
+   * asked who they are — there is nothing their name would attach to. The
+   * gate asks the home first; everyone the home calls an editor still meets
+   * the door exactly as phases 7-9 built it.
+   */
+  const canvasish =
+    matchPath(ITEM_ROUTE, pathname) ?? matchPath(CANVAS_ROUTE, pathname);
+  if (canvasish?.params.canvasId) {
+    return (
+      <ViewerGate
+        canvasId={canvasish.params.canvasId}
+        itemId={(canvasish.params as { itemId?: string }).itemId ?? null}
+        door={<IdentityDialog onDone={onIdentity} />}
+      />
+    );
+  }
   return <IdentityDialog onDone={onIdentity} />;
+}
+
+/**
+ * **Ask the home before asking for a name** (#88).
+ *
+ * One snapshot GET decides which face a nameless arrival meets: an admission
+ * that can only view goes straight to the presentation, and everything else —
+ * an editor's admission, a refusal, a canvas that is not there — falls back
+ * to the identity dialog, which is exactly where those paths led before this
+ * gate existed (the dialog's canvas page says "will not have you" in its own
+ * words). The read is not wasted work: it is the same request that admits the
+ * badge at the door, one flight earlier.
+ */
+function ViewerGate({
+  canvasId,
+  itemId,
+  door,
+}: {
+  canvasId: string;
+  itemId: string | null;
+  door: ReactNode;
+}) {
+  const [standing, setStanding] = useState<"asking" | "view" | "door">("asking");
+  useEffect(() => {
+    let live = true;
+    setStanding("asking");
+    getSnapshot(canvasId)
+      .then((s) => live && setStanding(s.capability === "view" ? "view" : "door"))
+      .catch(() => live && setStanding("door"));
+    return () => {
+      live = false;
+    };
+  }, [canvasId]);
+  // The door's own sentence for the beat the answer takes, so a viewer never
+  // sees the name prompt flash before the presentation replaces it.
+  if (standing === "asking") return <div className="page-note">Letting you in…</div>;
+  if (standing === "view") return <Viewer canvasId={canvasId} itemId={itemId} />;
+  return <>{door}</>;
 }
 
 /**

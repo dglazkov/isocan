@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Actor, AttestOffer, Grant, SweepReport } from "@isocan/core";
-import { canvasUrl, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
+import type { Actor, AttestOffer, Capability, Grant, SweepReport } from "@isocan/core";
+import { canvasUrl, capabilityOf, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
 import type { RowState } from "@isocan/core";
 import { useAnswerable } from "../lib/answerable.ts";
 import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
@@ -115,6 +115,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const address = canvasUrl(location.origin, record.id);
   const link = grants?.find((g) => g.subject === LINK) ?? null;
   const linkOn = link !== null;
+  const linkView = link !== null && capabilityOf(link) === "view";
   const invited = (grants ?? []).filter((g) => g.subject !== LINK);
 
   async function toggleLink(): Promise<void> {
@@ -160,6 +161,35 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * and capability (`no-attester`) with two deliberately different sentences,
    * and a second copy of either here would be a policy that goes stale.
    */
+  /**
+   * What the link admits to — one POST, the home does the replacing (#88).
+   *
+   * The sweep that rides back is the mechanism, not a side effect: the people
+   * already inside on the old link are re-rooted onto the new one at its
+   * capability, so "can view" reaches them without expelling them — and it
+   * reaches the person flipping the control too, unless they made the canvas
+   * or hold a named invitation. The count is reported the way the off-toggle's
+   * is, because it is the same kind of news.
+   */
+  async function setLinkCapability(capability: Capability): Promise<void> {
+    if (!canvasId || busy || !link || capabilityOf(link) === capability) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await createGrant(canvasId, LINK, capability);
+      if (answer.swept) setSwept({ what: "link", report: answer.swept });
+      setGrants((await listGrants(canvasId)).grants);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === "not-admitted"
+          ? "this canvas will not have you any more — ask whoever shared it"
+          : (err as Error).message,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function invite(): Promise<void> {
     if (!canvasId || busy || !who.trim()) return;
     setBusy(true);
@@ -269,7 +299,9 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                   // landed on said "ask whoever shared it" to the person who
                   // had just shared it. Saying so here costs one sentence and
                   // needs no new mechanism.
-                  "anyone who has the address can open this canvas. Turning it off removes everyone who came in that way — including you, unless you made this canvas."
+                  linkView
+                  ? "anyone who has the address can look — a presentation included — and change nothing. Turning it off removes everyone who came in that way."
+                  : "anyone who has the address can open this canvas. Turning it off removes everyone who came in that way — including you, unless you made this canvas."
                 : // Say what revocation actually did — and since phase 9 it
                   // does expel, so the count is read off the answer rather
                   // than asserted. `swept` is null when the link was already
@@ -279,6 +311,32 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
           </span>
         </span>
       </button>
+
+      {/* What the link admits to — shown only while there is a link to speak
+          for. Two words rather than a second switch: "on but read-only" and
+          "off" must not look like neighbouring positions of one control. */}
+      {linkOn && (
+        <div className="share-link-mode" role="radiogroup" aria-label="What the link allows">
+          <button
+            className={`btn${linkView ? "" : " primary"}`}
+            role="radio"
+            aria-checked={!linkView}
+            disabled={busy}
+            onClick={() => void setLinkCapability("edit")}
+          >
+            Can edit
+          </button>
+          <button
+            className={`btn${linkView ? " primary" : ""}`}
+            role="radio"
+            aria-checked={linkView}
+            disabled={busy}
+            onClick={() => void setLinkCapability("view")}
+          >
+            Can view
+          </button>
+        </div>
+      )}
 
       {error && <div className="identity-warning">{error}</div>}
 

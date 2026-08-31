@@ -16,6 +16,12 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 31 August 2026
+
+- Mark items as slides and press Enter: full screen flips through them with arrows, like a deck. Share the first slide's link and that is the presentation.
+- The link can now be view-only: anyone with the address sees the slides and can change nothing. Flip it in the Share dialog ("Can view") or with `isocan share --link view`.
+- Viewers are not asked for a name — they land straight on the presentation.
+
 ## 29 August 2026
 
 - Personas: give an agent a name, a model and a brief, and it keeps them across sessions.

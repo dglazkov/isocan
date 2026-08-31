@@ -1,4 +1,5 @@
 import type { SweepReport } from "@isocan/core";
+import { capabilityOf } from "@isocan/core";
 import { admittingGrant } from "./grants.ts";
 import type { BadgeRecord, Desk } from "./desk.ts";
 
@@ -198,7 +199,11 @@ export async function sweepCanvas(desk: Desk, canvasId: string): Promise<SweepRe
         changed = true;
         return "expelled";
       }
-      await desk.reroot(badgeId, canvasId, { root: "grant", grantId: grant.id });
+      // The new root's capability, with the new provenance: a re-rooted badge
+      // is here for the surviving grant's reason and may do what THAT grant
+      // admits to — which is how replacing the edit link with a view link
+      // (#88) demotes the people inside instead of expelling them.
+      await desk.reroot(badgeId, canvasId, { root: "grant", grantId: grant.id }, capabilityOf(grant));
       rerooted += 1;
       changed = true;
       return "rerooted";

@@ -919,6 +919,12 @@ in the web app drives:
 - `isocan share --link on` — grant it again. (That writes a NEW grant row; the
   old one stays as a record of when it was switched off. It does not bring
   anybody back: they are re-admitted the next time they ask.)
+- `isocan share --link view` — anyone with the address can **look, and change
+  nothing**: they land on the canvas's slides full screen, flip with arrows,
+  and every write is refused by the home (`view-only`). The people already in
+  on the link are moved to view rather than expelled; `--link on` moves them
+  back. This is how you share a presentation (see `isocan slides`) without
+  letting the audience rearrange the canvas.
 - `isocan share <email>` — **invite one person by name.** They get in by
   proving they read that address, whether or not the link is on. Nothing is
   emailed from here: the invitation is still the address, and the grant is

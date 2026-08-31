@@ -45,6 +45,7 @@ import {
   INSTALL_SPEC,
   LINK,
   grantSubjectOf,
+  capabilityOf,
   normalizeSubject,
   PASS_TTL_MS,
   actorNameIn,
@@ -2284,11 +2285,14 @@ async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
  * op would make the oplog lie"). Button and verb drive exactly the same three
  * routes, and neither of them spells a URL: `@isocan/core` does.
  *
- Four shapes, one endpoint:
+ Five shapes, one endpoint:
  *
  * - `isocan share` — the address to send, whether the link is on, and who has
  *   been invited by name.
  * - `isocan share --link off` / `--link on` — revoke, or grant again.
+ * - `isocan share --link view` — the link admits to LOOKING (#88): viewers
+ *   land on the deck full screen and every write is refused by the home. The
+ *   people already in on the link are re-rooted to view, not expelled.
  * - `isocan share <email>` — **phase 9 stage 2's slot, filled.** The home
  *   writes the row, and whoever proves that address is admitted whether or not
  *   the link is on. On a home that has borrowed no attester the request is
@@ -2319,8 +2323,9 @@ program
   .description("Who may enter this canvas: the address to send, the \"anyone with the link\" grant, and who was invited by name")
   .argument("[who]", "an email to invite by name — they get in by proving that address")
   .option(
-    "--link <on|off>",
-    "turn the link grant on (anyone with the address) or off — OFF EXPELS the badges that came in on it",
+    "--link <on|off|view>",
+    "turn the link grant on (anyone with the address can edit), off — OFF EXPELS the badges " +
+      "that came in on it — or view: anyone with the address can look, and change nothing (#88)",
   )
   .option(
     "--revoke <who>",
@@ -2359,14 +2364,24 @@ program
 
       if (opts.link !== undefined) {
         const want = opts.link.toLowerCase();
-        if (want !== "on" && want !== "off") {
-          throw new Error(`--link wants on or off, got: ${opts.link}`);
+        if (want !== "on" && want !== "off" && want !== "view") {
+          throw new Error(`--link wants on, off or view, got: ${opts.link}`);
         }
         const live = (await ctx.client.grants(canvas.id)).grants.find((g) => g.subject === LINK);
-        if (want === "on" && !live) await ctx.client.createGrant(canvas.id, LINK);
-        // Off with no live row is not an error: the gesture is "the link is
-        // off", and it already is. Two people flipping the same toggle at once
-        // must not turn one of them into a failure.
+        // `on` and `view` are the same POST with a different capability, and
+        // the home does the replacing when the link is already on the other
+        // way — one gesture, whose sweep re-roots the people inside rather
+        // than expelling them. Asking for what already stands does nothing,
+        // for the toggle's reason: two people flipping it at once must not
+        // turn one of them into a failure.
+        if (want !== "off") {
+          const capability = want === "view" ? ("view" as const) : ("edit" as const);
+          if (!live || capabilityOf(live) !== capability) {
+            sweepAlso((await ctx.client.createGrant(canvas.id, LINK, capability)).swept);
+          }
+        }
+        // Off with no live row is not an error either — the gesture is "the
+        // link is off", and it already is.
         if (want === "off" && live) {
           // **What the sweep did is remembered, not printed here.** Phase 9
           // made revocation expel people, and a gesture whose point is
@@ -2425,7 +2440,9 @@ program
       printKeyValues({
         address,
         link: link
-          ? `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
+          ? capabilityOf(link) === "view"
+            ? `view-only — anyone with the address can look, and change nothing (granted ${link.at.slice(0, 10)})`
+            : `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
           : // Phase 7's line here read "people already on this canvas keep
             // their access", and phase 9 made that false. Worse, with the
             // sweep's own count printed beside it the two lines contradicted

@@ -43,6 +43,32 @@ import type { Attestation, SweepReport } from "./badge.ts";
  */
 export type GrantSubject = "link" | `email:${string}` | `repo:${string}`;
 
+/**
+ * What a grant lets its holder DO once the door says yes — the roles question
+ * `identity-desk.md` left open ("that waits for a scene that forces it"),
+ * answered by the scene that forced it: a presentation (#87) whose viewers
+ * must not walk in and start moving things (#88).
+ *
+ * Two words and not a matrix. `edit` is everything admission has always
+ * meant; `view` is admission to READ — the snapshot, the oplog, the blobs,
+ * the socket's fan-out — and nothing that writes. The refusal is server-side
+ * at the op chokepoint, not a hidden toolbar: a capability that only a client
+ * enforced would be what the scrubber's comment calls a habit rather than a
+ * rule.
+ *
+ * **Absent means `edit`, everywhere.** Every grant row and every admission
+ * written before this field existed meant full access, so the absent field
+ * must go on meaning exactly that — and the wire, the desk and Firestore all
+ * store the field only when it narrows.
+ */
+export type Capability = "edit" | "view";
+
+/** The one reading of an absent field: a grant from before capabilities — or
+ * one written without narrowing — admits to everything, as it always did. */
+export function capabilityOf(grant: { capability?: Capability }): Capability {
+  return grant.capability ?? "edit";
+}
+
 /** The one subject that needs no attester: presenting the address IS the
  * proof, which is why it is the subject a canvas is born with. */
 export const LINK: GrantSubject = "link";
@@ -86,6 +112,9 @@ export interface Grant {
    */
   revokedAt?: string;
   revokedBy?: string;
+  /** What this row admits its holder to do. Written only when it NARROWS
+   * (`view`); absent is `edit` — see {@link Capability}. */
+  capability?: Capability;
 }
 
 /**
@@ -269,6 +298,9 @@ export const grantRoute = (canvasId: string, grantId: string): string =>
 
 export interface CreateGrantRequest {
   subject: GrantSubject;
+  /** Omitted means `edit`, which is what every caller from before the field
+   * asked for by not being able to ask. */
+  capability?: Capability;
 }
 
 export interface GrantsResponse {
@@ -304,6 +336,19 @@ export interface GrantResponse {
  * turn into "ask Priya for the link".
  */
 export const NOT_ADMITTED = "not-admitted";
+
+/**
+ * The door said yes and the ledger says LOOK, DON'T TOUCH — a view admission
+ * meeting a write.
+ *
+ * Its own code, for `not-admitted`'s reason turned one notch: this caller is
+ * both badged AND admitted, so neither "go to the door" nor "ask for the
+ * link" is the remedy. The remedy is to ask whoever shared it to share for
+ * editing, and a client can only say that sentence if the refusal is
+ * distinguishable from the other two. 403, like `not-admitted`: the request
+ * was understood and will not be honoured, and retrying cannot fix it.
+ */
+export const VIEW_ONLY = "view-only";
 
 /**
  * The WS close code for the same refusal, continuing ws.ts's 4400/4401/4404

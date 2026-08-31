@@ -15,6 +15,7 @@ import type {
   DoorRequest,
   DoorResponse,
   FreeNameResponse,
+  Capability,
   Grant,
   GrantResponse,
   GrantsResponse,
@@ -45,6 +46,7 @@ import {
   FILENAME_HEADER,
   fileOf,
   FREE_NAME_ROUTE,
+  capabilityOf,
   grantSubjectRefusal,
   CANVAS_PATH_PREFIX,
   HOME_GC_ROUTE,
@@ -94,7 +96,13 @@ import {
   type SigningKeys,
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
-import { admittingGrant, NotAdmittedError } from "./grants.ts";
+import {
+  admittingGrant,
+  capabilityIn,
+  heldCapability,
+  NotAdmittedError,
+  ViewOnlyError,
+} from "./grants.ts";
 import {
   clientAddress,
   MINT_PER_MINUTE,
@@ -431,6 +439,13 @@ export function registerRoutes(
     if (err instanceof NotAdmittedError) {
       return reply.status(403).send({ error: err.message, code: err.code });
     }
+    // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
+    // and the ledger says look-don't-touch. Its own code because the remedy is
+    // different again — not the door, not the link, but being shared with for
+    // editing.
+    if (err instanceof ViewOnlyError) {
+      return reply.status(403).send({ error: err.message, code: err.code });
+    }
     // 400 and its own code, for `not-admitted`'s reason pointed the other way:
     // the caller's BADGE is fine and a 401 would send it to the door to throw
     // away a perfectly good credential. What is wrong is the token it
@@ -598,7 +613,26 @@ export function registerRoutes(
       // canvas-scoped route added later is covered by DEFAULT instead of by
       // somebody remembering.
       const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1];
-      if (scoped) await admit(req, decodeSegment(scoped));
+      if (scoped) {
+        const canvasId = decodeSegment(scoped);
+        await admit(req, canvasId);
+        /**
+         * The capability check, method-keyed and in the SAME hook (#88): a
+         * view admission reads everything and changes nothing, and "changes"
+         * on an HTTP surface is any verb but GET/HEAD. One line here covers
+         * undo, redo, blobs, gc, grants, passes, sessions, bind, write — and
+         * whatever canvas-scoped route gets added next month, which is this
+         * hook's whole argument about coverage by default. `/api/ops` carries
+         * its canvas in the body and takes the same test in its handler.
+         */
+        if (
+          req.method !== "GET" &&
+          req.method !== "HEAD" &&
+          capabilityIn(req.badge, canvasId) === "view"
+        ) {
+          throw new ViewOnlyError(canvasId);
+        }
+      }
       return;
     }
     if (isOpen(req.method, pathname)) return;
@@ -733,7 +767,14 @@ export function registerRoutes(
     // 9 closed that one, so the only callers left here already hold a badge
     // and this is the belt on `/api/ops`, whose canvas is in its body.
     if (!req.badge) return;
-    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) return;
+    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) {
+      // Already in — but a VIEW admission re-asks the door, so proving an
+      // email after entering by a view link lets the invitation that names
+      // this person take effect (see `heldCapability`). Editors return on the
+      // short-circuit as they always have.
+      await heldCapability(desk, canvasId, req.badge);
+      return;
+    }
 
     // The bootstrap: this badge is creating the canvas, and it is the only
     // provenance that is not "somebody let me in". Nothing to consult — there
@@ -760,9 +801,17 @@ export function registerRoutes(
      * has its own route.
      */
 
+    // The admitting grant's capability rides onto the admission (#88): the
+    // door test short-circuits on the admission ever after, so this copy is
+    // the one that gets enforced. Bootstrap is `edit` by construction —
+    // making a canvas is editing it.
+    let capability: Capability = "edit";
     if (!provenance) {
       const grant = await admittingGrant(desk, canvasId, req.badge);
-      if (grant) provenance = { root: "grant", grantId: grant.id };
+      if (grant) {
+        provenance = { root: "grant", grantId: grant.id };
+        capability = capabilityOf(grant);
+      }
     }
 
     if (!provenance) {
@@ -772,10 +821,15 @@ export function registerRoutes(
       throw new NotAdmittedError(canvasId);
     }
 
-    await desk.admit(req.badge.badgeId, canvasId, provenance);
+    await desk.admit(req.badge.badgeId, canvasId, provenance, capability);
     req.badge.admissions = [
       ...req.badge.admissions,
-      { canvasId, provenance, at: new Date().toISOString() },
+      {
+        canvasId,
+        provenance,
+        at: new Date().toISOString(),
+        ...(capability === "view" ? { capability } : {}),
+      },
     ];
   };
 
@@ -863,7 +917,15 @@ export function registerRoutes(
      * could not refuse; a refusal that arrives after the op has landed is not
      * a refusal at all.
      */
-    if (body.canvasId) await admit(req, body.canvasId);
+    if (body.canvasId) {
+      await admit(req, body.canvasId);
+      // The capability check, at the one mutating route the hook cannot cover
+      // (#88). BEFORE the submit for the door's own reason: a refusal that
+      // arrives after the op has landed is not a refusal at all.
+      if (capabilityIn(req.badge!, body.canvasId) === "view") {
+        throw new ViewOnlyError(body.canvasId);
+      }
+    }
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
       badgeId: req.badge!.badgeId,
@@ -1276,7 +1338,16 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
     const refusal = grantSubjectRefusal(body.subject);
     if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
+    // Shape-checked like the subject beside it: two words, and anything else
+    // is a caller sending something other than a capability (#88).
+    if (body.capability !== undefined && body.capability !== "edit" && body.capability !== "view") {
+      return reply.status(400).send({
+        error: `not a capability: ${String(body.capability)} (a grant admits to \`edit\` or \`view\`)`,
+        code: "bad-grant",
+      });
+    }
     const subject = normalizeSubject(body.subject!);
+    const capability: Capability = body.capability === "view" ? "view" : "edit";
     // A REPLICA forwards without asking its own opinion, and the order of
     // these two lines is that decision. Shape is universal and refused above;
     // "can anything here verify that" is a fact about the home that OWNS the
@@ -1285,21 +1356,39 @@ export function registerRoutes(
     // have accepted, on the strength of its own configuration. Same reason
     // `isocan share <email>` has no client-side "not yet".
     const home = options.homes?.for(id) ?? null;
-    if (home) return home.createGrant(id, subject);
+    if (home) return home.createGrant(id, subject, capability);
     const unverifiable = attesterRefusal(subject, attesters);
     if (unverifiable) {
       return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
     await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
-    if (live) return { grant: live } satisfies GrantResponse;
+    if (live && capabilityOf(live) === capability) return { grant: live } satisfies GrantResponse;
     const grant: Grant = {
       id: newId("gnt"),
       canvasId: id,
       subject,
       grantedBy: req.badge!.badgeId,
       at: new Date().toISOString(),
+      ...(capability === "view" ? { capability } : {}),
     };
+    /**
+     * Same subject, different capability: a REPLACEMENT, in one gesture (#88).
+     * The old row is tombstoned and the new one written BEFORE the sweep runs,
+     * and that order is the mechanism: the sweep re-runs the door test on
+     * every badge rooted at the dead row, finds the new grant, and re-roots
+     * them at its capability — which is exactly how "the link can only view
+     * now" reaches the people who are already inside, without expelling them.
+     * Two rows and a sweep rather than an edit-in-place, because provenance
+     * points at grant ids and an id whose meaning changed underneath its
+     * admissions would be a capability nothing ever re-checked.
+     */
+    if (live) {
+      await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
+      await desk.putGrant(grant);
+      const swept = await sweepCanvas(desk, id);
+      return { grant, swept } satisfies GrantResponse;
+    }
     await desk.putGrant(grant);
     return { grant } satisfies GrantResponse;
   });
@@ -1759,7 +1848,15 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     // No `admit` here any more: the hook took the door's test on the way in,
     // for this route and every other one shaped like it.
-    return engine.getSnapshot(id);
+    const snapshot = await engine.getSnapshot(id);
+    // The one fact about the READER that rides on the read (#88): a client
+    // whose admission can only view learns it here, with the canvas, instead
+    // of discovering it as a refusal per gesture. Absent means edit, so a
+    // pre-capability client parsing this response sees nothing new.
+    if (req.badge && capabilityIn(req.badge, id) === "view") {
+      return { ...snapshot, capability: "view" as const };
+    }
+    return snapshot;
   });
 
   app.get("/api/projects/:id/oplog", async (req) => {
