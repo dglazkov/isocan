@@ -132,6 +132,7 @@ import {
   mapChildren,
   mapOf,
   mapOutline,
+  tidyMap,
   mapsOn,
   newMapId,
   importDesign,
@@ -4588,6 +4589,37 @@ map
       const outline = mapOutline(snapshot.canvas, mapId);
       if (ctx.json) return printJson({ mapId, outline });
       console.log(outline);
+    }),
+  );
+
+map
+  .command("tidy [map]")
+  .description("Lay the map out as a tree — one column per depth, parents centred on their children")
+  .option("--canvas <canvas>")
+  .option("--dry-run", "say what would move, and move nothing")
+  .action(
+    run(async (ref: string | undefined, opts: { dryRun?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const mapId = resolveMap(snapshot, ref);
+      const moves = tidyMap(snapshot.canvas, mapId);
+      if (ctx.json) return printJson({ mapId, moves });
+      if (moves.length === 0) return console.log("already tidy — nothing moved");
+      if (opts.dryRun) {
+        for (const m of moves) {
+          const node = snapshot.canvas.items[m.itemId];
+          console.log(`  ${truncate(node?.title ?? m.itemId, 30).padEnd(30)} ${node?.x},${node?.y} → ${m.x},${m.y}`);
+        }
+        return console.log(`\n${moves.length} would move — run without --dry-run to do it`);
+      }
+      /**
+       * **One op, so it is one undo.** The first thing anybody does after an
+       * automatic layout is decide they preferred it before, and a tidy that
+       * arrived as forty separate moves would need forty ⌘Zs to take back.
+       */
+      await sendOp(ctx, p.id, { type: "items.move", moves });
+      console.log(`tidied ${moves.length} node${moves.length === 1 ? "" : "s"} — \`isocan undo\` puts them back`);
     }),
   );
 

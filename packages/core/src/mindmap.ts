@@ -234,3 +234,120 @@ export function edgeAnchors(
     axis: "y",
   };
 }
+
+/**
+ * **Stage 3: a map that lands in a shape somebody would have dragged it into.**
+ *
+ * Placement so far has been INCREMENTAL — a child goes to the right of its
+ * parent and stacks under the lowest sibling, decided once at the moment it is
+ * added and never revisited. That was the right first move: it means an agent
+ * writing thirty nodes from one sentence produces something legible rather
+ * than a pile, which was the stated risk. It also means the arrangement
+ * records the ORDER things were typed rather than the shape of the tree, and
+ * the difference shows the moment a branch grows: a parent sits level with its
+ * first child while its last child is four rows down, so the eye reads a
+ * ladder instead of a fork.
+ *
+ * This is the tidy pass. Depth chooses the column; a post-order sweep chooses
+ * the row. Each leaf takes the next free row, and **a parent is centred on the
+ * band its descendants occupy** — which is the whole difference, and the one
+ * thing every hand-drawn mind map does.
+ *
+ * **It returns moves rather than applying them.** Layout that writes is layout
+ * that cannot be previewed, cannot be undone as one thing, and cannot be
+ * tested without a canvas. The caller sends one `items.move`, so tidying is a
+ * single undo step — which matters, because the first thing anyone does after
+ * an automatic layout is decide they preferred it before.
+ *
+ * Columns are sized to the WIDEST node in them rather than to a constant, so a
+ * long label does not overlap the column to its right — the failure that makes
+ * an automatic layout look worse than the pile it replaced.
+ */
+export interface MapMove {
+  itemId: string;
+  x: number;
+  y: number;
+}
+
+/** Space between a column and the next, and between one row and the next. */
+export const TIDY_GAP_X = 60;
+export const TIDY_GAP_Y = 24;
+
+export function tidyMap(canvas: CanvasContents, mapId: string): MapMove[] {
+  const roots = mapRoots(canvas, mapId);
+  if (roots.length === 0) return [];
+
+  // Depth of every node, and the widest node at each depth — the column's
+  // width, which is what stops a long label reaching into the next column.
+  const depthOf = new Map<string, number>();
+  const walk = (item: Item, depth: number, seen: Set<string>): void => {
+    if (seen.has(item.id)) return; // a cycle is guarded elsewhere; do not hang here
+    seen.add(item.id);
+    depthOf.set(item.id, depth);
+    for (const child of mapChildren(canvas, mapId, item.id)) walk(child, depth + 1, seen);
+  };
+  const seen = new Set<string>();
+  for (const root of roots) walk(root, 0, seen);
+
+  const widest: number[] = [];
+  for (const [itemId, depth] of depthOf) {
+    const item = canvas.items[itemId];
+    if (!item) continue;
+    widest[depth] = Math.max(widest[depth] ?? 0, item.width);
+  }
+  const columnX: number[] = [];
+  let x = roots[0]!.x;
+  for (let d = 0; d < widest.length; d += 1) {
+    columnX[d] = x;
+    x += (widest[d] ?? 0) + TIDY_GAP_X;
+  }
+
+  const moves: MapMove[] = [];
+  /**
+   * The top of the band the tree will occupy.
+   *
+   * Anchored on the topmost NODE, not on the root: a tidy moves the root down
+   * to sit level with the middle of its children, so anchoring there made the
+   * pass shift the whole map a little further each time it ran. Tidying twice
+   * has to be the same as tidying once — otherwise "tidy" is a verb that
+   * never settles, and the second press looks like a bug in the first.
+   *
+   * The topmost node after a tidy is the first leaf, whose top IS this
+   * cursor's start, which is what makes the anchor a fixed point.
+   */
+  const all = mapNodes(canvas, mapId);
+  let cursorY = Math.min(...all.map((n) => n.y));
+
+  /** Places a subtree and answers the vertical centre it ended up occupying. */
+  const place = (item: Item, depth: number, placed: Set<string>): number => {
+    if (placed.has(item.id)) return cursorY;
+    placed.add(item.id);
+    const children = mapChildren(canvas, mapId, item.id).filter((c) => !placed.has(c.id));
+    let centre: number;
+    if (children.length === 0) {
+      // A leaf takes the next free row and advances the cursor past itself.
+      centre = cursorY + item.height / 2;
+      cursorY += item.height + TIDY_GAP_Y;
+    } else {
+      const centres = children.map((child) => place(child, depth + 1, placed));
+      // Centred on its children — a parent level with its FIRST child is the
+      // ladder this pass exists to remove.
+      centre = (centres[0]! + centres[centres.length - 1]!) / 2;
+    }
+    moves.push({
+      itemId: item.id,
+      x: columnX[depth] ?? item.x,
+      y: Math.round(centre - item.height / 2),
+    });
+    return centre;
+  };
+
+  const placed = new Set<string>();
+  for (const root of roots) place(root, 0, placed);
+  // Only what actually moves: a tidy that reports every node as changed makes
+  // an undo step out of nothing and a diff nobody can read.
+  return moves.filter((m) => {
+    const item = canvas.items[m.itemId];
+    return !item || item.x !== m.x || item.y !== m.y;
+  });
+}
