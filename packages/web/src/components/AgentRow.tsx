@@ -39,6 +39,7 @@ export function AgentRowView({
   onToggle,
   following,
   onFollow,
+  onDismiss,
 }: {
   canvasId: string;
   row: AgentRow;
@@ -56,6 +57,14 @@ export function AgentRowView({
    */
   following?: boolean;
   onFollow?: () => void;
+  /**
+   * **Dismiss is the TRAY's too**, same reasoning as follow: the tray is
+   * where journey 8 puts the gesture ("the same doors that added an agent
+   * take one away"), so the tray passes this for actors with standing and
+   * the workbench passes nothing. Withdrawal removes the standing, never
+   * the history — the op it sends says exactly that.
+   */
+  onDismiss?: () => void;
 }) {
   // The peek is position:FIXED at a measured point — the roster scrolls,
   // and a peek positioned inside it gets clipped by the scroll box (the
@@ -70,6 +79,64 @@ export function AgentRowView({
   const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const color = actorColorIn(colors, row.actorId);
+
+  // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
+  // standing to answer here, no session because nothing has arrived. Not
+  // "away" (nothing left) and deliberately not "answerable" — that word is a
+  // liveness derivation phase 6 owes. The one control it carries is the one
+  // journey 8 puts here: Dismiss, which withdraws the standing and touches
+  // nothing else.
+  if (row.state === "enrolled") {
+    return (
+      <div
+        className="wb-row away enrolled"
+        title="Enrolled to answer on this canvas — a comment naming them reaches whatever answers for them"
+        onPointerEnter={enter}
+        onPointerLeave={() => setPeekAt(null)}
+      >
+        {peekAt && canvas && (
+          <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
+            <ul className="wb-trail">
+              {recentActivity(canvas, row.actorId, 8).map((act, i) => (
+                <li key={i}>
+                  <span className="wb-act">{describeAct(act.kind, act.subject)}</span>
+                  <em>{ago(act.at)}</em>
+                </li>
+              ))}
+              {recentActivity(canvas, row.actorId, 1).length === 0 && (
+                <li className="wb-quiet">nothing on this canvas yet</li>
+              )}
+            </ul>
+          </div>
+        )}
+        <span className="wb-row-head as-line">
+          <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
+          <span className="wb-row-name">
+            <b>{row.name}</b>
+            <i>enrolled</i>
+          </span>
+          <span className="wb-row-line">
+            {row.lastAct
+              ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
+              : "enrolled to answer here"}
+          </span>
+          {onDismiss && (
+            <button
+              className="wb-dismiss"
+              title={`Dismiss ${row.name} — withdraws the standing; the history stays`}
+              aria-label={`Dismiss ${row.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
 
   // An away row is memory, not presence: nothing live to expand, so it is a
   // line, not a disclosure. The affordance it carries is the truth about
@@ -189,6 +256,15 @@ export function AgentRowView({
           >
             Watch
           </button>
+          {onDismiss && (
+            <button
+              className="wb-watch wb-dismiss-live"
+              title={`Dismiss ${row.name} — withdraws the standing; the history stays`}
+              onClick={onDismiss}
+            >
+              Dismiss
+            </button>
+          )}
           {(() => {
             const answering = answeringExcerpt(canvas, session);
             return answering ? (

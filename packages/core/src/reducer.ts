@@ -448,6 +448,26 @@ export function applyOperation(
       });
     }
 
+    case "agent.enroll": {
+      // Re-enrolling updates the record in place: the standing was already
+      // there, the rules (or the name) changed. `rules` is stored verbatim
+      // and interpreted by nobody until phase 4 defines the vocabulary.
+      const row = { actor: op.agent, ...(op.rules !== undefined ? { rules: op.rules } : {}) };
+      return withCanvas({
+        ...canvas,
+        agents: { ...(canvas.agents ?? {}), [op.agent.id]: row },
+      });
+    }
+
+    case "agent.withdraw": {
+      const agents = { ...(canvas.agents ?? {}) };
+      if (!agents[op.actorId]) {
+        throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
+      }
+      delete agents[op.actorId];
+      return withCanvas({ ...canvas, agents });
+    }
+
     default:
       return unknownOperation(op);
   }

@@ -31,7 +31,9 @@ import { screenToWorld, type Viewport } from "./viewport.ts";
  * thing they can drag. The caller can see all of that; this cannot, and
  * guessing at it with fixed insets is how an item ends up behind the Chat.
  */
-export interface ScreenBox {
+/* Not exported since the lane tether was removed — it was the only caller
+   outside this file that needed to name the shape. */
+interface ScreenBox {
   left: number;
   top: number;
   right: number;

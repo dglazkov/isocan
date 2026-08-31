@@ -1,7 +1,8 @@
 import type { Actor, CanvasContents, Comment, CommentThread } from "./model.ts";
-import type { NewComment } from "./ops.ts";
+import type { NewComment, Operation } from "./ops.ts";
 import type { MentionCandidate } from "./mentions.ts";
 import { extractMentions } from "./mentions.ts";
+import { opMatchesFilters } from "./touches.ts";
 
 /**
  * **What is addressed to you, wherever it landed.**
@@ -106,6 +107,76 @@ export function reasonFor(
   if (thread?.main) return "main-thread";
   if (thread && inYourThread(thread, actorId, names)) return "in-your-thread";
   return null;
+}
+
+/**
+ * **What a rule may say** (agents-on-demand phase 4, decided 2026-08-30):
+ * today's filters, exactly — the items it names, the op types (or families,
+ * `item.*`) it wants. This is the whole grammar, defined HERE so `wait`, the
+ * inbox and the rc read one vocabulary; richer predicates ("the items Sian
+ * owns") join this type in this file when something can actually write them,
+ * never as a dialect one reader grows alone. Unknown keys in a stored rules
+ * object are ignored, not errors: the record has carried rules opaquely
+ * since phase 2, and a rule written by a newer build must not break an
+ * older reader's routing.
+ */
+export interface AgentRules {
+  /** Only changes touching these item ids. Empty/absent: any item. */
+  items?: string[];
+  /** Only these op types, `item.*` families allowed. Empty/absent with
+   * `items` also empty: comments only — the enrolled default. `["*"]` is
+   * everything, `wait --all-ops`'s spelling. */
+  ops?: string[];
+}
+
+/** The stored rules field, read tolerantly — it has been opaque since
+ * phase 2, and a malformed hand-me-down must cost the filter, not the
+ * summons. */
+export function rulesOf(raw: unknown): AgentRules {
+  if (raw === null || typeof raw !== "object") return {};
+  const strings = (value: unknown): string[] | undefined =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined;
+  const items = strings((raw as { items?: unknown }).items);
+  const ops = strings((raw as { ops?: unknown }).ops);
+  return { ...(items ? { items } : {}), ...(ops ? { ops } : {}) };
+}
+
+/**
+ * **THE routing composition, stated once** (agents-on-demand phase 4).
+ * `reasonFor` is the is-this-for-me predicate; this is the whole rule a
+ * park or a dispatcher applies to one op:
+ *
+ * - your own ops never wake you — otherwise an agent that writes what it
+ *   watches for wakes itself, forever;
+ * - a comment for you (`reasonFor`) is a SUMMONS, and it comes through any
+ *   filter — the human reaching you is never the noise you asked to be
+ *   spared;
+ * - everything else is a CHANGE, taken only when the rules ask for it:
+ *   filters narrow, an empty rule set means comments-only.
+ *
+ * It lived as loose composition in `wait`'s loop (`main.ts` checked the
+ * summons before the filters ever ran); it lives here so the rc importing
+ * the rule and the park applying it cannot drift — the piercing that must
+ * never differ between them is one function's control flow.
+ */
+export function dispatchReason(
+  op: Operation,
+  authorId: string,
+  agent: { actorId: string; names: readonly MentionCandidate[]; rules?: AgentRules | null | undefined },
+  canvas: CanvasContents | null | undefined,
+): InboxReason | "change" | null {
+  if (authorId === agent.actorId) return null;
+  if (op.type === "thread.create" || op.type === "thread.reply") {
+    const thread = canvas?.threads[op.threadId];
+    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names);
+    if (reason) return reason;
+  }
+  const rules = agent.rules;
+  if (!rules) return null;
+  const items = rules.items ?? [];
+  const ops = rules.ops ?? [];
+  if (items.length === 0 && ops.length === 0) return null; // comments only
+  return opMatchesFilters(op, { items, types: ops }, canvas ?? null) ? "change" : null;
 }
 
 export function inboxOn(

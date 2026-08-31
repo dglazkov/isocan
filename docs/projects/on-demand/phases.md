@@ -11,10 +11,15 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: phase 1 is closed (2026-08-30) — the park's cursor is
-durable, per actor per canvas, held by the daemon the park polls, and
-`--since` is a repair tool nobody has to know about. Phase 2 is next.
-Before that, the mechanism was revised once already.**
+**Where we are: phases 1, 2 and 2.5 are closed (2026-08-30).** The
+park's cursor is durable (phase 1); enrolment is a record in canvas
+state with its rc half beside the machine, the verbs exist in both
+spellings, and a bare `isocan rc` parks, announces itself on the
+presence plane, and narrates — enrolments, withdrawals, and summonses it
+cannot yet answer (phase 2); the tray and the *Add an agent* dialog are
+live, with dismissal on the row and the rc supplying where-and-how for
+web adds (phase 2.5, personas deferred). Phase 3 (the ACP client) is
+next. Before the walk began, the mechanism was revised once already.
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
 Withdrawn 30 Aug in review — see the mechanism section of design.md for
@@ -103,7 +108,53 @@ in `server/test/park.test.ts`.
 
 ## Phase 2 — `isocan rc` and the enrolment records
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Every outcome below is a passing test in
+`cli/test/rc.test.ts` (the verbs, both record halves, survival across
+restart, the narration asserted against a real spawned `rc`) and
+`core/test/agents.test.ts` (the record's shape and the mentionability it
+was stored for).
+
+**Closed at this door, 2026-08-30 — where the home half lives: canvas
+state, written by ops.** `agent.enroll` and `agent.withdraw` join the op
+vocabulary; the record is `canvas.agents` (`EnrolledAgent` in core's
+`model.ts`), non-undoable like `actor.claim` — standing never moves on a
+casual ⌘Z. The deciding fact, found in the code: mention candidates
+derive from canvas state (`mentions.ts`), so an enrolled-but-never-spoken
+Sian was UNMENTIONABLE under any other storage — no `@Sian`, no summons,
+ever. With the record in canvas state, everything this phase and 2.5 need
+falls out of the isomorphism: `@Sian` resolves, the web tray reads the
+snapshot it already has, a running `rc` notices record changes through
+the watchLog park it already holds, the record replicates to remote
+homes, survives restarts because the oplog does, and withdrawal removes
+the row while the log keeps the story — journey 8's acceptance by
+construction. The rc half (`harness`, `cwd`, `sessionId`) is a machine
+fact and lives in `~/.isocan/rc-agents.json` (`cli/src/rc.ts`), the same
+canvas-fact/machine-fact split `backing.ts` draws for files. The enrolled
+actor is minted through the ordinary `actor.claim`, keyed
+`agent:<canvasId>:<name>` on the enrolling machine's badge — so a worn
+name is refused by the registry rather than silently doubled, and
+re-enrolling Sian after a withdrawal hands the same Sian back; phase 3
+rebinds the actor to its adapter-born session key when a session first
+exists.
+
+**Closed at this door, 2026-08-30 — the residue: `isocan rc` refuses
+inside a harness session.** One line, naming the right verb (`isocan
+agent`). A bare rc in a tool call would block the turn until the harness
+killed it, while standing up a parent-of-agents no person started; the
+naming door drew the divide in the vocabulary, and the refusal is that
+divide holding mechanically.
+
+**Closed at this door, 2026-08-30 — where the person's word is checked:
+in the open, for now.** An agent's `isocan agent add` is an op in the log
+with the adding agent as author, narrated live by a running `rc`, visible
+in the tray 2.5 builds, and withdrawal is one gesture away — an unasked
+add cannot be quiet, and this phase's agents cannot act (no dispatch
+until phase 4), so today's exposure is a record, not a running process.
+The decision is explicitly provisional: phase 4's door revisits it with
+the mechanical context phase 2 structurally lacks — a summoned turn knows
+whether a person's comment started it. `isocan agent add` also refuses
+`--canvas` outright: the syntax is the containment, and the flagged
+point-anywhere form is a person's (`isocan rc add`).
 
 **Work:** The long-running command itself: started by the person, bare —
 the directory's binding supplies the canvas, the enrolment records supply
@@ -180,16 +231,54 @@ created by verb appears in the roster record, and a withdrawal takes it
 back out — both with or without an `rc` running, a running `rc`
 narrating each as an event. Kill the `rc`; the enrolments survive to its
 next start. (What `who` calls the added agent is phase 6's word.)
+*(All hold — `cli/test/rc.test.ts`, including the summons narrated as
+"no way to start a session yet".)*
 
 **Proof:** vitest for the record's two halves, the add and withdrawal
 verbs, and survival across restart; the narration asserted, not
-assumed.
+assumed. *(Done — plus the two refusals: rc inside a harness session,
+and `agent add --canvas`.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned.* (The facts that
+decided the storage door are recorded in the door itself, where they
+belong.)
 
 ## Phase 2.5 — The web doors
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The dialog and the tray were driven in
+the real app against a real canvas — add with no rc (the line handed
+over), add with an rc parked (narrated live, rc half supplied), dismiss
+from the row (narrated, rc half reaped) — and the mechanics are pinned in
+`cli/test/rc.test.ts` ("the web doors' mechanics"), `core/test/
+agents.test.ts` (the roster rows), and `web/test/agenttray.test.ts` (the
+gestures go through the same ops the CLI sends).
+
+**Closed at this door, 2026-08-30 — how the dialog knows an rc is
+parked: a presence-plane announcement.** The rc holds a session of a new
+kind, `"rc"` — no cursor, no face, no roster row, filtered from every
+rendering — so the existing machinery pays three times: the web already
+receives presence over WS, home-links already relay it to remote homes,
+and the TTL already retires a crashed rc. Ctrl-C stands the announcement
+down deliberately. This is the dialog's convenience signal and
+explicitly NOT the "answerable" truth — phase 6 still owes the
+connection-bound derivation, and the roster's word here is `enrolled`,
+never `answerable` (a web test forbids the word in rendering code).
+
+**Closed at this door, 2026-08-30 — the rc supplies WHERE and HOW.** A
+web add writes only the home half (a browser cannot touch
+`~/.isocan`); the parked rc, hearing `agent.enroll` — and once at start,
+for enrolments it missed — writes the missing rc-half row itself: its
+own directory, harness unsaid. The home half is authoritative: rc rows
+with no standing enrolment are dead and reaped at reconcile. A verb run
+on the machine already said more than the rc can guess, so adoption
+writes only when the row is absent.
+
+**Closed at this door, 2026-08-30 — personas: deferred entirely, by
+Dimitri.** No picker, no field on the record — "let's defer that until
+personas machinery is fully fleshed out." The dialog is name-only.
+Journey 1's step 2 therefore walks with a caveat: the persona-template
+half of the gesture (and journey 4's rules-defaulted-by-template) waits
+on the personas project, and whoever takes it up starts here.
 
 **Work:** The gestures where the people are, built on phase 2's records:
 the agent tray with a row per enrolled agent; *Add an agent* — name it,
@@ -214,15 +303,49 @@ dismiss one that no longer does.
 no `rc` parked, the dialog hands over the line instead. A tray
 dismissal takes the standing away and leaves the history untouched.
 Journeys 1 and 8 close here, with the caveats their map rows carry.
+*(All hold, driven live — plus the persona caveat above.)*
 
 **Proof:** The dialog and the tray driven in the app against a real
-canvas; the records asserted after each gesture.
+canvas; the records asserted after each gesture. *(Done — screenshots in
+the session, records asserted in `rc.test.ts` through the same ops the
+dialog sends.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** one discovery changed the build, not the course: the
+agent tray had NO standing door — it opened only from the rail strip's
+faces, which exist only while agents are live, so the canvas journey 1
+starts on (no agents yet) could never reach *Add an agent*. The rail
+strip now carries a permanent agents button. And one decision narrowed
+scope: personas are out of this phase entirely (the door above), so the
+walk hands the personas project a starting point rather than a
+half-built picker.
 
 ## Phase 3 — The ACP client in the `rc`
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The spike ran against the real adapter
+(three times, answers in design.md's spike section); the client is
+`cli/src/acp.ts`; the turn machinery is `isocan rc turn <name> <prompt>`
+— the plumbing phase 4's dispatch will call — proven in
+`cli/test/acp.test.ts` against a scripted adapter speaking the verified
+wire shapes, plus one true turn through the real adapter (the
+`ISOCAN_REAL_ACP=1` test, run green 2026-08-30).
+
+**Closed at this door, 2026-08-30 — the spike's verdict: a real resume
+handle.** `session/load` genuinely resumes across adapter restarts
+(history replayed, memory intact), so phase 2's `sessionId` is a resume
+handle — best-effort: the first load after a violent mid-turn death can
+fail transiently, so the client retries once and falls back to
+`session/new`. Full record in design.md. Two findings beyond the door's
+question: identity needs NO per-session rebinding — the adapter's shells
+see only the adapter's environment, so the rc injects
+`ISOCAN_HARNESS=agent` + `ISOCAN_SESSION_ID=<canvasId>:<name>` and the
+CLI inside presents exactly the enrolment's mint key (one idempotent
+`as:` claim covers web-enrolled agents, whose mint sits on a browser
+badge); and permission requests are auto-allowed for now, in one
+documented function — the agent runs as the person, in the person's
+directory, and what a summoned agent may do unattended is phase 4/5's
+door. Adapters resolve harness→command through `config.json`'s
+`acpAdapters` hook (the `harnessVars` posture), with `claude-code` known
+without being told; a null harness runs claude-code.
 
 **Work:** The `rc` speaks ACP over stdio to locally spawned agents. `fs`
 and `terminal` omitted from client capabilities — the spec treats omitted
@@ -246,16 +369,74 @@ that is always rebuilt. A design that reasons about a vendor is a
 hypothesis.
 
 **Outcome:** The `rc` starts a turn in a named agent on this machine and
-reads its `stopReason`.
+reads its `stopReason`. *(Holds — `isocan rc turn Real "Reply with
+exactly: ok"` through the real adapter, `stopReason end_turn`.)*
 
 **Proof:** The spike's answer written into design.md; an integration test
-that spawns a real adapter and completes one turn.
+that spawns a real adapter and completes one turn. *(Both done — the
+real-adapter test is opt-in (`ISOCAN_REAL_ACP=1`, credentials and spend),
+run green today; CI runs the scripted adapter speaking the same verified
+wire shapes.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned; the spike answered
+inside the door's own frame.*
 
 ## Phase 4 — Dispatch
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The scene played for real: a genuine
+Claude, summoned by `@Sian` on a canvas where nothing ran, oriented cold
+from the brief and replied in the thread through the CLI as Sian —
+`cli/test/dispatch.test.ts`'s opt-in real-adapter test, green in 12s. The
+mechanics are pinned CI-side against the scripted adapter: the reply in
+the thread, presence appearing with the turn and fading because the
+session ended, bulk noise starting zero turns, the mention through the
+filter, the self-wake guard, and the overnight batch delivered whole.
+
+**Closed at this door, 2026-08-30 — what a rule may say: today's
+filters, in core.** The grammar is `AgentRules` (`{items?, ops?}`, with
+`item.*` families and `["*"]` as all-ops), defined in `core/src/inbox.ts`
+beside `reasonFor`, and the whole composition is ONE function —
+`dispatchReason`: self never wakes, a summons pierces any filter, a
+change is taken when the rules ask, empty rules mean comments-only.
+`wait`'s loop now imports it (the hoisting the phase demanded), so the
+park and the rc cannot drift. Journey 4's "items Sian owns" bends to
+"the items the rule names"; ownership joins the grammar in core when
+something can write it. The reader: `isocan agent rules [name]` — the
+stored rules in words, plus the standing truths (mentions always come
+through; your own ops never wake you).
+
+**Closed at this door, 2026-08-30 — what a summons delivers: a fixed
+brief around the wait-shaped payload.** One wrapper, identical for fresh
+and loaded sessions: orientation (who you are, where, what this is), the
+working instructions (the CLI, the guide pointer, reply on the thread,
+and do NOT park — the session rests at end of turn), then the payload —
+`{reason, entries}`, the same entries and reason a `wait --json` wake
+carries, `redelivered` flags included. The `cursors` and `next` fields
+are delivery bookkeeping, not content, and stay with their deliveries.
+Cold arrival is carried by the brief and the guide pointer, never by
+inlining the 15k-token onboarding. The auto-upgrade window is settled
+here too: the rc IS the parked process now, and it runs `wait`'s same
+idle-point consideration on its quiet laps.
+
+**Closed at this door, 2026-08-30 — phase 2's word-check, revisited as
+promised: narration + visibility stays, now with teeth.** A dispatched
+agent's `isocan agent add` happens inside a turn a person's comment
+started, in a thread everyone reads, as an op the log keeps, narrated
+live by the rc — and withdrawal is one gesture. No intent-parsing of the
+person's words; phase 5's ceiling bounds what an unasked add could cost.
+The ask doors (journeys 1 and 8) are mechanically open now — a summoned
+session holds the agent spelling of the verbs and its identity binds by
+environment — with phase 5's guardrails the remaining walk.
+
+**One more thing this phase found and fixed — the seedAt floor.** A
+first-ever cursor claim seeded at "now", so a comment landing between
+enrolment and the rc's first claim would have been silently missed —
+journey 3's acceptance violated for exactly the web-add-then-start-rc
+shape. `parkClaim` now takes `seedAt`, a floor used only when CREATING a
+row (never a rewind): the enrol verb passes the enrolment op's seq, the
+rc passes it when adopting, and the overnight-batch test walks the
+repaired path — enrol, three comments with nothing running at all, rc
+starts, one summons carries all three.
 
 **Work:** On an op that the routing rule matches for an enrolled agent,
 the `rc` starts a turn carrying what `wait` would have returned. The
@@ -311,12 +492,17 @@ exactly.
 **Outcome:** A comment addressed to an enrolled, not-running agent
 produces a reply in the thread, the canvas showed the agent while it
 worked, and the only process anyone started by hand is `isocan rc`.
+*(Holds — with the real adapter, once, and with the scripted one in CI.)*
 
 **Proof:** The scene, played on a real canvas, presence included; vitest
 for the dispatch-on-match path, the mention-through-any-filter path, and
-the self-wake guard.
+the self-wake guard. *(All in `cli/test/dispatch.test.ts`; the
+composition's arithmetic in `core/test/agents.test.ts`.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** one addition the walk forced: the `seedAt` floor on
+`parkClaim` (the door record above) — journey 3's "nothing was running
+when it landed" turned out to have an unwalked case phase 1 could not
+see, because enrolment did not exist yet when phase 1 closed.
 
 ## Phase 5 — A limit and a reason
 

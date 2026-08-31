@@ -538,10 +538,13 @@ export const useUiStore = create<UiStore>((set) => {
      * Whether the canvas is being dragged under the hand right now.
      *
      * It was local state in `CanvasViewport`, which was fine while nothing
-     * outside that component needed to know. The lane tethers do: they are
-     * measured from live DOM rectangles, and a pan changes the viewport every
-     * frame, so leaving them on would force a layout per frame for a drawing
-     * that is only ever glanced at.
+     * outside that component needed to know. `useLaneFollow` in
+     * `MainThreadPanel` does: a camera that flies to the thing somebody is
+     * working on must not fight a hand that is already moving the canvas.
+     *
+     * The lane tethers needed it first and are gone; this outlived them
+     * because the reason generalises — anything outside the viewport that
+     * reacts to the camera wants to know when a person is driving it.
      */
     setPanning: (panning) => set({ panning }),
     setRailPanning: (railPanning) => set({ railPanning }),

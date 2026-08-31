@@ -11,6 +11,8 @@ import {
   lensSubjects,
 } from "@isocan/core";
 import { getSnapshot, listCanvases } from "../lib/api.ts";
+import { actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
+import { ItemThumb } from "../components/ItemThumb.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
 
 /**
@@ -31,6 +33,13 @@ import { HomeGlyph } from "../components/Glyphs.tsx";
  * The whole fold is `core/lens.ts`, the same functions `isocan lens` calls, so
  * the two surfaces cannot disagree about what an agent has been up to.
  */
+/** "1 canvases" is the kind of thing that makes a page look unfinished, and it
+ *  is the same sentence in two places. */
+function countWhere(entries: readonly LensEntry[]): string {
+  const n = new Set(entries.map((e) => e.canvasId)).size;
+  return `${n} canvas${n === 1 ? "" : "es"}`;
+}
+
 const BY: LensBy[] = ["canvas", "day", "kind"];
 const BY_LABEL: Record<LensBy, string> = {
   canvas: "By canvas",
@@ -82,6 +91,18 @@ export function LensPage() {
     };
   }, []);
 
+  /* Faces need colours, and nothing has opened a canvas here to seed them.
+     They derive from the actor id when unseeded, so this only replaces a good
+     answer with the chosen one. */
+  useEffect(() => void loadActorColors(), []);
+  const colors = useActorColors();
+
+  /** The canvases by id, so a tile can find the item it is drawing. */
+  const byCanvas = useMemo(
+    () => new Map((sources ?? []).map((s) => [s.canvasId, s.canvas])),
+    [sources],
+  );
+
   const subjects = useMemo(() => (sources ? lensSubjects(sources) : []), [sources]);
   const labels = useMemo(() => lensSubjectLabels(subjects), [subjects]);
   const subject: Actor | undefined = actorId
@@ -101,7 +122,20 @@ export function LensPage() {
           <Link to="/" className="home-mark" aria-label="Every canvas">
             <HomeGlyph size={16} />
           </Link>
+          {subject && (
+            <span
+              className="lens-face lens-face-big"
+              style={{ background: actorColorIn(colors, subject.id) }}
+              aria-hidden
+            >
+              {subject.name.charAt(0).toUpperCase()}
+            </span>
+          )}
           <h1>{subject ? labels.get(subject.id) : "Lens"}</h1>
+          {/* The same name-then-quiet-hint pattern the panel headers use, and
+              it answers the question a bare "Lens" leaves open: a page called
+              after a metaphor has to say what it is a lens ON. */}
+          {!subject && <i className="panel-hint">who has made what, across every canvas</i>}
         </div>
         <span className="spacer" />
         {subject && (
@@ -129,11 +163,41 @@ export function LensPage() {
       {sources && !subject && (
         <div className="lens-subjects">
           {subjects.length === 0 && <p className="canvas-none">Nobody has made anything yet.</p>}
-          {subjects.map((s) => (
-            <Link key={s.id} className="btn" to={`/lens/${encodeURIComponent(s.id)}`}>
-              {labels.get(s.id)}
-            </Link>
-          ))}
+          {subjects.map((s) => {
+            /* Their most recent work, as the thing itself. A name and a count
+               say who has been busy; four thumbnails say what they have been
+               busy WITH, which is the question somebody opens this holding. */
+            const theirs = lensEntries(sources, s.id);
+            const recent = theirs.slice(0, 4);
+            return (
+              <Link key={s.id} className="lens-subject" to={`/lens/${encodeURIComponent(s.id)}`}>
+                <span className="lens-subject-head">
+                  <span className="lens-face" style={{ background: actorColorIn(colors, s.id) }}>
+                    {s.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="lens-subject-who">
+                    <b>{labels.get(s.id)}</b>
+                    <span className="lens-subject-count">
+                      {theirs.length} thing{theirs.length === 1 ? "" : "s"} ·{" "}
+                      {countWhere(theirs)}
+                    </span>
+                  </span>
+                </span>
+                <span className="lens-strip" aria-hidden>
+                  {recent.map((e) => (
+                    <ItemThumb
+                      key={e.itemId}
+                      canvasId={e.canvasId}
+                      itemId={e.itemId}
+                      item={byCanvas.get(e.canvasId)?.items[e.itemId]}
+                      width={62}
+                      height={44}
+                    />
+                  ))}
+                </span>
+              </Link>
+            );
+          })}
         </div>
       )}
 
@@ -144,21 +208,46 @@ export function LensPage() {
               that has nowhere true to land. */}
           <p className="lens-note">
             {entries.length} thing{entries.length === 1 ? "" : "s"} across{" "}
-            {new Set(entries.map((e) => e.canvasId)).size} canvases — {LENS_REFUSAL}.
+            {countWhere(entries)} — {LENS_REFUSAL}.
           </p>
           {groups.map((group) => (
             <section key={group.key} className="lens-group">
-              <h2>{group.label}</h2>
-              <div className="lens-rows">
+              {/* A title is whatever somebody typed, and this view renders
+                  data it did not author — from canvases it has never opened,
+                  named by people and agents it has never met. Nothing bounds
+                  the length, so the heading bounds it here and keeps the whole
+                  string on `title` where it costs nothing. */}
+              <h2 title={group.label}>
+                <span className="lens-group-name">{group.label}</span>
+                <span className="lens-count">{group.entries.length}</span>
+              </h2>
+              {/* Tiles, not rows. The work is a visual medium and a list of
+                  its titles is the view that tells you least about it —
+                  "Sketch, Sketch, Sketch" is three names and no information,
+                  where three thumbnails are three different drawings. */}
+              <div className="lens-tiles">
                 {group.entries.map((e) => (
-                  <Link key={e.itemId} className="lens-row" to={itemPath(e.canvasId, e.itemId)}>
-                    <span className="lens-title">{e.title}</span>
-                    <span className="lens-kind">{e.kind}</span>
-                    {by !== "canvas" && <span className="lens-where">{e.canvasTitle}</span>}
-                    {/* Not "stale" and not a warning — other hands on a thing
-                        is ordinary collaboration, and this only says so. */}
-                    {e.editedSince && <span className="lens-touched">edited since</span>}
-                    <span className="lens-when">{ago(e.at, nowMs)}</span>
+                  <Link key={e.itemId} className="lens-tile" to={itemPath(e.canvasId, e.itemId)}>
+                    <span className="lens-shot">
+                      <ItemThumb
+                        canvasId={e.canvasId}
+                        itemId={e.itemId}
+                        item={byCanvas.get(e.canvasId)?.items[e.itemId]}
+                        width={188}
+                        height={128}
+                      />
+                    </span>
+                    <span className="lens-name">{e.title}</span>
+                    <span className="lens-meta">
+                      {/* Grouped by canvas, the canvas is the heading above —
+                          repeating it on every tile is noise. */}
+                      {by !== "canvas" && <span className="lens-where">{e.canvasTitle}</span>}
+                      <span className="lens-kind">{e.kind}</span>
+                      {/* Not "stale" and not a warning — other hands on a
+                          thing is ordinary collaboration, and this says so. */}
+                      {e.editedSince && <span className="lens-touched">edited since</span>}
+                      <span className="lens-when">{ago(e.at, nowMs)}</span>
+                    </span>
                   </Link>
                 ))}
               </div>

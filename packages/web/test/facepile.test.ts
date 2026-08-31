@@ -30,6 +30,18 @@ function session(actor: Actor, sessionId: string, kind: PresenceSession["kind"])
 const noUnread = new Map<string, { actor: Actor; count: number }>();
 
 suite("one face per person", () => {
+  it("a parked rc is a process fact, not a face — and it never eats its person's", () => {
+    // First-push-wins per actor: an rc session ahead of the person's web tab
+    // would claim Kenny's one face and render a participant that isn't one.
+    const faces = facesFor(
+      [session(kenny, "ses_rc", "rc"), session(kenny, "ses_web", "web")],
+      noUnread,
+      kenny,
+    );
+    expect(faces).toHaveLength(1);
+    expect(faces[0]!.kind).toBe("web");
+  });
+
   it("draws you once when you also hold another live session", () => {
     // The exact shape that produced the bug: canvasStore filters your own TAB
     // out of `sessions` by session id, so your CLI session is still in there,

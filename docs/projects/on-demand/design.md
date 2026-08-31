@@ -188,6 +188,13 @@ closed 2026-08-30: it lives with the daemon the park polls — the home
 itself when the canvas is local, the replica when it is not — see the
 door record in phases.md and `server/src/park.ts`.)
 
+*Built, phase 2 (2026-08-30): the home half is canvas state, written by
+`agent.enroll` / `agent.withdraw` — in canvas state and not a side table
+because mention candidates derive from canvas state, so any other home
+would leave an enrolled-but-never-spoken agent unmentionable and
+unsummonable. The rc half is `~/.isocan/rc-agents.json`. Phases.md's
+phase 2 doors carry the full argument.*
+
 **"Answerable" is a derivation, not a field.** Neither half of the
 record stores it, because a record cannot know its rc died. The
 home says an agent is answerable when the durable enrolment exists AND a
@@ -259,6 +266,38 @@ Two things to know before starting. `claude-agent-acp` wraps the Claude Agent
 SDK rather than the CLI, so skills and `CLAUDE.md` loading should be checked
 rather than assumed. And its restart path has open bugs worth reading first,
 notably subprocess death leaving a session unusable.
+
+### The spike's answers (phase 3, run 2026-08-30 against `@zed-industries/claude-code-acp` 0.16.2)
+
+The phase-3 door said session persistence was a hypothesis. Measured:
+
+- **`session/load` is a real resume handle.** A fresh adapter process
+  loaded a session created by a dead one, replayed the whole history as
+  `session/update` notifications during the load, and the resumed
+  conversation remembered what it had been told. The rc row's `sessionId`
+  is a resume handle, not bookkeeping.
+- **A session killed mid-turn survives — with a transient scar.** `kill
+  -9` mid-inference, then load from a fresh process: the FIRST load can
+  fail ("Query closed before response received"); a retry moments later
+  loaded cleanly, transcript intact up to the kill, memory intact. So the
+  client retries a failed load once and falls back to `session/new`, which
+  is always available — the handle is best-effort by design.
+- **Identity travels by environment injection, and only that way.** The
+  adapter's shells inherit the adapter process's environment;
+  `CLAUDE_CODE_SESSION_ID` is NOT set inside them. So the rc launches one
+  adapter per agent with `ISOCAN_HARNESS=agent` and
+  `ISOCAN_SESSION_ID=<canvasId>:<name>` — which makes the CLI inside
+  present exactly the session key the enrolment claim minted
+  (`agent:<canvasId>:<name>`): the mint claim IS the session binding. A
+  CLI-added agent needs no rebinding ever; a web-added one needs a single
+  idempotent `actor.claim { as }` on the machine badge, which the turn
+  makes.
+- **Wire facts**: newline-delimited JSON-RPC 2.0; `protocolVersion` is
+  the integer `1`; a finished turn is `stopReason: "end_turn"`;
+  permission requests arrive as `session/request_permission` with options
+  answered by `optionId`; `loadSession: true` is advertised. The adapter
+  refuses to start inside a Claude Code session (`CLAUDECODE` must be
+  scrubbed — the rc scrubs every harness variable before injecting).
 
 ---
 
@@ -423,16 +462,14 @@ shows presence appearing and fading with the summoned session.
   the `rc`, no agent registers anything on its own. Journey 1's comment door
   is a person asking, with the agent as the interface, and phase 2's door owes
   the decision on where the person's word is checked.)
-- **Where the auto-upgrade window goes.** `considerUpgrade()` uses the park as
-  "the first idle point." With no park there is no window — though the
-  rc sees `end_turn` and knows the moment precisely, which is better
-  than inferring it.
-- **Whether the prompt is the short brief or the full guide.** isocan composes
-  it now, so it owns the cost that agents currently pay themselves: about
-  15,000 tokens for the documented onboarding, about 1,045 for the six-command
-  brief. Journey 9 bounds the choice: `isocan wait --json` must stay a
-  faithful stand-in for a summons, so the `wait` payload remains the
-  inspectable core and the wrapper is fixed, never varied per summons.
+- **Where the auto-upgrade window goes.** *Settled at phase 4's door
+  (2026-08-30): the rc is the parked process, and its quiet laps run the
+  same idle-point consideration `wait`'s park does.*
+- **Whether the prompt is the short brief or the full guide.** *Settled at
+  phase 4's door (2026-08-30): a fixed brief around the wait-shaped
+  payload — orientation and the guide pointer carry cold arrival; the
+  15k onboarding is never inlined. The wrapper is identical for fresh
+  and loaded sessions, per journey 9's bound.*
 
 ---
 

@@ -256,6 +256,29 @@ alarming rather than impressive. And **fan out for work that is genuinely
 separate** — two agents editing the same item is a merge nobody asked for,
 while two agents on two screens is the thing this canvas is for.
 
+## Standing agents
+
+An agent can also be a **record instead of a process**: enrolled on this
+canvas, answerable when something arrives, running only then. When a person
+asks you to set one up — `@You add a reviewer here` — do it with:
+
+```sh
+isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
+isocan agent remove <name>  # withdraw its standing (the history stays)
+isocan agent rules [name]   # what an agent answers for here, and why
+```
+
+The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
+lives where you already are. Add one when a person asks, and only then; the
+add is an op everyone can read. If a person tells you "you're done here",
+`isocan agent remove <your name>` is how you take your own standing away.
+What any standing agent answers for — its routing rules, and the truths
+that hold through every rule set — is readable with `isocan agent rules`.
+
+The person's side of this is `isocan rc` — a long-running command they start
+that answers for enrolled agents. It is not your verb: inside a harness
+session it refuses, and everything you need is the `agent` spelling above.
+
 ## The Chat
 
 **The web app calls it the Chat**; on the wire and in this CLI it is the

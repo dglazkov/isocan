@@ -10,10 +10,20 @@ goal:
     at most: 1
     measured by: node scripts/measure.mjs core-runtime-deps
     baseline: 1, 2026-08-29, 6b1afaf
+  # 29 → 31 on 2026-08-30: `agent.enroll` and `agent.withdraw`, added by
+  # `c52da17` (phase 2 of agents-on-demand). Deliberate vocabulary, not drift —
+  # an agent's standing on a canvas has to live in canvas state, because
+  # everything that must see it already reads canvas state (`@Sian` resolves
+  # through mentions, the tray reads the snapshot, a parked `isocan rc` hears
+  # the op land), and it survives because the oplog does.
+  #
+  # Raised rather than absorbed, and by hand: this bound is what stops the op
+  # vocabulary growing by accident, so every rise should cost somebody a
+  # sentence about why the vocabulary genuinely needed to be bigger.
   - name: operations in the vocabulary
-    at most: 29
+    at most: 31
     measured by: node scripts/measure.mjs op-types
-    baseline: 29, 2026-08-29, 6b1afaf
+    baseline: 31, 2026-08-30, 3502dc8
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

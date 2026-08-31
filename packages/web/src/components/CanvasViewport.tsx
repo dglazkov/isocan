@@ -20,7 +20,6 @@ import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
-import { LaneTethers } from "./LaneTethers.tsx";
 import { MapEdges } from "./MapEdges.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
@@ -93,7 +92,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
     droppingTimer.current = setTimeout(() => setDropping(false), 700);
   };
-  // Mirrored into the store as well as kept locally: the lane tethers stop
+  // Mirrored into the store as well as kept locally: lane-follow stops
   // measuring while the canvas is moving, and only the store crosses
   // components. Local state stays because the class name is applied here.
   const [panning, setPanningLocal] = useState(false);
@@ -721,7 +720,6 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         <TextComposer canvasId={canvasId} actor={actor} />
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      <LaneTethers />
       <CursorLayer />
       <MarqueeRect />
       <GuideLines />

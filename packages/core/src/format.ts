@@ -43,7 +43,32 @@ export const FORMAT_CHILD_GAP_Y = 40;
 /** Between the screens and the reference block below them. */
 export const FORMAT_BAND_GAP_Y = 160;
 
+/**
+ * **What kind of tidy.**
+ *
+ * `grid` cleans up the LINES: every item on one lattice, uniform gutters,
+ * left edges that agree. It reads nothing into the canvas — no lineage, no
+ * kinds, no opinion about what belongs under what — which is exactly why it is
+ * the default. A tidy that only straightens is one somebody can run without
+ * wondering what it will decide, and "make it neat" is the request nine times
+ * out of ten.
+ *
+ * `smart` is the arrangement that reads the canvas: screens across, what came
+ * from each hanging beneath it, reference material gathered below. It is more
+ * useful and more opinionated, and being asked for by name is the right price
+ * for moving things somebody did not ask to have interpreted.
+ */
+export type FormatMode = "grid" | "smart";
+
+export const FORMAT_MODES: readonly FormatMode[] = ["grid", "smart"];
+
+export function isFormatMode(value: unknown): value is FormatMode {
+  return typeof value === "string" && (FORMAT_MODES as readonly string[]).includes(value);
+}
+
 export interface FormatOptions {
+  /** Which tidy. Defaults to `grid` — see `FormatMode`. */
+  mode?: FormatMode;
   /** Where the top-left of the arrangement goes. Defaults to where the
    * canvas already starts, so a format does not teleport the whole canvas. */
   origin?: { x: number; y: number };
@@ -59,6 +84,60 @@ function role(canvas: CanvasContents, item: Item): "screen" | "reference" | "att
   return kind === "image" || kind === "video" ? "reference" : "screen";
 }
 
+
+/**
+ * **The lattice tidy: straighten the lines, decide nothing.**
+ *
+ * Every placed item takes a cell in one grid. Columns are all the width of the
+ * WIDEST item, which is the whole difference between this and a row of things
+ * pushed together — uniform columns make left edges agree down the canvas, and
+ * agreeing edges are what somebody means by "make it a nice grid". Rows are as
+ * tall as their own tallest member, because forcing a uniform row height on a
+ * canvas holding a postage stamp and a full screen would leave craters.
+ *
+ * **Reading order is preserved, not invented.** Items are taken in bands by
+ * `y` and then left to right, so a canvas that was roughly in rows stays in
+ * the rows it was in. People arrange by hand and resent losing it.
+ *
+ * Annotations are left where they are, exactly as in the smart arrangement:
+ * ink that is ABOUT an item belongs on top of it and travels with it.
+ */
+function gridMoves(canvas: CanvasContents, options: FormatOptions): Move[] {
+  const items = Object.values(canvas.items).filter(
+    (item) => role(canvas, item) !== "attached",
+  );
+  if (items.length === 0) return [];
+
+  const origin = options.origin ?? {
+    x: Math.min(...items.map((item) => item.x)),
+    y: Math.min(...items.map((item) => item.y)),
+  };
+
+  /* Banded by y before sorting by x: a plain `y - x` sort would put an item
+     three pixels lower at the end of the previous row. The band is the tallest
+     item, so "roughly level" means "the same row" the way an eye reads it. */
+  const band = Math.max(...items.map((item) => item.height));
+  const ordered = [...items].sort(
+    (a, b) => Math.floor(a.y / band) - Math.floor(b.y / band) || a.x - b.x || a.id.localeCompare(b.id),
+  );
+
+  const perRow = Math.max(1, options.perRow ?? Math.ceil(Math.sqrt(ordered.length)));
+  const column = Math.max(...items.map((item) => item.width));
+
+  const moves: Move[] = [];
+  let rowTop = origin.y;
+  for (let i = 0; i < ordered.length; i += perRow) {
+    const row = ordered.slice(i, i + perRow);
+    row.forEach((item, col) => {
+      const x = Math.round(origin.x + col * (column + FORMAT_GAP_X));
+      const y = Math.round(rowTop);
+      if (item.x !== x || item.y !== y) moves.push({ itemId: item.id, x, y });
+    });
+    rowTop += Math.max(...row.map((item) => item.height)) + FORMAT_GAP_Y;
+  }
+  return moves;
+}
+
 /**
  * The moves that arrange the canvas. Only what actually changes, so running it
  * twice does nothing the second time — a formatted canvas is a fixed point.
@@ -66,6 +145,7 @@ function role(canvas: CanvasContents, item: Item): "screen" | "reference" | "att
 export function formatMoves(canvas: CanvasContents, options: FormatOptions = {}): Move[] {
   const items = Object.values(canvas.items);
   if (items.length === 0) return [];
+  if ((options.mode ?? "grid") === "grid") return gridMoves(canvas, options);
 
   const screens = items.filter((item) => role(canvas, item) === "screen");
   const reference = items.filter((item) => role(canvas, item) === "reference");

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
 import { roster } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { AddAgent } from "./AddAgent.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "../lib/panels.ts";
 import { AgentRowView } from "./AgentRow.tsx";
@@ -63,9 +64,10 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
              works before anybody is in it, and it says how somebody GETS in
              rather than shrugging. */
           <p className="agents-quiet">
-            Nobody is parked here right now. An agent joins with the isocan
-            skill and waits with <code>isocan wait</code>; anything you say in
-            the Chat reaches whoever parks next.
+            Nobody is parked here right now. Add an agent below to enrol one
+            that answers when something arrives, or an agent joins with the
+            isocan skill and waits with <code>isocan wait</code>; anything you
+            say in the Chat reaches whoever parks next.
           </p>
         ) : (
           rows.map((row) => (
@@ -86,10 +88,23 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
                   .getState()
                   .setFollowingActor(following === row.actorId ? null : row.actorId)
               }
+              /* Dismiss appears exactly on rows with STANDING (journey 8):
+                 withdrawal is the enroll op's inverse gesture, and the same
+                 op `isocan agent remove` sends — one record, two doors. */
+              {...(canvas?.agents?.[row.actorId]
+                ? {
+                    onDismiss: () =>
+                      void sendEchoed(canvasId, actor, {
+                        type: "agent.withdraw",
+                        actorId: row.actorId,
+                      }),
+                  }
+                : {})}
             />
           ))
         )}
       </div>
+      <AddAgent canvasId={canvasId} actor={actor} />
       <PanelResizer />
     </aside>
   );

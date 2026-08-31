@@ -126,3 +126,42 @@ describe("the dock holds one at a time, and everything knows", () => {
     expect(read("components/RailStrip.tsx")).toMatch(/openPanel\(canvasId, "agents"\)/);
   });
 });
+
+/**
+ * **The standing-agent doors** (agents-on-demand phase 2.5): the tray is
+ * where journey 1 adds an agent and journey 8 dismisses one. What these
+ * guard: the gestures go through the SAME ops the CLI verbs send — one
+ * record, two doors — and the dialog's rc line is derived from the rc's
+ * presence announcement rather than optimism.
+ */
+describe("the tray's standing-agent doors", () => {
+  const add = read("components/AddAgent.tsx");
+  const row = read("components/AgentRow.tsx");
+
+  it("the dialog claims the actor and sends the enroll op — the CLI's exact moves", () => {
+    expect(add).toMatch(/sessionKey: `agent:\$\{canvasId\}:\$\{wanted\}`/);
+    expect(add).toMatch(/type: "agent\.enroll"/);
+  });
+
+  it("the dialog's footer tells the truth about the rc, from its announcement", () => {
+    expect(add).toMatch(/s\.kind === "rc"/);
+    // Both worlds have words: an rc parked, and the line to start one.
+    expect(add).toMatch(/isocan rc/);
+  });
+
+  it("dismiss appears exactly on rows with standing, and sends the withdraw op", () => {
+    expect(tray).toMatch(/canvas\?\.agents\?\.\[row\.actorId\]/);
+    expect(tray).toMatch(/type: "agent\.withdraw"/);
+  });
+
+  it("an enrolled row says enrolled — never answerable, which is phase 6's word to earn", () => {
+    expect(row).toMatch(/row\.state === "enrolled"/);
+    // The word may appear in comments explaining why NOT to use it; the code
+    // that renders must never say it.
+    const code = row
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\/?\*)/.test(line))
+      .join("\n");
+    expect(code).not.toMatch(/answerable/);
+  });
+});

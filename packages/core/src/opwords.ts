@@ -46,6 +46,8 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "comment.remove": "removed a comment",
   "comment.restore": "restored a comment",
   "trash.empty": "emptied the trash",
+  "agent.enroll": "enrolled an agent",
+  "agent.withdraw": "dismissed an agent",
 };
 
 /**

@@ -30,6 +30,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { boardEnv as env } from "./board-identity.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -41,6 +42,8 @@ const has = (name) => argv.includes(name);
 const DRY = has("--dry-run");
 const ONLY = arg("--only");
 const NOTIFY = has("--notify");
+const LAY_OUT = has("--layout");
+const AS_ME = has("--as-me");
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
 
 /** The canvas these panels live on. The marker in this directory names the
@@ -63,11 +66,14 @@ if (!CANVAS && !DRY) {
   process.exit(2);
 }
 
+const boardEnv = env(AS_ME);
+
 const isocan = (...args) =>
   execFileSync("node", [cli, ...(CANVAS ? ["--canvas", CANVAS] : []), ...args], {
     cwd: repo,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env: boardEnv,
   });
 const isocanJSON = (...args) => JSON.parse(isocan("--json", ...args));
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trimEnd();
@@ -337,6 +343,246 @@ function personaPanel(p, readings, verdict, run) {
      </div>
      <div class="mono muted" style="margin-top:10px;font-size:11px">${esc(p.file)}${run ? ` · ${esc(run)}` : ""}</div>`,
     `<span class="mono">isocan --json persona ls</span> and each goal’s own measurement command`,
+  );
+}
+
+/**
+ * **The last CI run per workflow, at the newest sha GitHub has seen.**
+ *
+ * Reached through `gh`, which the design note lists as free. Everything about
+ * this can be absent — no `gh`, not signed in, no network, no runs yet — and
+ * every one of those absences returns `unknown`. **`unknown` never renders as
+ * green**, for the same reason a broken instrument is never a zero: "nothing
+ * failed" and "nothing was asked" are different facts, and a board that shows
+ * them the same way is worse than a board with no signal at all.
+ */
+function ci() {
+  let raw;
+  try {
+    raw = execFileSync(
+      "gh",
+      ["run", "list", "--limit", "20", "--json", "conclusion,status,name,headSha,createdAt"],
+      { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 },
+    );
+  } catch (err) {
+    return { unknown: String(err.stderr ?? err.message).trim().split("\n")[0].slice(0, 160) || "gh would not run" };
+  }
+  let runs;
+  try {
+    runs = JSON.parse(raw);
+  } catch {
+    return { unknown: "gh did not return JSON" };
+  }
+  if (!Array.isArray(runs) || runs.length === 0) return { unknown: "no runs recorded yet" };
+
+  // The newest sha GitHub has SEEN, which is not necessarily local HEAD — a
+  // board reporting CI for a commit nobody pushed is the same stale-copy bug
+  // in miniature, so the sha is carried and shown.
+  const sha = runs[0].headSha;
+  const latest = new Map();
+  for (const r of runs) {
+    if (r.headSha !== sha) continue;
+    if (!latest.has(r.name)) latest.set(r.name, r);
+  }
+  const workflows = [...latest.values()].map((r) => ({
+    name: r.name,
+    running: r.status !== "completed",
+    ok: r.conclusion === "success" || r.conclusion === "skipped" || r.conclusion === "neutral",
+    conclusion: r.conclusion || r.status,
+  }));
+  return {
+    sha: sha.slice(0, 7),
+    workflows,
+    failed: workflows.filter((w) => !w.running && !w.ok),
+    running: workflows.filter((w) => w.running),
+  };
+}
+
+/**
+ * **The one word.** Its rule is printed on the panel, because a light nobody
+ * knows the rule for is a light nobody trusts.
+ *
+ * RED   — CI failed at that sha, or an instrument would not run.
+ * AMBER — CI is still going, or a goal is past its bound.
+ * GREEN — CI passed at that sha and every goal is holding.
+ * NO SIGNAL — CI could not be reached. Never green.
+ */
+function signal(c, board) {
+  const broken = board.some((b) => b.readings.some((r) => r.broken));
+  const missed = board.some((b) => b.readings.some((r) => !r.broken && !met(r.goal, r.value)));
+  if (c.unknown) return { word: broken ? "RED" : "NO SIGNAL", tone: broken ? "red" : "grey" };
+  if (c.failed.length || broken) return { word: "RED", tone: "red" };
+  if (c.running.length || missed) return { word: "AMBER", tone: "amber" };
+  return { word: "GREEN", tone: "green" };
+}
+
+function buildPanel(c, board, f) {
+  const { word, tone } = signal(c, board);
+  const goals = board.flatMap((b) => b.readings);
+  const missed = goals.filter((r) => !r.broken && !met(r.goal, r.value));
+  const broken = goals.filter((r) => r.broken);
+
+  const ciLine = c.unknown
+    ? `<span class="pill grey">no signal</span> <span class="muted">${esc(c.unknown)}</span>`
+    : c.workflows
+        .map(
+          (w) =>
+            `<span class="pill ${w.running ? "amber" : w.ok ? "green" : "red"}">${esc(w.name)}</span>`,
+        )
+        .join(" ");
+
+  // CI runs what was pushed. A board that does not say when those differ is
+  // reporting a green for code nobody has seen.
+  const drift =
+    !c.unknown && c.sha !== f.commit
+      ? `<div class="muted" style="margin-top:6px;font-size:12px">CI ran <span class="mono">${esc(c.sha)}</span>;
+         you are on <span class="mono">${esc(f.commit)}</span> — this light is about the pushed commit, not yours.</div>`
+      : "";
+
+  return page(
+    `Build — ${word}`,
+    `<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+       <div style="font-size:clamp(48px, 17vw, 92px);line-height:1;font-weight:800;letter-spacing:-0.03em;
+         color:var(--${tone === "grey" ? "ink-muted" : tone === "amber" ? "warn" : tone === "red" ? "danger" : "good"})">
+         ${word}</div>
+       <div style="flex:1;min-width:200px">
+         <div style="display:flex;flex-wrap:wrap;gap:6px">${ciLine}</div>
+         <div class="muted" style="margin-top:8px;font-size:12.5px">
+           ${goals.length - missed.length - broken.length}/${goals.length} goals holding${
+             missed.length ? ` · ${missed.length} past bound` : ""
+           }${broken.length ? ` · ${broken.length} instrument${broken.length === 1 ? "" : "s"} broken` : ""}
+         </div>
+         ${drift}
+       </div>
+     </div>
+     <p class="muted" style="margin:16px 0 0;font-size:11.5px;line-height:1.6">
+       <b>GREEN</b> CI passed here and every goal holds · <b>AMBER</b> CI still going, or a goal past bound ·
+       <b>RED</b> a workflow failed, or an instrument would not run · <b>NO SIGNAL</b> CI unreachable,
+       which is never green</p>`,
+    `<span class="mono">gh run list</span> and each goal's own measurement command`,
+  );
+}
+
+/**
+ * **The repo's own canvas** — the one `.isocan/project.json` names, which is a
+ * committed marker and therefore travels with a clone. It is a different canvas
+ * from the one this board is published to, and conflating the two is the easy
+ * mistake: the board is where the panels live, the marker is what the
+ * repository itself says its canvas is.
+ *
+ * Everything here is read with `--canvas`, so nothing rebinds this directory.
+ */
+function repoCanvas() {
+  const marker = path.join(repo, ".isocan", "project.json");
+  if (!existsSync(marker)) return { none: "this directory has no .isocan/project.json" };
+  let id;
+  try {
+    ({ projectId: id } = JSON.parse(readFileSync(marker, "utf8")));
+  } catch {
+    return { none: "`.isocan/project.json` is not readable JSON" };
+  }
+  if (!id) return { none: "`.isocan/project.json` names no canvas" };
+  const ask = (...args) => {
+    try {
+      return JSON.parse(
+        execFileSync("node", [cli, "--json", "--canvas", id, ...args], {
+          cwd: repo,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env: boardEnv,
+        }),
+      );
+    } catch (err) {
+      // Unreachable is not empty. Same rule as a broken instrument.
+      throw new Error(String(err.stderr ?? err.message).trim().split("\n")[0].slice(0, 200));
+    }
+  };
+  try {
+    return { id, items: ask("ls"), threads: ask("comment", "list"), who: ask("who", "--all"), activity: ask("activity") };
+  } catch (err) {
+    return { id, unreachable: err.message };
+  }
+}
+
+function repoCanvasPanel(rc, f) {
+  if (rc.none) {
+    return page(
+      "The repo's canvas",
+      `<h1>The repo's canvas</h1>
+       <p class="muted" style="margin-top:10px">${esc(rc.none)} — so this repository does not name one.
+       <span class="mono">isocan use &lt;ref&gt;</span> binds this directory to a canvas, and the marker it
+       writes is committable, so a clone lands on the same canvas rather than a copy of it.</p>`,
+      `<span class="mono">.isocan/project.json</span>`,
+    );
+  }
+  if (rc.unreachable) {
+    return page(
+      "The repo's canvas",
+      `<h1>The repo's canvas</h1>
+       <p style="margin-top:10px"><span class="pill amber">unreachable</span></p>
+       <p class="muted" style="margin-top:10px"><span class="mono">${esc(rc.id)}</span> — ${esc(rc.unreachable)}</p>
+       <p class="muted" style="font-size:12px">Unreachable is not empty: this panel will not draw an empty
+       canvas from a failed read.</p>`,
+      `<span class="mono">isocan --canvas ${esc(rc.id)}</span>`,
+    );
+  }
+
+  const kinds = new Map();
+  for (const i of rc.items) kinds.set(i.kind, (kinds.get(i.kind) ?? 0) + 1);
+  // A thread whose last word is a question nobody has answered is the thing
+  // worth surfacing; a thread count is not.
+  const open = rc.threads.filter((t) => (t.comments.at(-1)?.body ?? "").trimStart().startsWith("/ask"));
+  const live = rc.who.filter((w) => w.live);
+  const recent = rc.activity.slice(0, 8);
+
+  const body = rc.items.length === 0 && rc.threads.length === 0
+    ? `<p class="muted" style="margin-top:10px">Nothing on it yet — no items, no conversation. That is a
+       real state and not a failed read: the marker names <span class="mono">${esc(rc.id)}</span> and the
+       canvas answered. When something lands there, this panel shows what and who, and the watcher
+       (<span class="mono">npm run board:watch</span>) refreshes the board and says so in the Chat.</p>`
+    : `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 14px">
+         <span class="chip">${rc.items.length} item${rc.items.length === 1 ? "" : "s"}</span>
+         ${[...kinds].map(([k, n]) => `<span class="chip">${n} ${esc(k)}</span>`).join("")}
+         <span class="chip">${rc.threads.length} thread${rc.threads.length === 1 ? "" : "s"}</span>
+         ${open.length ? `<span class="pill amber">${open.length} unanswered</span>` : ""}
+         ${live.length ? `<span class="pill green">${live.length} here now</span>` : ""}
+       </div>
+       ${
+         open.length
+           ? `<h2>Waiting on a person</h2>
+              <table><tbody>${open
+                .map(
+                  (t) =>
+                    `<tr><td style="width:120px" class="muted">${esc(t.comments.at(-1).author.name)}</td>` +
+                    `<td>${esc((t.comments.at(-1).body ?? "").replace(/^\/ask\s*/, "").slice(0, 160))}</td></tr>`,
+                )
+                .join("")}</tbody></table>`
+           : ""
+       }
+       ${
+         recent.length
+           ? `<h2 style="margin-top:16px">Lately</h2>
+              <table><tbody>${recent
+                .map(
+                  (a) =>
+                    `<tr><td style="width:120px" class="muted">${esc(a.who)}</td>` +
+                    `<td>${esc(a.kind)} <b>${esc(a.subject ?? "")}</b>${
+                      a.body ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(a.body.slice(0, 120))}</div>` : ""
+                    }</td></tr>`,
+                )
+                .join("")}</tbody></table>`
+           : ""
+       }`;
+
+  return page(
+    "The repo's canvas",
+    `<h1>The repo's canvas</h1>
+     <p class="muted" style="margin:8px 0 0;font-size:13px">
+       <span class="mono">${esc(rc.id)}</span>, named by this repository's committed
+       <span class="mono">.isocan/project.json</span> — so a clone lands on it rather than on a copy.
+       Not the canvas these panels live on.</p>
+     ${body}`,
+    `<span class="mono">isocan --canvas ${esc(rc.id)} ls / comment list / who / activity</span> at <span class="mono">${esc(f.commit)}</span>`,
   );
 }
 
@@ -653,60 +899,128 @@ const f = facts();
 const all = personas();
 const wantPanel = (name) => !ONLY || ONLY === name;
 
-const board = all.map((p) => {
-  const readings = p.goals.map((goal) => ({ goal, ...take(goal) }));
-  return { persona: p, readings, verdict: verdictOf(readings, p.goals) };
+/**
+ * **Taken once, and only if something asks.** Eleven commands is about fifteen
+ * seconds, which is the whole cost of a run — so `--only recent`, which needs
+ * no number at all, should not pay it. Memoised for that reason, and not
+ * because measuring twice would be wrong.
+ */
+let taken;
+const readBoard = () =>
+  (taken ??= all.map((p) => {
+    const readings = p.goals.map((goal) => ({ goal, ...take(goal) }));
+    return { persona: p, readings, verdict: verdictOf(readings, p.goals) };
+  }));
+
+/**
+ * The arrangement, top to bottom: **the one word and the brief first**, because
+ * the two questions somebody opens this canvas with are *is it green* and
+ * *what happened*; then the status band, then a persona per card, then the
+ * fortnight.
+ *
+ * **Positions apply on creation only.** Once a person has dragged a panel it
+ * stays dragged — a version never moves an item, and a generator that re-tidies
+ * every run is a generator that argues with whoever is looking. `--layout` is
+ * the deliberate exception: one `items.move`, one undo, and only when asked.
+ */
+const COL = 520, ROW = 460, GUT = 40, PER_ROW = 4;
+const WIDE = COL * PER_ROW + GUT * (PER_ROW - 1); // 2200
+const TOP = 520; // the Build word and the brief share the top row's height
+const PERSONA_TOP = TOP + 40 + 300 + 40; // …then the status band, then the cards
+/**
+ * **However many personas there are.** This was `2 * (ROW + GUT)` — the number
+ * of rows eight personas make — and a ninth (`journeys`, added while the
+ * watcher was running) started a third row that landed exactly on top of
+ * `Recently`. A constant standing in for a count is a layout that is correct
+ * until somebody adds a thing, which is the only kind of layout bug worth
+ * guarding.
+ */
+const PERSONA_ROWS = Math.max(1, Math.ceil(all.length / PER_ROW));
+const PROSE_TOP = PERSONA_TOP + PERSONA_ROWS * (ROW + GUT);
+
+const LAYOUT = {
+  build: { at: "0,0", size: `${COL}x${TOP}` },
+  "morning-brief": { at: `${COL + GUT},0`, size: `${WIDE - COL - GUT}x${TOP}` },
+  "tree-status": { at: `0,${TOP + 40}`, size: `${WIDE}x300` },
+  recently: { at: `0,${PROSE_TOP}`, size: `${WIDE}x620` },
+  "repo-canvas": { at: `0,${PROSE_TOP + 660}`, size: `${WIDE}x420` },
+};
+all.forEach((p, i) => {
+  LAYOUT[`persona-${p.name}`] = {
+    at: `${(i % PER_ROW) * (COL + GUT)},${PERSONA_TOP + Math.floor(i / PER_ROW) * (ROW + GUT)}`,
+    size: `${COL}x${ROW}`,
+  };
 });
 
-/* Layout: the status band across the top, its personas in a grid beneath it —
-   `parent` so `isocan format` hangs them under it — and the two prose panels
-   below that. Coordinates are only a starting arrangement: once a person drags
-   one, it stays dragged, because a version never moves an item. */
-const COL = 520, ROW = 460, GUT = 40, PER_ROW = 4;
 const STATUS_TITLE = "Tree status";
 
-if (wantPanel("status")) {
-  publish("tree-status", STATUS_TITLE, statusPanel(board, f), {
-    at: "0,0",
-    size: `${COL * PER_ROW + GUT * (PER_ROW - 1)}x300`,
-  });
-}
-
-const statusId = DRY ? undefined : (isocanJSON("ls").find((i) => i.title === STATUS_TITLE) ?? {}).id;
-
-if (wantPanel("personas")) {
-  board.forEach((b, i) => {
-    const x = (i % PER_ROW) * (COL + GUT);
-    const y = 360 + Math.floor(i / PER_ROW) * (ROW + GUT);
-    publish(
-      `persona-${b.persona.name}`,
-      `Persona · ${b.persona.name}`,
-      personaPanel(b.persona, b.readings, b.verdict, latestRun(b.persona)),
-      { at: `${x},${y}`, size: `${COL}x${ROW}`, props: statusId ? { parent: statusId } : {} },
-    );
-  });
-}
-
-const commits = recentCommits(14);
-if (wantPanel("recent")) {
-  publish("recently", "Recently", recentlyPanel(commits, f), { at: "0,1400", size: "1080x620" });
+if (wantPanel("build")) {
+  publish("build", "Build", buildPanel(ci(), readBoard(), f), LAYOUT.build);
 }
 if (wantPanel("brief")) {
-  publish("morning-brief", "Morning brief", briefPanel(commits, board, roadmap(), f, new Date()), {
-    at: "1120,1400",
-    size: "1080x620",
-  });
+  publish(
+    "morning-brief",
+    "Morning brief",
+    briefPanel(recentCommits(14), readBoard(), roadmap(), f, new Date()),
+    LAYOUT["morning-brief"],
+  );
+}
+if (wantPanel("status")) {
+  publish("tree-status", STATUS_TITLE, statusPanel(readBoard(), f), LAYOUT["tree-status"]);
+}
+
+const statusId = DRY ? undefined : (existing.find((i) => i.properties?.board === "tree-status") ?? {}).id;
+
+if (wantPanel("personas")) {
+  for (const b of readBoard()) {
+    const slug = `persona-${b.persona.name}`;
+    publish(slug, `Persona · ${b.persona.name}`, personaPanel(b.persona, b.readings, b.verdict, latestRun(b.persona)), {
+      ...LAYOUT[slug],
+      props: statusId ? { parent: statusId } : {},
+    });
+  }
+}
+if (wantPanel("recent")) {
+  publish("recently", "Recently", recentlyPanel(recentCommits(14), f), LAYOUT.recently);
+}
+if (wantPanel("repo-canvas")) {
+  publish("repo-canvas", "The repo’s canvas", repoCanvasPanel(repoCanvas(), f), LAYOUT["repo-canvas"]);
+}
+
+/**
+ * `--layout`: put every panel back where the generator would have put it.
+ * Explicit because a person's drag outranks a script's grid — this is the
+ * gesture that says "no, tidy it", and it is one move op, so one undo.
+ */
+if (LAY_OUT && !DRY) {
+  let moved = 0;
+  for (const item of isocanJSON("ls")) {
+    const spot = LAYOUT[item.properties?.board];
+    if (!spot) continue;
+    const [x, y] = spot.at.split(",");
+    const [w, h] = spot.size.split("x");
+    if (String(item.x) === x && String(item.y) === y && String(item.width) === w && String(item.height) === h) continue;
+    isocan("mv", item.id, x, y);
+    isocan("set", item.id, "--size", spot.size);
+    moved++;
+  }
+  console.log(moved ? `moved ${moved} panel${moved === 1 ? "" : "s"} back to the grid` : "layout already tidy");
 }
 
 /* ── say what happened ───────────────────────────────────────────────────── */
 
-const reds = board.filter((b) => b.verdict === "red");
-const ambers = board.filter((b) => b.verdict === "amber");
+// Only what was actually taken. A run that measured nothing says so, rather
+// than reporting "every goal holding" off an empty list — which is the same
+// shape of lie as reading a broken instrument as a zero.
+const reds = (taken ?? []).filter((b) => b.verdict === "red");
+const ambers = (taken ?? []).filter((b) => b.verdict === "amber");
 const line = ambers.length
   ? `⚠ ${ambers.map((b) => b.persona.name).join(", ")} — instrument would not run`
   : reds.length
     ? `${reds.map((b) => b.persona.name).join(", ")} past bound`
-    : "every goal holding";
+    : taken
+      ? "every goal holding"
+      : "no goal measured this run";
 
 if (changed.length === 0) {
   console.log(`board unchanged — ${line}`);

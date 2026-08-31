@@ -123,7 +123,17 @@ export type ClientMessage =
 export interface PresenceSession {
   sessionId: string;
   actor: Actor;
-  kind: "web" | "cli";
+  /**
+   * "web" is a person at a browser; "cli" an agent (or bare terminal) on the
+   * canvas; "rc" a parked `isocan rc` (agents-on-demand phase 2.5) — a
+   * process fact, not a participant: it renders nowhere (no cursor, no face,
+   * no roster row) and exists so a surface can say "an rc is parked here"
+   * (the add-agent dialog's line) without new machinery — presence already
+   * relays to remote homes and already expires a crashed process. It is NOT
+   * the "answerable" truth: that is phase 6's, connection-bound, per journey
+   * 7's no-TTL-lie acceptance.
+   */
+  kind: "web" | "cli" | "rc";
   /**
    * Which harness this agent is — `claude-code`, `codex`, `gemini`.
    *
@@ -214,6 +224,9 @@ export interface CreateSessionRequest {
   label?: string;
   /** See `PresenceSession.harness`. */
   harness?: string;
+  /** "cli" (the default) or "rc" — a parked rc announcing itself. "web"
+   * cannot be asked for here; browser sessions are born on the socket. */
+  kind?: "cli" | "rc";
 }
 
 export interface CreateSessionResponse {
@@ -299,6 +312,14 @@ export interface ParkClaimRequest {
   actorId: string;
   /** Reset the row to this seq — what `wait --since` means now. */
   since?: number;
+  /**
+   * Where a row that does not exist yet begins — ignored entirely when one
+   * does. An enrolled agent's first claim must not seed at "now": journey 3
+   * promises nothing is missed because nothing was running, and the moment
+   * standing began is the enrolment op's seq, which the enrol verb and the
+   * rc both know and pass here (phase 4).
+   */
+  seedAt?: number;
 }
 
 export interface ParkClaimResponse {

@@ -422,11 +422,15 @@ export class DaemonClient {
     actor: Actor,
     label?: string,
     harness?: string,
+    /** "rc": a parked `isocan rc` announcing itself — a process fact on the
+     * presence plane, rendered nowhere. Defaults to "cli". */
+    kind?: "cli" | "rc",
   ): Promise<CreateSessionResponse> {
     return this.request("POST", `/api/projects/${canvasId}/sessions`, {
       actor,
       ...(label !== undefined ? { label } : {}),
       ...(harness !== undefined ? { harness } : {}),
+      ...(kind !== undefined ? { kind } : {}),
     });
   }
 
