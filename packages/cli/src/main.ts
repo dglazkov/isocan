@@ -227,7 +227,8 @@ import {
 } from "./identity.ts";
 import { agentGuide } from "./agent-guide.ts";
 import { harnessSessions } from "./harness.ts";
-import { adoptRcAgent, readRcAgents, removeRcAgent, upsertRcAgent } from "./rc.ts";
+import { adoptRcAgent, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
+import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -7489,7 +7490,10 @@ async function enrolAgent(
   // its adapter-born session key when a session first exists.
   const claimed = await ctx.client.claimActor({
     type: "actor.claim",
-    sessionKey: `agent:${p.id}:${name}`,
+    // The SAME key the rc's injected environment will present when this
+    // agent's sessions run (acp.ts `enrolmentKey`): the mint claim IS the
+    // session binding, so a CLI-added agent needs no rebinding, ever.
+    sessionKey: enrolmentKey(p.id, name),
     name,
   });
   const agent = claimed.envelope.actor;
@@ -7601,6 +7605,98 @@ rcCommand
   .command("remove <name>")
   .description("Withdraw an agent's standing on this canvas")
   .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, false)));
+
+rcCommand
+  .command("turn <name> <prompt...>")
+  .description("Start one turn in an enrolled agent and read its stopReason (phase 3 plumbing)")
+  .addHelpText(
+    "after",
+    `
+The machinery dispatch (phase 4) will drive on a summons, driven by hand:
+spawn the agent's ACP adapter, resume its session (or start one), send the
+prompt, narrate the turn, print the stopReason. The session survives this
+process — the resume handle is stored in the enrolment's rc half, and a
+handle that fails to load twice is replaced by a fresh session rather than
+an error. Adapters: claude-code ships known; others are declared in
+~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
+  )
+  .action(
+    run(async (name: string, promptWords: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      // A person's verb, like bare rc: an agent puppeting another agent's
+      // turns is not a gesture this phase grants.
+      if ((await harnessSessions(ctx.home)).length > 0) {
+        throw new Error(
+          "`isocan rc turn` is a person's verb, and this is a harness session — an agent reaches " +
+            "another agent by commenting, not by driving its turns.",
+        );
+      }
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const record = Object.values(snapshot.canvas.agents ?? {}).find(
+        (a) => a.actor.name.toLowerCase() === name.toLowerCase() || a.actor.id === name,
+      );
+      if (!record) throw new Error(`no standing agent "${name}" on "${p.title}"`);
+      // The rc half: where and how. Missing (a web add, no rc ever parked
+      // here) means this process supplies them, the same adoption the
+      // parked rc makes.
+      let row = (await readRcAgents(ctx.home)).find(
+        (r) => r.canvasId === p.id && r.actorId === record.actor.id,
+      );
+      if (!row) {
+        row = {
+          canvasId: p.id,
+          actorId: record.actor.id,
+          name: record.actor.name,
+          harness: null,
+          cwd: process.cwd(),
+          sessionId: null,
+        };
+        await upsertRcAgent(ctx.home, row);
+      }
+      const spec = await adapterFor(ctx.home, row.harness);
+      if (!spec) {
+        throw new Error(
+          `no ACP adapter is known for harness "${row.harness}" — declare one in ~/.isocan/config.json: ` +
+            `{"acpAdapters": {"${row.harness}": ["command", "arg"]}}`,
+        );
+      }
+      // The binding: make the machine badge answer for the enrolled actor
+      // under the key the injected environment presents. For a CLI-added
+      // agent this is the mint claim resuming (a no-op); for a web-added
+      // one it is the one rebinding the spike showed is needed.
+      await ctx.client.claimActor({
+        type: "actor.claim",
+        sessionKey: enrolmentKey(p.id, record.actor.name),
+        as: record.actor.id,
+      });
+
+      console.error(`rc: starting ${spec.command} for ${record.actor.name} in ${row.cwd}`);
+      const agent = await AcpAgentProcess.spawn(spec, {
+        cwd: row.cwd,
+        env: adapterEnv(p.id, record.actor.name),
+      });
+      try {
+        const session = await agent.ensureSession(row.cwd, row.sessionId);
+        console.error(
+          session.resumed
+            ? `rc: session ${session.sessionId} resumed`
+            : `rc: session ${session.sessionId} started${row.sessionId ? " (the stored one would not load — rebuilt)" : ""}`,
+        );
+        await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
+        const turn = await agent.prompt(session.sessionId, promptWords.join(" "), (event) => {
+          if (event.kind === "chunk" && event.text) process.stdout.write(event.text);
+          else if (event.kind === "tool") console.error(`rc: [tool] ${event.detail}`);
+          else if (event.kind === "permission") console.error(`rc: [permission] ${event.detail}`);
+        });
+        process.stdout.write("\n");
+        console.error(`rc: turn ended — stopReason ${turn.stopReason}`);
+        if (turn.stopReason !== "end_turn") process.exitCode = 1;
+      } finally {
+        agent.close();
+      }
+    }),
+  );
 
 rcCommand.action(
   run(async (_opts: unknown, cmd: Command) => {

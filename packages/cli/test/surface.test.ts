@@ -22,8 +22,10 @@ const repo = path.resolve(here, "../../..");
 
 /** Commands that run the plumbing rather than the canvas. An agent never
  * needs to be told about these to collaborate; the guide covers the ones it
- * does need (setup, status) in prose. */
-const PLUMBING = new Set(["serve", "stop", "restart", "status", "upgrade", "help", "gc"]);
+ * does need (setup, status) in prose. `turn` (`rc turn`) is a person's dev
+ * verb that REFUSES harness sessions — telling agents about it would be
+ * documenting a door that is closed to them. */
+const PLUMBING = new Set(["serve", "stop", "restart", "status", "upgrade", "help", "gc", "turn"]);
 
 /**
  * The verbs the guide actually NAMES, as opposed to the words it happens to

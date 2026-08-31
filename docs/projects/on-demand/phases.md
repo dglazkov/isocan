@@ -321,7 +321,31 @@ half-built picker.
 
 ## Phase 3 — The ACP client in the `rc`
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** The spike ran against the real adapter
+(three times, answers in design.md's spike section); the client is
+`cli/src/acp.ts`; the turn machinery is `isocan rc turn <name> <prompt>`
+— the plumbing phase 4's dispatch will call — proven in
+`cli/test/acp.test.ts` against a scripted adapter speaking the verified
+wire shapes, plus one true turn through the real adapter (the
+`ISOCAN_REAL_ACP=1` test, run green 2026-08-30).
+
+**Closed at this door, 2026-08-30 — the spike's verdict: a real resume
+handle.** `session/load` genuinely resumes across adapter restarts
+(history replayed, memory intact), so phase 2's `sessionId` is a resume
+handle — best-effort: the first load after a violent mid-turn death can
+fail transiently, so the client retries once and falls back to
+`session/new`. Full record in design.md. Two findings beyond the door's
+question: identity needs NO per-session rebinding — the adapter's shells
+see only the adapter's environment, so the rc injects
+`ISOCAN_HARNESS=agent` + `ISOCAN_SESSION_ID=<canvasId>:<name>` and the
+CLI inside presents exactly the enrolment's mint key (one idempotent
+`as:` claim covers web-enrolled agents, whose mint sits on a browser
+badge); and permission requests are auto-allowed for now, in one
+documented function — the agent runs as the person, in the person's
+directory, and what a summoned agent may do unattended is phase 4/5's
+door. Adapters resolve harness→command through `config.json`'s
+`acpAdapters` hook (the `harnessVars` posture), with `claude-code` known
+without being told; a null harness runs claude-code.
 
 **Work:** The `rc` speaks ACP over stdio to locally spawned agents. `fs`
 and `terminal` omitted from client capabilities — the spec treats omitted
@@ -345,12 +369,17 @@ that is always rebuilt. A design that reasons about a vendor is a
 hypothesis.
 
 **Outcome:** The `rc` starts a turn in a named agent on this machine and
-reads its `stopReason`.
+reads its `stopReason`. *(Holds — `isocan rc turn Real "Reply with
+exactly: ok"` through the real adapter, `stopReason end_turn`.)*
 
 **Proof:** The spike's answer written into design.md; an integration test
-that spawns a real adapter and completes one turn.
+that spawns a real adapter and completes one turn. *(Both done — the
+real-adapter test is opt-in (`ISOCAN_REAL_ACP=1`, credentials and spend),
+run green today; CI runs the scripted adapter speaking the same verified
+wire shapes.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned; the spike answered
+inside the door's own frame.*
 
 ## Phase 4 — Dispatch
 

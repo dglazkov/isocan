@@ -74,6 +74,22 @@ export async function adoptRcAgent(home: string, row: RcAgentRow): Promise<boole
   return true;
 }
 
+/** The resume handle, once a session exists (phase 3). Best-effort by the
+ * spike's finding: a stored id that fails to load twice is replaced by a
+ * fresh session, and this row is what records the replacement. */
+export async function setRcSessionId(
+  home: string,
+  canvasId: string,
+  actorId: string,
+  sessionId: string,
+): Promise<void> {
+  const rows = await readRcAgents(home);
+  const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
+  if (!row) return;
+  row.sessionId = sessionId;
+  await writeRcAgents(home, rows);
+}
+
 /** Withdrawal takes the rc half with it; the oplog keeps the history. */
 export async function removeRcAgent(
   home: string,

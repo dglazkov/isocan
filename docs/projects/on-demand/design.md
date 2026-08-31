@@ -267,6 +267,38 @@ SDK rather than the CLI, so skills and `CLAUDE.md` loading should be checked
 rather than assumed. And its restart path has open bugs worth reading first,
 notably subprocess death leaving a session unusable.
 
+### The spike's answers (phase 3, run 2026-08-30 against `@zed-industries/claude-code-acp` 0.16.2)
+
+The phase-3 door said session persistence was a hypothesis. Measured:
+
+- **`session/load` is a real resume handle.** A fresh adapter process
+  loaded a session created by a dead one, replayed the whole history as
+  `session/update` notifications during the load, and the resumed
+  conversation remembered what it had been told. The rc row's `sessionId`
+  is a resume handle, not bookkeeping.
+- **A session killed mid-turn survives — with a transient scar.** `kill
+  -9` mid-inference, then load from a fresh process: the FIRST load can
+  fail ("Query closed before response received"); a retry moments later
+  loaded cleanly, transcript intact up to the kill, memory intact. So the
+  client retries a failed load once and falls back to `session/new`, which
+  is always available — the handle is best-effort by design.
+- **Identity travels by environment injection, and only that way.** The
+  adapter's shells inherit the adapter process's environment;
+  `CLAUDE_CODE_SESSION_ID` is NOT set inside them. So the rc launches one
+  adapter per agent with `ISOCAN_HARNESS=agent` and
+  `ISOCAN_SESSION_ID=<canvasId>:<name>` — which makes the CLI inside
+  present exactly the session key the enrolment claim minted
+  (`agent:<canvasId>:<name>`): the mint claim IS the session binding. A
+  CLI-added agent needs no rebinding ever; a web-added one needs a single
+  idempotent `actor.claim { as }` on the machine badge, which the turn
+  makes.
+- **Wire facts**: newline-delimited JSON-RPC 2.0; `protocolVersion` is
+  the integer `1`; a finished turn is `stopReason: "end_turn"`;
+  permission requests arrive as `session/request_permission` with options
+  answered by `optionId`; `loadSession: true` is advertised. The adapter
+  refuses to start inside a Claude Code session (`CLAUDECODE` must be
+  scrubbed — the rc scrubs every harness variable before injecting).
+
 ---
 
 ## Relationship to `launch/`
