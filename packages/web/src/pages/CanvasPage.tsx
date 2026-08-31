@@ -42,6 +42,7 @@ const Workbench = lazy(() =>
 import { FullScreen } from "../components/FullScreen.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { Scrubber } from "../components/Scrubber.tsx";
+import { WhatsNew } from "../components/WhatsNew.tsx";
 /**
  * **Loaded when it is opened, not when the canvas is.**
  *
@@ -819,6 +820,10 @@ function CanvasSurface({
       {historyOpen && (
         <Scrubber canvasId={canvasId} onClose={() => setHistoryOpen(false)} />
       )}
+      {/* Release notes. Floats over the canvas like the other panels rather
+          than living inside one, and decides its own visibility from the
+          store — there is no per-canvas state to hand it. */}
+      <WhatsNew />
       <HelpPanel />
       <OwnCursor actor={actor} />
       {/* Last, so it covers the panels and the toolbar: full screen means the

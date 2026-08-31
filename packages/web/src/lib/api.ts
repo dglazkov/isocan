@@ -15,6 +15,7 @@ import type {
   GrantsResponse,
   GrantSubject,
   HomesResponse,
+  NewsResponse,
   PresenceWhereResponse,
   KillBadgeResponse,
   LogEntry,
@@ -38,6 +39,7 @@ import {
   grantRoute,
   grantsRoute,
   HOMES_ROUTE,
+  NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
   newClientId,
   newOpId,
@@ -350,6 +352,12 @@ export function fetchHomes(): Promise<HomesResponse> {
  */
 export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
   return request("GET", PRESENCE_WHERE_ROUTE);
+}
+
+/** What changed, for the person using this — see `NEWS_ROUTE`. Open, because
+ *  it is release notes. */
+export function fetchNews(): Promise<NewsResponse> {
+  return request("GET", NEWS_ROUTE);
 }
 
 /**

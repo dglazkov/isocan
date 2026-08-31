@@ -14,6 +14,7 @@ export * from "./claims.ts";
 export * from "./invert.ts";
 export * from "./placement.ts";
 export * from "./titleroom.ts";
+export * from "./whatsnew.ts";
 export * from "./protocol.ts";
 export * from "./ids.ts";
 export * from "./mentions.ts";

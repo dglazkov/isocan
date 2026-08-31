@@ -1,6 +1,7 @@
 import { INSTALL_SPEC } from "./address.ts";
 import type { ActorColors, ActorNames } from "./identity.ts";
 import type { Actor, Canvas, CanvasContents } from "./model.ts";
+import type { NewsDay } from "./whatsnew.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 
 /** Default daemon port, localhost only. */
@@ -952,6 +953,24 @@ export const HOMES_ROUTE = "/api/homes";
  * may not enter is a roster of somebody else's business.
  */
 export const PRESENCE_WHERE_ROUTE = "/api/presence/where";
+
+/**
+ * **`GET /api/news` — what changed, for the person using this.**
+ *
+ * Read from the day files this build shipped with, so what a canvas tells you
+ * is new is what that canvas is actually running. A home a week behind says so
+ * by having nothing newer to show, which is the honest answer and cost
+ * nothing to arrange.
+ *
+ * Unauthenticated on purpose: it is release notes. There is nothing here that
+ * is not already public, and a "what's new" that needs a badge is one nobody
+ * reads on the day they most want to.
+ */
+export const NEWS_ROUTE = "/api/news";
+
+export interface NewsResponse {
+  days: NewsDay[];
+}
 
 export interface PresenceWhere {
   canvasId: string;

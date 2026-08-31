@@ -599,6 +599,18 @@ thing worth knowing, and it is often yours.
 amending what you asked is still asking. That is why "I'll just add a bit more
 detail" never accidentally marks you unblocked.
 
+## What changed
+
+`isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
+in the words somebody using the canvas would use. It is not the changelog:
+`docs/changelog/` is written for whoever maintains this and names functions
+and arguments, which is the right document and the wrong one to quote at
+somebody asking what is new. Days with nothing a user would notice do not
+appear at all, on purpose.
+
+The notes come from the home you are talking to, so what it lists is what that
+home is running.
+
 ## Mind maps
 
 Riffing into a shape somebody can drag. `isocan map new "Lake house"` starts

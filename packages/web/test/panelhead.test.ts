@@ -67,7 +67,9 @@ describe("the header's stylesheet", () => {
      * panel in the dock. Dressing either as a dock panel would be a redesign
      * rather than a repair — so they are named here, and anything else that
      * appears in this list is the bug coming back. */
-    const allowed = new Set([".trash-panel header", ".trash-panel header .spacer", ".help-panel header", ".help-panel header .spacer"]);
+    /* `.modal-card` replaced `.help-panel`: one shell, worn by the shortcut
+       list and by What's new, so the two cannot drift. See Modal.tsx. */
+    const allowed = new Set([".trash-panel header", ".trash-panel header .spacer", ".modal-card header", ".modal-card header .spacer"]);
     const perPanel = sheet.filter(
       (r) =>
         /-panel header\b/.test(r.selector) &&

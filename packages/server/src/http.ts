@@ -49,6 +49,9 @@ import {
   HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
   HOMES_ROUTE,
+  NEWS_ROUTE,
+  news,
+  type NewsResponse,
   PRESENCE_WHERE_ROUTE,
   type PresenceWhere,
   type PresenceWhereResponse,
@@ -110,7 +113,7 @@ import {
   resolveBadge,
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
-import { buildStamp } from "./build.ts";
+import { buildRoot, buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
@@ -268,6 +271,9 @@ function isOpen(method: string, pathname: string): boolean {
   if ((HEALTH_ROUTES as readonly string[]).includes(pathname)) return true;
   if (!pathname.startsWith("/api/")) return true; // the web app and its assets
   if (method === "POST" && pathname === DOOR_ROUTE) return true;
+  // Release notes. Nothing here is not already public, and a "what's new"
+  // that needs a badge is one nobody reads on the day they most want to.
+  if (method === "GET" && pathname === NEWS_ROUTE) return true;
   return false;
 }
 
@@ -1072,6 +1078,34 @@ export function registerRoutes(
    * not a count. "Three people somewhere you cannot look" is still a fact
    * about somebody else's canvas.
    */
+  /**
+   * **What changed, for the person using this** — see `NEWS_ROUTE`.
+   *
+   * Read from the day files this build shipped with, so a home a week behind
+   * has nothing newer to show, which is the honest answer and cost nothing to
+   * arrange. Read per request rather than cached: these files change when a
+   * build changes, a build change restarts the process, and a cache would be
+   * a staleness bug in a feature whose entire job is saying what is current.
+   */
+  app.get(NEWS_ROUTE, async () => {
+    const dir = path.join(buildRoot(), "docs", "changelog");
+    let files: string[] = [];
+    try {
+      files = (await fs.readdir(dir)).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f));
+    } catch {
+      // A build without the docs directory has no news, which is a normal
+      // answer for a stripped install rather than an error to raise.
+      return { days: [] } satisfies NewsResponse;
+    }
+    const read = await Promise.all(
+      files.map(async (f) => ({
+        day: f.replace(/\.md$/, ""),
+        markdown: await fs.readFile(path.join(dir, f), "utf8").catch(() => ""),
+      })),
+    );
+    return { days: news(read) } satisfies NewsResponse;
+  });
+
   app.get(PRESENCE_WHERE_ROUTE, async (req) => {
     const badge = req.badge!;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));

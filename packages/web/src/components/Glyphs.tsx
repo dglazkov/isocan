@@ -150,6 +150,18 @@ export function ShareGlyph({ size = 15 }: { size?: number }) {
 }
 
 
+/** What's new: a folded notice, with a line of text on it. */
+export function NewsGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.35} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M3 3.2h7.4a1 1 0 0 1 1 1v8.6H4.2a1.2 1.2 0 0 1-1.2-1.2z" />
+      <path d="M11.4 6h1.4a1 1 0 0 1 1 1v4.6a1.2 1.2 0 0 1-2.4 0" />
+      <path d="M5.2 6.2h3.6M5.2 8.7h3.6" />
+    </svg>
+  );
+}
+
 /**
  * **History: a clock wound backwards.**
  *

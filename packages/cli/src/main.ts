@@ -8816,6 +8816,28 @@ program
   );
 
 program
+  .command("whatsnew")
+  .description("What changed, for the person using this — one entry per day, newest first")
+  .option("-n, --days <n>", "how many days to show (default 5)")
+  .action(
+    run(async (opts: { days?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { days } = await ctx.client.news();
+      if (ctx.json) return printJson({ days });
+      if (days.length === 0) {
+        /* Not an error. A home with no notes is a home with nothing to say,
+           and the same sentence covers a stripped install that shipped no
+           docs — both are "nothing to tell you" rather than a failure. */
+        return console.log("nothing noted yet");
+      }
+      for (const day of days.slice(0, Number(opts.days ?? 5))) {
+        console.log(`\n${day.title}`);
+        for (const item of day.items) console.log(`  · ${item}`);
+      }
+    }),
+  );
+
+program
   .command("recap")
   .description("The whole history at decaying resolution — old spans summarized, recent ops verbatim")
   .option("-n, --recent <n>", "recent entries to keep verbatim (default 10)")

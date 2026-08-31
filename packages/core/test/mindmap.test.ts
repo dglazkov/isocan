@@ -12,7 +12,7 @@ import {
   edgeAnchors,
 } from "../src/mindmap.ts";
 import { PARENT_PROP } from "../src/lineage.ts";
-import { tidyMap } from "../src/mindmap.ts";
+import { tidyMap, type MapMove } from "../src/mindmap.ts";
 
 /**
  * **A mind map is items and properties, and that is the whole design.**
@@ -245,7 +245,7 @@ describe("tidying a map", () => {
        back into a fork. */
     const canvas = canvasOf([box("r", null), box("a", "r"), box("b", "r"), box("c", "r")]);
     const moves = tidyMap(canvas, MAP);
-    const [a, b, c] = ["a", "b", "c"].map((id) => at(moves, id)!);
+    const [a, b, c] = ["a", "b", "c"].map((id) => at(moves, id)!) as [MapMove, MapMove, MapMove];
     expect(a.y).toBeLessThan(b.y);
     expect(b.y).toBeLessThan(c.y);
     expect(at(moves, "r")!.y).toBe(b.y);

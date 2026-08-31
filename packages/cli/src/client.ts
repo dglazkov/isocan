@@ -37,6 +37,7 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
+  NewsResponse,
   PresenceWhereResponse,
   ServingResponse,
   SlashCommand,
@@ -44,6 +45,7 @@ import type {
 import {
   encodeFilename,
   FILENAME_HEADER,
+  NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
@@ -606,6 +608,12 @@ export class DaemonClient {
    * and the caller may enter — see `PRESENCE_WHERE_ROUTE`. */
   presenceWhere(): Promise<PresenceWhereResponse> {
     return this.request("GET", PRESENCE_WHERE_ROUTE);
+  }
+
+  /** What changed, for the person using this — release notes from the home
+   *  this CLI is talking to, so what it lists is what that home is running. */
+  news(): Promise<NewsResponse> {
+    return this.request("GET", NEWS_ROUTE);
   }
 
   /** Every slash command available here: built-ins under this home's own. */

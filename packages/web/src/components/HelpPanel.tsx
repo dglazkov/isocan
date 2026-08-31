@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { SHORTCUT_GROUPS, shortcutsIn, type SlashCommand } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
+import { Modal } from "./Modal.tsx";
 import { useCommands } from "../lib/commands.ts";
 
 /**
@@ -34,22 +35,15 @@ export function HelpPanel() {
 
   if (!open) return null;
   return (
-    <div className="help-backdrop" onPointerDown={() => setOpen(false)}>
-      <div
-        className="help-panel"
-        role="dialog"
-        aria-label="Keyboard shortcuts and commands"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <header>
-          <b>What this canvas answers to</b>
-          <span className="spacer" />
-          <button className="main-close" title="Close (Esc)" onClick={() => setOpen(false)}>
-            ✕
-          </button>
-        </header>
-
-        <div className="help-scroll">
+    /* The shared shell — see `Modal.tsx`. This is where the shape was first
+       written; What's new wanted it verbatim, which is the moment a copy
+       becomes a component. */
+    <Modal
+      label="Keyboard shortcuts and commands"
+      title="What this canvas answers to"
+      onClose={() => setOpen(false)}
+      wide
+    >
           <div className="help-columns">
             {SHORTCUT_GROUPS.map((group) => (
               <section key={group} className="help-group">
@@ -91,8 +85,6 @@ export function HelpPanel() {
               </div>
             ))}
           </section>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
