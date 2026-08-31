@@ -4347,7 +4347,12 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-sorts { display: flex; gap: 2px; flex-wrap: wrap; }
 /* The chosen ordering wears the accent the way a pressed control does
    everywhere else here — `aria-pressed` carries it for a reader. */
-.canvas-sorts .btn.on {
+/* One rule, two places: the canvas list's ordering and the lens's narrowing
+   are the same control — a chip that is currently ON — so they are written
+   once. Not a coincidence of values (see `copied-rules` in `measure.mjs` for
+   when merging would be wrong): pressing either means the same thing. */
+.canvas-sorts .btn.on,
+.lens-narrow .btn.on {
   background: var(--accent-wash);
   color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -4558,3 +4563,10 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Figures that line up, because these are read as a column of times. */
 .card-peek-when { flex: none; font-variant-numeric: tabular-nums; }
 .card-peek-quiet { font-style: italic; }
+
+/* The lens's narrowing chips — kinds, windows, and "untouched since". */
+.lens-narrow { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+
+/* The count earns the click: "screen 41" is a choice, a bare "screen" is a
+   guess. Dimmer than the kind, because the kind is what is being chosen. */
+.lens-tally { color: var(--ink-soft); font-variant-numeric: tabular-nums; }

@@ -187,6 +187,9 @@ import {
   lensGroups,
   lensSubjects,
   lensSubjectLabels,
+  filterLens,
+  lensKinds,
+  type LensFilter,
   LENS_REFUSAL,
   type LensBy,
   type LensSource,
@@ -8428,9 +8431,16 @@ program
   .command("lens [who]")
   .description("What somebody has MADE, across every canvas — grouped, and read-only")
   .option("--by <how>", "canvas (default), day, or kind")
+  .option("--kind <kind>", "only this kind of thing")
+  .option("--within <hours>", "only what was made in the last N hours")
+  .option("--untouched", "only what nobody else has touched since")
   .option("-n, --limit <n>", "how many things to show (default 40)")
   .action(
-    run(async (who: string | undefined, opts: { by?: string; limit?: string }, cmd: Command) => {
+    run(async (
+      who: string | undefined,
+      opts: { by?: string; limit?: string; kind?: string; within?: string; untouched?: boolean },
+      cmd: Command,
+    ) => {
       const ctx = await ctxOf(cmd);
       /**
        * **A lens, and deliberately not a canvas.**
@@ -8465,7 +8475,30 @@ program
       if (!["canvas", "day", "kind"].includes(by)) {
         throw new Error(`not an arrangement: ${by} — canvas, day, kind`);
       }
-      const all = lensEntries(sources, wanted.id);
+      /**
+       * The same three narrowings the app offers, from the same function —
+       * `isocan lens --kind screen` and the app's chip have to mean one thing
+       * or the surfaces disagree about what an agent has been doing.
+       */
+      const within = opts.within === undefined ? undefined : Number(opts.within);
+      if (within !== undefined && (!Number.isFinite(within) || within <= 0)) {
+        throw new Error(`--within wants hours: ${opts.within}`);
+      }
+      const filter: LensFilter = {
+        ...(opts.kind ? { kind: opts.kind } : {}),
+        ...(within === undefined ? {} : { withinHours: within }),
+        ...(opts.untouched ? { untouched: true } : {}),
+      };
+      const everything = lensEntries(sources, wanted.id);
+      const all = filterLens(everything, filter, Date.now());
+      if (all.length === 0 && everything.length > 0) {
+        // A narrowed lens that matches nothing reads exactly like an agent who
+        // has made nothing, and the kinds that ARE there is the useful half.
+        const kinds = lensKinds(everything).map((k) => `${k.kind} (${k.count})`);
+        return console.log(
+          `nothing of ${wanted.name}'s matches that — they have ${kinds.join(", ")}`,
+        );
+      }
       const groups = lensGroups(all.slice(0, Number(opts.limit ?? 40)), by);
       if (ctx.json) return printJson({ actor: wanted, total: all.length, groups });
       if (all.length === 0) return console.log(`${wanted.name} has not made anything here`);

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
-import { LENS_REFUSAL, lensEntries, lensGroups, lensSubjects, type LensSource } from "../src/lens.ts";
+import {
+  filterLens,
+  LENS_REFUSAL,
+  LENS_WINDOWS,
+  lensEntries,
+  lensGroups,
+  lensKinds,
+  lensSubjects,
+  type LensEntry,
+  type LensSource,
+} from "../src/lens.ts";
 
 /**
  * **A lens is not a canvas, and the tests are where that stays true.**
@@ -152,5 +162,88 @@ describe("the lens refuses the drag", () => {
 describe("who a lens can be pointed at", () => {
   it("is everybody who made something, by name", () => {
     expect(lensSubjects(sources).map((a) => a.name)).toEqual(["Ada", "Bo"]);
+  });
+});
+
+/**
+ * **Narrowing** (phase 2) — because at three hundred things the gallery is a
+ * wall, and the questions somebody arrives with are narrower than "everything
+ * this agent ever made".
+ */
+describe("narrowing a lens", () => {
+  const NOW = Date.parse("2026-08-30T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString();
+  const entry = (over: Partial<LensEntry>): LensEntry => ({
+    itemId: "itm_1",
+    canvasId: "prj_1",
+    canvasTitle: "One",
+    title: "A thing",
+    kind: "screen",
+    at: hoursAgo(1),
+    editedSince: false,
+    ...over,
+  });
+
+  it("keeps only the kind asked for", () => {
+    const all = [entry({ itemId: "a" }), entry({ itemId: "b", kind: "drawing" })];
+    expect(filterLens(all, { kind: "drawing" }, NOW).map((e) => e.itemId)).toEqual(["b"]);
+  });
+
+  it("keeps only what falls inside the window", () => {
+    const all = [
+      entry({ itemId: "recent", at: hoursAgo(2) }),
+      entry({ itemId: "old", at: hoursAgo(200) }),
+    ];
+    expect(filterLens(all, { withinHours: 24 }, NOW).map((e) => e.itemId)).toEqual(["recent"]);
+  });
+
+  it("treats an unreadable date as not recent", () => {
+    /* A filter that lets unknowns through is one somebody stops trusting the
+       first time a mystery shows up under "today". */
+    const all = [entry({ itemId: "broken", at: "not a date" })];
+    expect(filterLens(all, { withinHours: 24 }, NOW)).toEqual([]);
+  });
+
+  it("keeps only what nobody else has touched, when asked", () => {
+    const all = [
+      entry({ itemId: "mine" }),
+      entry({ itemId: "theirs", editedSince: true }),
+    ];
+    expect(filterLens(all, { untouched: true }, NOW).map((e) => e.itemId)).toEqual(["mine"]);
+  });
+
+  it("composes — every filter narrows the last", () => {
+    const all = [
+      entry({ itemId: "keep", kind: "screen", at: hoursAgo(1) }),
+      entry({ itemId: "wrongKind", kind: "drawing", at: hoursAgo(1) }),
+      entry({ itemId: "tooOld", kind: "screen", at: hoursAgo(500) }),
+      entry({ itemId: "touched", kind: "screen", at: hoursAgo(1), editedSince: true }),
+    ];
+    const got = filterLens(all, { kind: "screen", withinHours: 24, untouched: true }, NOW);
+    expect(got.map((e) => e.itemId)).toEqual(["keep"]);
+  });
+
+  it("is everything when nothing is asked", () => {
+    const all = [entry({ itemId: "a" }), entry({ itemId: "b", kind: "drawing" })];
+    expect(filterLens(all, {}, NOW)).toHaveLength(2);
+  });
+
+  it("offers only the kinds that are actually there, commonest first", () => {
+    /* A chooser listing kinds nobody has made is a menu of dead ends, and the
+       count is what makes the choice worth making. */
+    const all = [
+      entry({ itemId: "a", kind: "screen" }),
+      entry({ itemId: "b", kind: "screen" }),
+      entry({ itemId: "c", kind: "drawing" }),
+    ];
+    expect(lensKinds(all)).toEqual([
+      { kind: "screen", count: 2 },
+      { kind: "drawing", count: 1 },
+    ]);
+  });
+
+  it("names its windows in the words somebody would choose them by", () => {
+    expect(LENS_WINDOWS.map((w) => w.label)).toEqual(["Today", "This week", "This month"]);
+    expect(LENS_WINDOWS.every((w) => w.hours > 0)).toBe(true);
   });
 });
