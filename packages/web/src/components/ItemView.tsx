@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import type { Actor, Item, Operation } from "@isocan/core";
+import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
   backingOf,
   isDesignSystem,
@@ -19,6 +19,7 @@ import {
   TEXT_FACE_STACK,
   parseUriList,
   renamedFilename,
+  titleRoom,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { contentBase } from "../lib/contentBase.ts";
@@ -58,6 +59,13 @@ const EXPAND = (
     <path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" />
   </svg>
 );
+
+/** The title row's height on screen: 11px type at 1.4 line height, as the
+ *  stylesheet sets it. Used to work out the world band a name occupies. */
+const TITLE_STRIP_PX = 16;
+/** Clear space left before whatever the name stopped for, so a reaching name
+ *  does not touch the thing it yielded to. */
+const TITLE_GAP_PX = 8;
 
 function ItemViewInner({
   item,
@@ -117,6 +125,68 @@ function ItemViewInner({
   // The rule lives in lib/chrome.ts so a test can reach it without a browser —
   // there is no floor, and chrome.test.ts is where that is held.
   const row = titleRow(width, scale);
+
+  /**
+   * **A hovered name reaches into the empty space beside it.**
+   *
+   * The label is clipped to the card, so anything longer reads as
+   * "White Lot…" and a canvas of screens becomes a canvas of things whose
+   * names you have to click to learn. The room to the right is usually empty
+   * — this uses it, and stops where something is actually in the way.
+   *
+   * **Hover only.** One thing is hovered at a time, so at most one name is
+   * reaching. Selection is the opposite: a marquee over nine items would have
+   * nine names reaching over each other, and the arrangement that reads as
+   * "these nine" would become unreadable exactly when you asked to see it.
+   *
+   * Computed only while hovered, so the scan costs nothing on a still canvas
+   * — and `titleRoom` is in core, because it is geometry that is wrong in one
+   * direction at one zoom level and a browser is a poor place to learn that.
+   */
+  const hovered = useUiStore((st) => st.hoveredItemId === item.id);
+  /**
+   * **Many selected is the case that cannot reach; one is not.**
+   *
+   * The rule started as hover-only, and that made clicking a hovered item
+   * snap its name back to the card — the reach appearing and vanishing on the
+   * same pointer gesture. The reason to exclude selection was never selection
+   * itself, it was MANY: a marquee over nine items would have nine names
+   * reaching over each other. One selected item has exactly the same
+   * one-name-at-a-time property that makes hover safe.
+   *
+   * A boolean rather than the array, so this re-renders only when the
+   * selection crosses one-to-many, not on every click.
+   */
+  const manySelected = useUiStore((st) => st.selectedItemIds.length > 1);
+  const mayReach = !renaming && !manySelected && (hovered || selected);
+  const reach = useCanvasStore((st) => {
+    if (!mayReach) return null;
+    const all = st.canvas?.items;
+    if (!all) return null;
+    const chosen = useUiStore.getState().selectedItemIds;
+    // The title row's height in world units. The row is counter-scaled, so
+    // its SCREEN height is fixed (11px type at 1.4 line height) and the world
+    // band it covers grows as you zoom out — which is exactly when labels
+    // start reaching across neighbours, so the conversion matters.
+    const strip = TITLE_STRIP_PX / scale;
+    const others: Neighbour[] = [];
+    for (const other of Object.values(all)) {
+      if (other.id === item.id) continue;
+      others.push({
+        x: other.x,
+        y: other.y,
+        width: other.width,
+        height: other.height,
+        /* A selected neighbour is showing its own name in the band this one
+           wants. Read from the ui store rather than subscribed to: every item
+           subscribing to the selection array would re-render the whole canvas
+           on every click, and this only has to be right at the moment a hover
+           begins — which re-renders this item and re-runs the selector. */
+        titled: chosen.includes(other.id),
+      });
+    }
+    return titleRoom(item, others, strip, TITLE_GAP_PX / scale);
+  });
   const kind = iconKindFor(item);
   // Where this item belongs on disk, and what this machine's disk says —
   // the canvas fact and the per-machine one, kept apart by `backingOf`.
@@ -468,8 +538,17 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}`}
       data-item-id={item.id}
+      /* One id in the store rather than a flag per item: moving the pointer
+         across a canvas re-renders the two items whose state changed, not
+         every item on screen. */
+      onPointerEnter={() => useUiStore.getState().setHoveredItem(item.id)}
+      onPointerLeave={() =>
+        useUiStore.setState((st) =>
+          st.hoveredItemId === item.id ? { hoveredItemId: null } : st,
+        )
+      }
       style={{
         left: x,
         top: y,
@@ -522,7 +601,17 @@ function ItemViewInner({
             // NO FLOOR, and `nameRoom` in lib/chrome.ts is where that is
             // argued and tested. Below the width where a name says anything
             // the name is dropped instead, and the star stays.
-            maxWidth: row.nameRoom,
+            /* The reach, in the label's own units — the label is
+               counter-scaled, so world room has to be converted. Never below
+               `nameRoom`: hovering must not shrink a label. */
+            maxWidth:
+              reach === null
+                ? row.nameRoom
+                : /* Nothing in the way: no limit, said as `none` rather than
+                     as a very large pixel count. */
+                  Number.isFinite(reach)
+                  ? Math.max(row.nameRoom, reach * scale)
+                  : "none",
             // The row is here if anything in it is. Which of the icon and the
             // name survive at this size is `titleRow`'s call, and they do NOT
             // fall together: hiding the pair is what left a bare star between
