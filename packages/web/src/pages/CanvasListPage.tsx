@@ -17,6 +17,7 @@ import { fetchHomes, listCanvases, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
+import { CardPeek } from "../components/CardPeek.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
@@ -132,6 +133,8 @@ export function CanvasListPage({
    * to the new card and marks it for a moment.
    */
   const [justMade, setJustMade] = useState<string | null>(null);
+  /** The card somebody is pointing at or has tabbed to, if any. */
+  const [peeking, setPeeking] = useState<string | null>(null);
 
   /**
    * **A clock, because "8m ago" is a lie the moment it is painted.**
@@ -451,6 +454,23 @@ export function CanvasListPage({
           <div
             className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
             key={canvas.id}
+            /**
+             * **Pointer AND focus**, because a hover-only affordance does not
+             * exist for a keyboard or a touch screen — and this one holds the
+             * only account of what happened here before the last thing.
+             *
+             * `focusWithin` rather than the card's own focus: the card is a
+             * div wrapping links and buttons, so what actually receives focus
+             * is a child, and listening on the card catches all of them.
+             */
+            onPointerEnter={() => setPeeking(canvas.id)}
+            onPointerLeave={() => setPeeking((at) => (at === canvas.id ? null : at))}
+            onFocus={() => setPeeking(canvas.id)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setPeeking((at) => (at === canvas.id ? null : at));
+              }
+            }}
           >
             {editing === canvas.id ? (
               <CanvasEditor
@@ -494,6 +514,10 @@ export function CanvasListPage({
                     </span>
                   </div>
                 </Link>
+                {/* Under the meta line, inside the card: a popover floating
+                    outside would need placing, and this is a few short rows
+                    that the card has room for. */}
+                <CardPeek canvasId={canvas.id} open={peeking === canvas.id} />
                 <div className="card-more">
                   {confirmingDelete === canvas.id ? (
                     <>

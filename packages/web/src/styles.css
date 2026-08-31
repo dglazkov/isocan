@@ -4531,3 +4531,30 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-muted); font-size: 11px; font-family: inherit;
 }
 .palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }
+
+/**
+ * **The card's peek** — what happened here before the last thing.
+ *
+ * Inside the card rather than floating over it: a popover would need placing
+ * against the viewport, and these are three short rows the card has room for.
+ * It appears on pointer AND on focus, because a hover-only affordance does not
+ * exist for a keyboard or a touch screen.
+ */
+.card-peek {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 14px 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.card-peek-row { display: flex; align-items: baseline; gap: 8px; }
+.card-peek-what {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Figures that line up, because these are read as a column of times. */
+.card-peek-when { flex: none; font-variant-numeric: tabular-nums; }
+.card-peek-quiet { font-style: italic; }
