@@ -11,6 +11,9 @@ import {
   lensSubjects,
   type LensEntry,
   lensActs,
+  lensLive,
+  lensLiveList,
+  lensLiveWords,
   lensShape,
   type LensSource,
 } from "../src/lens.ts";
@@ -353,5 +356,77 @@ describe("what somebody did, from the log", () => {
     const renamed = lensActs(logs, "usr_ada", () => "Ada Lovelace");
     expect(new Set(renamed.map((a) => a.actor))).toEqual(new Set(["Ada Lovelace"]));
     expect(lensActs(logs, "usr_ada")[0]!.actor).toBe("Ada");
+  });
+});
+
+describe("the lens says who is live", () => {
+  const ada = { id: "usr_ada", name: "Ada" };
+  const row = (canvasId: string, kind: "web" | "cli" | "rc", actor = ada) => ({
+    canvasId,
+    actor,
+    kind,
+    harness: null,
+    status: null,
+    statusSource: null,
+    lastSeen: "2026-08-30T12:00:00.000Z",
+  });
+
+  it("separates being there from being reachable there", () => {
+    /* A parked rc is a process standing by, not a person at the canvas. One
+       set with a flag would make forgetting the difference possible; two sets
+       make every caller choose. */
+    const live = lensLive([row("c1", "cli"), row("c2", "rc")], "usr_ada");
+    expect([...live.here]).toEqual(["c1"]);
+    expect([...live.available]).toEqual(["c2"]);
+  });
+
+  it("lets being there outrank standing by, on one canvas", () => {
+    /* An agent working on a canvas that also has its rc parked is WORKING
+       there. Counting it in both would double it, and the weaker fact is the
+       one that should give way. */
+    const live = lensLive([row("c1", "rc"), row("c1", "cli")], "usr_ada");
+    expect([...live.here]).toEqual(["c1"]);
+    expect(live.available.size).toBe(0);
+  });
+
+  it("ignores everybody else", () => {
+    const bo = { id: "usr_bo", name: "Bo" };
+    const live = lensLive([row("c1", "web", bo), row("c2", "cli")], "usr_ada");
+    expect([...live.here]).toEqual(["c2"]);
+  });
+
+  it("says nothing at all rather than saying offline", () => {
+    /* Absent from every room THIS daemon can see is not "not working" — an
+       agent busy on a canvas homed elsewhere appears here as nothing. A
+       confident "offline" would be the instrument reporting its own blind
+       spot as a fact about somebody. */
+    expect(lensLiveWords(lensLive([], "usr_ada"))).toBeNull();
+  });
+
+  it("counts, once there is more than one", () => {
+    expect(lensLiveWords(lensLive([row("c1", "cli")], "usr_ada"))).toBe("on a canvas now");
+    expect(lensLiveWords(lensLive([row("c1", "cli"), row("c2", "web")], "usr_ada"))).toBe(
+      "on 2 canvases now",
+    );
+    expect(lensLiveWords(lensLive([row("c1", "rc")], "usr_ada"))).toBe("standing by");
+  });
+});
+
+describe("naming where somebody is", () => {
+  it("puts the ones they are ON before the ones standing by", () => {
+    const live = { here: new Set(["c2"]), available: new Set(["c1"]) };
+    expect(lensLiveList(live)).toEqual([
+      { canvasId: "c2", state: "here" },
+      { canvasId: "c1", state: "available" },
+    ]);
+  });
+
+  it("is stable, so a poll does not reshuffle the line every 15 seconds", () => {
+    const live = { here: new Set(["cz", "ca", "cm"]), available: new Set<string>() };
+    expect(lensLiveList(live).map((l) => l.canvasId)).toEqual(["ca", "cm", "cz"]);
+  });
+
+  it("is empty when there is nothing to name", () => {
+    expect(lensLiveList(lensLive([], "usr_ada"))).toEqual([]);
   });
 });

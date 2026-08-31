@@ -1,5 +1,6 @@
 import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { LogEntry } from "./ops.ts";
+import type { PresenceWhere } from "./protocol.ts";
 import { itemKind } from "./kinds.ts";
 
 /**
@@ -323,4 +324,78 @@ export function lensShape(acts: readonly LensAct[]): {
     canvases: new Set(acts.map((a) => a.canvasId)).size,
     mostly: top ? top[0] : null,
   };
+}
+
+/**
+ * **Where somebody is right now** — the canvases they are on, and whether
+ * they are there or merely reachable there.
+ *
+ * Two states, and the difference is the whole point. A `web` or `cli` session
+ * is somebody AT the canvas: a face, a cursor, work happening. A parked `rc`
+ * is a process standing by — nobody is there, but something could be woken.
+ * `docs/research/2026-08-30-standing-agents.md` is blunt about why these must
+ * not render alike: *"a facepile that shows six faces on a canvas nobody is
+ * working on has stopped meaning anything, which is the whole value of
+ * presence being honest."*
+ *
+ * So `here` and `available` are separate sets rather than one set with a flag,
+ * because every caller has to decide between them and a flag makes forgetting
+ * possible. A canvas somebody is genuinely on outranks a parked process on the
+ * same canvas — being there is the stronger fact.
+ */
+export interface LensLive {
+  /** Canvas ids where this actor is actually present. */
+  here: ReadonlySet<string>;
+  /** Canvas ids where an rc is parked for them, and they are not present. */
+  available: ReadonlySet<string>;
+}
+
+export function lensLive(where: readonly PresenceWhere[], actorId: string): LensLive {
+  const here = new Set<string>();
+  const parked = new Set<string>();
+  for (const row of where) {
+    if (row.actor.id !== actorId) continue;
+    (row.kind === "rc" ? parked : here).add(row.canvasId);
+  }
+  for (const canvasId of here) parked.delete(canvasId);
+  return { here, available: parked };
+}
+
+/**
+ * One sentence for a subject row: present somewhere, standing by, or neither.
+ *
+ * Null rather than "offline", because absent from every room this daemon can
+ * see is not the same as not working — presence rides on sockets to canvases,
+ * and an agent busy on a canvas that lives at another home shows up here as
+ * nothing at all. A confident "offline" would be the instrument reporting its
+ * own blind spot as a fact about somebody.
+ */
+export function lensLiveWords(live: LensLive): string | null {
+  if (live.here.size > 0) {
+    return live.here.size === 1 ? "on a canvas now" : `on ${live.here.size} canvases now`;
+  }
+  if (live.available.size > 0) {
+    return live.available.size === 1 ? "standing by" : `standing by on ${live.available.size}`;
+  }
+  return null;
+}
+
+/**
+ * The canvases to NAME, present ones first.
+ *
+ * `lensLiveWords` counts, which is right for a roster of a dozen people — a
+ * list of titles there is a wall. On one subject's page the count is the
+ * uninteresting half: "on a canvas now" invites exactly one question, and the
+ * page could not answer it, because the canvas somebody is SITTING on is
+ * often not one they have made anything on. Those are the two halves of this
+ * page's own subject and it could only show one.
+ *
+ * Ids, not titles: core folds identity, and a title belongs to whichever
+ * surface is drawing it — a link in the app, a word in a terminal.
+ */
+export function lensLiveList(live: LensLive): Array<{ canvasId: string; state: "here" | "available" }> {
+  return [
+    ...[...live.here].sort().map((canvasId) => ({ canvasId, state: "here" as const })),
+    ...[...live.available].sort().map((canvasId) => ({ canvasId, state: "available" as const })),
+  ];
 }

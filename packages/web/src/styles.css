@@ -4585,3 +4585,20 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 18ch;
 }
 .lens-act-where:hover { color: var(--accent-text); }
+
+/* **Here, and standing by, must not read alike.** A facepile showing six
+   faces on a canvas nobody is working on has stopped meaning anything, and
+   the same is true of a dot. Filled is somebody there; a ring is a process
+   that could be woken — present as a possibility, absent as a person. */
+.lens-live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--good); flex: none;
+}
+.lens-live-dot.standby { background: transparent; box-shadow: inset 0 0 0 1.5px var(--good); }
+.lens-live-said {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--good); font-size: 11.5px; font-style: normal;
+}
+.lens-group h2 .lens-live-dot { margin-right: 6px; }
+.lens-live-at { color: inherit; text-decoration: none; }
+.lens-live-at:hover { text-decoration: underline; }

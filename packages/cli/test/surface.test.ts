@@ -139,6 +139,15 @@ describe("the cross-canvas folds are shared, not re-rolled", () => {
     expect(source).toContain("lensShape(acts)");
   });
 
+  it("the lens says who is live, on this surface too", () => {
+    /* A dot in the app and nothing in the terminal is the gap the house rule
+       calls a bug: an agent asking "is anybody working on this" would have
+       had to open a browser. Same fold, same words. */
+    expect(source).toContain("lensLive(");
+    expect(source).toContain("lensLiveWords(");
+    expect(source).toContain("lensLiveList(");
+  });
+
   it("counts canvases once, rather than agreeing by coincidence", () => {
     /* `new Set(acts.map(a => a.canvas)).size` is the line this replaced. It
        was correct, and it was a second opinion about a number the page also

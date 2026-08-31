@@ -177,3 +177,68 @@ describe("the lens remembers what it can no longer show", () => {
     expect(bare).toMatch(/canvasPath\(act\.canvasId\)/);
   });
 });
+
+/**
+ * **Presence** (phase 4) — the one present-tense fact on a page that is
+ * otherwise entirely past tense.
+ */
+describe("the lens says who is live", () => {
+  it("folds presence with core, so the CLI agrees about standing by", () => {
+    expect(bare).toContain("lensLive(");
+    expect(bare).toContain("lensLiveList(");
+  });
+
+  it("reads it, rather than opening a socket per canvas", () => {
+    /* Presence rides the per-canvas socket. This page spans a dozen canvases
+       and holds a socket to none of them; a dozen connections to draw a dozen
+       dots is a cost nobody asked for, and a dot a few seconds stale is still
+       a dot. */
+    expect(bare).toContain("fetchPresenceWhere()");
+    expect(bare).not.toMatch(/new WebSocket|subscribe\(/);
+  });
+
+  it("stops polling when the page goes away", () => {
+    /* An interval that outlives its page is a leak that only shows up after
+       somebody has navigated around for an hour. */
+    expect(bare).toMatch(/clearInterval\(timer\)/);
+  });
+
+  it("names the canvas on a subject's page, rather than only counting", () => {
+    /* "On a canvas now" invites exactly one question, and the page could not
+       answer it: the canvas somebody is SITTING on is often not one they have
+       made anything on, so no group heading below is theirs. */
+    expect(bare).toMatch(/lensLiveList\(live\)\.map/);
+    expect(bare).toMatch(/canvasPath\(at\.canvasId\)/);
+  });
+
+  it("never renders a confident 'offline'", () => {
+    /* Absent from every room this daemon can see is not "not working" — an
+       agent busy on a canvas homed elsewhere appears here as nothing. Saying
+       offline would be the instrument reporting its blind spot as a fact
+       about somebody. */
+    expect(bare).not.toMatch(/offline|not working|away\b/i);
+  });
+});
+
+describe("here and standing by do not look alike", () => {
+  const sheet = rules(withoutComments()).filter((r) => /lens-live-dot/.test(r.selector));
+
+  it("has a rule for each state", () => {
+    expect(sheet.some((r) => /\.standby/.test(r.selector))).toBe(true);
+  });
+
+  it("makes the standby dot differ in more than a shade", () => {
+    /* The whole value of presence is that it is honest: a facepile showing
+       six faces on a canvas nobody is working on has stopped meaning
+       anything, and so has a dot that looks the same either way. Filled
+       versus a ring survives a colourblind reader and a greyscale screen;
+       two greens would not. */
+    const standby = sheet.find((r) => /\.standby/.test(r.selector));
+    expect(standby?.body).toMatch(/background:\s*transparent/);
+    expect(standby?.body).toMatch(/inset/);
+  });
+
+  it("takes its colour from a token, like everything else", () => {
+    for (const r of sheet) expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});

@@ -185,6 +185,9 @@ import {
   type FormatMode,
   lensActs,
   lensEntries,
+  lensLive,
+  lensLiveList,
+  lensLiveWords,
   lensGroups,
   lensShape,
   lensSubjects,
@@ -8481,7 +8484,18 @@ program
         if (subjects.length === 0) return console.log("nobody has made anything here yet");
         console.log("who to look at — `isocan lens <who>`\n");
         const labels = lensSubjectLabels(subjects);
-        for (const s of subjects) console.log(`  ${labels.get(s.id)}`);
+        /* The one present-tense fact in a list of past-tense ones, and the
+           same words the app's roster prints — from `lensLiveWords`, so
+           neither surface invents its own phrasing for "standing by". */
+        /* An older daemon has no such route, and the honest answer to "who
+           is live" from a daemon that cannot say is silence — which is what
+           `lensLiveWords` already renders for an empty set. Not a swallowed
+           error: the same nothing, by the same rule. */
+        const { where } = await ctx.client.presenceWhere().catch(() => ({ where: [] }));
+        for (const s of subjects) {
+          const said = lensLiveWords(lensLive(where, s.id));
+          console.log(`  ${labels.get(s.id)}${said ? ` — ${said}` : ""}`);
+        }
         return;
       }
       const wanted = subjects.find(
@@ -8529,10 +8543,21 @@ program
           );
         }
       }
-      const where = new Set(all.map((e) => e.canvasId)).size;
+      const spread = new Set(all.map((e) => e.canvasId)).size;
+      const live = lensLive(
+        (await ctx.client.presenceWhere().catch(() => ({ where: [] }))).where,
+        wanted.id,
+      );
+      /* Named rather than counted, for the same reason the app names them:
+         "on a canvas now" invites exactly one question, and the canvas
+         somebody is sitting on is often not one of the ones listed above. */
+      const titleOf = new Map(canvases.map((c) => [c.id, c.title]));
+      const at = lensLiveList(live)
+        .map((l) => `${l.state === "here" ? "" : "standing by on "}${titleOf.get(l.canvasId) ?? l.canvasId}`)
+        .join(", ");
       console.log(
         `\n${wanted.name} made ${all.length} thing${all.length === 1 ? "" : "s"} across ` +
-          `${where} canvas${where === 1 ? "" : "es"} — ${LENS_REFUSAL}`,
+          `${spread} canvas${spread === 1 ? "" : "es"}${at ? ` · now on ${at}` : ""} — ${LENS_REFUSAL}`,
       );
     }),
   );

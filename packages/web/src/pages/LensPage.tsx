@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Actor, LensAct, LensBy, LensEntry, LensFilter, LensGroup, LensLog, LensSource } from "@isocan/core";
+import type {
+  Actor,
+  LensAct,
+  LensBy,
+  LensEntry,
+  LensFilter,
+  LensGroup,
+  LensLog,
+  LensSource,
+  PresenceWhere,
+} from "@isocan/core";
 import {
   ago,
   filterLens,
   LENS_WINDOWS,
   lensActs,
+  lensLive,
+  lensLiveList,
+  lensLiveWords,
   lensKinds,
   lensShape,
   opWords,
@@ -17,7 +30,7 @@ import {
   lensSubjectLabels,
   lensSubjects,
 } from "@isocan/core";
-import { getOplog, getSnapshot, listCanvases } from "../lib/api.ts";
+import { fetchPresenceWhere, getOplog, getSnapshot, listCanvases } from "../lib/api.ts";
 import { actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { ItemThumb } from "../components/ItemThumb.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
@@ -66,6 +79,14 @@ function toggle<K extends keyof LensFilter>(
 
 /** Above this many things, the narrowing appears. */
 const NARROW_FROM = 12;
+
+/**
+ * How often the dots refresh. Presence expires on a TTL the daemon owns, so
+ * this only has to be comfortably under it — often enough that somebody
+ * arriving shows up while you are still looking, rare enough that a page left
+ * open all afternoon is not a load.
+ */
+const PRESENCE_EVERY_MS = 15_000;
 
 const BY: LensBy[] = ["canvas", "day", "kind"];
 const BY_LABEL: Record<LensBy, string> = {
@@ -129,6 +150,13 @@ export function LensPage() {
     () => new Map((sources ?? []).map((s) => [s.canvasId, s.canvas])),
     [sources],
   );
+  /* Titles, for the canvases presence names — which are not always canvases
+     this subject has made anything on, so no group heading below carries the
+     name and the map above holds contents rather than a title. */
+  const titles = useMemo(
+    () => new Map((sources ?? []).map((s) => [s.canvasId, s.canvasTitle])),
+    [sources],
+  );
 
   const subjects = useMemo(() => (sources ? lensSubjects(sources) : []), [sources]);
   const labels = useMemo(() => lensSubjectLabels(subjects), [subjects]);
@@ -171,11 +199,46 @@ export function LensPage() {
     };
   }, [mode, sources, logs]);
 
+  /**
+   * **Who is live, refreshed while the page is open.**
+   *
+   * Unlike the logs this is not lazy: it is one request for the whole board,
+   * it answers a question on BOTH views (the roster and a subject's canvases),
+   * and a dot that appears only after you click something is not presence.
+   *
+   * It polls rather than subscribes. Presence rides on the per-canvas socket,
+   * so being exact here would mean a socket per canvas — a dozen connections
+   * to draw a dozen dots. `null` while unknown, so nothing renders "nobody is
+   * here" before anybody has been asked.
+   */
+  const [present, setPresent] = useState<PresenceWhere[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const read = () => {
+      fetchPresenceWhere()
+        .then((r) => live && setPresent(r.where))
+        .catch(() => {
+          /* A daemon that will not answer this leaves the dots off. The rest
+             of the page is about what happened, and none of it needs a dot. */
+        });
+    };
+    read();
+    const timer = setInterval(read, PRESENCE_EVERY_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, []);
+
   const acts = useMemo<LensAct[]>(
     () => (logs && subject ? lensActs(logs, subject.id) : []),
     [logs, subject],
   );
   const shape = useMemo(() => lensShape(acts), [acts]);
+  const live = useMemo(
+    () => lensLive(present ?? [], subject?.id ?? ""),
+    [present, subject],
+  );
   const all = useMemo<LensEntry[]>(
     () => (sources && subject ? lensEntries(sources, subject.id) : []),
     [sources, subject],
@@ -209,6 +272,30 @@ export function LensPage() {
               it answers the question a bare "Lens" leaves open: a page called
               after a metaphor has to say what it is a lens ON. */}
           {!subject && <i className="panel-hint">who has made what, across every canvas</i>}
+          {/* Present tense, next to a page that is otherwise entirely past
+              tense. Absent when there is nothing to say — see
+              `lensLiveWords`, which will not call somebody offline on the
+              strength of rooms it cannot see into. */}
+          {subject && lensLiveList(live).length > 0 && (
+            <i className="lens-live-said">
+              {/* Named, not counted. "On a canvas now" invites exactly one
+                  question, and until this the page could not answer it: the
+                  canvas somebody is SITTING on is often not one they have
+                  made anything on, so no group heading below is theirs. */}
+              {lensLiveList(live).map((at, i) => (
+                <span key={at.canvasId}>
+                  {i > 0 && ", "}
+                  <span
+                    className={`lens-live-dot${at.state === "available" ? " standby" : ""}`}
+                    aria-hidden
+                  />{" "}
+                  <Link className="lens-live-at" to={canvasPath(at.canvasId)}>
+                    {titles.get(at.canvasId) ?? "a canvas"}
+                  </Link>
+                </span>
+              ))}
+            </i>
+          )}
         </div>
         <span className="spacer" />
         {subject && (
@@ -257,6 +344,10 @@ export function LensPage() {
                busy WITH, which is the question somebody opens this holding. */
             const theirs = lensEntries(sources, s.id);
             const recent = theirs.slice(0, 4);
+            /* The one present-tense fact on a page of past-tense ones, and
+               the reason to look before choosing: "who is working right now"
+               is answered here or nowhere. */
+            const said = lensLiveWords(lensLive(present ?? [], s.id));
             return (
               <Link key={s.id} className="lens-subject" to={`/lens/${encodeURIComponent(s.id)}`}>
                 <span className="lens-subject-head">
@@ -269,6 +360,11 @@ export function LensPage() {
                       {theirs.length} thing{theirs.length === 1 ? "" : "s"} ·{" "}
                       {countWhere(theirs)}
                     </span>
+                    {said && (
+                      <span className="lens-live-said">
+                        <span className="lens-live-dot" aria-hidden /> {said}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <span className="lens-strip" aria-hidden>
@@ -399,6 +495,15 @@ export function LensPage() {
                   the length, so the heading bounds it here and keeps the whole
                   string on `title` where it costs nothing. */}
               <h2 title={group.label}>
+                {/* Grouped by canvas, `group.key` IS the canvas id — so the
+                    dot is only meaningful in that arrangement. "By day" has
+                    no room to be in. */}
+                {by === "canvas" && live.here.has(group.key) && (
+                  <span className="lens-live-dot" title="here now" />
+                )}
+                {by === "canvas" && live.available.has(group.key) && (
+                  <span className="lens-live-dot standby" title="standing by" />
+                )}
                 <span className="lens-group-name">{group.label}</span>
                 <span className="lens-count">{group.entries.length}</span>
               </h2>

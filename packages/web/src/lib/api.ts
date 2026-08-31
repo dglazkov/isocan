@@ -14,6 +14,7 @@ import type {
   GrantsResponse,
   GrantSubject,
   HomesResponse,
+  PresenceWhereResponse,
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
@@ -35,6 +36,7 @@ import {
   grantRoute,
   grantsRoute,
   HOMES_ROUTE,
+  PRESENCE_WHERE_ROUTE,
   newClientId,
   newOpId,
   PASS_REDEEM_ROUTE,
@@ -334,6 +336,18 @@ export function listCanvases(): Promise<Canvas[]> {
  */
 export function fetchHomes(): Promise<HomesResponse> {
   return request("GET", HOMES_ROUTE);
+}
+
+/**
+ * **Who is on which canvas right now** — one read for a question presence
+ * files the other way round. See `PRESENCE_WHERE_ROUTE`.
+ *
+ * The lens shows one agent across a dozen canvases and holds a socket to none
+ * of them; opening a dozen to keep a dozen dots exact is a cost nobody asked
+ * for, and a dot a few seconds stale is still a dot.
+ */
+export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
+  return request("GET", PRESENCE_WHERE_ROUTE);
 }
 
 export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {

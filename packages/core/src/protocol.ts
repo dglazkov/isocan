@@ -934,6 +934,41 @@ export interface JoinCanvasResponse {
 export const HOMES_ROUTE = "/api/homes";
 
 /**
+ * **`GET /api/presence/where` — who is on which canvas, right now.**
+ *
+ * Presence rides on the per-canvas socket, and that is the right shape for
+ * the canvas and the wrong shape for a question about a PERSON. The lens
+ * shows one agent across twelve canvases and holds a socket to none of them;
+ * a facepile on a canvas card is the same question again, once per card.
+ *
+ * So this is the read that answers it in one request, and it is deliberately
+ * a read rather than a subscription: a dot that is a few seconds stale is a
+ * dot, whereas twelve sockets opened to keep twelve dots exact is a cost
+ * nobody asked for. Presence is still never written down — this reports
+ * daemon memory, touches no store and no oplog.
+ *
+ * **Scoped by the same admission the canvas list uses**, because "where is
+ * this agent working" is a question about canvases, and a roster of rooms you
+ * may not enter is a roster of somebody else's business.
+ */
+export const PRESENCE_WHERE_ROUTE = "/api/presence/where";
+
+export interface PresenceWhere {
+  canvasId: string;
+  /** The vouched actor — the trustworthy half of a presence row. */
+  actor: Actor;
+  kind: PresenceSession["kind"];
+  harness: string | null;
+  status: string | null;
+  statusSource: PresenceSession["statusSource"];
+  lastSeen: string;
+}
+
+export interface PresenceWhereResponse {
+  where: PresenceWhere[];
+}
+
+/**
  * **`GET /api/serving` — how this home serves, advertised to the app.**
  *
  * The first (and so far only) fact it carries: the content origin's base URL,

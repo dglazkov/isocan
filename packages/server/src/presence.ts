@@ -152,6 +152,26 @@ export class PresenceHub {
   }
 
   /**
+   * Every face in every room, as `[canvasId, session]` pairs.
+   *
+   * Presence rides on the PER-CANVAS socket, which is the right shape for a
+   * canvas and the wrong shape for a question about a person: the lens shows
+   * one agent across twelve canvases and holds a socket to none of them.
+   * Opening twelve to draw twelve dots would be absurd, so the cross-canvas
+   * question is a read.
+   *
+   * Unfiltered on purpose — this is daemon memory, and the caller applies the
+   * admission test, because only the route knows whose badge is asking.
+   */
+  everywhere(): Array<{ canvasId: string; session: PresenceSession }> {
+    const all: Array<{ canvasId: string; session: PresenceSession }> = [];
+    for (const canvasId of this.rooms.keys()) {
+      for (const session of this.roster(canvasId)) all.push({ canvasId, session });
+    }
+    return all;
+  }
+
+  /**
    * This daemon's OWN faces on a canvas — what a home connection relays up.
    *
    * The narrowing is the loop guard: relaying `roster()` would send the home
