@@ -201,7 +201,7 @@ export interface NodeBox {
 export function edgeAnchors(
   from: NodeBox,
   to: NodeBox,
-): { x1: number; y1: number; x2: number; y2: number } {
+): { x1: number; y1: number; x2: number; y2: number; axis: "x" | "y" } {
   const fromMid = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
   const toMid = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
   const dx = toMid.x - fromMid.x;
@@ -214,6 +214,7 @@ export function edgeAnchors(
       y1: fromMid.y,
       x2: rightwards ? to.x : to.x + to.width,
       y2: toMid.y,
+      axis: "x",
     };
   }
   const downwards = dy >= 0;
@@ -222,5 +223,14 @@ export function edgeAnchors(
     y1: downwards ? from.y + from.height : from.y,
     x2: toMid.x,
     y2: downwards ? to.y : to.y + to.height,
+    /**
+     * **Which side the line leaves by**, which the points alone cannot say.
+     *
+     * A curve has to bulge PERPENDICULAR to the edge it leaves, or it enters
+     * the node at an angle and reads as a stray stroke rather than a branch.
+     * The choice is already made here — on the dominant axis — and was being
+     * thrown away, so the renderer could only draw something straight.
+     */
+    axis: "y",
   };
 }

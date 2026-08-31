@@ -2530,6 +2530,11 @@ button.mt-card:hover { border-color: var(--accent); }
    it from the same token, so the dark ground and the pale one each hold the
    same relationship. */
 .map-edge {
+  /* `fill: none` is load-bearing, not tidiness: these became `<path>` when the
+     lines became curves, and an unfilled path is filled BLACK by default —
+     every branch would paint the region between its curve and its chord. A
+     `<line>` has no interior and never needed saying. */
+  fill: none;
   stroke: var(--ink-soft);
   opacity: 0.65;
   stroke-width: calc(1.5px / var(--scale, 1));

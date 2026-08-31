@@ -22,6 +22,35 @@ import { useUiStore } from "../stores/uiStore.ts";
  * **Under the items**, because a node is chromeless text and a line drawn
  * over it would strike through the words.
  */
+/**
+ * **A branch, not a wire.**
+ *
+ * Straight segments were the first version and they read as a circuit
+ * diagram: every line arrives at a node on a different diagonal, and a parent
+ * with six children becomes a spray of spokes converging on one point. A mind
+ * map is read as *branching*, and the thing that carries that is a line
+ * leaving its parent along the parent's own axis and arriving at the child
+ * along the child's.
+ *
+ * So: a cubic bezier whose control points sit on the axis `edgeAnchors`
+ * chose. Both handles push out along the same axis, which is what makes the
+ * curve leave and enter square-on and flow rather than kink.
+ *
+ * The handle length is **half the span**, which is the ratio that keeps a
+ * curve looking like one curve at every distance — a fixed number is too
+ * limp across a wide gap and too loopy across a narrow one. Clamped at the
+ * bottom so two nodes almost touching still get a visible bend rather than a
+ * segment, and at the top so a node dragged far away does not throw a handle
+ * so long the line bows back past its own endpoint.
+ */
+function curve({ x1, y1, x2, y2, axis }: ReturnType<typeof edgeAnchors>): string {
+  const span = Math.abs(axis === "x" ? x2 - x1 : y2 - y1);
+  const reach = Math.min(Math.max(span * 0.5, 12), 160);
+  const [c1x, c1y] = axis === "x" ? [x1 + Math.sign(x2 - x1 || 1) * reach, y1] : [x1, y1 + Math.sign(y2 - y1 || 1) * reach];
+  const [c2x, c2y] = axis === "x" ? [x2 - Math.sign(x2 - x1 || 1) * reach, y2] : [x2, y2 - Math.sign(y2 - y1 || 1) * reach];
+  return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+}
+
 export function MapEdges() {
   const canvas = useCanvasStore((s) => s.canvas);
   const drag = useUiStore((s) => s.drag);
@@ -42,10 +71,10 @@ export function MapEdges() {
     };
   };
 
-  const drawn = edges.map(({ from, to }) => ({
-    key: `${from.id}->${to.id}`,
-    ...edgeAnchors(riding(from), riding(to)),
-  }));
+  const drawn = edges.map(({ from, to }) => {
+    const a = edgeAnchors(riding(from), riding(to));
+    return { key: `${from.id}->${to.id}`, ...a, d: curve(a) };
+  });
 
   /**
    * **The SVG is sized to its own contents, and that is not a nicety.**
@@ -80,7 +109,7 @@ export function MapEdges() {
       viewBox={`${minX} ${minY} ${width} ${height}`}
     >
       {drawn.map((d) => (
-        <line key={d.key} className="map-edge" x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} />
+        <path key={d.key} className="map-edge" d={d.d} />
       ))}
     </svg>
   );
