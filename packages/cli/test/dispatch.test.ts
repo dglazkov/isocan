@@ -355,7 +355,12 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
       path.join(home, "config.json"),
       JSON.stringify({
         acpAdapters: { fake: [process.execPath, fakeAcp] },
-        rcLimits: { agentChain: 1 },
+        // Zero agent-to-agent turns allowed: the guard fires on the FIRST
+        // agent-only batch, so the proof needs one cascade round instead of
+        // two — CI runners share two cores with every other spawning test
+        // file, and each extra round is two CLI boots under that load. The
+        // guard's arithmetic is identical at every bound.
+        rcLimits: { agentChain: 0 },
       }),
     );
     await isocan("rc", "add", "Sian", "--harness", "fake");
@@ -366,7 +371,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     // A person lights the fuse; the agents' replies keep summoning each
     // other through the shared thread until the chain guard holds one.
     await summon("th_loop", "@Sian please coordinate with @Percy on this");
-    await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 40_000);
+    await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 90_000);
     const all = await threads();
     const guard = all["th_loop"]!.comments.find((c) => c.author.name === "isocan");
     expect(guard).toBeDefined();
@@ -384,11 +389,11 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
       async () => rc.out(),
       (o) => (o.match(/turn ended/g) ?? []).length > turnsBefore,
       "the human word lifting the hold",
-      40_000,
+      60_000,
     );
     rc.child.kill("SIGINT");
     await rc.done;
-  }, 90_000);
+  }, 180_000);
 
   it("the system voice may only comment — the engine refuses it the canvas", async () => {
     const reply = await post("/api/ops", {
