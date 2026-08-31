@@ -25,7 +25,23 @@ export interface Face {
   sessionId: string | null;
   /** Presence label if they have a session, else their plain name. */
   label: string;
-  live: boolean;
+  /**
+   * **Three states, because two could not tell the difference that matters.**
+   *
+   * `here` is somebody at the canvas: a face, a cursor, work happening.
+   * `away` is somebody who left a comment and went. `available` is the third
+   * thing three separate notes independently reached for — an agent that
+   * could be woken, present as a possibility and absent as a person.
+   *
+   * `docs/research/2026-08-30-standing-agents.md` asks it as an open
+   * question — *"what does an agent registered for a canvas it has never
+   * opened look like in the roster? Present, absent, or a third thing"* —
+   * and answers it in the same breath: **`available` must look different
+   * from `here`.** A facepile showing six faces on a canvas nobody is
+   * working on has stopped meaning anything, which is the whole value of
+   * presence being honest. A boolean had nowhere to put that.
+   */
+  presence: "here" | "available" | "away";
   kind: PresenceSession["kind"] | null;
   /** Which agent this is — `claude-code`, `codex` — or null for a person. */
   harness: string | null;
@@ -90,14 +106,15 @@ export function facesFor(
   };
 
   for (const session of sessions) {
-    // A parked rc is a process fact, not a participant — and first-push-wins
-    // means letting it through would eat its person's real face.
+    // A parked rc is not a participant, and first-push-wins means letting it
+    // through HERE would eat its person's real face. It gets its own pass
+    // below, after everybody actually present has claimed theirs.
     if (session.kind === "rc") continue;
     push({
       actor: session.actor,
       sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
-      live: true,
+      presence: "here",
       kind: session.kind,
       harness: session.harness,
       status: describe(session),
@@ -106,12 +123,36 @@ export function facesFor(
       self: false,
     });
   }
+  /**
+   * Then whoever is only STANDING BY — a parked rc and no session of their
+   * own. Ordered here on purpose: being reachable is a stronger fact than
+   * having left a comment and gone, and weaker than being at the canvas, so
+   * first-push-wins puts each actor in the truest state they qualify for.
+   */
+  for (const session of sessions) {
+    if (session.kind !== "rc") continue;
+    push({
+      actor: session.actor,
+      // No session handle: there is nothing to follow, because nobody is
+      // moving. Follow mode would have nowhere to fly to.
+      sessionId: null,
+      label: session.label ?? session.actor.name,
+      presence: "available",
+      kind: "rc",
+      harness: session.harness,
+      status: "standing by — not here yet",
+      cursor: null,
+      unread: unreadBy.get(session.actor.id)?.count ?? 0,
+      self: false,
+    });
+  }
+
   for (const [, { actor: author, count }] of unreadBy) {
     push({
       actor: author,
       sessionId: null,
       label: author.name,
-      live: false,
+      presence: "away",
       kind: null,
       harness: null,
       status: "not here — left a comment",
@@ -130,7 +171,7 @@ export function facesFor(
       actor: self,
       sessionId: null,
       label: self.name,
-      live: true,
+      presence: "here",
       kind: "web",
       harness: null,
       status: null,

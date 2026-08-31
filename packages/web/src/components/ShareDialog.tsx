@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Grant, SweepReport } from "@isocan/core";
-import { canvasUrl, collectCanvasActors, grantSubjectOf, LINK } from "@isocan/core";
+import { canvasUrl, collectCanvasActors, grantSubjectOf, LINK, roster } from "@isocan/core";
+import type { RowState } from "@isocan/core";
+import { useAnswerable } from "../lib/answerable.ts";
 import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -52,6 +54,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const record = useCanvasStore((s) => s.project);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
+  const answerable = useAnswerable(record?.id ?? null);
   const colors = useActorColors();
   const names = useActorNames();
   const [grants, setGrants] = useState<Grant[] | null>(null);
@@ -354,8 +357,15 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
 
       <div className="identity-menu-head">On this canvas</div>
       <div className="share-roster">
-        {roster(actor, sessions, canvas).map((who) => (
-          <div key={who.actor.id} className={`share-roster-row${who.live ? "" : " away"}`}>
+        {rosterRows(actor, sessions, canvas, answerable).map((who) => (
+          <div
+            key={who.actor.id}
+            /* The state IS the class — the same shape the facepile uses. It
+               said `available` for BOTH standing states at first, which is a
+               lie in the markup: an enrolled agent nobody is listening for is
+               precisely not available. */
+            className={`share-roster-row ${who.state}`}
+          >
             <span
               className="face-mark"
               style={{ background: actorColorIn(colors, who.actor.id) }}
@@ -404,32 +414,58 @@ function lost(swept: SweepReport): string {
 
 interface RosterRow {
   actor: Actor;
-  live: boolean;
+  state: RowState | "you";
   kind: string;
 }
 
 /**
- * Who is on this canvas — live sessions first, then everyone whose work is on
- * it. Exactly `isocan who --all`'s answer, computed from the same core helper
- * (`collectCanvasActors`) rather than from a second walk of the state.
+ * Who is on this canvas — from core's `roster()`, the same fold the workbench,
+ * the agent tray and `isocan who` read.
+ *
+ * **This used to be its own walk**, and the walk was wrong in the way a second
+ * implementation always eventually is: it pushed every session as `live` with
+ * `kind: "cli" ? "terminal" : "here"`, so a PARKED RC — a process fact that
+ * renders nowhere else, no cursor, no face — appeared in this dialog as a
+ * person who is here. The one roster you open to see who you are sharing with
+ * was the one roster inventing an occupant.
+ *
+ * Core knows the difference and has for some time: `answerable` when a live rc
+ * holds a connection claiming an enrolled agent, `enrolled` when the record
+ * stands and nothing is listening.
  */
-function roster(
+function rosterRows(
   self: Actor,
   sessions: ReturnType<typeof useCanvasStore.getState>["sessions"],
   canvas: ReturnType<typeof useCanvasStore.getState>["canvas"],
+  answerable: ReadonlySet<string>,
 ): RosterRow[] {
-  const rows: RosterRow[] = [{ actor: self, live: true, kind: "you" }];
-  for (const session of sessions) {
-    if (rows.some((row) => row.actor.id === session.actor.id)) continue;
+  const rows: RosterRow[] = [{ actor: self, state: "you", kind: "you" }];
+  for (const row of roster(sessions, canvas, Date.now(), answerable)) {
+    if (rows.some((r) => r.actor.id === row.actorId)) continue;
     rows.push({
-      actor: session.actor,
-      live: true,
-      kind: session.kind === "cli" ? "terminal" : "here",
+      actor: row.primary?.actor ?? { id: row.actorId, name: row.name },
+      state: row.state,
+      kind: KIND_WORD[row.state],
     });
   }
+  /* Core's roster caps its away half at six — a room, not a list. This dialog
+     is about who can REACH the canvas, so it names everyone the canvas
+     remembers; the cap belongs to the panel that has to fit on a screen. */
   for (const who of canvas ? collectCanvasActors(canvas) : []) {
     if (rows.some((row) => row.actor.id === who.id)) continue;
-    rows.push({ actor: who, live: false, kind: "away" });
+    rows.push({ actor: who, state: "away", kind: "away" });
   }
   return rows;
 }
+
+/** One word per state, in this dialog's voice. */
+const KIND_WORD: Record<RowState, string> = {
+  blocked: "waiting on an answer",
+  working: "working",
+  parked: "parked",
+  quiet: "quiet",
+  here: "here",
+  answerable: "standing by",
+  enrolled: "enrolled",
+  away: "away",
+};

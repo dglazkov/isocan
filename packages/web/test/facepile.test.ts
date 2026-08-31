@@ -104,7 +104,7 @@ suite("one face per person", () => {
     const faces = facesFor([], unread, kenny);
     const theirs = faces.find((face) => face.actor.id === "usr_nico")!;
     expect(theirs.unread).toBe(3);
-    expect(theirs.live).toBe(false);
+    expect(theirs.presence).toBe("away");
   });
 });
 
@@ -125,5 +125,53 @@ suite("unread is counted per author", () => {
     );
     expect(unread.get("usr_kenny")).toBeUndefined();
     expect(unread.get("usr_nico")!.count).toBe(1);
+  });
+});
+
+/**
+ * **The third state** — `docs/research/2026-08-30-standing-agents.md` asks it
+ * as an open question and answers it in the same breath: an agent registered
+ * for a canvas it has never opened is neither present nor absent, and
+ * *"`available` must look different from `here`"*.
+ */
+suite("standing by is neither here nor away", () => {
+  const parked = (actor: Actor) => ({ ...session(actor, "ses_rc", "cli"), kind: "rc" as const });
+
+  it("gives a parked rc a face of its own", () => {
+    const [face] = facesFor([parked(nico)], noUnread, kenny).filter(
+      (f) => f.actor.id === nico.id,
+    );
+    expect(face?.presence).toBe("available");
+    expect(face?.status).toBe("standing by — not here yet");
+  });
+
+  it("offers nothing to follow, because nobody is moving", () => {
+    /* A session handle here would put a Follow control on a face with no
+       cursor: a button that flies you nowhere. */
+    const [face] = facesFor([parked(nico)], noUnread, kenny).filter(
+      (f) => f.actor.id === nico.id,
+    );
+    expect(face?.sessionId).toBeNull();
+    expect(face?.cursor).toBeNull();
+  });
+
+  it("never eats the real face of somebody who is actually here", () => {
+    /* The reason rc was skipped outright before: first-push-wins. An actor
+       with both a live session and a parked rc is WORKING, and the weaker
+       fact must not claim the row. */
+    const faces = facesFor([parked(nico), session(nico, "ses_cli", "cli")], noUnread, kenny);
+    const theirs = faces.filter((f) => f.actor.id === nico.id);
+    expect(theirs).toHaveLength(1);
+    expect(theirs[0]!.presence).toBe("here");
+  });
+
+  it("outranks having left a comment and gone", () => {
+    /* Reachable now is a stronger fact than was here once. */
+    const unread = new Map([["usr_nico", { actor: nico, count: 2 }]]);
+    const [face] = facesFor([parked(nico)], unread, kenny).filter(
+      (f) => f.actor.id === nico.id,
+    );
+    expect(face?.presence).toBe("available");
+    expect(face?.unread, "and it keeps what they left behind").toBe(2);
   });
 });

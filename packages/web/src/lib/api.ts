@@ -350,6 +350,18 @@ export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
   return request("GET", PRESENCE_WHERE_ROUTE);
 }
 
+/**
+ * **Which enrolled agents a live rc is actually answering for.**
+ *
+ * Connection-bound, never a TTL: the daemon reports the holds it is holding
+ * right now. `roster()` takes this as its fourth argument and downgrades every
+ * standing row to `enrolled` without it — which is what the app did until it
+ * started asking. See `useAnswerable`.
+ */
+export function fetchRcAnswering(canvasId: string): Promise<{ actorIds: string[] }> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/rc`);
+}
+
 export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
   return request("GET", `/api/projects/${canvasId}/canvas`);
 }

@@ -76,11 +76,23 @@ describe("the stylesheet", () => {
     expect(twice, "a lost scope or a section pasted twice").toEqual([]);
   });
 
-  it("dims a face only where a face is away", () => {
+  it("dims a face only where a face is not fully here", () => {
     // The rule that broke, named directly: absence is a claim about one person
     // and it must never be made about the room.
+    //
+    // WIDENED, deliberately, when the roster grew a third state: `.available`
+    // is an agent standing by — something is listening for them, nobody is at
+    // the canvas — and it is dimmed on purpose, less than `.away`. The
+    // invariant was never "only .away"; it was "a dimming rule must name the
+    // ONE person it is about". Two scopes still satisfy that. A third being
+    // added without a reason written here would not.
+    const NOT_FULLY_HERE = [".away", ".available", ".answerable", ".enrolled"];
     for (const rule of css.matchAll(/([^{}]*\.face-mark[^{}]*)\{([^}]*)\}/g)) {
-      if (/opacity|grayscale/.test(rule[2]!)) expect(rule[1]!).toContain(".away");
+      if (!/opacity|grayscale/.test(rule[2]!)) continue;
+      expect(
+        NOT_FULLY_HERE.some((scope) => rule[1]!.includes(scope)),
+        `${rule[1]!.trim()} dims a face without saying whose absence it is about`,
+      ).toBe(true);
     }
   });
 });

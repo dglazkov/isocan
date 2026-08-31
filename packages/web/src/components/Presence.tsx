@@ -103,7 +103,7 @@ export function Presence({ actor }: { actor: Actor }) {
         <button
           key={face.actor.id}
           data-face-id={face.actor.id}
-          className={`face${face.live ? " live" : " away"}${
+          className={`face ${face.presence}${
             face.self ? " self" : ""
           }${face.unread > 0 ? " badged" : ""}${
             face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
@@ -165,7 +165,15 @@ function FaceCard({
         <span className="face-card-who">
           <b>{name}</b>
           <span className="face-card-kind">
-            {face.self ? "you" : face.live ? (face.kind === "cli" ? "terminal" : "here") : "away"}
+            {face.self
+              ? "you"
+              : face.presence === "available"
+                ? "standing by"
+                : face.presence === "here"
+                  ? face.kind === "cli"
+                    ? "terminal"
+                    : "here"
+                  : "away"}
           </span>
         </span>
       </div>
