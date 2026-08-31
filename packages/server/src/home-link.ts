@@ -43,6 +43,7 @@ import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } from "./badge-store.ts";
 import { plausibleSha, type HomeBuild } from "./build.ts";
+import type { RcHolds } from "./rc-holds.ts";
 
 /**
  * The home connection: what turns a local daemon into a **syncing replica**.
@@ -426,6 +427,9 @@ export interface HomeLinkOptions {
    * `gcIntervalMs` is one: a proof that the timer FIRES cannot be written
    * against an interval a test would have to wait out. */
   probeMs?: number;
+  /** The daemon's rc hold registry (agent-custody): local holds relay up
+   * beside the faces, and the home's `rc-ask` lands back in it. */
+  rc?: RcHolds;
 }
 
 interface CanvasLink {
@@ -531,6 +535,7 @@ export class HomeLink implements HomeConnection {
   homeBuild: HomeBuild | null = null;
 
   private badge: StoredBadge | null = null;
+  private readonly rc: RcHolds | null;
   private links = new Map<string, CanvasLink>();
   private poll: ReturnType<typeof setInterval> | null = null;
   /** A self-rescheduling timeout, `gc.ts`'s pattern — never a second
@@ -572,10 +577,15 @@ export class HomeLink implements HomeConnection {
     this.engine = options.engine;
     this.presence = options.presence;
     this.registry = options.registry;
+    this.rc = options.rc ?? null;
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS;
     this.probeMs = options.probeMs ?? BUILD_PROBE_MS;
     // Local faces going up. Coalesced per canvas; see `scheduleRelay`.
     this.presence.onChange((canvasId) => this.scheduleRelay(canvasId));
+    // And the rc's liveness beside them (agent-custody mechanism 1): a hold
+    // opening or closing re-relays. Fires for every canvas on the machine;
+    // `scheduleRelay` ignores the ones this link does not carry.
+    this.rc?.onChange((canvasId) => this.scheduleRelay(canvasId));
     /**
      * A canvas this daemon now holds and is not listening to gets a socket at
      * once, rather than at the next poll.
@@ -1079,6 +1089,25 @@ export class HomeLink implements HomeConnection {
         this.links.delete(canvasId);
         this.closeLink(link);
         return;
+      /**
+       * "Someone at the canvas asked to add an agent" (agent-custody
+       * mechanism 2), routed here because this link's `rc-relay` said an rc
+       * is parked behind it. Handed to the local hold registry: the parked
+       * rc's open `/api/rc/hold` carries it the last hop, and the rc makes
+       * the same moves `isocan agent add` makes. An ask with nobody parked
+       * any more dies in the registry's short queue — the dialog that sent
+       * it is already counting down to say nothing answered.
+       */
+      case "rc-ask": {
+        if (this.rc) {
+          this.rc.ask(canvasId, {
+            askId: message.askId,
+            name: message.name,
+            from: message.from,
+          });
+        }
+        return;
+      }
       case "presence-roster": {
         // Our own relayed faces come back in the merged roster; taking them
         // as mirrored copies would double every face this machine puts up.
@@ -1297,6 +1326,47 @@ export class HomeLink implements HomeConnection {
     const health = this.healthOf(link.canvasId);
     health.relayedAt = new Date().toISOString();
     health.facesRelayed = vouched.length;
+    /**
+     * **The rc's liveness, beside the faces** (agent-custody mechanism 1).
+     * Local holds only — a mirror re-relayed would launder someone else's
+     * assertion as this badge's. Each answerable actor must be one this
+     * badge can vouch for AND an enrolled agent of the canvas: the hold's
+     * ids are the rc's word, and the enrolment record is the check the home
+     * cannot make against a set of bare ids. Dropping is not silent — it
+     * goes through the same once-per-face `unvouched` line the faces use.
+     */
+    if (this.rc) {
+      const local = this.rc.answeringLocal(link.canvasId);
+      const agents =
+        (await this.engine.getSnapshot(link.canvasId).catch(() => null))?.canvas.agents ?? {};
+      const answerable: string[] = [];
+      for (const actorId of local.actorIds) {
+        const record = agents[actorId];
+        if (!record) continue;
+        const key = `${link.canvasId} ${actorId}`;
+        const ok = await this.ensureClaim(record.actor).then(
+          () => true,
+          (err: unknown) => {
+            if (!this.unvouched.has(key)) {
+              this.unvouched.add(key);
+              console.error(
+                `[isocan] ${this.homeUrl} will not vouch for ${record.actor.name} ` +
+                  `(${actorId}): ${(err as Error).message} — they stay unanswerable at the home until it does`,
+              );
+            }
+            return false;
+          },
+        );
+        if (!ok) continue;
+        this.unvouched.delete(key);
+        answerable.push(actorId);
+      }
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(
+          JSON.stringify({ type: "rc-relay", parked: local.parked, actorIds: answerable }),
+        );
+      }
+    }
   }
 
   // ---- the badge, and the claims that ride on it ----

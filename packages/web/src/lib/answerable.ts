@@ -14,53 +14,64 @@ import { fetchRcAnswering } from "./api.ts";
  * on the same canvas said otherwise. `AgentRow` had the `answerable` branch
  * written and reachable by nothing.
  *
+ * Since agent-custody, the same poll also answers **whether any rc is parked
+ * at all** — the add-agent gate (`useRcParked`): with no rc anywhere, the Web
+ * UI offers no add, because a button that enrolls what nothing will run is
+ * the button issue #81 describes.
+ *
  * One poll shared by every component that asks, because four rosters on one
  * screen is one question, not four. Connection-bound facts cannot be cached
  * across canvases, so the entry is dropped when the last reader leaves.
  */
 const ANSWERING_EVERY_MS = 10_000;
 
-interface Watch {
+interface Answering {
+  parked: boolean;
   ids: ReadonlySet<string>;
+}
+
+interface Watch {
+  state: Answering;
   readers: number;
   timer: ReturnType<typeof setInterval> | null;
-  listeners: Set<(ids: ReadonlySet<string>) => void>;
+  listeners: Set<(state: Answering) => void>;
 }
 
 const watches = new Map<string, Watch>();
 
-const EMPTY: ReadonlySet<string> = new Set();
+const NOBODY: Answering = { parked: false, ids: new Set() };
 
-export function useAnswerable(canvasId: string | null): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(
-    () => (canvasId ? (watches.get(canvasId)?.ids ?? EMPTY) : EMPTY),
+function useAnswering(canvasId: string | null): Answering {
+  const [state, setState] = useState<Answering>(
+    () => (canvasId ? (watches.get(canvasId)?.state ?? NOBODY) : NOBODY),
   );
 
   useEffect(() => {
     if (!canvasId) {
-      setIds(EMPTY);
+      setState(NOBODY);
       return;
     }
     let watch = watches.get(canvasId);
     if (!watch) {
-      watch = { ids: EMPTY, readers: 0, timer: null, listeners: new Set() };
+      watch = { state: NOBODY, readers: 0, timer: null, listeners: new Set() };
       watches.set(canvasId, watch);
     }
     const here = watch;
     here.readers += 1;
-    here.listeners.add(setIds);
-    setIds(here.ids);
+    here.listeners.add(setState);
+    setState(here.state);
 
     const read = () => {
       fetchRcAnswering(canvasId)
         .then((r) => {
-          here.ids = new Set(r.actorIds);
-          for (const listener of here.listeners) listener(here.ids);
+          here.state = { parked: r.parked === true, ids: new Set(r.actorIds) };
+          for (const listener of here.listeners) listener(here.state);
         })
         .catch(() => {
           /* A daemon that will not answer this leaves every standing row
-             reading `enrolled`, which is the honest fallback: not knowing
-             whether anybody is listening is not knowing. */
+             reading `enrolled` and the add gate shut, which is the honest
+             fallback: not knowing whether anybody is listening is not
+             knowing. */
         });
     };
     if (here.timer === null) {
@@ -69,7 +80,7 @@ export function useAnswerable(canvasId: string | null): ReadonlySet<string> {
     }
 
     return () => {
-      here.listeners.delete(setIds);
+      here.listeners.delete(setState);
       here.readers -= 1;
       if (here.readers > 0) return;
       if (here.timer !== null) clearInterval(here.timer);
@@ -80,5 +91,17 @@ export function useAnswerable(canvasId: string | null): ReadonlySet<string> {
     };
   }, [canvasId]);
 
-  return ids;
+  return state;
+}
+
+export function useAnswerable(canvasId: string | null): ReadonlySet<string> {
+  return useAnswering(canvasId).ids;
+}
+
+/** The add-agent gate (agent-custody mechanism 2): true while any `isocan
+ * rc` holds a connection for this canvas — here, or relayed from a member's
+ * machine. Same poll as `useAnswerable`; one question, one connection-bound
+ * answer. */
+export function useRcParked(canvasId: string | null): boolean {
+  return useAnswering(canvasId).parked;
 }

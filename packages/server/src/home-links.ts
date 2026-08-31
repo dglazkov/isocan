@@ -9,6 +9,7 @@ import {
   type HomeRegistry,
 } from "./home-link.ts";
 import { readHomes, writeHomes, type HomeAssignments } from "./homes.ts";
+import type { RcHolds } from "./rc-holds.ts";
 
 /**
  * **Every home this daemon dials, and which canvas belongs to which** — phase
@@ -66,6 +67,9 @@ export interface HomeLinksOptions {
   /** How often each link re-asks its home which build it is. See
    * `HomeLinkOptions.probeMs`. */
   probeMs?: number;
+  /** The daemon's rc hold registry, whose local holds each link relays up as
+   * `rc-relay` and whose asks arrive back down as `rc-ask` (agent-custody). */
+  rc?: RcHolds;
 }
 
 export class HomeLinks implements HomeDirectory, HomeRegistry {
@@ -359,6 +363,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
       registry: this,
       ...(this.options.pollMs !== undefined ? { pollMs: this.options.pollMs } : {}),
       ...(this.options.probeMs !== undefined ? { probeMs: this.options.probeMs } : {}),
+      ...(this.options.rc !== undefined ? { rc: this.options.rc } : {}),
     });
     this.open.set(key, link);
     // Not awaited: `start()` costs a sweep's round trip, and the caller here is
