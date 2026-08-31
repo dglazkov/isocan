@@ -49,11 +49,6 @@ export function sessionName(
   return session.label && session.label.trim() ? session.label : lookup(names, session.actor);
 }
 
-/** The same answer as a subscription, for a component naming one actor. */
-export function useActorName(actor: { id: string; name: string }): string {
-  return useCanvasStore((s) => lookup(s.actorNames, actor));
-}
-
 /** Imperative — for a title string or a canvas paint, where a hook cannot go. */
 export function actorName(actor: { id: string; name: string }): string {
   return lookup(useCanvasStore.getState().actorNames, actor);

@@ -3479,69 +3479,7 @@ button.mt-card:hover { border-color: var(--accent); }
    list. Wraps rather than shrinks — a home address is long. */
 .notfound-page .row { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* ---------- ⌘K command bar: the lane to your emissary ---------- */
-.cmdbar-backdrop {
-  position: fixed; inset: 0; z-index: var(--z-modal);
-  display: flex; justify-content: center; align-items: flex-start;
-  padding-top: 14vh;
-}
-.cmdbar {
-  width: min(640px, 92vw);
-  display: flex; flex-direction: column;
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: var(--shadow-pop); overflow: hidden;
-}
-.cmdbar-listening {
-  padding: 8px 15px; font-size: 11.5px; color: var(--ink-muted);
-  border-bottom: 1px solid var(--line-soft);
-  display: flex; align-items: center; gap: 7px;
-}
-.cmdbar-listening.live { color: var(--ink); }
-.cmdbar-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: var(--good); box-shadow: 0 0 0 3px var(--live-wash);
-}
-.cmdbar-thread {
-  max-height: 184px; overflow-y: auto; overscroll-behavior: contain;
-  padding: 10px 15px; display: flex; flex-direction: column; gap: 6px;
-  font-size: 12.5px; line-height: 1.45; border-bottom: 1px solid var(--line-soft);
-}
-.cmdbar-author { font-weight: 600; margin-right: 6px; }
-.cmdbar-body { color: var(--ink); overflow-wrap: anywhere; }
-.cmdbar-input {
-  width: 100%; border: none; background: transparent; color: var(--ink);
-  padding: 13px 15px; font-size: 15px; outline: none;
-}
-.cmdbar-input::placeholder { color: var(--ink-soft); }
 
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
-}
-
-/* ---------- slash commands ---------- */
-/* A message that asked for a known piece of work. The chip is the part an
-   agent looks up; the words after it are what the person added on top. */
-.command-chip {
-  display: inline-block; margin-right: 6px; padding: 1px 6px;
-  border-radius: 5px; background: var(--accent); color: var(--accent-ink);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
-  vertical-align: baseline;
-}
-/* The body's first paragraph runs on from the chip rather than under it. */
-.body:has(> .command-chip) > .command-chip + * { display: inline; }
-
-/* The ⌘K bar composes with the same field as everywhere else, so @, # and /
-   complete here too. It wears the bar's own type: bigger, and no box —
-   the bar IS the box. */
-.cmdbar-form { display: flex; padding: 8px 9px; }
-.cmdbar-form .mention-field .mention-input,
-.cmdbar-form .mention-field .mention-backdrop {
-  padding: 5px 6px; font-size: 15px;
-}
-.cmdbar-form .mention-field .mention-input { border-color: transparent; }
-.cmdbar-form .mention-field .mention-input:focus,
-.cmdbar-form .mention-field .mention-input:focus-visible { outline: none; border-color: transparent; }
-.cmdbar-form .mention-field .mention-input::placeholder { color: var(--ink-soft); }
 
 /* ---------- help (?) ---------- */
 .help-btn { font-weight: 700; }
@@ -4535,3 +4473,61 @@ button.mt-card:hover { border-color: var(--accent); }
 .lens-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12ch; }
 .lens-touched { color: var(--ink-muted); }
 .lens-when { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/**
+ * **The ⌘K launcher.**
+ *
+ * Near the top rather than centred: a palette pinned to the middle of the
+ * screen covers the thing somebody is about to act on, and the list grows
+ * downward as they type — so it is anchored where it starts and eats space it
+ * is not using.
+ */
+.palette-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: var(--overlay);
+}
+.palette {
+  position: fixed; z-index: var(--z-modal);
+  top: 12vh; left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.palette-field {
+  border: none; border-bottom: 1px solid var(--line-soft);
+  padding: 14px 16px; font-size: 15px;
+  background: transparent; color: var(--ink); outline: none;
+}
+.palette-field::placeholder { color: var(--ink-soft); }
+.palette-rows { max-height: 52vh; overflow-y: auto; padding: 6px; }
+.palette-group {
+  padding: 8px 10px 4px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; color: var(--ink-soft);
+}
+.palette-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 10px; border: none; border-radius: 7px;
+  background: transparent; color: var(--ink);
+  font-size: 13.5px; text-align: left; cursor: pointer;
+}
+/* Highlight follows the KEYBOARD, and the pointer sets it rather than
+   painting its own — two highlights on one list is a list that cannot say
+   which row Enter will take. */
+.palette-row.at { background: var(--accent-wash); }
+.palette-name { flex: none; font-weight: 500; }
+.palette-hint {
+  color: var(--ink-soft); font-size: 12px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Said on every one of them, because the difference between doing a thing and
+   asking for it is the whole reason these are two groups. */
+.palette-posts { margin-left: auto; color: var(--ink-soft); font-size: 11px; flex: none; }
+.palette-keys {
+  margin-left: auto; flex: none;
+  padding: 1px 6px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--chip);
+  color: var(--ink-muted); font-size: 11px; font-family: inherit;
+}
+.palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }

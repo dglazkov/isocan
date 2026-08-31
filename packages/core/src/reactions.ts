@@ -43,12 +43,6 @@ export function hasReacted(item: Item, emoji: string, actorId: string): boolean 
   return (item.reactions?.[emoji] ?? []).includes(actorId);
 }
 
-/** How many distinct marks are on this item — for a summary that does not
- * want to draw them. */
-export function reactionCount(item: Item): number {
-  return Object.keys(item.reactions ?? {}).length;
-}
-
 
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */

@@ -240,8 +240,12 @@ async function rig() {
     },
     /** A modifier chord — ⌘Enter and friends, as the browser delivers them. */
     press: async (key, { meta = false } = {}) => {
-      const codes = { Enter: { windowsVirtualKeyCode: 13, key: "Enter", text: "\r" } };
+      const codes = {
+        Enter: { windowsVirtualKeyCode: 13, key: "Enter", text: "\r" },
+        k: { windowsVirtualKeyCode: 75, key: "k", code: "KeyK" },
+      };
       const k = codes[key];
+      if (!k) throw new Error(`journeys cannot press ${key} yet`);
       const mods = meta ? 4 : 0;
       await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: mods, ...k });
       await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: mods, ...k });
@@ -430,6 +434,40 @@ export const JOURNEYS = [
           throw new Error(`${name}'s glyph and title are touching (${head.between}px apart)`);
         }
       }
+    },
+  },
+  {
+    name: "launcher",
+    /** ⌘K stopped being a third composer and became the way to reach
+     *  everything. A launcher that opens but does nothing is the worst version
+     *  of it, so this presses a real chord and runs a real action. */
+    what: "Cmd-K opens, filters, and actually does the thing",
+    async run(rig) {
+      await makeCanvas(rig, "Launcher journey");
+      await rig.press("k", { meta: true });
+      await until(rig.b, `!!document.querySelector(".palette")`, "the launcher to open");
+      const groups = await rig.b.ev(
+        `[...document.querySelectorAll(".palette-group")].map(g => g.textContent)`,
+      );
+      /* Both vocabularies: things the app DOES, and messages it can hand to an
+         agent. A palette showing only one has lost half the point. */
+      if (!groups.includes("View")) throw new Error(`no actions in the launcher: ${groups}`);
+      if (!groups.includes("Ask an agent")) {
+        throw new Error(`no agent commands in the launcher: ${groups}`);
+      }
+      await rig.type("actual size");
+      await until(
+        rig.b,
+        `document.querySelectorAll(".palette-row").length === 1`,
+        "the list to narrow to one row",
+      );
+      await rig.press("Enter");
+      const done = await rig.b.ev(`(() => ({
+        closed: !document.querySelector(".palette"),
+        zoom: (document.body.innerText.match(/(\\d+)%/) || [])[1] ?? null,
+      }))()`);
+      if (!done.closed) throw new Error("the launcher stayed open after running something");
+      if (done.zoom !== "100") throw new Error(`Actual size did not zoom to 100% (got ${done.zoom})`);
     },
   },
   {
