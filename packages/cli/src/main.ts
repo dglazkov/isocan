@@ -158,7 +158,10 @@ import {
   namesFor,
   PARK_ADOPTED_CODE,
   dispatchReason,
+  isSystemActor,
+  newId,
   rulesOf,
+  SYSTEM_ACTOR,
   docStatus,
   statusProblems,
   toJsonCanvas,
@@ -188,7 +191,7 @@ import {
   type LensBy,
   type LensSource,
 } from "@isocan/core";
-import { buildStamp, describeBuild, paths, plausibleSha, stalenessOf } from "@isocan/server";
+import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
 import {
   type Ctx,
   type HomeRecord,
@@ -6771,9 +6774,27 @@ program
           known.map((n) => ({ name: n.name, id: n.id, live: n.live ? "yes" : "—" })),
         );
       }
-      if (ctx.json) return printJson(sessions);
-      printTable(
-        sessions.map((s) => ({
+      /**
+       * **The roster tells the truth about absent agents** (phase 6,
+       * journey 7). Standing agents get rows beside the live sessions —
+       * `answerable` exactly when a live rc holds a connection claiming
+       * them (the daemon's connection-bound fact, never a TTL), `enrolled`
+       * when the record stands but nobody is listening. Three readings,
+       * distinguishable without knowing how any of it works.
+       */
+      const answering = new Set(
+        (await ctx.client.rcAnswering(p.id).catch(() => ({ actorIds: [] as string[] }))).actorIds,
+      );
+      const liveActorIds = new Set(sessions.filter((s) => s.kind !== "rc").map((s) => s.actor.id));
+      const standing = Object.values(canvas.agents ?? {})
+        .filter((a) => !liveActorIds.has(a.actor.id))
+        .map((a) => ({
+          actor: a.actor,
+          state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
+        }));
+      if (ctx.json) return printJson({ sessions, standing });
+      printTable([
+        ...sessions.map((s) => ({
           who: s.label ?? s.actor.name,
           // `kind` says cli-or-web; `harness` says WHICH agent. Two agents in
           // one terminal are two `cli` rows, and telling them apart is the
@@ -6790,7 +6811,20 @@ program
           status: s.status ?? "—",
           seen: s.lastSeen,
         })),
-      );
+        ...standing.map((a) => ({
+          who: a.actor.name,
+          kind: "agent",
+          state: a.state,
+          cursor: "—",
+          selection: "—",
+          activity: "—",
+          status:
+            a.state === "answerable"
+              ? "answers if you comment"
+              : "enrolled — nobody is listening right now",
+          seen: "—",
+        })),
+      ]);
     }),
   );
 
@@ -7836,10 +7870,45 @@ rcCommand.action(
       scannedTip: number;
       busy: boolean;
       /** After a failed turn: hold the pending batch until this passes —
-       * phase 5 owes the ceiling and the thread-visible refusal; this keeps
-       * a broken adapter from a hot loop meanwhile. */
+       * a broken adapter must not hot-loop; the thread already carries the
+       * refusal (phase 5). */
       retryAfter: number;
+      /** Turn-start times inside the sliding hour — the ceiling's memory. */
+      turnTimes: number[];
+      /** Consecutive turns whose batch held no person's word — the cycle
+       * guard's count. A human comment resets it. */
+      agentChain: number;
+      /** Which limit is holding the current batch, so its refusal is said
+       * once, not once per lap. */
+      held: "ceiling" | "cycle" | null;
     }
+    /** The limits (phase 5): a ceiling on turns per agent per hour, and a
+     * bound on agent-to-agent chains. `config.json`'s `rcLimits` hook
+     * overrides either. */
+    const limitsConfig = await readConfigFile<{
+      rcLimits?: { turnsPerHour?: number; agentChain?: number };
+    }>(ctx.home);
+    const TURNS_PER_HOUR = limitsConfig.rcLimits?.turnsPerHour ?? 12;
+    const AGENT_CHAIN = limitsConfig.rcLimits?.agentChain ?? 3;
+    /** The system voice, into the thread where the person is looking —
+     * journey 5's acceptance. Never authored as the agent (words in a dead
+     * agent's mouth) and never as the person (sentences no person wrote). */
+    const sayInThread = async (threadId: string | null, body: string): Promise<void> => {
+      if (!threadId) return;
+      await ctx.client
+        .sendOp(p.id, SYSTEM_ACTOR, {
+          type: "thread.reply",
+          threadId,
+          comment: { id: newId("cmt"), body },
+        })
+        .catch(() => {});
+    };
+    const threadOf = (entries: WatchedLogEntry[]): string | null => {
+      const comment = entries.find(
+        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
+      );
+      return comment ? (comment.envelope.op as { threadId: string }).threadId : null;
+    };
     const dispatches = new Map<string, AgentDispatch>();
     // Where each standing began — the floor for a cursor row that does not
     // exist yet (a web add with no rc parked, and nothing to claim it since).
@@ -7868,12 +7937,39 @@ rcCommand.action(
           scannedTip: claim.cursor,
           busy: false,
           retryAfter: 0,
+          turnTimes: [],
+          agentChain: 0,
+          held: null,
         });
       } catch (err) {
         console.log(`rc: could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`);
       }
     };
     for (const actorId of Object.keys(opening)) await claimAgent(actorId);
+
+    /**
+     * **The connection IS the fact** (phase 6). This hold, re-issued
+     * back-to-back forever, is what makes the roster's `answerable` true:
+     * the daemon counts these agents answerable exactly while a hold is
+     * open, and a dead rc's socket closes instantly — no window, no TTL
+     * lie, per journey 7. Ten-second holds so a fresh enrolment joins the
+     * claim within seconds; the microsecond gap between holds can only err
+     * toward "not answerable", the permitted direction.
+     */
+    void (async () => {
+      for (;;) {
+        try {
+          await ctx.client.rcHold({
+            canvasId: p.id,
+            actorIds: [...dispatches.keys()],
+            waitMs: 10_000,
+          });
+        } catch {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    })();
+
 
     /**
      * **The auto-upgrade window, restored** (the design's open question,
@@ -8164,14 +8260,64 @@ rcCommand.action(
         if (Date.now() < dispatch.retryAfter) continue;
         const record = roster[actorId];
         if (!record) continue;
+
+        /**
+         * **A limit and a reason** (phase 5). Two guards, and every stop
+         * leaves a trace where somebody is looking — the thread gets the
+         * system voice, the narration gets the same fact, and nothing is
+         * dropped: a held batch stays pending and dispatches the moment the
+         * limit lifts.
+         */
+        const enrolledIds = new Set(Object.keys(roster));
+        const hasPersonWord = dispatch.pending.some(
+          (e) => !enrolledIds.has(e.envelope.actor.id) && !isSystemActor(e.envelope.actor.id),
+        );
+        // The cycle guard: A waking B waking A ends here. A person's word —
+        // anywhere in the batch — resets the chain and lifts the hold.
+        if (!hasPersonWord && dispatch.agentChain >= AGENT_CHAIN) {
+          if (dispatch.held !== "cycle") {
+            dispatch.held = "cycle";
+            const line = `${record.actor.name} paused after ${dispatch.agentChain} agent-to-agent turns with no person in the conversation — a human word resumes it.`;
+            console.log(`rc: ${line}`);
+            await sayInThread(threadOf(dispatch.pending), line);
+          }
+          continue;
+        }
+        // The ceiling: turns per agent per hour. The stop is recorded, the
+        // batch waits for the window, and a person can read what didn't run.
+        const hourAgo = Date.now() - 3_600_000;
+        dispatch.turnTimes = dispatch.turnTimes.filter((t) => t > hourAgo);
+        if (dispatch.turnTimes.length >= TURNS_PER_HOUR) {
+          const freesAt = dispatch.turnTimes[0]! + 3_600_000;
+          dispatch.retryAfter = Math.min(freesAt, Date.now() + 60_000);
+          if (dispatch.held !== "ceiling") {
+            dispatch.held = "ceiling";
+            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((freesAt - Date.now()) / 60_000))} min).`;
+            console.log(`rc: ${line}`);
+            await sayInThread(threadOf(dispatch.pending), line);
+          }
+          continue;
+        }
+        if (dispatch.held) {
+          console.log(`rc: ${record.actor.name}'s hold lifted — dispatching what waited`);
+          dispatch.held = null;
+        }
+        dispatch.turnTimes.push(Date.now());
+        dispatch.agentChain = hasPersonWord ? 0 : dispatch.agentChain + 1;
+        const failedThread = threadOf(dispatch.pending);
         dispatch.busy = true;
         void runSummons(record, dispatch)
-          .catch((err) => {
-            // Loud in the narration; phase 5 owes the thread. The batch is
-            // not advanced, so an rc restart redelivers it marked; in
-            // process, a minute's pause keeps a broken adapter off a hot
-            // loop.
-            console.log(`rc: ${record.actor.name}'s turn FAILED — ${(err as Error).message} (retrying in 60s)`);
+          .catch(async (err) => {
+            // Silence surfaced (journey 5): the failure reaches the thread
+            // it failed FOR, in the system voice — never as the agent, which
+            // never ran, and never silently. The batch is not advanced; a
+            // minute's pause keeps a broken adapter off a hot loop.
+            const why = (err as Error).message;
+            console.log(`rc: ${record.actor.name}'s turn FAILED — ${why} (retrying in 60s)`);
+            await sayInThread(
+              failedThread,
+              `${record.actor.name} couldn't answer — ${why}. The summons is held and will be retried; \`isocan rc\`'s log has the detail.`,
+            );
             dispatch.retryAfter = Date.now() + 60_000;
           })
           .finally(() => {

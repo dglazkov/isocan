@@ -49,18 +49,20 @@ export const QUIET_AFTER_MS = 35_000;
  * - `away`: no session; the canvas remembers the actor. A message waits on
  *   the thread for the next wake.
  */
-/** `enrolled` (agents-on-demand phase 2.5): a standing agent from
- * `canvas.agents` with no live session — a record, present whether or not
- * anything runs. Deliberately NOT called "answerable": that word is a
- * derivation (enrolment + a live rc claiming it) that phase 6 owes,
- * connection-bound, and claiming it from a record alone would be exactly the
- * lie journey 7 forbids. Phase 6 owns the final vocabulary. */
+/** The standing-agent states (phases 2.5 and 6). `answerable`: enrolled AND
+ * a live rc holds a connection claiming it — "will answer if you comment",
+ * derived from `roster()`'s `answerable` set and never from a record or a
+ * TTL (journey 7's no-lie rule; the set comes from the daemon's
+ * connection-bound rc holds, and a caller that cannot see the holds passes
+ * nothing and gets `enrolled`, the safe under-claim). `enrolled`: the
+ * record alone — standing granted, nobody listening right now. */
 export type RowState =
   | "blocked"
   | "working"
   | "parked"
   | "quiet"
   | "here"
+  | "answerable"
   | "enrolled"
   | "away";
 
@@ -163,6 +165,9 @@ export function roster(
   sessions: readonly PresenceSession[],
   canvas: CanvasContents | null,
   nowMs: number,
+  /** Actor ids a live rc answers for — the connection-bound fact (phase 6).
+   * Omit when the caller cannot see the holds; rows then read `enrolled`. */
+  answerable?: ReadonlySet<string>,
 ): AgentRow[] {
   const byActor = new Map<string, PresenceSession[]>();
   for (const session of sessions) {
@@ -195,8 +200,9 @@ export function roster(
     parked: 2,
     quiet: 3,
     here: 4,
-    enrolled: 5,
-    away: 6,
+    answerable: 5,
+    enrolled: 6,
+    away: 7,
   };
   live.sort((a, b) => {
     if (ORDER[a.state] !== ORDER[b.state]) return ORDER[a.state] - ORDER[b.state];
@@ -217,7 +223,7 @@ export function roster(
     enrolled.push({
       actorId: record.actor.id,
       name: record.actor.name,
-      state: "enrolled",
+      state: answerable?.has(record.actor.id) ? "answerable" : "enrolled",
       primary: null,
       others: [],
       harness: null,

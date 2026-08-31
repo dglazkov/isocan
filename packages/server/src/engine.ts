@@ -36,6 +36,7 @@ import {
   claimsActor,
   collectCanvasNames,
   invertOperation,
+  isSystemActor,
   newOpId,
   notYourActor,
   positionIsMeaningful,
@@ -487,7 +488,15 @@ export class Engine {
       // this machine from another, so it checks session-level before anything
       // leaves the machine. The home then checks badge-level, which is all it
       // can honestly see.
-      await this.requireActor(request.badgeId, request.actor.id);
+      //
+      // The SYSTEM voice is the one actor no badge claims (phase 5): any
+      // machinery may report as isocan itself, because a system message
+      // carries no person's authority — and it may only REPORT, so the
+      // exemption is comment-shaped ops and nothing else.
+      const systemComment =
+        isSystemActor(request.actor.id) &&
+        (request.op.type === "thread.create" || request.op.type === "thread.reply");
+      if (!systemComment) await this.requireActor(request.badgeId, request.actor.id);
       /**
        * **Which home this op goes to, resolved once** (phase 10.3).
        *

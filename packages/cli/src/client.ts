@@ -674,6 +674,18 @@ export class DaemonClient {
     return this.request("POST", "/api/park/advance", request);
   }
 
+  /** The rc's connection-bound liveness (phase 6): held open for `waitMs`,
+   * during which these agents read as answerable. Re-issue back-to-back;
+   * the fact dies with the socket, which is the whole point. */
+  rcHold(request: { canvasId: string; actorIds: string[]; waitMs: number }): Promise<{ ok: true }> {
+    return this.request("POST", "/api/rc/hold", request);
+  }
+
+  /** Who a live rc answers for on this canvas — empty when none is holding. */
+  rcAnswering(canvasId: string): Promise<{ actorIds: string[] }> {
+    return this.request("GET", `/api/projects/${canvasId}/rc`);
+  }
+
   undo(canvasId: string, actor: Actor): Promise<LogEntry> {
     return this.request("POST", `/api/projects/${canvasId}/undo`, { actor });
   }

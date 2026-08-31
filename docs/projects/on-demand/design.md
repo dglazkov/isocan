@@ -449,12 +449,11 @@ shows presence appearing and fading with the summoned session.
 
 ## Open
 
-- **What `isocan who` says about an agent that is not running.** Presence stays
-  ephemeral, so this is a second fact read alongside it. The word matters and
-  there is not a good one yet. Only the word is open: journey 7's acceptance
-  requires three distinguishable readings — answerable, running, gone — so
-  the earlier thought that a first version might have two states is withdrawn
-  (2026-08-30, journey review).
+- **What `isocan who` says about an agent that is not running.** *Settled at
+  phase 6's door (2026-08-30): `answerable` when a live rc holds a
+  connection claiming the agent (POST /api/rc/hold — the fact dies with the
+  socket), `enrolled` with "nobody is listening right now" when the record
+  stands alone. Three readings, connection-bound, per journey 7.*
 - **Whether an agent may make *another* agent answerable unasked.** Everything
   about sponsorship and standing mints currently rests on Scene 7, which is
   not vetted. (The bullet's old closing line — a first version where an agent

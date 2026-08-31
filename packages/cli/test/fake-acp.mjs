@@ -25,6 +25,10 @@ const known = () => {
 let buffer = "";
 const loaded = new Set();
 let failedALoad = false;
+
+// The failure modes journey 5 demands, drivable: a session that never
+// starts, and one that dies mid-turn.
+if (process.env.FAKE_ACP_CRASH === "boot") process.exit(1);
 const send = (msg) => process.stdout.write(`${JSON.stringify(msg)}\n`);
 let permissionId = 1000;
 const awaitingPermission = new Map();
@@ -63,7 +67,7 @@ function handle(msg) {
     });
   } else if (method === "session/new") {
     const sessions = known();
-    const sessionId = `sess_fake_${sessions.length + 1}`;
+    const sessionId = `sess_fake_${process.pid}_${sessions.length + 1}`;
     sessions.push(sessionId);
     writeFileSync(STORE, JSON.stringify(sessions));
     send({ jsonrpc: "2.0", id, result: { sessionId } });
@@ -78,6 +82,7 @@ function handle(msg) {
       send({ jsonrpc: "2.0", id, error: { code: -32603, message: "unknown session" } });
     }
   } else if (method === "session/prompt") {
+    if (process.env.FAKE_ACP_CRASH === "turn") process.exit(1); // died mid-turn
     const pid = permissionId++;
     const answered = new Promise((resolve) => awaitingPermission.set(pid, resolve));
     send({

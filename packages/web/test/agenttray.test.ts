@@ -154,14 +154,13 @@ describe("the tray's standing-agent doors", () => {
     expect(tray).toMatch(/type: "agent\.withdraw"/);
   });
 
-  it("an enrolled row says enrolled — never answerable, which is phase 6's word to earn", () => {
-    expect(row).toMatch(/row\.state === "enrolled"/);
-    // The word may appear in comments explaining why NOT to use it; the code
-    // that renders must never say it.
-    const code = row
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\/?\*)/.test(line))
-      .join("\n");
-    expect(code).not.toMatch(/answerable/);
+  it("the standing words are the derivation's, never invented in rendering", () => {
+    // Phase 6 earned "answerable": it renders exactly when roster() derives
+    // it from the connection-bound rc holds — the row prints `row.state`,
+    // and the one hand-written claim is the safe direction ("nobody is
+    // listening"), never an unearned promise.
+    expect(row).toMatch(/row\.state === "enrolled" \|\| row\.state === "answerable"/);
+    expect(row).toMatch(/\{row\.state\}/);
+    expect(row).toMatch(/nobody is listening/);
   });
 });

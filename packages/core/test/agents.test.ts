@@ -8,6 +8,7 @@ import {
   OpValidationError,
   roster,
   rulesOf,
+  SYSTEM_ACTOR,
 } from "../src/index.ts";
 import { apply, seedState } from "./helpers.ts";
 
@@ -130,6 +131,16 @@ describe("the roster shows the record (phase 2.5)", () => {
     expect(rows[0]!.state).toBe("enrolled");
   });
 
+  it("answerable is the caller's derivation, never the record's claim (phase 6)", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    // A caller that can see the connection-bound holds passes the set…
+    const seen = roster([], s.canvas, Date.now(), new Set([sian.id]));
+    expect(seen.find((r) => r.actorId === sian.id)!.state).toBe("answerable");
+    // …and one that cannot (the web on a replica) under-claims, safely.
+    const blind = roster([], s.canvas, Date.now());
+    expect(blind.find((r) => r.actorId === sian.id)!.state).toBe("enrolled");
+  });
+
   it("a parked rc's announcement is a process fact, never a roster row", () => {
     const person: Actor = { id: "usr_dimitri", name: "Dimitri" };
     const s = seedState();
@@ -185,5 +196,44 @@ describe("dispatchReason — THE routing composition (phase 4)", () => {
     expect(rulesOf(null)).toEqual({});
     expect(rulesOf("nonsense")).toEqual({});
     expect(rulesOf({ items: ["a", 3], ops: "not-an-array", extra: true })).toEqual({ items: ["a"] });
+  });
+});
+
+describe("the system voice (phase 5)", () => {
+  it("is a voice, not a participant: unmentionable, no roster row", () => {
+    let s = seedState();
+    s = apply(
+      s,
+      {
+        type: "thread.create",
+        threadId: "th_sys",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        comment: { id: "cmt_sys", body: "Sian couldn't answer — machinery reporting" },
+      },
+      SYSTEM_ACTOR,
+    )!;
+    expect(extractMentions("@isocan are you there?", collectCanvasNames(s.canvas))).toEqual([]);
+    expect(roster([], s.canvas, Date.now()).find((r) => r.actorId === SYSTEM_ACTOR.id)).toBeUndefined();
+  });
+
+  it("its reports never summon — the failure message must not wake the failure", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    // Sian is IN this thread (wrote in it), so an ordinary reply would be
+    // in-your-thread; the system's reply is not.
+    s = apply(
+      s,
+      { type: "thread.create", threadId: "th_g", x: 0, y: 0, anchorItemId: null, comment: { id: "c0", body: "hello" } },
+      sian,
+    )!;
+    const systemReply = {
+      type: "thread.reply",
+      threadId: "th_g",
+      comment: { id: "c1", body: "Sian couldn't answer — the adapter died" },
+    } as const;
+    expect(
+      dispatchReason(systemReply, SYSTEM_ACTOR.id, { actorId: sian.id, names: [sian] }, s.canvas),
+    ).toBeNull();
   });
 });

@@ -11,15 +11,19 @@ decision reversed, a phase reordered, scope cut or added. It is not a
 work log or a list of insights; a phase that went as planned leaves it
 empty.
 
-**Where we are: phases 1, 2 and 2.5 are closed (2026-08-30).** The
-park's cursor is durable (phase 1); enrolment is a record in canvas
-state with its rc half beside the machine, the verbs exist in both
-spellings, and a bare `isocan rc` parks, announces itself on the
-presence plane, and narrates — enrolments, withdrawals, and summonses it
-cannot yet answer (phase 2); the tray and the *Add an agent* dialog are
-live, with dismissal on the row and the rc supplying where-and-how for
-web adds (phase 2.5, personas deferred). Phase 3 (the ACP client) is
-next. Before the walk began, the mechanism was revised once already.
+**Where we are: THE WALK IS COMPLETE (2026-08-30) — all phases closed
+in one day.** The park's cursor is durable (1); enrolment is a record
+with verbs in both spellings and a narrating rc (2); the tray and dialog
+are live (2.5, personas deferred); the ACP client speaks to real
+adapters with sessions that genuinely resume (3); dispatch answers — a
+real summoned Claude replied in a thread, presence included (4); the
+limits hold with every stop visible, spoken by the new SYSTEM VOICE (5,
+Dimitri's addition); and `isocan who` tells answerable from running from
+gone, connection-bound (6). Journey 10 — a week on one canvas — is now a
+matter of living with it rather than building it; the deferred residue
+is personas (the templates, the rules-defaulting) and the web tray's
+answerable relay. Before the walk began, the mechanism was revised once
+already.
 The design's first draft had agents enrolling themselves from inside a
 session (`ISOCAN_HOOK`, a new exit code) and the daemon spawning turns.
 Withdrawn 30 Aug in review — see the mechanism section of design.md for
@@ -506,7 +510,37 @@ see, because enrolment did not exist yet when phase 1 closed.
 
 ## Phase 5 — A limit and a reason
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Both guards, both failure kinds, every
+stop visible where somebody is looking — driven end to end in
+`cli/test/dispatch.test.ts` ("a limit and a reason"), including the whole
+journey-6 scene: a person lights the fuse, Sian and Percy chain through a
+shared thread, the guard pauses one with its reason in the thread, and a
+human word resumes it.
+
+**Closed at this door, 2026-08-30 — who says the agent couldn't answer:
+THE SYSTEM VOICE, by Dimitri's decision.** Not the rc-as-machinery and
+not a minted per-rc actor, but a first-class concept: **isocan itself can
+talk.** `SYSTEM_ACTOR` (`sys_isocan`, "isocan") in core — a voice, not a
+participant: no registry row, unmentionable, no roster presence, rendered
+in the app as a fixed machinery chip (⚙ isocan) with no actor color, so
+"Sian couldn't answer" can never be misread as Sian answering. The engine
+accepts it from any badge for COMMENT ops only — machinery reports, it
+does not edit the canvas — because a system message carries no person's
+authority, so there is none to steal. And its reports never summon
+(`dispatchReason` returns null for system authors): the failure message
+must not wake the failure, forever.
+
+**The guards.** A ceiling of turns per agent per hour (default 12) and a
+bound on consecutive agent-only turns (default 3), both overridable via
+`config.json`'s `rcLimits`. A held batch is never dropped: the ceiling's
+hold lifts when the window frees; the cycle guard's hold lifts the moment
+a person's word joins the batch — which also resets the chain, so agents
+may talk to each other exactly as long as a human stays in the
+conversation. Every stop is one system comment in the thread (said once,
+not once per lap) and the same fact in the narration. Failures — a
+session that never starts, and one that dies mid-turn — reach the thread
+they failed for the same way, with the retry policy stated in the
+message.
 
 **Work:** A ceiling on turns per agent per hour, a record of what the
 ceiling stopped, and a cycle guard — the per-actor self-wake rule does
@@ -526,16 +560,42 @@ so a refusal is never mistaken for the agent answering.
 **Outcome:** Two agents set to wake each other stop at the guard, the
 stop visible in the thread and the narration; a failed start, or a death
 mid-turn before any reply, is readable in the thread it failed for.
+*(Both hold — driven, not simulated.)*
 
 **Proof:** vitest for the guard and the ceiling; driven failures of both
 kinds — never started, and died mid-turn — whose messages land in the
-thread.
+thread. *(All five in `dispatch.test.ts`'s phase-5 block, plus the
+engine's comment-only exemption and core's voice-not-participant tests.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** the door's three options were all refused for a fourth:
+Dimitri introduced the SYSTEM VOICE — isocan itself as a speaker — which
+is bigger than this phase (a concept the product now has) and smaller
+than the alternatives (no minted actor, no person's name on machinery
+words). Scope any future machinery-speaks moment to it.
 
 ## Phase 6 — The roster
 
-**Status: NOT STARTED.**
+**Status: CLOSED (2026-08-30).** Journey 7 walks: `isocan who` tells the
+three readings apart, and "answerable" dies with the rc's socket —
+`kill -9` the rc and the very next `who` says `enrolled`, no window, no
+TTL. Proven in `cli/test/dispatch.test.ts` ("the roster tells the
+truth"), including running-beside-answerable in one view.
+
+**Closed at this door, 2026-08-30 — the word: `answerable` /
+`enrolled`.** The rc-alive state earns the design doc's own word, because
+it is finally derived from a connection: the rc holds a request open
+against the daemon (`POST /api/rc/hold`, ten-second holds re-issued
+back-to-back), the daemon counts its agents answerable exactly while a
+hold is open, and the microsecond gap between holds can only err toward
+"not answerable" — the direction journey 7 permits. The rc-gone state
+keeps the record's word, `enrolled`, with the line saying the hard part
+out loud: "nobody is listening right now." `roster()` takes the
+answerable set as a parameter; a caller that cannot see the holds (the
+web app on a replica — a remote rc's connection is at another daemon)
+passes nothing and under-claims to `enrolled`, safely. One derivation,
+two knowledge levels, honest at both. The registry is in-memory per
+daemon, like presence — a registry that survived its daemon would be the
+TTL lie again with extra steps.
 
 **Work:** What `isocan who` says about an agent that is not running.
 Presence stays ephemeral; this is a second, durable fact read alongside
@@ -561,11 +621,17 @@ without a fresh look.
 
 **Outcome:** `isocan who` distinguishes a running agent, an answerable
 agent, and an absent one — including "enrolled, but the `rc` is gone, so
-nobody is coming." All three, per journey 7's acceptance.
+nobody is coming." All three, per journey 7's acceptance. *(Holds:
+`who`'s table appends standing rows, and `--json` answers
+`{sessions, standing}`.)*
 
 **Proof:** vitest for `who`'s output in all states, dead `rc` included.
+*(Done — the dead-rc case is a real `SIGKILL`, and the claim was gone on
+the next read.)*
 
-**Trajectory:** *nothing yet.*
+**Trajectory:** *nothing — the phase went as planned; journey 7 had
+already decided the hard half, and the mechanism bent to it as the
+journeys' rule requires.*
 
 ## Deliberately not in the walk
 
