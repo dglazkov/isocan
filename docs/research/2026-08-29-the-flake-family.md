@@ -784,3 +784,74 @@ production does not, and the cheap remedy is to stop opening a hundred
 sockets: keep-alive on the test agent, or a bounded pool. That is a much
 smaller change than anything the previous two rounds proposed, and it is the
 one the evidence actually points at.
+
+---
+
+## A seventh witness, which does not fit the sixth's explanation
+
+**31 Aug, later.** The instrument now carries the queue depth, and the very
+next occurrence used it to contradict the section above.
+
+```
+POST http://127.0.0.1:59863/api/door, connect/ETIMEDOUT,
+  gave up after 7793ms and 1 attempt (budget 3000ms), loop stalled 16ms during this test;
+  something IS listening on 59863 and did not accept
+  (on 59863 now: node[77802] 127.0.0.1:59863 (LISTEN);
+   node[77802] 127.0.0.1:59865->127.0.0.1:59863 (ESTABLISHED) — THIS process is among them);
+  accept queue 1/1/128 (qlen/incqlen/maxqlen)
+```
+
+**The queue is 1 of 128.** Not full, not close. And the caller is
+`door.test.ts`'s `flood`, which is a `for` loop of `await knock()` — **N
+requests one after another, not a burst.** The accept-queue explanation was
+built on a hundred *concurrent* POSTs, and this witness has no concurrency at
+all.
+
+`qlen` is sampled eight seconds late and its being low is not evidence, as the
+previous section says. But `incqlen` reads **1**: one incomplete connection
+pending at the moment of asking, which is the retransmitting SYN itself and
+not a backlog under pressure.
+
+### The second mechanism, also demonstrated
+
+What N sequential connects to one port DO produce:
+
+```
+300 sequential connects to one port → 517 TIME_WAIT entries for that port
+  sample: 127.0.0.1.62834  127.0.0.1.62833  TIME_WAIT
+```
+
+**A SYN arriving for a 4-tuple still in TIME_WAIT is dropped rather than
+refused** — the same signature as a full queue, from the opposite cause. Both
+read as *the listener is there and the SYN went nowhere*, which is exactly why
+the bind probe could never have separated them and why this note has twice
+mistaken one for the whole answer.
+
+It also fits what nothing else has explained: **the port recurrence.** 59863
+and 59866 keep coming back because they are the ports tests hammer hardest —
+a daemon that has served hundreds of rapid connections is carrying hundreds of
+its own TIME_WAIT 4-tuples, and is therefore the most likely place for the
+next collision. The clustering was never about the kernel's counter.
+
+### Where this actually stands
+
+**Two mechanisms are demonstrated, neither is confirmed in situ, and they are
+not rivals** — both are real ways to drop a SYN on loopback, and this suite
+does both things: it fires bursts (the hundred-item move) and it churns
+sequential connections (every `flood`, every polling `until`).
+
+The instrument now reports both readings, so the next witness discriminates:
+a deep queue points at the burst, a large TIME_WAIT count at the churn. That
+is the first time this investigation has had an instrument that can be WRONG
+in a specific direction rather than merely absent.
+
+**What has been learned that will not need revisiting**, whichever wins:
+
+- The loop is not the cause. Measured, twice, and a blocked loop with a free
+  queue answers `CONNECTED after 9002ms` rather than timing out.
+- The port RANGE is not the cause. Reverted, with a private-range failure.
+- The application is not the cause. Nothing isocan wrote is in either path.
+- The symptom is fully explained by a dropped SYN, and there are exactly two
+  ordinary ways for loopback to drop one. Both are now on the table with a
+  measurement behind them.
+
