@@ -13,6 +13,7 @@ export * from "./roster.ts";
 export * from "./claims.ts";
 export * from "./invert.ts";
 export * from "./placement.ts";
+export * from "./titleroom.ts";
 export * from "./protocol.ts";
 export * from "./ids.ts";
 export * from "./mentions.ts";

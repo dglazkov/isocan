@@ -865,6 +865,24 @@ img { height: auto; }
 .chrome-left .name {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* **A hovered name reaches past its card.**
+   `.item-titlebar` is `left: 0; right: 0`, which pins the row to the card's
+   own width — so widening the name alone does nothing until the row is
+   allowed to be wider than the thing it names. `right: auto` does that; the
+   width it actually takes is the `max-width` ItemView measures, which stops
+   where something is in the way.
+   Not on `.selected`: nine selected items would be nine names reaching over
+   each other, which is unreadable exactly when you asked to see them. */
+/* Keyed off a class the component sets, NOT off `:hover`/`.selected` here.
+   Two reasons. The policy — hover, or a selection of exactly one, and never
+   many — is a judgement with an argument behind it, and it belongs where the
+   argument is written down. And `titlebar.test.ts` forbids the title row's
+   placement varying with `.selected`, which is right: that rule remembers the
+   row jumping when corner handles appeared. A selector spelling out
+   `:not(.selected)` would have been arguing with a guard instead of obeying
+   the invariant it protects. */
+.item.reaching .item-titlebar { right: auto; }
+.item.reaching .chrome-left { max-width: none; }
 .chrome-right { display: flex; align-items: center; flex: none; margin-left: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,

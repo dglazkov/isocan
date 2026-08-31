@@ -171,6 +171,15 @@ interface UiStore {
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
    * name in a list and a thing on the surface are visibly the same thing. */
   peekedItemId: string | null;
+  /**
+   * The item the pointer is over on the canvas — distinct from `peekedItemId`,
+   * which is the Files panel pointing AT an item from outside.
+   *
+   * One id rather than a flag per item, so moving the pointer across a canvas
+   * re-renders the two items whose state actually changed instead of all of
+   * them.
+   */
+  hoveredItemId: string | null;
   /** Session being followed: the camera tracks their locus until the user
    * takes the wheel back (any manual pan/zoom/jump, or Esc). */
   followSessionId: string | null;
@@ -225,6 +234,7 @@ interface UiStore {
   setPendingChat: (text: string | null) => void;
   setPaletteOpen: (open: boolean) => void;
   setPeeked: (itemId: string | null) => void;
+  setHoveredItem: (itemId: string | null) => void;
   /** How wide the docked left panel is, in screen pixels. */
   panelWidth: number;
   setPanelWidth: (width: number) => void;
@@ -464,6 +474,7 @@ export const useUiStore = create<UiStore>((set) => {
     pendingChat: null,
     paletteOpen: false,
     peekedItemId: null,
+    hoveredItemId: null,
     followSessionId: null,
     // Every existing caller of setViewport is a user gesture (wheel, drag,
     // zoom buttons, a jump) — each one hands the camera back to the user.
@@ -539,6 +550,7 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingChat: (pendingChat) => set({ pendingChat }),
     setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
+    setHoveredItem: (hoveredItemId) => set({ hoveredItemId }),
     /**
      * Chrome that steps aside for the panel EASES to its new place, which is
      * right when the panel opens or closes — one step, and a thing that
