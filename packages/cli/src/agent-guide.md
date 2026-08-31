@@ -272,6 +272,8 @@ The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
 lives where you already are. Add one when a person asks, and only then; the
 add is an op everyone can read. If a person tells you "you're done here",
 `isocan agent remove <your name>` is how you take your own standing away.
+What any standing agent answers for — its routing rules, and the truths
+that hold through every rule set — is readable with `isocan agent rules`.
 
 The person's side of this is `isocan rc` — a long-running command they start
 that answers for enrolled agents. It is not your verb: inside a harness

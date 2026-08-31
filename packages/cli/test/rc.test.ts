@@ -42,6 +42,13 @@ beforeEach(async () => {
     path.join(home, "identity.json"),
     JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
   );
+  // Phase 4: a summons DISPATCHES now. The scripted adapter answers for
+  // every harness this suite enrols, so no test can reach for a real one.
+  const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
+  await fs.writeFile(
+    path.join(home, "config.json"),
+    JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] } }),
+  );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -201,8 +208,8 @@ describe("the running rc — quiet start, events narrated", () => {
     await isocan("agent", "add", "Sian");
     await until(async () => out, (o) => o.includes("enrolled Sian"), "the enrolment narrated");
 
-    // A summons is recognized and narrated, never answered: `reasonFor` is
-    // importable today; dispatch is phase 4's.
+    // A summons is recognized, narrated — and since phase 4, ANSWERED: the
+    // narration accounts for the whole turn.
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
@@ -216,7 +223,8 @@ describe("the running rc — quiet start, events narrated", () => {
       },
     });
     await until(async () => out, (o) => o.includes("summons for Sian"), "the summons narrated");
-    expect(out).toContain("no way to start a session yet");
+    expect(out).toContain("starting a session");
+    await until(async () => out, (o) => o.includes("turn ended"), "the turn narrated");
 
     await isocan("agent", "remove", "Sian");
     await until(async () => out, (o) => o.includes("dismissed Sian"), "the withdrawal narrated");

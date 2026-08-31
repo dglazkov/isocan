@@ -183,14 +183,16 @@ describe("the doorbell works (journey 2)", () => {
 
   it("presence appears when the turn starts and fades because the session ended", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    const rc = startRc({ FAKE_ACP_SLOW_MS: "2500" });
+    const rc = startRc({ FAKE_ACP_SLOW_MS: "4000" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
     await summon("th_p", "@Sian have a look?");
-    // Mid-turn: Sian's face is on the canvas, reading the comment.
+    // Mid-turn: Sian's face is on the canvas, reading the comment. The
+    // status lands one write after the face, so the wait is for BOTH — a
+    // poll under suite load can otherwise catch the face bare.
     const during = await until(
       sessions,
-      (list) => list.some((s) => s.actor.name === "Sian" && s.kind === "cli"),
+      (list) => list.some((s) => s.actor.name === "Sian" && s.kind === "cli" && s.status !== null),
       "Sian's presence during the turn",
     );
     const face = during.find((s) => s.actor.name === "Sian")!;
