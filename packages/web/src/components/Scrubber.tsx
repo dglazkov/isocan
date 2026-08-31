@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LogEntry, Major } from "@isocan/core";
-import { at, majors, majorWhat, span, track } from "@isocan/core";
+import type { Item, LogEntry, Major, TrackBucket } from "@isocan/core";
+import { ago, at, axisTicks, majors, majorWhat, span, track } from "@isocan/core";
+import { ItemThumb } from "./ItemThumb.tsx";
 import { getArchivedOplog, getOplog } from "../lib/api.ts";
 import { enterPast, leavePast, useCanvasStore } from "../stores/canvasStore.ts";
 
@@ -64,6 +65,15 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
   );
   const seams = useMemo(() => (entries ? majors(entries) : []), [entries]);
   const peak = useMemo(() => Math.max(...buckets.map((b) => b.weight), 1), [buckets]);
+  const ticks = useMemo(() => (entries ? axisTicks(entries) : []), [entries]);
+  /* Which bar the pointer is over, by index. Cleared when the pointer leaves
+     the rail rather than each bar, so moving along the bars does not flicker
+     the card off and on between them. */
+  const [peek, setPeek] = useState<number | null>(null);
+  const peeked = peek === null ? null : (buckets[peek] ?? null);
+  /* The canvas as it is NOW, for thumbnails — see `BucketPeek` on why this is
+     not the canvas as it was. */
+  const items = useCanvasStore((st) => st.canvas?.items);
 
   /**
    * **Standing at a seq is a fold, and the fold is core's.** The same `at` the
@@ -230,6 +240,7 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
         aria-valuetext={atNow ? "now" : `entry ${here} of ${range.last}`}
         onPointerDown={drag}
         onPointerMove={move}
+        onPointerLeave={() => setPeek(null)}
         onKeyDown={(e) => {
           const jump = e.key === "PageDown" || e.key === "PageUp" ? 25 : 1;
           if (e.key === "ArrowLeft" || e.key === "PageUp") {
@@ -253,13 +264,117 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
           {buckets.map((b, i) => (
             <span
               key={i}
-              className={`scrub-bar${b.majors.length > 0 ? " seam" : ""}`}
+              className={`scrub-bar${b.majors.length > 0 ? " seam" : ""}${peek === i ? " peeked" : ""}`}
               style={{ height: `${Math.max(6, (b.weight / peak) * 100)}%` }}
+              /* Per-bar rather than one handler on the rail: the rail already
+                 owns pointer-down for scrubbing, and a bar knows which bucket
+                 it is without arithmetic that would have to agree with the
+                 layout. */
+              onPointerEnter={() => setPeek(i)}
             />
           ))}
         </div>
+        {/**
+         * **The axis.** Ticks land where their day (or month, or year) turns
+         * over, positioned by seq because the rail is — so a quiet fortnight
+         * is one tick's width from its neighbour rather than a season of
+         * empty rail. The ends are labelled outright: an axis you cannot read
+         * the extent of is decoration.
+         */}
+        {ticks.length > 0 && (
+          <div className="scrub-axis" aria-hidden>
+            {ticks.map((t) => (
+              <span
+                key={t.seq}
+                className="scrub-tick"
+                style={{ left: `${t.at * 100}%` }}
+                data-edge={t.at === 0 ? "first" : t.at === 1 ? "last" : undefined}
+              >
+                {t.label}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="scrub-head-line" style={{ left: `${fraction * 100}%` }} aria-hidden />
       </div>
+      {peeked && peek !== null && (
+        <BucketPeek
+          bucket={peeked}
+          items={items}
+          canvasId={canvasId}
+          /* Over the bar it describes. Clamped away from the ends because the
+             card is centred on that point and a card centred at 0% hangs half
+             off the panel — the numbers are half the card's max width over the
+             rail's, which is fixed by the stylesheet. */
+          at={Math.min(82, Math.max(18, ((peek + 0.5) / Math.max(1, buckets.length)) * 100))}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * **What a bar is made of, when you point at it.**
+ *
+ * A histogram says how much and never what. The bar is already the answer to
+ * "was anything happening here"; the card is the answer to the question that
+ * immediately follows, and it was previously only obtainable by scrubbing
+ * onto the bar and reading the header.
+ *
+ * **Thumbnails only for what still exists.** A seam that added something
+ * shows the thing, taken from the canvas as it is NOW — which means work that
+ * was later deleted shows its words and no picture. That is the honest
+ * asymmetry rather than a gap: reconstructing the item as it stood would mean
+ * folding the log to that seq for every bar the pointer crosses, which is a
+ * fold per hover on a history of any size.
+ */
+function BucketPeek({
+  bucket,
+  items,
+  canvasId,
+  at,
+}: {
+  bucket: TrackBucket;
+  items: Record<string, Item> | undefined;
+  canvasId: string;
+  at: number;
+}) {
+  /* One clock for the whole card: `ago` takes the moment to measure from, and
+     reading Date.now() per row would let two rows in one card disagree. */
+  const now = Date.now();
+  const when = bucket.fromTs ? new Date(bucket.fromTs) : null;
+  const shown = bucket.majors.slice(0, 4);
+  return (
+    <div className="scrub-peek" style={{ left: `${at}%` }}>
+      <div className="scrub-peek-when">
+        {when
+          ? when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+          : "nothing here"}
+        <span className="scrub-peek-count">
+          {bucket.count} {bucket.count === 1 ? "change" : "changes"}
+        </span>
+      </div>
+      {shown.map((m) => {
+        const item = m.itemId ? items?.[m.itemId] : undefined;
+        return (
+          <div className="scrub-peek-row" key={m.seq}>
+            {item && (
+              <ItemThumb
+                canvasId={canvasId}
+                itemId={item.id}
+                item={item}
+                width={38}
+                height={28}
+              />
+            )}
+            <span className="scrub-peek-what">{majorWhat(m)}</span>
+            <span className="scrub-peek-when-row">{ago(m.ts, now)}</span>
+          </div>
+        );
+      })}
+      {bucket.majors.length > shown.length && (
+        <div className="scrub-peek-more">and {bucket.majors.length - shown.length} more</div>
+      )}
     </div>
   );
 }
