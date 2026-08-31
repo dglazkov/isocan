@@ -18,23 +18,35 @@ import { fetchActorMarks } from "./api.ts";
  * eight places and none of them should be a request.
  */
 let cached: ActorMarks | null = null;
-let inFlight: Promise<ActorMarks> | null = null;
+/** The one fetch, kept only so it is never made twice. It resolves
+ *  NOTHING on purpose — see `loadActorMarks`. */
+let inFlight: Promise<void> | null = null;
 const listeners = new Set<(marks: ActorMarks) => void>();
 
-function load(): Promise<ActorMarks> {
+/** Fetch once per tab, then answer from the cache. Named to match
+ *  `loadActorColors`, and exported so a test can prove the answer stays
+ *  current after a pick. */
+export function loadActorMarks(): Promise<ActorMarks> {
   inFlight ??= fetchActorMarks()
     .then((marks) => {
       cached = marks;
       for (const listener of listeners) listener(marks);
-      return marks;
     })
     .catch(() => {
       // A home that will not answer leaves everybody on their initials, which
       // is what they had before and reads as nothing being wrong.
       cached = {};
-      return {};
     });
-  return inFlight;
+  // Resolve what the cache holds NOW, not what the fetch saw. `inFlight` is
+  // memoised for the life of the tab, so it keeps answering with the snapshot
+  // from the very first request — and a component mounting after somebody
+  // picked an emoji would take that stale answer and overwrite what
+  // `rememberMark` had already told everybody. That is the identity menu
+  // showing `D` while the facepile two inches above it wears the emoji you
+  // just chose: the facepile subscribed before the pick, the menu mounted
+  // after it.
+  const done = inFlight;
+  return done.then(() => cached ?? {});
 }
 
 /** Say locally what the home has been told, so your own face changes at once
@@ -51,7 +63,7 @@ export function useActorMarks(): ActorMarks {
   const [marks, setMarks] = useState<ActorMarks>(cached ?? {});
   useEffect(() => {
     listeners.add(setMarks);
-    void load().then((m) => setMarks(m));
+    void loadActorMarks().then((m) => setMarks(m));
     return () => {
       listeners.delete(setMarks);
     };
