@@ -212,6 +212,54 @@ afterAll(() => {
  * gone" from "the daemon was there and never accepted".
  */
 /**
+ * **How full the listener's accept queue is** — the reading that decides it.
+ *
+ * On 31 Aug the symptom was reproduced deterministically, which no earlier
+ * round of this investigation managed. A loopback listener that EXISTS and
+ * does not accept, with its queue overflowed:
+ *
+ * ```
+ * connects: 400, failed: 305 — all ETIMEDOUT at 7823ms
+ * slow successes: 1085, 2047, 2048, 3968, 5890, 5892ms
+ * ```
+ *
+ * 7823ms against witnesses at 7791, 7803, 7808, 7813, 7819 and 7848, and the
+ * slow successes tracing a SYN retransmit ladder. A full queue makes the
+ * kernel DROP the SYN, which is precisely a connect that times out instead of
+ * being refused.
+ *
+ * The control matters as much: a listener whose loop is blocked for nine
+ * seconds but whose queue has room answers `CONNECTED after 9002ms`. The
+ * kernel completes the handshake itself and accept merely happens late. **So
+ * a busy server is not enough — the queue has to actually fill**, and
+ * `kern.ipc.somaxconn` is 128 here while `daemon.test.ts`'s hundred-item move
+ * — one of the two witnesses that day — issues 100 concurrent POSTs.
+ *
+ * What is still missing is the depth at a real failure, which is this.
+ * `netstat -L` prints `qlen/incqlen/maxqlen`.
+ *
+ * **Read it with the same caution the bind probe carries.** This samples
+ * AFTER the connect gave up, by which point the queue has had eight seconds
+ * to drain — measured on a deliberately overflowed listener, it printed
+ * `0/0/1`, having already emptied. So `qlen` is a snapshot and its being low
+ * proves nothing; `maxqlen` is the solid half, and a `maxqlen` the burst
+ * could plausibly exceed is what makes the case. A HIGH `qlen` here would be
+ * strong evidence; a low one is simply no evidence either way.
+ */
+async function queueDepth(port: number): Promise<string> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)("netstat", ["-L", "-a", "-n"], { timeout: 4000 });
+    const row = stdout.split("\n").find((l) => new RegExp(`\\.${port}\\b`).test(l));
+    const depth = row?.trim().split(/\s+/)[0];
+    return depth ? `; accept queue ${depth} (qlen/incqlen/maxqlen)` : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * **Which process holds a port, at the moment we ask.**
  *
  * The bind probe below says whether ANYTHING is there; two rounds of this
@@ -232,14 +280,9 @@ async function whoHolds(port: number): Promise<string> {
     const { promisify } = await import("node:util");
     // -nP: no DNS, no port-name lookup — both can block for seconds, which is
     // the last thing a diagnostic for a timeout should do.
-    // NOT filtered to LISTEN. The listener is half the tuple; the other half
-    // is the connecting socket, and its SOURCE PORT is the next thing this
-    // investigation needs. Five of the recorded witnesses — 59382, 59772,
-    // 59856, 59863, 59866 — sit within ~500 of each other in a 16000-wide
-    // range, and one port has now appeared three times in separate runs.
-    // That is not what a uniform rotating counter looks like, and a
-    // self-connect (source port landing on the destination) would explain
-    // both the clustering and a SYN that is dropped rather than refused.
+    // NOT filtered to LISTEN: the listener is half the picture and the
+    // connecting sockets are the other half. `queueDepth` below adds the
+    // reading that actually decides it.
     const { stdout } = await promisify(execFile)("lsof", ["-nP", `-iTCP:${port}`], {
       timeout: 4000,
     });
@@ -251,9 +294,13 @@ async function whoHolds(port: number): Promise<string> {
       .filter((cols) => cols.length > 8)
       // command[pid] name (state) — `name` carries src->dst, which is the tuple.
       .map((cols) => `${cols[0]}[${cols[1]}] ${cols[8]}${cols[9] ? ` ${cols[9]}` : ""}`);
-    if (rows.length === 0) return "";
+    const depth = await queueDepth(port);
+    if (rows.length === 0) return depth;
     const mine = rows.some((r) => r.includes(`[${process.pid}]`));
-    return ` (on ${port} now: ${[...new Set(rows)].join("; ")}${mine ? " — THIS process is among them" : ""})`;
+    return (
+      ` (on ${port} now: ${[...new Set(rows)].join("; ")}` +
+      `${mine ? " — THIS process is among them" : ""})${depth}`
+    );
   } catch {
     return "";
   }

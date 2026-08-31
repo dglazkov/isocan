@@ -713,50 +713,74 @@ runs. **That is not what a uniform rotating counter looks like**, and the
 earlier note read the 59866 repeat as the counter merely landing twice in the
 same place. Three times says something else.
 
-### The mechanism, measured in three lines
+### The mechanism, reproduced — and it is not what the clustering suggested
+
+The clustering above suggested a self-connect: bind with `port: 0`, connect to
+it, and the client's source port is **the very next number** (measured:
+listener 63301, client 63302 — both from one rotating counter, moments apart),
+so the two ends are always neighbours and a collision looks reachable.
+
+**That theory did not survive being tested.** What does reproduce the symptom,
+deterministically, is a listener that exists and does not accept:
 
 ```
-dest port: 63301 | client source port: 63302
-  node[39821] 127.0.0.1:63301 (LISTEN)
-  node[39821] 127.0.0.1:63302->127.0.0.1:63301 (ESTABLISHED)
+400 connects at a listener with backlog 1, never accepting
+  → 305 failed, ALL ETIMEDOUT at 7823ms
+  → slow successes at 1085, 2047, 2048, 3968, 5890, 5892ms
 ```
 
-Bind a listener with `port: 0` and immediately connect to it, and the client's
-source port is **the very next number** — both come from the same rotating
-counter, moments apart. So a test daemon and the connection to it are always
-neighbours in that counter.
+7823ms, against witnesses at 7791, 7803, 7808, 7813, 7819 and 7848 — and the
+slow successes tracing a SYN retransmit ladder. **A full accept queue makes the
+kernel DROP the SYN**, which is exactly a connect that times out rather than
+being refused, and exactly what "something IS listening and did not accept"
+describes.
 
-**Which makes a self-connect reachable.** When the counter wraps or the timing
-aligns so the source port lands *on* the destination port, the socket is
-connecting to itself: a TCP simultaneous open to its own address. That is a
-SYN that is **dropped rather than refused**, which is the exact shape this
-investigation has been unable to explain — and it fits every fact at once:
+### The control, which is what makes it an explanation
 
-- the connect times out instead of being refused (a SYN nobody answers),
-- ~7.8 seconds every time (a retransmit schedule, not a load curve),
-- the loop is idle (nothing in the application is involved),
-- the holder is THIS process (it is the same socket at both ends),
-- the witnesses cluster (they are all in the band the counter was crossing).
+A busy server is NOT enough:
 
-**It also explains why the private range did not save us.** Moving listeners
-to 20000–32000 left the CLIENT's source port in the kernel's ephemeral band,
-so it changed which neighbours were possible without removing the collision —
-and 20807 duly failed anyway. The reverted fix was aimed at the right family
-and at the wrong half of the tuple.
+```
+loop blocked hard for 9000ms, one connect → CONNECTED after 9002ms
+```
 
-### Claimed and not claimed
+With room in the queue the kernel completes the handshake itself and `accept`
+merely happens late. **So the queue has to actually fill.** That is the
+difference between "the machine was loaded" — which never explained why a
+timeout rather than a slow success — and a mechanism.
 
-**Not proven.** No witness has yet shown a source port equal to its
-destination; the mechanism is demonstrated to be *reachable*, not observed in
-the act. The instrument now captures the whole tuple rather than just the
-holder — `lsof` without the `LISTEN` filter, so a `SYN_SENT` row and its
-source port are in the sentence — and the next occurrence either shows
-`59866->59866` or kills this too.
+Three facts then line up:
 
-**If it is right**, the fix is not a port range. It is to stop the two ends
-being neighbours: bind listeners from a range the kernel never assigns as a
-source port, which is what `ports.ts` does for the seven files that already
-use it, and which failed last time only because the reservation was racy.
-A non-racy version — bind, hold the socket, hand the LISTENER over rather
-than the number — has neither problem.
+- `kern.ipc.somaxconn` is **128** on this machine, so that is the cap however
+  large a backlog Node asks for.
+- One of the day's two witnesses is `daemon.test.ts`'s **hundred-item move**,
+  which is `Promise.all` over **100 concurrent POSTs** to one daemon.
+- Fourteen workers on fourteen cores, plus sixteen spinners, means the
+  daemon's loop is not blocked so much as rarely scheduled — which drains a
+  queue slowly while a burst fills it fast.
 
+**And it explains the loop measurement that killed the earlier hypothesis.**
+"Loop stalled 17ms" was read as *nothing was busy*, and it is true and
+irrelevant: the queue is drained by the kernel handing sockets to `accept`,
+and a process that is merely descheduled between ticks shows no single long
+stall while still not accepting.
+
+### What is claimed, and what would settle it
+
+**Claimed:** the symptom is fully accounted for by accept-queue overflow, and
+that is now demonstrated rather than argued — with a control ruling out the
+weaker "server was busy" version.
+
+**Not claimed:** that the queue was full at the moment of any particular
+witness. Nothing has measured that yet. The instrument now prints
+`netstat -L`'s `qlen/incqlen/maxqlen` for the failing port, with the caveat
+recorded in the code: it samples after the connect gave up, so a low `qlen`
+proves nothing — measured on a deliberately overflowed listener it had already
+drained to `0/0/1`. A HIGH `qlen` would be decisive; `maxqlen` is the solid
+half.
+
+**If it holds, the fix is not a port range at all** — it is the burst. A
+hundred simultaneous connections to a test daemon is a thing tests do and
+production does not, and the cheap remedy is to stop opening a hundred
+sockets: keep-alive on the test agent, or a bounded pool. That is a much
+smaller change than anything the previous two rounds proposed, and it is the
+one the evidence actually points at.
