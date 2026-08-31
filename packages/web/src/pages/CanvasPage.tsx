@@ -11,6 +11,7 @@ import {
 import {
   connectToCanvas,
   disconnect,
+  setNotice,
   loadBacking,
   publishSelection,
   setPresenceActor,
@@ -18,7 +19,8 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { pasteInto } from "../lib/clipboard.ts";
-import { redo, sendOp, undo } from "../lib/api.ts";
+import { blobUrl, redo, sendOp, undo } from "../lib/api.ts";
+import { downloadItem } from "../lib/itemactions.ts";
 import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
@@ -633,6 +635,30 @@ function CanvasSurface({
         if (ids.length === 1 && canvas && (canvas.items[ids[0]!]?.versions.length ?? 0) > 1) {
           e.preventDefault();
           ui.setFanned(ui.fannedItemId === ids[0] ? null : ids[0]!);
+        }
+      } else if (e.shiftKey && e.key.toLowerCase() === "d" && !e.metaKey && !e.ctrlKey) {
+        /**
+         * ⇧D downloads the selected item's current version.
+         *
+         * Shifted rather than bare `D`, because the unshifted letters are the
+         * tools and a canvas where `d` saves a file is a canvas where a
+         * mistyped tool writes to your disk. It calls the same
+         * `downloadItem` the context menu does — the menu and the key are two
+         * doors onto one act, never two implementations of it.
+         *
+         * One item only. "Download" of a multi-selection is a different
+         * feature (a zip, a naming scheme, a progress bar), and silently
+         * downloading the first of six would be the worst answer available.
+         */
+        const ids = ui.selectedItemIds;
+        const canvas = useCanvasStore.getState().canvas;
+        const item = ids.length === 1 ? canvas?.items[ids[0]!] : undefined;
+        const version = item?.versions.find((v) => v.id === item.currentVersionId);
+        if (item && version) {
+          e.preventDefault();
+          void downloadItem(blobUrl(canvasId!, version.blobHash), version.filename).catch(
+            (err: Error) => setNotice(err.message),
+          );
         }
       } else if (e.shiftKey && e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
         // ⇧C comments on WHAT IS SELECTED, rather than on wherever you next

@@ -125,6 +125,9 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     },
     {
       label: "Download",
+      /* The accelerator is looked up from `SHORTCUTS`, never spelled here —
+         a rebound key cannot leave the menu telling somebody the old one. */
+      shortcutFor: "Download",
       disabled: !one || !version,
       run: () => {
         if (!one || !version) return;

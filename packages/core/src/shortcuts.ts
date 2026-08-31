@@ -57,6 +57,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["F2", "Double-click the name"], does: "Rename", note: "The file follows the title", group: "Items" },
   { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
   { keys: ["⇧F"], does: "Fit the item to its content", group: "Items", note: "F fits the view to an item; ⇧F fits the item to what is in it. Several at once are settled so nothing overlaps" },
+  { keys: ["⇧D"], does: "Download", group: "Items", note: "The item's current version, under the filename it carries — the one the version stack and a rename both follow" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
   { keys: ["⌘Z", "⌘⇧Z"], does: "Undo and redo", note: "Yours, not everyone's", group: "Items" },
   {
