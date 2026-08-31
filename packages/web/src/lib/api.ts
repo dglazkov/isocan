@@ -24,6 +24,7 @@ import type {
   Persona,
   PostOpResponse,
   Canvas,
+  ActorMarks,
   ActorNames,
   RedeemPassResponse,
   ServingResponse,
@@ -288,6 +289,11 @@ export function fetchActorColors(): Promise<ActorColors> {
 }
 
 /** The name each actor goes by now, actor id → name. */
+/** The mark each actor wears instead of an initial — see `useActorMarks`. */
+export function fetchActorMarks(): Promise<ActorMarks> {
+  return request("GET", "/api/marks");
+}
+
 export function fetchActorNames(): Promise<ActorNames> {
   return request("GET", "/api/names");
 }

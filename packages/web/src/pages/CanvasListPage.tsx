@@ -12,6 +12,7 @@ import {
   opWords,
   sortCanvases,
   type CanvasSort,
+  faceMark,
 } from "@isocan/core";
 import { fetchHomes, listCanvases, sendOp } from "../lib/api.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -21,6 +22,7 @@ import { CardPeek } from "../components/CardPeek.tsx";
 import { IdentityMenu } from "../components/IdentityMenu.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 const SORT_KEY = "isocan.canvases.sort";
 /** Above this many canvases, the filter and the sort appear. */
@@ -34,6 +36,7 @@ export function CanvasListPage({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const colors = useActorColors();
+  const marks = useActorMarks();
   const names = useActorNames();
   const [canvases, setProjects] = useState<Canvas[] | null>(null);
   const [title, setTitle] = useState("");
@@ -352,7 +355,7 @@ export function CanvasListPage({
             onClick={() => setIdentityOpen(!identityOpen)}
           >
             <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
-              {actor.name.charAt(0).toUpperCase()}
+              {faceMark(marks, actor)}
             </span>
             {actor.name}
           </button>

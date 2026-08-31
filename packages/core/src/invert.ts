@@ -33,6 +33,7 @@ export function invertOperation(
   switch (op.type) {
     case "actor.claim":
     case "actor.setColor":
+    case "actor.setMark":
       return null; // home-scoped and never undoable; never reaches a canvas
 
     case "agent.enroll":

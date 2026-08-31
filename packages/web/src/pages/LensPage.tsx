@@ -29,11 +29,13 @@ import {
   lensGroups,
   lensSubjectLabels,
   lensSubjects,
+  faceMark,
 } from "@isocan/core";
 import { fetchPresenceWhere, getOplog, getSnapshot, listCanvases } from "../lib/api.ts";
 import { actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { ItemThumb } from "../components/ItemThumb.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
+import { useActorMarks } from "../lib/marks.ts";
 
 /**
  * **What somebody has made, across every canvas — and it is not a canvas.**
@@ -144,6 +146,7 @@ export function LensPage() {
      answer with the chosen one. */
   useEffect(() => void loadActorColors(), []);
   const colors = useActorColors();
+  const marks = useActorMarks();
 
   /** The canvases by id, so a tile can find the item it is drawing. */
   const byCanvas = useMemo(
@@ -264,7 +267,7 @@ export function LensPage() {
               style={{ background: actorColorIn(colors, subject.id) }}
               aria-hidden
             >
-              {subject.name.charAt(0).toUpperCase()}
+              {faceMark(marks, subject)}
             </span>
           )}
           <h1>{subject ? labels.get(subject.id) : "Lens"}</h1>
@@ -352,7 +355,7 @@ export function LensPage() {
               <Link key={s.id} className="lens-subject" to={`/lens/${encodeURIComponent(s.id)}`}>
                 <span className="lens-subject-head">
                   <span className="lens-face" style={{ background: actorColorIn(colors, s.id) }}>
-                    {s.name.charAt(0).toUpperCase()}
+                    {faceMark(marks, s)}
                   </span>
                   <span className="lens-subject-who">
                     <b>{labels.get(s.id)}</b>

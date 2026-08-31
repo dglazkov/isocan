@@ -3,10 +3,17 @@ import type { Operation } from "./ops.ts";
 import type { ActorClaim } from "./badge.ts";
 import { OpValidationError } from "./errors.ts";
 import { newActorId } from "./ids.ts";
-import { type ActorColors, type ActorNames, isIdentityColor } from "./identity.ts";
+import {
+  type ActorColors,
+  type ActorMarks,
+  type ActorNames,
+  isFaceMark,
+  isIdentityColor,
+} from "./identity.ts";
 
 export type ActorClaimOp = Extract<Operation, { type: "actor.claim" }>;
 export type ActorSetColorOp = Extract<Operation, { type: "actor.setColor" }>;
+export type ActorSetMarkOp = Extract<Operation, { type: "actor.setMark" }>;
 
 /**
  * The actor registry: who everyone is, and who may speak as them. Identity
@@ -75,9 +82,19 @@ export interface ActorRegistry {
    * a preference, each frozen at the moment it was written. Here it is one
    * row that answers for all of them, past and future. */
   colors: ActorColors;
+  /**
+   * Chosen face marks, keyed by ACTOR id — same shape and same reasoning as
+   * the colours above.
+   *
+   * **Optional on the type**, because registries written before this field
+   * existed are on disk right now and read back without it. A `?? {}` at every
+   * read is cheaper than a migration over every home's actors log, and there
+   * is nothing to migrate TO: absent and empty mean the same thing.
+   */
+  marks?: ActorMarks;
 }
 
-export const emptyActorRegistry = (): ActorRegistry => ({ names: {}, colors: {} });
+export const emptyActorRegistry = (): ActorRegistry => ({ names: {}, colors: {}, marks: {} });
 
 /** A claim row as served over the API — to the badge that holds it, and to
  * nobody else. `key` is the claim's `sessionKey`: a client's own index into
@@ -556,6 +573,30 @@ export function applyActorColor(
   if (op.color === null) delete colors[op.actorId];
   else colors[op.actorId] = op.color;
   return { ...registry, colors };
+}
+
+/**
+ * The mark you wear instead of your initial (`actor.setMark`). Same posture as
+ * the colour: home-scoped, applied against the registry, not undoable, and a
+ * null mark puts you back on your initial so "no row" and "derived" are one
+ * state.
+ */
+export function applyActorMark(
+  registry: ActorRegistry,
+  op: ActorSetMarkOp,
+): ActorRegistry {
+  if (op.mark !== null && !isFaceMark(op.mark)) {
+    throw new OpValidationError("bad-op", `not a single emoji: ${JSON.stringify(op.mark)}`);
+  }
+  const marks = { ...(registry.marks ?? {}) };
+  if (op.mark === null) delete marks[op.actorId];
+  else marks[op.actorId] = op.mark;
+  return { ...registry, marks };
+}
+
+/** The mark every actor wears, keyed by actor id — the wire shape. */
+export function actorMarks(registry: ActorRegistry): ActorMarks {
+  return { ...(registry.marks ?? {}) };
 }
 
 /**

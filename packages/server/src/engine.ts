@@ -4,9 +4,11 @@ import type {
   ActorClaim,
   ActorClaimOp,
   ActorColors,
+  ActorMarks,
   ActorNames,
   ActorRegistry,
   ActorSetColorOp,
+  ActorSetMarkOp,
   CanvasSnapshotResponse,
   ClaimContext,
   LogEntry,
@@ -25,9 +27,11 @@ import {
   OplogFencedError,
   OpValidationError,
   DEFAULT_COMMANDS,
+  actorMarks,
   actorNames,
   allocateName,
   applyActorColor,
+  applyActorMark,
   mergeCommands,
   applyClaim,
   applyOperation,
@@ -329,6 +333,12 @@ export class Engine {
     return actorNames(registry);
   }
 
+  /** The mark each actor wears instead of an initial. */
+  async actorMarks(): Promise<ActorMarks> {
+    const { registry } = await this.actors();
+    return actorMarks(registry);
+  }
+
   /**
    * Choosing the color you wear. Home-scoped like a claim: it lands in the
    * actors log, updates the registry, and is not undoable.
@@ -400,6 +410,65 @@ export class Engine {
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
       this.identityChanged(registry.colors, request.op.actorId);
+      return entry;
+    });
+  }
+
+  /**
+   * Choosing the mark you wear instead of an initial. The colour's twin in
+   * every respect — home-scoped, lands in the actors log, not undoable, both
+   * actors checked because choosing a face for somebody else is exactly the
+   * impersonation mechanism 5 exists to stop — and forwarded to every home
+   * for the same reason: the actors log never replicates down, so a home not
+   * told keeps drawing the old face forever with nothing to correct it.
+   *
+   * **What it does NOT do yet, said plainly:** there is no live broadcast. A
+   * colour has `onColors`, which repaints open canvases the moment it
+   * changes; a mark reaches other people's screens on their next read of the
+   * registry — a reload, or opening a canvas. Your own screen updates at
+   * once. That is a real limitation rather than a hidden one, and the fix is
+   * a broadcast carrying both facts rather than a second one carrying this.
+   */
+  setActorMark(request: {
+    op: ActorSetMarkOp;
+    actor: Actor;
+    clientId?: string;
+    badgeId: string;
+  }): Promise<LogEntry> {
+    return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      if (request.op.actorId !== request.actor.id) {
+        await this.requireActor(request.badgeId, request.op.actorId);
+      }
+      const homes = this.homes?.all() ?? [];
+      if (homes.length > 0) {
+        await Promise.allSettled(
+          homes.map((home) =>
+            home.submitOp({
+              canvasId: null,
+              actor: request.actor,
+              op: request.op,
+              ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+            }),
+          ),
+        );
+      }
+      const runtime = await this.actors();
+      const registry = applyActorMark(runtime.registry, request.op);
+      const envelope: OpEnvelope = {
+        id: newOpId(),
+        canvasId: null,
+        actor: request.actor,
+        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+        ts: new Date().toISOString(),
+        op: request.op,
+      };
+      const seq = runtime.lastSeq + 1;
+      const entry: LogEntry = { seq, envelope, inverse: null };
+      await this.appendActorsOrFence(entry);
+      runtime.registry = registry;
+      runtime.lastSeq = seq;
+      await this.store.saveActors(registry, seq);
       return entry;
     });
   }

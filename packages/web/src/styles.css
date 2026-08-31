@@ -400,6 +400,13 @@ img { height: auto; }
   box-shadow: var(--shadow-pop);
 }
 .identity-menu { display: flex; flex-direction: column; gap: 10px; }
+/* The face, left of the name it stands in for — same disc as everywhere else,
+   made pressable. */
+.identity-mark {
+  flex: none; cursor: pointer; border: none; padding: 0;
+  font-size: 13px; line-height: 1;
+}
+.identity-mark:hover { filter: brightness(1.08); }
 .identity-rename { display: flex; gap: 6px; }
 .identity-rename .text-input { flex: 1; min-width: 0; }
 .identity-menu-head {

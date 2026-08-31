@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Actor, ActivityEntry, PresenceSession } from "@isocan/core";
+import type { Actor, ActivityEntry, PresenceSession, ActorMarks} from "@isocan/core";
 import { elapsedLabel, recentActivity } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -8,6 +8,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 /**
  * Who is on this canvas, top right — and, in the same cluster, who has said
@@ -34,6 +35,7 @@ const MAX_FACES = 5;
 
 export function Presence({ actor }: { actor: Actor }) {
   const colors = useActorColors();
+  const marks = useActorMarks();
   const names = useActorNames();
   // Which face the pointer is on. Not per-face hover state: see the row.
   const [peek, setPeek] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export function Presence({ actor }: { actor: Actor }) {
           {/* The disc, not the button, carries the dimming — a badge on an
               absent author still has to read at full strength. */}
           <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
-            {initial(face.label)}
+            {initial(face.label, marks, face.actor)}
           </span>
           {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
         </button>
@@ -151,6 +153,7 @@ function FaceCard({
   onGo: (face: Face) => void;
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
+  const marks = useActorMarks();
   const recent = canvas ? recentActivity(canvas, face.actor.id, 5) : [];
   // Stamped once per open: "4m ago" that re-renders into "4m ago" is noise,
   // and the card does not live long enough for the number to go stale.
@@ -160,7 +163,7 @@ function FaceCard({
     <div className="hover-card face-card" onPointerDown={(e) => e.stopPropagation()}>
       <div className="face-card-head">
         <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
-          {initial(face.label)}
+          {initial(face.label, marks, face.actor)}
         </span>
         <span className="face-card-who">
           <b>{name}</b>
@@ -253,8 +256,18 @@ function tooltip(face: Face): string {
   return parts.join(" · ");
 }
 
-/** First character of a label, skipping a leading emoji when there is a word. */
-function initial(label: string): string {
+/**
+ * What goes in the disc.
+ *
+ * A CHOSEN mark wins outright. Failing that, the first character of a label,
+ * skipping a leading emoji when there is a word — presence labels have
+ * carried an emoji by convention for a while ("Kenny 🤖"), and that decoration
+ * should not become the whole face. `actor.setMark` is the same wish said
+ * deliberately, so it outranks the guess.
+ */
+function initial(label: string, marks: ActorMarks, actor: { id: string; name: string }): string {
+  const chosen = marks[actor.id];
+  if (chosen) return chosen;
   const word = label.trim().split(/\s+/).find((part) => /\p{L}|\p{N}/u.test(part));
   return (word ?? label).charAt(0).toUpperCase();
 }

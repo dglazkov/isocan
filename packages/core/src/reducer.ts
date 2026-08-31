@@ -94,6 +94,7 @@ export function applyOperation(
   switch (op.type) {
     case "actor.claim":
     case "actor.setColor":
+    case "actor.setMark":
       // Home-scoped: the engine applies these against the actor registry and
       // never routes them here. The cases exist for exhaustiveness.
       throw new OpValidationError("bad-op", `${op.type} is not a canvas operation`);

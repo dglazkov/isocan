@@ -45,6 +45,50 @@ export type ActorColors = Record<string, string>;
  */
 export type ActorNames = Record<string, string>;
 
+/** The mark each actor wears in place of an initial, keyed by actor id. */
+export type ActorMarks = Record<string, string>;
+
+/**
+ * **Is this one emoji?**
+ *
+ * Deliberately not a whitelist of code points: the emoji set grows every year
+ * and a list would refuse next year's. What is being checked is the SHAPE —
+ * one grapheme, and pictographic rather than a letter — because the failure
+ * this prevents is somebody putting a word, a name, or three flags where a
+ * single mark has to fit inside a 22px disc.
+ *
+ * `Intl.Segmenter` counts graphemes properly, so a family emoji joined by
+ * zero-width joiners is ONE, which is what a reader sees and therefore the
+ * only count that matters here.
+ */
+export function isFaceMark(mark: string): boolean {
+  const trimmed = mark.trim();
+  if (!trimmed) return false;
+  const graphemes = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(trimmed)];
+  if (graphemes.length !== 1) return false;
+  return /\p{Extended_Pictographic}/u.test(trimmed);
+}
+
+/**
+ * **What goes in the disc: the mark if there is one, else the initial.**
+ *
+ * One function because there were EIGHT places computing
+ * `name.charAt(0).toUpperCase()` — the facepile, the rail strip, comments,
+ * toasts, the share roster, the lens, the identity menu and the identity
+ * dialog. Eight copies of a rule is eight places to forget the emoji, and the
+ * ninth caller would have gone on drawing a letter with nothing to say it was
+ * wrong.
+ */
+export function faceMark(
+  marks: ActorMarks | undefined,
+  actor: { id: string; name: string },
+  displayName?: string,
+): string {
+  const mark = marks?.[actor.id];
+  if (mark) return mark;
+  return (displayName ?? actor.name).trim().charAt(0).toUpperCase();
+}
+
 /** The name this actor goes by NOW, falling back to the one stamped at the
  * time — an actor the registry has never heard of (another machine's, or one
  * from before the registry) is still owed a name. */

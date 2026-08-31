@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { faceMark } from "@isocan/core";
+import { useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { adoptIdentity, knownIdentities, renameIdentity, signOut } from "../lib/identity.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
-import { setActorColor } from "../lib/identitycolor.ts";
+import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
+import { EmojiPicker } from "./EmojiPicker.tsx";
 import { TerminalDialog } from "./TerminalDialog.tsx";
 import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
+import { useActorMarks } from "../lib/marks.ts";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -74,6 +77,10 @@ export function IdentityMenu({
   onClose: () => void;
 }) {
   const colors = useActorColors();
+  const marks = useActorMarks();
+  const mine = marks[actor.id] ?? null;
+  const [picking, setPicking] = useState(false);
+  const markButton = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +131,39 @@ export function IdentityMenu({
           attempt(renameIdentity(trimmed));
         }}
       >
+        {/**
+         * **The face, to the left of the name it stands in for.**
+         *
+         * A disc with a letter in it is fine until a canvas has a Di, a Dion
+         * and a Dimitri on it. Clicking it opens the picker the canvas
+         * already has — one emoji picker, several doorways — and picking the
+         * mark you already wear takes it back, which is the behaviour that
+         * component's `worn` prop exists to show before you click.
+         */}
+        <button
+          type="button"
+          ref={markButton}
+          className="identity-mark face-mark"
+          style={{ background: actorColorIn(colors, actor.id) }}
+          title={mine ? "Change or remove your emoji" : "Wear an emoji instead of your initial"}
+          aria-label="Your emoji"
+          onClick={() => setPicking((was) => !was)}
+        >
+          {faceMark(marks, actor, name)}
+        </button>
+        {picking && (
+          <EmojiPicker
+            anchor={markButton}
+            worn={mine ? [mine] : []}
+            onClose={() => setPicking(false)}
+            onPick={(emoji) => {
+              setPicking(false);
+              /* Picking the one you wear takes it back — the same gesture
+                 both ways, which is why the picker shows it pressed. */
+              void setActorMark(actor, emoji === mine ? null : emoji);
+            }}
+          />
+        )}
         <input
           className="text-input"
           autoFocus
@@ -148,7 +188,7 @@ export function IdentityMenu({
                 onClick={() => attempt(adoptIdentity(other))}
               >
                 <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
-                  {other.name.charAt(0).toUpperCase()}
+                  {faceMark(marks, other)}
                 </span>
                 {other.name}
               </button>

@@ -1,7 +1,9 @@
+import { faceMark } from "@isocan/core";
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
 import { adoptIdentity, enterAs, knownIdentities } from "../lib/identity.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorMarks } from "../lib/marks.ts";
 
 /**
  * The door. First time through it asks for a name; after that it also offers
@@ -13,6 +15,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
  */
 export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
   const colors = useActorColors();
+  const marks = useActorMarks();
   const [name, setName] = useState("");
   const [known] = useState(knownIdentities);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
                 title={`Come back as ${actor.name}`}
               >
                 <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
-                  {actor.name.charAt(0).toUpperCase()}
+                  {faceMark(marks, actor)}
                 </span>
                 {actor.name}
               </button>
