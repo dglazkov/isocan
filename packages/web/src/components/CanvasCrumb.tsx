@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
+
 import { useDismissOnOutside } from "../lib/dismiss.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
@@ -58,7 +58,7 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
             title={canvas.title}
             description={canvas.description}
             onSave={async (patch) => {
-              await sendOp(canvas.id, actor, { type: "project.update", patch });
+              await sendEchoed(canvas.id, actor, { type: "project.update", patch });
               setEditing(false);
             }}
             onCancel={() => setEditing(false)}

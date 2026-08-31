@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { isTextItem } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
+
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { sendEchoed } from "../stores/canvasStore.ts";
 
 const FAN_SCALE = 0.62;
 const FAN_GAP = 18;
@@ -53,7 +54,7 @@ export function VersionFanOut({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={async () => {
               if (version.id !== item.currentVersionId) {
-                await sendOp(canvasId, actor, {
+                await sendEchoed(canvasId, actor, {
                   type: "item.setCurrentVersion",
                   itemId: item.id,
                   versionId: version.id,

@@ -10,11 +10,11 @@ import {
   takenSentence,
   workbenchItemPath,
 } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
-import { sendOp } from "../lib/api.ts";
+
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { goStage } from "../lib/goStage.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
@@ -150,7 +150,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
          */
         const where = cleanFilePath(entry.path);
         if (where) {
-          void sendOp(canvasId, actor, {
+          void sendEchoed(canvasId, actor, {
             type: "item.update",
             itemId: ids[0],
             patch: { properties: { [FILE_PROP]: where } },

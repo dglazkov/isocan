@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Actor, GcReport } from "@isocan/core";
-import { runGc, sendOp } from "../lib/api.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { runGc } from "../lib/api.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
 function formatBytes(bytes: number): string {
@@ -63,7 +63,7 @@ export function TrashPanel({ canvasId, actor }: { canvasId: string; actor: Actor
             <button
               className="btn"
               onClick={() =>
-                void sendOp(canvasId, actor, { type: "item.restore", itemId: entry.item.id })
+                void sendEchoed(canvasId, actor, { type: "item.restore", itemId: entry.item.id })
               }
             >
               Restore
@@ -92,7 +92,7 @@ export function TrashPanel({ canvasId, actor }: { canvasId: string; actor: Actor
                 className="btn danger"
                 onClick={() => {
                   setConfirming(false);
-                  void sendOp(canvasId, actor, { type: "trash.empty" });
+                  void sendEchoed(canvasId, actor, { type: "trash.empty" });
                 }}
               >
                 Really empty {trash.length} item{trash.length === 1 ? "" : "s"} — can't be undone

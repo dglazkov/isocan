@@ -1,8 +1,8 @@
 import type { Actor, PresenceSession } from "@isocan/core";
 import { mainThread, newThreadId } from "@isocan/core";
-import { sendOp } from "./api.ts";
+
 import { screenToWorld } from "./viewport.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { makeComment } from "../components/CommentLayer.tsx";
 
@@ -28,7 +28,7 @@ export async function postToMain(
   };
   const existing = mainThread(useCanvasStore.getState().canvas!);
   if (existing) {
-    await sendOp(canvasId, actor, {
+    await sendEchoed(canvasId, actor, {
       type: "thread.reply",
       threadId: existing.id,
       comment: withItems(body),
@@ -40,7 +40,7 @@ export async function postToMain(
   const ui = useUiStore.getState();
   const center = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
   try {
-    await sendOp(canvasId, actor, {
+    await sendEchoed(canvasId, actor, {
       type: "thread.create",
       threadId: newThreadId(),
       x: Math.round(center.x),
@@ -54,7 +54,7 @@ export async function postToMain(
     // now; deliver the message there.
     const winner = mainThread(useCanvasStore.getState().canvas!);
     if (winner) {
-      await sendOp(canvasId, actor, {
+      await sendEchoed(canvasId, actor, {
         type: "thread.reply",
         threadId: winner.id,
         comment: withItems(body),

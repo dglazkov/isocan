@@ -12,10 +12,10 @@ import {
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
-import { blobUrl, sendOp } from "./api.ts";
+import { blobUrl } from "./api.ts";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
-import { useCanvasStore, flashNotice, setNotice } from "../stores/canvasStore.ts";
+import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Panel, openPanel } from "./panels.ts";
 import { glideToBox } from "./zoomactions.ts";
@@ -157,7 +157,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         const item = items[0];
         if (!item) return;
         const next = contextMark(item) === "pinned" ? null : "pinned";
-        void sendOp(ctx.canvasId, ctx.actor, {
+        void sendEchoed(ctx.canvasId, ctx.actor, {
           type: "item.update",
           itemId: item.id,
           patch: markPatch(next),
@@ -174,7 +174,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         const item = items[0];
         if (!item) return;
         const next = contextMark(item) === "excluded" ? null : "excluded";
-        void sendOp(ctx.canvasId, ctx.actor, {
+        void sendEchoed(ctx.canvasId, ctx.actor, {
           type: "item.update",
           itemId: item.id,
           patch: markPatch(next),

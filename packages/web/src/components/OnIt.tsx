@@ -1,7 +1,7 @@
 import { listeners, summonedBy, workersOn, type Actor, type CommentThread } from "@isocan/core";
-import { sendOp, undo } from "../lib/api.ts";
+import { undo } from "../lib/api.ts";
 import { makeComment } from "./CommentLayer.tsx";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor } from "../lib/presence.ts";
 
@@ -127,7 +127,7 @@ async function retract(canvasId: string, actor: Actor, thread: CommentThread): P
   const last = thread.comments[thread.comments.length - 1];
   if (!last || last.author.id !== actor.id) return;
   if (thread.comments.length === 1 && !thread.main) {
-    await sendOp(canvasId, actor, { type: "thread.delete", threadId: thread.id });
+    await sendEchoed(canvasId, actor, { type: "thread.delete", threadId: thread.id });
     return;
   }
   await undo(canvasId, actor);
@@ -137,7 +137,7 @@ async function retract(canvasId: string, actor: Actor, thread: CommentThread): P
  * that is mid-turn and reading its own tools — and because "why did this stop
  * halfway" is a question somebody asks next week. */
 async function askToStop(canvasId: string, actor: Actor, thread: CommentThread): Promise<void> {
-  await sendOp(canvasId, actor, {
+  await sendEchoed(canvasId, actor, {
     type: "thread.reply",
     threadId: thread.id,
     comment: makeComment("/cancel"),
