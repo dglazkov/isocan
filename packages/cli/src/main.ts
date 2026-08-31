@@ -170,6 +170,10 @@ import {
   contextMark,
   markPatch,
   markLabel,
+  isSlide,
+  slidePatch,
+  slides,
+  SLIDE_EMOJI,
   majors,
   majorLine,
   track,
@@ -5958,6 +5962,84 @@ context
       });
       if (ctx.json) return printJson(pieces);
       console.log(contextReport(pieces));
+    }),
+  );
+
+// ---------- the slide deck ----------
+
+/**
+ * **The deck** (#87): which items full screen flips through. The same
+ * property-not-operation answer `context pin` reached — `item.update`
+ * already carries it — so this verb and the web menu's "Make this a slide"
+ * cannot disagree about what a slide is, and there is no deck URL to mint:
+ * full screen is already an address, and `show` prints the first slide's.
+ */
+const slidesCmd = program
+  .command("slides")
+  .description(`The deck ${SLIDE_EMOJI} — which items full screen flips through, in reading order`);
+
+function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
+  slidesCmd
+    .command(`${name} <items...>`)
+    .description(blurb)
+    .option("--canvas <canvas>")
+    .action(
+      run(async (refs: string[], opts: { canvas?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        if (opts.canvas) ctx.canvasRef = opts.canvas;
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        for (const ref of refs) {
+          const item = resolveItem(snapshot, ref);
+          if (isSlide(item) === on) {
+            console.log(
+              on ? `"${item.title}" is already a slide` : `"${item.title}" was not a slide`,
+            );
+            continue;
+          }
+          await sendOp(ctx, p.id, {
+            type: "item.update",
+            itemId: item.id,
+            patch: slidePatch(on),
+          });
+          console.log(
+            on
+              ? `${SLIDE_EMOJI} "${item.title}" is a slide`
+              : `"${item.title}" is out of the deck — it stays on the canvas`,
+          );
+        }
+      }),
+    );
+}
+
+slideVerb("add", true, "Mark items as slides — bare arrows in full screen stop only at these");
+slideVerb("rm", false, "Take items out of the deck — they stay on the canvas");
+
+slidesCmd
+  .command("show", { isDefault: true })
+  .description("The deck in reading order, and the address to hand an audience")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const deck = slides(snapshot.canvas);
+      if (ctx.json) {
+        return printJson(deck.map((item) => ({ id: item.id, title: item.title })));
+      }
+      if (deck.length === 0) {
+        return console.log(
+          "No slides marked — full screen flips through every item, in reading order.\n" +
+            "Narrow it: isocan slides add <item>",
+        );
+      }
+      deck.forEach((item, i) => console.log(`${i + 1}. ${item.title} (${item.id})`));
+      // THIS canvas's home, never the daemon's — the same one-door rule
+      // `isocan open` follows: the address you hand an audience must be the
+      // door of the home that holds the canvas.
+      const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
+      console.log(`\nThe deck's address (the first slide, full screen):`);
+      console.log(itemUrl(origin, p.id, deck[0]!.id));
     }),
   );
 

@@ -64,3 +64,40 @@ describe("the help panel tells the truth about it", () => {
     expect(`${entry!.does} ${entry!.note ?? ""}`.toLowerCase()).toContain("full screen");
   });
 });
+
+/**
+ * The deck (#87): bare arrows flip through the items marked as slides, in
+ * reading order — or everything, with none marked. Linear where ⌘-arrows are
+ * spatial, and decided in core (`deckStep`), so `isocan slides` and this walk
+ * cannot disagree about the same deck.
+ */
+describe("bare arrows flip the deck", () => {
+  it("the cover keeps them from the canvas underneath", () => {
+    for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown"]) {
+      expect(crossesCover({ key }), key).toBe(false);
+    }
+  });
+
+  it("asks core which slide is next, not its own idea of the deck", () => {
+    expect(source).toMatch(/import \{[^}]*\bdeckStep\b[^}]*\} from "@isocan\/core"/);
+    expect(source).toContain("deckStep(canvas, itemId");
+  });
+
+  it("answers a clicker too — Page Up/Down flip", () => {
+    expect(source).toContain('"PageDown"');
+    expect(source).toContain('"PageUp"');
+  });
+
+  it("leaves arrows alone while typing — that is the caret's business", () => {
+    // The flip branch must carry its own isTyping guard, not borrow the
+    // ⌘-branch's: each returns before the other runs.
+    const flip = source.slice(source.indexOf("FLIP_NEXT.has(e.key) || FLIP_PREV.has(e.key)"));
+    expect(flip.slice(0, 400)).toMatch(/isTyping\(e\.target\)/);
+  });
+
+  it("is registered in the help panel", () => {
+    const entry = SHORTCUTS.find((s) => s.does === "Flip through the slides");
+    expect(entry).toBeDefined();
+    expect(entry!.note!.toLowerCase()).toContain("full screen");
+  });
+});

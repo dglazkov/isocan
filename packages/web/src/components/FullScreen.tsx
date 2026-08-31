@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, itemPath } from "@isocan/core";
+import { canvasPath, deckStep, itemPath } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
@@ -13,6 +13,14 @@ import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+
+/** Bare keys that flip the deck (#87). Forward and back each answer to three
+ * keys because a presenter's clicker sends Page Up/Down, and because "left/
+ * right (and up/down)" is how the ask was written: the deck is LINEAR, in
+ * reading order, so both axes flip rather than up/down meaning something
+ * spatial that would strand a presenter at the end of a row. */
+const FLIP_NEXT = new Set<string>(["ArrowRight", "ArrowDown", "PageDown"]);
+const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
 
 /**
  * One item, filling the screen, live.
@@ -90,6 +98,28 @@ export function FullScreen({
         if (!canvas || !current) return;
         const next = findNextItem(current, Object.values(canvas.items), e.key as Direction);
         if (!next) return; // the edge of the canvas: stay put rather than wrap
+        useUiStore.getState().select(next.id);
+        revealItem(next.id);
+        navigate(itemPath(canvasId, next.id));
+        return;
+      }
+      // Bare arrows flip the deck (#87): the items marked as slides, in
+      // reading order — or every item, with none marked, because a canvas of
+      // screens is already a deck and marking narrows it rather than turning
+      // it on. Linear where ⌘-arrows are spatial: a presenter at the end of a
+      // row pressing → must land on the next row's first slide, not on the
+      // edge. Which items and in what order is core's call (`deckStep`), so
+      // the CLI's `isocan slides` and this walk cannot disagree about the
+      // same deck.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && (FLIP_NEXT.has(e.key) || FLIP_PREV.has(e.key))) {
+        // Arrows in a text field move the caret — that field's business.
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation(); // the canvas underneath would nudge its selection
+        const canvas = useCanvasStore.getState().canvas;
+        if (!canvas) return;
+        const next = deckStep(canvas, itemId, FLIP_NEXT.has(e.key) ? 1 : -1);
+        if (!next) return; // the deck's edge: stay put rather than wrap
         useUiStore.getState().select(next.id);
         revealItem(next.id);
         navigate(itemPath(canvasId, next.id));

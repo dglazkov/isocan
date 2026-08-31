@@ -4013,6 +4013,11 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Unbound: no directory on this machine at all. Barely there — it is not a
    problem with the item, it is the absence of a question. */
 .file-mark.unbound { opacity: 0.4; }
+
+/* In the deck (#87). An emoji, sized down to sit in the 11px title row
+   without stretching it — the mark reads at a glance and the row's height
+   does not change when an item joins the deck. */
+.slide-mark { flex: none; font-size: 10px; line-height: 1; }
 /* The one stage button that is about to overwrite somebody's work. Warn, not
    danger: the file is not lost, it is about to be replaced by a version the
    canvas can still show — and `--danger` is reserved for what cannot be

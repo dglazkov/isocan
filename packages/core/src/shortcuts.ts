@@ -49,6 +49,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["W"], does: "Workbench — the agent room", group: "Moving around", note: "Who is here to work and what each is doing, the main thread beside them, and one item on a stage. A single selection comes along as the stage's focus; Esc steps back out" },
   { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
+  { keys: ["←", "→", "↑", "↓"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
 
   // ---- Items ----

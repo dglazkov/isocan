@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { contextMark, itemKind, itemPath, markPatch, workbenchItemPath, keyFor} from "@isocan/core";
+import { contextMark, isSlide, itemKind, itemPath, markPatch, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -182,6 +182,32 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         });
         flashNotice(
           next ? `"${item.title}" is kept out of context — it is still on the canvas` : `"${item.title}" is back in context`,
+        );
+      },
+    },
+    /**
+     * **The deck** (#87): mark an item as a slide and full screen's bare
+     * arrows flip through just the marked ones, in reading order. The same
+     * toggling shape as the context marks above, and the same op underneath —
+     * `item.update` with a property, so the CLI's `isocan slides add` and
+     * this entry cannot disagree.
+     */
+    {
+      label: isSlide(items[0]!) ? `${SLIDE_EMOJI} No longer a slide` : `${SLIDE_EMOJI} Make this a slide`,
+      disabled: many,
+      run: () => {
+        const item = items[0];
+        if (!item) return;
+        const on = !isSlide(item);
+        void sendEchoed(ctx.canvasId, ctx.actor, {
+          type: "item.update",
+          itemId: item.id,
+          patch: slidePatch(on),
+        });
+        flashNotice(
+          on
+            ? `"${item.title}" is a slide — arrows in full screen stop here`
+            : `"${item.title}" is out of the deck`,
         );
       },
     },
