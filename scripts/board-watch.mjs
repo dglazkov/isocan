@@ -13,8 +13,17 @@
  *      the hook.
  *   2. **The repo's own canvas** — the one `.isocan/project.json` names, which
  *      is a committed marker and so is the same canvas for everybody who clones.
- *      Watched with `isocan wait --all-ops`, which is the daemon telling us
- *      rather than us asking it.
+ *      Tailed through the API (`canvas.tail()`, iso-api journey 2): one async
+ *      iterator in this process. No `isocan wait` children, no re-parking loop —
+ *      the watcher holds no process but its own.
+ *
+ * **The cursor is this script's own.** `tail({ since })` keeps the cursor with
+ * the caller, and each entry carries its seq — so the last seq handled is
+ * written to `.isocan/board-watch.json` (git-ignored, per-machine), and a
+ * watcher that dies resumes where it stopped: kill it after entry N, and the
+ * first entry the next run handles is N+1. A daemon restart is not even that —
+ * the tail rides it out on an unchanged cursor and yields nothing for the
+ * reconnect.
  *
  * **This runs in the foreground, and says what it is doing.** A detached
  * watcher whose output goes nowhere is precisely the failure this repo just
@@ -28,20 +37,18 @@
  * generator. One refresh per quiet period.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, watch } from "node:fs";
+import { existsSync, readFileSync, watch, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { boardEnv } from "./board-identity.mjs";
+import { register } from "tsx/esm/api";
+import { BOARD_IDENTITY } from "./board-identity.mjs";
+
+// The bin's own trick, same as canvas-board.mjs: register tsx so the
+// workspace's TypeScript sources import directly, then load the API.
+register();
+const { connect } = await import("@isocan/api");
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
-/**
- * **The watcher parks as the BOARD, never as whoever launched it.** `isocan
- * wait` does not wake you on your own ops — so a watcher wearing the launching
- * agent's identity is blind to precisely the changes that agent makes, which
- * is most of them. Caught by watching it miss a text node this session created.
- */
-const env = boardEnv();
-const cli = path.join(repo, "packages/cli/bin/isocan.js");
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(name);
@@ -49,8 +56,6 @@ const arg = (name, fallback) => {
 };
 /** Long enough that a burst of ops is one refresh, short enough to feel live. */
 const QUIET_MS = Number(arg("--quiet", 4000));
-/** Each `wait` is a child; a short park just means more laps. */
-const PARK_S = Number(arg("--park", 300));
 
 const say = (...m) => console.log(new Date().toISOString().slice(11, 19), ...m);
 const git = (...a) => execFileSync("git", a, { cwd: repo, encoding: "utf8" }).trim();
@@ -65,10 +70,14 @@ const canvasOf = (file, key) => {
   }
 };
 const repoCanvas = canvasOf("project.json", "projectId");
-const boardCanvas = canvasOf("board.json", "canvas");
+/** Where the panels live — resolved the way canvas-board.mjs resolves it, and
+ * passed through to it when stated, so the two agree on every run. */
+const boardRef = arg("--canvas") ?? process.env.ISOCAN_BOARD_CANVAS ?? canvasOf("board.json", "canvas");
 
-if (!boardCanvas) {
-  console.error("no board canvas — write .isocan/board.json first (see scripts/canvas-board.mjs)");
+if (!boardRef) {
+  console.error(
+    "no board canvas — pass --canvas <ref>, export ISOCAN_BOARD_CANVAS, or write .isocan/board.json (see scripts/canvas-board.mjs)",
+  );
   process.exit(2);
 }
 
@@ -93,11 +102,15 @@ function refresh() {
   const why = [...reasons].join(", ") || "change";
   reasons.clear();
   say(`refreshing — ${why}`);
-  const child = spawn("node", [path.join(repo, "scripts/canvas-board.mjs"), "--notify"], {
-    cwd: repo,
-    stdio: ["ignore", "inherit", "inherit"],
-    env,
-  });
+  const child = spawn(
+    "node",
+    [
+      path.join(repo, "scripts/canvas-board.mjs"),
+      "--notify",
+      ...(arg("--canvas") ? ["--canvas", boardRef] : []),
+    ],
+    { cwd: repo, stdio: ["ignore", "inherit", "inherit"] },
+  );
   child.on("exit", (code) => {
     running = false;
     // Non-zero is one thing only: an instrument that would not run. Said out
@@ -128,7 +141,7 @@ const gitDir = path.resolve(repo, git("rev-parse", "--git-dir"));
  * is re-read and compared rather than assumed. That comparison is the whole
  * filter, and it is why an ordinary `git status` does not wake the board.
  */
-function pollHead(why) {
+function pollHead() {
   let now;
   try {
     now = git("rev-parse", "HEAD");
@@ -144,7 +157,7 @@ function pollHead(why) {
 
 try {
   watch(gitDir, { persistent: true }, (_e, file) => {
-    if (!file || /^(HEAD|ORIG_HEAD|refs|packed-refs)/.test(String(file))) pollHead(String(file));
+    if (!file || /^(HEAD|ORIG_HEAD|refs|packed-refs)/.test(String(file))) pollHead();
   });
   say(`watching the repository at ${gitDir}`);
 } catch (err) {
@@ -152,56 +165,69 @@ try {
 }
 // A belt for filesystems where watch misses things (network mounts, some
 // containers). Cheap: one `rev-parse` a minute.
-setInterval(() => pollHead("poll"), 60_000).unref?.();
+setInterval(pollHead, 60_000).unref?.();
 
 /* ── source 2: the repo's own canvas ─────────────────────────────────────── */
 
 /**
- * One `wait --all-ops` after another. `wait` already survives a daemon
- * restart on its own, so there is no supervisor loop here beyond re-parking:
- * exit 2 is a timeout and means nothing arrived.
+ * **The watcher tails as the BOARD, never as whoever launched it** — the same
+ * actor the refresh writes as, so its own panel versions (should the board
+ * and repo canvas ever be one) are recognisably its own and skipped below.
+ * The tail itself filters nothing: it is the raw log, and the deciding is
+ * done here, where a line can say what was decided.
  */
+const stateFile = path.join(repo, ".isocan", "board-watch.json");
+const savedSeq = (() => {
+  try {
+    const state = JSON.parse(readFileSync(stateFile, "utf8"));
+    return state.canvas === repoCanvas ? state.seq : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+let seq = savedSeq;
+
 async function watchCanvas(id) {
-  say(`watching canvas ${id} for every op`);
+  const home = await connect({ identity: BOARD_IDENTITY });
+  const me = home.actor;
+  const canvas = await home.canvas(id);
+  say(
+    seq !== undefined
+      ? `tailing canvas ${id} from seq ${seq} — resuming where the last watcher stopped`
+      : `tailing canvas ${id} from now`,
+  );
   for (;;) {
-    const code = await new Promise((done) => {
-      const child = spawn(
-        "node",
-        [cli, "--canvas", id, "wait", "--all-ops", "--json", "--timeout", String(PARK_S)],
-        { cwd: repo, stdio: ["ignore", "pipe", "pipe"], env },
-      );
-      let out = "";
-      child.stdout.on("data", (d) => (out += d));
-      child.stderr.on("data", () => {});
-      child.on("exit", (c) => {
-        if (c === 0) {
-          const n = (() => {
-            try {
-              return JSON.parse(out).entries?.length ?? 0;
-            } catch {
-              return 0;
-            }
-          })();
-          say(`canvas ${id} → ${n} op${n === 1 ? "" : "s"}`);
-          schedule(`${n} op${n === 1 ? "" : "s"} on ${id}`);
-        }
-        done(c);
-      });
-    });
-    // 0 = something came, 2 = nothing came. Anything else is the daemon being
-    // unreachable; wait a beat rather than spinning on it.
-    if (code !== 0 && code !== 2) {
-      say(`wait exited ${code} — the daemon may be down; retrying in 10s`);
+    try {
+      for await (const entry of canvas.tail(seq !== undefined ? { since: seq } : {})) {
+        seq = entry.seq;
+        // Handled-means-recorded: the cursor moves the moment an entry is
+        // seen, so a killed watcher never re-triggers a refresh it already
+        // scheduled — at worst it re-reads the entry it died on.
+        writeFileSync(stateFile, JSON.stringify({ canvas: id, seq }) + "\n");
+        // Own ops are not news: the board's writes must not wake the board.
+        if (entry.envelope.actor.id === me.id) continue;
+        say(`canvas ${id} → ${entry.opType} by ${entry.envelope.actor.name} (seq ${entry.seq})`);
+        schedule(`${entry.opType} on ${id}`);
+      }
+      return; // unreachable — tail() only ends by throwing or being aborted
+    } catch (err) {
+      // A refusal, not a blip — tail rides out blips itself. Wait a beat and
+      // re-tail from the recorded seq rather than spinning on it.
+      say(`tail refused: ${err.message} — retrying in 10s`);
       await new Promise((r) => setTimeout(r, 10_000));
     }
   }
 }
 
 if (repoCanvas) {
-  watchCanvas(repoCanvas);
+  watchCanvas(repoCanvas).catch((err) => {
+    console.error(err.message);
+    process.exit(2);
+  });
 } else {
   say("no .isocan/project.json — this directory names no canvas of its own, so only the repo is watched");
 }
 
-say(`board is ${boardCanvas}; debounce ${QUIET_MS}ms. Ctrl-C to stop.`);
+say(`board is ${boardRef}; debounce ${QUIET_MS}ms. Ctrl-C to stop.`);
 schedule("first run");

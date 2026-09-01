@@ -16,7 +16,7 @@ bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phases 1–2 CLOSED, phase 3 next.** Journeys and design
+**Where we are: phases 1–3 CLOSED, phase 4 next.** Journeys and design
 written 31 Aug 2026; doors settled the same day (typed library with the
 CLI atop it, release-branch distribution, the API stays a client of the
 daemon). The seam exists as of 31 Aug: `@isocan/api` owns the Node
@@ -201,7 +201,11 @@ CLI's.
 
 ## Phase 3 — The log as an iterator, proven by the watcher
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** All three proofs played live twice — by the
+worker and replayed by the conductor: a real reply refreshed panels, an
+`isocan restart` under the running watcher produced no phantom wake, and
+a watcher SIGKILLed at seq N resumed yielding exactly N+1. Six tail
+tests pin the same claims in-suite against a real daemon.
 
 **Work:** `canvas.tail({ since })` — an async iterator over the entry
 stream, cursor with the caller, resuming across disconnects and daemon
@@ -222,7 +226,26 @@ the watcher after entry N, restart it, and the first entry it yields is
 N+1. A wake that is actually a dropped connection reported as one fails
 this proof — the auto-upgrade project's standing lesson, inherited.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — Unreachable splits by surface a second time: the
+  handle refuses eagerly with typed `unreachable`, but `tail` treats it
+  as a pause — a tail is a park, so it retries on an unchanged cursor
+  and restarts the daemon; only an answered refusal throws.
+- **2026-08-31** — An abandoned generator pending in a long-poll keeps
+  polling forever — one un-awaited `next()` drives the loop until an
+  entry arrives. Hence `tail`'s `AbortSignal`, threaded to `watchLog`'s
+  fetch — the phase's one routes.ts change.
+- **2026-08-31** — `tail` carries no self-filter: wait's "your own ops
+  never wake you" is dispatch policy, not log shape, so the watcher
+  states the board's identity and skips `actor.id === me.id` where a log
+  line can say so.
+- **2026-08-31** — `boardEnv` lost its last consumer: the watcher was
+  the last script spawning the CLI as the board, so the env-var surgery
+  is gone and the stated-argument identity is the only spelling left.
+- **2026-08-31** — `docs/ROADMAP.md` drifted when phase 2 closed —
+  journey.md's front matter changed without regenerating the derived
+  file; found as a suite red, regenerated here.
 
 ---
 

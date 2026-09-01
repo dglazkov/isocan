@@ -7,7 +7,10 @@ import type {
   ItemKind,
   MentionCandidate,
   NewComment,
+  Operation,
   PresenceSession,
+  WatchedLogEntry,
+  WatchLogResponse,
 } from "@isocan/core";
 import {
   actorNameIn,
@@ -222,6 +225,42 @@ export function activityRows(
  * same pairing `isocan --json ls` prints. */
 export type ListedItem = Item & { kind: ItemKind };
 
+/** What `tail()` takes: where to resume, and how to stop. */
+export interface TailOptions {
+  /**
+   * Yield entries with seq greater than this — the seq of the last entry the
+   * caller handled, which every yielded entry carries as `entry.seq`. Omitted,
+   * the tail starts at the canvas's current tip: entries that land after the
+   * iteration begins. `since: 0` replays the whole live log.
+   */
+  since?: number;
+  /** Ends the iteration — cleanly, no throw — when aborted, including one
+   * blocked in a held poll or in a retry pause. */
+  signal?: AbortSignal;
+}
+
+/** What `tail()` yields: the log entry itself (its `seq` is the cursor to
+ * resume from), with the op's type flattened to the one field a reaction
+ * switches on. Who wrote it is `entry.envelope.actor` — a watcher that also
+ * writes skips its own. */
+export interface TailEntry extends WatchedLogEntry {
+  opType: Operation["type"];
+}
+
+/** A pause that ends early when the signal fires — so an aborted tail is not
+ * stuck sleeping out its retry backoff. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done);
+  });
+}
+
 /** The default display size for content nobody sized — the CLI's own. */
 const DEFAULT_SIZE = { width: 480, height: 360 };
 
@@ -304,6 +343,82 @@ export class CanvasHandle {
   async activity(limit = 10): Promise<ActivityRow[]> {
     const snapshot = await this.snapshot();
     return activityRows(snapshot, collectCanvasActors(snapshot.canvas), limit);
+  }
+
+  /**
+   * **The log as an iterator** (iso-api phase 3, journey 2): every entry that
+   * lands on this canvas, in order, as an async iterator over the daemon's
+   * long-poll — the same `watchLog` laps `isocan wait` lives on, without the
+   * park row, the dispatch rules, or the self-filter. A raw tail: the caller
+   * decides what an entry means.
+   *
+   * **The cursor stays with the caller.** `{ since }` in; each yielded entry
+   * carries its `seq` out. A tail that dies resumes by handing back the last
+   * seq it handled — the seq-cursor gesture every replica uses — and the
+   * first entry the new tail yields is the one after it. Nothing here stores
+   * anything: where "handled" is recorded is the caller's business.
+   *
+   * **A dropped connection is a pause, never an entry.** A daemon restart, an
+   * upgrade, a laptop waking up — the poll fails at the connection level, the
+   * cursor is unchanged, and the loop retries (starting the daemon again if
+   * it is gone, `isocan wait`'s own gesture). Nothing is yielded for the
+   * reconnect, so a consumer cannot mistake it for activity — the
+   * auto-upgrade project's standing lesson, inherited. Ops written while the
+   * connection was down are still in the log and arrive as themselves. The
+   * daemon ANSWERING with a refusal is different: an `ApiError` means
+   * somebody was there to say no, and it is thrown, not retried.
+   */
+  async *tail(options: TailOptions = {}): AsyncGenerator<TailEntry, void, undefined> {
+    const { signal } = options;
+    let cursor = options.since;
+    let offlineSince: number | null = null;
+    let complained = false;
+    for (;;) {
+      if (signal?.aborted) return;
+      let batch: WatchLogResponse;
+      try {
+        // No `since` yet: a cursor-less lap, which the daemon answers
+        // immediately with the tip and no entries — "from now on", seeded on
+        // the same call the loop lives on, retried like every other lap.
+        batch = await this.ctx.client.watchLog(
+          cursor === undefined
+            ? { only: [this.id] }
+            : { cursors: { [this.id]: cursor }, waitMs: 30_000, only: [this.id] },
+          signal,
+        );
+      } catch (err) {
+        if (signal?.aborted) return;
+        if (err instanceof ApiError) throw err;
+        if (offlineSince === null) offlineSince = Date.now();
+        // Pause first, then bring the daemon back: `ensureDaemon` no-ops when
+        // something is answering, and after an `isocan restart` something
+        // usually is by the time the pause ends — the spawn is for a daemon
+        // that is genuinely gone, not one mid-restart.
+        await pause(400, signal);
+        if (signal?.aborted) return;
+        await this.ctx.client.ensureDaemon().catch(() => {});
+        // Say it once, after long enough that a restart is not worth
+        // mentioning — on stderr, the script's transcript, never as a yield.
+        if (!complained && Date.now() - offlineSince > 3_000) {
+          complained = true;
+          console.error(
+            "tail: the daemon stopped answering — retrying, and starting it if it is gone. " +
+              "The cursor is unchanged; nothing that lands meanwhile is missed.",
+          );
+        }
+        continue;
+      }
+      if (offlineSince !== null) {
+        const gap = Math.round((Date.now() - offlineSince) / 1000);
+        if (complained) console.error(`tail: daemon back after ${gap}s — still tailing, nothing missed`);
+        offlineSince = null;
+        complained = false;
+      }
+      cursor = batch.cursors[this.id] ?? cursor ?? 0;
+      for (const entry of batch.entries) {
+        yield { ...entry, opType: entry.envelope.op.type };
+      }
+    }
   }
 
   /**

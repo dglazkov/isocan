@@ -314,23 +314,13 @@ describe("placement", () => {
  * only into a log nobody was reading.
  */
 describe("the board speaks as the board", () => {
-  it("clears every harness variable and pins one session key", async () => {
-    const { boardEnv, BOARD_SESSION } = await import("../scripts/board-identity.mjs");
-    const polluted = {
-      CLAUDE_CODE_SESSION_ID: "someone-elses-agent",
-      CODEX_THREAD_ID: "another-one",
-      PI_SESSION_ID: "a-third",
-      ANTIGRAVITY_CONVERSATION_ID: "a-fourth",
-    };
-    const env = boardEnv(false, polluted);
-    for (const k of Object.keys(polluted)) expect(env[k], `${k} leaked through`).toBeUndefined();
-    expect(env.ISOCAN_SESSION_ID).toBe(BOARD_SESSION);
-  });
-
-  it("keeps the caller's identity under --as-me", async () => {
-    const { boardEnv } = await import("../scripts/board-identity.mjs");
-    const mine = { CLAUDE_CODE_SESSION_ID: "mine" };
-    expect(boardEnv(true, mine)).toBe(mine);
+  it("pins one stable session key, stated rather than inherited", async () => {
+    // The env-var surgery (`boardEnv`) went with the last CLI spawn (iso-api
+    // phase 3); what remains is the fact it existed to defend — one stable
+    // key, so the board is one actor across every run and every script.
+    const { BOARD_IDENTITY, BOARD_SESSION } = await import("../scripts/board-identity.mjs");
+    expect(BOARD_IDENTITY.session).toBe(BOARD_SESSION);
+    expect(BOARD_IDENTITY.harness).toBe("board");
   });
 
   it("publishes under that identity, not the caller's", () => {
@@ -356,18 +346,29 @@ describe("the board speaks as the board", () => {
 describe("the watcher", () => {
   const watch = readFileSync(fileURLToPath(new URL("../scripts/board-watch.mjs", import.meta.url)), "utf8");
 
-  it("watches the repo's own canvas, not the board's", () => {
+  it("tails the repo's own canvas, not the board's", () => {
     // The board is where panels are published; the marker is what the
     // repository says its canvas is. Conflating them is the easy mistake.
     expect(watch).toContain('canvasOf("project.json", "projectId")');
     expect(watch).toContain('canvasOf("board.json", "canvas")');
-    expect(watch).toContain("--all-ops");
+    expect(watch).toContain("canvas.tail(");
   });
 
-  it("parks as the board, or it cannot see the launcher's own ops", () => {
-    // `isocan wait` never wakes you on your own ops.
-    expect(watch).toContain("const env = boardEnv();");
-    expect(watch).toMatch(/stdio: \["ignore", "pipe", "pipe"\], env \}/);
+  it("tails as the board, and skips its own ops itself", () => {
+    // `tail()` is the raw log — no self-filter, unlike `isocan wait` — so
+    // the watcher states the board's identity and does the skipping where a
+    // log line can say so. A watcher wearing the launcher's identity would
+    // refresh on that agent's every op AND its own, which is a loop.
+    expect(watch).toContain("connect({ identity: BOARD_IDENTITY })");
+    expect(watch).toContain("entry.envelope.actor.id === me.id");
+  });
+
+  it("keeps its cursor in a file, so a killed watcher resumes at N+1", () => {
+    // Journey 2's resume: the cursor is the caller's, and this caller is a
+    // process that dies. The seq is recorded as each entry is seen, and the
+    // next run hands it back as `since`.
+    expect(watch).toContain("board-watch.json");
+    expect(watch).toMatch(/\{ since: seq \}/);
   });
 
   it("watches HEAD by comparing it, not by trusting the event", () => {

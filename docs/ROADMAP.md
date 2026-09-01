@@ -54,7 +54,7 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. Phases 1–2 closed 31 Aug: the seam holds, `connect()` exists, and journey 1 played for real — the board is one process on `@isocan/api`. · see multiuser, on-demand |
+| **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. Phases 1–3 closed 31 Aug: the seam holds, `connect()` and `tail()` exist, journeys 1–2 played for real — the board is one process and the watcher resumes where it stopped. · see multiuser, on-demand |
 
 ## Built <sub>8</sub>
 

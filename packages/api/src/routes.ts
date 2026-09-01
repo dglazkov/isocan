@@ -159,12 +159,18 @@ export class DaemonRoutes {
    * Exactly one recovery per request, and never a loop: a 401 goes to the
    * door (which re-claims on the way back), and a `not-your-actor` claims.
    */
-  private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  private async request<T>(
+    method: string,
+    url: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
     const send = async () => {
       const headers: Record<string, string> = { ...(await this.authHeader()) };
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return fetch(`${this.base}${url}`, {
         method,
+        ...(signal !== undefined ? { signal } : {}),
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
@@ -618,9 +624,10 @@ export class DaemonRoutes {
   }
 
   /** Every canvas at once. Omit `cursors` to seed at "now"; otherwise the
-   * daemon long-polls until an op lands on any canvas. */
-  watchLog(request: WatchLogRequest): Promise<WatchLogResponse> {
-    return this.request("POST", "/api/oplog/watch", request);
+   * daemon long-polls until an op lands on any canvas. `signal` aborts a held
+   * poll — what lets `tail()` stop listening mid-window instead of after it. */
+  watchLog(request: WatchLogRequest, signal?: AbortSignal): Promise<WatchLogResponse> {
+    return this.request("POST", "/api/oplog/watch", request, signal);
   }
 
   // ---- the durable park cursor (on-demand phase 1) ----
