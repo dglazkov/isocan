@@ -173,6 +173,19 @@ describe("the stage's chrome rests with the bar above it", () => {
     expect(css).toMatch(/\.stage-rail \{[^}]*transition: opacity/);
   });
 
+  it("takes the rail out of the flow, so fading it leaves nothing behind", () => {
+    /**
+     * Fading it was not enough, and the report said why: a faded rail still
+     * held its 26px of the row and the preview pane still drew its left
+     * border against it, so what bowed out was the word EDIT and what stayed
+     * was a strip down the side of every slide. Out of flow, not collapsed
+     * to zero width — taking 26px away from a live iframe relays its
+     * document out, which is the reflow this surface exists to avoid.
+     */
+    expect(css).toContain(".fullscreen .stage-rail { position: absolute;");
+    expect(css).toMatch(/\.fullscreen \.stage-preview-pane \{ border-left: 0/);
+  });
+
   it("does not lean on `:has()` for the typing exception", () => {
     /**
      * `:has(.stage-editor:focus-within)` parses, and `Element.matches()`
