@@ -206,6 +206,9 @@ import {
   type LensBy,
   type LensLog,
   type LensSource,
+  PAPERS,
+  PAPER_PROP,
+  PAPER_SIZE,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
 import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
@@ -4325,6 +4328,7 @@ program
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
   .option("--style <step>", "body | heading | title | display — how far out it stays readable")
   .option("--face <face>", "sans | mono | serif")
+  .option("--paper <colour>", "yellow | pink | blue | green | grey — a post-it rather than a caption")
   .action(
     run(
       async (
@@ -4337,6 +4341,7 @@ program
           file?: string;
           style?: string;
           face?: string;
+          paper?: string;
         },
         cmd: Command,
       ) => {
@@ -4383,7 +4388,17 @@ program
         // they wrap in; `--size` still overrides the box outright.
         const style = pickOne("style", opts.style, TEXT_STYLES, "body");
         const face = pickOne("face", opts.face, TEXT_FACES, "sans");
-        const { width, height } = sizeFor(opts.size, textBox(body, style));
+        /**
+         * Paper starts SQUARE rather than measured, and that is the point of
+         * it: a post-it will not hold an essay, so it holds an idea. A note
+         * measured to its words is a text node with a background — the shape
+         * would be doing no work. `--size` still overrides, like everywhere.
+         */
+        const paper = opts.paper === undefined ? null : pickOne("paper", opts.paper, PAPERS, "yellow");
+        const { width, height } = sizeFor(
+          opts.size,
+          paper === null ? textBox(body, style) : { width: PAPER_SIZE, height: PAPER_SIZE },
+        );
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -4405,6 +4420,7 @@ program
             ...TEXT_PROPERTIES,
             ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
             ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+            ...(paper === null ? {} : { [PAPER_PROP]: paper }),
           },
         });
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;

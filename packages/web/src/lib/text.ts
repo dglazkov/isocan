@@ -1,4 +1,5 @@
-import type { Actor, Placement } from "@isocan/core";
+import type {
+  Paper, Actor, Placement } from "@isocan/core";
 import {
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -12,6 +13,8 @@ import {
   textTitle,
   type TextFace,
   type TextStyle,
+  PAPER_PROP,
+  PAPER_SIZE,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
@@ -35,11 +38,18 @@ export async function addTextNode(
   measured?: { width: number; height: number },
   style: TextStyle = "body",
   face: TextFace = "sans",
+  /** Paper, or null for a plain caption. See `core/textnode.ts`. */
+  paper: Paper | null = null,
 ): Promise<string> {
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
   const itemId = newItemId();
-  const box = measured ?? textBox(body, style);
+  /**
+   * Paper is SQUARE rather than measured, and that is the whole point of it:
+   * a post-it will not hold an essay, so it holds an idea. A note sized to
+   * its words is a text node with a background.
+   */
+  const box = paper !== null ? { width: PAPER_SIZE, height: PAPER_SIZE } : (measured ?? textBox(body, style));
   /**
    * **`sendEchoed`, so the thing you just made appears when you make it.**
    *
@@ -74,6 +84,7 @@ export async function addTextNode(
       ...TEXT_PROPERTIES,
       ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
       ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+      ...(paper === null ? {} : { [PAPER_PROP]: paper }),
     },
   });
   return itemId;

@@ -60,6 +60,23 @@
      from the nearest of any of them, which is the widest gap on the wheel,
      and 5.23:1 on `--card` / 5.05:1 on `--ground`. */
   --slide: #b8339f;
+  /* **Paper** (`core/textnode.ts`). Tints rather than the semantic hues:
+     warn/accent/good/danger mean things, and seven more colours belong to
+     people. Paper is a BACKGROUND, which reads in a different register from a
+     mark, so a desaturated tint has room where a saturated one would be making
+     a claim. One ink for all five, dark, because paper is pale in both themes
+     — a sticky note is a pale object on whatever desk it is lying on. */
+  --paper-ink: #2f2c26;
+  --paper-yellow: #fdf3c3;
+  --paper-yellow-edge: #e8dca0;
+  --paper-pink: #fbdce6;
+  --paper-pink-edge: #e9c0ce;
+  --paper-blue: #d8ebf9;
+  --paper-blue-edge: #b9d5e8;
+  --paper-green: #d9f0dc;
+  --paper-green-edge: #b8dcbd;
+  --paper-grey: #e6e7e3;
+  --paper-grey-edge: #cfd0cb;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -131,6 +148,27 @@
   /* Lifted for the dark ground, like every other hue here: 6.30:1 on `--card`,
      7.22:1 on `--ground`. The light value would sit at 2.69 and disappear. */
   --slide: #e07ccb;
+  /* Paper stays PALE in the dark, because that is what paper is — a bright
+     object on a dark desk, which is exactly how a sticky note reads on a
+     board at night. Dimmed rather than inverted: the same tints a few steps
+     down, so five notes on a dark canvas do not glare.
+
+     The ink is repeated at the SAME value rather than left to inherit the
+     light one, which the token rule requires and is right to: a colour that
+     is deliberately identical in both themes should say so, because the
+     alternative reading is that somebody forgot. It stays dark because it is
+     sitting on paper, not on the canvas. */
+  --paper-ink: #2f2c26;
+  --paper-yellow: #e6dba8;
+  --paper-yellow-edge: #c9bd85;
+  --paper-pink: #e4c3ce;
+  --paper-pink-edge: #c7a3b0;
+  --paper-blue: #c3d6e4;
+  --paper-blue-edge: #a3b8c8;
+  --paper-green: #c2d8c6;
+  --paper-green-edge: #a2bba7;
+  --paper-grey: #cdcec9;
+  --paper-grey-edge: #b0b1ac;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -4239,6 +4277,51 @@ button.mt-card:hover { border-color: var(--accent); }
    second wording of a note brought the same card back for the same reason,
    so it takes the same hairline. */
 .item.textnode .ply { background: transparent; border-color: var(--line-soft); }
+
+/* ---------- paper: the same words, on something you could pick up ----------
+
+   A text node is a caption and takes no card on purpose (above). Paper puts
+   the card back, deliberately: edges, a colour and a shadow are what make a
+   post-it read as an OBJECT rather than as words belonging to the space.
+   `core/textnode.ts` carries the argument, and
+   `docs/research/2026-09-01-post-it-notes.md` the alternatives it beat.
+
+   Tints rather than the semantic hues, and that is not taste: `--warn`,
+   `--accent`, `--good` and `--danger` mean things here, and seven more
+   colours belong to PEOPLE, whose outlines land on items during remote
+   selection. Paper is a BACKGROUND, which reads in a different register
+   from a mark, so a desaturated tint has room where a saturated one would
+   be making a claim. They mean nothing on purpose: the moment yellow means
+   "todo" the canvas has a vocabulary nobody wrote down. */
+.item.textnode.paper {
+  background: var(--paper);
+  border-color: var(--paper-edge);
+  box-shadow: var(--shadow-card);
+}
+.item.textnode.paper .item-content { background: transparent; }
+/* The ply reads as a second sheet under the first, which for paper is
+   exactly right — so it takes the paper's own colour rather than the
+   hairline a chromeless note needs. */
+.item.textnode.paper .ply { background: var(--paper); border-color: var(--paper-edge); }
+/* Words on paper stop borrowing the canvas's ink: a note is its own surface,
+   and light ink on a pale tint is what makes a sticky note unreadable in
+   dark mode. */
+.item.textnode.paper .text-view { color: var(--paper-ink); }
+/* The swatches in the Text composer. Square, because they stand for a square
+   note, and they carry the same tokens the node will — so the choice shows
+   the colour it commits. The first is "no paper" and reads as an empty
+   outline rather than a colour: a caption is still the common case. */
+.text-paper {
+  width: 16px; padding: 0;
+  background: var(--paper); border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+}
+.text-paper-none { background: none; border-style: dashed; border-color: var(--line); }
+.item.textnode.paper-yellow, .text-paper.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
+.item.textnode.paper-pink, .text-paper.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
+.item.textnode.paper-blue, .text-paper.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
+.item.textnode.paper-green, .text-paper.paper-green { --paper: var(--paper-green); --paper-edge: var(--paper-green-edge); }
+.item.textnode.paper-grey, .text-paper.paper-grey { --paper: var(--paper-grey); --paper-edge: var(--paper-grey-edge); }
 /* The mark that stands in for words too small to be words. Quiet on purpose:
    at the zoom where these appear there may be dozens, and their job is to say
    "text lives here" while the canvas is read as a whole — not to compete with

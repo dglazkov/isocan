@@ -1,13 +1,13 @@
 ---
-status: designed
+status: built
 since: 2026-09-01
 see: ui-refresh
-note: a paper facet on the text node, not a new tool and not a comment — the T tool grows a style, everything else comes free
+note: built 1 Sep — `properties.paper` on a text node, a swatch row on the Text tool and `isocan text --paper`; option A as recommended, no new op and no new kind
 ---
 
 # The post-it, and which of three things it is
 
-**1 September 2026.** Research. Nothing built.
+**1 September 2026.** Research, and then built the same day — option A, as recommended below.
 
 The question, as asked: *sometimes I reach for the T text tool and it is all I
 need, and other times I really want a digital post-it. Is a post-it a style

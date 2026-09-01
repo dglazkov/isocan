@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { InkPoint, InkStroke, TextFace, TextStyle } from "@isocan/core";
+import type { InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -52,6 +52,9 @@ export interface PendingText {
    *  so choosing a size shows you the size before it is everyone's. */
   style: TextStyle;
   face: TextFace;
+  /** The paper being typed on, or null/absent for a plain caption — local
+   *  until it commits, like the step and the face. */
+  paper?: Paper | null;
 }
 
 export interface PendingComment {

@@ -173,6 +173,68 @@ export function isTextFace(value: unknown): value is TextFace {
 }
 
 /**
+ * **Paper: the same words, on something you could pick up.**
+ *
+ * A text node is a caption — words that belong to the space around them. A
+ * post-it is an object: edges, a colour, a shadow, and the sense that it
+ * could be peeled off and stuck somewhere else. That difference is real and
+ * it is entirely presentational, which is why this is a property on the node
+ * rather than a new kind of thing with its own tool. `docs/research/
+ * 2026-09-01-post-it-notes.md` is the argument, including why a post-it is
+ * not a comment: a comment is ADDRESSED — author, thread, unread state — and
+ * a sticky note is not a message.
+ *
+ * Absent means no paper, which is every text node made before this existed
+ * and stays exactly right. Strip the property and an ordinary text node is
+ * what is left, the same promise `kind` makes.
+ *
+ * **A closed set, and it means nothing.** The colours are paper, not a
+ * taxonomy: the moment yellow means "todo" the canvas has a vocabulary
+ * nobody wrote down and everybody reads differently. Closed for the reason
+ * the faces are closed — this is a SHARED fact, and a colour resolved from
+ * somebody's local taste renders one collaborator's canvas differently from
+ * another's.
+ */
+export const PAPERS = ["yellow", "pink", "blue", "green", "grey"] as const;
+export type Paper = (typeof PAPERS)[number];
+
+export const PAPER_PROP = "paper";
+
+/** The paper this node is written on, or null for none — a plain text node. */
+export function paperOf(item: Item): Paper | null {
+  const raw = item.properties[PAPER_PROP];
+  return isPaper(raw) ? raw : null;
+}
+
+export function isPaper(value: unknown): value is Paper {
+  return typeof value === "string" && (PAPERS as readonly string[]).includes(value);
+}
+
+/**
+ * The patch that puts a note on paper or takes it off — one place, so the app
+ * and the CLI cannot spell the property two ways.
+ *
+ * Clearing uses `removeProperties`, because `properties` MERGES: an unpaper
+ * that quietly left the value on would leave the note yellow forever. Same
+ * shape, and the same reason, as `slidePatch`.
+ */
+export function paperPatch(
+  paper: Paper | null,
+): { properties: Record<string, string> } | { removeProperties: string[] } {
+  return paper === null ? { removeProperties: [PAPER_PROP] } : { properties: { [PAPER_PROP]: paper } };
+}
+
+/**
+ * **How big a note starts, and why it is a square rather than a line.**
+ *
+ * A physical post-it's constraint is what makes it useful: it will not hold
+ * an essay, so it holds an idea. A note that grows to fit its text is a text
+ * node with a background — the shape is doing no work. So paper starts square
+ * and a drag overrides it, like any other item.
+ */
+export const PAPER_SIZE = 220;
+
+/**
  * **Below this many screen pixels, words stop being words.**
  *
  * Not a rendering nicety: at 10% zoom a body node draws forty shapes of

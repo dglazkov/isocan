@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Actor } from "@isocan/core";
+import type {
+  Paper, Actor } from "@isocan/core";
 import {
   TEXT_FACES,
   TEXT_FACE_STACK,
@@ -12,6 +13,7 @@ import {
   TEXT_WIDTH,
   type TextFace,
   type TextStyle,
+  PAPERS,
 } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice } from "../stores/canvasStore.ts";
@@ -95,6 +97,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // there is no composer, and that render draws nothing.
   const style = pending?.style ?? "body";
   const face = pending?.face ?? "sans";
+  const paper = pending?.paper ?? null;
   const mirror = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState({ width: TEXT_WIDTH, height: TEXT_SIZE * 2 });
   useLayoutEffect(() => {
@@ -146,16 +149,20 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   const width = fit.width;
 
   /** Change the step or face mid-sentence, without losing the sentence. */
-  function restyle(next: { style?: TextStyle; face?: TextFace }) {
+  function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
     const ui = useUiStore.getState();
     const at = ui.pendingText;
     if (!at) return;
     const style2 = next.style ?? at.style;
     const face2 = next.face ?? at.face;
+    // `undefined` is "unchanged" and `null` is "no paper", which are different
+    // answers — so this asks whether the key was given, not whether it is set.
+    const paper2 = "paper" in next ? (next.paper ?? null) : (at.paper ?? null);
     ui.setPendingText({
       ...at,
       style: style2,
       face: face2,
+      paper: paper2,
       body,
       // A NEW node's column follows its step; an existing one keeps its box.
       ...(at.itemId ? {} : { width: TEXT_COLUMN[style2] }),
@@ -190,6 +197,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           measured,
           at.style,
           at.face,
+          at.paper ?? null,
         );
       }
     } catch (err) {
@@ -233,6 +241,21 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           >
             Aa
           </button>
+        ))}
+        <span className="text-style-gap" />
+        {/* Paper. The first swatch is NO paper, which is today's plain text
+            node and stays the default — a caption is still the common case,
+            and a picker whose first option is a colour would quietly make
+            every note a sticky one. The rest mean nothing: they are paper,
+            not a taxonomy (`core/textnode.ts`). */}
+        {([null, ...PAPERS] as const).map((one) => (
+          <button
+            key={one ?? "none"}
+            className={`text-style-btn text-paper${one === null ? " text-paper-none" : ` paper-${one}`}${one === paper ? " on" : ""}`}
+            title={one === null ? "No paper — words on the canvas" : `${one} paper`}
+            aria-label={one === null ? "No paper" : `${one} paper`}
+            onClick={() => restyle({ paper: one })}
+          />
         ))}
       </div>
       {/* The mirror: same type, same wrapping, no ink. `aria-hidden` because
