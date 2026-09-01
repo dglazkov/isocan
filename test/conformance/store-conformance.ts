@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LogEntry, OpEnvelope, Operation, CanvasState } from "@isocan/core";
-import { applyOperation, invertOperation } from "@isocan/core";
+import type { LogEntry, OpEnvelope, Operation, CanvasState, ActorRegistry } from "@isocan/core";
+import { applyOperation, emptyActorRegistry, invertOperation } from "@isocan/core";
 import type { Store } from "@isocan/server";
 
 /**
@@ -222,7 +222,7 @@ export function storeConformance(
     test(
       "the actor registry: snapshot plus tail, and the tail heals the snapshot",
       withStore(async ({ store }) => {
-        expect(await store.loadActors()).toEqual({ registry: { names: {}, colors: {} }, lastSeq: 0 });
+        expect(await store.loadActors()).toEqual({ registry: emptyActorRegistry(), lastSeq: 0 });
         await store.appendActorsLog(claimEntry(1, { id: "usr_ada", name: "Ada" }));
         await store.appendActorsLog(claimEntry(2, { id: "usr_bo", name: "Bo" }));
         // Nothing has written a snapshot, so this is pure replay.
@@ -233,6 +233,38 @@ export function storeConformance(
         // …and it healed itself on the way out, so a second load replays nothing.
         await store.saveActors(replayed.registry, replayed.lastSeq);
         expect((await store.loadActors()).lastSeq).toBe(2);
+      }),
+    );
+
+    test(
+      "keeps every field of the actor registry, including ones added later",
+      withStore(async ({ store }) => {
+        /**
+         * **The guard on a whole class of bug, not on one field.**
+         *
+         * A store that writes `{ names, colors }` silently stops saving
+         * whatever is added next. That has now cost three things: `capability`
+         * dropped by `toGrant` on the way out of Firestore, and `marks` —
+         * a chosen emoji that applied, was served while the process lived,
+         * and was in no file and no document, so it died at the next restart
+         * and no teammate ever saw it.
+         *
+         * `Required<ActorRegistry>` is the nudge. Every key must appear here,
+         * so ADDING A FIELD TO THE REGISTRY BREAKS THIS FILE until somebody
+         * puts it in the fixture — and once it is in the fixture, a backing
+         * that forgets to persist it fails the round trip below. The compiler
+         * asks the question and the assertion answers it, on both backings.
+         */
+        const full: Required<ActorRegistry> = {
+          names: { usr_ada: { name: "Ada", at: "2026-01-01T00:00:00.000Z" } },
+          colors: { usr_ada: "#0f8a80" },
+          marks: { usr_ada: "⚓" },
+        };
+        await store.saveActors(full, 7);
+        const back = await store.loadActors();
+        expect(back.lastSeq).toBe(7);
+        // Field by field would repeat the very mistake: the whole object.
+        expect(back.registry).toEqual(full);
       }),
     );
 

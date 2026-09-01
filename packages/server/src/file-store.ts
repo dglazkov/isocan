@@ -13,6 +13,7 @@ import {
   extensionFor,
   OpValidationError,
   parseCommandFile,
+  emptyActorRegistry,
   sortCanvases,
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
@@ -256,17 +257,25 @@ export class FileStore implements Store {
   }
 
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
-    const snapshot = await readJson<{
-      lastSeq: number;
-      names?: ActorRegistry["names"];
-      colors?: ActorRegistry["colors"];
-    }>(p.actorsFile(this.home));
+    const snapshot = await readJson<Partial<ActorRegistry> & { lastSeq?: number }>(
+      p.actorsFile(this.home),
+    );
     // `colors` is absent in files written before identity colors existed —
     // an old home simply has nobody who has chosen one yet. `names` is absent
     // in files written before the badge; `migrations.ts` rewrites those at
     // startup, and a file that somehow reached here unmigrated rebuilds its
     // names from the log below rather than refusing to boot.
-    let registry: ActorRegistry = { names: snapshot?.names ?? {}, colors: snapshot?.colors ?? {} };
+    // Read back whole, for the reason `saveActors` writes whole: a reader that
+    // lists the fields it knows is a reader that drops the next one added.
+    // `lastSeq` is the envelope rather than part of the registry, so it is the
+    // one key taken back out — it shares the file, not the type.
+    const { lastSeq: _seq, ...saved } = snapshot ?? {};
+    let registry: ActorRegistry = {
+      ...emptyActorRegistry(),
+      ...saved,
+      names: saved.names ?? {},
+      colors: saved.colors ?? {},
+    };
     let lastSeq = snapshot?.names === undefined ? 0 : (snapshot?.lastSeq ?? 0);
     const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
     let recovered = false;
@@ -293,11 +302,24 @@ export class FileStore implements Store {
     return { registry, lastSeq };
   }
 
+  /**
+   * **The whole registry, not a list of its fields.**
+   *
+   * This named `names` and `colors` and therefore dropped `marks` on every
+   * write: the op applied, `/api/marks` served it while the process lived,
+   * and the file it was saved to never had it. So a chosen emoji survived
+   * until the daemon restarted, reached no other machine, and no teammate
+   * ever saw it — reported exactly that way.
+   *
+   * Spread rather than enumerated, so this is the LAST field it can happen
+   * to. A writer that lists what it saves is a writer that silently stops
+   * saving whatever is added next, and this is the third time that shape has
+   * cost something here (`toGrant` dropped `capability` the same way).
+   * `actors.test.ts` holds the guard that fails when a field stops round
+   * tripping.
+   */
   async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
-    await writeFileAtomic(
-      p.actorsFile(this.home),
-      pretty({ lastSeq, names: registry.names, colors: registry.colors }),
-    );
+    await writeFileAtomic(p.actorsFile(this.home), pretty({ lastSeq, ...registry }));
   }
 
   async appendActorsLog(entry: LogEntry): Promise<void> {
