@@ -72,6 +72,30 @@ import {
 const FREE_NAME_PROBE = " free-name probe";
 
 /**
+ * **How long a claim on THIS badge is presumed to be about to go live.**
+ *
+ * `wornLive` answers "is somebody working as this actor" with presence, which
+ * is the real question and needs no clock. The gap it cannot see is the
+ * moment between claiming a name and reaching a canvas: for a second or two
+ * an agent is nobody's face and is about to be somebody's.
+ *
+ * A minute covers that gap with room. Thirty minutes — what
+ * `CLAIM_STANDS_MS` gives a claim on ANOTHER badge, where liveness is
+ * invisible and the caution is right — was what made `identity --as`
+ * unusable for the reincarnation `--agent-help` documents (#89): a harness
+ * hands each conversation a new session key, so a fresh conversation on the
+ * same machine was told it "is somebody else here" for half an hour, after a
+ * clean `session end`, with the old agent demonstrably gone.
+ */
+const OWN_CLAIM_FRESH_MS = 60_000;
+
+/** Is this claim recent enough to be an agent that has not reached a canvas
+ *  yet, rather than one that is gone? */
+function fresh(boundAt: string, now: string): boolean {
+  return Date.parse(now) - Date.parse(boundAt) < OWN_CLAIM_FRESH_MS;
+}
+
+/**
  * How far a name question may see, gathered in `claimContext`.
  *
  * - `"admitted"` — the rooms this badge has actually been let into (plus, for
@@ -1682,13 +1706,43 @@ export class Engine {
       ...(shelved !== undefined ? { shelved } : {}),
       ...(await this.preferredName(request, own, shelved)),
       scoped,
-      // Only `as` asks a global question, so only `as` pays for one. The
-      // badge ids the desk hands back are dropped here: `reincarnate` judges
-      // whether an actor is visibly SOMEBODY, which is a question about
-      // claims and never about who is holding them (mechanism 5's "the
-      // reducer judges actors, never badges", one layer up). They are on that
-      // answer for kill-a-badge's sake — see `Desk.claimants`.
-      claimants: holders.map((row) => row.claim),
+      /**
+       * Only `as` asks a global question, so only `as` pays for one.
+       *
+       * **Rows on THIS badge stop blocking once they are no longer fresh, and
+       * that is the fix for #89.** The refusal these feed exists for one
+       * reason, stated where it is thrown: letting a second session key an
+       * actor a first is holding "would unseat a working agent". On another
+       * badge we cannot see whether that agent is working, so the
+       * thirty-minute window stands. On THIS badge we can: a working agent is
+       * live on a canvas, and `wornLive` refuses for it with better
+       * information and no clock at all.
+       *
+       * The short window that remains covers the one case `wornLive` cannot:
+       * an agent that has JUST claimed and has not reached a canvas yet, so
+       * it is nobody's face but is seconds from being one. That case is
+       * deliberate and tested ("a just-claimed session is presumed alive").
+       * Half an hour of it was the bug; a minute of it is the guard.
+       *
+       * What the window was doing instead was refusing an agent its own past
+       * self. A harness gives each conversation a new session key, so a fresh
+       * conversation on the same machine, with the same badge, holding a
+       * transcript of nothing, was told it "is somebody else here" — for half
+       * an hour, even after a clean `session end`, even with the old agent
+       * demonstrably gone. That is the reincarnation `--agent-help` documents,
+       * refused by the guard meant to protect it. It also reached CI, where a
+       * pass test failed on exactly this sentence and passed on a re-run.
+       *
+       * The badge ids the desk hands back stay dropped from what the reducer
+       * SEES — `reincarnate` judges whether an actor is visibly somebody,
+       * which is a question about claims and never about who is holding them
+       * (mechanism 5's "the reducer judges actors, never badges"). The badge
+       * thinking happens here, beside `heldElsewhere`, which is the same
+       * shape and the same reason.
+       */
+      claimants: holders
+        .filter((row) => row.badgeId !== request.badgeId || fresh(row.claim.boundAt, now))
+        .map((row) => row.claim),
       ...(request.op.as
         ? await this.vouch(request.badgeId, request.op.as, request.op.sessionKey, holders)
         : {}),

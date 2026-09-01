@@ -198,6 +198,31 @@ describe("a session is a key, not a person", () => {
     expect(steal.stderr).toContain("two faces");
   });
 
+  it("comes back in a NEW conversation minutes later, on the same machine (#89)", async () => {
+    /**
+     * The reincarnation `--agent-help` documents, and the one that was
+     * refused for half an hour.
+     *
+     * A harness hands every conversation its own session key, so an agent
+     * that starts a fresh conversation presents a key it has never used —
+     * on the same machine, with the same badge, holding a transcript of
+     * nothing. The guard against unseating a WORKING agent read that as
+     * theft and answered "is somebody else here" until thirty minutes had
+     * passed. `wornLive` is what protects a working agent, and it says
+     * nothing here, because there is nobody to protect.
+     *
+     * Two minutes rather than twenty-six: the point is that it no longer
+     * takes half an hour, and any wait at all would be the bug in miniature.
+     */
+    const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
+    const kenny = idOf(first.stdout)!;
+    await age("claude-code:s-1", 2 / 60); // the previous conversation, minutes ago
+
+    const back = await asAgent(claude("s-2"), "identity", "--as", kenny);
+    expect(back.code, back.stderr).toBe(0);
+    expect(idOf(back.stdout)).toBe(kenny);
+  });
+
   it("unless --new, which makes you someone else", async () => {
     const first = await asAgent(claude("s-1"), "identity", "--name", "Kenny", "--session");
     const other = await asAgent(claude("s-9"), "identity", "--name", "Kenny", "--session", "--new");
