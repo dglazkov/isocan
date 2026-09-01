@@ -175,6 +175,21 @@ describe("installable straight from git", () => {
     expect(released["//"]).toContain("abc1234");
   });
 
+  it("the release manifest moves the types condition to the compiled declarations", async () => {
+    // An install has no workspace links and tsserver refuses `.ts` sources in
+    // node_modules (measured 31 Aug: TS5097 and TS2307 on every api file), so
+    // the release ships `types/` (release.mjs's emitTypes) and its manifest
+    // must aim the editor there. The default stays the loader-registering
+    // entry: runtime still runs the sources.
+    const { releaseManifest } = await import("../scripts/release.mjs");
+    const pkg = await readJson("package.json");
+    const shipped = releaseManifest(pkg).exports["."];
+    expect(shipped).toEqual({
+      types: "./types/api/src/index.d.ts",
+      default: "./index.mjs",
+    });
+  });
+
   it("releases from CI on every commit, with the history a push needs", async () => {
     // Nobody remembers to release by hand, and an unreleased commit is one
     // nobody can install. Two things the workflow cannot get wrong: full
