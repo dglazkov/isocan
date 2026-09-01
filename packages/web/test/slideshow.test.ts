@@ -169,7 +169,8 @@ describe("the stage's chrome rests with the bar above it", () => {
     // would grow the slide the moment somebody stopped moving the mouse.
     const rule = css.slice(css.indexOf(".fullscreen.resting .stage-pane-bar"));
     expect(rule.slice(0, rule.indexOf("}"))).not.toContain("display: none");
-    expect(css).toMatch(/\.stage-pane-bar,\n\.stage-rail \{ transition: opacity/);
+    expect(css).toMatch(/\.stage-pane-bar \{[^}]*transition: opacity/);
+    expect(css).toMatch(/\.stage-rail \{[^}]*transition: opacity/);
   });
 
   it("does not lean on `:has()` for the typing exception", () => {

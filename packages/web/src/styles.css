@@ -1091,6 +1091,16 @@ img { height: auto; }
    through the transparent parts of somebody else's design and misrepresent it.
    The rest of the app takes its colours from the tokens. */
 .html-view { width: 100%; height: 100%; border: 0; background: #fff; }
+/* **Two frames, one place.** The next slide loads behind the one on screen
+   and is promoted when it is ready, so the white above is never seen through
+   — see `HtmlView`. The stack fills its parent exactly as the lone frame used
+   to, so nothing that embeds a screen has to know this happens. */
+.html-view-stack { position: relative; width: 100%; height: 100%; }
+.html-view-stack > .html-view { position: absolute; inset: 0; }
+/* Loading, not hidden: `visibility: hidden` and `display: none` both let a
+   browser skip the work this is waiting for. It has to be painted to have
+   laid out. */
+.html-view.arriving { opacity: 0; pointer-events: none; }
 /* The mini-browser: a live site projected onto the canvas. */
 .browser-view { width: 100%; height: 100%; border: 0; background: #fff; }
 .browser-reload {
@@ -1474,8 +1484,6 @@ img { height: auto; }
    wake the chrome (flipping slides would blink it on every slide), which is
    right for presenting and wrong for writing: without this, somebody typing
    would watch the toolbar above their own text fade out. */
-.stage-pane-bar,
-.stage-rail { transition: opacity 0.35s ease; }
 .fullscreen.resting .stage-pane-bar,
 .fullscreen.resting .stage-rail { opacity: 0; pointer-events: none; }
 /* The exception — somebody typing must not watch the toolbar above their own
@@ -1894,6 +1902,8 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   flex: none; display: flex; align-items: center; gap: 8px;
   padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
   font-size: 11.5px; color: var(--ink-muted);
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
 }
 .stage-pane-bar .spacer { flex: 1; }
 .stage-pane-name { font-weight: 600; color: var(--ink); }
@@ -1907,6 +1917,8 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 /* A folded pane, still standing at its edge: the label reads down the strip
    and the whole strip is the button. */
 .stage-rail {
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
   flex: none; width: 26px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center;
   justify-content: space-between;
