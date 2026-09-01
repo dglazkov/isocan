@@ -14,6 +14,7 @@ import {
   type TextFace,
   type TextStyle,
   PAPERS,
+  PAPER_SIZE,
 } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice } from "../stores/canvasStore.ts";
@@ -146,7 +147,21 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
 
   // `hand` is drawn larger to hold the ladder's promise — see TEXT_FACE_SCALE.
   const size = Math.round(TEXT_STYLE_SIZE[style] * TEXT_FACE_SCALE[face]);
-  const width = fit.width;
+  /**
+   * **On paper, the composer IS the note.**
+   *
+   * The bar above already previews the step and the face, on the stated
+   * principle that "the composer renders at the size it will commit at, so
+   * the choice is previewed by the thing you are typing into". Paper changes
+   * the size and the colour, so it has to be previewed by the same thing or
+   * the principle only half holds — you would pick yellow and go on typing
+   * into a white rectangle that becomes a square note on commit.
+   *
+   * The square is `PAPER_SIZE`, which is exactly what `addTextNode` commits,
+   * so what is under the caret is the note.
+   */
+  const width = paper ? PAPER_SIZE : fit.width;
+  const height = paper ? PAPER_SIZE : fit.height;
 
   /** Change the step or face mid-sentence, without losing the sentence. */
   function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
@@ -211,9 +226,9 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
 
   return (
     <div
-      className="text-composer"
+      className={`text-composer${paper ? ` on-paper paper-${paper}` : ""}`}
       ref={box}
-      style={{ left: pending.x, top: pending.y, width }}
+      style={{ left: pending.x, top: pending.y, width, ...(paper ? { height } : {}) }}
     >
       {/* The controls sit WITH the words, not on the selection, because size
           and face are things you decide while writing — and because the
@@ -274,7 +289,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
       </div>
       <textarea
         ref={area}
-        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face], height: fit.height }}
+        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face], height }}
         value={body}
         placeholder="Type…"
         spellCheck

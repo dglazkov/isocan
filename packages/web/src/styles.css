@@ -67,6 +67,9 @@
      a claim. One ink for all five, dark, because paper is pale in both themes
      — a sticky note is a pale object on whatever desk it is lying on. */
   --paper-ink: #2f2c26;
+  /* The placeholder's ink — a real colour, because dimming text with opacity
+     hides a contrast decision from every check that could catch it. */
+  --paper-ink-soft: #8a8477;
   --paper-yellow: #fdf3c3;
   --paper-yellow-edge: #e8dca0;
   --paper-pink: #fbdce6;
@@ -159,6 +162,7 @@
      alternative reading is that somebody forgot. It stays dark because it is
      sitting on paper, not on the canvas. */
   --paper-ink: #2f2c26;
+  --paper-ink-soft: #7d7768;
   --paper-yellow: #e6dba8;
   --paper-yellow-edge: #c9bd85;
   --paper-pink: #e4c3ce;
@@ -4312,11 +4316,11 @@ button.mt-card:hover { border-color: var(--accent); }
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
 .item.textnode.paper .text-view { color: var(--paper-ink); }
-.item.textnode.paper-yellow, .text-paper.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
-.item.textnode.paper-pink, .text-paper.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
-.item.textnode.paper-blue, .text-paper.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
-.item.textnode.paper-green, .text-paper.paper-green { --paper: var(--paper-green); --paper-edge: var(--paper-green-edge); }
-.item.textnode.paper-grey, .text-paper.paper-grey { --paper: var(--paper-grey); --paper-edge: var(--paper-grey-edge); }
+.item.textnode.paper-yellow, .text-paper.paper-yellow, .text-composer.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
+.item.textnode.paper-pink, .text-paper.paper-pink, .text-composer.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
+.item.textnode.paper-blue, .text-paper.paper-blue, .text-composer.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
+.item.textnode.paper-green, .text-paper.paper-green, .text-composer.paper-green { --paper: var(--paper-green); --paper-edge: var(--paper-green-edge); }
+.item.textnode.paper-grey, .text-paper.paper-grey, .text-composer.paper-grey { --paper: var(--paper-grey); --paper-edge: var(--paper-grey-edge); }
 /* The mark that stands in for words too small to be words. Quiet on purpose:
    at the zoom where these appear there may be dozens, and their job is to say
    "text lives here" while the canvas is read as a whole — not to compete with
@@ -4402,6 +4406,35 @@ button.mt-card:hover { border-color: var(--accent); }
    the swatch's whole job is to be the colour it stands for. */
 .text-paper.on { background: var(--paper); outline: 2px solid var(--accent); outline-offset: 1px; }
 .text-paper-none.on { background: none; }
+
+/* **The composer wearing paper: what you type into IS the note.**
+
+   The bar already previews the step and the face on the principle that the
+   composer renders at the size it will commit at. Paper changes the size and
+   the colour, so it is previewed by the same thing — pick yellow and the box
+   under the caret becomes the square yellow note that `addTextNode` is about
+   to write, rather than a white rectangle that turns into one on commit.
+
+   The card, the tint and the ink are the item's own (`.item.textnode.paper`),
+   because agreeing by construction beats agreeing by two sets of numbers. */
+.text-composer.on-paper {
+  background: var(--paper);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+/* Ink and a little breathing room INSIDE the square, the way words sit on a
+   real note rather than against its edge. Transparent field: the paper is
+   the surface, so a second one on top of it would be a card on a card. */
+.text-composer.on-paper textarea,
+.text-composer.on-paper .text-composer-mirror {
+  background: none; border: none; box-shadow: none;
+  color: var(--paper-ink);
+  padding: 10px;
+}
+/* A quieter INK rather than a dimmed one: opacity on text is a contrast
+   decision no colour test can see, which is what `dimmed.test.ts` refuses. */
+.text-composer.on-paper textarea::placeholder { color: var(--paper-ink-soft); }
 /* The mirror measures; it never shows. Same padding, wrapping and border box
    as the textarea beside it, or it would measure a different shape than the
    one being typed in. `max-content` up to the column is what gives a short
