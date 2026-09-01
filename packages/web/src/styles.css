@@ -1530,26 +1530,18 @@ img { height: auto; }
    wake the chrome (flipping slides would blink it on every slide), which is
    right for presenting and wrong for writing: without this, somebody typing
    would watch the toolbar above their own text fade out. */
-.fullscreen.resting .stage-pane-bar,
-.fullscreen.resting .stage-rail { opacity: 0; pointer-events: none; }
-/* **In full screen the rail FLOATS**, the way the bar above it does.
+.fullscreen.resting .stage-pane-bar { opacity: 0; pointer-events: none; }
+/* **No rail here at all**, so there is nothing to float and nothing to fade.
 
-   Fading it was not enough and the report says why: a faded rail still held
-   its 26px of the row, and the preview pane still drew its left border
-   against it, so what bowed out was the word EDIT and what stayed was a
-   strip down the side of every slide. Out of flow, the slide is the full
-   width of the glass at all times — and the fade then leaves nothing behind,
-   because there is nothing left to leave.
+   It was made to float first — fading alone left its 26px of the row and the
+   preview pane's border drawing against it, so the word EDIT bowed out and a
+   strip stayed down the side of every slide. Then the better answer: full
+   screen is the PRESENTING surface and the editor is not offered on it
+   (`ArtifactStage`), so the rail is not rendered, and a control that does not
+   exist needs no rules about how it leaves.
 
-   Out of flow rather than collapsed to zero, for the same reason the bar
-   fades instead of unmounting: taking 26px away from a live iframe relays
-   its document out, which is the reflow this whole surface has been trying
-   to stop happening in front of a room. */
-.fullscreen .artifact-stage-body { position: relative; }
-.fullscreen .stage-rail { position: absolute; top: 0; bottom: 0; z-index: 1; }
-.fullscreen .stage-rail.left { left: 0; }
-.fullscreen .stage-rail.right { right: 0; }
-/* The seam belonged to a column that is no longer there. */
+   The seam goes with it: the preview pane's left border drew against a
+   column that is no longer there. */
 .fullscreen .stage-preview-pane { border-left: 0; }
 /* The exception — somebody typing must not watch the toolbar above their own
    text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
