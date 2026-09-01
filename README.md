@@ -623,8 +623,13 @@ earlier run left behind; `isocan restart` does. From a checkout,
 
 ## Development
 
+**New contributor?** [`docs/getting-started.md`](docs/getting-started.md) is
+the first hour: clone to running, the three homes and which one you are
+pointing at, how work reaches production, and the house practices that are not
+obvious from the code.
+
 [`docs/development.md`](docs/development.md) is the whole of it, written for the
-two people who actually work here: an **upgrade** door for a rig built before
+people who actually work here: an **upgrade** door for a rig built before
 the home work landed, and a **first entry** door — `git clone` to a running dev
 setup to a canvas of your own at dev.isocan.io — plus the shared matter, the
 clean-shell discipline and the hazards. What follows is the command list it
