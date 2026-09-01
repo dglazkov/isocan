@@ -241,3 +241,80 @@ describe("the upgrade re-ask", () => {
     expect((await daemon.desk.badge(jordan.badgeId))!.admissions[0]!.capability).toBeUndefined();
   });
 });
+
+/**
+ * **Whose link it is** — the gap #88 left, found by somebody falling into it.
+ *
+ * An account that had not made the canvas pressed "Can view", and the sweep
+ * that re-roots everybody at the surviving grant took THEM with it: into a
+ * canvas they could now only look at, with the control that would undo it
+ * behind the edit they had just given away. Every editor could do that, to
+ * everybody, including themselves — and the way out was to be somebody else.
+ *
+ * So the capability is the owner's alone. Ownership is `project.createdBy`,
+ * which every canvas has already carried since the first one, and it is
+ * checked against the badge's CLAIMS rather than one badge id: the canvas may
+ * have been made from a terminal and the link pressed in a browser, which is
+ * precisely the shape that produced the report.
+ */
+describe("changing what the link admits to", () => {
+  const jordan = { id: "usr_jordan", name: "Jordan" };
+
+  /** An editor who did not make this canvas: in on the link, and able to write. */
+  async function editorWhoDoesNotOwnIt(): Promise<TestBadge> {
+    const badge = await stranger();
+    await badge.speakAs(jordan);
+    // In on the (edit) link, and really an editor — so what refuses below is
+    // ownership and not some other missing permission.
+    expect((await rename(badge, jordan)).status).toBe(200);
+    return badge;
+  }
+
+  it("is refused for an editor who did not make the canvas", async () => {
+    await makeCanvas();
+    const other = await editorWhoDoesNotOwnIt();
+    const answer = await post(other, grantsRoute(CANVAS), { subject: "link", capability: "view" });
+    expect(answer.status).toBe(403);
+    const body = (await answer.json()) as { code?: string; error?: string };
+    expect(body.code).toBe("not-owner");
+    // The refusal names who to ask, because "no" alone leaves somebody stuck.
+    expect(body.error).toContain("Priya");
+  });
+
+  it("leaves the link exactly as it was when it refuses", async () => {
+    // The damage was never the button; it was the sweep behind it.
+    await makeCanvas();
+    const other = await editorWhoDoesNotOwnIt();
+    await post(other, grantsRoute(CANVAS), { subject: "link", capability: "view" });
+    const link = (await grantsOf(owner)).find((g) => g.subject === "link");
+    expect(link?.capability).toBeUndefined(); // absent means edit
+    // And the person who tried it can still work, rather than having demoted
+    // themselves out of the room.
+    expect((await rename(other, jordan)).status).toBe(200);
+  });
+
+  it("is allowed for the person who made it", async () => {
+    await makeCanvas();
+    const answer = await post(owner, grantsRoute(CANVAS), { subject: "link", capability: "view" });
+    expect(answer.status).toBe(200);
+    expect((await grantsOf(owner)).find((g) => g.subject === "link")?.capability).toBe("view");
+  });
+
+  it("still lets any editor invite somebody, or turn the link off", async () => {
+    // Only the CAPABILITY is owner-only. These are additive, or undoable by
+    // whoever did them, and neither can lock the room from the inside.
+    await makeCanvas();
+    const other = await editorWhoDoesNotOwnIt();
+    const invited = await post(other, grantsRoute(CANVAS), { subject: "email:sam@acme.test" });
+    // This daemon has no attester, so an email subject is refused 400 for
+    // that reason — which is the point: whatever stops it, it is not
+    // ownership. A 403 here would mean the rule had spread beyond capability.
+    expect(invited.status).not.toBe(403);
+    const link = (await grantsOf(owner)).find((g) => g.subject === "link")!;
+    const off = await fetch(`${base}${grantsRoute(CANVAS)}/${link.id}`, {
+      method: "DELETE",
+      headers: other.headers,
+    });
+    expect(off.status).toBe(200);
+  });
+});

@@ -61,6 +61,31 @@ export type GrantSubject = "link" | `email:${string}` | `repo:${string}`;
  * must go on meaning exactly that — and the wire, the desk and Firestore all
  * store the field only when it narrows.
  */
+/**
+ * **Who owns a canvas: the actor who made it.**
+ *
+ * Not a new field. `project.createdBy` has been on every canvas since the
+ * first one, so ownership is a reading of what is already recorded rather
+ * than a role somebody has to be granted — which also means every canvas
+ * that predates this has an owner already, with no migration.
+ *
+ * The ACTOR, deliberately, and not the badge. `{root: "created"}` marks the
+ * one badge that made the canvas, and a person is not a badge: they have a
+ * laptop and a phone and a terminal, and the two accounts one human answers
+ * to. Reported exactly there — the canvas was made by one identity, the
+ * browser was wearing another, and the link admitted that one like a
+ * stranger. Owning by actor is what makes "I made this" survive changing
+ * surfaces.
+ */
+export function ownerOf(project: { createdBy: { id: string } }): string {
+  return project.createdBy.id;
+}
+
+/** Is this actor the one who made it? */
+export function ownsCanvas(project: { createdBy: { id: string } }, actorId: string): boolean {
+  return ownerOf(project) === actorId;
+}
+
 export type Capability = "edit" | "view";
 
 /** The one reading of an absent field: a grant from before capabilities — or

@@ -1,11 +1,13 @@
 import {
   attestationSatisfying,
   capabilityOf,
+  claimsActor,
   GRANTED_BY_HOME,
   isLive,
   LINK,
   newId,
   NOT_ADMITTED,
+  ownerOf,
   VIEW_ONLY,
 } from "@isocan/core";
 import type { Capability, Grant } from "@isocan/core";
@@ -105,6 +107,39 @@ export async function admittingGrant(
     // door offers the attesters".
   }
   return null;
+}
+
+/** The refusal when somebody who did not make the canvas tries to change what
+ *  its link admits to. Its own code, so a client can say the useful sentence
+ *  rather than "no". */
+export const NOT_OWNER = "not-owner";
+
+/**
+ * **Only the person who made a canvas may change what its link admits to.**
+ *
+ * Reported the hard way: an account that was not the owner pressed "Can
+ * view", and the sweep that re-roots everybody at the surviving grant took
+ * THEM with it — into a canvas they could now only look at, with the control
+ * that would undo it behind an edit they no longer had. Every editor could do
+ * that, to everybody, including themselves.
+ *
+ * Ownership is `project.createdBy`, which every canvas has already, and it is
+ * checked against the badge's CLAIMS rather than against one badge id. A
+ * person is not a badge — the canvas may have been made from a terminal and
+ * the link pressed in a browser, which is exactly the shape that produced the
+ * report — so what counts is whether this caller may act as the owner, which
+ * is the same question `item` ops ask before they let anybody write.
+ *
+ * Only the CAPABILITY is owner-only. Inviting somebody, and turning the link
+ * off, stay with anyone who can edit: they are additive or reversible by the
+ * person who did them, and neither can lock the room from the inside.
+ */
+export async function ownsThisCanvas(
+  desk: Desk,
+  project: { createdBy: { id: string } },
+  badge: BadgeRecord,
+): Promise<boolean> {
+  return claimsActor(await desk.claimsOf(badge.badgeId), ownerOf(project));
 }
 
 /**

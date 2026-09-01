@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Capability, Grant, SweepReport } from "@isocan/core";
-import { canvasUrl, capabilityOf, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
+import { canvasUrl, capabilityOf, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
 import type { RowState } from "@isocan/core";
 import { useAnswerable } from "../lib/answerable.ts";
 import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
@@ -116,6 +116,12 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const link = grants?.find((g) => g.subject === LINK) ?? null;
   const linkOn = link !== null;
   const linkView = link !== null && capabilityOf(link) === "view";
+  // The canvas is the owner's, and the owner is whoever made it — a fact it
+  // has carried since it was made, so nothing had to be stored for this.
+  const owned = record !== null && ownsCanvas(record, actor.id);
+  const ownerNote = record
+    ? `only ${actorNameIn(names, record.createdBy)}, who made this canvas, can change what the link allows`
+    : "";
   const invited = (grants ?? []).filter((g) => g.subject !== LINK);
 
   async function toggleLink(): Promise<void> {
@@ -314,14 +320,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
 
       {/* What the link admits to — shown only while there is a link to speak
           for. Two words rather than a second switch: "on but read-only" and
-          "off" must not look like neighbouring positions of one control. */}
+          "off" must not look like neighbouring positions of one control.
+
+          **Only the owner may move it**, and the daemon is what enforces that
+          (`ownsThisCanvas`). Disabled rather than hidden for everybody else:
+          what the link currently admits to is worth knowing whoever you are,
+          and a control that vanishes leaves somebody wondering where the
+          setting went. The title says whose it is. */}
       {linkOn && (
         <div className="share-link-mode" role="radiogroup" aria-label="What the link allows">
           <button
             className={`btn${linkView ? "" : " primary"}`}
             role="radio"
             aria-checked={!linkView}
-            disabled={busy}
+            disabled={busy || !owned}
+            title={owned ? "Anyone with the link can change things" : ownerNote}
             onClick={() => void setLinkCapability("edit")}
           >
             Can edit
@@ -330,12 +343,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
             className={`btn${linkView ? " primary" : ""}`}
             role="radio"
             aria-checked={linkView}
-            disabled={busy}
+            disabled={busy || !owned}
+            title={owned ? "Anyone with the link can look, and change nothing" : ownerNote}
             onClick={() => void setLinkCapability("view")}
           >
             Can view
           </button>
         </div>
+      )}
+      {/* Who made it. Worth saying on its own — it is the answer to "why can I
+          not change that", and on a shared canvas it is simply useful to know
+          whose room you are in. */}
+      {record && (
+        <p className="share-owner">
+          Made by {owned ? "you" : actorNameIn(names, record.createdBy)}
+        </p>
       )}
 
       {error && <div className="identity-warning">{error}</div>}
