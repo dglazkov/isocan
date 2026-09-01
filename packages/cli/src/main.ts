@@ -209,6 +209,7 @@ import {
   PAPERS,
   PAPER_PROP,
   PAPER_SIZE,
+  isFaceMark,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
 import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
@@ -733,6 +734,28 @@ function parseIdentityColor(input: string): string | null {
   );
 }
 
+/**
+ * One emoji, or "none" to go back to the initial.
+ *
+ * `isFaceMark` is core's rule and is the same gate the app's picker passes
+ * through: exactly one grapheme, and a pictograph rather than a letter. A
+ * mark is a SHARED fact — it is drawn on every face on every canvas — so a
+ * terminal that accepted "hello" would put a word where a glyph goes on
+ * somebody else's screen.
+ */
+function parseFaceMark(input: string): string | null {
+  const wanted = input.trim();
+  if (wanted === "" || wanted.toLowerCase() === "none" || wanted.toLowerCase() === "default") {
+    return null;
+  }
+  if (!isFaceMark(wanted)) {
+    throw new Error(
+      `not an emoji: ${input} — one emoji (⚓, 🌈), or "none" to go back to your initial`,
+    );
+  }
+  return wanted;
+}
+
 program
   .command("identity")
   .description("Set or show the identity stamped on your changes")
@@ -748,6 +771,10 @@ program
     "--color <color>",
     'the color you wear on every canvas — a palette name (e.g. "teal") or a hex, "none" to go back to the one your id implies',
   )
+  .option(
+    "--mark <emoji>",
+    'one emoji worn instead of your initial, everywhere your face is drawn — "none" to go back to the letter',
+  )
   .action(
     run(
       async (
@@ -758,6 +785,7 @@ program
           new?: boolean;
           as?: string;
           color?: string;
+          mark?: string;
         },
         cmd: Command,
       ) => {
@@ -782,6 +810,36 @@ program
               : `${resolved.actor.name} now wears ${color}`,
           );
           if (!opts.name && !opts.session && !opts.as) return;
+        }
+        /**
+         * **The face mark, on the surface that has no faces.**
+         *
+         * A terminal draws nobody's avatar, so the obvious reading is that
+         * this belongs to the app alone. It does not: the mark is a fact
+         * about the ACTOR, stored in the same registry as the name and the
+         * colour, and it shows on every canvas somebody else is looking at.
+         * An agent that can name and colour itself and cannot mark itself is
+         * the shape this project calls a habit — a fact one client can set
+         * and the other cannot.
+         *
+         * `none` clears it, the same word `--color` takes, so the two read
+         * the same at the prompt.
+         */
+        if (opts.mark !== undefined) {
+          const resolved = await resolveIdentity(client, home);
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
+          const mark = parseFaceMark(opts.mark);
+          await client.sendOp(null, resolved.actor, {
+            type: "actor.setMark",
+            actorId: resolved.actor.id,
+            mark,
+          });
+          console.log(
+            mark === null
+              ? `${resolved.actor.name} wears their initial again`
+              : `${resolved.actor.name} now wears ${mark}`,
+          );
+          if (!opts.name && !opts.session && !opts.as && opts.color === undefined) return;
         }
         // `--session` alone is a claim, not a lookup: "hand me a free name".
         if (opts.name || opts.session || opts.as) {
