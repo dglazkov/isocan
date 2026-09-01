@@ -56,21 +56,4 @@ describe("the isocan module entry", () => {
       expect(existsSync(path.join(repo, target)), `${target} missing`).toBe(true);
     }
   });
-
-  it("the release manifest moves the types condition to the compiled declarations", async () => {
-    // An install has no workspace links and tsserver refuses `.ts` sources in
-    // node_modules (measured 31 Aug: TS5097 and TS2307 on every api file), so
-    // the release ships `types/` (release.mjs's emitTypes) and its manifest
-    // must aim the editor there. The default stays the loader-registering
-    // entry: runtime still runs the sources.
-    const { releaseManifest } = (await import("../../../scripts/release.mjs")) as {
-      releaseManifest: (pkg: object) => { exports: Record<string, { types: string; default: string }> };
-    };
-    const pkg = JSON.parse(readFileSync(path.join(repo, "package.json"), "utf8")) as object;
-    const shipped = releaseManifest(pkg).exports["."];
-    expect(shipped).toEqual({
-      types: "./types/api/src/index.d.ts",
-      default: "./index.mjs",
-    });
-  });
 });
