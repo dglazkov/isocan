@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**8 built · 23 still open** — of which 12 partly
-built, 11 designed, 0 blocked, and
+**8 built · 24 still open** — of which 12 partly
+built, 12 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -33,7 +33,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>11</sub>
+## Designed, not built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -41,6 +41,7 @@ and the done column should not be flattered by either.
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
+| **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. · see multiuser, on-demand |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug — a user-started `isocan rc` parks against the home and vends agent sessions over ACP. journey.md is the acceptance suite, design.md the argument, phases.md the walk; phase 1 stands alone. · see on-demand, launch |
