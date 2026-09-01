@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckStep, itemPath } from "@isocan/core";
+import { canvasPath, deckStep, itemPath, isFramedItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
@@ -125,8 +125,16 @@ export function FullScreen({
         useUiStore.getState().select(next.id);
         revealItem(next.id);
         // The push, not a cut — the motion belongs to the deck flip alone;
-        // ⌘-arrows above are a spatial walk and stay instant.
-        flipTo(navigate, itemPath(canvasId, next.id), forward ? "next" : "prev");
+        // ⌘-arrows above are a spatial walk and stay instant. Except for a
+        // screen or a site: those are iframes, and an iframe photographs
+        // blank, so animating one is a white flash. See `flipTo`.
+        const here = canvas.items[itemId];
+        flipTo(
+          navigate,
+          itemPath(canvasId, next.id),
+          forward ? "next" : "prev",
+          isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+        );
       }
     }
     window.addEventListener("keydown", onKey, true);

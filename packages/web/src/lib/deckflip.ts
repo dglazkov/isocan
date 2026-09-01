@@ -17,21 +17,34 @@ let lastFlip = 0;
  * answers "which way did I go". Shared by `FullScreen` and `Viewer` — the two
  * faces of the same deck (#87, #88) must flip the same way.
  *
- * The outgoing slide leaves as a view-transition snapshot — a painted image —
- * which is the only honest way to animate it: a slide is a live iframe, and
- * keeping a second one mounted to cross-fade would run its scripts twice and
- * reload it in view. `data-flip` on the root tells the CSS which way this
- * transition runs (styles.css, "the deck flip"), and is removed when the
- * transition settles.
+ * The outgoing slide leaves as a view-transition snapshot — a painted image.
+ * `data-flip` on the root tells the CSS which way this transition runs
+ * (styles.css, "the deck flip"), and is removed when the transition settles.
  *
- * It cuts instead when the browser has no view transitions (the flip still
+ * **A frame cannot be photographed, so a frame is never animated.** This is
+ * the `framed` argument, and it is the whole reason it exists. A screen and a
+ * site are sandboxed cross-origin iframes; a view transition captures the
+ * page as an image, and what it captures THERE is a blank rectangle. Pushing
+ * that across the screen is a white flash on every flip — reported from a
+ * presentation, and unfixable by any amount of caching, because the frame was
+ * loaded the whole time. It simply cannot be photographed. So a deck of
+ * screens cuts, and a deck of images and text — which snapshot perfectly
+ * well — still pushes.
+ *
+ * It also cuts when the browser has no view transitions (the flip still
  * works, minus the motion), when the person asked for reduced motion, or
  * within CUT_WITHIN_MS of the previous flip — see that constant.
  */
-export function flipTo(navigate: NavigateFunction, path: string, dir: "next" | "prev"): void {
+export function flipTo(
+  navigate: NavigateFunction,
+  path: string,
+  dir: "next" | "prev",
+  framed = false,
+): void {
   const rapid = Date.now() - lastFlip < CUT_WITHIN_MS;
   lastFlip = Date.now();
   if (
+    framed ||
     rapid ||
     typeof document.startViewTransition !== "function" ||
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
