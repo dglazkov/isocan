@@ -767,3 +767,100 @@ describe("a connection that goes quiet", () => {
     expect(useCanvasStore.getState().canvas!.items["itm_1"]!.x).toBe(seq);
   });
 });
+
+/**
+ * **A beat proves the socket. The tip proves the subscription.** (#85)
+ *
+ * Reported against dev: two agents working, the tab saying "live", the canvas
+ * not moving, and a reload showing everything already there. The store's
+ * silence watchdog could not catch it, and the reason is the shape of the
+ * defence: ANY message counts as proof of life, so a connection still
+ * delivering heartbeats while its op broadcasts had stopped reset the
+ * watchdog on every beat, forever. The one failure the watchdog was blind to
+ * is the one that happened.
+ *
+ * So the beat carries how far the canvas has got. A tab that finds itself
+ * behind hands the problem to the recovery it already has — close, reconnect,
+ * resume from the cursor — which makes this self-healing whatever stopped the
+ * broadcasts, and that still is not known.
+ */
+describe("a heartbeat that says the canvas has moved on", () => {
+  /** Let scheduled work run — a close reconnects on a backoff, not at once. */
+  const tick = async (ms: number) => {
+    vi.advanceTimersByTime(ms);
+    await settle();
+  };
+
+  it("does nothing while the tab is level with it", async () => {
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    for (let i = 0; i < 3; i++) {
+      FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 2 });
+      await settle();
+    }
+    expect(FakeSocket.opened.length).toBe(dialled);
+    expect(useCanvasStore.getState().connection).toBe("live");
+  });
+
+  it("does not reconnect on ONE beat that finds it behind", async () => {
+    // An op broadcast in flight when the beat was produced makes the tab
+    // momentarily and correctly behind. Closing on that would churn the
+    // socket on every busy canvas.
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 5 });
+    await settle();
+    expect(FakeSocket.opened.length).toBe(dialled);
+  });
+
+  it("resyncs when a second beat finds it behind at the same cursor", async () => {
+    // Two beats at an unmoved cursor is a stall, not a message in flight.
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 5 });
+    await settle();
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 5 });
+    await settle();
+    // The close is immediate; the redial is on the usual backoff.
+    await tick(2_000);
+    expect(FakeSocket.opened.length).toBeGreaterThan(dialled);
+  });
+
+  it("forgets it was behind once the tail arrives", async () => {
+    // Behind, then caught up: the next beat starts the count again rather
+    // than firing on a staleness that has already been repaired.
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 3 });
+    await settle();
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 2 });
+    await settle();
+    FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 2 });
+    await settle();
+    expect(FakeSocket.opened.length).toBe(dialled);
+  });
+
+  it("ignores a tip for a canvas this tab is not on", async () => {
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    for (let i = 0; i < 3; i++) {
+      FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_other", tip: 99 });
+      await settle();
+    }
+    expect(FakeSocket.opened.length).toBe(dialled);
+  });
+
+  it("still takes a bare beat as proof of life, from a home too old to send a tip", async () => {
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    for (let i = 0; i < 3; i++) {
+      await tick(20_000);
+      FakeSocket.last.deliver({ type: "heartbeat" });
+      await settle();
+    }
+    expect(FakeSocket.opened.length).toBe(dialled);
+    expect(useCanvasStore.getState().connection).toBe("live");
+  });
+});

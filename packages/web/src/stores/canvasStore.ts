@@ -941,6 +941,10 @@ function openSocket(canvasId: string): void {
   // schedule a reconnect and leave TWO live sockets — every broadcast then
   // processed twice, tripping the seq-gap check and flapping "reconnecting".
   const stale = () => socket !== ws || currentProjectId !== canvasId;
+  /** The cursor this socket was on when a beat last said it was behind, or
+   *  null when it was level. Two beats at the same cursor is a stall; one is
+   *  an op in flight. See the heartbeat branch below. */
+  let behindAt: number | null = null;
 
   ws.onmessage = (event) => {
     if (stale()) return;
@@ -948,6 +952,42 @@ function openSocket(canvasId: string): void {
     // quiet canvases, and a busy one proves itself with its own traffic.
     heard();
     const message = JSON.parse(event.data as string) as ServerMessage;
+    if (message.type === "heartbeat") {
+      /**
+       * **The beat proves the socket; the TIP proves the subscription** (#85).
+       *
+       * Reported: two agents working, the tab saying "live", the canvas not
+       * moving, and a reload showing everything already there. The silence
+       * watchdog could not see it because `heard()` above fires on any
+       * message — so a connection still delivering beats while its op
+       * broadcasts had stopped reset the watchdog on every beat, forever. The
+       * one shape it was blind to is the one that happened.
+       *
+       * So the beat now says how far the canvas has got, and a tab that finds
+       * itself behind hands the problem to the recovery it already has:
+       * `close()`, which reconnects and resumes from the cursor. No new
+       * repair path, and it is indifferent to WHY the broadcasts stopped —
+       * which matters, because that is still unknown.
+       *
+       * **Two beats, not one**, and that is not timidity: an op broadcast in
+       * flight when a beat is produced makes the tab momentarily and
+       * correctly behind, and closing on that would churn the socket on every
+       * busy canvas. Waiting for a second beat where the cursor has not moved
+       * tells "catching up" apart from "stopped" exactly. Costs up to 50s to
+       * heal a freeze that used to need a reload and never healed at all.
+       */
+      if (message.canvasId === canvasId && typeof message.tip === "number") {
+        const here = useCanvasStore.getState().lastSeq;
+        const behind = message.tip > here;
+        if (behind && behindAt === here) {
+          behindAt = null;
+          ws.close();
+          return;
+        }
+        behindAt = behind ? here : null;
+      }
+      return;
+    }
     if (message.type === "snapshot") {
       backoffMs = RECONNECT_MIN_MS;
       failedDials = 0;

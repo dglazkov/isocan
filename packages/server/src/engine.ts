@@ -533,6 +533,27 @@ export class Engine {
     throw notYourActor(actorId);
   }
 
+  /**
+   * **How far this canvas has actually got** — the number a tab compares its
+   * own cursor against to find out it has stopped hearing (#85).
+   *
+   * Read from the runtime rather than counted along the broadcast path, and
+   * that is the whole point: the failure this answers is broadcasts stopping
+   * while the socket stays up, so a tip derived from the thing that stopped
+   * would agree with the tab and confirm the freeze.
+   *
+   * Returns null for a canvas this home cannot produce, because a beat is not
+   * the place to raise: the socket is fine, and a heartbeat that threw would
+   * take down the one mechanism that is supposed to be steady.
+   */
+  async tipSeq(canvasId: string): Promise<number | null> {
+    try {
+      return (await this.runtime(canvasId)).lastSeq;
+    } catch {
+      return null;
+    }
+  }
+
   async getLog(canvasId: string, sinceSeq = 0): Promise<LogEntry[]> {
     const runtime = await this.runtime(canvasId);
     return runtime.entries.filter((entry) => entry.seq > sinceSeq);
