@@ -5,6 +5,9 @@ hour, not the whole map: enough to run isocan, change it, and know which of
 the three places you are pointing at before you type something you cannot
 take back.
 
+*Only want isocan running, not to work on it?* [`start.md`](start.md) is two
+commands and stops there.
+
 Two guides sit behind this one. [Develop isocan](development.md) is the full
 setup, with a section per machine and a long troubleshooting list — go there
 the moment anything here does not work. [Architecture](architecture.md) is

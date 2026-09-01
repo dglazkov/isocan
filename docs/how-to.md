@@ -2,6 +2,9 @@
 
 From nothing to working with an agent on a canvas. Five minutes.
 
+*Just want it running?* [`start.md`](start.md) is the first two steps below
+and nothing else.
+
 ## 1. Give your agent the skill
 
 In the directory you want to work in:
