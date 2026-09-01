@@ -544,6 +544,12 @@ function toGrant(data: DocumentData): Grant {
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
+    // Written only when it narrows (#88), and it MUST come back: this
+    // field-picking rebuild is exactly where a stored `view` silently became
+    // `edit` on the hosted home — the write kept it, every read dropped it,
+    // and the flip "took" in the response while the door went on admitting
+    // editors. Absent stays absent, which reads as edit.
+    ...(data["capability"] === "view" ? { capability: "view" as const } : {}),
   };
 }
 

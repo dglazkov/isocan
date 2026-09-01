@@ -213,6 +213,18 @@ export function deskConformance(
           grantedBy: "bdg_1",
         });
         expect((await desk.grantsFor("prj_b")).map((row) => row.id)).toEqual(["gnt_2"]);
+
+        // The capability ROUND-TRIPS (#88) — asserted here because a backing
+        // that rebuilds rows field-by-field can keep a field on the write and
+        // drop it on the read, and that shape shipped: the hosted home's
+        // "Can view" answered 200 and went on admitting editors, while the
+        // file desk (which stores rows whole) passed every test. A field the
+        // door enforces must survive whichever backing holds it.
+        await desk.putGrant({ ...grant("gnt_3", "prj_c", "bdg_1"), capability: "view" });
+        const onC = await desk.grantsFor("prj_c");
+        expect(onC[0]!.capability).toBe("view");
+        // And a row written without one stays without one: absent means edit.
+        expect(onA[0]!.capability).toBeUndefined();
       }),
     );
 
