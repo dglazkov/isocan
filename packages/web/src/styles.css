@@ -1509,9 +1509,45 @@ img { height: auto; }
 /* The item title takes the slack; the spacer before the presence group is
    what keeps that group pinned right when there is no item at all. */
 .fullscreen-bar .spacer { flex: 1; }
-/* The item itself, and everything left over is its. */
-.fullscreen-stage { flex: 1; min-height: 0; position: relative; overflow: auto; }
+/* The item itself, and everything left over is its. `view-transition-name`
+   is the deck flip's handle on it — see the block below. */
+.fullscreen-stage {
+  flex: 1; min-height: 0; position: relative; overflow: auto;
+  view-transition-name: slide;
+}
 .fullscreen-stage > * { width: 100%; height: 100%; }
+
+/* ---------- the deck flip ---------- */
+/* A flip PUSHES (lib/deckflip.ts): the new slide slides in from the side the
+   key named while the old one — a view-transition snapshot, so its scripts
+   are not run twice — recedes a quarter of the way and lets go. 220ms with a
+   hard ease-out reads as snappy rather than staged; anything longer is fun
+   exactly twice. The name is on `.fullscreen-stage` — one per document,
+   whichever face of the deck is up — so only the slide travels: everything
+   else (the bar, the chrome) is pinned still by the `root` rule below, which
+   is scoped to `data-flip` so no future view transition inherits it.
+
+   No reduced-motion block: deckflip.ts never starts a transition for someone
+   who asked for reduced motion, so there is nothing here to switch off. */
+html[data-flip]::view-transition-old(root),
+html[data-flip]::view-transition-new(root) { animation: none; }
+html[data-flip]::view-transition-old(slide),
+html[data-flip]::view-transition-new(slide) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-flip="next"]::view-transition-old(slide) { animation-name: deck-recede-left; }
+html[data-flip="next"]::view-transition-new(slide) { animation-name: deck-enter-right; }
+html[data-flip="prev"]::view-transition-old(slide) { animation-name: deck-recede-right; }
+html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-left; }
+/* The recede scales to 0.98 on its way out — a faint depth cue that says the
+   old slide fell behind, at no cost in time. */
+@keyframes deck-recede-left { to { transform: translateX(-25%) scale(0.98); opacity: 0; } }
+@keyframes deck-recede-right { to { transform: translateX(25%) scale(0.98); opacity: 0; } }
+/* The enter replaces the default cross-fade entirely: it arrives opaque,
+   because a push that also fades is a slide you watch appear twice. */
+@keyframes deck-enter-right { from { transform: translateX(100%); } }
+@keyframes deck-enter-left { from { transform: translateX(-100%); } }
 
 /* The way IN, beside the size chip under a selected item. A chip, not a
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),

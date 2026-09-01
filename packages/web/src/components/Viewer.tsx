@@ -6,6 +6,7 @@ import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
+import { flipTo } from "../lib/deckflip.ts";
 
 /** The deck keys, exactly `FullScreen`'s (#87): a presenter's clicker sends
  * Page Up/Down, and both axes flip because the deck is linear. */
@@ -74,9 +75,10 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
       e.preventDefault();
       const now = useCanvasStore.getState().canvas;
       if (!now || !itemId) return;
-      const next = deckStep(now, itemId, FLIP_NEXT.has(e.key) ? 1 : -1);
+      const forward = FLIP_NEXT.has(e.key);
+      const next = deckStep(now, itemId, forward ? 1 : -1);
       if (!next) return; // the deck's edge: stay put rather than wrap
-      navigate(itemPath(canvasId, next.id));
+      flipTo(navigate, itemPath(canvasId, next.id), forward ? "next" : "prev");
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

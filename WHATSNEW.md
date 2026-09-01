@@ -21,6 +21,7 @@ second week.
 - Mark items as slides and press Enter: full screen flips through them with arrows, like a deck. Share the first slide's link and that is the presentation.
 - The link can now be view-only: anyone with the address sees the slides and can change nothing. Flip it in the Share dialog ("Can view") or with `isocan share --link view`.
 - Viewers are not asked for a name — they land straight on the presentation.
+- Flipping a slide now pushes it in from the side you pressed, instead of blinking to the next screen. Flip fast and it stays instant.
 
 ## 29 August 2026
 

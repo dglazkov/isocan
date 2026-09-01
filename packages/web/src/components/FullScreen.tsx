@@ -9,6 +9,7 @@ import { KindIcon } from "./KindIcon.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
+import { flipTo } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
@@ -118,11 +119,14 @@ export function FullScreen({
         e.stopPropagation(); // the canvas underneath would nudge its selection
         const canvas = useCanvasStore.getState().canvas;
         if (!canvas) return;
-        const next = deckStep(canvas, itemId, FLIP_NEXT.has(e.key) ? 1 : -1);
+        const forward = FLIP_NEXT.has(e.key);
+        const next = deckStep(canvas, itemId, forward ? 1 : -1);
         if (!next) return; // the deck's edge: stay put rather than wrap
         useUiStore.getState().select(next.id);
         revealItem(next.id);
-        navigate(itemPath(canvasId, next.id));
+        // The push, not a cut — the motion belongs to the deck flip alone;
+        // ⌘-arrows above are a spatial walk and stay instant.
+        flipTo(navigate, itemPath(canvasId, next.id), forward ? "next" : "prev");
       }
     }
     window.addEventListener("keydown", onKey, true);
