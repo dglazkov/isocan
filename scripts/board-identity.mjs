@@ -33,6 +33,16 @@ export const BOARD_SESSION = process.env.ISOCAN_BOARD_SESSION ?? "isocan-board";
 /** What `isocan identity --name` was given, for the message when it is absent. */
 export const BOARD_NAME = "Board";
 
+/**
+ * The same identity as a STATED ARGUMENT — what the ported board hands
+ * `connect()` (iso-api phase 2). One key, spelled once: `boardEnv` below is
+ * this fact expressed as environment for the scripts that still spawn the CLI
+ * (the watcher), and this is it expressed as a parameter for the one that no
+ * longer does. The claim gesture is unchanged either way:
+ * `ISOCAN_HARNESS=board ISOCAN_SESSION_ID=isocan-board isocan identity --name Board --session`.
+ */
+export const BOARD_IDENTITY = { session: BOARD_SESSION, harness: "board" };
+
 const BUILTIN_HARNESS_VARS = [
   "CLAUDE_CODE_SESSION_ID",
   "CODEX_THREAD_ID",

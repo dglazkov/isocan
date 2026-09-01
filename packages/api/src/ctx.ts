@@ -5,7 +5,13 @@ import { DEFAULT_PORT, newCanvasId, normalizeHomeUrl } from "@isocan/core";
 import { paths, readConfigFile, stalenessOf } from "@isocan/server";
 import { ApiError, type Health } from "./routes.ts";
 import { DaemonClient } from "./client.ts";
-import { requireIdentity, resolveIdentity, retireStrandedIdentities } from "./identity.ts";
+import {
+  requireIdentity,
+  resolveExplicitIdentity,
+  resolveIdentity,
+  retireStrandedIdentities,
+  type ExplicitIdentity,
+} from "./identity.ts";
 import { DIRECT_VAR, resolveDeclared } from "./direct.ts";
 import {
   bindableRoot,
@@ -32,7 +38,6 @@ export interface Ctx {
    * sets of variables.
    */
   harness: string | null;
-  json: boolean;
   home: string;
   canvasRef?: string;
   /** The directory's canvas, when the cwd sits under a `.isocan/project.json`
@@ -200,11 +205,23 @@ export async function baseForCwd(
  * actor and canvas from the directory and the environment alone.
  */
 export interface CtxOptions {
-  /** Machine-readable output. A presentation flag, carried through because
-   * `Ctx` is what every command holds — see the phase's findings. */
-  json?: boolean;
   port?: number;
   canvasRef?: string;
+  /**
+   * A stated identity instead of the ambient walk — `connect({ identity })`.
+   * The named session must already be claimed; when it is not, no actor
+   * resolves (and there is no fallback to the machine's person — a script
+   * that says who it is must never quietly run as somebody else).
+   */
+  identity?: ExplicitIdentity;
+  /**
+   * May a person at a TTY be asked for a name — the CLI's first-run flow.
+   * Defaults on; `connect()` turns it off, because an API call must never
+   * wait on a keyboard. (`--json` used to ride through here as well; it is
+   * the CLI's presentation flag and lives on the CLI's own Ctx now — the
+   * phase 1 finding, resolved by the split it predicted.)
+   */
+  interactive?: boolean;
 }
 
 export async function resolveCtx(options: CtxOptions = {}): Promise<Ctx> {
@@ -228,8 +245,15 @@ export async function resolveCtx(options: CtxOptions = {}): Promise<Ctx> {
   // before it decides what to call itself. The getter is what makes that
   // lazy — reads never touch `actor`, so they never demand one.
   await retireStrandedIdentities(process.cwd(), home);
-  const known = await resolveIdentity(client, home);
-  const actor = known?.actor ?? (process.stdin.isTTY ? await requireIdentity(client, home) : null);
+  const known = options.identity
+    ? await resolveExplicitIdentity(client, home, options.identity)
+    : await resolveIdentity(client, home);
+  const interactive = options.interactive ?? true;
+  const actor =
+    known?.actor ??
+    (interactive && !options.identity && process.stdin.isTTY
+      ? await requireIdentity(client, home)
+      : null);
   const harness = known?.harness ?? null;
   // A direct machine has no daemon to ensure, and starting one would be the
   // one thing it has said not to do.
@@ -266,7 +290,6 @@ export async function resolveCtx(options: CtxOptions = {}): Promise<Ctx> {
       }
       return actor;
     },
-    json: options.json ?? false,
     harness,
     home,
     binding,

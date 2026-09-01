@@ -5,11 +5,22 @@ import { paths, readConfigFile, type HomeConfig } from "@isocan/server";
 import type { UpgradeConfig } from "./managed.ts";
 import {
   resolveCtx,
-  type Ctx,
+  type Ctx as ResolvedCtx,
   type DirectConfig,
   type HarnessVarConfig,
   type HomeDefaultConfig,
 } from "@isocan/api";
+
+/**
+ * The API's resolution plus the one thing that is purely presentation:
+ * `--json`. It rode through the seam in phase 1 because every command holds a
+ * `Ctx`; phase 2 split it back out — `connect()` returns typed values, so a
+ * machine-readable flag has no meaning there, and the flag lives with the
+ * flag-parser.
+ */
+export interface Ctx extends ResolvedCtx {
+  json: boolean;
+}
 
 /**
  * **The commander half of context-making** — what stayed behind when the
@@ -38,11 +49,14 @@ export async function makeCtx(cmd: Command): Promise<Ctx> {
     /** `--project`, the hidden alias kept from before phase 13.5's rename. */
     project?: string;
   };
-  return resolveCtx({
-    json: opts.json ?? false,
+  // The resolved context is mutated rather than spread: `actor` is a lazy
+  // getter (reads must not demand a name), and a spread would evaluate it.
+  const ctx = (await resolveCtx({
     ...(opts.port ? { port: Number(opts.port) } : {}),
     ...(canvasRefOf(opts) !== undefined ? { canvasRef: canvasRefOf(opts)! } : {}),
-  });
+  })) as Ctx;
+  ctx.json = opts.json ?? false;
+  return ctx;
 }
 
 interface ConfigFile

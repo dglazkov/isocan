@@ -7,8 +7,8 @@ status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
 **8 built · 25 still open** — of which 12 partly
-built, 13 designed, 0 blocked, and
-**0 with no verdict recorded at all**, which is the number worth
+built, 12 designed, 0 blocked, and
+**1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -33,7 +33,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>13</sub>
+## Designed, not built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -41,7 +41,6 @@ and the done column should not be flattered by either.
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
-| **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. · see multiuser, on-demand |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-08-31 | the door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — four phases, all in packages/web. Scope decided 31 Aug: the door only; the precondition stays copy; no server change, no new op, no new route. · see multiuser |
@@ -50,6 +49,12 @@ and the done column should not be flattered by either.
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
+
+## No verdict recorded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. Phases 1–2 closed 31 Aug: the seam holds, `connect()` exists, and journey 1 played for real — the board is one process on `@isocan/api`. · see multiuser, on-demand |
 
 ## Built <sub>8</sub>
 

@@ -16,7 +16,7 @@ bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phase 1 CLOSED, phase 2 next.** Journeys and design
+**Where we are: phases 1–2 CLOSED, phase 3 next.** Journeys and design
 written 31 Aug 2026; doors settled the same day (typed library with the
 CLI atop it, release-branch distribution, the API stays a client of the
 daemon). The seam exists as of 31 Aug: `@isocan/api` owns the Node
@@ -121,7 +121,10 @@ working CLI at the same package count as before the move.
 
 ## Phase 2 — `connect()`, proven by the board
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** Journey 1 closed on the real board canvas
+(`prj_swWX-C5559`): the ported board is one process, zero spawns, same
+bytes proven both directions (each era's board no-ops over the other's
+panels), all five flags exercised. Suite 2734 green, typecheck clean.
 
 **Work:** The public surface, shaped by what [journey 1](journey.md)
 forces rather than by what `DaemonClient` happens to expose:
@@ -165,7 +168,34 @@ phase's findings. `--dry-run`, `--only`, `--as-me` and `--layout` all
 still work — the flags are the board's contract with its user, not the
 CLI's.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — Measured: creation run 35.2s → 24.7s, no-op 24.8s →
+  24.3s; plumbing isolated (`--only recent`) 1.23s → 0.95s with zero
+  isocan spawns (was ~34 per creation run). The remaining floor is the
+  goals' own `measuredBy` commands, not isocan.
+- **2026-08-31** — `--json` split as phase 1 predicted: the API's `Ctx`
+  lost the flag, the CLI's `Ctx` extends it — mutated, not spread,
+  because `actor` is a lazy getter a spread would evaluate.
+- **2026-08-31** — The stderr voice resolved by halving it: notes stay
+  (a script's stderr is its transcript), the TTY prompt goes —
+  `connect()` refuses eagerly with the remedy, per the settled
+  harness-less door.
+- **2026-08-31** — Typed `unreachable` lives on the handle surface, not
+  in `request()`: `isocan wait` reads any `ApiError` as "somebody said
+  no", so wrapping at the client would knock parked agents off restarts
+  again.
+- **2026-08-31** — Eager refusal met `--dry-run`: a nameless machine
+  must still render, so the board connects lazily — only when a canvas
+  is actually reached for.
+- **2026-08-31** — The port pulled three CLI-local derivations onto the
+  surface — `who --all`, activity rows, the comment builder — and the
+  CLI now consumes them, so a script and the CLI answer with one list
+  and one mention resolution.
+- **2026-08-31** — Five board-test assertions matched CLI-spawn
+  spellings verbatim and were rewritten against the API's; the scripts
+  sweep joined the boundary test (journeys.mjs exempted: its `/api/`
+  strings run inside a driven browser page).
 
 ---
 

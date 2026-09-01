@@ -13,9 +13,17 @@
  *   node scripts/canvas-board.mjs --dry-run          # render, write nothing
  *   node scripts/canvas-board.mjs --notify           # also say so in the Chat
  *
+ * **One process** (iso-api journey 1). The board is the API's first consumer:
+ * it used to spawn the CLI per action — a temp file so `add` could read it
+ * back, a re-list after every create, stderr sliced to guess at failures —
+ * and now it holds one `connect()` and typed results. It is deliberately NOT
+ * dependency-free: in-repo it imports the workspace the way the bin does,
+ * and that is the point of the test. Scripts with no loop and no canvas keep
+ * spawning the CLI, which remains a fine way to do a small job.
+ *
  * **A new VERSION, never a new item.** The note names silting — a fresh item
  * per run, forty panels by Friday — as the most likely way this goes wrong in
- * week two, so `publish()` finds the panel by title and `isocan edit`s it.
+ * week two, so `publish()` finds the panel by title and edits it in place.
  * And it compares the rendered bytes against the version already there: a run
  * that changed nothing stacks nothing, because a version history where every
  * entry is identical is not a history.
@@ -26,11 +34,19 @@
  */
 import { createHash } from "node:crypto";
 import { execSync, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { boardEnv as env } from "./board-identity.mjs";
+import { register } from "tsx/esm/api";
+import { BOARD_IDENTITY } from "./board-identity.mjs";
+
+// The bin's own trick: register tsx so the workspace's TypeScript sources
+// import directly, then load the API. Dynamic, because a static import would
+// resolve before the register call runs.
+register();
+const { connect, ApiError } = await import("@isocan/api");
+const { PERSONA_DIR, parsePersona } = await import("@isocan/core");
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -44,7 +60,6 @@ const ONLY = arg("--only");
 const NOTIFY = has("--notify");
 const LAY_OUT = has("--layout");
 const AS_ME = has("--as-me");
-const cli = path.join(repo, "packages/cli/bin/isocan.js");
 
 /** The canvas these panels live on. The marker in this directory names the
  *  repo's OWN canvas, which is not necessarily the board's — so the board's is
@@ -66,16 +81,23 @@ if (!CANVAS && !DRY) {
   process.exit(2);
 }
 
-const boardEnv = env(AS_ME);
+/**
+ * **The board is its own collaborator, whoever set it off** — a stated
+ * argument now, where it used to be env-var surgery (`boardEnv` cleared every
+ * harness variable before each spawn). `--as-me` opts out, for a person who
+ * wants a manual run to be theirs; ambient resolution is then the CLI's own
+ * rule, so the run is whoever the environment says is here.
+ *
+ * Connected once, and only when a canvas is actually reached for: a dry run
+ * of a panel that reads git alone must keep working on a machine where the
+ * Board actor has never been claimed — `connect()` refuses a nameless
+ * caller at the door, which is right for a run that writes and wrong to pay
+ * for a render that does not.
+ */
+let connected;
+const homeOnce = () => (connected ??= connect(AS_ME ? {} : { identity: BOARD_IDENTITY }));
+const board = DRY || !CANVAS ? null : await (await homeOnce()).canvas(CANVAS);
 
-const isocan = (...args) =>
-  execFileSync("node", [cli, ...(CANVAS ? ["--canvas", CANVAS] : []), ...args], {
-    cwd: repo,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    env: boardEnv,
-  });
-const isocanJSON = (...args) => JSON.parse(isocan("--json", ...args));
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trimEnd();
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -83,7 +105,34 @@ const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
 /* ── what the repo says about itself ─────────────────────────────────────── */
 
-const personas = () => isocanJSON("persona", "ls");
+/**
+ * Every persona in this directory. Not a daemon call — the CLI's `persona ls`
+ * is a directory walk with core's `parsePersona`, and so is this: core stays
+ * the one reader, and the shape matches what `--json persona ls` printed.
+ */
+const personas = () => {
+  const dir = path.join(repo, PERSONA_DIR);
+  let names = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((n) => n.endsWith(".md"))
+    .sort()
+    .flatMap((name) => {
+      let text;
+      try {
+        text = readFileSync(path.join(dir, name), "utf8");
+      } catch {
+        return [];
+      }
+      const persona = parsePersona(text, name);
+      // A README beside the personas is a README, not a broken persona.
+      return persona ? [{ ...persona, file: path.join(PERSONA_DIR, name) }] : [];
+    });
+};
 
 /**
  * Take one goal's number. Copied in spirit from `scripts/persona-run.mjs` — a
@@ -114,7 +163,7 @@ function verdictOf(readings, goals) {
 }
 
 /** `43 8 * * *` → `daily 08:43`. Anything cleverer than this belongs in a
- *  library, and this file has no dependencies on purpose. */
+ *  library, and this file keeps its dependencies to the workspace on purpose. */
 function cronWords(cron) {
   const [min, hour, dom, mon, dow] = String(cron).split(/\s+/);
   const at = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
@@ -470,9 +519,10 @@ function buildPanel(c, board, f) {
  * mistake: the board is where the panels live, the marker is what the
  * repository itself says its canvas is.
  *
- * Everything here is read with `--canvas`, so nothing rebinds this directory.
+ * Opened by ref off the same `connect()`, so nothing rebinds this directory —
+ * one process, two canvases, which is the whole of journey 1's job.
  */
-function repoCanvas() {
+async function repoCanvas() {
   const marker = path.join(repo, ".isocan", "project.json");
   if (!existsSync(marker)) return { none: "this directory has no .isocan/project.json" };
   let id;
@@ -482,25 +532,21 @@ function repoCanvas() {
     return { none: "`.isocan/project.json` is not readable JSON" };
   }
   if (!id) return { none: "`.isocan/project.json` names no canvas" };
-  const ask = (...args) => {
-    try {
-      return JSON.parse(
-        execFileSync("node", [cli, "--json", "--canvas", id, ...args], {
-          cwd: repo,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-          env: boardEnv,
-        }),
-      );
-    } catch (err) {
-      // Unreachable is not empty. Same rule as a broken instrument.
-      throw new Error(String(err.stderr ?? err.message).trim().split("\n")[0].slice(0, 200));
-    }
-  };
   try {
-    return { id, items: ask("ls"), threads: ask("comment", "list"), who: ask("who", "--all"), activity: ask("activity") };
+    const rc = await (await homeOnce()).canvas(id);
+    return {
+      id,
+      items: await rc.items(),
+      threads: await rc.threads(),
+      who: await rc.who(),
+      activity: await rc.activity(),
+    };
   } catch (err) {
-    return { id, unreachable: err.message };
+    // Unreachable is not empty. Same rule as a broken instrument — and it is
+    // a typed refusal now (`ApiError` carries the wire code), not a slice of
+    // a child process's stderr.
+    const code = err instanceof ApiError && err.code ? ` [${err.code}]` : "";
+    return { id, unreachable: `${String(err.message).split("\n")[0].slice(0, 200)}${code}` };
   }
 }
 
@@ -843,8 +889,10 @@ function briefPanel(commits, board, rm, f, now) {
 
 /* ── putting them on the canvas ──────────────────────────────────────────── */
 
-const out = DRY ? mkdtempSync(path.join(tmpdir(), "isocan-board-")) : mkdtempSync(path.join(tmpdir(), "isocan-board-"));
-let existing = DRY ? [] : isocanJSON("ls");
+/** Only a dry run renders to disk — the write path hands the daemon the bytes
+ *  as a value, so the temp directory the CLI's `add <file>` demanded is gone. */
+const out = DRY ? mkdtempSync(path.join(tmpdir(), "isocan-board-")) : null;
+let existing = DRY || !board ? [] : await board.items();
 const changed = [];
 
 /**
@@ -860,12 +908,14 @@ const changed = [];
  * The bytes are compared against the current version's `blobHash`, which is the
  * sha256 of what the canvas is holding. So an unchanged run is genuinely a
  * no-op rather than an identical version stacked on an identical version, and
- * the stack that IS there is the history of the repo's health.
+ * the stack that IS there is the history of the repo's health. The item the
+ * comparison needs comes back from the call that created it — the re-list
+ * after every create is gone.
  */
-function publish(slug, title, html, place) {
-  const file = path.join(out, `${slug}.html`);
-  writeFileSync(file, html);
+async function publish(slug, title, html, place) {
   if (DRY) {
+    const file = path.join(out, `${slug}.html`);
+    writeFileSync(file, html);
     console.log(`would publish "${title}" → ${file}`);
     return;
   }
@@ -874,22 +924,26 @@ function publish(slug, title, html, place) {
   const item = byProp ?? existing.find((i) => i.title === title);
 
   if (!item) {
-    const args = ["add", file, "--title", title, "--prop", `board=${slug}`];
-    if (place?.at) args.push("--at", place.at);
-    if (place?.size) args.push("--size", place.size);
-    for (const [k, v] of Object.entries(place?.props ?? {})) args.push("--prop", `${k}=${v}`);
-    isocan(...args);
+    const made = await board.add({
+      title,
+      content: html,
+      mime: "text/html",
+      filename: `${slug}.html`,
+      ...(place?.at ? { at: place.at } : {}),
+      ...(place?.size ? { size: place.size } : {}),
+      properties: { board: slug, ...(place?.props ?? {}) },
+    });
     changed.push({ title, what: "created" });
-    existing = isocanJSON("ls");
+    existing.push(made);
     return;
   }
   // Adopting a panel from before identity was a property: stamp it once, and
   // never match this one by title again.
-  if (!byProp) isocan("set", item.id, "--prop", `board=${slug}`);
+  if (!byProp) await board.set(item.id, { properties: { board: slug } });
 
   const current = item.versions.find((v) => v.id === item.currentVersionId);
   if (current?.blobHash === hash) return;
-  isocan("edit", item.id, file);
+  await board.edit(item.id, { content: html, mime: "text/html", filename: `${slug}.html` });
   changed.push({ title, what: `v${item.versions.length + 1}` });
 }
 
@@ -939,26 +993,29 @@ const PERSONA_ROWS = Math.max(1, Math.ceil(all.length / PER_ROW));
 const PROSE_TOP = PERSONA_TOP + PERSONA_ROWS * (ROW + GUT);
 
 const LAYOUT = {
-  build: { at: "0,0", size: `${COL}x${TOP}` },
-  "morning-brief": { at: `${COL + GUT},0`, size: `${WIDE - COL - GUT}x${TOP}` },
-  "tree-status": { at: `0,${TOP + 40}`, size: `${WIDE}x300` },
-  recently: { at: `0,${PROSE_TOP}`, size: `${WIDE}x620` },
-  "repo-canvas": { at: `0,${PROSE_TOP + 660}`, size: `${WIDE}x420` },
+  build: { at: { x: 0, y: 0 }, size: { width: COL, height: TOP } },
+  "morning-brief": { at: { x: COL + GUT, y: 0 }, size: { width: WIDE - COL - GUT, height: TOP } },
+  "tree-status": { at: { x: 0, y: TOP + 40 }, size: { width: WIDE, height: 300 } },
+  recently: { at: { x: 0, y: PROSE_TOP }, size: { width: WIDE, height: 620 } },
+  "repo-canvas": { at: { x: 0, y: PROSE_TOP + 660 }, size: { width: WIDE, height: 420 } },
 };
 all.forEach((p, i) => {
   LAYOUT[`persona-${p.name}`] = {
-    at: `${(i % PER_ROW) * (COL + GUT)},${PERSONA_TOP + Math.floor(i / PER_ROW) * (ROW + GUT)}`,
-    size: `${COL}x${ROW}`,
+    at: {
+      x: (i % PER_ROW) * (COL + GUT),
+      y: PERSONA_TOP + Math.floor(i / PER_ROW) * (ROW + GUT),
+    },
+    size: { width: COL, height: ROW },
   };
 });
 
 const STATUS_TITLE = "Tree status";
 
 if (wantPanel("build")) {
-  publish("build", "Build", buildPanel(ci(), readBoard(), f), LAYOUT.build);
+  await publish("build", "Build", buildPanel(ci(), readBoard(), f), LAYOUT.build);
 }
 if (wantPanel("brief")) {
-  publish(
+  await publish(
     "morning-brief",
     "Morning brief",
     briefPanel(recentCommits(14), readBoard(), roadmap(), f, new Date()),
@@ -966,7 +1023,7 @@ if (wantPanel("brief")) {
   );
 }
 if (wantPanel("status")) {
-  publish("tree-status", STATUS_TITLE, statusPanel(readBoard(), f), LAYOUT["tree-status"]);
+  await publish("tree-status", STATUS_TITLE, statusPanel(readBoard(), f), LAYOUT["tree-status"]);
 }
 
 const statusId = DRY ? undefined : (existing.find((i) => i.properties?.board === "tree-status") ?? {}).id;
@@ -974,17 +1031,17 @@ const statusId = DRY ? undefined : (existing.find((i) => i.properties?.board ===
 if (wantPanel("personas")) {
   for (const b of readBoard()) {
     const slug = `persona-${b.persona.name}`;
-    publish(slug, `Persona · ${b.persona.name}`, personaPanel(b.persona, b.readings, b.verdict, latestRun(b.persona)), {
+    await publish(slug, `Persona · ${b.persona.name}`, personaPanel(b.persona, b.readings, b.verdict, latestRun(b.persona)), {
       ...LAYOUT[slug],
       props: statusId ? { parent: statusId } : {},
     });
   }
 }
 if (wantPanel("recent")) {
-  publish("recently", "Recently", recentlyPanel(recentCommits(14), f), LAYOUT.recently);
+  await publish("recently", "Recently", recentlyPanel(recentCommits(14), f), LAYOUT.recently);
 }
 if (wantPanel("repo-canvas")) {
-  publish("repo-canvas", "The repo’s canvas", repoCanvasPanel(repoCanvas(), f), LAYOUT["repo-canvas"]);
+  await publish("repo-canvas", "The repo’s canvas", repoCanvasPanel(await repoCanvas(), f), LAYOUT["repo-canvas"]);
 }
 
 /**
@@ -994,14 +1051,19 @@ if (wantPanel("repo-canvas")) {
  */
 if (LAY_OUT && !DRY) {
   let moved = 0;
-  for (const item of isocanJSON("ls")) {
+  for (const item of await board.items()) {
     const spot = LAYOUT[item.properties?.board];
     if (!spot) continue;
-    const [x, y] = spot.at.split(",");
-    const [w, h] = spot.size.split("x");
-    if (String(item.x) === x && String(item.y) === y && String(item.width) === w && String(item.height) === h) continue;
-    isocan("mv", item.id, x, y);
-    isocan("set", item.id, "--size", spot.size);
+    if (
+      item.x === spot.at.x &&
+      item.y === spot.at.y &&
+      item.width === spot.size.width &&
+      item.height === spot.size.height
+    ) {
+      continue;
+    }
+    await board.move(item.id, spot.at.x, spot.at.y);
+    await board.set(item.id, { size: spot.size });
     moved++;
   }
   console.log(moved ? `moved ${moved} panel${moved === 1 ? "" : "s"} back to the grid` : "layout already tidy");
@@ -1033,8 +1095,7 @@ if (NOTIFY && !DRY) {
   const what = changed.length
     ? `${changed.length} panel${changed.length === 1 ? "" : "s"} updated`
     : "no panel changed";
-  isocan(
-    "notify",
+  await board.notify(
     `\`${f.commit}\` ${f.subject} — ${f.author}. Board: ${line}; ${what}. See #Tree status`,
   );
 }

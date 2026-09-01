@@ -46,6 +46,32 @@ describe("the API/CLI seam", () => {
     ).toEqual([]);
   });
 
+  it("no repo script constructs a request to the daemon", () => {
+    // Phase 2 made a script a consumer of the seam: the board imports
+    // `@isocan/api` and holds typed results. A script that instead hand-rolled
+    // a `fetch` of an `/api/` path would be the drift this file exists to
+    // prevent, wearing a different directory — so the sweep covers scripts/
+    // too. One named exemption: journeys.mjs drives a real BROWSER and its
+    // `/api/` strings are evaluated inside the page, where they are the web
+    // client's own speech, not a Node-side client.
+    const offenders: string[] = [];
+    for (const file of scriptFiles(path.join(repo, "scripts"))) {
+      if (path.basename(file) === "journeys.mjs") continue;
+      const text = readFileSync(file, "utf8");
+      for (const [i, line] of text.split("\n").entries()) {
+        const lead = line.trimStart();
+        if (lead.startsWith("//") || lead.startsWith("*") || lead.startsWith("/*")) continue;
+        if (/(["'`]|\})\/api\//.test(line)) {
+          offenders.push(`${path.relative(repo, file)}:${i + 1}: ${line.trim()}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      `a script speaks to the daemon through @isocan/api (or by spawning the CLI), never by hand:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("the typed route surface does not import the Node-only half", () => {
     // The separability both unsolved twists depend on (design.md's lockstep
     // section): a browser build of the transport kernel is only possible while
@@ -91,6 +117,21 @@ function closureOf(entry: string, root: string): string[] {
   };
   walk(entry);
   return [...seen];
+}
+
+/** Every `.mjs` under a directory — the scripts are plain node. */
+function scriptFiles(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === "node_modules") continue;
+      const full = path.join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (entry.endsWith(".mjs")) found.push(full);
+    }
+  };
+  walk(root);
+  return found;
 }
 
 /** Every `.ts` under a directory, the sweep the house pattern uses. */

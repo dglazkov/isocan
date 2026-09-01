@@ -9,9 +9,14 @@
  *
  * Workspace-internal for now, deliberately: the root manifest advertises no
  * `exports` entry until phase 4 makes the install line true, so nothing
- * outside this repository is invited in yet. The public `connect()` surface
- * is phase 2's.
+ * outside this repository is invited in yet.
+ *
+ * `connect.ts` is the public surface (phase 2): a home handle whose canvases
+ * open by ref, identity as a parameter, content as values, ops returning what
+ * they made. Everything else here is the layer underneath it — shared with
+ * the CLI, which consumes the same resolution and adds argv.
  */
+export * from "./connect.ts";
 export * from "./routes.ts";
 export * from "./client.ts";
 export * from "./ctx.ts";

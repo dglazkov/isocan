@@ -113,10 +113,12 @@ const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => 
  * regenerated, or decided here and nowhere else.*
  */
 describe("the board is derived, and says so", () => {
-  it("reads personas through the CLI, so there is one parser", () => {
+  it("reads personas through core's parser, so there is one parser", () => {
     // Same reason `scripts/persona-run.mjs` does: a second front-matter reader
-    // means one persona says two things depending on who asked.
-    expect(board).toMatch(/--json", "persona", "ls"|--json persona ls/);
+    // means one persona says two things depending on who asked. The ported
+    // board walks the directory itself (iso-api phase 2's honest footnote) —
+    // the one-reader rule survives because core is the one reader.
+    expect(board).toContain("parsePersona");
     expect(board).not.toContain("splitFrontMatter");
   });
 
@@ -148,7 +150,7 @@ describe("a run stacks a version, never a second item", () => {
     // gets a duplicate on the next run. The property survives a rename; the
     // title fallback exists only to adopt panels made before this rule.
     expect(board).toContain("properties?.board === slug");
-    expect(board).toMatch(/--prop", `board=\$\{slug\}`/);
+    expect(board).toContain("properties: { board: slug");
   });
 
   it("writes nothing when the rendered bytes have not changed", () => {
@@ -157,8 +159,8 @@ describe("a run stacks a version, never a second item", () => {
     expect(board).toContain("if (current?.blobHash === hash) return;");
   });
 
-  it("uses `isocan edit` — the verb the note wrongly said was missing", () => {
-    expect(board).toContain(`isocan("edit", item.id, file)`);
+  it("stacks the version through the edit verb — the one the note wrongly said was missing", () => {
+    expect(board).toContain("board.edit(item.id");
   });
 });
 
@@ -332,8 +334,9 @@ describe("the board speaks as the board", () => {
   });
 
   it("publishes under that identity, not the caller's", () => {
-    // Every `isocan` call the board makes, not just some of them.
-    expect(board).toContain("env: boardEnv");
+    // The one connection every canvas act rides — a stated argument now,
+    // where it used to be `env: boardEnv` on every spawn.
+    expect(board).toMatch(/connect\(AS_ME \? \{\} : \{ identity: BOARD_IDENTITY \}\)/);
     expect(board).toContain("board-identity.mjs");
   });
 
@@ -393,8 +396,8 @@ describe("the repo's canvas panel", () => {
     expect(board).toContain("unreachable");
   });
 
-  it("reads it with --canvas, so nothing rebinds this directory", () => {
-    expect(board).toMatch(/"--canvas", id/);
+  it("opens it by ref, so nothing rebinds this directory", () => {
+    expect(board).toContain(".canvas(id)");
   });
 });
 
