@@ -48,6 +48,30 @@ export function slidePatch(
 }
 
 /**
+ * **What a slide gesture on a SELECTION means, and which items it moves.**
+ *
+ * A single item toggles, which is obvious. Ten items where six are already
+ * slides do not, and the wrong answer here loses work: reading "some are on"
+ * as "turn everything off" throws away marks somebody deliberately made.
+ *
+ * So a mixed selection turns them all ON, and only a selection that is
+ * ALREADY all slides turns off. That is the answer a tri-state checkbox
+ * gives, and — more to the point — the one `isocan slides add <items...>`
+ * has given since the day it shipped: mark the unmarked, skip the rest, say
+ * how many. The app was the surface that could not do it at all, its menu
+ * entry `disabled` for any selection over one, which made a rule the CLI
+ * enforced into a habit the app did not know.
+ *
+ * `changing` is only the items that actually move, so the gesture writes
+ * nothing for the six that were already right — fewer ops, and a notice that
+ * can say what really happened.
+ */
+export function slideIntent(items: readonly Item[]): { on: boolean; changing: Item[] } {
+  const on = !(items.length > 0 && items.every(isSlide));
+  return { on, changing: items.filter((item) => isSlide(item) !== on) };
+}
+
+/**
  * **Reading order: rows top to bottom, each row left to right.**
  *
  * The canvas has no z-order and no slide numbers, but it has geometry, and a

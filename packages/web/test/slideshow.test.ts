@@ -101,3 +101,39 @@ describe("bare arrows flip the deck", () => {
     expect(entry!.note!.toLowerCase()).toContain("full screen");
   });
 });
+
+/**
+ * **The menu entry works on a selection**, which is how a deck is actually
+ * made: ten screens in one gesture, not ten gestures. It used to be
+ * `disabled: many`, so the app could not do what `isocan slides add
+ * <items...>` had done since it shipped.
+ */
+describe("marking a selection as slides", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/lib/menuentries.tsx", import.meta.url)),
+    "utf8",
+  );
+  const entry = src.slice(src.indexOf("label: slideLabel(items)"));
+  const body = entry.slice(0, entry.indexOf("{ separator:"));
+
+  it("is not disabled for a multi-selection any more", () => {
+    expect(body).not.toContain("disabled: many");
+  });
+
+  it("asks core which way to go, rather than deciding again here", () => {
+    // The one fold: if the app decided for itself, it could disagree with
+    // `isocan slides add` about what a mixed selection means.
+    expect(body).toContain("slideIntent(items)");
+  });
+
+  it("is one undo for the whole gesture", () => {
+    // Ten ops with no group is ten presses of ⌘Z to take back one act.
+    expect(body).toContain("newGroupId()");
+    expect(body).toContain("group,");
+  });
+
+  it("writes only for the items that actually move", () => {
+    expect(body).toContain("for (const item of changing)");
+    expect(body).toContain("if (changing.length === 0) return;");
+  });
+});

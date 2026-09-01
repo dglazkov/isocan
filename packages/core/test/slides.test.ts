@@ -6,6 +6,7 @@ import {
   deckStep,
   isSlide,
   readingOrder,
+  slideIntent,
   slidePatch,
   slides,
 } from "../src/slides.ts";
@@ -128,5 +129,68 @@ describe("flipping", () => {
 
   it("an empty canvas has nowhere to go", () => {
     expect(deckStep(canvasOf([]), "a", 1)).toBeNull();
+  });
+});
+
+/**
+ * **A gesture on a SELECTION, where the wrong answer loses work.**
+ *
+ * Reported from the app: ten screens selected, "make a slide" refused —
+ * the menu entry was `disabled` for anything over one, so a deck had to be
+ * marked one item at a time. `isocan slides add <items...>` had taken many
+ * since the day it shipped and skipped the ones already marked, so this was
+ * a rule the CLI enforced that the app did not know: a habit, not a rule.
+ *
+ * The half that needs care is MIXED. Reading "some are on" as "turn them all
+ * off" throws away marks somebody deliberately made, so mixed turns ON — the
+ * answer a tri-state checkbox gives, and the one the CLI already gave.
+ */
+describe("marking a whole selection", () => {
+  const on = (id: string) => item(id, { x: 0, y: 0 }, asSlide);
+  const off = (id: string) => item(id, { x: 0, y: 0 });
+
+  it("turns a selection of none-marked ON", () => {
+    const intent = slideIntent([off("a"), off("b")]);
+    expect(intent.on).toBe(true);
+    expect(intent.changing.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("turns a MIXED selection on, and moves only the ones that need it", () => {
+    // The case that decides the design: six already slides, four not.
+    const intent = slideIntent([on("a"), off("b"), on("c"), off("d")]);
+    expect(intent.on).toBe(true);
+    expect(intent.changing.map((i) => i.id)).toEqual(["b", "d"]);
+  });
+
+  it("turns off only when every one of them is already a slide", () => {
+    const intent = slideIntent([on("a"), on("b")]);
+    expect(intent.on).toBe(false);
+    expect(intent.changing.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("moves the single item it is given, in whichever direction it is not", () => {
+    // A selection of one is a plain toggle, both ways — which is the entry
+    // people already had, unchanged.
+    expect(slideIntent([off("a")])).toMatchObject({ on: true });
+    expect(slideIntent([off("a")]).changing.map((i) => i.id)).toEqual(["a"]);
+    expect(slideIntent([on("a")])).toMatchObject({ on: false });
+    expect(slideIntent([on("a")]).changing.map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("has nothing to do with an empty selection, and says so rather than turning on", () => {
+    // `every` on an empty array is true, so a naive rule would read "all are
+    // slides" and answer "turn them all off" — of nothing. The caller checks
+    // `changing` before it writes; this keeps that check from being the only
+    // thing standing between a stray gesture and a pile of no-op ops.
+    expect(slideIntent([]).changing).toEqual([]);
+  });
+
+  it("agrees with the CLI, which skips what is already right", () => {
+    // `slides add` prints "is already a slide" and continues. The app must
+    // reach the same end state from the same selection.
+    const selection = [on("a"), off("b")];
+    const { on: turningOn, changing } = slideIntent(selection);
+    expect(turningOn).toBe(true);
+    expect(changing.every((i) => !isSlide(i))).toBe(true);
   });
 });
