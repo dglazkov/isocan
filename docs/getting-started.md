@@ -179,8 +179,33 @@ densest design documentation in this repository.
 
 ## Working with agents
 
-isocan is built to be worked by people and agents on the same canvas, and the
-CLI ships its own instructions for the latter:
+isocan is built to be worked by people and agents on the same canvas, and
+connecting one is two steps — one of which you have already done by cloning.
+
+**In this checkout**, the skill is already here: `.agents/skills/isocan-collab`
+and a `.claude/` copy of it ship in the repository. So an agent started in this
+directory can see it, and the whole of it is:
+
+```
+use isocan
+```
+
+It reads the skill, makes sure the CLI and the daemon are up, and joins a
+canvas as a named collaborator with a cursor of its own.
+
+**Anywhere else** — a different project, a teammate trying it — the skill has
+to be installed first, which is the version [`how-to.md`](how-to.md) covers:
+
+```sh
+npx skills add dglazkov/isocan
+```
+
+then `use isocan` as above. That command installs one file, the doorway; it
+starts no daemon and creates no canvas. `npx github:dglazkov/isocan#release
+setup` is the same thing done by hand, for a machine with no agent in it.
+
+The CLI ships its own instructions for agents, and they describe the build you
+are actually running rather than a copy that can fall behind:
 
 ```sh
 isocan --agent-help    # the protocol: presence, the lap, parking on `wait`
