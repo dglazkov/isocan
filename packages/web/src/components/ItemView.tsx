@@ -1022,14 +1022,109 @@ export function VersionContent({
     // its storage. The blob response additionally carries `CSP: sandbox` and
     // nosniff.
     const frame = itemFrame(contentBase(), canvasId, blobHash);
-    return (
-      <iframe className="html-view" src={frame.src} sandbox={frame.sandbox} title={filename} />
-    );
+    return <HtmlView src={frame.src} sandbox={frame.sandbox} title={filename} />;
   }
   return (
     <div className="file-view">
       {filename}
       <br />({mimeType})
+    </div>
+  );
+}
+
+/** How many slide documents stay mounted. Enough that flicking back and forth
+ *  through a run of slides never reloads one, small enough that a long deck
+ *  does not keep a hundred live documents in memory. */
+const KEEP_FRAMES = 6;
+/** One frozen empty set, so the initial state is not a new object per render. */
+const EMPTY: ReadonlySet<string> = new Set();
+
+/**
+ * **A screen, held on the glass until the next one is ready to take its
+ * place.**
+ *
+ * Reported from a presentation: flipping between slides flashed WHITE for a
+ * split second, and the fonts "load lazily every time" — the slide painting
+ * once in a fallback face and then re-laying-out when the real one arrived,
+ * which changes the metrics and moves everything.
+ *
+ * Both are one cause. Every slide is its own iframe document, and pointing an
+ * iframe at a new address blanks it: the element's own `background: #fff` is
+ * what shows through the gap — deliberately, see `.html-view`, so somebody's
+ * transparent design is not misrepresented by whatever sits behind it. Then
+ * the fresh document lays out in a fallback face and reflows when the webfont
+ * lands, which is `font-display: swap` doing exactly what it promises, in
+ * full view of the room.
+ *
+ * So do not show the gap. The arriving document loads in a second frame
+ * stacked behind the one already on screen, invisible, and takes its place
+ * only `onLoad` — by which time the stylesheets are parsed and the layout
+ * they describe has happened. The outgoing frame is never blanked because it
+ * is never navigated: it is unmounted whole, once its replacement is ready.
+ *
+ * **Keys are what make that true.** Both frames are children of one parent
+ * and keyed by `src`, so promoting the arriving one lets React reuse that DOM
+ * node — the document it just loaded stays loaded. Setting `src` on a single
+ * element instead would re-navigate it and put the flash straight back.
+ *
+ * It cannot wait for `document.fonts.ready`: these frames are sandboxed to an
+ * opaque origin on purpose (the content-origin boundary above), so nothing
+ * here may look inside one. `load` is the last moment this side can observe.
+ *
+ * **And a slide already seen is not loaded again.** Holding one spare frame
+ * would still re-fetch, re-parse and re-lay-out every slide on every visit,
+ * which is most of what "the fonts load lazily EVERY time" was describing —
+ * somebody flicking back and forth pays the whole cost each way. So the
+ * frames are a small POOL keyed by address: the last few documents stay
+ * mounted and laid out, and returning to one is a class change rather than a
+ * navigation. Bounded, because a hundred-slide deck left open should not hold
+ * a hundred live documents; the oldest is dropped, and the one on screen
+ * never is.
+ */
+function HtmlView({
+  src,
+  sandbox,
+  title,
+}: {
+  src: string;
+  sandbox: string;
+  title: string;
+}) {
+  const [mounted, setMounted] = useState<string[]>([src]);
+  const [loaded, setLoaded] = useState<ReadonlySet<string>>(EMPTY);
+  const [visible, setVisible] = useState(src);
+
+  useEffect(() => {
+    // Keep the one on screen whatever happens, or the flip has nothing to
+    // stand on while the next document arrives.
+    setMounted((was) => {
+      const kept = was.filter((one) => one !== src);
+      const trimmed = kept.length + 1 > KEEP_FRAMES ? kept.slice(-(KEEP_FRAMES - 1)) : kept;
+      const next = [...(trimmed.includes(visible) || visible === src ? trimmed : [visible, ...trimmed].slice(-(KEEP_FRAMES - 1))), src];
+      return was.length === next.length && was.every((one, i) => one === next[i]) ? was : next;
+    });
+  }, [src, visible]);
+
+  // Already here and already painted: show it now. This is the whole point of
+  // the pool — going back a slide should not reload a thing.
+  useEffect(() => {
+    if (loaded.has(src)) setVisible(src);
+  }, [src, loaded]);
+
+  return (
+    <div className="html-view-stack">
+      {mounted.map((one) => (
+        <iframe
+          key={one}
+          className={`html-view${one === visible ? "" : " arriving"}`}
+          src={one}
+          sandbox={sandbox}
+          title={title}
+          onLoad={() => {
+            setLoaded((was) => (was.has(one) ? was : new Set(was).add(one)));
+          }}
+        />
+      ))}
     </div>
   );
 }

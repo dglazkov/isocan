@@ -1091,6 +1091,16 @@ img { height: auto; }
    through the transparent parts of somebody else's design and misrepresent it.
    The rest of the app takes its colours from the tokens. */
 .html-view { width: 100%; height: 100%; border: 0; background: #fff; }
+/* **Two frames, one place.** The next slide loads behind the one on screen
+   and is promoted when it is ready, so the white above is never seen through
+   — see `HtmlView`. The stack fills its parent exactly as the lone frame used
+   to, so nothing that embeds a screen has to know this happens. */
+.html-view-stack { position: relative; width: 100%; height: 100%; }
+.html-view-stack > .html-view { position: absolute; inset: 0; }
+/* Loading, not hidden: `visibility: hidden` and `display: none` both let a
+   browser skip the work this is waiting for. It has to be painted to have
+   laid out. */
+.html-view.arriving { opacity: 0; pointer-events: none; }
 /* The mini-browser: a live site projected onto the canvas. */
 .browser-view { width: 100%; height: 100%; border: 0; background: #fff; }
 .browser-reload {
@@ -1454,6 +1464,38 @@ img { height: auto; }
 .fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
 .fullscreen.resting .fs-bar > * { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }
+
+/* **The STAGE's chrome rests with the bar above it.**
+
+   `.fs-bar` bowed out and the stage's own furniture stayed: the pane bar
+   ("Saved — v6", the walk arrows, "Edit text") and the folded `EDIT` rail
+   down the side. Half the chrome fading is worse than none — it reads as
+   something failing to load rather than as a slideshow getting out of the
+   way — and on a screen being presented, that strip is the only thing on
+   the glass that is not the slide.
+
+   One timer, not a second one: `.resting` is already on the ancestor, so
+   this is the same few still seconds and the same pointer move that ends
+   them. Opacity, like `.fs-bar`, so the layout does not move under the
+   slide — the strip keeps its place and stops competing, rather than the
+   slide growing 26px the moment somebody stops moving the mouse.
+
+   **Unless the caret is in the editor.** A key press deliberately does not
+   wake the chrome (flipping slides would blink it on every slide), which is
+   right for presenting and wrong for writing: without this, somebody typing
+   would watch the toolbar above their own text fade out. */
+.fullscreen.resting .stage-pane-bar,
+.fullscreen.resting .stage-rail { opacity: 0; pointer-events: none; }
+/* The exception — somebody typing must not watch the toolbar above their own
+   text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
+   focus-within)` rule first, and that selector parses, `Element.matches()`
+   agrees it matches, and the style engine still does not apply it: a nasty
+   way to be wrong, because everything reads correct and the pixels never
+   change. Measured, not assumed. FullScreen wakes on a keystroke that is
+   going into a field, which is the same fact expressed where it works. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-pane-bar, .stage-rail { transition: none; }
+}
 /* The stage is the whole window now that nothing above it takes a slice. */
 .fullscreen > .fullscreen-stage { position: absolute; inset: 0; }
 
@@ -1860,6 +1902,8 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   flex: none; display: flex; align-items: center; gap: 8px;
   padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
   font-size: 11.5px; color: var(--ink-muted);
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
 }
 .stage-pane-bar .spacer { flex: 1; }
 .stage-pane-name { font-weight: 600; color: var(--ink); }
@@ -1873,6 +1917,8 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 /* A folded pane, still standing at its edge: the label reads down the strip
    and the whole strip is the button. */
 .stage-rail {
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
   flex: none; width: 26px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center;
   justify-content: space-between;
