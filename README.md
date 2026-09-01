@@ -21,9 +21,11 @@ the daemon runs authoritatively and the web client runs against its replica.
 The CLI and the web app cannot diverge, because they speak the same vocabulary
 to the same engine.
 
-**New here?** [`docs/how-to.md`](docs/how-to.md) is the five-minute version:
-add the skill, tell your agent "use isocan", and work with it on a canvas.
-What follows is the developer's route into the same thing.
+**New here?** [`docs/start.md`](docs/start.md) is two commands and nothing
+else — the shortest path to a canvas with an agent on it. (No, you do not
+need Claude Code; any agent that reads `.agents/skills/` works.)
+[`docs/how-to.md`](docs/how-to.md) is the five-minute version of actually
+using it. What follows is the developer's route into the same thing.
 
 ## Quick start
 
