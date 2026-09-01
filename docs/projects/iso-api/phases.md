@@ -16,7 +16,10 @@ bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phases 1–3 CLOSED, phase 4 next.** Journeys and design
+**Where we are: ALL FOUR PHASES CLOSED (31 Aug 2026).** The API is
+reachable (`npm i github:dglazkov/isocan#release`, walked on a stranger
+machine against the real branch) and discovered (`--agent-help`'s
+Scripting section, walked Scene-6 style). Journeys and design
 written 31 Aug 2026; doors settled the same day (typed library with the
 CLI atop it, release-branch distribution, the API stays a client of the
 daemon). The seam exists as of 31 Aug: `@isocan/api` owns the Node
@@ -251,7 +254,14 @@ this proof — the auto-upgrade project's standing lesson, inherited.
 
 ## Phase 4 — Reachable and discovered
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** Both proofs walked twice — worker against
+a packed release-shaped tree, conductor against the real branch after
+CI regenerated it: `npm i github:dglazkov/isocan#release` in an empty
+directory, admission by a pass minted elsewhere, a ten-line script
+landing `itm_LsEximhBWP` on the Board at dev as the stranger's own
+actor, and tsc catching a deliberate type error against the shipped
+declarations. The Scene-6 walk found the API through `--agent-help`
+alone, one actor for CLI and scripted ops alike.
 
 One phase, two halves of one idea: the API can be gotten, and it can be
 found. The install must work before the guide advertises it, and a single
@@ -305,4 +315,31 @@ already uses.
   actor for its CLI ops and its scripted ops alike. The transcript is the
   record.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — The tree carried the runtime but not the types:
+  tsserver refused `.ts` inside node_modules (TS5097) and bare
+  `@isocan/*` (TS2307) — the predicted turn — so `release.mjs` now
+  compiles `types/` and the release manifest re-aims the `types`
+  condition there.
+- **2026-08-31** — The entry cannot `export * from`: static re-exports
+  resolve while the graph links, before the loaders register — so
+  `index.mjs` re-exports by name after a dynamic import, and
+  `entry.test.ts` holds the list equal to the surface.
+- **2026-08-31** — npm's pack honors `.gitignore`, so `types/` must stay
+  un-ignored or every install silently drops it — the same mechanics
+  that already strip gitignored-but-committed paths from git installs.
+- **2026-08-31** — `rewriteRelativeImportExtensions` leaves declaration
+  output untouched, and `Buffer` sits on `connect()`'s public surface —
+  hence `emitTypes()` rewrites specifiers itself, and `@types/node`
+  moved into root dependencies.
+- **2026-08-31** — Importing `release.mjs` from a workspace tsc sweeps
+  fails typecheck (TS7016); the manifest pin moved to the root test
+  tree, where `packaging.test.ts` already imports it untyped.
+- **2026-08-31** — The accessibility instruments (headless Chrome via
+  `grade.mjs`) can fail to launch in CI, and the board exits 1 on amber
+  by design — one release run failed on the flake and greened on rerun.
+- **2026-08-31** — The real-branch walk raced dev's own redeploy: the
+  stranger's op queued in its replica while the home restarted, and both
+  its daemon and this machine's needed a restart before the op landed
+  and synced. The op was never lost.
