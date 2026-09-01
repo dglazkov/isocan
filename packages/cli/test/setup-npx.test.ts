@@ -39,7 +39,7 @@ beforeEach(async () => {
   // dependencies come from this checkout, the way npx's copy has its own.
   const npxRoot = path.join(cache, "_npx", "605520e755a722a9", "node_modules", "isocan");
   await fs.mkdir(npxRoot, { recursive: true });
-  for (const pkg of ["core", "server", "cli"]) {
+  for (const pkg of ["api", "core", "server", "cli"]) {
     await fs.cp(path.join(repo, "packages", pkg), path.join(npxRoot, "packages", pkg), {
       recursive: true,
     });

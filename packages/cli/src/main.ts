@@ -208,22 +208,17 @@ import {
   type LensSource,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
+import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
 import {
-  type Ctx,
   type HomeRecord,
   type ResolveOptions,
   baseForCwd,
-  canvasRefOf,
   ensureDirBinding,
   homeAddressOf,
-  makeCtx,
-  metaPatch,
-  readConfig,
   readHomeRecord,
   matchRef,
   resolveCanvas,
-  writeConfig,
-} from "./ctx.ts";
+} from "@isocan/api";
 import {
   bindableRoot,
   dirsOf,
@@ -233,9 +228,10 @@ import {
   recordDir,
   writeMarker,
 } from "@isocan/server";
-import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "./direct.ts";
+import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "@isocan/api";
+import { CanvasHandle, activityRows, buildComment } from "@isocan/api";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
-import { ApiError, DaemonClient, type Health } from "./client.ts";
+import { ApiError, DaemonClient, type Health } from "@isocan/api";
 import {
   adoptIdentity,
   readIdentity,
@@ -246,9 +242,9 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity,
-} from "./identity.ts";
+} from "@isocan/api";
 import { agentGuide } from "./agent-guide.ts";
-import { harnessSessions } from "./harness.ts";
+import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
 import {
@@ -258,6 +254,7 @@ import {
   type Install,
   type UpgradePlan,
 } from "./upgrade.ts";
+import { shaOfRoot } from "@isocan/api";
 import {
   adoptGlobal,
   applySwap,
@@ -267,7 +264,6 @@ import {
   flipTo,
   lastRefusal,
   listBuilds,
-  shaOfRoot,
   upgradePolicy,
   type Adoption,
   type Build,
@@ -673,9 +669,8 @@ async function nameCollision(
       ...(canvasRefOf(globals) !== undefined ? { canvasRef: canvasRefOf(globals)! } : {}),
     };
     const canvas = await resolveCanvas(ctx);
-    const sessions = await client.listSessions(canvas.id);
     const wanted = actor.name.toLowerCase();
-    const clash = (await knownNames(ctx, canvas, sessions)).find(
+    const clash = (await new CanvasHandle(ctx, canvas).who()).find(
       (known) => known.id !== actor.id && known.name.toLowerCase() === wanted,
     );
     return clash ? { name: clash.name, id: clash.id, canvas: canvas.title } : null;
@@ -6487,26 +6482,9 @@ async function newComment(
   snapshot: CanvasSnapshotResponse,
   body: string,
 ): Promise<NewComment> {
-  // What the canvas remembers, plus what everyone goes by NOW — otherwise
-  // "@Di" resolves to nobody the moment Dion 2 renames, and the summons that
-  // was meant for her is a comment nobody wakes for.
-  const candidates: MentionCandidate[] = actorsAnswerTo(
-    collectCanvasActors(snapshot.canvas),
-    snapshot.names,
-  );
-  const sessions = await ctx.client.listSessions(canvasId).catch(() => []);
-  for (const s of sessions) {
-    candidates.push(s.actor);
-    if (s.label) candidates.push({ id: s.actor.id, name: s.label });
-  }
-  const mentions = extractMentions(body, candidates);
-  const items = extractItemRefs(body, collectItemRefCandidates(snapshot.canvas));
-  return {
-    id: newCommentId(),
-    body,
-    ...(mentions.length > 0 ? { mentions } : {}),
-    ...(items.length > 0 ? { items } : {}),
-  };
+  // The API's one spelling (`buildComment`), so a mention posted from a
+  // script and from this CLI resolve identically (iso-api phase 2).
+  return buildComment(ctx.client, canvasId, snapshot, body);
 }
 
 comment
@@ -6935,7 +6913,9 @@ program
       const caveat = await rosterCaveat(ctx, p.id);
       if (caveat) console.error(`note: ${caveat}`);
       if (opts.all) {
-        const known = await knownNames(ctx, p, sessions);
+        // The API's derivation, consumed rather than copied — `who --all` and
+        // a script's `canvas.who()` must answer with one list.
+        const known = await new CanvasHandle(ctx, p).who();
         if (ctx.json) return printJson(known);
         return printTable(
           known.map((n) => ({ name: n.name, id: n.id, live: n.live ? "yes" : "—" })),
@@ -7022,15 +7002,9 @@ program
         throw new Error(`nobody on ${p.title} answers to ${who} (isocan who --all)`);
       }
 
-      const rows = actors
-        .flatMap((actor) =>
-          recentActivity(snapshot.canvas, actor.id, limit).map((entry) => ({
-            who: actorNameIn(snapshot.names, actor),
-            ...entry,
-          })),
-        )
-        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
-        .slice(0, limit);
+      // The API's assembly, shared with `canvas.activity()` — the WHO filter
+      // above is the CLI's own affordance, the shaping is one spelling.
+      const rows = activityRows(snapshot, actors, limit);
 
       if (ctx.json) return printJson(rows);
       if (rows.length === 0) return printTable([]);
@@ -7055,41 +7029,10 @@ function describeActivity(activity: PresenceSession["activity"]): string {
   return `working at ${Math.round(activity.x)},${Math.round(activity.y)}`;
 }
 
-/** A name in use on a canvas — from a live session or from its history. Keyed
- * by NAME, not actor: one person can have worked under several, and every one
- * of them still answers to `@Name`. Agents read this to pick a free one. */
-interface KnownName {
-  name: string;
-  /** Who answers to it. */
-  id: string;
-  /** They are on the canvas right now, under this name. */
-  live: boolean;
-}
-
-async function knownNames(
-  ctx: Ctx,
-  record: Canvas,
-  sessions: PresenceSession[],
-): Promise<KnownName[]> {
-  const known = new Map<string, KnownName>();
-  const add = (name: string, id: string, live: boolean) => {
-    const key = name.toLowerCase();
-    const prior = known.get(key);
-    if (!prior) known.set(key, { name, id, live });
-    else if (live) known.set(key, { ...prior, live: true });
-  };
-  const { canvas } = await ctx.client.snapshot(record.id);
-  // The canvas's own author counts: they named the canvas before touching it.
-  for (const actor of [record.createdBy, record.updatedBy]) add(actor.name, actor.id, false);
-  for (const candidate of collectCanvasNames(canvas)) add(candidate.name, candidate.id, false);
-  for (const session of sessions) {
-    add(session.actor.name, session.actor.id, true);
-    if (session.label) add(session.label, session.actor.id, true);
-  }
-  return [...known.values()].sort(
-    (a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name),
-  );
-}
+// The list agents read to pick a free name — `KnownName` and its derivation
+// live in `@isocan/api` now (`CanvasHandle.who()`), consumed above, because a
+// script asking "who has touched this canvas" must get the same answer as
+// `isocan who --all` (iso-api phase 2).
 
 // ---------- waiting on collaborators ----------
 

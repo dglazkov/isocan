@@ -1,8 +1,8 @@
 ---
-status: designed
+status: building
 since: 2026-08-31
 see: multiuser, on-demand
-note: "#78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real."
+note: "#78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. Phases 1–3 closed 31 Aug: the seam holds, `connect()` and `tail()` exist, journeys 1–2 played for real — the board is one process and the watcher resumes where it stopped."
 ---
 
 # The isomorphic API — the journeys

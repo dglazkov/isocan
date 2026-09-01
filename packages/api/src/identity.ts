@@ -5,7 +5,8 @@ import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
 import { elapsedLabel, newActorId } from "@isocan/core";
 import { paths } from "@isocan/server";
-import { ApiError, type DaemonClient } from "./client.ts";
+import { ApiError } from "./routes.ts";
+import type { DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
 
 interface IdentityFile extends Actor {
@@ -319,6 +320,49 @@ export async function resolveIdentity(
   // resolves an identity gets the recovery wired, so no command has to
   // remember to. Registration only — nothing is sent until the home asks.
   if (resolved) client.reclaimWith(() => reclaimIdentity(client, resolved));
+  return resolved;
+}
+
+/** A session named by the caller instead of found in the environment — what
+ * `connect({ identity })` takes. The two fields are `ISOCAN_SESSION_ID` and
+ * `ISOCAN_HARNESS`, spelled as an argument. */
+export interface ExplicitIdentity {
+  /** The stable session key — what `ISOCAN_SESSION_ID` would carry. */
+  session: string;
+  /** What set it, for `whoami` and presence. Defaults to "isocan", exactly
+   * as the environment spelling does. */
+  harness?: string;
+}
+
+/**
+ * **A stated session key, resolved the way the ambient walk resolves one**
+ * (iso-api phase 2). `connect({ identity })` is the environment surgery a
+ * script used to perform — export `ISOCAN_SESSION_ID`, clear every harness
+ * variable — expressed as an argument: one key, looked up in the same
+ * registry, wired for the same reclaim. No fallback to the home identity,
+ * deliberately: a script that names who it is must never quietly run as the
+ * machine's person because the name was not claimed yet. Null says so, and
+ * the caller owns the refusal sentence.
+ */
+export async function resolveExplicitIdentity(
+  client: DaemonClient,
+  home: string,
+  identity: ExplicitIdentity,
+): Promise<ResolvedIdentity | null> {
+  const harness = identity.harness ?? "isocan";
+  const key = `${harness}:${identity.session}`;
+  await client.ensureDaemon();
+  const bindings = await legacyTolerant(client.actorBindings([key]));
+  const bound = bindings?.[0];
+  if (!bound) return null;
+  const resolved: ResolvedIdentity = {
+    actor: bound.actor,
+    source: "session",
+    file: paths.actorsFile(home),
+    harness,
+    key,
+  };
+  client.reclaimWith(() => reclaimIdentity(client, resolved));
   return resolved;
 }
 

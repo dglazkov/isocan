@@ -16,9 +16,11 @@ bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: NOTHING BUILT.** Journeys and design written 31 Aug 2026;
-doors settled the same day (typed library with the CLI atop it,
-release-branch distribution, the API stays a client of the daemon).
+**Where we are: phases 1–3 CLOSED, phase 4 next.** Journeys and design
+written 31 Aug 2026; doors settled the same day (typed library with the
+CLI atop it, release-branch distribution, the API stays a client of the
+daemon). The seam exists as of 31 Aug: `@isocan/api` owns the Node
+client, the CLI consumes it, and both boundary tests hold it.
 
 The order below is dependency order, and it is also risk order: phase 1 is
 pure movement and proves the seam exists where the design claims; phase 2
@@ -57,7 +59,10 @@ deliberately instead of improvising mid-task:
 
 ## Phase 1 — The seam
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** The suite passed untouched (2727 tests; the
+only edits were import paths and the fixture lists in finding 4), both
+boundary tests fail when violated, and a release-shaped install still
+yields a working CLI at the same package count (82 before and after).
 
 **Work:** `packages/api` exists and the CLI consumes it. `client.ts`,
 `identity.ts`, `direct.ts`, and the non-commander half of `ctx.ts` move;
@@ -89,13 +94,37 @@ tests exist and fail when violated (shown by violating each once,
 locally). `npm i -g` from a locally-built release tree still yields a
 working CLI at the same package count as before the move.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — The split fell where the design drew it, with one
+  refinement: `client.ts` split again into `routes.ts` (typed surface)
+  and `client.ts` (daemon lifecycle), so the boundary test guards a file
+  line, not a region of one file.
+- **2026-08-31** — `--json` rides through the seam: `Ctx` carries the
+  CLI's presentation flag because every command holds `Ctx`. Splitting
+  it out is restructuring, not movement — left for phase 2's `connect()`.
+- **2026-08-31** — The moved layer is not silent: staleness warnings,
+  binding notes, and `requireIdentity`'s TTY prompt speak on stderr from
+  inside the API package. Phase 2 must decide what `connect()` does with
+  that voice.
+- **2026-08-31** — Daemon lifecycle needs `shaOfRoot` ("which build am
+  I") from the upgrade machinery; the two path helpers moved into the
+  API rather than dragging `managed.ts` along.
+- **2026-08-31** — `setup-npx.test.ts` and `restart.test.ts` each spell
+  the workspace list by hand and both missed `api`; a hand-spelled list
+  will miss the next package too.
+- **2026-08-31** — `daemonBin()` now locates the CLI bin by a
+  cross-package relative path (`../../cli/bin`), the same reach in
+  checkout and install, but a path that moves if either package does.
 
 ---
 
 ## Phase 2 — `connect()`, proven by the board
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** Journey 1 closed on the real board canvas
+(`prj_swWX-C5559`): the ported board is one process, zero spawns, same
+bytes proven both directions (each era's board no-ops over the other's
+panels), all five flags exercised. Suite 2734 green, typecheck clean.
 
 **Work:** The public surface, shaped by what [journey 1](journey.md)
 forces rather than by what `DaemonClient` happens to expose:
@@ -139,13 +168,44 @@ phase's findings. `--dry-run`, `--only`, `--as-me` and `--layout` all
 still work — the flags are the board's contract with its user, not the
 CLI's.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — Measured: creation run 35.2s → 24.7s, no-op 24.8s →
+  24.3s; plumbing isolated (`--only recent`) 1.23s → 0.95s with zero
+  isocan spawns (was ~34 per creation run). The remaining floor is the
+  goals' own `measuredBy` commands, not isocan.
+- **2026-08-31** — `--json` split as phase 1 predicted: the API's `Ctx`
+  lost the flag, the CLI's `Ctx` extends it — mutated, not spread,
+  because `actor` is a lazy getter a spread would evaluate.
+- **2026-08-31** — The stderr voice resolved by halving it: notes stay
+  (a script's stderr is its transcript), the TTY prompt goes —
+  `connect()` refuses eagerly with the remedy, per the settled
+  harness-less door.
+- **2026-08-31** — Typed `unreachable` lives on the handle surface, not
+  in `request()`: `isocan wait` reads any `ApiError` as "somebody said
+  no", so wrapping at the client would knock parked agents off restarts
+  again.
+- **2026-08-31** — Eager refusal met `--dry-run`: a nameless machine
+  must still render, so the board connects lazily — only when a canvas
+  is actually reached for.
+- **2026-08-31** — The port pulled three CLI-local derivations onto the
+  surface — `who --all`, activity rows, the comment builder — and the
+  CLI now consumes them, so a script and the CLI answer with one list
+  and one mention resolution.
+- **2026-08-31** — Five board-test assertions matched CLI-spawn
+  spellings verbatim and were rewritten against the API's; the scripts
+  sweep joined the boundary test (journeys.mjs exempted: its `/api/`
+  strings run inside a driven browser page).
 
 ---
 
 ## Phase 3 — The log as an iterator, proven by the watcher
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** All three proofs played live twice — by the
+worker and replayed by the conductor: a real reply refreshed panels, an
+`isocan restart` under the running watcher produced no phantom wake, and
+a watcher SIGKILLed at seq N resumed yielding exactly N+1. Six tail
+tests pin the same claims in-suite against a real daemon.
 
 **Work:** `canvas.tail({ since })` — an async iterator over the entry
 stream, cursor with the caller, resuming across disconnects and daemon
@@ -166,7 +226,26 @@ the watcher after entry N, restart it, and the first entry it yields is
 N+1. A wake that is actually a dropped connection reported as one fails
 this proof — the auto-upgrade project's standing lesson, inherited.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — Unreachable splits by surface a second time: the
+  handle refuses eagerly with typed `unreachable`, but `tail` treats it
+  as a pause — a tail is a park, so it retries on an unchanged cursor
+  and restarts the daemon; only an answered refusal throws.
+- **2026-08-31** — An abandoned generator pending in a long-poll keeps
+  polling forever — one un-awaited `next()` drives the loop until an
+  entry arrives. Hence `tail`'s `AbortSignal`, threaded to `watchLog`'s
+  fetch — the phase's one routes.ts change.
+- **2026-08-31** — `tail` carries no self-filter: wait's "your own ops
+  never wake you" is dispatch policy, not log shape, so the watcher
+  states the board's identity and skips `actor.id === me.id` where a log
+  line can say so.
+- **2026-08-31** — `boardEnv` lost its last consumer: the watcher was
+  the last script spawning the CLI as the board, so the env-var surgery
+  is gone and the stated-argument identity is the only spelling left.
+- **2026-08-31** — `docs/ROADMAP.md` drifted when phase 2 closed —
+  journey.md's front matter changed without regenerating the derived
+  file; found as a suite red, regenerated here.
 
 ---
 

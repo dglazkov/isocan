@@ -8,7 +8,7 @@ import type { Grant } from "@isocan/core";
 import { canvasUrl, grantsRoute } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 import { mintTestBadge } from "./badge.ts";
 
 /**

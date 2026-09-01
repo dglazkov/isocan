@@ -1,7 +1,8 @@
-import { promises as fs, realpathSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { paths } from "@isocan/server";
+import { resolved } from "@isocan/api";
 
 /**
  * Upgrading depends on how this copy got here, and the answer is never
@@ -51,16 +52,6 @@ export async function whichInstall(
     return { kind: "global", root };
   }
   return { kind: "local", root };
-}
-
-/** `realpath`, falling back to `resolve` for a path that does not exist yet.
- * Shared with `managed.ts`, which compares the same kind of pair. */
-export function resolved(target: string): string {
-  try {
-    return realpathSync(path.resolve(target));
-  } catch {
-    return path.resolve(target);
-  }
 }
 
 /** What a checkout can be told about itself before touching it. */

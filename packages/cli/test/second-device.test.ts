@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 
 /**
  * **Scene 0's multi-device beat, played against the door.**

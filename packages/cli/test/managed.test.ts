@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { paths } from "@isocan/server";
 import { reservePort } from "../../../test/ports.ts";
+import { shaOfRoot } from "@isocan/api";
 import {
   adoptGlobal,
   currentSha,
@@ -13,7 +14,6 @@ import {
   listBuilds,
   liveBuildShas,
   pruneBuilds,
-  shaOfRoot,
   smokeTest,
 } from "../src/managed.ts";
 import { whichInstall } from "../src/upgrade.ts";

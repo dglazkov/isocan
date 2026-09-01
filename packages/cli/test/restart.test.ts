@@ -69,7 +69,7 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
   // location through /private/var/…, and the daemon reports the latter.
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "isocan-other-copy-")));
   await fs.cp(path.join(repo, "package.json"), path.join(root, "package.json"));
-  for (const pkg of ["core", "server", "cli"]) {
+  for (const pkg of ["api", "core", "server", "cli"]) {
     await fs.cp(path.join(repo, "packages", pkg), path.join(root, "packages", pkg), {
       recursive: true,
     });

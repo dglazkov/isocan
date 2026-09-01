@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { harnessVars } from "./harness.ts";
+import { harnessVars } from "@isocan/api";
 import { readConfigFile } from "@isocan/server";
 
 /**
