@@ -53,6 +53,26 @@ describe("a post-it is a text node wearing paper", () => {
     expect(body).toContain("box-shadow:");
   });
 
+  it("declares the swatch AFTER the button class it borrows", () => {
+    /**
+     * The swatches wear `.text-style-btn` for their size and hit area, and
+     * that class sets `background: transparent; border: none` at the same
+     * specificity. Declared above it, every swatch painted nothing and the
+     * chosen one took `.on`'s accent fill — five invisible squares and a blue
+     * one, reported as "the text tool is broken".
+     *
+     * Order is the whole fix, so order is what this guards. Nothing here
+     * needs to out-specify anything; it needs to come second.
+     */
+    expect(css.indexOf(".text-paper {")).toBeGreaterThan(css.indexOf(".text-style-btn {"));
+  });
+
+  it("keeps a chosen swatch showing its paper rather than the accent", () => {
+    // A swatch's whole job is to be the colour it stands for; filling it with
+    // the accent to say "chosen" hides the one thing it exists to show.
+    expect(css).toContain(".text-paper.on { background: var(--paper); outline:");
+  });
+
   it("offers 'no paper' first, so a caption stays the default", () => {
     // A picker whose first option is a colour quietly makes every note a
     // sticky one.
