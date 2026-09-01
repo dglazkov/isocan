@@ -26,13 +26,27 @@ export type ServerMessage =
    * Silence is therefore the thing that has to become measurable, and this is
    * the only way to measure it from a browser: the WebSocket API exposes no
    * protocol-level ping or pong, so liveness has to be an ordinary message.
-   * It carries nothing — a heartbeat that carried state would be a second way
-   * to learn the canvas, and there is exactly one.
    *
-   * A client too old to know this type ignores it, which is what makes adding
-   * it safe: unknown message types already fall through.
+   * **It carries a tip, and that is not the same as carrying the canvas**
+   * (#85). This originally carried nothing, on the rule that "a heartbeat
+   * that carried state would be a second way to learn the canvas, and there
+   * is exactly one". The rule stands and the tip does not break it: `tip` is
+   * how far the canvas has GOT, never what it says, and a tab that finds
+   * itself behind resyncs down the one path it already had. It learns the
+   * canvas exactly one way; what it learns here is that it has stopped
+   * hearing.
+   *
+   * That distinction is the whole fix. A beat proved the SOCKET and reset the
+   * silence watchdog on every arrival, so a connection still delivering beats
+   * while its op broadcasts had stopped could never be caught — the watchdog
+   * was blind to precisely the shape that happened, and reported: agents
+   * working, tab saying "live", nothing moving, a reload showing everything.
+   *
+   * Both halves are optional so an old client ignores what it does not know
+   * and an old home simply sends a beat without a tip: unknown fields and
+   * unknown message types already fall through.
    */
-  | { type: "heartbeat" }
+  | { type: "heartbeat"; canvasId?: string; tip?: number }
   | {
       type: "snapshot";
       project: Canvas;

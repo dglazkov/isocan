@@ -65,7 +65,39 @@ export function attachWebSockets(
    */
   const alive = new WeakSet<WebSocket>();
   const beatMs = 25_000;
-  const heartbeat = JSON.stringify({ type: "heartbeat" } satisfies ServerMessage);
+  const bareBeat = JSON.stringify({ type: "heartbeat" } satisfies ServerMessage);
+  /**
+   * **The beat says how far the canvas has got** (#85), and where that number
+   * comes from is the fix.
+   *
+   * It is read from the ENGINE, never counted along the broadcast path,
+   * because the failure it exists to catch is broadcasts stopping while the
+   * socket stays up. A tip derived from the thing that stopped would agree
+   * with the frozen tab and confirm the freeze. Asking the engine costs one
+   * cached lookup per room per 25 seconds.
+   */
+  const beat = async (): Promise<void> => {
+    const beaten = new Set<WebSocket>();
+    for (const [canvasId, room] of rooms) {
+      const open = [...room].filter((s) => s.readyState === WebSocket.OPEN);
+      if (open.length === 0) continue;
+      const tip = await engine.tipSeq(canvasId);
+      const payload =
+        tip === null
+          ? bareBeat
+          : JSON.stringify({ type: "heartbeat", canvasId, tip } satisfies ServerMessage);
+      for (const socket of open) {
+        socket.send(payload);
+        beaten.add(socket);
+      }
+    }
+    // A socket that has not joined a room yet still needs proof of life; it
+    // has no canvas to be behind on, so it gets the beat without a tip.
+    for (const socket of wss.clients) {
+      if (beaten.has(socket) || socket.readyState !== WebSocket.OPEN) continue;
+      socket.send(bareBeat);
+    }
+  };
   const beating = setInterval(() => {
     for (const socket of wss.clients) {
       if (!alive.has(socket)) {
@@ -78,8 +110,12 @@ export function attachWebSockets(
       alive.delete(socket);
       if (socket.readyState !== WebSocket.OPEN) continue;
       socket.ping();
-      socket.send(heartbeat);
     }
+    // Beats are async now (the tip is a read), so they are sent after the
+    // reaping rather than inside it. A beat that cannot be produced is
+    // skipped rather than thrown: the socket is fine, and a heartbeat that
+    // raised would take down the one mechanism meant to be steady.
+    void beat().catch(() => {});
   }, beatMs);
   // Never hold the process open for a heartbeat: a daemon whose last tab
   // closed should still exit.

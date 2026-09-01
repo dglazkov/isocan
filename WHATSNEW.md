@@ -19,9 +19,19 @@ second week.
 ## 31 August 2026
 
 - Mark items as slides and press Enter: full screen flips through them with arrows, like a deck. Share the first slide's link and that is the presentation.
+- Select as many screens as you like and make them all slides at once. The ones already in the deck are left alone, and one undo takes the whole thing back.
+- Slides are outlined on the canvas, so you can see which of forty screens are in the deck without opening any of them.
+- Presenting is quieter: after a few still seconds every bar fades away and the slide is the only thing on the screen. Move the mouse and they come back. Typing keeps them up, so writing is never interrupted.
+- Full screen no longer offers the editor. It is for showing work; the workbench is for changing it.
+- Moving between slides fades from one to the next, and a slide you have already seen does not load again — so no white flash between screens, and no fonts arriving late and shifting everything as they land.
 - The link can now be view-only: anyone with the address sees the slides and can change nothing. Flip it in the Share dialog ("Can view") or with `isocan share --link view`.
+- Only the person who made a canvas can change what its link allows. Before, anyone who could edit could make the link view-only — including themselves, leaving nobody able to undo it. Share and `isocan share` now both say whose canvas it is.
 - Viewers are not asked for a name — they land straight on the presentation.
-- Flipping a slide now pushes it in from the side you pressed, instead of blinking to the next screen. Flip fast and it stays instant.
+- Select the words of a comment and press ⌘C and you get the words. It used to copy the item behind them.
+- A reply in a thread can be more than one line now: Enter sends, Shift+Enter starts a new line, the same as the Chat.
+- The emoji picker knows 578 marks instead of 178 — flags, food, travel, animals — and finds a country by its name or its two-letter code.
+- An emoji you pick appears everywhere your face is drawn, straight away, instead of on the next reload.
+- Bringing back an older version of a file now tells you which file on disk it left behind. Saving that file no longer warns that somebody else changed it when it is only a version behind — that warning is kept for when somebody really did.
 
 ## 29 August 2026
 
