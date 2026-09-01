@@ -540,7 +540,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}`}
       data-item-id={item.id}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
@@ -1116,30 +1116,39 @@ function HtmlView({
 }) {
   const [mounted, setMounted] = useState<string[]>([src]);
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(EMPTY);
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set([src]));
   const [visible, setVisible] = useState(src);
-  // A stable value for the effect to depend on: the array is rebuilt on every
-  // render of the parent, so depending on it directly would remount the pool
-  // every time anything above changed.
   const warmKey = warm.join("\u0000");
 
   useEffect(() => {
     const neighbours = warmKey === "" ? [] : warmKey.split("\u0000");
     setMounted((was) => {
       /**
-       * What stays mounted, in the order that decides what gets dropped:
-       * the one on SCREEN first (losing it would blank the flip), then the
-       * one asked for, then the neighbours, then whatever else was here.
-       * Oldest off the end.
+       * **Append-only, and that is load-bearing.** Moving a mounted iframe to
+       * a new index re-inserts the DOM node, which cancels the transition
+       * running on it — measured as both frames sitting at opacity 0 for a
+       * beat mid-flip, which is a hole in the picture exactly where this was
+       * supposed to remove one. So the order never changes; `z-index` decides
+       * what is on top instead.
        */
-      const next = [...new Set([visible, src, ...neighbours, ...was])].slice(0, KEEP_FRAMES);
-      return was.length === next.length && was.every((one, i) => one === next[i]) ? was : next;
+      const want = new Set([visible, src, ...neighbours]);
+      const kept = was.filter((one) => want.has(one) || one === visible);
+      const added = [...want].filter((one) => !kept.includes(one));
+      const next = [...kept, ...added];
+      const trimmed =
+        next.length > KEEP_FRAMES
+          ? next.filter((one, i) => one === visible || one === src || i >= next.length - KEEP_FRAMES)
+          : next;
+      return was.length === trimmed.length && was.every((one, i) => one === trimmed[i])
+        ? was
+        : trimmed;
     });
   }, [src, visible, warmKey]);
 
-  // Already here and already painted: show it now. This is the whole point —
-  // a slide that was warmed does not load, it just becomes visible.
   useEffect(() => {
-    if (loaded.has(src)) setVisible(src);
+    if (!loaded.has(src)) return;
+    setVisible(src);
+    setShown((was) => (was.has(src) ? was : new Set(was).add(src)));
   }, [src, loaded]);
 
   return (
@@ -1147,7 +1156,15 @@ function HtmlView({
       {mounted.map((one) => (
         <iframe
           key={one}
-          className={`html-view${one === visible ? "" : " arriving"}`}
+          /**
+           * `arriving` — invisible — only while a frame has NEVER been shown.
+           * One that has been on screen stays painted underneath at full
+           * opacity, so the incoming slide fades in over a finished picture
+           * rather than over the ground. There is no moment where the two of
+           * them together add up to less than one slide.
+           */
+          className={`html-view${shown.has(one) ? "" : " arriving"}`}
+          style={{ zIndex: one === visible ? 2 : 1 }}
           src={one}
           sandbox={sandbox}
           title={title}
