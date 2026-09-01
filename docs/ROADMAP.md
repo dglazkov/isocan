@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**10 built · 25 still open** — of which 12 partly
-built, 13 designed, 0 blocked, and
+**10 built · 26 still open** — of which 12 partly
+built, 14 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -33,7 +33,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>13</sub>
+## Designed, not built <sub>14</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -47,6 +47,7 @@ and the done column should not be flattered by either.
 | **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug — a user-started `isocan rc` parks against the home and vends agent sessions over ACP. journey.md is the acceptance suite, design.md the argument, phases.md the walk; phase 1 stands alone. · see on-demand, launch |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
+| research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
 | research | [Teleport: moving a canvas to another home](docs/research/2026-09-01-teleport.md) | 2026-09-01 | moving a canvas between homes is a replay of its own log and is buildable; keeping two homes writable is a different product, and the reason is that exactly one place assigns order · see multiuser, on-demand |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
