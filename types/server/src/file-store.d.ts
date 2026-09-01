@@ -61,6 +61,22 @@ export declare class FileStore implements Store {
         registry: ActorRegistry;
         lastSeq: number;
     }>;
+    /**
+     * **The whole registry, not a list of its fields.**
+     *
+     * This named `names` and `colors` and therefore dropped `marks` on every
+     * write: the op applied, `/api/marks` served it while the process lived,
+     * and the file it was saved to never had it. So a chosen emoji survived
+     * until the daemon restarted, reached no other machine, and no teammate
+     * ever saw it — reported exactly that way.
+     *
+     * Spread rather than enumerated, so this is the LAST field it can happen
+     * to. A writer that lists what it saves is a writer that silently stops
+     * saving whatever is added next, and this is the third time that shape has
+     * cost something here (`toGrant` dropped `capability` the same way).
+     * `actors.test.ts` holds the guard that fails when a field stops round
+     * tripping.
+     */
     saveActors(registry: ActorRegistry, lastSeq: number): Promise<void>;
     appendActorsLog(entry: LogEntry): Promise<void>;
     /**

@@ -20,6 +20,7 @@ import {
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
+  emptyActorRegistry,
 } from "@isocan/core";
 import type {
   BlobListing,
@@ -387,9 +388,18 @@ export class CloudStore implements Store {
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
     const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
     const data = snapshot.data();
+    // Read back whole, for the reason `saveActors` writes whole: a reader that
+    // lists the fields it knows drops the next one somebody adds.
+    // `lastSeq` shares the document with the registry but is not part of it,
+    // so it is the one key taken back out of the spread.
+    const { lastSeq: _seq, ...saved } = (data ?? {}) as Partial<ActorRegistry> & {
+      lastSeq?: number;
+    };
     let registry: ActorRegistry = {
-      names: (data?.["names"] as ActorRegistry["names"]) ?? {},
-      colors: (data?.["colors"] as ActorRegistry["colors"]) ?? {},
+      ...emptyActorRegistry(),
+      ...saved,
+      names: (saved.names as ActorRegistry["names"]) ?? {},
+      colors: (saved.colors as ActorRegistry["colors"]) ?? {},
     };
     let lastSeq = (data?.["lastSeq"] as number | undefined) ?? 0;
 
@@ -418,10 +428,20 @@ export class CloudStore implements Store {
     return { registry, lastSeq };
   }
 
+  /**
+   * **The whole registry, not a list of its fields** — the same correction the
+   * file store took, because this had the same bug and it is the one that
+   * reached people.
+   *
+   * Naming `names` and `colors` dropped `marks` on every write: a chosen
+   * emoji applied, was served while the instance lived, and was never in the
+   * document. So it did not survive a restart and no teammate ever saw it.
+   * This is the third time a field-by-field rebuild has quietly stopped
+   * saving something here — `toGrant` dropped `capability` the same way, on
+   * this same backing.
+   */
   async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
-    await this.db.doc(ACTORS_SNAPSHOT).set(
-      jsonSafe({ lastSeq, names: registry.names, colors: registry.colors }),
-    );
+    await this.db.doc(ACTORS_SNAPSHOT).set(jsonSafe({ lastSeq, ...registry }));
   }
 
   async appendActorsLog(entry: LogEntry): Promise<void> {
