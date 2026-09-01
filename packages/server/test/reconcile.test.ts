@@ -181,3 +181,56 @@ describe("do the bytes agree with the ops", () => {
     expect(report.pushed, "and unreachable is never pushed").toEqual([]);
   });
 });
+
+/**
+ * **And now nobody has to think to ask.**
+ *
+ * `reconcileBlobs` could always find bytes that had fallen behind. What it
+ * could not do is ask on its own: it ran when a person typed `isocan blobs`,
+ * which means it ran only after somebody had already been shown a broken
+ * screen. That is a repair, not resilience.
+ *
+ * It happened again the night before a talk — two slides, on two canvases,
+ * written in the three minutes before the home restarted for a deploy. The
+ * bytes were on the laptop the whole time; nothing was lost. It simply needed
+ * somebody to think to ask.
+ */
+describe("the replica checks its own bytes on a clock", () => {
+  it("sends a blob the home never got, without anybody asking", async () => {
+    await untilReplicated();
+    // The divergence a skipped push leaves: bytes in the replica's store that
+    // the home was never told about.
+    const { blobHash } = await replica.store.putBlob(CANVAS, bytes("<h1>lost slide</h1>"), {
+      mimeType: "text/html",
+      filename: "07-lost.html",
+    });
+    const homeHas = async () =>
+      (await home.store.listBlobs(CANVAS)).some((b) => b.hash === blobHash);
+    expect(await homeHas(), "the home must start without these bytes").toBe(false);
+
+    // A second replica over the SAME home directory, with the keeper on a
+    // millisecond clock — the daemon under test is the one that boots and
+    // finds bytes behind, which is exactly the shape that produced the report.
+    await replica.close();
+    const keeper = await startDaemon({
+      port: 0,
+      home: repDir,
+      birthHome: baseOf(home),
+      homePollMs: 50,
+      blobCheckIntervalMs: 50,
+      blobCheckFirstMs: 10,
+    });
+    try {
+      let landed = false;
+      for (let tries = 0; tries < 200 && !landed; tries++) {
+        landed = await homeHas();
+        if (!landed) await new Promise((r) => setTimeout(r, 25));
+      }
+      expect(landed, "the keeper never sent the blob the home was missing").toBe(true);
+    } finally {
+      await keeper.close();
+      // The suite's afterEach closes `replica`; it is already down.
+      replica = keeper;
+    }
+  });
+});

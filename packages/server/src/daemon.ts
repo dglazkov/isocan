@@ -16,6 +16,7 @@ import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
 import { CONTENT_CSP, contentPorts, registerContentRoutes } from "./content.ts";
@@ -122,6 +123,15 @@ export interface DaemonOptions {
    * run it at millisecond scale against a real daemon.
    */
   gcIntervalMs?: number;
+  /**
+   * **How often a replica checks its bytes reached the home**, and the same
+   * kind of field as `gcIntervalMs` for the same reason: a test proving the
+   * timer fires cannot wait ten minutes. Zero switches it off.
+   */
+  blobCheckIntervalMs?: number;
+  /** When the FIRST byte check runs. The one that matters most — it looks at
+   *  what fell behind while this daemon was not running. */
+  blobCheckFirstMs?: number;
   /**
    * **When the first sweep runs**, in milliseconds after start. Defaults to
    * `firstSweepDelay` of the interval — a minute — and is here as its own
@@ -520,6 +530,29 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.gcFirstSweepMs !== undefined ? { firstSweepMs: options.gcFirstSweepMs } : {}),
   });
 
+  /**
+   * **The bytes, checked on a clock** — the other half of the GC's argument.
+   *
+   * The sweeper above removes what nothing names. This one sends what nothing
+   * has: a blob is not an Operation, so it does not replicate, and anything
+   * that stops `putBlob`'s hand-push leaves the op replicated and the bytes
+   * behind in silence. `reconcileBlobs` could always find that; it just only
+   * ever ran when somebody typed `isocan blobs`, which is to say only after a
+   * teammate had already been shown "blob not found" under a screen.
+   *
+   * Same clock and same reasoning as the GC: the instance is the right one,
+   * because bytes only fall behind while this daemon is writing. The first
+   * sweep matters most and is the one that would have caught this — it looks
+   * at what was lost while the daemon was NOT running.
+   */
+  const blobKeeper = startBlobKeeper({
+    engine,
+    assignments: () => homes.assignments(),
+    intervalMs: options.blobCheckIntervalMs ?? 10 * 60_000,
+    ...(options.blobCheckFirstMs !== undefined ? { firstSweepMs: options.blobCheckFirstMs } : {}),
+    log: (message: string) => app.log.info(message),
+  });
+
   await fs.writeFile(
     daemonFile(home),
     JSON.stringify({ pid: process.pid, port, startedAt: new Date().toISOString() }, null, 2),
@@ -534,6 +567,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // is on its way down; awaiting it means the tick already running has
     // finished asking for any.
     await sweeper.stop();
+    // The blob keeper on the same terms: it UPLOADS, so shutdown may not race
+    // past a sweep that is mid-push.
+    await blobKeeper.stop();
     // The metadata repair, on the same terms and for the same reason: it is a
     // writer, so shutdown may not race past it. Setting the flag first cuts it
     // short at the next canvas instead of making `close()` wait out a large

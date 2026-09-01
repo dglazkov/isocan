@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   Actor,
   ActorBindingRecord,
@@ -920,7 +921,37 @@ export class Engine {
       // THIS canvas's home, since phase 10.3: bytes follow the ops that name
       // them, and the ops go where the canvas's row says.
       const home = this.homes?.for(canvasId) ?? null;
-      if (home) await home.putBlob(canvasId, data, meta);
+      if (home) {
+        await home.putBlob(canvasId, data, meta);
+        /**
+         * **And confirm it is actually there.**
+         *
+         * The upload throws on a refusal, so a clean failure was always
+         * loud. What was not covered is a push that ANSWERS well and does
+         * not stick — a home mid-restart accepting bytes it never durably
+         * writes. That is not hypothetical: two slides lost their bytes in
+         * the three minutes before a deploy rolled the home over, with the
+         * `item.addVersion` replicating normally, and the first anybody knew
+         * was "blob not found" under a screen in somebody else's browser.
+         *
+         * Asked here because THIS is the moment the bytes are still in hand.
+         * A minute later the only copy is on one laptop and the only repair
+         * is somebody noticing.
+         *
+         * `false` is the home saying it does not have them, and that is worth
+         * failing the save over — the caller still holds the data and can try
+         * again. `null` is "I could not ask", which is not an answer about the
+         * bytes and must not be treated as one; the periodic reconcile is the
+         * backstop for that, and for everything else this cannot see.
+         */
+        const blobHash = createHash("sha256").update(data).digest("hex");
+        if ((await home.hasBlob(canvasId, blobHash)) === false) {
+          throw new Error(
+            `${home.homeUrl} took the bytes for ${meta.filename} and does not have them — ` +
+              "not saved; try again",
+          );
+        }
+      }
       return this.store.putBlob(canvasId, data, meta);
     });
   }
