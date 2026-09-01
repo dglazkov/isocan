@@ -3,6 +3,8 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { markOf } from "@isocan/core";
+import { useActorMarks } from "../lib/marks.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
@@ -30,6 +32,7 @@ interface Anim {
  */
 export function CursorLayer() {
   const colors = useActorColors();
+  const marks = useActorMarks();
   const sessions = useCanvasStore((s) => s.sessions);
   const viewport = useUiStore((s) => s.viewport);
   const animated = useRef(new Map<string, Anim>());
@@ -171,6 +174,19 @@ export function CursorLayer() {
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColorIn(colors, session.actor.id);
         const name = session.label ?? session.actor.name;
+        /**
+         * **The mark, in front of the name.**
+         *
+         * A cursor is where you identify somebody at a glance, and it is the
+         * one that MOVES — a glyph is easier to follow across a canvas than a
+         * word is to read. The chip's colour already says who, but colours
+         * run out (there are seven) and two people can share one; a mark is
+         * chosen and distinct, which is the whole reason it exists.
+         *
+         * The raw mark, not `faceMark`: that falls back to an initial, and
+         * the name is right there — "D Dion" would be the letter twice.
+         */
+        const mark = markOf(marks, session.actor);
         // Say only what we know: the session's status if it has one, and
         // for how long it has been quiet once it goes silent — a thinking
         // agent must not look frozen, but we never invent a verb for it.
@@ -188,6 +204,7 @@ export function CursorLayer() {
               <path d="M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z" fill={color} stroke="#fff" strokeWidth="1" />
             </svg>
             <span className="cursor-chip" style={{ background: color }}>
+              {mark && <b className="cursor-mark">{mark}</b>}
               {name}
               {line && <em>{line}</em>}
             </span>

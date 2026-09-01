@@ -79,12 +79,28 @@ export function isFaceMark(mark: string): boolean {
  * ninth caller would have gone on drawing a letter with nothing to say it was
  * wrong.
  */
+/**
+ * **The mark somebody chose, or nothing.**
+ *
+ * `faceMark` below answers "what glyph goes in the disc", and falls back to
+ * an initial because a disc is never empty. This is the raw question, for the
+ * places that want the emoji OR nothing at all — a cursor chip already says
+ * the name, so falling back to its first letter would print "D Dion".
+ *
+ * One fold: `faceMark` is written in terms of this, so there is a single
+ * place that knows a mark is a chosen thing which may be absent.
+ */
+export function markOf(marks: ActorMarks | undefined, actor: { id: string }): string | null {
+  const mark = marks?.[actor.id];
+  return mark ? mark : null;
+}
+
 export function faceMark(
   marks: ActorMarks | undefined,
   actor: { id: string; name: string },
   displayName?: string,
 ): string {
-  const mark = marks?.[actor.id];
+  const mark = markOf(marks, actor);
   if (mark) return mark;
   return (displayName ?? actor.name).trim().charAt(0).toUpperCase();
 }
