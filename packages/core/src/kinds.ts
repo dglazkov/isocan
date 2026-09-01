@@ -64,6 +64,25 @@ export function itemKind(item: Item): ItemKind {
 }
 
 /**
+ * **Is this item drawn inside an iframe?**
+ *
+ * A screen is an HTML document and a site is somebody else's page; both are
+ * live frames rather than pictures. That matters to anything that wants to
+ * ANIMATE one, because a sandboxed cross-origin frame cannot be captured:
+ * a view-transition snapshot of it is a blank rectangle, and animating that
+ * is a white flash across the screen. Reported from a presentation, on every
+ * flip, and no amount of caching touches it — the frame was loaded the whole
+ * time, it simply cannot be photographed.
+ *
+ * In core because it is a fact about the item, and both surfaces will want it
+ * the moment either grows a transition.
+ */
+export function isFramedItem(item: Item): boolean {
+  const kind = itemKind(item);
+  return kind === "screen" || kind === "site";
+}
+
+/**
  * Can this content be edited as TEXT — the question the stage's Edit mode
  * asks before offering itself. A png simply has no Edit tab, rather than an
  * empty box.

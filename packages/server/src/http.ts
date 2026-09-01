@@ -100,7 +100,9 @@ import {
   admittingGrant,
   capabilityIn,
   heldCapability,
+  NOT_OWNER,
   NotAdmittedError,
+  ownsThisCanvas,
   ViewOnlyError,
 } from "./grants.ts";
 import {
@@ -1361,9 +1363,31 @@ export function registerRoutes(
     if (unverifiable) {
       return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
-    await engine.getSnapshot(id);
+    const snapshot = await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
     if (live && capabilityOf(live) === capability) return { grant: live } satisfies GrantResponse;
+    /**
+     * **Changing what a grant admits to is the owner's alone.**
+     *
+     * Everything else about sharing stays with anyone who can edit — invite
+     * somebody, turn the link off — because those are additive or undoable by
+     * the person who did them. Capability is neither: replacing the edit link
+     * with a view one sweeps everybody rooted at the old row into `view`,
+     * including the person who pressed it, and the control that would put it
+     * back is behind the edit they just gave away. Reported exactly that way.
+     *
+     * Checked here rather than in the client, and after the replica forward
+     * above, so the home that owns the canvas is the one that answers.
+     */
+    const changingCapability = live ? capabilityOf(live) !== capability : capability === "view";
+    if (changingCapability && !(await ownsThisCanvas(desk, snapshot.project, req.badge!))) {
+      return reply.status(403).send({
+        error:
+          `only ${snapshot.project.createdBy.name}, who made this canvas, can change what its ` +
+          `link admits to — ask them, or share with somebody by name instead`,
+        code: NOT_OWNER,
+      });
+    }
     const grant: Grant = {
       id: newId("gnt"),
       canvasId: id,

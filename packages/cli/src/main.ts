@@ -2436,9 +2436,23 @@ program
 
       const { grants } = await ctx.client.grants(canvas.id);
       const link = grants.find((g) => g.subject === LINK) ?? null;
-      if (ctx.json) return printJson({ address, grants, ...(swept ? { swept } : {}) });
+      // Just the names, not a whole snapshot: this command needs one string,
+      // and the registry is what a rename reaches.
+      const owner = actorNameIn(await ctx.client.actorNames(), canvas.createdBy);
+      if (ctx.json) {
+        return printJson({
+          address,
+          owner: canvas.createdBy,
+          grants,
+          ...(swept ? { swept } : {}),
+        });
+      }
       printKeyValues({
         address,
+        // Whose canvas this is. It is the answer to the refusal `--link view`
+        // gets from anybody else, so it belongs beside the link rather than
+        // only in the error.
+        owner,
         link: link
           ? capabilityOf(link) === "view"
             ? `view-only — anyone with the address can look, and change nothing (granted ${link.at.slice(0, 10)})`

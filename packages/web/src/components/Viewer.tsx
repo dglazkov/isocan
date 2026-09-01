@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deck, deckStep, isDesignSystem, isTextItem, itemPath } from "@isocan/core";
+import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
@@ -78,7 +78,15 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
       const forward = FLIP_NEXT.has(e.key);
       const next = deckStep(now, itemId, forward ? 1 : -1);
       if (!next) return; // the deck's edge: stay put rather than wrap
-      flipTo(navigate, itemPath(canvasId, next.id), forward ? "next" : "prev");
+      // A screen or a site is an iframe, and an iframe photographs blank, so
+      // animating one is a white flash on every flip. See `flipTo`.
+      const here = now.items[itemId];
+      flipTo(
+        navigate,
+        itemPath(canvasId, next.id),
+        forward ? "next" : "prev",
+        isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+      );
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
