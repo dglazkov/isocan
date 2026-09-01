@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { contextMark, isSlide, itemKind, itemPath, markPatch, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI } from "@isocan/core";
+import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -193,21 +193,42 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
      * this entry cannot disagree.
      */
     {
-      label: isSlide(items[0]!) ? `${SLIDE_EMOJI} No longer a slide` : `${SLIDE_EMOJI} Make this a slide`,
-      disabled: many,
+      /**
+       * **A whole selection at once**, which is how a deck actually gets
+       * made: ten screens are marked in one gesture, not ten. This entry was
+       * `disabled: many`, so the app could not do what `isocan slides add
+       * <items...>` had done since the day it shipped — a rule the CLI
+       * enforced and the app did not know about.
+       *
+       * `slideIntent` decides, in core, so the two surfaces cannot drift:
+       * already-all-slides turns off, anything else turns ON and skips the
+       * ones that are already right. A mixed selection reading as "turn
+       * everything off" would throw away marks somebody meant.
+       */
+      label: slideLabel(items),
       run: () => {
-        const item = items[0];
-        if (!item) return;
-        const on = !isSlide(item);
-        void sendEchoed(ctx.canvasId, ctx.actor, {
-          type: "item.update",
-          itemId: item.id,
-          patch: slidePatch(on),
-        });
+        const { on, changing } = slideIntent(items);
+        if (changing.length === 0) return;
+        // One gesture, one ⌘Z — however many items it turns out to be.
+        const group = newGroupId();
+        for (const item of changing) {
+          void sendEchoed(
+            ctx.canvasId,
+            ctx.actor,
+            { type: "item.update", itemId: item.id, patch: slidePatch(on) },
+            group,
+          );
+        }
+        const what =
+          changing.length === 1 ? `"${changing[0]!.title}"` : `${changing.length} items`;
+        // Says what MOVED, not what was selected: "3 of 10" is the honest
+        // sentence when seven were already slides, and it is the one that
+        // tells somebody the gesture did what they meant.
+        const of = changing.length === items.length ? "" : ` of ${items.length}`;
         flashNotice(
           on
-            ? `"${item.title}" is a slide — arrows in full screen stop here`
-            : `"${item.title}" is out of the deck`,
+            ? `${what}${of} — arrows in full screen stop here`
+            : `${what}${of} out of the deck`,
         );
       },
     },
@@ -219,6 +240,29 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       run: () => void deleteItems(ctx.canvasId, ctx.actor, ids),
     },
   ];
+}
+
+/**
+ * What the deck entry is called for THIS selection.
+ *
+ * One entry that says what pressing it does, never two that contradict — the
+ * same rule the context-mark entries above follow. The count is the count
+ * that will MOVE, so a selection of ten where seven are already slides reads
+ * "Make 3 slides" and nobody presses it expecting ten.
+ */
+function slideLabel(items: readonly Item[]): string {
+  const { on, changing } = slideIntent(items);
+  if (changing.length === 0) {
+    // Everything is already the way pressing it would leave it. Naming the
+    // state beats an entry that looks live and does nothing.
+    return on ? `${SLIDE_EMOJI} Make a slide` : `${SLIDE_EMOJI} No longer a slide`;
+  }
+  if (items.length === 1) {
+    return on ? `${SLIDE_EMOJI} Make this a slide` : `${SLIDE_EMOJI} No longer a slide`;
+  }
+  return on
+    ? `${SLIDE_EMOJI} Make ${changing.length} slides`
+    : `${SLIDE_EMOJI} Take ${changing.length} out of the deck`;
 }
 
 /** The menu for the canvas itself — a right-click on open ground. */

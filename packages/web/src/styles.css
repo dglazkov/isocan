@@ -719,15 +719,28 @@ img { height: auto; }
  * it. Excluding the variants is the version that covers the one nobody has
  * added yet.
  */
-.bar-cluster .btn:not(.primary):not(.active) {
-  background: none; border-color: transparent;
-  /* The border comes off as well as the padding. `box-sizing: border-box`
-     means the pill's 34 INCLUDES its hairline, so subtracting only the inset
-     left the control 1px too tall — 4px of air above it and 5px beside it,
-     which is exactly the kind of one-pixel asymmetry that reads as "not quite
-     right" long before anybody can name it. */
+/* **SHAPE for everything in the pill, whatever colour it is wearing.**
+
+   This used to be one rule with the paint below, and excluding the variants
+   from the paint took the SHAPE off them too: a lit Share button fell back to
+   the base `.btn` — 6px corners, taller than the pill's inside — and broke
+   out of the curve behind it. A control inside the pill is a smaller copy of
+   the pill; being lit is not a reason to stop being one.
+
+   The border comes off as well as the padding. `box-sizing: border-box` means
+   the pill's 34 INCLUDES its hairline, so subtracting only the inset left the
+   control 1px too tall — 4px of air above it and 5px beside it, which is
+   exactly the kind of one-pixel asymmetry that reads as "not quite right"
+   long before anybody can name it. */
+.bar-cluster .btn {
   height: calc(var(--pill-h) - 2px - var(--pill-inset) * 2); padding: 0 10px;
   border-radius: 999px;
+}
+/* **PAINT for the quiet ones only.** A primary or a lit button keeps its
+   fill — that is the whole job of the variant, and washing it out here is
+   what put white text on a white panel. */
+.bar-cluster .btn:not(.primary):not(.active) {
+  background: none; border-color: transparent;
 }
 /* The handle is a glyph, not a word, so it gets a square footprint rather than
    a label's padding — a wide pill around three dots reads as an empty button. */
