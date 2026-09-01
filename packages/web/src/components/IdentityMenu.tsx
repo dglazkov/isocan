@@ -91,6 +91,15 @@ export function IdentityMenu({
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
+  /**
+   * **Is there a rename to do?** — the same question the submit handler
+   * already asks before it does anything (`!trimmed || trimmed === actor.name`
+   * closes without sending). The button was live for both answers, so it went
+   * blue and pressable over a name nobody had touched, and pressing it just
+   * shut the menu. A control that offers an act it will not perform teaches
+   * people not to believe the next one.
+   */
+  const renames = trimmed !== "" && trimmed !== actor.name;
 
   const attempt = (claim: Promise<Actor>) => {
     setError(null);
@@ -127,7 +136,7 @@ export function IdentityMenu({
         className="identity-rename"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!trimmed || trimmed === actor.name) return onClose();
+          if (!renames) return onClose();
           attempt(renameIdentity(trimmed));
         }}
       >
@@ -182,7 +191,7 @@ export function IdentityMenu({
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <button className="btn primary" type="submit" disabled={!trimmed}>
+        <button className="btn primary" type="submit" disabled={!renames}>
           Rename
         </button>
       </form>

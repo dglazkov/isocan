@@ -4312,16 +4312,6 @@ button.mt-card:hover { border-color: var(--accent); }
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
 .item.textnode.paper .text-view { color: var(--paper-ink); }
-/* The swatches in the Text composer. Square, because they stand for a square
-   note, and they carry the same tokens the node will — so the choice shows
-   the colour it commits. The first is "no paper" and reads as an empty
-   outline rather than a colour: a caption is still the common case. */
-.text-paper {
-  width: 16px; padding: 0;
-  background: var(--paper); border: 1px solid var(--paper-edge);
-  border-radius: 3px;
-}
-.text-paper-none { background: none; border-style: dashed; border-color: var(--line); }
 .item.textnode.paper-yellow, .text-paper.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
 .item.textnode.paper-pink, .text-paper.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
 .item.textnode.paper-blue, .text-paper.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
@@ -4389,6 +4379,29 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The face buttons show their own face, so they are set in it and want the
    weight prose is set in rather than a label's bold. */
 .text-style-face { font-weight: 500; font-size: 12px; }
+/* **The paper swatches, and they must come AFTER `.text-style-btn`.**
+
+   They wear that class for their size and hit area, and it sets
+   `background: transparent; border: none` at the same specificity — so
+   declared above it, every swatch painted nothing and the chosen one took
+   `.on`'s accent fill. Five invisible squares and a blue one, reported as
+   "the text tool is broken". Order is the whole fix; nothing here needs to
+   out-specify anything.
+
+   Square, because they stand for a square note, and carrying the same tokens
+   the node will, so the choice shows the colour it commits. */
+.text-paper {
+  width: 16px; min-width: 16px; height: 16px; padding: 0;
+  background: var(--paper); border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+}
+/* "No paper" is an empty outline rather than a colour: a caption is still the
+   common case, and a sixth colour would imply a sixth paper. */
+.text-paper-none { background: none; border-style: dashed; border-color: var(--line); }
+/* Chosen shows as a ring around the paper, never as `.on`'s accent fill —
+   the swatch's whole job is to be the colour it stands for. */
+.text-paper.on { background: var(--paper); outline: 2px solid var(--accent); outline-offset: 1px; }
+.text-paper-none.on { background: none; }
 /* The mirror measures; it never shows. Same padding, wrapping and border box
    as the textarea beside it, or it would measure a different shape than the
    one being typed in. `max-content` up to the column is what gives a short
