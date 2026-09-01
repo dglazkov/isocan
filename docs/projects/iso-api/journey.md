@@ -1,8 +1,8 @@
 ---
-status: building
+status: built
 since: 2026-08-31
 see: multiuser, on-demand
-note: "#78 — the third isomorphic surface. design.md is the argument: the API already exists as the CLI's private middle layer, and the work is a seam. These journeys are the acceptance suite, phases.md the walk — four phases, the seam first, each journey closed by playing it for real. Phases 1–3 closed 31 Aug: the seam holds, `connect()` and `tail()` exist, journeys 1–2 played for real — the board is one process and the watcher resumes where it stopped."
+note: "#78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone."
 ---
 
 # The isomorphic API — the journeys
