@@ -362,6 +362,21 @@ export function ArtifactStage({
               />
             )}
           </div>
+        ) : surface === "fullscreen" ? (
+          /**
+           * **Nothing.** Presenting is not editing, and full screen is the
+           * presenting surface: a rail down the side of every slide offering
+           * a way INTO the editor is chrome earning nothing in the one place
+           * a slide should be the only thing on the glass. The workbench is
+           * where an item is worked on, and it has the same stage with both
+           * panes and a rail of its own.
+           *
+           * The editor is not merely folded here, it is not offered — which
+           * is why this is a branch rather than a hidden rail. `readPanes`
+           * has always opened full screen with `edit: false`; this is that
+           * decision finally reaching the chrome.
+           */
+          null
         ) : (
           /* The folded editor's rail: its whole face is the way back, on the
              edge the pane folded to. */

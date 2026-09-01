@@ -159,9 +159,28 @@ describe("the stage's chrome rests with the bar above it", () => {
     "utf8",
   );
 
-  it("fades the pane bar and the rail, not only the bar above them", () => {
+  it("fades the pane bar with the bar above it", () => {
     expect(css).toMatch(/\.fullscreen\.resting \.stage-pane-bar[\s\S]{0,120}opacity: 0/);
-    expect(css).toContain(".fullscreen.resting .stage-rail");
+  });
+
+  it("does not offer the editor at all, so there is no rail to fade", () => {
+    /**
+     * Presenting is not editing. A rail down the side of every slide
+     * offering a way INTO the editor is chrome earning nothing in the one
+     * place a slide should be the only thing on the glass — the workbench is
+     * where an item is worked on, and it has the same stage with a rail of
+     * its own. `readPanes` has always opened full screen with `edit: false`;
+     * this is that decision reaching the chrome.
+     */
+    const stage = readFileSync(
+      fileURLToPath(new URL("../src/components/ArtifactStage.tsx", import.meta.url)),
+      "utf8",
+    );
+    expect(stage).toContain(') : surface === "fullscreen" ? (');
+    expect(stage).toContain("Presenting is not editing");
+    // And the rules that only existed to make the rail behave went with it.
+    expect(css).not.toContain(".fullscreen .stage-rail");
+    expect(css).not.toContain(".fullscreen.resting .stage-rail");
   });
 
   it("fades them, rather than removing them and moving the slide", () => {
@@ -173,16 +192,7 @@ describe("the stage's chrome rests with the bar above it", () => {
     expect(css).toMatch(/\.stage-rail \{[^}]*transition: opacity/);
   });
 
-  it("takes the rail out of the flow, so fading it leaves nothing behind", () => {
-    /**
-     * Fading it was not enough, and the report said why: a faded rail still
-     * held its 26px of the row and the preview pane still drew its left
-     * border against it, so what bowed out was the word EDIT and what stayed
-     * was a strip down the side of every slide. Out of flow, not collapsed
-     * to zero width — taking 26px away from a live iframe relays its
-     * document out, which is the reflow this surface exists to avoid.
-     */
-    expect(css).toContain(".fullscreen .stage-rail { position: absolute;");
+  it("drops the seam that drew against the rail's column", () => {
     expect(css).toMatch(/\.fullscreen \.stage-preview-pane \{ border-left: 0/);
   });
 
