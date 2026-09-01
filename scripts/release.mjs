@@ -61,8 +61,21 @@ export const PREPARATION_KEYS = [
 export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
   const { workspaces, scripts, ...rest } = pkg;
   const built = sourceCommit ? ` from ${sourceCommit}` : "";
+  /**
+   * **The `types` condition moves to the compiled declarations** (iso-api
+   * phase 4). On main it points at `packages/api/src/index.ts` — right in a
+   * checkout, where the workspace links let an editor follow `@isocan/core`.
+   * An install has no workspace links, and tsserver refuses `.ts` sources
+   * inside node_modules (TS5097) and cannot resolve the sibling packages
+   * (TS2307) — measured 31 Aug, the turn design.md predicted. So the release
+   * carries `types/` (emitTypes below) and ships the manifest aimed at it.
+   */
+  const exportsMap = rest.exports?.["."]?.types
+    ? { ...rest.exports, ".": { ...rest.exports["."], types: "./types/api/src/index.d.ts" } }
+    : rest.exports;
   return {
     ...rest,
+    ...(exportsMap ? { exports: exportsMap } : {}),
     /**
      * **What an installed copy knows about itself.** The tree npm hands out has
      * no `.git`, so without this a daemon on somebody's laptop cannot say which
@@ -77,6 +90,89 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
       : {}),
     "//": `GENERATED BRANCH — \`npm run release\` builds it${built} on main; develop there, not here. No \`workspaces\` and no scripts, deliberately: npm's git installer treats either as "needs preparation", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.`,
   };
+}
+
+/**
+ * **Compile the API's declarations into `types/`** — the release-time half of
+ * `import { connect } from "isocan"` having types (iso-api phase 4).
+ *
+ * The sources stay the reference an editor JUMPS to; what it RESOLVES is this
+ * tree, because a consumer's TypeScript cannot read the shipped `.ts` files:
+ * it refuses `.ts`-extension imports inside node_modules without a flag no
+ * consumer should need, and `@isocan/core` / `@isocan/server` are bare
+ * specifiers with no node_modules to answer them in an installed tree.
+ *
+ * So: one `tsc` declaration-only emit of core, server and api (api's public
+ * types reach into both), then a rewrite of every emitted specifier into a
+ * form an installed tree can resolve — `./x.ts` becomes `./x.js` (TypeScript
+ * maps that back to `x.d.ts`), and the two bare package names become relative
+ * paths within `types/` itself. The result is self-contained: no workspace,
+ * no loader, no node_modules but the consumer's own.
+ *
+ * `types/` is deliberately NOT in `.gitignore`: npm's pack honors gitignore
+ * for anything a `files` field does not claim, so ignoring it here would
+ * strip it from every install — the tree would carry it and npm would not.
+ * `main()` removes it after the release commit instead.
+ */
+export async function emitTypes() {
+  const out = path.join(root, "types");
+  await fs.rm(out, { recursive: true, force: true });
+  const tsconfig = path.join(root, "tsconfig.release-types.json");
+  await fs.writeFile(
+    tsconfig,
+    JSON.stringify(
+      {
+        extends: "./tsconfig.base.json",
+        compilerOptions: {
+          noEmit: false,
+          emitDeclarationOnly: true,
+          declaration: true,
+          outDir: "./types",
+          rootDir: "./packages",
+          types: ["node"],
+        },
+        include: ["packages/core/src", "packages/server/src", "packages/api/src"],
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  try {
+    const tsc = path.join(root, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
+    const done = spawnSync(tsc, ["-p", tsconfig], { cwd: root, stdio: "inherit" });
+    if (done.status !== 0) throw new Error("tsc --emitDeclarationOnly failed — no types, no release");
+  } finally {
+    await fs.rm(tsconfig, { force: true });
+  }
+  await rewriteSpecifiers(out, out);
+  const entry = path.join(out, "api", "src", "index.d.ts");
+  await fs.access(entry).catch(() => {
+    throw new Error(`no declarations at ${entry} — nothing for the manifest's types condition to name`);
+  });
+  return out;
+}
+
+/** The specifier rewrite emitTypes describes, over every `.d.ts` under `dir`. */
+async function rewriteSpecifiers(dir, out) {
+  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await rewriteSpecifiers(full, out);
+      continue;
+    }
+    if (!entry.name.endsWith(".d.ts")) continue;
+    const relative = (pkg) => {
+      const target = path.relative(path.dirname(full), path.join(out, pkg, "src", "index.js"));
+      const posix = target.split(path.sep).join("/");
+      return posix.startsWith(".") ? posix : `./${posix}`;
+    };
+    const text = await fs.readFile(full, "utf8");
+    const rewritten = text
+      .replace(/"(\.[^"]*)\.ts"/g, '"$1.js"')
+      .replace(/"@isocan\/core"/g, `"${relative("core")}"`)
+      .replace(/"@isocan\/server"/g, `"${relative("server")}"`);
+    if (rewritten !== text) await fs.writeFile(full, rewritten);
+  }
 }
 
 const git = (...args) => {
@@ -127,13 +223,18 @@ async function main() {
     throw new Error(`no web app at ${dist} — nothing to release`);
   });
 
+  // The other build only a release has: the API's declarations, compiled so
+  // an editor on an installed copy can answer what `connect()` returns.
+  await emitTypes();
+
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-"));
   try {
-    // A temporary index: HEAD's tree, plus dist (gitignored, hence -f), plus a
-    // package.json that only exists on this branch.
+    // A temporary index: HEAD's tree, plus dist (gitignored, hence -f), plus
+    // the compiled types, plus a package.json that only exists on this branch.
     const env = { ...process.env, GIT_INDEX_FILE: path.join(tmp, "index") };
     git("read-tree", head, { env });
     git("add", "-f", "packages/web/dist", { env });
+    git("add", "-f", "types", { env });
     /**
      * **`.github/` does not ship.**
      *
@@ -183,6 +284,10 @@ async function main() {
     }
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
+    // The emitted declarations were for the release commit, not for main's
+    // working tree — and they cannot be gitignored (see emitTypes), so they
+    // are cleaned up rather than left as untracked noise.
+    await fs.rm(path.join(root, "types"), { recursive: true, force: true });
   }
 }
 

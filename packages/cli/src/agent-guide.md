@@ -256,6 +256,51 @@ alarming rather than impressive. And **fan out for work that is genuinely
 separate** — two agents editing the same item is a merge nobody asked for,
 while two agents on two screens is the thing this canvas is for.
 
+## Scripting
+
+The CLI has a library underneath it, and it is the same code. Reach past the
+CLI when the work is a loop rather than a gesture — forty ops in a batch, a
+watcher reacting to the log, a tool that composes many reads — because a
+spawned `isocan` costs a process per action and hands you strings where the
+library hands you typed values.
+
+Install it locally, in the directory you are working in — never `-g`, a
+global install is not importable:
+
+```sh
+npm i github:dglazkov/isocan#release
+```
+
+That line is the answer everywhere, a readied directory included: `isocan
+setup` put the CLI on your PATH, and a PATH is not a module, so a script's
+import needs the local install even where the CLI already works.
+
+```js
+import { connect } from "isocan";
+
+const home = await connect();        // this directory's canvas, this
+                                     // session's actor — the CLI's own
+                                     // resolution, because it IS it
+const canvas = await home.canvas();  // or home.canvas("<ref>") for another
+const items = await canvas.items();  // typed reads: items, threads, who, activity
+const item = await canvas.add({ title: "Report", content: html, mime: "text/html" });
+for await (const entry of canvas.tail()) { /* entry.seq is your resume cursor */ }
+```
+
+Run it with plain `node` — the import registers its own TypeScript loaders.
+`connect()` resolves the directory marker, the canvas, and your session
+identity exactly as every `isocan` command does, so the script's ops land as
+the same actor your CLI commands do; a script that is its own actor states it
+(`connect({ identity: { session, harness } })`, claimed first with `isocan
+identity --session`). `add` and `edit` take content as values and return the
+item they made; `notify` speaks in the Chat; a refusal is an `ApiError`
+carrying the wire's code, with `unreachable` when nothing answered.
+
+The reference is the types themselves: the package is TypeScript source, so
+your editor answers what `connect()` returns straight from the install, and
+there is no separate API document to go stale. The ops a script sends are the
+ops you would have typed — one op per user-visible act is still one undo.
+
 ## Standing agents
 
 An agent can also be a **record instead of a process**: enrolled on this
