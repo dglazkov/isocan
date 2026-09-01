@@ -1489,6 +1489,25 @@ img { height: auto; }
    would watch the toolbar above their own text fade out. */
 .fullscreen.resting .stage-pane-bar,
 .fullscreen.resting .stage-rail { opacity: 0; pointer-events: none; }
+/* **In full screen the rail FLOATS**, the way the bar above it does.
+
+   Fading it was not enough and the report says why: a faded rail still held
+   its 26px of the row, and the preview pane still drew its left border
+   against it, so what bowed out was the word EDIT and what stayed was a
+   strip down the side of every slide. Out of flow, the slide is the full
+   width of the glass at all times — and the fade then leaves nothing behind,
+   because there is nothing left to leave.
+
+   Out of flow rather than collapsed to zero, for the same reason the bar
+   fades instead of unmounting: taking 26px away from a live iframe relays
+   its document out, which is the reflow this whole surface has been trying
+   to stop happening in front of a room. */
+.fullscreen .artifact-stage-body { position: relative; }
+.fullscreen .stage-rail { position: absolute; top: 0; bottom: 0; z-index: 1; }
+.fullscreen .stage-rail.left { left: 0; }
+.fullscreen .stage-rail.right { right: 0; }
+/* The seam belonged to a column that is no longer there. */
+.fullscreen .stage-preview-pane { border-left: 0; }
 /* The exception — somebody typing must not watch the toolbar above their own
    text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
    focus-within)` rule first, and that selector parses, `Element.matches()`
