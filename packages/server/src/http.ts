@@ -31,8 +31,7 @@ import type {
   RcAskRequest,
   RedeemPassRequest,
   RedeemPassResponse,
-  UndoRedoRequest,
-} from "@isocan/core";
+  UndoRedoRequest, LogEntry } from "@isocan/core";
 import {
   ATTEST_ROUTE,
   AUTH_ACTION_PATH,
@@ -2227,6 +2226,45 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { push?: boolean };
     return engine.reconcileBlobs(id, { push: body.push === true });
+  });
+
+  /**
+   * **Send this canvas to another home**, or say what that would move.
+   *
+   * The whole gesture is one call because the ORDER is the safety: bytes,
+   * then the log, then the routing row. Split across three requests, a caller
+   * that stopped halfway would leave a canvas whose bytes are in one place
+   * and whose ops are in another, and no single request could tell.
+   *
+   * `dryRun` is not politeness. Moving a canvas is the kind of act people
+   * want to see the shape of first, and a report costs one listing and one
+   * log read.
+   */
+  app.post("/api/projects/:id/teleport", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { to?: string; dryRun?: boolean };
+    if (typeof body.to !== "string" || body.to.trim() === "") {
+      return { error: "teleport needs a home to send it to (`--to <url>`)", code: "bad-op" };
+    }
+    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true });
+  });
+
+  /**
+   * **Receive a canvas whole** — the far end of a teleport.
+   *
+   * Creates, never merges: `Engine.adopt` refuses a canvas this home already
+   * has, which is what keeps this narrow enough to expose. The entries are
+   * written verbatim, seq and timestamp included, because a canvas replayed
+   * through the ordinary write path would arrive correctly ordered and
+   * entirely re-dated.
+   */
+  app.post("/api/projects/:id/adopt", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { entries?: LogEntry[] };
+    if (!Array.isArray(body.entries)) {
+      return { error: "adopt takes the canvas's entries", code: "bad-op" };
+    }
+    return engine.adopt(id, body.entries);
   });
 
   app.post("/api/projects/:id/gc", async (req) => {

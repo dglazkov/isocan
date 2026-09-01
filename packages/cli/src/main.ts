@@ -4881,6 +4881,51 @@ program
   );
 
 program
+  .command("teleport <canvas>")
+  .description("Send a canvas to another home — its whole history, and the bytes with it")
+  .option("--to <home>", "the home to send it to")
+  .option("--dry-run", "say what would move, and move nothing")
+  .action(
+    run(async (ref: string, opts: { to?: string; dryRun?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const canvas = await resolveCanvas({ ...ctx, canvasRef: ref });
+      if (!opts.to) throw new Error("teleport needs somewhere to send it: --to <home url>");
+      /**
+       * `--dry-run` means what its name means: nothing moves. It is worth
+       * having because moving a canvas is not undoable by any gesture this
+       * tool has — afterwards the far home holds the log and this one
+       * forwards to it — so seeing the shape of the thing first (how many
+       * ops, how many blobs, how much of it) is most of the confidence.
+       */
+      const report = await ctx.client.teleport(canvas.id, opts.to, opts.dryRun === true);
+      if (ctx.json) return printJson(report);
+      printKeyValues({
+        canvas: `${canvas.title} (${canvas.id})`,
+        to: report.to,
+        history: `${report.entries} operation${report.entries === 1 ? "" : "s"}`,
+        bytes: `${report.blobs} blob${report.blobs === 1 ? "" : "s"} (${formatBytes(report.bytes)})`,
+      });
+      if (!report.moved) {
+        console.log("");
+        console.log("nothing moved — this was a dry run. Run it again without --dry-run to send it.");
+      } else {
+        console.log("");
+        console.log(`moved. ${canvas.title} lives at ${report.to} now; this daemon forwards to it.`);
+      }
+      /**
+       * Said whether it moved or not, because the answer does not change and
+       * somebody deciding whether to move a canvas should know before, not
+       * discover after.
+       */
+      console.log("");
+      console.log("what does NOT travel:");
+      console.log("  who may enter — invite them again at the new home, and set its link");
+      console.log("  names, colours and face marks — those are the old home's, and people");
+      console.log("  arrive under whatever name was stamped on their ops");
+    }),
+  );
+
+program
   .command("tree")
   .description("The directory bound to this canvas, as its home daemon lists it")
   .action(

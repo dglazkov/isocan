@@ -116,6 +116,17 @@ interface CanvasRuntime {
   undo: UndoStacks;
 }
 
+/** What a teleport did, or would do. */
+export interface TeleportReport {
+  canvasId: string;
+  to: string;
+  entries: number;
+  blobs: number;
+  bytes: number;
+  /** False for a dry run, and for nothing else. */
+  moved: boolean;
+}
+
 interface ActorsRuntime {
   registry: ActorRegistry;
   lastSeq: number;
@@ -577,6 +588,147 @@ export class Engine {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * **Send a canvas to another home** — the move half, and a dry run of it.
+   *
+   * `docs/research/2026-09-01-teleport.md` is the argument. The short form:
+   * the log IS the canvas, the reducer is deterministic, so a home holding
+   * the same entries holds the same canvas. This is not a data migration, it
+   * is a replay — and the order below is chosen so that anything failing
+   * before the last step leaves the canvas exactly where it was.
+   *
+   *   1. bytes — content-addressed, so sending them twice is free
+   *   2. the log — verbatim, via `adopt`, which refuses a canvas that exists
+   *   3. the routing row — this daemon stops being the home and starts
+   *      forwarding, which is what makes it a MOVE rather than a copy
+   *
+   * Two things deliberately do not travel, and the report says so rather
+   * than leaving them to be discovered:
+   *
+   * **The grants.** Who may enter is a decision about a PLACE, and the new
+   * home is a different place with a different operator. A teleport that
+   * quietly recreated "anyone with the link can enter" would have widened
+   * access without anybody saying so.
+   *
+   * **The actor registry.** Names, colours and marks are home-scoped and
+   * never replicate; the receiving home knows these actors only by what is
+   * stamped on their ops. People arrive under the name they had when they
+   * wrote, which is a real loss and a visible one.
+   */
+  teleport(
+    canvasId: string,
+    toHomeUrl: string,
+    options: { dryRun: boolean },
+  ): Promise<TeleportReport> {
+    return this.enqueue(async () => {
+      const already = this.homes?.for(canvasId) ?? null;
+      if (already !== null) {
+        throw new OpValidationError(
+          "bad-op",
+          `${canvasId} is not homed here — it belongs to ${already.homeUrl}, and only its home can send it`,
+        );
+      }
+      const link = this.homes?.linkFor(toHomeUrl) ?? null;
+      if (!link) {
+        throw new OpValidationError("bad-op", `this daemon dials no homes, so it cannot send one`);
+      }
+      const runtime = await this.runtime(canvasId);
+      const archived = await this.store.readArchivedLog(canvasId);
+      const entries = [...archived, ...runtime.entries].sort((a, b) => a.seq - b.seq);
+      const blobs = await this.store.listBlobs(canvasId);
+      const bytes = blobs.reduce((n, b) => n + b.meta.size, 0);
+      const report: TeleportReport = {
+        canvasId,
+        to: link.homeUrl,
+        entries: entries.length,
+        blobs: blobs.length,
+        bytes,
+        moved: false,
+      };
+      if (options.dryRun) return report;
+
+      // Bytes first: an item whose blob has not arrived is the "blob not
+      // found" this project has already paid for once.
+      for (const blob of blobs) {
+        if ((await link.hasBlob(canvasId, blob.hash)) === true) continue;
+        const stream = await this.store.openBlob(canvasId, blob.hash);
+        if (!stream) continue;
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(chunk as Buffer);
+        await link.putBlob(canvasId, Buffer.concat(chunks), {
+          mimeType: blob.meta.mimeType,
+          filename: blob.meta.filename,
+        });
+      }
+      await link.adopt(canvasId, entries);
+      // Last, and only once the far end holds everything: from here this
+      // daemon is a replica, and every client that asks it is forwarded.
+      await this.homes?.bind(canvasId, link.homeUrl);
+      return { ...report, moved: true };
+    });
+  }
+
+  /**
+   * **Take a canvas whole, as somebody else's log** — the receiving half of a
+   * teleport.
+   *
+   * A canvas IS its log: the snapshot is what you get by folding it, and the
+   * reducer is deterministic, so a home holding the same entries holds the
+   * same canvas. This writes them VERBATIM — same seq, same `ts`, same
+   * envelope — which is the whole reason it exists rather than a loop over
+   * `submitOp`.
+   *
+   * Replaying through the ordinary write path would look equivalent and
+   * quietly is not. `PostOpRequest` carries no timestamp, deliberately: a
+   * client that stamps its own time is a client that can lie about when
+   * something happened. So a replayed canvas would arrive with every comment,
+   * every version and every item dated at the moment of the move — the order
+   * intact and the history erased. Seqs would survive by luck (an empty
+   * canvas numbers 1..N the same way), but times would not, and nobody would
+   * notice until they looked at a thread.
+   *
+   * **Only into nothing.** This refuses a canvas that already exists here,
+   * which keeps the surface narrow: it can create, never overwrite, so no
+   * sequence of calls to it can damage a canvas anybody is using. Moving a
+   * canvas ONTO a home that has it is not a teleport, it is a merge, and
+   * merging two orders is the thing `docs/research/2026-09-01-teleport.md`
+   * argues is a different product.
+   */
+  adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }> {
+    return this.enqueue(async () => {
+      if (await this.store.canvasExists(canvasId)) {
+        throw new OpValidationError(
+          "bad-op",
+          `${canvasId} is already here — a teleport creates a canvas, it never merges into one`,
+        );
+      }
+      if (entries.length === 0) {
+        throw new OpValidationError("bad-op", "a canvas with no history is not a canvas");
+      }
+      // The order the sender read them in is the order they mean; sorting here
+      // rather than trusting the wire keeps a shuffled body from becoming a
+      // differently-folded canvas.
+      const inOrder = [...entries].sort((a, b) => a.seq - b.seq);
+      await this.store.createCanvasDir(canvasId);
+      let state: CanvasState | null = null;
+      for (const entry of inOrder) {
+        // Folded as we go, so a body that does not apply is refused before it
+        // is written rather than leaving half a canvas behind.
+        state = applyOperation(state, entry.envelope);
+        await this.store.appendLog(canvasId, entry);
+      }
+      const lastSeq = inOrder[inOrder.length - 1]!.seq;
+      await this.store.saveSnapshot(canvasId, state!, lastSeq);
+      this.canvases.set(canvasId, {
+        state: state!,
+        lastSeq,
+        entries: [...inOrder],
+        undo: new UndoStacks(),
+      });
+      return { seqs: inOrder.length };
+    });
   }
 
   async getLog(canvasId: string, sinceSeq = 0): Promise<LogEntry[]> {

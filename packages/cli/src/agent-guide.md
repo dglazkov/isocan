@@ -922,6 +922,32 @@ A copy does NOT inherit the original's `file`. Two items claiming one path
 would overwrite each other on `save`, and the copy is not that file — bind it
 yourself if it should be one.
 
+## Moving a canvas to another home
+
+A canvas lives at the home it was born at, and `isocan home` says which one.
+To move it — a local canvas that should be hosted, a canvas at the wrong
+home — `isocan teleport <canvas> --to <home>` sends it:
+
+```sh
+isocan teleport <canvas> --to https://isocan.io --dry-run   # what would move
+isocan teleport <canvas> --to https://isocan.io             # move it
+```
+
+The whole history goes, verbatim: the same operations, the same order, the
+same timestamps, and the bytes with them. Afterwards this daemon forwards to
+the new home, so every address that worked still works.
+
+**Two things do not travel, and the command says so both times.** Who may
+enter — invite them again at the new home and set its link, because who may
+be somewhere is a decision about a PLACE. And names, colours and face marks,
+which belong to the old home's registry: people arrive under whatever name
+was stamped on their ops.
+
+Only a canvas's own home can send it, and it can only land somewhere that
+does not already have it. Moving a canvas onto a home that has it would be a
+merge, and two orders of the same canvas is not a thing this system has an
+answer for.
+
 ## When a teammate sees the item but not the picture
 
 An item replicates; the BYTES it names do not follow on their own. They are
