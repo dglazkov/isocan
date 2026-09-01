@@ -25,18 +25,6 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 # about it. `.isocan/` is git-ignored, so this is per-machine by construction.
 [ -f "$root/.isocan/board.json" ] || exit 0
 
-# **Stand down if the watcher has this.** Both of us react to a commit, and
-# running both put every announcement in the Chat twice. The watcher is the
-# better of the two — it debounces, and it sees HEAD move however it moved — so
-# it claims the job with a pidfile and this checks whether that process is
-# still alive. A stale pidfile from a killed watcher does not silence us: the
-# kill `-0` is the liveness test, not the file's existence.
-pid=$(cat "$root/.isocan/board-watch.pid" 2>/dev/null || true)
-if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
-  echo "isocan: board:watch (pid $pid) has this one"
-  exit 0
-fi
-
 log="$root/.isocan/board.log"
 {
   printf '\n── %s  %s  %s\n' \

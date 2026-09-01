@@ -1,8 +1,8 @@
 ---
-status: partial
+status: designed
 since: 2026-08-30
 see: on-demand
-note: the read half is built, and both sources are watched — commits and the repo's own canvas; CI still cannot reach a canvas
+note: the read half is buildable today; the write half waits on on-demand's ACP wake, authoritative since 30 Aug
 ---
 # A canvas that watches its own repository
 
@@ -80,13 +80,11 @@ push a new version on every run. The canvas's own version stack then becomes
 the history of the repo's health, for free, with no store to keep and nothing
 to reconcile.
 
-**~~One gap in the CLI, and it is small.~~ There was no gap.** This note said
-`isocan add` only ever creates a new item and nothing exposes
-`item.addVersion` for an arbitrary one, so a regenerating dashboard would silt
-— forty panels by Friday. **`isocan edit <item> <file>` is that verb**, and was
-already there when this was written: *"Create a new version — from a file, or in
-$EDITOR"*. Recorded rather than deleted, because a note that quietly loses a
-wrong claim teaches nobody to check the next one.
+**One gap in the CLI, and it is small.** `isocan add` only ever creates a new
+item; nothing exposes `item.addVersion` for an arbitrary item. Without it a
+regenerating dashboard mints a new item per run, which is the silting the night
+shift's budget rule exists to prevent — forty panels by Friday. The verb is one
+command over an operation that already exists.
 
 **Rendering, not screenshotting.** A panel should be a page that reads its own
 numbers, not an image of one. isocan already serves item content and already
@@ -148,162 +146,6 @@ sources for one fact — the bug this whole note is written around.
   convention above.
 
 ---
-
-## What was built, 30 Aug 2026
-
-The read half, and the half of the write half that is reachable from this
-machine. Four files:
-
-| | What it is |
-| --- | --- |
-| `scripts/canvas-board.mjs` | Renders eleven panels and publishes them — created once, a new **version** every time their bytes change, nothing at all when they have not. |
-| `scripts/hooks/post-commit` | When code lands, refresh the board and say so in the Chat. |
-| `scripts/install-hooks.mjs` | Symlinks the hooks into `.git/hooks`, one at a time, refusing to overwrite one it did not write. |
-| `test/canvas-board.test.ts` | Sixteen guards, including the two bugs this build shipped and caught. |
-
-```sh
-npm run hooks              # install the post-commit hook (--remove, --status)
-npm run board              # refresh every panel now
-npm run board:brief        # just the morning brief, and say so in the Chat
-node scripts/canvas-board.mjs --dry-run      # render, write nothing
-```
-
-**The canvas is named per machine, not per repo.** `.isocan/board.json` holds
-`{"canvas":"prj_…"}` and `.isocan/` is git-ignored, so a clone of this repo
-publishes to nobody's canvas until somebody says which — the correct default
-for a file that would otherwise commit one person's canvas id into everybody's
-checkout.
-
-### The panels
-
-**Tree status** — every persona as a dot, then a table of what is not holding,
-at this commit and this working tree. **Persona · \<name\>**, one per persona:
-its goals, each bound, the number now, the drift from its baseline, its model,
-trigger and tool count, and the path to its own file and its last run page.
-**Recently** — the fortnight's shape as a bar per day, then the last three days
-in detail. **Morning brief** — "Welcome to Sunday!", the week's commits, what is
-on deck from `docs/ROADMAP.md`, and what wants a person.
-
-Green is *every goal inside its bound*; red is *a goal past it*. **Amber
-outranks red**: an instrument that would not run is worse news than a number
-going the wrong way, because it means the board is not reporting. Grey is *no
-goal at all*, which is not the same as fine, and `market-researcher` wears it.
-The board exits non-zero for amber alone — a board that goes red every morning
-trains everybody to stop looking.
-
-**A panel is found by a `board=<slug>` property, not by its title**, so renaming
-one on the canvas keeps it the same panel. Title matching survives only as a
-one-time adoption path for panels made before that rule.
-
-### What it does not do, on purpose
-
-**No panel is editable.** Everything is derived and regenerated; the one fact
-this note says must be decided on the canvas — the outcome of a finding — is
-deliberately absent rather than half-built. The moment a second panel becomes
-editable, the mirror bug is back, and it will be silent.
-
-**No guards panel.** Recommendation 1 below is still unbuilt: without a marker
-distinguishing a guard from an ordinary behavioural test, "show me the guards"
-is a file count, and a file count is not a lens.
-
-### Two bugs, and the guard that nearly did not work
-
-Both were the same shape — an instrument reporting success while meaning
-nothing.
-
-**The commit parser.** Asking git for `--shortstat` and `--pretty` in one pass
-interleaves them, so a reader taking "up to the next separator" swallows every
-commit after the first. The panel rendered *"nothing landed in the last 14
-days"* against 470 commits, with a straight face. Two passes joined by sha now.
-
-**The guard for it, which passed on the broken parser.** The first test checked
-that HEAD's sha appeared and that the count was above one — and the broken
-parser satisfied both, because it got record one right and turned every later
-one into a stat line wearing a sha's place. The test now checks that *every* sha
-the panel renders is one `git log` actually reports, and it was falsified
-against the real bug before being kept.
-
-That second one is the paragraph worth keeping. **A measurement that cannot fail
-reports success forever, which is worse than no measurement because it is
-believed** — the personas' own rule, met from the other side.
-
-### The morning brief needs a clock
-
-The hook refreshes the brief on every commit, so it is fresh whenever anybody is
-working — and stale on a Monday morning before the first commit, which is
-exactly when it is read. That wants a scheduler, and a scheduler is a change to
-somebody's machine rather than to this repo, so it is written down and not
-installed:
-
-```sh
-# every weekday at 07:30, in the user's own crontab
-30 7 * * 1-5 cd /path/to/isocan && /usr/bin/env node scripts/canvas-board.mjs --only brief --notify
-```
-
-### Watching both sources
-
-The question was about two kinds of change, and the first build only covered
-one. `scripts/board-watch.mjs` (`npm run board:watch`) watches:
-
-1. **The repository** — HEAD moving, whatever moved it: a commit here, a
-   `pull`, a rebase, a checkout by another agent. The `post-commit` hook already
-   covers a commit made in this tree; this covers the rest, and covers the
-   commit too where nobody installed the hook. `fs.watch` on `.git` fires for
-   index writes and lock files as well, so HEAD is **re-read and compared**
-   rather than assumed — which is why an ordinary `git status` does not wake
-   the board.
-2. **The repo's own canvas** — the one `.isocan/project.json` names, watched
-   with `isocan wait --all-ops`. That marker is committed, so it is the same
-   canvas for everybody who clones; it is **not** the canvas the panels are
-   published to, and conflating the two is the easy mistake here.
-
-It runs in the **foreground**, one process, a line per wake — for the reason in
-the next section. It **debounces**: a person dragging twelve items writes twelve
-ops, and twelve refreshes would be twelve versions of every panel, which is the
-silting the note warns about arriving through the watcher instead of the
-generator. And two refreshes never overlap; a change that lands mid-run is
-re-scheduled rather than dropped.
-
-### The identity bug, which cost eleven silent failures
-
-**A git hook inherits the environment of whatever committed.** In a repository
-with several agents working in it, that is *another agent's session* — so the
-board acted as that agent, and every one of the hook's first eleven runs died
-on `"Kenny" is taken here`. The board had never once updated from a commit, and
-said so only into `.isocan/board.log`, which nobody was reading.
-
-The fix is `scripts/board-identity.mjs`: clear every harness variable the CLI
-could be recognised by — the four it ships with, plus anything this machine
-declared in `~/.isocan/config.json` — and pin `ISOCAN_SESSION_ID` to one stable
-key. *Deliberate beats ambient* is the CLI's own rule
-(`packages/cli/src/harness.ts`); clearing the rest is belt, because which leaked
-session *is* this process is settled by the registry rather than the
-environment. The board is now its own collaborator, **Board**, and its panels
-and messages are signed that way whoever set it off.
-
-**It matters a second time, and that one is easier to miss.** `isocan wait`
-never wakes you on your own ops — so a watcher parked as the person who
-launched it is blind to exactly the changes that person makes, which is most of
-them. Caught by watching the watcher miss a text node this session had just
-created. One module, imported by both scripts: two copies of this rule would
-drift, and the drift would look exactly like the bug.
-
-**Both are guarded**, and both guards were falsified against the real bug before
-being kept — `test/canvas-board.test.ts`, 32 of them now.
-
-### Two logs, and why one of them is foreground
-
-The hook writes to a file and the watcher writes to a terminal, and that
-difference is deliberate. A hook cannot hold a terminal — you are at a prompt —
-so it detaches and names its log. A watcher can, and should: **the eleven silent
-failures happened in the half that writes to a file.** Anything that can be
-watched in front of a person is.
-
-### The write half is still what it was
-
-CI still cannot reach a canvas — no daemon, no badge, no route in. A git hook is
-not a counter-example to that sentence; it is the case where the two machines
-happen to be the same machine. **Three doors, one hinge**, unchanged.
 
 ## Recommendation
 
