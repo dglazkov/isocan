@@ -1,9 +1,3 @@
-import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
-import { existsSync, openSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { shaOfRoot } from "./managed.ts";
 import type {
   Actor,
   ActorBindingRecord,
@@ -66,7 +60,7 @@ import {
 } from "@isocan/core";
 import type { UpgradeVerdict } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
-import { askTheDoor, bearerHeader, paths, readBadge, writeBadge } from "@isocan/server";
+import { askTheDoor, bearerHeader, readBadge, writeBadge } from "@isocan/server";
 
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
@@ -116,7 +110,19 @@ export class ApiError extends Error {
   }
 }
 
-export class DaemonClient {
+/**
+ * **The typed route surface** — every request the daemon answers, typed, and
+ * nothing about how a daemon comes to exist.
+ *
+ * This class is the half of the Node client that the unsolved browser-kernel
+ * twist depends on staying separable (iso-api design.md, "the surfaces stay in
+ * lockstep"): it constructs requests and heals refused ones, and it never
+ * imports the Node-only half — no `node:child_process`, no daemon spawn, no
+ * `homes.json`. `DaemonClient` in `client.ts` extends it with exactly that
+ * half, and `packages/api/test/boundary.test.ts` is what keeps the line a
+ * fact rather than an intention.
+ */
+export class DaemonRoutes {
   /** Loaded once per process, from `identity.json`'s `auth` block. */
   private badge: StoredBadge | null | undefined;
 
@@ -301,72 +307,6 @@ export class DaemonClient {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * **Which copy a daemon started from here should run** (auto-upgrade phase
-   * 4). Normally this one — the process asking for a daemon is the obvious
-   * candidate to provide it. On a MANAGED install it is `current` instead,
-   * and that difference is one of the phase's three idle points: starting a
-   * daemon is a fresh process either way, so it is a free moment to land on
-   * whatever build the machine has since flipped to. It is also what makes a
-   * parked agent's reconnect land on the new build, because `isocan wait`
-   * calls `ensureDaemon` when its daemon goes away.
-   *
-   * Gated on this copy being managed, and that gate is the whole of the care
-   * here. A CHECKOUT must keep starting the daemon it built, whatever
-   * `~/.isocan/current` happens to point at — a developer whose daemon quietly
-   * came up on a release build instead of their own working tree would spend
-   * an afternoon on it. Same for a global install nobody has adopted.
-   */
-  private daemonBin(): string {
-    const own = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../bin/isocan.js");
-    if (shaOfRoot(this.home, path.resolve(own, "../../../..")) === null) return own;
-    const current = path.join(
-      paths.currentLink(this.home),
-      "node_modules/isocan/packages/cli/bin/isocan.js",
-    );
-    return existsSync(current) ? current : own;
-  }
-
-  /** Start the daemon detached if it isn't answering, then wait for healthz. */
-  async ensureDaemon(): Promise<void> {
-    if (await this.health()) return;
-    const cliBin = this.daemonBin();
-    await fs.mkdir(this.home, { recursive: true });
-    const log = openSync(paths.daemonLogFile(this.home), "a");
-    const port = new URL(this.base).port;
-    spawn(process.execPath, [cliBin, "serve", "--foreground"], {
-      detached: true,
-      stdio: ["ignore", log, log],
-      env: { ...process.env, ISOCAN_PORT: port, ISOCAN_HOME: this.home },
-    }).unref();
-    /**
-     * **How long to wait for a daemon that is starting.**
-     *
-     * It was five seconds, and five seconds is a guess about a machine. On a
-     * busy laptop — a test suite running, a build, several agents — a daemon
-     * takes longer than that to answer, and every caller of this reads the
-     * throw as "there is no daemon" and goes on to do less.
-     *
-     * `isocan setup` was the worst of them: it gates the whole command on
-     * this, so a slow start meant no home written, no pass redeemed, nobody
-     * admitted — and exit 0. Found through a test that was flaky because the
-     * product was fragile, which is the useful kind of flaky.
-     *
-     * Costs nothing when a daemon is already there: `health()` answers on the
-     * first pass and this loop never runs a second time. What it lengthens is
-     * only the wait for one that is genuinely on its way, and the case it
-     * makes slower — no daemon at all, ever — still fails, with the log path,
-     * which is the trade this repo makes everywhere: a slow failure beats a
-     * cheerful wrong answer.
-     */
-    const deadline = Date.now() + 20_000;
-    while (Date.now() < deadline) {
-      if (await this.health(1000)) return;
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    throw new Error(`daemon did not come up on ${this.base} — see ${paths.daemonLogFile(this.home)}`);
   }
 
   /** Name (or resume) the actor behind a session key — the one op sent

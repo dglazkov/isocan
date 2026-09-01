@@ -16,9 +16,11 @@ bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: NOTHING BUILT.** Journeys and design written 31 Aug 2026;
-doors settled the same day (typed library with the CLI atop it,
-release-branch distribution, the API stays a client of the daemon).
+**Where we are: phase 1 CLOSED, phase 2 next.** Journeys and design
+written 31 Aug 2026; doors settled the same day (typed library with the
+CLI atop it, release-branch distribution, the API stays a client of the
+daemon). The seam exists as of 31 Aug: `@isocan/api` owns the Node
+client, the CLI consumes it, and both boundary tests hold it.
 
 The order below is dependency order, and it is also risk order: phase 1 is
 pure movement and proves the seam exists where the design claims; phase 2
@@ -57,7 +59,10 @@ deliberately instead of improvising mid-task:
 
 ## Phase 1 — The seam
 
-**Status: not started.**
+**Status: CLOSED 2026-08-31.** The suite passed untouched (2727 tests; the
+only edits were import paths and the fixture lists in finding 4), both
+boundary tests fail when violated, and a release-shaped install still
+yields a working CLI at the same package count (82 before and after).
 
 **Work:** `packages/api` exists and the CLI consumes it. `client.ts`,
 `identity.ts`, `direct.ts`, and the non-commander half of `ctx.ts` move;
@@ -89,7 +94,28 @@ tests exist and fail when violated (shown by violating each once,
 locally). `npm i -g` from a locally-built release tree still yields a
 working CLI at the same package count as before the move.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-08-31** — The split fell where the design drew it, with one
+  refinement: `client.ts` split again into `routes.ts` (typed surface)
+  and `client.ts` (daemon lifecycle), so the boundary test guards a file
+  line, not a region of one file.
+- **2026-08-31** — `--json` rides through the seam: `Ctx` carries the
+  CLI's presentation flag because every command holds `Ctx`. Splitting
+  it out is restructuring, not movement — left for phase 2's `connect()`.
+- **2026-08-31** — The moved layer is not silent: staleness warnings,
+  binding notes, and `requireIdentity`'s TTY prompt speak on stderr from
+  inside the API package. Phase 2 must decide what `connect()` does with
+  that voice.
+- **2026-08-31** — Daemon lifecycle needs `shaOfRoot` ("which build am
+  I") from the upgrade machinery; the two path helpers moved into the
+  API rather than dragging `managed.ts` along.
+- **2026-08-31** — `setup-npx.test.ts` and `restart.test.ts` each spell
+  the workspace list by hand and both missed `api`; a hand-spelled list
+  will miss the next package too.
+- **2026-08-31** — `daemonBin()` now locates the CLI bin by a
+  cross-package relative path (`../../cli/bin`), the same reach in
+  checkout and install, but a path that moves if either package does.
 
 ---
 

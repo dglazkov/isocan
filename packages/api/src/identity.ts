@@ -5,7 +5,8 @@ import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
 import { elapsedLabel, newActorId } from "@isocan/core";
 import { paths } from "@isocan/server";
-import { ApiError, type DaemonClient } from "./client.ts";
+import { ApiError } from "./routes.ts";
+import type { DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
 
 interface IdentityFile extends Actor {

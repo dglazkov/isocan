@@ -4,8 +4,9 @@ import net from "node:net";
 import path from "node:path";
 import { healthPath, type UpgradeVerdict } from "@isocan/core";
 import { buildStamp, paths, plausibleSha, readConfigFile } from "@isocan/server";
+import { shaOfRoot } from "@isocan/api";
 import { findOnPath, rootOfBin } from "./onpath.ts";
-import { resolved, whichInstall, type Install, type InstallKind } from "./upgrade.ts";
+import { whichInstall, type Install, type InstallKind } from "./upgrade.ts";
 
 /**
  * **The managed install root** (auto-upgrade phase 3).
@@ -522,27 +523,6 @@ export async function liveBuildShas(home: string): Promise<Set<string>> {
   if (sha) live.add(sha);
   return live;
 }
-
-/**
- * The build a path belongs to, or null when it is outside `builds/`.
- *
- * **Both sides are resolved through their symlinks first, and that is the
- * whole of the care here.** A daemon reports `buildStamp().root`, which node
- * has already realpath'd on its way to loading the module; `ISOCAN_HOME` is
- * whatever a person or a test typed. On macOS those two spellings differ for
- * every temporary directory in existence — `/tmp` is a symlink to
- * `/private/tmp`, `$TMPDIR` to `/private/var/folders/…` — so comparing them
- * literally answers "not one of ours" about a tree that plainly is, and the
- * consequence of that wrong answer is deleting a build out from under a
- * running daemon. Found by a test that started a real process and asked.
- */
-export function shaOfRoot(home: string, root: string): string | null {
-  const relative = path.relative(resolved(paths.buildsDir(home)), resolved(root));
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
-  const sha = relative.split(path.sep)[0];
-  return sha && sha.length > 0 ? sha : null;
-}
-
 
 /**
  * Delete the builds nobody needs, and only those. Returns what went.

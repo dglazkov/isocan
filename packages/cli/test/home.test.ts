@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { paths, startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { reservePort } from "../../../test/ports.ts";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 
 /**
  * **`isocan home` — the verb phase 7.5 exists for, re-scoped by phase 10.3.**

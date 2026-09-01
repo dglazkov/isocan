@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PresenceSession } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**

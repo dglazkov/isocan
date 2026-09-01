@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { MintPassResponse, PostOpResponse, Canvas } from "@isocan/core";
 import { PASS_REDEEM_ROUTE, passesRoute } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**

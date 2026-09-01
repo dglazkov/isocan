@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 
 /**
  * The identity files already in the wild (#59). Deleting the directory slot

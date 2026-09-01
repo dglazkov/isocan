@@ -16,7 +16,7 @@
  * CLI could be recognised by is cleared — the four it ships with, plus anything
  * this machine declared in `~/.isocan/config.json` — and `ISOCAN_SESSION_ID` is
  * set to one stable key. *Deliberate beats ambient* is the CLI's own rule
- * (`packages/cli/src/harness.ts`); clearing the rest is belt, because which
+ * (`packages/api/src/harness.ts`); clearing the rest is belt, because which
  * leaked session *is* this process is settled by the registry rather than by
  * the environment.
  *

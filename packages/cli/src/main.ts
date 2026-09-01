@@ -208,22 +208,18 @@ import {
   type LensSource,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
+import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig } from "./ctx.ts";
 import {
   type Ctx,
   type HomeRecord,
   type ResolveOptions,
   baseForCwd,
-  canvasRefOf,
   ensureDirBinding,
   homeAddressOf,
-  makeCtx,
-  metaPatch,
-  readConfig,
   readHomeRecord,
   matchRef,
   resolveCanvas,
-  writeConfig,
-} from "./ctx.ts";
+} from "@isocan/api";
 import {
   bindableRoot,
   dirsOf,
@@ -233,9 +229,9 @@ import {
   recordDir,
   writeMarker,
 } from "@isocan/server";
-import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "./direct.ts";
+import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "@isocan/api";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
-import { ApiError, DaemonClient, type Health } from "./client.ts";
+import { ApiError, DaemonClient, type Health } from "@isocan/api";
 import {
   adoptIdentity,
   readIdentity,
@@ -246,9 +242,9 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity,
-} from "./identity.ts";
+} from "@isocan/api";
 import { agentGuide } from "./agent-guide.ts";
-import { harnessSessions } from "./harness.ts";
+import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
 import {
@@ -258,6 +254,7 @@ import {
   type Install,
   type UpgradePlan,
 } from "./upgrade.ts";
+import { shaOfRoot } from "@isocan/api";
 import {
   adoptGlobal,
   applySwap,
@@ -267,7 +264,6 @@ import {
   flipTo,
   lastRefusal,
   listBuilds,
-  shaOfRoot,
   upgradePolicy,
   type Adoption,
   type Build,

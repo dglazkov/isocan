@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stopDaemons } from "@isocan/server";
-import { harnessVars } from "../src/harness.ts";
+import { harnessVars } from "@isocan/api";
 import { reservePort } from "../../../test/ports.ts";
 
 /**
