@@ -37,13 +37,27 @@ export function fileOf(item: Item): string | null {
  * What one machine's disk says about a tracked item.
  *
  * - `written` — the file is there and matches the item's current version.
- * - `drifted` — it is there and does NOT match: somebody edited it outside
- *   the canvas, so a write would eat their work and must say so first.
+ * - `behind` — it is there and holds ANOTHER version of this same item. The
+ *   canvas moved and the disk did not: `version promote` does exactly this,
+ *   every time, because nothing writes a file on its own. An ordinary write
+ *   catches it up and eats nobody's work.
+ * - `drifted` — it is there and matches NO version this item has ever had:
+ *   somebody edited it outside the canvas, so a write would eat their work
+ *   and must say so first.
  * - `absent` — tracked, and never written on this machine.
  * - `unbound` — no directory here at all, which is every hosted canvas and
  *   every machine without the checkout. Not an error; a different question.
+ *
+ * **`behind` exists because the daemon already believed in it.** `writeBound`
+ * refuses on "what is there is not anything this canvas EVER wrote" — it is
+ * handed every version's hash — while this function compared against the
+ * current one alone. So the two halves of one rule disagreed, and the client
+ * called a promoted item's file drifted when the daemon would have written it
+ * without complaint. The web read that and offered "Overwrite file", which
+ * passes `force` — and `force` is what switches the real drift check OFF. The
+ * one state that never needed the escape hatch was the one being handed it.
  */
-export type BackingState = "written" | "drifted" | "absent" | "unbound";
+export type BackingState = "written" | "behind" | "drifted" | "absent" | "unbound";
 
 export interface Backing {
   path: string;
@@ -69,7 +83,12 @@ export function backingOf(
   const found = onDisk(path);
   if (found === null) return { path, state: "absent" };
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  return { path, state: found === current?.blobHash ? "written" : "drifted" };
+  if (found === current?.blobHash) return { path, state: "written" };
+  // Anything this item has ever been is ours, which is the same set the
+  // daemon writes against. Matching one of them means the disk is a version
+  // BEHIND, not somebody else's work.
+  if (item.versions.some((v) => v.blobHash === found)) return { path, state: "behind" };
+  return { path, state: "drifted" };
 }
 
 /**

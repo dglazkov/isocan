@@ -63,13 +63,43 @@ describe("what one machine's disk says", () => {
     });
   });
 
-  it("drifted: there, and NOT what the canvas holds", () => {
+  it("drifted: there, and not anything this item has EVER been", () => {
     // Somebody edited it outside the canvas. A write would eat their work,
     // so this is the state the write route refuses on.
     expect(backingOf(tracked, true, () => "hash_theirs")?.state).toBe("drifted");
-    // An OLD version of this very item counts as drift too: the disk is
-    // behind, and "behind" is still "not what would be written".
-    expect(backingOf(tracked, true, () => "hash_old")?.state).toBe("drifted");
+  });
+
+  it("behind: there, and holding an OLDER version of this same item", () => {
+    /**
+     * This case used to answer "drifted", and the reasoning written beside it
+     * was that behind is still "not what would be written". True of the
+     * write, and false of the WORD — which is where it did damage.
+     *
+     * `writeBound` has always refused on "not anything this canvas ever
+     * wrote", and it is handed every version's hash; this function compared
+     * against the current one alone. So the two halves of one rule
+     * disagreed, and the client called a file drifted that the daemon would
+     * have written without complaint. The web believed the client, offered
+     * "Overwrite file", and that button passes `force` — which is exactly
+     * what switches the real drift check OFF. The one state that never
+     * needed the escape hatch was the only one being handed it.
+     *
+     * `version promote` produces this state every time, because nothing
+     * writes a file on its own.
+     */
+    expect(backingOf(tracked, true, () => "hash_old")?.state).toBe("behind");
+  });
+
+  it("agrees with the daemon about what is ours", () => {
+    // The set the client tests against must be the set the daemon writes
+    // against — every version, not the current one. This is the guard on the
+    // fold: if either side narrows it again, they disagree again.
+    const everyHash = tracked.versions.map((v) => v.blobHash);
+    for (const hash of everyHash) {
+      expect(backingOf(tracked, true, () => hash)?.state, `${hash} read as foreign`).not.toBe(
+        "drifted",
+      );
+    }
   });
 
   it("absent: tracked, never written here", () => {

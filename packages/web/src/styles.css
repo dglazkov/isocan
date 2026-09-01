@@ -4046,6 +4046,12 @@ button.mt-card:hover { border-color: var(--accent); }
 .file-mark.written { background: var(--ink-soft); border-color: var(--ink-soft); }
 /* Absent: hollow — it has a place and has not been put there. */
 .file-mark.absent { background: none; }
+/* Behind: the file is there and holds an older version of THIS item — the
+   ordinary state after promoting one, because nothing writes a file on its
+   own. Present but not current, so it is filled and quiet. Deliberately not
+   `--warn`: this is a catch-up, not somebody's work about to be lost, and
+   colouring it like drift is how the two came to be confused. */
+.file-mark.behind { background: var(--chip); border-color: var(--ink-soft); }
 /* Drifted: the disk and the canvas disagree, and saving would overwrite
    somebody's work. The one state that should catch an eye. */
 .file-mark.drifted { background: var(--warn); border-color: var(--warn); }

@@ -451,11 +451,20 @@ export function ArtifactStage({
 /**
  * The button, and the two sentences it needs.
  *
- * `absent` is an ordinary write. `drifted` means the file changed outside the
- * canvas since anything this item has ever held — so the first press is
+ * `absent` is an ordinary write, and so is `behind` — the file holds an older
+ * version of this same item, which is what promoting one leaves behind every
+ * time, and writing catches it up without touching anybody's work.
+ *
+ * `drifted` is the only alarming one: the file matches NO version this item
+ * has ever had, so somebody edited it outside the canvas. The first press is
  * refused by the daemon and the second, which says `force`, is a person
- * deciding to overwrite somebody's work. Making that two presses rather than
- * a confirm dialog keeps the decision in the same place as the gesture.
+ * deciding to overwrite their work. Making that two presses rather than a
+ * confirm dialog keeps the decision in the same place as the gesture.
+ *
+ * Telling `behind` from `drifted` matters more than the wording: this button
+ * used to call both of them drift and offer "Overwrite file" for both, which
+ * passes `force` — and `force` is precisely what turns the drift check off.
+ * The state that never needed it was the one being handed it.
  */
 function SaveToDisk({
   canvasId,
@@ -493,6 +502,7 @@ function SaveToDisk({
   }
 
   const drifted = backing.state === "drifted";
+  const behind = backing.state === "behind";
   return (
     <>
       {refused && <span className="text-edit-refusal">{refused}</span>}
@@ -504,11 +514,21 @@ function SaveToDisk({
             ? `${backing.path} is up to date`
             : drifted
               ? `${backing.path} changed on disk outside the canvas — this overwrites it`
-              : `Write this item to ${backing.path}`
+              : behind
+                ? `${backing.path} holds an older version of this item — this catches it up`
+                : `Write this item to ${backing.path}`
         }
         onClick={() => void save(drifted)}
       >
-        {busy ? "…" : backing.state === "written" ? "Saved to disk" : drifted ? "Overwrite file" : "Save to disk"}
+        {busy
+          ? "…"
+          : backing.state === "written"
+            ? "Saved to disk"
+            : drifted
+              ? "Overwrite file"
+              : behind
+                ? "Update file"
+                : "Save to disk"}
       </button>
     </>
   );
