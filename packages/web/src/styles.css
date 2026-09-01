@@ -67,6 +67,9 @@
      a claim. One ink for all five, dark, because paper is pale in both themes
      — a sticky note is a pale object on whatever desk it is lying on. */
   --paper-ink: #2f2c26;
+  /* The placeholder's ink — a real colour, because dimming text with opacity
+     hides a contrast decision from every check that could catch it. */
+  --paper-ink-soft: #8a8477;
   --paper-yellow: #fdf3c3;
   --paper-yellow-edge: #e8dca0;
   --paper-pink: #fbdce6;
@@ -159,6 +162,7 @@
      alternative reading is that somebody forgot. It stays dark because it is
      sitting on paper, not on the canvas. */
   --paper-ink: #2f2c26;
+  --paper-ink-soft: #7d7768;
   --paper-yellow: #e6dba8;
   --paper-yellow-edge: #c9bd85;
   --paper-pink: #e4c3ce;
@@ -4428,7 +4432,9 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--paper-ink);
   padding: 10px;
 }
-.text-composer.on-paper textarea::placeholder { color: var(--paper-ink); opacity: 0.45; }
+/* A quieter INK rather than a dimmed one: opacity on text is a contrast
+   decision no colour test can see, which is what `dimmed.test.ts` refuses. */
+.text-composer.on-paper textarea::placeholder { color: var(--paper-ink-soft); }
 /* The mirror measures; it never shows. Same padding, wrapping and border box
    as the textarea beside it, or it would measure a different shape than the
    one being typed in. `max-content` up to the column is what gives a short
