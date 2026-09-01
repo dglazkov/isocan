@@ -11,6 +11,8 @@ export function fileMarkTip(backing: Backing): string {
   switch (backing.state) {
     case "written":
       return `${backing.path} — this item is that file, and the file matches`;
+    case "behind":
+      return `${backing.path} — the file holds an older version of this item; saving catches it up`;
     case "drifted":
       return `${backing.path} — the file changed outside the canvas; saving would overwrite it`;
     case "absent":
