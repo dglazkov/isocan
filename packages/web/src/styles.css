@@ -1454,6 +1454,40 @@ img { height: auto; }
 .fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
 .fullscreen.resting .fs-bar > * { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }
+
+/* **The STAGE's chrome rests with the bar above it.**
+
+   `.fs-bar` bowed out and the stage's own furniture stayed: the pane bar
+   ("Saved — v6", the walk arrows, "Edit text") and the folded `EDIT` rail
+   down the side. Half the chrome fading is worse than none — it reads as
+   something failing to load rather than as a slideshow getting out of the
+   way — and on a screen being presented, that strip is the only thing on
+   the glass that is not the slide.
+
+   One timer, not a second one: `.resting` is already on the ancestor, so
+   this is the same few still seconds and the same pointer move that ends
+   them. Opacity, like `.fs-bar`, so the layout does not move under the
+   slide — the strip keeps its place and stops competing, rather than the
+   slide growing 26px the moment somebody stops moving the mouse.
+
+   **Unless the caret is in the editor.** A key press deliberately does not
+   wake the chrome (flipping slides would blink it on every slide), which is
+   right for presenting and wrong for writing: without this, somebody typing
+   would watch the toolbar above their own text fade out. */
+.stage-pane-bar,
+.stage-rail { transition: opacity 0.35s ease; }
+.fullscreen.resting .stage-pane-bar,
+.fullscreen.resting .stage-rail { opacity: 0; pointer-events: none; }
+/* The exception — somebody typing must not watch the toolbar above their own
+   text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
+   focus-within)` rule first, and that selector parses, `Element.matches()`
+   agrees it matches, and the style engine still does not apply it: a nasty
+   way to be wrong, because everything reads correct and the pixels never
+   change. Measured, not assumed. FullScreen wakes on a keystroke that is
+   going into a field, which is the same fact expressed where it works. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-pane-bar, .stage-rail { transition: none; }
+}
 /* The stage is the whole window now that nothing above it takes a slice. */
 .fullscreen > .fullscreen-stage { position: absolute; inset: 0; }
 

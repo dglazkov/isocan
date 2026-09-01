@@ -158,12 +158,27 @@ export function FullScreen({
       clearTimeout(timer);
       timer = window.setTimeout(() => setResting(true), REST_AFTER_MS);
     };
+    /**
+     * **Typing into a FIELD wakes it; typing to flip a slide does not.**
+     *
+     * The rule above — a key press must not reveal the chrome — is about
+     * presenting, where ⌘→ on every slide would blink the bar in and out. It
+     * is wrong for the one person who is writing: `focusin` fires when they
+     * click into the editor and then never again, so the chrome would fade
+     * out over their own text while they typed under it. `isTyping` is the
+     * same helper every other global handler asks before it acts.
+     */
+    const typingWake = (event: KeyboardEvent) => {
+      if (isTyping(event.target)) wake();
+    };
     window.addEventListener("pointermove", wake, { passive: true });
     window.addEventListener("focusin", wake);
+    window.addEventListener("keydown", typingWake);
     return () => {
       clearTimeout(timer);
       window.removeEventListener("pointermove", wake);
       window.removeEventListener("focusin", wake);
+      window.removeEventListener("keydown", typingWake);
     };
   }, []);
 

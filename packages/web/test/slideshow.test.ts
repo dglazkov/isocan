@@ -137,3 +137,50 @@ describe("marking a selection as slides", () => {
     expect(body).toContain("if (changing.length === 0) return;");
   });
 });
+
+/**
+ * **All the chrome rests, or none of it should.**
+ *
+ * `.fs-bar` bowed out after a few still seconds and the stage's own furniture
+ * stayed: the pane bar ("Saved — v6", the walk arrows, "Edit text") and the
+ * folded EDIT rail. Half the chrome fading reads as something failing to
+ * load, not as a slideshow getting out of the way — and on a screen being
+ * presented that strip is the only thing on the glass that is not the slide.
+ *
+ * One timer, not a second one: `.resting` is already on the ancestor.
+ */
+describe("the stage's chrome rests with the bar above it", () => {
+  const css = readFileSync(
+    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
+    "utf8",
+  );
+  const fs = readFileSync(
+    fileURLToPath(new URL("../src/components/FullScreen.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("fades the pane bar and the rail, not only the bar above them", () => {
+    expect(css).toMatch(/\.fullscreen\.resting \.stage-pane-bar[\s\S]{0,120}opacity: 0/);
+    expect(css).toContain(".fullscreen.resting .stage-rail");
+  });
+
+  it("fades them, rather than removing them and moving the slide", () => {
+    // `visibility`/`opacity`, never `display`: a strip that stops taking space
+    // would grow the slide the moment somebody stopped moving the mouse.
+    const rule = css.slice(css.indexOf(".fullscreen.resting .stage-pane-bar"));
+    expect(rule.slice(0, rule.indexOf("}"))).not.toContain("display: none");
+    expect(css).toMatch(/\.stage-pane-bar,\n\.stage-rail \{ transition: opacity/);
+  });
+
+  it("does not lean on `:has()` for the typing exception", () => {
+    /**
+     * `:has(.stage-editor:focus-within)` parses, and `Element.matches()`
+     * agrees it matches — and the style engine does not apply it. Measured in
+     * a browser, not assumed. Somebody typing must not watch the toolbar
+     * above their own text fade, so that fact lives in the wake instead.
+     */
+    expect(css).not.toContain(":has(.stage-editor:focus-within)");
+    expect(fs).toContain("if (isTyping(event.target)) wake();");
+    expect(fs).toContain('window.addEventListener("keydown", typingWake)');
+  });
+});
