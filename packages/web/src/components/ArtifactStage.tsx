@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
-import { backingOf, editableText, isDesignSystem, isTextItem } from "@isocan/core";
+import { backingOf, deckStep, editableText, isDesignSystem, isTextItem } from "@isocan/core";
 import { homeAnswered, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -169,6 +169,8 @@ export function ArtifactStage({
   surface: Surface;
 }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
+  // The whole canvas, for the deck walk that decides what to warm.
+  const canvas = useCanvasStore((s) => s.canvas);
   const loaded = useCanvasStore((s) => s.canvas !== null);
   const [panes, setPanes] = useState<Panes>(() => readPanes(surface));
   const [split, setSplit] = useState<number | null>(readSplit);
@@ -232,6 +234,23 @@ export function ArtifactStage({
     writePanes(surface, next);
   };
 
+  /**
+   * **The slides either side, so the flip has nothing left to do.**
+   *
+   * Only in full screen, because that is the surface with a next and a
+   * previous — on the canvas and in the workbench there is no arrow to press
+   * and warming would be work nobody asked for. `deckStep` is the same walk
+   * the arrows take, so what gets rendered early is exactly what they reach.
+   */
+  const neighbours =
+    surface === "fullscreen" && canvas
+      ? ([1, -1] as const)
+          .map((delta) => deckStep(canvas, item.id, delta))
+          .filter((one): one is NonNullable<typeof one> => Boolean(one))
+          .map((one) => one.versions.find((v) => v.id === one.currentVersionId)?.blobHash)
+          .filter((hash): hash is string => Boolean(hash))
+      : [];
+
   const saved = (
     <VersionContent
       canvasId={canvasId}
@@ -242,6 +261,7 @@ export function ArtifactStage({
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
       reloadToken={0}
+      warm={neighbours}
     />
   );
 

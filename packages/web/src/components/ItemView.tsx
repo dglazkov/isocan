@@ -976,12 +976,16 @@ export function VersionContent({
   reloadToken = 0,
   designSystem,
   textNode,
+  warm,
 }: {
   canvasId: string;
   blobHash: string;
   mimeType: string;
   filename: string;
   entered: boolean;
+  /** Blobs to render out of sight because they are probably next — the slides
+   *  either side of this one. See `HtmlView`. */
+  warm?: readonly string[];
   /** Bumped by the titlebar's ⟳ to remount a browser item's iframe. */
   reloadToken?: number;
   /** A text node: markdown typed onto the canvas, whose newlines are meant
@@ -1022,7 +1026,15 @@ export function VersionContent({
     // its storage. The blob response additionally carries `CSP: sandbox` and
     // nosniff.
     const frame = itemFrame(contentBase(), canvasId, blobHash);
-    return <HtmlView src={frame.src} sandbox={frame.sandbox} title={filename} />;
+    const base = contentBase();
+    return (
+      <HtmlView
+        src={frame.src}
+        sandbox={frame.sandbox}
+        title={filename}
+        warm={(warm ?? []).map((hash) => itemFrame(base, canvasId, hash).src)}
+      />
+    );
   }
   return (
     <div className="file-view">
@@ -1071,6 +1083,16 @@ const EMPTY: ReadonlySet<string> = new Set();
  * opaque origin on purpose (the content-origin boundary above), so nothing
  * here may look inside one. `load` is the last moment this side can observe.
  *
+ * **The slides either side are rendered before you ask for them.** `load`
+ * fires before a webfont has been fetched and laid out, so promoting on it
+ * still shows the fallback face first and reflows when the real one lands —
+ * `font-display: swap`, in front of the room. Nothing on this side can wait
+ * for `document.fonts.ready`, because these frames are sandboxed to an opaque
+ * origin on purpose. What it CAN do is start the neighbours early: they are
+ * mounted out of sight with `opacity`, never `visibility` or `display`, so
+ * the browser lays them out and fetches their fonts for real. By the time the
+ * arrow is pressed the document has already done its reflow, unwatched.
+ *
  * **And a slide already seen is not loaded again.** Holding one spare frame
  * would still re-fetch, re-parse and re-lay-out every slide on every visit,
  * which is most of what "the fonts load lazily EVERY time" was describing —
@@ -1085,28 +1107,37 @@ function HtmlView({
   src,
   sandbox,
   title,
+  warm = [],
 }: {
   src: string;
   sandbox: string;
   title: string;
+  warm?: readonly string[];
 }) {
   const [mounted, setMounted] = useState<string[]>([src]);
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(EMPTY);
   const [visible, setVisible] = useState(src);
+  // A stable value for the effect to depend on: the array is rebuilt on every
+  // render of the parent, so depending on it directly would remount the pool
+  // every time anything above changed.
+  const warmKey = warm.join("\u0000");
 
   useEffect(() => {
-    // Keep the one on screen whatever happens, or the flip has nothing to
-    // stand on while the next document arrives.
+    const neighbours = warmKey === "" ? [] : warmKey.split("\u0000");
     setMounted((was) => {
-      const kept = was.filter((one) => one !== src);
-      const trimmed = kept.length + 1 > KEEP_FRAMES ? kept.slice(-(KEEP_FRAMES - 1)) : kept;
-      const next = [...(trimmed.includes(visible) || visible === src ? trimmed : [visible, ...trimmed].slice(-(KEEP_FRAMES - 1))), src];
+      /**
+       * What stays mounted, in the order that decides what gets dropped:
+       * the one on SCREEN first (losing it would blank the flip), then the
+       * one asked for, then the neighbours, then whatever else was here.
+       * Oldest off the end.
+       */
+      const next = [...new Set([visible, src, ...neighbours, ...was])].slice(0, KEEP_FRAMES);
       return was.length === next.length && was.every((one, i) => one === next[i]) ? was : next;
     });
-  }, [src, visible]);
+  }, [src, visible, warmKey]);
 
-  // Already here and already painted: show it now. This is the whole point of
-  // the pool — going back a slide should not reload a thing.
+  // Already here and already painted: show it now. This is the whole point —
+  // a slide that was warmed does not load, it just becomes visible.
   useEffect(() => {
     if (loaded.has(src)) setVisible(src);
   }, [src, loaded]);
@@ -1120,9 +1151,8 @@ function HtmlView({
           src={one}
           sandbox={sandbox}
           title={title}
-          onLoad={() => {
-            setLoaded((was) => (was.has(one) ? was : new Set(was).add(one)));
-          }}
+          aria-hidden={one === visible ? undefined : true}
+          onLoad={() => setLoaded((was) => (was.has(one) ? was : new Set(was).add(one)))}
         />
       ))}
     </div>
