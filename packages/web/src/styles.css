@@ -53,6 +53,13 @@
   --accent-text: #1f3fd0;
   --danger: #b3261e;
   --warn: #a06000;
+  /* **In the deck.** A role, not a state — see `.item.slide`. Magenta because
+     it is the one hue nothing else here claims: the four semantic colours are
+     warn/accent/good/danger, and seven more belong to PEOPLE (identity.ts),
+     whose outlines land on items during remote selection. Measured 36-47°
+     from the nearest of any of them, which is the widest gap on the wheel,
+     and 5.23:1 on `--card` / 5.05:1 on `--ground`. */
+  --slide: #b8339f;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -121,6 +128,9 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --good: #56b06a;
+  /* Lifted for the dark ground, like every other hue here: 6.30:1 on `--card`,
+     7.22:1 on `--ground`. The light value would sit at 2.69 and disappear. */
+  --slide: #e07ccb;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -825,6 +835,19 @@ img { height: auto; }
      badge, plies, resize handle) can never paint over sibling items. */
   z-index: 0;
 }
+/* **A slide wears its membership on the canvas**, not only in its name.
+
+   The 🎬 in the title says it, and a mark inside a title bar is something you
+   read one item at a time — the question this answers is "which of these
+   forty is in the deck", asked at a glance and from a distance. So it is the
+   EDGE that carries it.
+
+   Quiet by default and firmer under the pointer: being in the deck is a
+   standing fact, and a border as loud as selection would compete with the
+   thing that means "I am working on this right now". Selection still wins —
+   `.item.selected` is declared after this and paints the accent over it. */
+.item.slide { border-color: var(--slide); }
+.item.slide:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--slide); }
 .item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
 /* STEPPED INSIDE — the item is running. Its scripts are live, its links work,
    and the wheel belongs to it rather than to the canvas. That is a different
@@ -1093,7 +1116,11 @@ img { height: auto; }
    page, and a page assumes a white canvas. Painting it graphite would show
    through the transparent parts of somebody else's design and misrepresent it.
    The rest of the app takes its colours from the tokens. */
-.html-view { width: 100%; height: 100%; border: 0; background: #fff; }
+.html-view {
+  width: 100%; height: 100%; border: 0; background: #fff;
+  /* The dissolve between slides — see the note below `.html-view.arriving`. */
+  transition: opacity 0.16s ease;
+}
 /* **Two frames, one place.** The next slide loads behind the one on screen
    and is promoted when it is ready, so the white above is never seen through
    — see `HtmlView`. The stack fills its parent exactly as the lone frame used
@@ -1104,6 +1131,22 @@ img { height: auto; }
    browser skip the work this is waiting for. It has to be painted to have
    laid out. */
 .html-view.arriving { opacity: 0; pointer-events: none; }
+/* **The dissolve between slides, and why this one is possible.**
+
+   A view transition could not do it: it animates a SNAPSHOT, and a sandboxed
+   cross-origin frame photographs blank (see `deckflip.ts`). The old code
+   said a cross-fade was impossible for the other reason too — "keeping a
+   second one mounted would run its scripts twice and reload it in view".
+   Neither objection stands now. The pool already keeps both documents
+   mounted and loaded, so these are two LIVE elements being composited, with
+   nothing re-run and nothing re-fetched.
+
+   It is a dissolve rather than a true cross-fade, and the order is what makes
+   it clean: the moment the new slide is promoted it becomes the FIRST child —
+   underneath, fully opaque — and the outgoing one is left on top fading to
+   nothing. So the picture is never two half-transparent layers with the
+   ground showing between them; it is one finished slide being uncovered. */
+@media (prefers-reduced-motion: reduce) { .html-view { transition: none; } }
 /* The mini-browser: a live site projected onto the canvas. */
 .browser-view { width: 100%; height: 100%; border: 0; background: #fff; }
 .browser-reload {
