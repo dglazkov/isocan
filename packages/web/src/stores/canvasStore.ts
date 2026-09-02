@@ -10,6 +10,7 @@ import type {
   Canvas,
   CanvasState,
   ServerMessage,
+  ActorJoins,
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
@@ -136,6 +137,11 @@ interface CanvasStore {
    * registry. A comment carries the name its author wore when they wrote it;
    * this is what we show instead. See lib/names.ts. */
   actorNames: ActorNames;
+  /** Actors folded into others (`actor.join`, multi-identity phase 5), from
+   * the same registry. Names, colours and marks arrive already resolved;
+   * this is for the comparisons a name cannot answer — is this comment
+   * mine, whom does a new "@Dimitri 2" reach. */
+  actorJoins: ActorJoins;
   /**
    * **What THIS MACHINE's disk says about the canvas's backed items** —
    * the derived half of `backingOf` (`docs/projects/workbench/files-on-disk.md`).
@@ -180,6 +186,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   sessions: [],
   actorColors: {},
   actorNames: {},
+  actorJoins: {},
   backing: { bound: false, onDisk: {} },
   commands: null,
   capability: "edit",
@@ -996,6 +1003,7 @@ function openSocket(canvasId: string): void {
         connection: "live",
         actorColors: message.colors,
         actorNames: message.names,
+        actorJoins: message.joined ?? {},
         capability: message.capability === "view" ? "view" : "edit",
       });
       // Through `confirm`, like every other move of the truth: the snapshot IS
@@ -1023,6 +1031,7 @@ function openSocket(canvasId: string): void {
         connection: "live",
         actorColors: message.colors,
         actorNames: message.names,
+        actorJoins: message.joined ?? {},
         capability: message.capability === "view" ? "view" : "edit",
       });
       schedulePresenceFlush();
@@ -1031,6 +1040,7 @@ function openSocket(canvasId: string): void {
         sessions: message.sessions.filter((session) => session.sessionId !== CLIENT_ID),
         actorColors: message.colors,
         actorNames: message.names,
+        actorJoins: message.joined ?? {},
       });
     } else if (message.type === "op-applied") {
       // **The tail is applied to the CONFIRMED state, never to the view.**

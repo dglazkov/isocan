@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Actor, CanvasContents, CommentThread } from "@isocan/core";
+import type { Actor, ActorJoins, CanvasContents, CommentThread } from "@isocan/core";
+import { sameActor } from "@isocan/core";
 import { useUiStore } from "./uiStore.ts";
 
 /**
@@ -137,11 +138,24 @@ export function noticeComment(notice: CommentNotice): void {
   }));
 }
 
-/** Comments in this thread written by others since you last read it. */
-export function unreadCount(thread: CommentThread, seen: Watermarks, selfId: string): number {
+/**
+ * Comments in this thread written by others since you last read it.
+ *
+ * "Others" is resolved through `joined` (multi-identity phase 5): a comment
+ * written under an id that was later folded into yours is your own comment,
+ * not something new from somebody else. Without the map, only an exact id
+ * match counts as yours.
+ */
+export function unreadCount(
+  thread: CommentThread,
+  seen: Watermarks,
+  selfId: string,
+  joined?: ActorJoins,
+): number {
   const since = seen[thread.id];
   return thread.comments.filter(
-    (comment) => comment.author.id !== selfId && (!since || comment.createdAt > since),
+    (comment) =>
+      !sameActor(joined, comment.author.id, selfId) && (!since || comment.createdAt > since),
   ).length;
 }
 
@@ -150,8 +164,9 @@ export function unreadThreads(
   canvas: CanvasContents,
   seen: Watermarks,
   selfId: string,
+  joined?: ActorJoins,
 ): CommentThread[] {
   return Object.values(canvas.threads).filter(
-    (thread) => unreadCount(thread, seen, selfId) > 0,
+    (thread) => unreadCount(thread, seen, selfId, joined) > 0,
   );
 }

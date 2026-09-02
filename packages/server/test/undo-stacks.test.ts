@@ -43,6 +43,49 @@ const undoEntry = (seq: number, actor: typeof alice, targetSeq: number): LogEntr
 const redoEntry = (seq: number, actor: typeof alice, targetSeq: number): LogEntry =>
   entry(seq, actor, { cause: { kind: "redo", targetSeq } });
 
+describe("UndoStacks, for a person with two ids (multi-identity phase 5)", () => {
+  const alice2 = { id: "usr_alice_2", name: "Alice 2" };
+
+  it("walks both stacks as one, newest first, and leaves Bob's alone", () => {
+    const stacks = UndoStacks.rebuild([
+      entry(1, alice),
+      entry(2, alice2),
+      entry(3, bob),
+      entry(4, alice),
+      entry(5, alice2),
+    ]);
+    const person = [alice.id, alice2.id];
+    expect(stacks.nextUndoTarget(person)).toBe(5);
+    // Each id alone still answers for itself: the stacks are per id.
+    expect(stacks.nextUndoTarget(alice.id)).toBe(4);
+    expect(stacks.nextUndoTarget(alice2.id)).toBe(5);
+    expect(stacks.nextUndoTarget(bob.id)).toBe(3);
+  });
+
+  it("an undo by the person of an op the old id wrote moves it to the person's redo", () => {
+    const stacks = UndoStacks.rebuild([entry(1, alice2), entry(2, alice)]);
+    const person = [alice.id, alice2.id];
+    stacks.record(undoEntry(3, alice, 2));
+    expect(stacks.nextUndoTarget(person)).toBe(1);
+    stacks.record(undoEntry(4, alice, 1)); // Alice 2's op, undone by Alice
+    expect(stacks.nextUndoTarget(person)).toBeNull();
+    expect(stacks.nextUndoTarget(alice2.id)).toBeNull(); // gone from the old stack too
+    // Redo walks back in the order they were undone: 1 first, then 2.
+    expect(stacks.nextRedoTarget(person)).toEqual({ targetSeq: 1, undoSeq: 4 });
+    stacks.record(redoEntry(5, alice, 1));
+    expect(stacks.nextRedoTarget(person)).toEqual({ targetSeq: 2, undoSeq: 3 });
+    expect(stacks.nextUndoTarget(person)).toBe(1);
+  });
+
+  it("discards from whichever of the person's stacks holds the seq", () => {
+    const stacks = UndoStacks.rebuild([entry(1, alice2), entry(2, alice)]);
+    const person = [alice.id, alice2.id];
+    stacks.discardUndoTarget(person, 1);
+    expect(stacks.nextUndoTarget(alice2.id)).toBeNull();
+    expect(stacks.nextUndoTarget(person)).toBe(2);
+  });
+});
+
 describe("UndoStacks", () => {
   it("hands each actor only their own ops, newest first", () => {
     const stacks = UndoStacks.rebuild([

@@ -49,6 +49,13 @@ export function loadActorMarks(): Promise<ActorMarks> {
   return done.then(() => cached ?? {});
 }
 
+/** Ask again — after `actor.join` (multi-identity phase 5), when the map the
+ * home serves has changed for ids this tab did not touch itself. */
+export function refreshActorMarks(): Promise<ActorMarks> {
+  inFlight = null;
+  return loadActorMarks();
+}
+
 /** Say locally what the home has been told, so your own face changes at once
  *  rather than on the next reload. */
 export function rememberMark(actorId: string, mark: string | null): void {

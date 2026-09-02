@@ -32,6 +32,7 @@ import { useActorMarks } from "../lib/marks.ts";
 export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
+  const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const colors = useActorColors();
   const marks = useActorMarks();
@@ -55,8 +56,13 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
    * whole canvas — so the two numbers differ without disagreeing.
    */
   const chat = mainThread(canvas);
-  const unread = chat ? unreadCount(chat, seen, actor.id) : 0;
-  const unreadBy = unreadByAuthor(unreadThreads(canvas, seen, actor.id), seen, actor.id);
+  const unread = chat ? unreadCount(chat, seen, actor.id, joined) : 0;
+  const unreadBy = unreadByAuthor(
+    unreadThreads(canvas, seen, actor.id, joined),
+    seen,
+    actor.id,
+    joined,
+  );
   const now = Date.now();
 
   // Agents only. A person's face belongs in the facepile, which is about who

@@ -34,6 +34,7 @@ export function invertOperation(
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":
+    case "actor.join":
       return null; // home-scoped and never undoable; never reaches a canvas
 
     case "agent.enroll":

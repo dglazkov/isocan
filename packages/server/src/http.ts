@@ -897,6 +897,17 @@ export function registerRoutes(
       });
       return { seq: entry.seq, envelope: entry.envelope };
     }
+    if (body.op?.type === "actor.join") {
+      // Home-scoped like the colour and the mark (multi-identity phase 5):
+      // the registry changes, and the claim check is inside `joinActors`.
+      const entry = await engine.joinActors({
+        op: body.op,
+        actor: body.actor,
+        badgeId: req.badge!.badgeId,
+        ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
+      });
+      return { seq: entry.seq, envelope: entry.envelope };
+    }
     if (body.op?.type === "actor.setColor") {
       // Home-scoped like a claim: the registry, not a canvas, is what changes.
       const entry = await engine.setActorColor({
@@ -2200,7 +2211,9 @@ export function registerRoutes(
   app.get("/api/projects/:id/sessions", async (req) => {
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id);
-    return presence.roster(id);
+    // A session under a folded id is listed as the person it was folded into
+    // (multi-identity phase 5), so `isocan who` shows one Dimitri.
+    return engine.resolveSessions(presence.roster(id));
   });
 
   app.delete("/api/presence/actors/:actorId", async (req) => {

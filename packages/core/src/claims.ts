@@ -5,15 +5,19 @@ import { OpValidationError } from "./errors.ts";
 import { newActorId } from "./ids.ts";
 import {
   type ActorColors,
+  type ActorJoins,
   type ActorMarks,
   type ActorNames,
+  actorColor,
   isFaceMark,
   isIdentityColor,
+  resolveActor,
 } from "./identity.ts";
 
 export type ActorClaimOp = Extract<Operation, { type: "actor.claim" }>;
 export type ActorSetColorOp = Extract<Operation, { type: "actor.setColor" }>;
 export type ActorSetMarkOp = Extract<Operation, { type: "actor.setMark" }>;
+export type ActorJoinOp = Extract<Operation, { type: "actor.join" }>;
 
 /**
  * The actor registry: who everyone is, and who may speak as them. Identity
@@ -92,9 +96,22 @@ export interface ActorRegistry {
    * is nothing to migrate TO: absent and empty mean the same thing.
    */
   marks?: ActorMarks;
+  /**
+   * Actors folded into other actors, old id → new id (`actor.join`,
+   * multi-identity phase 5). Optional for the reason `marks` is: registries
+   * written before the field are on disk now, and absent means nobody has
+   * joined anybody. Readers go through `resolveActor` rather than reading
+   * this directly, so a chain of joins resolves to its end.
+   */
+  joined?: ActorJoins;
 }
 
-export const emptyActorRegistry = (): ActorRegistry => ({ names: {}, colors: {}, marks: {} });
+export const emptyActorRegistry = (): ActorRegistry => ({
+  names: {},
+  colors: {},
+  marks: {},
+  joined: {},
+});
 
 /** A claim row as served over the API — to the badge that holds it, and to
  * nobody else. `key` is the claim's `sessionKey`: a client's own index into
@@ -594,9 +611,91 @@ export function applyActorMark(
   return { ...registry, marks };
 }
 
-/** The mark every actor wears, keyed by actor id — the wire shape. */
+/**
+ * **Two actors become one person** (`actor.join`, multi-identity phase 5).
+ *
+ * Writes one row into the registry's `joined` map, `from` → `into`, and
+ * nothing else: no name moves, no colour moves, no log entry changes. The
+ * wire shapes below (`actorNames`, `actorColors`, `actorMarks`) read through
+ * the map, so every client that already shows a name for an id shows the
+ * joined person's name without learning anything new.
+ *
+ * Refused as a join (`bad-join`) when `from` is `into`, when `from` is
+ * already folded into somebody, or when the join would close a cycle; refused
+ * as `unknown-actor` when either id has no name row here. Whether the
+ * speaker may do this at all — the presenting badge must claim both — is the
+ * engine's question, asked with `claimsActor` before this runs.
+ */
+export function applyActorJoin(registry: ActorRegistry, op: ActorJoinOp): ActorRegistry {
+  const { from, into } = op;
+  if (from === into) {
+    throw new OpValidationError("bad-join", `${from} cannot be folded into itself`);
+  }
+  for (const id of [from, into]) {
+    if (!registry.names[id]) {
+      throw new OpValidationError("unknown-actor", `no actor ${id} is known here`);
+    }
+  }
+  const joined = registry.joined ?? {};
+  if (joined[from] !== undefined) {
+    throw new OpValidationError(
+      "bad-join",
+      `${from} is already folded into ${resolveActor(joined, from)}`,
+    );
+  }
+  if (resolveActor(joined, into) === from) {
+    throw new OpValidationError(
+      "bad-join",
+      `${into} already resolves to ${from} — folding ${from} into it would close a cycle`,
+    );
+  }
+  return { ...registry, joined: { ...joined, [from]: into } };
+}
+
+/**
+ * The refusal for a badge that does not speak for both sides of a join. Its
+ * own code rather than `not-your-actor`, because the remedy is different: a
+ * join is not "claim that actor first" but "be both first", which on a
+ * browser is the door's proof and on a CLI is `--as` with a vouch.
+ */
+export function notBothActors(from: string, into: string, missing: string): OpValidationError {
+  return new OpValidationError(
+    "bad-join",
+    `this badge does not speak for ${missing} — folding ${from} into ${into} needs a badge ` +
+      "that is both. Prove the address they signed in with (the web app's identity menu), " +
+      "or `isocan identity --as <actor id>` with a vouch, then fold.",
+  );
+}
+
+/** The actors folded into others, old id → new id — the wire shape. */
+export function actorJoins(registry: ActorRegistry): ActorJoins {
+  return { ...(registry.joined ?? {}) };
+}
+
+/** The mark every actor wears, keyed by actor id — the wire shape. A folded
+ * actor wears the mark of the person it was folded into. */
 export function actorMarks(registry: ActorRegistry): ActorMarks {
-  return { ...(registry.marks ?? {}) };
+  const marks: ActorMarks = { ...(registry.marks ?? {}) };
+  for (const from of Object.keys(registry.joined ?? {})) {
+    const mark = marks[resolveActor(registry.joined, from)];
+    if (mark) marks[from] = mark;
+    else delete marks[from];
+  }
+  return marks;
+}
+
+/**
+ * The colour every actor who chose one wears, keyed by actor id — the wire
+ * shape. Only the exceptions, as before, plus one row per folded actor: it
+ * wears the person's colour, chosen or derived, because the colour its own
+ * id implies is the colour of somebody who no longer answers.
+ */
+export function actorColors(registry: ActorRegistry): ActorColors {
+  const colors: ActorColors = { ...registry.colors };
+  for (const from of Object.keys(registry.joined ?? {})) {
+    colors[from] = actorColor(resolveActor(registry.joined, from), registry.colors);
+  }
+  return colors;
 }
 
 /**
@@ -605,10 +704,18 @@ export function actorMarks(registry: ActorRegistry): ActorMarks {
  * A read, not a derivation. It used to walk every claim and take the newest
  * per actor; recency is stored now, so replay order does that work and a name
  * survives the claim that made it.
+ *
+ * A folded actor answers with the name of the person it was folded into
+ * (multi-identity phase 5): every comment written as `Dimitri 2` shows
+ * Dimitri, and no client had to learn a new field to show it.
  */
 export function actorNames(registry: ActorRegistry): ActorNames {
   const names: ActorNames = {};
   for (const [actorId, row] of Object.entries(registry.names)) names[actorId] = row.name;
+  for (const from of Object.keys(registry.joined ?? {})) {
+    const name = registry.names[resolveActor(registry.joined, from)]?.name;
+    if (name) names[from] = name;
+  }
   return names;
 }
 
@@ -791,16 +898,18 @@ function handedRow(ctx: ClaimContext, as: string, mine: ActorClaim | undefined):
 function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undefined): void {
   const name = op.name!;
   const holder = ctx.held.find(
-    (h) => sameName(h.actor.name, name) && h.actor.id !== selfId,
+    (h) => sameName(h.actor.name, name) && h.actor.id !== selfId && !folded(ctx, h.actor.id),
   );
   // A name is taken when somebody ANSWERS to it: held on a canvas, or claimed
   // by a session that is not this one. A name row alone does not reserve a
   // name — an actor nobody speaks as any more is a name that was used, and
-  // `held` already remembers those.
+  // `held` already remembers those. An actor folded into somebody else
+  // (`actor.join`) answers to nobody, so its name is released.
   const bound = ctx.scoped.find(
     (row) =>
       row.sessionKey !== op.sessionKey &&
       row.actorId !== selfId &&
+      !folded(ctx, row.actorId) &&
       sameName(nameOf(ctx, row.actorId), name),
   );
   if (!holder && !bound) return;
@@ -826,8 +935,14 @@ function requireFree(ctx: ClaimContext, op: ActorClaimOp, selfId: string | undef
  */
 export function allocateName(ctx: ClaimContext, sessionKey?: string | null): string {
   const taken = new Set<string>();
-  for (const holder of ctx.held) taken.add(holder.actor.name.trim().toLowerCase());
-  for (const row of ctx.scoped) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
+  // A folded actor's name is free again — the same release `requireFree`
+  // grants a claimant who asks for it by name.
+  for (const holder of ctx.held) {
+    if (!folded(ctx, holder.actor.id)) taken.add(holder.actor.name.trim().toLowerCase());
+  }
+  for (const row of ctx.scoped) {
+    if (!folded(ctx, row.actorId)) taken.add(nameOf(ctx, row.actorId).trim().toLowerCase());
+  }
   // The authority's pick goes first, and is still checked here — so allocation
   // keeps its one promise even when the home's answer has gone stale between
   // the asking and the claiming, or when there was no home to ask.
@@ -867,6 +982,12 @@ export function allocateName(ctx: ClaimContext, sessionKey?: string | null): str
  * inventing, so a name comparison simply does not match. */
 function nameOf(ctx: ClaimContext, actorId: string): string {
   return ctx.registry.names[actorId]?.name ?? "";
+}
+
+/** Was this actor folded into somebody else? Then it holds no name: the
+ * person answers under the other id now (multi-identity phase 5). */
+function folded(ctx: ClaimContext, actorId: string): boolean {
+  return resolveActor(ctx.registry.joined, actorId) !== actorId;
 }
 
 function sameName(a: string, b: string): boolean {

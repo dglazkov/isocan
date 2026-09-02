@@ -4,7 +4,13 @@
  * `chips.ts`, shared with #item-references.
  */
 import { useMemo } from "react";
-import type { CanvasContents, MentionCandidate, PresenceSession, ActorNames } from "@isocan/core";
+import type {
+  ActorJoins,
+  ActorNames,
+  CanvasContents,
+  MentionCandidate,
+  PresenceSession,
+} from "@isocan/core";
 import { actorsAnswerTo, collectCanvasActors } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { sessionName } from "./names.ts";
@@ -35,11 +41,13 @@ export function mentionRoster(
   sessions: PresenceSession[],
   selfId?: string,
   names?: ActorNames,
+  joined?: ActorJoins,
 ): MentionRoster {
   // Everyone the canvas remembers, under the names they answer to now as well
-  // as the ones stamped on old ops (core/mentions.ts).
+  // as the ones stamped on old ops (core/mentions.ts). An actor folded into
+  // somebody (`actor.join`) is that person, so the menu lists one of them.
   const candidates: MentionCandidate[] = canvas
-    ? actorsAnswerTo(collectCanvasActors(canvas), names)
+    ? actorsAnswerTo(collectCanvasActors(canvas), names, joined)
     : [];
   const peers = new Map<string, MentionPeer>();
   for (const candidate of candidates) {
@@ -77,8 +85,9 @@ export function useMentionRoster(selfId?: string): MentionRoster {
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const names = useCanvasStore((state) => state.actorNames);
+  const joined = useCanvasStore((state) => state.actorJoins);
   return useMemo(
-    () => mentionRoster(canvas, sessions, selfId, names),
-    [canvas, sessions, selfId, names],
+    () => mentionRoster(canvas, sessions, selfId, names, joined),
+    [canvas, sessions, selfId, names, joined],
   );
 }

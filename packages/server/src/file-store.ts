@@ -5,6 +5,7 @@ import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "@isocan/core";
 import {
   applyActorColor,
+  applyActorJoin,
   applyActorMark,
   applyOperation,
   bindName,
@@ -292,6 +293,8 @@ export class FileStore implements Store {
         registry = applyActorColor(registry, op);
       } else if (op.type === "actor.setMark") {
         registry = applyActorMark(registry, op);
+      } else if (op.type === "actor.join") {
+        registry = applyActorJoin(registry, op);
       } else {
         continue;
       }

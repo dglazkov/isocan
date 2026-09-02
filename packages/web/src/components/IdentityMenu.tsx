@@ -1,16 +1,23 @@
 import { faceMark } from "@isocan/core";
 import { useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
-import { adoptIdentity, knownIdentities, renameIdentity, signOut } from "../lib/identity.ts";
-import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
+import {
+  adoptIdentity,
+  foldIdentity,
+  knownIdentities,
+  renameIdentity,
+  signOut,
+} from "../lib/identity.ts";
+import { IDENTITY_COLORS, actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
+import { invalidateOwnActors, useOwnActors } from "../lib/ownactors.ts";
+import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { TerminalDialog } from "./TerminalDialog.tsx";
 import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
-import { useActorMarks } from "../lib/marks.ts";
 import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
 
@@ -29,6 +36,15 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   else from now on. (`isocan identity --name --session` does exactly this.)
  * - SWITCH adopts an identity this browser has worn before, id and all, so
  *   coming back as yourself really is coming back.
+ * - FOLD INTO is `actor.join` (multi-identity phase 5), journey 6's last
+ *   step: a persona this badge ALSO claims can be folded into the one that
+ *   is active, so a person who spent weeks as `Dimitri 2` ends with one
+ *   actor, one name over everything they wrote, one inbox and one undo.
+ *   Offered only for a persona the badge claims, because the home refuses it
+ *   otherwise; armed in place with one sentence, because it cannot be undone
+ *   and a browser `confirm()` is a dialog this app does not control the
+ *   words of. On success the row leaves the roster and the canvas repaints
+ *   names, colours and marks from the registry it already subscribes to.
  * - LEAVE clears the current identity and returns you to the door, where the
  *   roster is still waiting.
  * - COLOR picks the color you wear — cursor, face, pins, and your Pen's
@@ -88,7 +104,14 @@ export function IdentityMenu({
   const [picking, setPicking] = useState(false);
   const markButton = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(actor.name);
-  const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
+  const [others, setOthers] = useState(() =>
+    knownIdentities().filter((known) => known.id !== actor.id),
+  );
+  /** Which roster row is one click from being folded — see SurfacesDialog's
+   * `arming` for why a destructive act gets a second click and no dialog. */
+  const [folding, setFolding] = useState<string | null>(null);
+  const [foldBusy, setFoldBusy] = useState(false);
+  const claimed = useOwnActors();
   const [error, setError] = useState<Refusal | null>(null);
   const [terminal, setTerminal] = useState(false);
   const [cloud, setCloud] = useState(false);
@@ -121,6 +144,27 @@ export function IdentityMenu({
         onClose();
       })
       .catch((err: unknown) => setError(refusalFor(err, name)));
+  };
+
+  /** Fold `other` into the actor this menu is open on. The op lands at the
+   * home; the roster row goes; the registry the canvas subscribes to now
+   * answers for the old id, and the colour and mark maps are re-read so this
+   * tab's own faces repaint without waiting for the next roster. */
+  const fold = async (other: Actor) => {
+    setError(null);
+    setFoldBusy(true);
+    try {
+      await foldIdentity(other, actor);
+      setOthers((rest) => rest.filter((known) => known.id !== other.id));
+      setFolding(null);
+      invalidateOwnActors();
+      void loadActorColors();
+      void refreshActorMarks();
+    } catch (err) {
+      setError({ kind: "message", text: (err as Error).message });
+    } finally {
+      setFoldBusy(false);
+    }
   };
 
   // The dialog takes the popover over rather than opening a second one beside
@@ -213,17 +257,49 @@ export function IdentityMenu({
           <div className="identity-menu-head">Switch to</div>
           <div className="identity-known">
             {others.map((other) => (
-              <button
-                key={other.id}
-                className="identity-known-row"
-                title={`Continue as ${other.name} — the same you as before`}
-                onClick={() => attempt(adoptIdentity(other), other.name)}
-              >
-                <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
-                  {faceMark(marks, other)}
-                </span>
-                {other.name}
-              </button>
+              <div key={other.id} className="identity-known-entry">
+                <button
+                  className="identity-known-row"
+                  title={`Continue as ${other.name} — the same you as before`}
+                  onClick={() => attempt(adoptIdentity(other), other.name)}
+                >
+                  <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
+                    {faceMark(marks, other)}
+                  </span>
+                  {other.name}
+                </button>
+                {/* Only for a persona this badge also claims: the home refuses
+                    the join otherwise, and a control that offers an act it
+                    will not perform teaches people not to believe the next
+                    one (the Rename button's lesson, above). */}
+                {claimed?.has(other.id) && folding !== other.id && (
+                  <button
+                    className="btn identity-fold"
+                    title={`Make ${other.name} the same person as ${actor.name}, everywhere`}
+                    onClick={() => setFolding(other.id)}
+                  >
+                    Fold into {actor.name}
+                  </button>
+                )}
+                {claimed?.has(other.id) && folding === other.id && (
+                  <div className="identity-fold-arm">
+                    <span>
+                      Everything written as {other.name} becomes {actor.name}&rsquo;s. This cannot
+                      be undone.
+                    </span>
+                    <button
+                      className="btn danger"
+                      disabled={foldBusy}
+                      onClick={() => void fold(other)}
+                    >
+                      {foldBusy ? "Folding…" : "Fold"}
+                    </button>
+                    <button className="btn" disabled={foldBusy} onClick={() => setFolding(null)}>
+                      Keep both
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </>

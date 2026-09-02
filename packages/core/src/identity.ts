@@ -49,6 +49,55 @@ export type ActorNames = Record<string, string>;
 export type ActorMarks = Record<string, string>;
 
 /**
+ * Actors folded into other actors: old id → the id it was folded into
+ * (`actor.join`, multi-identity phase 5). The registry's `joined` map, and
+ * the wire shape that rides beside `names`.
+ *
+ * Readers resolve before they compare: `resolveActor` walks this map to the
+ * id that answers now. The log is never rewritten, so an op written as
+ * `Dimitri 2` still carries `Dimitri 2`'s id — what changes is that every
+ * reader turns that id into Dimitri's first.
+ */
+export type ActorJoins = Record<string, string>;
+
+/**
+ * The actor id that answers for `actorId` now — itself, unless it was folded
+ * into somebody, in which case the end of the chain. Transitive, and safe
+ * against a cycle that should never have been written: a map that loops
+ * answers with the last id before the loop closes rather than hanging.
+ */
+export function resolveActor(joined: ActorJoins | undefined, actorId: string): string {
+  if (!joined) return actorId;
+  let current = actorId;
+  const seen = new Set<string>([current]);
+  for (;;) {
+    const next = joined[current];
+    if (next === undefined || seen.has(next)) return current;
+    seen.add(next);
+    current = next;
+  }
+}
+
+/** Do these two ids name one person? */
+export function sameActor(joined: ActorJoins | undefined, a: string, b: string): boolean {
+  return a === b || resolveActor(joined, a) === resolveActor(joined, b);
+}
+
+/**
+ * Every id that resolves to the same person as `actorId`, the resolved id
+ * first. What an undo walks after a join: the person is one, so their stack
+ * is every stack they ever wrote under.
+ */
+export function actorAliases(joined: ActorJoins | undefined, actorId: string): string[] {
+  const person = resolveActor(joined, actorId);
+  const aliases = [person];
+  for (const from of Object.keys(joined ?? {})) {
+    if (from !== person && resolveActor(joined, from) === person) aliases.push(from);
+  }
+  return aliases;
+}
+
+/**
  * **Is this one emoji?**
  *
  * Deliberately not a whitelist of code points: the emoji set grows every year

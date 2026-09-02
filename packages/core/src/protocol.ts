@@ -1,5 +1,5 @@
 import { INSTALL_SPEC } from "./address.ts";
-import type { ActorColors, ActorNames } from "./identity.ts";
+import type { ActorColors, ActorJoins, ActorNames } from "./identity.ts";
 import type { Actor, Canvas, CanvasContents } from "./model.ts";
 import type { NewsDay } from "./whatsnew.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
@@ -57,6 +57,11 @@ export type ServerMessage =
       /** Current names (actor id → name), so a rename reaches the words
        * somebody wrote before it. Absent entries keep the stamped name. */
       names: ActorNames;
+      /** Actors folded into others (`actor.join`, multi-identity phase 5), so
+       * a reader comparing ids — the inbox, a mention — resolves first.
+       * Names, colours and marks already arrive resolved; this is for the
+       * comparisons a name cannot answer. Absent from an older home. */
+      joined?: ActorJoins;
       /** Present only when this connection's admission is view-only (#88), so
        * the client can wear the viewer face instead of discovering the fact
        * as a refusal per gesture. Absent means edit — every hello from before
@@ -89,6 +94,8 @@ export type ServerMessage =
       lastSeq: number;
       colors: ActorColors;
       names: ActorNames;
+      /** As on `snapshot`. */
+      joined?: ActorJoins;
       /** As on `snapshot`: present only for a view-only admission (#88). */
       capability?: "view";
     }
@@ -103,6 +110,8 @@ export type ServerMessage =
       sessions: PresenceSession[];
       colors: ActorColors;
       names: ActorNames;
+      /** As on `snapshot`. */
+      joined?: ActorJoins;
     }
   /**
    * "Someone at the canvas asked to add an agent here" (agent-custody
@@ -744,6 +753,9 @@ export interface CanvasSnapshotResponse {
   /** Current names (actor id → name); absent entries keep the name that
    * was stamped on the comment or op being rendered. */
   names: ActorNames;
+  /** Actors folded into others (`actor.join`, multi-identity phase 5) — see
+   * the `snapshot` message. Absent from an older home. */
+  joined?: ActorJoins;
   /** Present only when the CALLER's admission is view-only (#88) — the one
    * fact about the reader that rides on the read, so a client can wear the
    * viewer face before its first refused write. Absent means edit. */

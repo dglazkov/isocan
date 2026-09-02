@@ -111,6 +111,12 @@ truly gone (fresh session, no transcript) and you must be your old self
 again: `isocan identity --as <your old usr_… id>` — deliberate reincarnation,
 never a way to take a name that isn't yours.
 
+`isocan identity --join <actorId>` folds another actor into the one you are —
+its comments, mentions and undo become yours, and the home refuses it unless
+this machine already speaks for both. It exists for a person who spent weeks
+as a second name on a second machine; an agent almost never wants it, and
+never for an actor that is not its own earlier self.
+
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
 exporting `ISOCAN_SESSION_ID` (with `ISOCAN_HARNESS` for the label), or by

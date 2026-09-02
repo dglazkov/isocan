@@ -768,6 +768,10 @@ program
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
   .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
   .option(
+    "--join <actorId>",
+    "fold that actor into the one this session is — its comments, mentions and undo become yours; cannot be undone",
+  )
+  .option(
     "--color <color>",
     'the color you wear on every canvas — a palette name (e.g. "teal") or a hex, "none" to go back to the one your id implies',
   )
@@ -784,6 +788,7 @@ program
           home?: boolean;
           new?: boolean;
           as?: string;
+          join?: string;
           color?: string;
           mark?: string;
         },
@@ -792,6 +797,28 @@ program
         const home = paths.isocanHome();
         const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
         await retireStrandedIdentities(process.cwd(), home);
+        /**
+         * **Two actors become one person** (multi-identity phase 5). The same
+         * `actor.join` the web app's identity menu sends: home-scoped, applied
+         * to the registry, refused unless this machine's badge speaks for both
+         * actors. Nothing in the log is rewritten; every reader resolves the
+         * old id to this one from now on.
+         */
+        if (opts.join !== undefined) {
+          const resolved = await resolveIdentity(client, home);
+          if (!resolved) throw new Error(await noIdentityHere(client, home));
+          const from = opts.join.trim();
+          await client.sendOp(null, resolved.actor, {
+            type: "actor.join",
+            from,
+            into: resolved.actor.id,
+          });
+          console.log(
+            `${from} is now ${resolved.actor.name} (${resolved.actor.id}) — everything it wrote, ` +
+              "every mention of it, and its undo are yours; the log keeps the old id on each entry",
+          );
+          return;
+        }
         // Choosing your color is a mutation on the actor registry, the same
         // one the web app's identity menu sends — so both clients change the
         // color everyone sees, not a local preference each keeps to itself.
@@ -5990,7 +6017,9 @@ program
         // lies in the only direction that matters.
         const snapshot = await ctx.client.snapshot(canvas.id).catch(() => null);
         if (!snapshot) continue;
-        entries.push(...inboxOn(snapshot.canvas, ctx.actor, names, canvas.id, canvas.title));
+        entries.push(
+          ...inboxOn(snapshot.canvas, ctx.actor, names, canvas.id, canvas.title, snapshot.joined),
+        );
       }
       const wanted = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
       const ordered = inboxNewestFirst(wanted).slice(0, Number(opts.limit ?? 20));
@@ -7586,12 +7615,17 @@ command or reply. No \`session start\` needed after a wake.`,
               op.type === "thread.create" ||
               op.type === "thread.reply" ||
               (waitRules?.items?.length ?? 0) > 0;
-            const canvas = needCanvas ? (await snapOf(entry.canvasId)()).canvas : null;
+            const snapshot = needCanvas ? await snapOf(entry.canvasId)() : null;
             const reason = dispatchReason(
               op,
               entry.envelope.actor.id,
-              { actorId: ctx.actor.id, names: selfNames, rules: waitRules },
-              canvas,
+              {
+                actorId: ctx.actor.id,
+                names: selfNames,
+                rules: waitRules,
+                ...(snapshot?.joined !== undefined ? { joined: snapshot.joined } : {}),
+              },
+              snapshot?.canvas ?? null,
             );
             if (!reason) continue;
             if (reason !== "change") summoned = true;

@@ -15,6 +15,7 @@ import type {
 import {
   actorNameIn,
   actorsAnswerTo,
+  resolveActor,
   annotationsOf,
   collectCanvasActors,
   collectCanvasNames,
@@ -317,9 +318,14 @@ export class CanvasHandle {
    * `--json who --all`. */
   async who(): Promise<KnownName[]> {
     const sessions = await this.ctx.client.listSessions(this.id).catch(() => [] as PresenceSession[]);
-    const { canvas } = await this.snapshot();
+    const { canvas, joined } = await this.snapshot();
     const known = new Map<string, KnownName>();
-    const add = (name: string, id: string, live: boolean) => {
+    const add = (name: string, stamped: string, live: boolean) => {
+      // An actor folded into somebody else (`actor.join`, multi-identity
+      // phase 5) is listed as that person: one row, the person's id. The
+      // name as written still gets its row, because `who --all` lists names
+      // the canvas remembers and a folded actor's old name is one of them.
+      const id = resolveActor(joined, stamped);
       const key = name.toLowerCase();
       const prior = known.get(key);
       if (!prior) known.set(key, { name, id, live });
@@ -614,6 +620,7 @@ export async function buildComment(
   const candidates: MentionCandidate[] = actorsAnswerTo(
     collectCanvasActors(snapshot.canvas),
     snapshot.names,
+    snapshot.joined,
   );
   const sessions = await client.listSessions(canvasId).catch(() => []);
   for (const session of sessions) {

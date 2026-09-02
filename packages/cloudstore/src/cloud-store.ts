@@ -11,6 +11,7 @@ import type {
 } from "@isocan/core";
 import {
   applyActorColor,
+  applyActorJoin,
   applyActorMark,
   applyOperation,
   bindName,
@@ -387,21 +388,7 @@ export class CloudStore implements Store {
 
   async loadActors(): Promise<{ registry: ActorRegistry; lastSeq: number }> {
     const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
-    const data = snapshot.data();
-    // Read back whole, for the reason `saveActors` writes whole: a reader that
-    // lists the fields it knows drops the next one somebody adds.
-    // `lastSeq` shares the document with the registry but is not part of it,
-    // so it is the one key taken back out of the spread.
-    const { lastSeq: _seq, ...saved } = (data ?? {}) as Partial<ActorRegistry> & {
-      lastSeq?: number;
-    };
-    let registry: ActorRegistry = {
-      ...emptyActorRegistry(),
-      ...saved,
-      names: (saved.names as ActorRegistry["names"]) ?? {},
-      colors: (saved.colors as ActorRegistry["colors"]) ?? {},
-    };
-    let lastSeq = (data?.["lastSeq"] as number | undefined) ?? 0;
+    let { registry, lastSeq } = actorsFromDocument(snapshot.data());
 
     const entries = await this.readLog(this.db.collection(ACTORS), lastSeq, (seq) =>
       this.actorOverflowKey(seq),
@@ -418,6 +405,8 @@ export class CloudStore implements Store {
         registry = applyActorColor(registry, op);
       } else if (op.type === "actor.setMark") {
         registry = applyActorMark(registry, op);
+      } else if (op.type === "actor.join") {
+        registry = applyActorJoin(registry, op);
       } else {
         continue;
       }
@@ -441,7 +430,7 @@ export class CloudStore implements Store {
    * this same backing.
    */
   async saveActors(registry: ActorRegistry, lastSeq: number): Promise<void> {
-    await this.db.doc(ACTORS_SNAPSHOT).set(jsonSafe({ lastSeq, ...registry }));
+    await this.db.doc(ACTORS_SNAPSHOT).set(actorsToDocument(registry, lastSeq));
   }
 
   async appendActorsLog(entry: LogEntry): Promise<void> {
@@ -787,6 +776,33 @@ export class CloudStore implements Store {
  */
 function jsonSafe<T>(value: T): DocumentData {
   return JSON.parse(JSON.stringify(value)) as DocumentData;
+}
+
+/**
+ * The actors snapshot document, both ways — exported so the round trip can be
+ * asserted without a Firestore. `lastSeq` shares the document with the
+ * registry but is not part of it, so it is the one key taken back out of the
+ * spread; everything else is read back whole, for the reason `saveActors`
+ * writes whole: a reader that lists the fields it knows drops the next one
+ * somebody adds (`marks` once, and `joined` would have been next).
+ */
+export function actorsToDocument(registry: ActorRegistry, lastSeq: number): DocumentData {
+  return jsonSafe({ lastSeq, ...registry });
+}
+
+export function actorsFromDocument(
+  data: DocumentData | undefined,
+): { registry: ActorRegistry; lastSeq: number } {
+  const { lastSeq: _seq, ...saved } = (data ?? {}) as Partial<ActorRegistry> & {
+    lastSeq?: number;
+  };
+  const registry: ActorRegistry = {
+    ...emptyActorRegistry(),
+    ...saved,
+    names: (saved.names as ActorRegistry["names"]) ?? {},
+    colors: (saved.colors as ActorRegistry["colors"]) ?? {},
+  };
+  return { registry, lastSeq: (data?.["lastSeq"] as number | undefined) ?? 0 };
 }
 
 function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {

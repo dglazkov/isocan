@@ -1,6 +1,6 @@
 import type { Actor, ActorClaimOp } from "@isocan/core";
 import { newId } from "@isocan/core";
-import { claimActor } from "./api.ts";
+import { claimActor, sendOp } from "./api.ts";
 
 const KEY = "isocan.identity";
 const ROSTER_KEY = "isocan.identities";
@@ -88,6 +88,31 @@ export async function renameIdentity(name: string): Promise<Actor> {
 export async function adoptIdentity(actor: Actor): Promise<Actor> {
   const known = personas().find((p) => p.id === actor.id);
   return resume(known ?? { ...actor });
+}
+
+/**
+ * **Fold one persona into another** (`actor.join`, multi-identity phase 5) —
+ * journey 6's last step. The same op the CLI's `identity --join` sends,
+ * home-scoped like a colour: the registry records that `from` is `into` now,
+ * every reader resolves the old id through it, and nothing in the log is
+ * rewritten. The home refuses it unless this badge speaks for both, which is
+ * why the menu only offers it for a persona the badge claims.
+ *
+ * On success the folded persona leaves this browser's roster: it answers to
+ * nobody now, so "Switch to" it would be switching to an actor the home
+ * shows as `into` anyway.
+ */
+export async function foldIdentity(from: Actor, into: Actor): Promise<void> {
+  await sendOp(null, into, { type: "actor.join", from: from.id, into: into.id });
+  forgetIdentity(from.id);
+}
+
+/** Drop a persona from the roster this browser remembers. */
+export function forgetIdentity(actorId: string): void {
+  write(
+    ROSTER_KEY,
+    personas().filter((known) => known.id !== actorId),
+  );
 }
 
 /**
