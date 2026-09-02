@@ -97,8 +97,15 @@ isocan home https://dev.isocan.io
 ```
 
 That is a *birth default*: it decides where the NEXT canvas is created and
-moves nothing that already exists. A canvas cannot be moved between homes
-today — decide before you create it.
+moves nothing that already exists. To move one that does exist:
+
+```sh
+isocan teleport <canvas> --to https://dev.isocan.io --dry-run
+```
+
+It carries the whole history and the bytes, and leaves the old home
+forwarding, so every address that worked still works. Grants do not travel —
+who may enter is a decision about a place — and the command says so.
 
 **Two things worth being careful about.**
 
