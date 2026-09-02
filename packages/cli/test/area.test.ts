@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
-import { AREA_TITLE_HEIGHT, AREA_INSET } from "@isocan/core";
+import { AREA_HEAD, AREA_INSET } from "@isocan/core";
 
 /**
  * **Areas, over the wire** (`core/area.ts`, sprint phase 0).
@@ -92,7 +92,7 @@ describe("a sheet, and what is on it", () => {
     // Placed --in: inside, under the title strip, inset — and chosen, so the
     // daemon's tidy rule never carries it out of the sheet.
     const first = await json("text", "first sketch", "--in", "Sketches", "--paper", "pink");
-    expect(first.placement).toEqual({ x: sx + AREA_INSET, y: sy + AREA_TITLE_HEIGHT, chosen: true });
+    expect(first.placement).toEqual({ x: sx + AREA_INSET, y: sy + AREA_HEAD, chosen: true });
     // The second lands clear of the first, and still on the sheet.
     const second = await json("text", "second sketch", "--in", "sket", "--paper", "pink");
     expect(second.placement).not.toEqual(first.placement);
@@ -119,7 +119,7 @@ describe("a sheet, and what is on it", () => {
     expect(after.length).toBe(3);
     for (const one of after) {
       expect(one.x).toBeGreaterThanOrEqual(sx);
-      expect(one.y).toBeGreaterThanOrEqual(sy + AREA_TITLE_HEIGHT);
+      expect(one.y).toBeGreaterThanOrEqual(sy + AREA_HEAD);
     }
     const sheetNow = (await json("ls")).find((one: any) => one.title === "Sketches");
     expect(sheetNow.x).toBe(sx);

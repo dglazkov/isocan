@@ -4391,9 +4391,13 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
-/* The card — what happens here, in a few lines — under the name. */
+/* The card — what happens here, in a few lines — under the name, in the
+   band `AREA_CARD_HEIGHT` reserves for it (120 world units), so it can
+   never spill into the sheet's contents and nothing placed on the sheet
+   can land on it. */
 .item.area .md-view {
-  padding: 0 24px 24px;
+  padding: 0 24px 12px;
+  height: 120px; box-sizing: border-box;
   font-size: 18px; line-height: 1.4;
   color: var(--paper-ink-soft, var(--ink-muted));
   max-width: 720px;

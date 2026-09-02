@@ -37,7 +37,10 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const { state, nowMs } = useSprint();
   const names = useActorNames();
   const [flash, setFlash] = useState<"phase" | "bell" | null>(null);
-  const lastPhase = useRef<string | null>(null);
+  // What this tab saw when it mounted — a phase's comment id, or null for
+  // "no sprint yet" — and then whatever it saw last. `undefined` is "not
+  // mounted yet", which is the one state that must never flash or walk.
+  const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
   const selectedIds = useUiStore((s) => s.selectedItemIds);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -45,21 +48,23 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const remaining = state ? remainingSeconds(state, nowMs) : null;
 
   useEffect(() => {
-    if (!state) {
-      lastPhase.current = null;
-      return;
+    // Nothing is watched until the canvas is here: a tab that opens on an
+    // empty store and then receives a running sprint saw the canvas LOAD,
+    // not a phase change, and must neither flash nor walk.
+    if (!canvas) return;
+    const now = state?.commentId ?? null;
+    // Only a change you WATCHED flashes and walks — arriving on a page
+    // mid-sprint is not a phase change, and a chip that flashes on mount is
+    // noise. But the first phase of a sprint, called while this tab was
+    // open, IS a change you watched: the tab saw "no sprint" on mount and
+    // sees Map now. That is the walk's most important moment.
+    const watched = lastPhase.current !== undefined && lastPhase.current !== now;
+    lastPhase.current = now;
+    if (watched && state) {
+      setFlash("phase");
+      goToArea(state);
     }
-    if (lastPhase.current !== state.commentId) {
-      // Only the SECOND phase onwards flashes — arriving on a page mid-sprint
-      // is not a phase change, and a chip that flashes on mount is noise.
-      // The walk follows the same rule: a call you watched moves you.
-      if (lastPhase.current !== null) {
-        setFlash("phase");
-        goToArea(state);
-      }
-      lastPhase.current = state.commentId;
-    }
-  }, [state]);
+  }, [state, canvas]);
 
   useEffect(() => {
     if (!state || remaining !== 0 || rang.current === state.commentId) return;

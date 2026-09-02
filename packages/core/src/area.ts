@@ -50,6 +50,16 @@ export const AREA_TINT_PROP = "tint";
  *  placed `--in` an area start below it. */
 export const AREA_TITLE_HEIGHT = 56;
 
+/** The band under the title where the card is drawn — what happens here,
+ *  in a few lines. Reserved whether or not the sheet has a card, so the
+ *  first thing placed on a sheet never lands on the words that say what
+ *  the sheet is for (which is exactly what happened before it was). */
+export const AREA_CARD_HEIGHT = 120;
+
+/** Title and card together: where the sheet's own words end and its
+ *  contents begin. */
+export const AREA_HEAD = AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT;
+
 /** Inset from the sheet's edge for anything placed inside it. */
 export const AREA_INSET = 24;
 
@@ -86,9 +96,9 @@ export function areasOf(canvas: CanvasContents): Item[] {
 export function areaInner(area: Item): { x: number; y: number; width: number; height: number } {
   return {
     x: area.x + AREA_INSET,
-    y: area.y + AREA_TITLE_HEIGHT,
+    y: area.y + AREA_HEAD,
     width: Math.max(0, area.width - AREA_INSET * 2),
-    height: Math.max(0, area.height - AREA_TITLE_HEIGHT - AREA_INSET),
+    height: Math.max(0, area.height - AREA_HEAD - AREA_INSET),
   };
 }
 

@@ -18,9 +18,16 @@ const skill = read("../../core/src/commands.ts");
  */
 describe("a phase call walks the room to its sheet", () => {
   it("glides to the sheet on a phase change — and only one you watched", () => {
-    const effect = chip.slice(chip.indexOf("lastPhase.current !== state.commentId"), chip.indexOf("lastPhase.current = state.commentId"));
-    expect(effect).toContain("if (lastPhase.current !== null)");
+    // `undefined` is "not mounted yet": the one state that never walks. A
+    // tab that saw "no sprint" on mount and sees Map now DID watch a change,
+    // and that first call is the walk's most important moment.
+    const effect = chip.slice(chip.indexOf("if (!canvas) return;"), chip.indexOf("}, [state, canvas]);"));
+    expect(effect).toContain("lastPhase.current !== undefined && lastPhase.current !== now");
+    // A tab that opens on an empty store and then receives a running sprint
+    // saw the canvas LOAD, not a call: nothing is recorded until it is here.
+    expect(effect.startsWith("if (!canvas) return;")).toBe(true);
     expect(effect).toContain("goToArea(state)");
+    expect(chip).toContain("useRef<string | null | undefined>(undefined)");
   });
 
   it("goes nowhere without a board", () => {

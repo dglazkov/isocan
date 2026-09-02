@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
 import {
+  AREA_CARD_HEIGHT,
+  AREA_HEAD,
   AREA_INSET,
   AREA_PROPERTIES,
   AREA_TITLE_HEIGHT,
@@ -118,12 +120,15 @@ describe("a spot inside the sheet", () => {
 
   it("starts under the title, inset from the edge", () => {
     const inner = areaInner(sheet);
+    // Under the title AND the card: the first thing placed on a sheet must
+    // never land on the words that say what the sheet is for.
     expect(inner).toEqual({
       x: 1000 + AREA_INSET,
-      y: 1000 + AREA_TITLE_HEIGHT,
+      y: 1000 + AREA_HEAD,
       width: 1000 - AREA_INSET * 2,
-      height: 800 - AREA_TITLE_HEIGHT - AREA_INSET,
+      height: 800 - AREA_HEAD - AREA_INSET,
     });
+    expect(AREA_HEAD).toBe(AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT);
     expect(freeSpotIn(canvasOf(sheet), sheet, 200, 200)).toEqual({ x: inner.x, y: inner.y });
   });
 
