@@ -2,6 +2,7 @@ import type { CanvasContents } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { DRAWING_MIME } from "./drawing.ts";
 import { ANNOTATES_PROP } from "./annotation.ts";
+import { TEXT_KIND } from "./textnode.ts";
 import type { Box } from "./annotation.ts";
 import type { Placement } from "./ops.ts";
 import { OpValidationError } from "./errors.ts";
@@ -164,11 +165,22 @@ export function resolvePlacement(
  * Whether this item's position MEANS something, and must not be tidied.
  *
  * Ink is where the pen drew it and an annotation sits over the thing it is
- * about. Lives here, beside the rule it exempts, because two callers need the
+ * about. Words typed at a spot are the third case: the Text tool opens its
+ * composer where you clicked and renders the words at the size they will
+ * land, on the promise that nothing moves when they commit — and the tidy
+ * rule was moving them, so a note typed touching another landed somewhere
+ * else (reported with pictures). A note laid half on another is what
+ * post-its are for. Only a position somebody CHOSE counts: a click, or
+ * `--at`. A text node placed by anchor — the CLI's default — is still
+ * tidied, because nobody chose those coordinates.
+ *
+ * Lives here, beside the rule it exempts, because two callers need the
  * same answer: the daemon, which resolves the final position before logging,
  * and the reducer, which must reach the same place when the log is replayed.
  * Two implementations of this predicate is two canvases.
  */
 export function positionIsMeaningful(op: Extract<Operation, { type: "item.add" }>): boolean {
-  return op.version.mimeType === DRAWING_MIME || op.properties?.[ANNOTATES_PROP] !== undefined;
+  if (op.version.mimeType === DRAWING_MIME) return true;
+  if (op.properties?.[ANNOTATES_PROP] !== undefined) return true;
+  return op.properties?.kind === TEXT_KIND && "x" in op.placement;
 }

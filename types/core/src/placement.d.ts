@@ -85,7 +85,16 @@ export declare function resolvePlacement(canvas: CanvasContents, placement: Plac
  * Whether this item's position MEANS something, and must not be tidied.
  *
  * Ink is where the pen drew it and an annotation sits over the thing it is
- * about. Lives here, beside the rule it exempts, because two callers need the
+ * about. Words typed at a spot are the third case: the Text tool opens its
+ * composer where you clicked and renders the words at the size they will
+ * land, on the promise that nothing moves when they commit — and the tidy
+ * rule was moving them, so a note typed touching another landed somewhere
+ * else (reported with pictures). A note laid half on another is what
+ * post-its are for. Only a position somebody CHOSE counts: a click, or
+ * `--at`. A text node placed by anchor — the CLI's default — is still
+ * tidied, because nobody chose those coordinates.
+ *
+ * Lives here, beside the rule it exempts, because two callers need the
  * same answer: the daemon, which resolves the final position before logging,
  * and the reducer, which must reach the same place when the log is replayed.
  * Two implementations of this predicate is two canvases.
