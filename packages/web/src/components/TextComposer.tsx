@@ -9,6 +9,7 @@ import {
   TEXT_FACE_SCALE,
   TEXT_SIZE,
   TEXT_STYLES,
+  TEXT_STYLE_LABEL,
   TEXT_STYLE_SIZE,
   TEXT_WIDTH,
   type TextFace,
@@ -328,10 +329,14 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           <button
             key={s}
             className={`text-style-btn text-style-step${s === style ? " on" : ""}`}
+            // The size is the label; the step's name and its promise are the
+            // tooltip, so the ladder's vocabulary is one hover away rather
+            // than the thing you have to know first.
             title={`${s} — readable down to ${Math.ceil((8 / TEXT_STYLE_SIZE[s]) * 100)}% zoom`}
+            aria-label={`${TEXT_STYLE_LABEL[s]} (${s})`}
             onClick={() => restyle({ style: s })}
           >
-            {s[0]!.toUpperCase()}
+            {TEXT_STYLE_LABEL[s]}
           </button>
         ))}
         <span className="text-style-gap" />

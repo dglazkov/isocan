@@ -4394,28 +4394,34 @@ button.mt-card:hover { border-color: var(--accent); }
    any zoom — the same move the item titlebar makes, for the same reason: the
    words are canvas content and scale, the controls are chrome and must not. */
 .text-style-bar {
-  position: absolute; bottom: 100%; left: 0; margin-bottom: 6px;
-  display: flex; align-items: center; gap: 2px;
-  padding: 3px; border-radius: 7px;
+  position: absolute; bottom: 100%; left: 0; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 3px;
+  padding: 4px; border-radius: 10px;
   background: var(--card); border: 1px solid var(--line);
   box-shadow: var(--shadow-card);
   transform: scale(calc(1 / var(--scale, 1))); transform-origin: bottom left;
 }
-.text-style-gap { width: 1px; height: 16px; margin: 0 4px; background: var(--line); }
+.text-style-gap { width: 1px; height: 20px; margin: 0 5px; background: var(--line); }
 /* One class for what both buttons ARE, and a second only for what the face
    button differs in — the `.resize-handle` pattern the sheet already uses,
-   and what `oneblock` is asking for when it refuses a class declared twice. */
+   and what `oneblock` is asking for when it refuses a class declared twice.
+
+   28px, not the 22 it started at: the bar is counter-scaled so it holds
+   this size at every zoom, and at 22 it was reported as too small — a
+   control you choose the size of your words with should not itself be the
+   smallest thing on the screen. The rail's buttons are 38; this sits
+   between, because it is a row of eleven. */
 .text-style-btn {
-  min-width: 22px; height: 22px; padding: 0 5px;
-  border: none; border-radius: 5px; cursor: pointer;
+  min-width: 28px; height: 28px; padding: 0 7px;
+  border: none; border-radius: 7px; cursor: pointer;
   background: transparent; color: var(--ink-muted);
-  font-size: 11px; font-weight: 700; line-height: 1;
+  font-size: 13px; font-weight: 700; line-height: 1;
 }
 .text-style-btn:hover { background: var(--chip); color: var(--ink); }
 .text-style-btn.on { background: var(--accent); color: var(--accent-ink); }
 /* The face buttons show their own face, so they are set in it and want the
    weight prose is set in rather than a label's bold. */
-.text-style-face { font-weight: 500; font-size: 12px; }
+.text-style-face { font-weight: 500; font-size: 14px; }
 /* **The paper swatches, and they must come AFTER `.text-style-btn`.**
 
    They wear that class for their size and hit area, and it sets
@@ -4428,9 +4434,9 @@ button.mt-card:hover { border-color: var(--accent); }
    Square, because they stand for a square note, and carrying the same tokens
    the node will, so the choice shows the colour it commits. */
 .text-paper {
-  width: 16px; min-width: 16px; height: 16px; padding: 0;
+  width: 20px; min-width: 20px; height: 20px; padding: 0;
   background: var(--paper); border: 1px solid var(--paper-edge);
-  border-radius: 3px;
+  border-radius: 5px;
 }
 /* "No paper" is an empty outline rather than a colour: a caption is still the
    common case, and a sixth colour would imply a sixth paper. */

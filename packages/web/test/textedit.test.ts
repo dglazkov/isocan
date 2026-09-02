@@ -132,3 +132,33 @@ describe("hovering a swatch previews its paper", () => {
     expect(reset).toContain("setPeek(undefined)");
   });
 });
+
+/**
+ * **The bar says sizes, and both surfaces read the same map.**
+ *
+ * B / H / T / D were the initials of the step names, a code for anyone not
+ * told the words. S / M / L / XL is a vocabulary everybody has. The labels
+ * live in core so the bar cannot say one thing and the CLI accept another.
+ */
+describe("the step buttons say sizes", () => {
+  it("draws the label from core, never a hand-written initial", () => {
+    expect(composer).toContain("{TEXT_STYLE_LABEL[s]}");
+    expect(composer).not.toContain("{s[0]!.toUpperCase()}");
+  });
+
+  it("keeps the step's name and its promise one hover away", () => {
+    expect(composer).toMatch(/title=\{`\$\{s\} — readable down to/);
+  });
+
+  it("is accepted by the CLI in the same spelling", () => {
+    const cli = read("../../cli/src/main.ts");
+    expect(cli).toContain("textStyleFrom(opts.style)");
+    expect(cli).toContain("S | M | L | XL");
+  });
+
+  it("is a control you can see — 28px, between the rail and a chip", () => {
+    const rule = css.slice(css.indexOf(".text-style-btn {"));
+    const body = rule.slice(0, rule.indexOf("}"));
+    expect(body).toContain("height: 28px");
+  });
+});
