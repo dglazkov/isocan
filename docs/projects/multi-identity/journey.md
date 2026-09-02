@@ -2,7 +2,7 @@
 status: designed
 since: 2026-08-31
 see: multiuser
-note: "the door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — four phases, all in packages/web. Scope decided 31 Aug: the door only; the precondition stays copy; no server change, no new op, no new route."
+note: "the door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
 ---
 
 # Multi-identity — the journeys
@@ -27,7 +27,9 @@ Key terms, defined in the multiuser project's
   claimed them proved the same attestation your badge proved.
 
 The journeys are ordered from the main path outward: the first is the feature,
-the last verifies that nothing changed for anyone else.
+journey 5 verifies that nothing changed for anyone else, and journey 6, added
+1 Sep 2026, is the person who already picked a second name before this
+existed.
 
 ## Journey 1: Resume your identity on a second machine
 
@@ -69,16 +71,23 @@ already use.
 1. At the door, enter `Dimitri` and submit.
 2. The door refuses: *Dimitri is somebody else here. Another surface already
    speaks as them. If that's you:* **Prove your address** *— or pick a
-   different name.*
+   different name.* These are the door's words, not the server's. The
+   server's refusal for a typed name is written for the CLI and names
+   `--as` and `--new`.
 3. Click **Prove your address** and continue from step 3 of journey 1.
 
 Acceptance criteria:
 
 - The browser branches on the refusal's wire code (`ApiError.code ===
-  "name-taken"`), not on its message text.
-- The refusal renders a working control, not instructions to find one.
-- The CLI's refusal is unchanged: prose that names the remedies, exactly as
-  `claims.ts` writes it today.
+  "name-taken"`), not on its message text. Both `name-taken` throws in
+  `claims.ts` — the typed-name refusal and the roster-row refusal — render
+  the same door copy.
+- The refusal renders a working control, not instructions to find one, and
+  no CLI flag appears in the door.
+- The CLI's refusal is unchanged in shape: prose that names the remedies, as
+  `claims.ts` writes it today. One word changes: the menu entry it names,
+  "Work from your terminal…", no longer exists and becomes "Bring your own
+  agent…".
 
 ## Journey 3: Nobody to pick up
 
@@ -145,8 +154,9 @@ a set of checks, each walked separately.
    the notice reports what was proved and, if another surface answers to the
    same address, offers the switch as buttons. The door-owns-the-offer rule
    applies only while the door is showing.
-4. **A CLI.** `isocan` commands see no new behavior. The refusal text, the
-   pass flow, and `isocan pass` are untouched.
+4. **A CLI.** `isocan` commands see no new behavior. The pass flow and
+   `isocan pass` are untouched; the refusal text changes only where it named
+   a menu entry that no longer exists.
 
 Acceptance criteria:
 
@@ -155,7 +165,54 @@ Acceptance criteria:
 - Check 2: the view path renders `Viewer` with no identity dialog mounted.
 - Check 3: with `actor !== null`, the sign-in notice still carries the "Be
   &lt;name&gt;" buttons.
-- Check 4: no diff under `packages/cli` or `packages/core`.
+- Check 4: no diff under `packages/cli`, and under `packages/core` only the
+  corrected menu label in the `name-taken` refusal (journey 2).
+
+## Journey 6: You already picked a second name
+
+You have used the laptop for weeks as `Dimitri 2`, because the door refused
+`Dimitri` and you took the way out it offered. You have written comments as
+`Dimitri 2`. Now you want the laptop to be Dimitri.
+
+1. On the laptop, with `Dimitri 2` active, open the identity menu, type
+   `Dimitri` into the name field and press **Rename**. The rename carries
+   your actor id and the new name, and the home refuses it with `name-taken`
+   because Dimitri answers to another actor.
+2. The menu renders the same refusal journey 2's door renders: *Dimitri is
+   somebody else here. Another surface already speaks as them. If that's
+   you:* **Prove your address** *— or pick a different name.* Clicking the
+   control opens the **Prove your address** panel in place of the menu.
+3. Send the link and open it in this browser. You return with an actor, so
+   the notice offers **Be Dimitri**, exactly as journey 5 check 3 describes.
+   Reopening the panel lists Dimitri under "You are also".
+4. Click **Be Dimitri**. You are Dimitri on the laptop, with Dimitri's actor
+   id. `Dimitri 2` stays in this browser's roster, one click away.
+5. The identity menu's roster still lists `Dimitri 2`, and because this
+   browser now holds both actors, the row offers **Fold into Dimitri**. The
+   menu says once that this cannot be undone. Confirm.
+6. Every comment you wrote as `Dimitri 2` now shows Dimitri's name, color and
+   mark. A thread where somebody @-mentioned `Dimitri 2` is in Dimitri's
+   inbox. `isocan who` shows one Dimitri, and the roster row for `Dimitri 2`
+   is gone. The log still carries the actor id each op was written with.
+
+Acceptance criteria:
+
+- The rename form's refusal branches on `ApiError.code === "name-taken"` and
+  renders the same copy and the same control as the door. No CLI flag appears
+  in the menu.
+- Step 4 binds the laptop to the existing Dimitri actor. `isocan who` and the
+  presence list show one Dimitri; `Dimitri 2` remains a persona in the
+  roster and resumes on click.
+- Step 5 is `actor.join`, one op, refused unless the presenting badge speaks
+  for both actors. The CLI sends the same op as `isocan identity --join
+  <actorId>`, and both surfaces read the same result.
+- No op in the log is rewritten. `Dimitri 2`'s ops carry the actor id they
+  were written with; what changes is how every reader resolves that id.
+- After the join, Dimitri's undo reaches an op `Dimitri 2` wrote, and a
+  mention of `Dimitri 2` in an old thread counts as a mention of Dimitri.
+- If no other machine proved the address, the panel says so in journey 3's
+  words: nobody to pick up, prove the same address on the other machine,
+  then come back.
 
 ## What the journeys force
 
@@ -171,8 +228,18 @@ Named here so the design can be held to it:
   more than one parent, so `resumable` arrives through a `useResumable()`
   hook backed by `signin.ts`'s offer cache, which must notify when it
   invalidates.
-- **Refusals branch on code** (journey 2): `ApiError.code`, never message
-  text.
+- **Refusals branch on code** (journeys 2, 6): `ApiError.code`, never message
+  text. The door and the identity menu's rename form are the two places a
+  browser sends `actor.claim` and meets `name-taken`, and both render the
+  same copy and the same control.
+- **A join is an op, not a rewrite** (journey 6): `actor.join` lands in the
+  registry beside names, colors and marks, and the log keeps every stamp.
+  Readers resolve an actor id through the registry before comparing it, so
+  one change reaches names, inbox, presence and undo without touching
+  history. It is the project's one new op, and it belongs to phase 5 alone.
+- **Only somebody who is both may join them** (journey 6): the op is refused
+  unless the presenting badge claims both actors, which is exactly what
+  steps 1–4 leave the laptop holding.
 - **The gate is the existing gate** (journey 4): `canVerifyEmail(offer)`
   decides every new control, so attester-less homes show none of this.
 - **Failure states carry instructions** (journey 3): the message a stuck
