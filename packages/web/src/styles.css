@@ -5199,6 +5199,9 @@ button.mt-card:hover { border-color: var(--accent); }
   font: inherit; font-size: 11px; font-weight: 600; line-height: 1;
 }
 .sprint-action:hover { border-color: var(--accent); }
+/* A desk's chip: the sprint's clock, read from elsewhere, and one button. */
+.sprint-desk-label { color: var(--ink-muted); font-weight: 500; }
+.sprint-chip.desk { border-style: dashed; }
 .sprint-action.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sprint-phase { display: inline-flex; align-items: center; gap: 5px; }
 .sprint-mark { font-size: 12px; }

@@ -1,15 +1,20 @@
-import { useSyncExternalStore } from "react";
-import type { Actor, Item, Paper, SprintState } from "@isocan/core";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { Actor, Canvas, CanvasContents, Item, Paper, SprintState } from "@isocan/core";
 import {
   PAPER_SIZE,
+  copyProperties,
+  deskOf,
   freeSpotIn,
   handInPatch,
   handedInFor,
   hidesVotes,
   inArea,
   newGroupId,
+  newItemId,
+  newVersionId,
   sprintState,
 } from "@isocan/core";
+import { getSnapshot, readBlob, sendOp, uploadBlob } from "./api.ts";
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { screenToWorld } from "./viewport.ts";
@@ -153,6 +158,120 @@ export async function handIn(canvasId: string, actor: Actor, items: readonly Ite
       ? `Handed in for ${state.phase.label}`
       : `Handed ${pending.length} in for ${state.phase.label}`,
   );
+}
+
+/**
+ * **The desk** (sprint phase 3): this canvas is somebody's desk for a sprint
+ * running on ANOTHER canvas, and its chip has to show that sprint's clock.
+ * The store holds one canvas, so the sprint's is asked for — a snapshot
+ * every fifteen seconds while a desk is open, which is a clock that can be
+ * fifteen seconds stale and a phase change that arrives within one. Enough
+ * for a bell, and nothing to keep in sync: every pull is the whole truth.
+ */
+const DESK_PULL_MS = 15_000;
+
+/** The sprint this canvas is a desk for, read off the canvas record. */
+export function deskSprintOf(project: Canvas | null): string | null {
+  return project ? deskOf(project) : null;
+}
+
+export function useRemoteSprint(canvasId: string | null): {
+  state: SprintState | null;
+  canvas: CanvasContents | null;
+  nowMs: number;
+} {
+  const [remote, setRemote] = useState<{ id: string; canvas: CanvasContents } | null>(null);
+  const second = useClockSecond();
+  useEffect(() => {
+    if (!canvasId) {
+      setRemote(null);
+      return;
+    }
+    let live = true;
+    const pull = () =>
+      getSnapshot(canvasId)
+        .then((snapshot) => {
+          if (live) setRemote({ id: canvasId, canvas: snapshot.canvas });
+        })
+        .catch(() => {
+          // A pull that failed leaves the last one standing: a stale clock is
+          // better than a chip that blinks out on every blip.
+        });
+    void pull();
+    const timer = setInterval(pull, DESK_PULL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [canvasId]);
+  const canvas = remote && remote.id === canvasId ? remote.canvas : null;
+  return { state: canvas ? sprintState(canvas) : null, canvas, nowMs: second * 1000 };
+}
+
+/**
+ * **Hand in, from a desk**: copy the selection onto the sprint's sheet for
+ * the running phase and stamp each copy, in one group on the receiving
+ * canvas. The bytes are read from the desk and put where the sprint will
+ * look for them, the way a cross-canvas paste does; the spot is the first
+ * clear one on the sheet, each copy's search seeing the one before land.
+ * The originals stay on the desk — a hand-in is a copy, so the sketch is
+ * still the sketcher's.
+ */
+export async function handInFromDesk(
+  deskId: string,
+  sprintId: string,
+  sprintCanvas: CanvasContents,
+  actor: Actor,
+  items: readonly Item[],
+  state: SprintState,
+): Promise<number> {
+  const group = newGroupId();
+  let occupied = sprintCanvas;
+  let made = 0;
+  for (const item of items) {
+    const version = item.versions.find((v) => v.id === item.currentVersionId);
+    if (!version) continue;
+    const bytes = await readBlob(deskId, version.blobHash).catch(() => null);
+    if (bytes === null) continue;
+    const up = await uploadBlob(sprintId, bytes, version.filename);
+    const spot = state.area ? freeSpotIn(occupied, state.area, item.width, item.height) : { x: item.x, y: item.y };
+    const itemId = newItemId();
+    await sendOp(
+      sprintId,
+      actor,
+      {
+        type: "item.add",
+        itemId,
+        version: {
+          id: newVersionId(),
+          blobHash: up.blobHash,
+          mimeType: version.mimeType,
+          filename: version.filename,
+          size: version.size,
+        },
+        width: item.width,
+        height: item.height,
+        placement: { ...spot, ...(state.area ? { chosen: true } : {}) },
+        title: item.title,
+        ...(item.description ? { description: item.description } : {}),
+        properties: {
+          ...copyProperties(item, { sameCanvas: false }),
+          ...handInPatch(state.phase.name).properties,
+        },
+      },
+      group,
+    );
+    occupied = { ...occupied, items: { ...occupied.items, [itemId]: { ...item, id: itemId, ...spot } } };
+    made++;
+  }
+  flashNotice(
+    made === 0
+      ? "Nothing could be handed in — the desk's bytes could not be read"
+      : made === 1
+        ? `Handed in for ${state.phase.label}${state.area ? ` — on ${state.area.title}` : ""}`
+        : `Handed ${made} in for ${state.phase.label}${state.area ? ` — on ${state.area.title}` : ""}`,
+  );
+  return made;
 }
 
 /** Whether votes are hidden right now — the lens half of the curtain. */

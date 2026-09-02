@@ -265,6 +265,33 @@ export function briefItem(canvas: CanvasContents): Item | null {
 }
 
 /**
+ * **The desk** (sprint phase 3, journey Scene 2): a private canvas per
+ * sketcher, born by the facilitator, that knows which sprint it belongs to.
+ *
+ * `sprintOf=<canvas id>` on the DESK canvas's own properties is the whole
+ * record. The privacy is real rather than a courtesy: the desk's link grant
+ * is turned off at birth and one single-use pass admits one browser, so
+ * the daemon refuses everyone else at the door — the answer the 1 Sep
+ * research chose over a veil. What the desk's chip shows (the sprint's
+ * phase and clock) it reads from the sprint canvas by asking for it; what
+ * *Hand in* does from a desk is a cross-canvas copy onto the sprint's
+ * sheet, stamped for the phase. Nothing on a desk is on the wall until its
+ * sketcher says so.
+ */
+export const DESK_OF_PROP = "sprintOf";
+
+/** The sprint this canvas is a desk for, or null when it is not a desk. */
+export function deskOf(project: { properties?: Record<string, string> }): string | null {
+  return project.properties?.[DESK_OF_PROP] ?? null;
+}
+
+/** What a desk is called: the sketcher's name, possessive. */
+export function deskTitle(name: string): string {
+  const trimmed = name.trim();
+  return /s$/i.test(trimmed) ? `${trimmed}' desk` : `${trimmed}'s desk`;
+}
+
+/**
  * The phases, in the order a five-day sprint runs them. A word not in this
  * table is NOT a phase — `/sprint make onboarding better` is a brief for the
  * facilitator, not a state change — which is what keeps a typo from starting

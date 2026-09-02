@@ -131,6 +131,8 @@ import {
   boardOf,
   briefCard,
   briefItem,
+  DESK_OF_PROP,
+  deskTitle,
   areaInner,
   areasOf,
   findArea,
@@ -4351,8 +4353,10 @@ program
   .description("Copy items — beside themselves, or into another canvas with --to")
   .option("--to <canvas>", "copy into this canvas instead of beside the originals")
   .option("--at <x,y>", "where the copy goes (default: clear ground beside the originals)")
+  .option("--in <area>", "onto this sheet of the canvas they land on, at the first clear spots")
+  .option("--handin", "and hand them in for the phase running where they land — a desk's bell")
   .action(
-    run(async (items: string[], opts: { to?: string; at?: string }, cmd: Command) => {
+    run(async (items: string[], opts: { to?: string; at?: string; in?: string; handin?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: from, snapshot } = await canvasAndSnapshot(ctx);
       const sources = items.map((ref) => resolveItem(snapshot, ref));
@@ -4366,11 +4370,34 @@ program
       // beside the originals when that is the same one, on clear ground when
       // it is not.
       const into = sameCanvas ? snapshot.canvas : (await ctx.client.snapshot(target.id)).canvas;
-      const placements = duplicatePlacements(
-        into,
-        sources,
-        opts.at ? parseXY(opts.at) : undefined,
-      );
+      /**
+       * `--in <sheet>`: each copy takes the first clear spot on the sheet,
+       * the search seeing the ones before it land — a hand-in from a desk is
+       * this, and a wall that arrives together needs every sketch on the
+       * sheet, not one on it and five nudged off. `--handin` stamps them for
+       * the phase running on the canvas they land on, so a desk's bell is
+       * one command.
+       */
+      const sheet = opts.in === undefined ? null : findArea(into, opts.in);
+      if (opts.in !== undefined && !sheet) {
+        throw new Error(`no area called "${opts.in}" on "${target.title}" — \`isocan area ls\` there names them`);
+      }
+      const running = opts.handin ? sprintState(into) : null;
+      if (opts.handin && !running) {
+        throw new Error(`no sprint is running on "${target.title}" — nothing to hand in for`);
+      }
+      let placements: { item: Item; x: number; y: number }[];
+      if (sheet) {
+        let occupied = into;
+        placements = [];
+        for (const item of sources) {
+          const spot = freeSpotIn(occupied, sheet, item.width, item.height);
+          placements.push({ item, ...spot });
+          occupied = { ...occupied, items: { ...occupied.items, [`pending_${placements.length}`]: { ...item, ...spot } } };
+        }
+      } else {
+        placements = duplicatePlacements(into, sources, opts.at ? parseXY(opts.at) : undefined);
+      }
       // One copy is one act: eight items land as eight ops under one id, and
       // one ⌘Z takes them all back. See `LogEntry.group`.
       const group = newGroupId();
@@ -4399,17 +4426,25 @@ program
           },
           width: item.width,
           height: item.height,
-          // `--at` chose the spot, so the copies stay where they were put.
-          placement: { x, y, ...(opts.at ? { chosen: true } : {}) },
+          // `--at` chose the spot, and so did a sheet's search: the copies
+          // stay where they were put.
+          placement: { x, y, ...(opts.at || sheet ? { chosen: true } : {}) },
           title: item.title,
           ...(item.description ? { description: item.description } : {}),
-          properties: copyProperties(item, { sameCanvas }),
+          properties: {
+            ...copyProperties(item, { sameCanvas }),
+            ...(running ? handInPatch(running.phase.name).properties : {}),
+          },
         }, group);
         made.push(itemId);
       }
-      if (ctx.json) return printJson({ items: made, canvasId: target.id });
-      const where = sameCanvas ? "beside the originals" : `into "${target.title}"`;
-      console.log(`copied ${made.length} item${made.length === 1 ? "" : "s"} ${where}`);
+      if (ctx.json) return printJson({ items: made, canvasId: target.id, ...(running ? { handedInFor: running.phase.name } : {}) });
+      const where = sheet
+        ? `onto "${sheet.title}"${sameCanvas ? "" : ` in "${target.title}"`}`
+        : sameCanvas
+          ? "beside the originals"
+          : `into "${target.title}"`;
+      console.log(`copied ${made.length} item${made.length === 1 ? "" : "s"} ${where}${running ? `, handed in for ${running.phase.name}` : ""}`);
       for (const id of made) console.log(`  ${id}`);
     }),
   );
@@ -6713,6 +6748,48 @@ sprintCmd
         console.log(`the brief is on the board${sheet ? "" : " (no Brief sheet — laid where text goes)"} — react ✅ on it when it is right`);
       },
     ),
+  );
+
+/**
+ * **The desk** (sprint phase 3): a private canvas for one sketcher. Born
+ * knowing its sprint (`sprintOf`), its link grant turned off at birth so the
+ * address alone admits nobody, and one single-use pass minted for the one
+ * browser that should get in. The facilitator hands the address to that
+ * sketcher and nobody else; the daemon refuses the rest at the door.
+ */
+sprintCmd
+  .command("desk <name...>")
+  .description("A private canvas for one sketcher — link off, one pass in; hand them the address it prints")
+  .option("--canvas <canvas>", "the sprint canvas this desk belongs to")
+  .action(
+    run(async (words: string[], opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const sprint = await resolveCanvas(ctx);
+      const name = words.join(" ").trim();
+      if (!name) throw new Error("whose desk? — `isocan sprint desk Theo`");
+      const canvasId = newCanvasId();
+      await sendOp(ctx, null, {
+        type: "project.create",
+        canvasId,
+        title: deskTitle(name),
+        description: `${name}'s desk for "${sprint.title}" — sketch here; Hand in puts it on the sprint's wall`,
+        properties: { [DESK_OF_PROP]: sprint.id },
+      });
+      // The link grant every canvas is born with is the one thing that would
+      // let anybody with the address in. Off, before the address exists.
+      const link = (await ctx.client.grants(canvasId)).grants.find((g) => g.subject === LINK);
+      if (link) await ctx.client.revokeGrant(canvasId, link.id);
+      // One pass, one browser, once. Admit-only: the sketcher names
+      // themselves at the door, the way anyone entering a canvas does.
+      const origin = (await ctx.homeOf(canvasId)) ?? ctx.client.base;
+      const { token } = await ctx.client.mintPass(canvasId);
+      const address = canvasUrlWithPass(origin, canvasId, token);
+      if (ctx.json) return printJson({ canvasId, title: deskTitle(name), sprintOf: sprint.id, address });
+      console.log(`${deskTitle(name)} (${canvasId}) — the link is off. Hand ${name} this address and nobody else; it admits one browser, once:`);
+      console.log(`  ${address}`);
+      console.log(`their Hand in lands on "${sprint.title}"; \`isocan sprint desk ${name}\` again mints a fresh pass if this one lapses`);
+    }),
   );
 
 sprintCmd

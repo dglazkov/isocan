@@ -697,8 +697,10 @@ bell:
 ```sh
 isocan sprint board                       # lay the board: one sheet per stretch of the week
 isocan sprint brief --goal "…" --decider Maya --question "…"   # the brief, as one card with a history
+isocan sprint desk Theo                   # a private canvas for one sketcher: link off, one pass in
 isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
 isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
+isocan copy <items...> --to <sprint> --in Sketches --handin   # a desk's bell: onto the sheet, stamped
 isocan sprint handin <items...>           # these were made for the current phase
 isocan sprint tally                       # human dots and agent dots, apart
 isocan sprint end                         # over — no phase, no clock
@@ -715,6 +717,15 @@ box): calling a phase walks everyone's camera there and puts the phase's one
 action on the clock chip — *New note* on the phase's paper in the sheet,
 *Hand in* which lands the selection on the sheet. You never say where to go
 or what to click; call the phase and the board does that.
+
+**Desks are where the silence happens.** `isocan sprint desk <name>` births a
+private canvas for one sketcher — the link grant off, one single-use pass
+minted — and prints an address to hand to that person and nobody else. The
+desk knows its sprint (`sprintOf` on the canvas record), so its clock chip
+shows the sprint's phase and clock and offers *Hand in*, which copies the
+selection onto the sprint's sheet for the running phase, stamped. The
+terminal's twin is `isocan copy <items> --to <sprint> --in <sheet> --handin`.
+The original stays on the desk: a hand-in is a copy.
 
 `phase` refuses a word that is not a phase (`map experts hmw target demos
 notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard

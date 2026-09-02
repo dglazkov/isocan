@@ -819,11 +819,16 @@ phase with no clock (museum, supervote, prototype) runs until you call the next.
 SILENCE IS THE METHOD. During hmw, notes, ideas, crazy8s and sketch:
 - Do not post in the Chat — every parked sketcher wakes on it. Narrate with
   \`isocan session say "…"\` instead; the chip shows the clock.
-- Sketchers work ALONE: a person on their own scratch canvas or on paper, an
-  agent in its own directory or canvas. Nothing lands on this canvas until the
-  bell. At the bell each hands in — \`isocan copy <items> --to <this canvas>\`
-  then \`isocan sprint handin <items>\` — and you \`isocan format\` once so the
-  wall arrives together. Six arrivals at once beat six arrivals in a row.
+- Sketchers work ALONE, each on a DESK you give them before the first silent
+  box: \`isocan sprint desk <name>\` makes a private canvas for that one
+  person — link off, one pass in — and prints an address to hand to them and
+  nobody else (a DM, never the Chat). An agent sketches in its own directory
+  or on a desk of its own. Nothing lands on this canvas until the bell. At
+  the bell each hands in — the desk's clock chip has a Hand in button that
+  lands the selection on this sprint's sheet, or from a terminal
+  \`isocan copy <items> --to <this canvas> --in <sheet> --handin\` — and you
+  \`isocan format --in <sheet>\` once so the wall arrives together. Six
+  arrivals at once beat six arrivals in a row.
 - QUOTAS hold the wall to one voice each: eight frames in crazy8s, ONE solution
   sketch per sketcher. An agent that could make forty makes one. Check with
   \`isocan sprint\` (it counts hand-ins) and say so if somebody is over.

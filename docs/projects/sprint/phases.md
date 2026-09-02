@@ -36,7 +36,12 @@ built too:** a phase call glides everyone who watched it to the phase's
 sheet, and the clock chip offers the phase's one action — *Go there*, *New
 note* on the phase's paper in the sheet, *Hand in* which lands the
 selection on the sheet — through helpers the item menu shares
-(`web/test/walk.test.ts`). Phase 3 is next.
+(`web/test/walk.test.ts`). **Phase 3 is built:** `isocan sprint desk <name>`
+births a private canvas — link off, one pass in — that knows its sprint; its
+chip reads the sprint's clock by pulling the snapshot and offers *Hand in*,
+a cross-canvas copy onto the phase's sheet, stamped, in one group; the
+terminal's twin is `copy --to --in --handin` (`cli/test/desk.test.ts`).
+Phase 4 is next.
 
 ---
 
