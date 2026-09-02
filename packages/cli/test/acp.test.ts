@@ -126,7 +126,7 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(run.stderr).toContain("stopReason end_turn");
     // The scripted agent echoes its environment: the harness/session pair
     // the CLI inside would present — exactly the mint claim's key.
-    expect(run.stdout).toContain("env:agent:prj_1:Sian");
+    expect(run.stdout).toContain("env:agent:Sian");
     expect(run.stdout).toContain("echo:say hello");
     // The permission flow ran, and the client chose the allow option.
     expect(run.stdout).toContain("permission:yes");
@@ -134,7 +134,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // agent's session runs it — the injected environment, nothing else —
     // resolves as the enrolled Sian.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "prj_1:Sian" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian" }),
     );
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
@@ -178,14 +178,14 @@ describe("a turn in a named agent (phase 3)", () => {
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("env:agent:prj_1:Percy");
+    expect(run.stdout).toContain("env:agent:Percy");
     const rows = await rcRows();
     expect(rows[0]).toMatchObject({ actorId: "usr_percy", sessionId: rows[0]!.sessionId });
     // The machine badge now answers for Percy under the injected key: a
     // CLI run the way the agent's shells run it speaks as Percy — the one
     // rebinding a web-enrolled agent needed, made by the turn.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "prj_1:Percy" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy" }),
     );
     expect(inside.stdout).toContain("Percy");
   }, 30_000);

@@ -37,8 +37,20 @@ export interface Ctx extends ResolvedCtx {
  * Which canvas the flags name: `--canvas`, or `--project` — the hidden alias
  * kept working through phase 13.5's rename so nothing anybody scripted broke.
  */
-export function canvasRefOf(opts: { canvas?: string; project?: string }): string | undefined {
-  return opts.canvas ?? opts.project;
+/**
+ * Which canvas a command means: `--canvas`, its old spelling `--project`, and
+ * then `ISOCAN_CANVAS` in the environment — what an rc sets for a summons so
+ * the agent's shells act on the canvas the summons is FOR rather than on the
+ * working directory's binding (standing agents, phase 1). Pass `null` for
+ * `env` to ask about the flags alone; the `agent add` containment refuses an
+ * explicit pointer and must not refuse the environment it was summoned into.
+ */
+export function canvasRefOf(
+  opts: { canvas?: string; project?: string },
+  env: NodeJS.ProcessEnv | null = process.env,
+): string | undefined {
+  const fromEnv = env?.ISOCAN_CANVAS?.trim();
+  return opts.canvas ?? opts.project ?? (fromEnv ? fromEnv : undefined);
 }
 
 export async function makeCtx(cmd: Command): Promise<Ctx> {

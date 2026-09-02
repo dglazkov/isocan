@@ -373,3 +373,72 @@ describe("the vocabulary divide, enforced", () => {
     expect(await snapshotAgents()).toEqual({});
   });
 });
+
+/**
+ * **One agent, one name, one machine, many canvases** (standing agents,
+ * phase 1). The enrolment key used to be `agent:<canvasId>:<name>`, so Percy
+ * enrolled on a second canvas from the same machine was a second session key
+ * on the same badge asking for a worn name — refused by the desk, the gate
+ * #89 hit. The key is the name now: the same claim on any canvas resumes the
+ * one Percy.
+ */
+describe("one agent, one name, one machine, many canvases", () => {
+  it("enrolling a name this machine answers for, on a second canvas, is the same actor", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Q" },
+    });
+    const first = await isocan("--json", "--canvas", "prj_1", "rc", "add", "Percy");
+    const second = await isocan("--json", "--canvas", "prj_2", "rc", "add", "Percy");
+    expect(first.code).toBe(0);
+    expect(second.code).toBe(0);
+    const a = JSON.parse(first.stdout).enrolled as { id: string; name: string };
+    const b = JSON.parse(second.stdout).enrolled as { id: string; name: string };
+    expect(b.id).toBe(a.id);
+
+    // Both canvases carry the one actor; the machine holds one row per canvas.
+    const rosterOf = async (canvasId: string) => {
+      const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
+      const snapshot = (await res.json()) as { canvas: { agents?: Record<string, { actor: { id: string } }> } };
+      return Object.values(snapshot.canvas.agents ?? {}).map((row) => row.actor.id);
+    };
+    expect(await rosterOf("prj_1")).toEqual([a.id]);
+    expect(await rosterOf("prj_2")).toEqual([a.id]);
+    const rows = await rcRows();
+    expect(rows.map((r) => r.canvasId).sort()).toEqual(["prj_1", "prj_2"]);
+    expect(new Set(rows.map((r) => r.actorId)).size).toBe(1);
+
+    // A CLI run the way a summons on prj_2 runs it — the injected environment,
+    // nothing else, in an unbound directory — speaks as Percy AND acts on
+    // prj_2: `ISOCAN_CANVAS` is read like `--canvas`.
+    const inside = await collect(
+      spawnCli(["--json", "whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+    );
+    expect(JSON.parse(inside.stdout).id).toBe(a.id);
+    const typed = await collect(
+      spawnCli(["text", "standing", "here"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+    );
+    expect(typed.code).toBe(0);
+    const itemsOf = async (canvasId: string) => {
+      const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
+      const snapshot = (await res.json()) as { canvas: { items: Record<string, unknown> } };
+      return Object.keys(snapshot.canvas.items);
+    };
+    expect((await itemsOf("prj_2")).length).toBe(1);
+    expect((await itemsOf("prj_1")).length).toBe(0);
+
+    // The containment still holds for the agent's spelling: an explicit
+    // pointer is refused, but the environment a summons runs in is not one.
+    const pointed = await collect(
+      spawnCli(["--canvas", "prj_1", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+    );
+    expect(pointed.code).toBe(1);
+    expect(pointed.stderr).toContain("beside itself");
+    const beside = await collect(
+      spawnCli(["--json", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+    );
+    expect(beside.code).toBe(0);
+    expect(JSON.parse(beside.stdout).canvasId).toBe("prj_2");
+  }, 30_000);
+});
