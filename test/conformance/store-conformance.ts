@@ -106,6 +106,28 @@ export function storeConformance(
     );
 
     test(
+      "tipSeq reads the backing, never a cache — and moves when the log does (#85)",
+      withStore(async ({ store }) => {
+        // The one read an engine uses to find out it has gone stale: it must
+        // answer from what is durable, so a SECOND process writing to the
+        // same backing is seen without this store having been told anything.
+        expect(await store.tipSeq("prj_nope")).toBeNull();
+        const state = await seed(store);
+        expect(await store.tipSeq("prj_1")).toBe(3);
+        // An append with no snapshot behind it — the shape a write from the
+        // other instance leaves, and the shape a crash leaves — still moves
+        // the tip: the log is the truth and the snapshot may lag it.
+        const env = envelope({ type: "item.move", itemId: "itm_1", x: 1, y: 2 });
+        await store.appendLog("prj_1", {
+          seq: 4,
+          envelope: env,
+          inverse: invertOperation(state, env.op),
+        });
+        expect(await store.tipSeq("prj_1")).toBe(4);
+      }),
+    );
+
+    test(
       "init is idempotent, and close can be called twice",
       withStore(async ({ store }) => {
         // Both are called on paths that can run more than once — a daemon
