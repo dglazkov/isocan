@@ -39,7 +39,10 @@ describe("the composer grows to the right before it wraps", () => {
        never laid out in — which is the bug the mirror exists to prevent. */
     const composer = source("../src/components/TextComposer.tsx");
     expect(composer).toContain("Math.min(TEXT_COLUMN_MAX[style], width)");
-    expect(composer).toContain("maxWidth: TEXT_COLUMN_MAX[style]");
+    /* A NEW composer wraps at the hard limit. An EXISTING node's words wrap
+       at ITS width, or the height measured would be for a box they are not
+       in — see `textedit.test.ts`. */
+    expect(composer).toContain("editing && pending.width ? pending.width : TEXT_COLUMN_MAX[style]");
   });
 });
 
@@ -66,6 +69,7 @@ describe("the step and face are remembered across reloads", () => {
        not remembering them for anybody who reloads. */
     expect(ui).toContain("lastTextStyle: readTextStyle()");
     expect(ui).toContain("lastTextFace: readTextFace()");
+    expect(ui).toContain("lastPaper: readPaper()");
   });
 
   it("writes them when they change", () => {
@@ -78,6 +82,7 @@ describe("the step and face are remembered across reloads", () => {
        thing that goes stale. */
     expect(ui).toContain("TEXT_STYLES.includes(");
     expect(ui).toContain("TEXT_FACES.includes(");
+    expect(ui).toMatch(/function readPaper[\s\S]{0,400}isPaper\(raw\)/);
     expect(TEXT_STYLES.length).toBeGreaterThan(1);
     expect(TEXT_FACES.length).toBeGreaterThan(1);
   });

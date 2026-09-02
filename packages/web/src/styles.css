@@ -4486,7 +4486,12 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 4px 6px;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
-  background: var(--card);
+  /* Transparent, because you are typing ONTO the canvas: a caption wears no
+     card (`.item.textnode`), so the field editing one must not either — a
+     white box over the words read as a form, and re-opening a caption put
+     that box inside the selected item. The accent hairline is the one thing
+     that says where the box is; the words are otherwise the canvas's own. */
+  background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 16px;

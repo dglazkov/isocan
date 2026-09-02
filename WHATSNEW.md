@@ -16,6 +16,13 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 2 September 2026
+
+- The Text tool keeps what you typed. Typing a note and then choosing a colour, size or face used to lose the words when you clicked away; it no longer does.
+- Changing a note's colour, size or face saves the moment you choose it, as its own undo step — no need to change the words too.
+- Double-clicking text edits it in place: the field sits exactly on the note or caption, transparent, with the words selected, the way renaming works.
+- A new note opens on the paper you chose last, the way it already remembered your size and face.
+
 ## 1 September 2026
 
 - Run a design sprint on a canvas: type `/sprint` in the Chat and an agent facilitates — people and agents sketch as peers, one named person decides. A clock chip shows the phase and the time left; votes are reactions, hidden until the bell; `isocan sprint` prints the same clock from the terminal and `isocan sprint tally` shows human and agent dots apart.
