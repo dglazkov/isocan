@@ -8,6 +8,7 @@ import type {
   LogEntry,
   Operation,
 } from "@isocan/core";
+import { undoneSeqs } from "@isocan/core";
 import type { Engine } from "./engine.ts";
 
 /**
@@ -41,12 +42,10 @@ export const DEFAULT_GRACE_MS = 10 * 60 * 1000;
 export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[] {
   const bySeq = new Map(entries.map((entry) => [entry.seq, entry]));
 
-  // Final undone-state: an undo marks its target undone; a redo clears it.
-  const undoneBy = new Map<number, number>();
-  for (const entry of entries) {
-    if (entry.cause?.kind === "undo") undoneBy.set(entry.cause.targetSeq, entry.seq);
-    else if (entry.cause?.kind === "redo") undoneBy.delete(entry.cause.targetSeq);
-  }
+  // Final undone-state, from core: an undo marks its target undone, a redo
+  // clears it. Shared with `buildCorpus` rather than spelled twice — see
+  // `undoneSeqs` for why the `undoneBy` FIELD cannot be used for this.
+  const undoneBy = undoneSeqs(entries);
 
   // Careful: slice(-0) === slice(0) would keep everything.
   const newest = keepOps <= 0 ? [] : entries.slice(-keepOps);

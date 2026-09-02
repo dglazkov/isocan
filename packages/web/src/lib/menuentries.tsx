@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI } from "@isocan/core";
+import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, handInPatch, handedInFor, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -232,6 +232,11 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         );
       },
     },
+    // Handing in to a sprint (core/sprint.ts): one property, the same op
+    // `isocan sprint handin` sends. Offered only while a phase is running —
+    // there is nothing to hand in to otherwise — and only for items not
+    // already in, so the label is the count that will move.
+    ...sprintHandIn(items, ctx),
     { separator: "" },
     {
       label: many ? `Delete ${items.length} items` : "Delete",
@@ -263,6 +268,37 @@ function slideLabel(items: readonly Item[]): string {
   return on
     ? `${SLIDE_EMOJI} Make ${changing.length} slides`
     : `${SLIDE_EMOJI} Take ${changing.length} out of the deck`;
+}
+
+/** The hand-in entry, or nothing when no sprint phase is running. */
+function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
+  const canvas = useCanvasStore.getState().canvas;
+  const state = canvas ? sprintState(canvas) : null;
+  if (!state) return [];
+  const pending = items.filter((item) => handedInFor(item) !== state.phase.name);
+  if (pending.length === 0) return [];
+  const what = pending.length === 1 ? (items.length === 1 ? "this" : "1") : String(pending.length);
+  return [
+    {
+      label: `Hand ${what} in for ${state.phase.label}`,
+      run: () => {
+        const group = pending.length > 1 ? newGroupId() : undefined;
+        for (const item of pending) {
+          void sendEchoed(
+            ctx.canvasId,
+            ctx.actor,
+            { type: "item.update", itemId: item.id, patch: handInPatch(state.phase.name) },
+            group,
+          );
+        }
+        flashNotice(
+          pending.length === 1
+            ? `Handed in for ${state.phase.label}`
+            : `Handed ${pending.length} in for ${state.phase.label}`,
+        );
+      },
+    },
+  ];
 }
 
 /** The menu for the canvas itself — a right-click on open ground. */

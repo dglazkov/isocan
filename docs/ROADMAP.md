@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 23 still open** — of which 14 partly
+**14 built · 24 still open** — of which 15 partly
 built, 9 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>14</sub>
+## Partly built <sub>15</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -25,13 +25,14 @@ and the done column should not be flattered by either.
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
 | **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
-| **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
+| **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built; stage 1's join key was not the one this plan named · see evals |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 | the same-machine half answered 1 Sep by standing-agents phase 1 — the enrolment key is the name, so one badge holds one actor across canvases; the cross-machine credential (shape A) is not built and stays a vouch · see standing-agents, personas |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents — phase 1 (one name, one machine, many canvases) built 1 Sep, the multi-canvas rc and `available` not · see standing-agents, on-demand, personas |
 | **project** | [standing-agents](docs/projects/standing-agents/design.md) | 2026-09-01 | phase 1 built 1 Sep — one name on one machine stands on many canvases (the enrolment key is the name; the summons carries its canvas). The rc that parks on every canvas its rows name, `available` in the web roster, and `isocan history` are not built. · see standing-agents, on-demand, agent-custody |
+| research | [The design sprint, as a game the canvas already knows how to play](docs/research/2026-09-01-design-sprint.md) | 2026-09-01 | stages 0-2 built 1 Sep — the `/sprint` command, `sprintState` derived from the Chat, `isocan sprint` and the clock chip, hand-in as a property, the vote curtain by lens, the split tally, the bell; stage 3 (rival rooms, the overnight Monday) is practice, not code, and the sprint has not yet been run for real · see atlas, personas, on-demand |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 

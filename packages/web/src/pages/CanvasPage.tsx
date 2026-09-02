@@ -73,6 +73,7 @@ import { PersonasPanel } from "../components/PersonasPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
+import { SprintChip } from "../components/SprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
@@ -809,6 +810,9 @@ function CanvasSurface({
         <CanvasViewport canvasId={canvasId} actor={actor} />
       </div>
       <Toolbar actor={actor} onIdentity={onIdentity} />
+      {/* The sprint's clock, when the Chat says one is running — derived,
+          like `isocan sprint`; sits under the banners when one is up. */}
+      <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} />
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
           isocan updated — reload to catch up
