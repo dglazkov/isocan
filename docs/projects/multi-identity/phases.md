@@ -16,7 +16,7 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phase 1 CLOSED 1 Sep 2026; phase 2 is next.** Design and
+**Where we are: phases 1–2 CLOSED 1 Sep 2026; phase 3 is next.** Design and
 journeys written 31 Aug 2026. Scope decided the same day for phases 1–4: the door and the menu, the
 precondition stays copy, and the diff lives in `packages/web` — no server
 change, no new op, no new route. Journey 5's acceptance ("no diff under
@@ -109,7 +109,15 @@ renders no buttons in the notice.
 
 ## Phase 2 — The door starts the proof
 
-**Status: not started.**
+**Status: CLOSED** 1 Sep 2026. Journey 1 walked by the conductor on the phase
+1 setup: a fresh Chrome badge at a canvas link met state A, opened B in
+place, sent the link and read C with the name field live, returned to the
+door in D with the Dimitri row above the field and a buttonless notice, and
+became the desk badge's actor id. D′ walked by killing the desk badge and
+reloading: the door named the proved address and the gesture. The
+attester-less door is held byte-for-byte by `test/doorproof.test.ts`.
+Journey 4 was not walked separately — Dimitri's call, 1 Sep: the door never
+reads a name, so it is journey 1's walk with a different row label.
 
 **Work:** The four states from [design.md](design.md), inside the one dialog:
 
@@ -136,7 +144,17 @@ with `canVerifyEmail` false, the door's rendered output is today's door.
 Journey 3's laptop half (D′, with its exact instructions) is exercised by
 proving an address nobody else proved.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-09-01 — Decided: D and D′ are read off the offer, not the sign-in
+  landing.** The door then says the true thing whenever a proved badge meets
+  it, not only on the return leg. The cost is that the offer is cached per
+  page load, so a door already open does not see another badge die until a
+  reload. No scene asks for that; recorded, not changed.
+- **2026-09-01 — The notice offered "Be Dimitri" to Dimitri.** The door's
+  claim lands while the sign-in notice is still up, and the `actor !== null`
+  branch then offered the person they had just become. The notice now leaves
+  the current actor out, the rule VerifyDialog already draws as "you, here".
 
 ---
 

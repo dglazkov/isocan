@@ -340,6 +340,19 @@ img { height: auto; }
 .identity-dialog input { flex: 1; }
 /* Coming back: the names this browser has worn, one click each. */
 .identity-dialog .identity-known { margin-bottom: 14px; }
+/* Beneath the name form: the door's way to start a proof (multi-identity
+   phase 2). Quiet on purpose — the stranger on a share link is the common
+   arrival and this asks nothing of them. State B reuses the Share panel's
+   address form, because it is that form. */
+.identity-prove { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.identity-prove-line { color: var(--ink-muted); font-size: 12.5px; line-height: 1.35; }
+.identity-prove-line b { color: var(--ink); font-weight: 600; }
+/* The line's control reads as a link inside a sentence, not as a second
+   Start button: a button-shaped thing here would compete with the name form. */
+.identity-prove-open {
+  padding: 0; border: 0; background: none; font: inherit; font-weight: 600;
+  color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
 
 /* ---------- canvas list ---------- */
 /* ---------- every canvas ----------
