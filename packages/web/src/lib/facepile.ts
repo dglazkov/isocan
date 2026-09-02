@@ -1,4 +1,5 @@
-import type { Actor, CommentThread, PresenceSession } from "@isocan/core";
+import type { Actor, ActorJoins, CommentThread, PresenceSession } from "@isocan/core";
+import { resolveActor, sameActor } from "@isocan/core";
 import { quietFor, statusLine } from "./presence.ts";
 
 /**
@@ -60,21 +61,29 @@ export function describe(session: PresenceSession): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-/** Who owes you a read, and how many comments each of them left. */
+/**
+ * Who owes you a read, and how many comments each of them left.
+ *
+ * Keyed by the RESOLVED author id (multi-identity phase 5): comments written
+ * under an id that was later folded into another group under the id that
+ * answers now, and none of them count when that id is yours.
+ */
 export function unreadByAuthor(
   pending: CommentThread[],
   seen: Record<string, string>,
   selfId: string,
+  joined?: ActorJoins,
 ): Map<string, { actor: Actor; count: number }> {
   const unreadBy = new Map<string, { actor: Actor; count: number }>();
   for (const thread of pending) {
     for (const comment of thread.comments) {
-      if (comment.author.id === selfId) continue;
+      if (sameActor(joined, comment.author.id, selfId)) continue;
       const since = seen[thread.id];
       if (since && comment.createdAt <= since) continue;
-      const entry = unreadBy.get(comment.author.id);
+      const authorId = resolveActor(joined, comment.author.id);
+      const entry = unreadBy.get(authorId);
       if (entry) entry.count += 1;
-      else unreadBy.set(comment.author.id, { actor: comment.author, count: 1 });
+      else unreadBy.set(authorId, { actor: { ...comment.author, id: authorId }, count: 1 });
     }
   }
   return unreadBy;

@@ -1,6 +1,7 @@
 import { describe as suite, expect, it } from "vitest";
 import type { Actor, PresenceSession } from "@isocan/core";
 import { facesFor, unreadByAuthor } from "../src/lib/facepile.ts";
+import { unreadCount } from "../src/stores/unreadStore.ts";
 
 /**
  * The facepile draws one face per PERSON.
@@ -125,6 +126,36 @@ suite("unread is counted per author", () => {
     );
     expect(unread.get("usr_kenny")).toBeUndefined();
     expect(unread.get("usr_nico")!.count).toBe(1);
+  });
+});
+
+/**
+ * multi-identity phase 5: `actor.join` folds one actor into another. The log
+ * keeps the folded id on every comment it wrote, so the unread helpers have
+ * to resolve authors through the `joined` map before deciding whose words a
+ * comment is.
+ */
+suite("a folded actor's comments are their person's own", () => {
+  const kenny2: Actor = { id: "usr_kenny2", name: "Kenny 2" };
+  const joined = { usr_kenny2: "usr_kenny" };
+  const thread = {
+    id: "thr_1",
+    comments: [
+      { author: kenny2, createdAt: "2026-01-01T00:00:01Z", body: "written before the join" },
+      { author: nico, createdAt: "2026-01-01T00:00:02Z", body: "from somebody else" },
+    ],
+  } as never;
+
+  it("is not unread for the person it folded into when `joined` maps it", () => {
+    expect(unreadCount(thread, {}, kenny.id, joined)).toBe(1);
+    expect(unreadCount(thread, {}, kenny.id)).toBe(2);
+  });
+
+  it("groups under the id that answers now, and never under yours", () => {
+    const byAuthor = unreadByAuthor([thread], {}, nico.id, joined);
+    expect([...byAuthor.keys()]).toEqual(["usr_kenny"]);
+    expect(byAuthor.get("usr_kenny")!.count).toBe(1);
+    expect(unreadByAuthor([thread], {}, kenny.id, joined).has("usr_kenny2")).toBe(false);
   });
 });
 

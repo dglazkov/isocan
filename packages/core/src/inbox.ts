@@ -1,7 +1,9 @@
 import type { Actor, CanvasContents, Comment, CommentThread } from "./model.ts";
 import type { NewComment, Operation } from "./ops.ts";
 import type { MentionCandidate } from "./mentions.ts";
+import type { ActorJoins } from "./identity.ts";
 import { extractMentions } from "./mentions.ts";
+import { sameActor } from "./identity.ts";
 import { isSystemActor } from "./model.ts";
 import { opMatchesFilters } from "./touches.ts";
 
@@ -60,21 +62,34 @@ export function namesFor(actor: Actor, label?: string | null): MentionCandidate[
  * body is re-read as well because older comments predate that field, and
  * because a name you answer to NOW (a session label) may not have been
  * resolvable when the comment was written.
+ *
+ * Ids are compared through `joined` (multi-identity phase 5): a mention of
+ * `Dimitri 2` was resolved to `Dimitri 2`'s id when it was written, and that
+ * id resolves to Dimitri now, so the thread is in Dimitri's inbox. Callers
+ * that have no map compare ids as they always did.
  */
 export function addressesActor(
   comment: NewComment | Comment,
   names: readonly MentionCandidate[],
+  joined?: ActorJoins,
 ): boolean {
   const self = names[0]?.id;
-  if (self && (comment.mentions ?? []).includes(self)) return true;
+  if (self && (comment.mentions ?? []).some((id) => sameActor(joined, id, self))) return true;
   return extractMentions(comment.body, names as MentionCandidate[]).length > 0;
 }
 
 /** Are you already in this conversation — did you write in it, or were you
  *  named in it? A reply to a thread you are part of is for you even when it
  *  does not repeat your name. */
-function inYourThread(thread: CommentThread, actorId: string, names: readonly MentionCandidate[]): boolean {
-  return thread.comments.some((c) => c.author.id === actorId || addressesActor(c, names));
+function inYourThread(
+  thread: CommentThread,
+  actorId: string,
+  names: readonly MentionCandidate[],
+  joined?: ActorJoins,
+): boolean {
+  return thread.comments.some(
+    (c) => sameActor(joined, c.author.id, actorId) || addressesActor(c, names, joined),
+  );
 }
 
 /**
@@ -103,10 +118,12 @@ export function reasonFor(
   thread: CommentThread | undefined,
   actorId: string,
   names: readonly MentionCandidate[],
+  /** The registry's joins, when the caller holds them — see `addressesActor`. */
+  joined?: ActorJoins,
 ): InboxReason | null {
-  if (addressesActor(comment, names)) return "mentioned";
+  if (addressesActor(comment, names, joined)) return "mentioned";
   if (thread?.main) return "main-thread";
-  if (thread && inYourThread(thread, actorId, names)) return "in-your-thread";
+  if (thread && inYourThread(thread, actorId, names, joined)) return "in-your-thread";
   return null;
 }
 
@@ -163,17 +180,23 @@ export function rulesOf(raw: unknown): AgentRules {
 export function dispatchReason(
   op: Operation,
   authorId: string,
-  agent: { actorId: string; names: readonly MentionCandidate[]; rules?: AgentRules | null | undefined },
+  agent: {
+    actorId: string;
+    names: readonly MentionCandidate[];
+    rules?: AgentRules | null | undefined;
+    /** The registry's joins, when the caller holds them — see `addressesActor`. */
+    joined?: ActorJoins | undefined;
+  },
   canvas: CanvasContents | null | undefined,
 ): InboxReason | "change" | null {
-  if (authorId === agent.actorId) return null;
+  if (sameActor(agent.joined, authorId, agent.actorId)) return null;
   // The system voice reports outcomes; it never summons. Without this,
   // "Sian couldn't answer" landing in Sian's own thread would re-summon
   // Sian — the failure message waking the failure, forever (phase 5).
   if (isSystemActor(authorId)) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
-    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names);
+    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
     if (reason) return reason;
   }
   const rules = agent.rules;
@@ -190,12 +213,14 @@ export function inboxOn(
   names: readonly MentionCandidate[],
   canvasId: string,
   canvasTitle?: string,
+  /** The registry's joins, when the caller holds them — see `addressesActor`. */
+  joined?: ActorJoins,
 ): InboxEntry[] {
   const out: InboxEntry[] = [];
   for (const thread of Object.values(canvas.threads ?? {})) {
     for (const comment of thread.comments) {
-      if (comment.author.id === actor.id) continue;
-      const reason = reasonFor(comment, thread, actor.id, names);
+      if (sameActor(joined, comment.author.id, actor.id)) continue;
+      const reason = reasonFor(comment, thread, actor.id, names, joined);
       if (!reason) continue;
       out.push({
         canvasId,

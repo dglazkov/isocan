@@ -16,7 +16,7 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phases 1–4 CLOSED 1 Sep 2026; phase 5 is next.** Design and
+**Where we are: ALL FIVE PHASES CLOSED 1 Sep 2026.** Journeys 1–6 walked or held by test as each phase records. Design and
 journeys written 31 Aug 2026. Scope decided the same day for phases 1–4: the door and the menu, the
 precondition stays copy, and the diff lives in `packages/web` — no server
 change, no new op, no new route. Journey 5's acceptance ("no diff under
@@ -278,7 +278,18 @@ corrected menu label in `claims.ts`.
 
 ## Phase 5 — Two actors become one person
 
-**Status: not started.**
+**Status: CLOSED** 1 Sep 2026. Journey 6 walked to the end by the conductor
+on the scratch home: a comment written as `Dimitri 2` and a comment by Dimitri
+mentioning `Dimitri 2` were on the canvas; the identity menu's `Dimitri 2` row
+offered **Fold into Dimitri**, armed with "Everything written as Dimitri 2
+becomes Dimitri's. This cannot be undone.", and folded. Afterwards the names
+map answered Dimitri for the old id, the `joined` map read
+`usr_Vl5lMHIH5c → usr_Ik0D_mNpU7`, the stored comment still carried the old
+author stamp and the old mention id, the sessions route listed one Dimitri,
+the roster dropped `Dimitri 2`, and two ⌘Z from Dimitri removed first their
+own comment and then the one `Dimitri 2` had written. Suite: 263 files, 2878
+tests; typecheck clean; `git diff --stat` 35 files across core, server,
+cloudstore, api, cli and web.
 
 **Work:** `actor.join { from, into }`, designed in [design.md](design.md)'s
 "Joining two actors":
@@ -315,4 +326,22 @@ refused. A test holds that the log entry `Dimitri 2` wrote still carries
 `Dimitri 2`'s id after the join. The same op sent from the CLI and from the
 web produces the same registry.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-09-01 — Decided: resolve at the server edge where a name can
+  answer, ship the map where only an id can.** `names`, `colors`, `marks`
+  and presence leave the home already resolved, so every existing reader
+  repaints with no change. The `joined` map rides beside `names` on the
+  snapshot and rosters for the comparisons a name cannot settle: the inbox,
+  mention candidates, unread counts. Both surfaces read one answer.
+- **2026-09-01 — Decided: a folded actor cannot be folded again.** The design
+  named four refusals; a fifth keeps the map a forest. All but "unknown id"
+  answer `bad-join`; an unknown id keeps the registry's own `unknown-actor`.
+- **2026-09-01 — Unread counts compared ids without the map.** Found on the
+  walk: Dimitri's own words under the old id showed as "1 new from Dimitri".
+  The unread helpers and the facepile now resolve authors through the map.
+- **Left for later, named here:** `actorBindings` and orphaned-claim lookups
+  still answer a folded actor's raw id; readers resolve it, and the CLI keeps
+  writing under its own id after a join, which the log is meant to record.
+  A replica does not merge `joined` from its home (`mergeRemoteIdentity` has
+  no callers today).

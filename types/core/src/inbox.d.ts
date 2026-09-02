@@ -1,6 +1,7 @@
 import type { Actor, CanvasContents, Comment, CommentThread } from "./model.js";
 import type { NewComment, Operation } from "./ops.js";
 import type { MentionCandidate } from "./mentions.js";
+import type { ActorJoins } from "./identity.js";
 /**
  * **What is addressed to you, wherever it landed.**
  *
@@ -48,8 +49,13 @@ export declare function namesFor(actor: Actor, label?: string | null): MentionCa
  * body is re-read as well because older comments predate that field, and
  * because a name you answer to NOW (a session label) may not have been
  * resolvable when the comment was written.
+ *
+ * Ids are compared through `joined` (multi-identity phase 5): a mention of
+ * `Dimitri 2` was resolved to `Dimitri 2`'s id when it was written, and that
+ * id resolves to Dimitri now, so the thread is in Dimitri's inbox. Callers
+ * that have no map compare ids as they always did.
  */
-export declare function addressesActor(comment: NewComment | Comment, names: readonly MentionCandidate[]): boolean;
+export declare function addressesActor(comment: NewComment | Comment, names: readonly MentionCandidate[], joined?: ActorJoins): boolean;
 /**
  * Everything on one canvas that is addressed to this actor, oldest first.
  *
@@ -71,7 +77,9 @@ export declare function addressesActor(comment: NewComment | Comment, names: rea
  * whose they are. A missing thread (an op racing its own snapshot) can still
  * mention you; it cannot be main or already yours.
  */
-export declare function reasonFor(comment: NewComment | Comment, thread: CommentThread | undefined, actorId: string, names: readonly MentionCandidate[]): InboxReason | null;
+export declare function reasonFor(comment: NewComment | Comment, thread: CommentThread | undefined, actorId: string, names: readonly MentionCandidate[], 
+/** The registry's joins, when the caller holds them — see `addressesActor`. */
+joined?: ActorJoins): InboxReason | null;
 /**
  * **What a rule may say** (agents-on-demand phase 4, decided 2026-08-30):
  * today's filters, exactly — the items it names, the op types (or families,
@@ -117,8 +125,12 @@ export declare function dispatchReason(op: Operation, authorId: string, agent: {
     actorId: string;
     names: readonly MentionCandidate[];
     rules?: AgentRules | null | undefined;
+    /** The registry's joins, when the caller holds them — see `addressesActor`. */
+    joined?: ActorJoins | undefined;
 }, canvas: CanvasContents | null | undefined): InboxReason | "change" | null;
-export declare function inboxOn(canvas: CanvasContents, actor: Actor, names: readonly MentionCandidate[], canvasId: string, canvasTitle?: string): InboxEntry[];
+export declare function inboxOn(canvas: CanvasContents, actor: Actor, names: readonly MentionCandidate[], canvasId: string, canvasTitle?: string, 
+/** The registry's joins, when the caller holds them — see `addressesActor`. */
+joined?: ActorJoins): InboxEntry[];
 /**
  * Newest first, across canvases — the order an inbox is read in.
  *

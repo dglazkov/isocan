@@ -13,6 +13,14 @@ import type { LogEntry } from "../../core/src/index.js";
  */
 export declare class UndoStacks {
     private byActor;
+    /**
+     * **A person may hold several stacks** (multi-identity phase 5). After
+     * `actor.join` folds `Dimitri 2` into Dimitri, Dimitri's ⌘Z reaches the ops
+     * either id wrote, in log order. The stacks stay per actor id — that is what
+     * the log records — and every question below accepts the list of ids that
+     * resolve to one person (`actorAliases`), walking them as one stack. A
+     * caller with a single id gets exactly the behaviour there always was.
+     */
     /** targetSeq → seq of the undo entry that reversed it. */
     private undoneBy;
     /**
@@ -29,8 +37,16 @@ export declare class UndoStacks {
      * entries affect the stacks of the actor who performed them — which is
      * always the owner of their target, since stacks are per-actor. */
     record(entry: LogEntry): void;
+    /**
+     * One person's stack across every id they wrote under. An undo stack is
+     * in log order per id, so the merge is a sort by seq. A redo stack is in
+     * the order things were UNDONE — the last thing undone is the first thing
+     * redone — so the merge sorts by the seq of the undo entry that put each
+     * target there, which `undoneBy` remembers.
+     */
+    private merged;
     /** Seq of the entry this actor's next undo should reverse, or null. */
-    nextUndoTarget(actorId: string): number | null;
+    nextUndoTarget(who: string | readonly string[]): number | null;
     /**
      * **Every seq one ⌘Z should reverse** — newest first, which is the order
      * they must be undone in.
@@ -47,23 +63,23 @@ export declare class UndoStacks {
      * cannot break a group. That falls out of the stacks being per-actor and is
      * the reason this stays simple.
      */
-    nextUndoGroup(actorId: string): number[];
+    nextUndoGroup(who: string | readonly string[]): number[];
     /** The same question for redo: the group at the top of the redo stack,
      *  oldest first — the order they were originally written, which is the
      *  order that re-does them. */
-    nextRedoGroup(actorId: string): {
+    nextRedoGroup(who: string | readonly string[]): {
         targetSeq: number;
         undoSeq: number;
     }[];
     /** For this actor's next redo: the original entry to re-do, plus the undo
      * entry whose stored inverse performs it. */
-    nextRedoTarget(actorId: string): {
+    nextRedoTarget(who: string | readonly string[]): {
         targetSeq: number;
         undoSeq: number;
     } | null;
     /** Drop an undo candidate whose inverse no longer applies (its objects were
      * removed by another actor). Nothing to redo — the effect is already gone. */
-    discardUndoTarget(actorId: string, seq: number): void;
+    discardUndoTarget(who: string | readonly string[], seq: number): void;
     /** Drop a redo candidate that can no longer be re-applied. */
-    discardRedoTarget(actorId: string, seq: number): void;
+    discardRedoTarget(who: string | readonly string[], seq: number): void;
 }

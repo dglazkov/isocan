@@ -149,16 +149,20 @@ export function attachWebSockets(
       canvasId,
       setTimeout(() => {
         pendingRoster.delete(canvasId);
-        void Promise.all([engine.actorColors(), engine.actorNames()]).then(
-          ([colors, names]) => {
-            broadcast(canvasId, {
-              type: "presence-roster",
-              sessions: presence.roster(canvasId),
-              colors,
-              names,
-            });
-          },
-        );
+        void Promise.all([
+          engine.actorColors(),
+          engine.actorNames(),
+          engine.actorJoins(),
+          engine.resolveSessions(presence.roster(canvasId)),
+        ]).then(([colors, names, joined, sessions]) => {
+          broadcast(canvasId, {
+            type: "presence-roster",
+            sessions,
+            colors,
+            names,
+            joined,
+          });
+        });
       }, 40),
     );
   };
@@ -385,6 +389,7 @@ export function attachWebSockets(
             lastSeq: tail.length > 0 ? tail[tail.length - 1]!.seq : since,
             colors: snapshot.colors,
             names: snapshot.names,
+            ...(snapshot.joined !== undefined ? { joined: snapshot.joined } : {}),
             ...narrowed,
           }
         : { type: "snapshot", ...snapshot, ...narrowed };
@@ -397,9 +402,10 @@ export function attachWebSockets(
       }
       const roster: ServerMessage = {
         type: "presence-roster",
-        sessions: presence.roster(canvasId),
+        sessions: await engine.resolveSessions(presence.roster(canvasId)),
         colors: snapshot.colors,
         names: snapshot.names,
+        ...(snapshot.joined !== undefined ? { joined: snapshot.joined } : {}),
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {

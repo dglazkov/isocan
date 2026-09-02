@@ -1,4 +1,4 @@
-import type { ActorNames } from "./identity.js";
+import type { ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, CanvasContents } from "./model.js";
 /**
  * @-mentions. A mention is resolved at AUTHORING time against the actors the
@@ -55,7 +55,12 @@ export declare function extractMentions(body: string, candidates: MentionCandida
  * The old names stay: text written months ago still says "@Dion 2", and that
  * should keep pointing at the same person.
  */
-export declare function actorsAnswerTo(actors: MentionCandidate[], names: ActorNames | undefined): MentionCandidate[];
+export declare function actorsAnswerTo(actors: MentionCandidate[], names: ActorNames | undefined, 
+/** The registry's joins (multi-identity phase 5): every candidate's id is
+ * resolved first, so a new "@Dimitri 2" is stored as a mention of Dimitri —
+ * the person who answers to it now — rather than of an actor nobody is any
+ * more. */
+joined?: ActorJoins): MentionCandidate[];
 /** One entry per actor visible in a canvas, under the first name they used.
  * Combine with the live presence roster for mention candidates. */
 export declare function collectCanvasActors(canvas: CanvasContents): Actor[];

@@ -2,7 +2,7 @@ import type { Actor } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { ActorClaim } from "./badge.js";
 import { OpValidationError } from "./errors.js";
-import { type ActorColors, type ActorMarks, type ActorNames } from "./identity.js";
+import { type ActorColors, type ActorJoins, type ActorMarks, type ActorNames } from "./identity.js";
 export type ActorClaimOp = Extract<Operation, {
     type: "actor.claim";
 }>;
@@ -11,6 +11,9 @@ export type ActorSetColorOp = Extract<Operation, {
 }>;
 export type ActorSetMarkOp = Extract<Operation, {
     type: "actor.setMark";
+}>;
+export type ActorJoinOp = Extract<Operation, {
+    type: "actor.join";
 }>;
 /**
  * The actor registry: who everyone is, and who may speak as them. Identity
@@ -86,6 +89,14 @@ export interface ActorRegistry {
      * is nothing to migrate TO: absent and empty mean the same thing.
      */
     marks?: ActorMarks;
+    /**
+     * Actors folded into other actors, old id → new id (`actor.join`,
+     * multi-identity phase 5). Optional for the reason `marks` is: registries
+     * written before the field are on disk now, and absent means nobody has
+     * joined anybody. Readers go through `resolveActor` rather than reading
+     * this directly, so a chain of joins resolves to its end.
+     */
+    joined?: ActorJoins;
 }
 export declare const emptyActorRegistry: () => ActorRegistry;
 /** A claim row as served over the API — to the badge that holds it, and to
@@ -339,14 +350,51 @@ export declare function applyActorColor(registry: ActorRegistry, op: ActorSetCol
  * state.
  */
 export declare function applyActorMark(registry: ActorRegistry, op: ActorSetMarkOp): ActorRegistry;
-/** The mark every actor wears, keyed by actor id — the wire shape. */
+/**
+ * **Two actors become one person** (`actor.join`, multi-identity phase 5).
+ *
+ * Writes one row into the registry's `joined` map, `from` → `into`, and
+ * nothing else: no name moves, no colour moves, no log entry changes. The
+ * wire shapes below (`actorNames`, `actorColors`, `actorMarks`) read through
+ * the map, so every client that already shows a name for an id shows the
+ * joined person's name without learning anything new.
+ *
+ * Refused as a join (`bad-join`) when `from` is `into`, when `from` is
+ * already folded into somebody, or when the join would close a cycle; refused
+ * as `unknown-actor` when either id has no name row here. Whether the
+ * speaker may do this at all — the presenting badge must claim both — is the
+ * engine's question, asked with `claimsActor` before this runs.
+ */
+export declare function applyActorJoin(registry: ActorRegistry, op: ActorJoinOp): ActorRegistry;
+/**
+ * The refusal for a badge that does not speak for both sides of a join. Its
+ * own code rather than `not-your-actor`, because the remedy is different: a
+ * join is not "claim that actor first" but "be both first", which on a
+ * browser is the door's proof and on a CLI is `--as` with a vouch.
+ */
+export declare function notBothActors(from: string, into: string, missing: string): OpValidationError;
+/** The actors folded into others, old id → new id — the wire shape. */
+export declare function actorJoins(registry: ActorRegistry): ActorJoins;
+/** The mark every actor wears, keyed by actor id — the wire shape. A folded
+ * actor wears the mark of the person it was folded into. */
 export declare function actorMarks(registry: ActorRegistry): ActorMarks;
+/**
+ * The colour every actor who chose one wears, keyed by actor id — the wire
+ * shape. Only the exceptions, as before, plus one row per folded actor: it
+ * wears the person's colour, chosen or derived, because the colour its own
+ * id implies is the colour of somebody who no longer answers.
+ */
+export declare function actorColors(registry: ActorRegistry): ActorColors;
 /**
  * The name every actor goes by now, keyed by actor id — the wire shape.
  *
  * A read, not a derivation. It used to walk every claim and take the newest
  * per actor; recency is stored now, so replay order does that work and a name
  * survives the claim that made it.
+ *
+ * A folded actor answers with the name of the person it was folded into
+ * (multi-identity phase 5): every comment written as `Dimitri 2` shows
+ * Dimitri, and no client had to learn a new field to show it.
  */
 export declare function actorNames(registry: ActorRegistry): ActorNames;
 /**

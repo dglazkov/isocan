@@ -5,6 +5,8 @@ import type {
   ActorClaim,
   ActorClaimOp,
   ActorColors,
+  ActorJoinOp,
+  ActorJoins,
   ActorMarks,
   ActorNames,
   ActorRegistry,
@@ -28,10 +30,14 @@ import {
   OplogFencedError,
   OpValidationError,
   DEFAULT_COMMANDS,
+  actorAliases,
+  actorColors,
+  actorJoins,
   actorMarks,
   actorNames,
   allocateName,
   applyActorColor,
+  applyActorJoin,
   applyActorMark,
   mergeCommands,
   applyClaim,
@@ -43,7 +49,9 @@ import {
   invertOperation,
   isSystemActor,
   newOpId,
+  notBothActors,
   notYourActor,
+  resolveActor,
   positionIsMeaningful,
   resolvePlacement,
   SHELF,
@@ -331,14 +339,42 @@ export class Engine {
       lastSeq: runtime.lastSeq,
       colors: await this.actorColors(),
       names: await this.actorNames(),
+      joined: await this.actorJoins(),
     };
   }
 
   /** Chosen identity colors, actor id → hex. Everything absent is derived
-   * from the id, so this map is only ever the exceptions. */
+   * from the id, so this map is only ever the exceptions — plus one row per
+   * folded actor, wearing the person's colour (multi-identity phase 5). */
   async actorColors(): Promise<ActorColors> {
     const { registry } = await this.actors();
-    return registry.colors;
+    return actorColors(registry);
+  }
+
+  /** Actors folded into others, old id → new id (`actor.join`). */
+  async actorJoins(): Promise<ActorJoins> {
+    const { registry } = await this.actors();
+    return actorJoins(registry);
+  }
+
+  /**
+   * Presence as a reader should see it after a join (multi-identity phase
+   * 5): a session still beating under a folded id is the person it was
+   * folded into, so the facepile draws one face and `isocan who` lists one
+   * name. The session keeps its id, kind, label and status; only the actor
+   * is resolved, and only on the way out — the beat itself is checked
+   * against the badge's claims on the id it actually presented.
+   */
+  async resolveSessions(sessions: PresenceSession[]): Promise<PresenceSession[]> {
+    const { registry } = await this.actors();
+    const joined = registry.joined ?? {};
+    if (Object.keys(joined).length === 0) return sessions;
+    return sessions.map((session) => {
+      const id = resolveActor(joined, session.actor.id);
+      if (id === session.actor.id) return session;
+      const name = registry.names[id]?.name ?? session.actor.name;
+      return { ...session, actor: { id, name } };
+    });
   }
 
   /**
@@ -445,7 +481,7 @@ export class Engine {
       runtime.registry = registry;
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
-      this.identityChanged(registry.colors, request.op.actorId);
+      this.identityChanged(actorColors(registry), request.op.actorId);
       return entry;
     });
   }
@@ -505,6 +541,69 @@ export class Engine {
       runtime.registry = registry;
       runtime.lastSeq = seq;
       await this.store.saveActors(registry, seq);
+      return entry;
+    });
+  }
+
+  /**
+   * **Two actors become one person** (`actor.join`, multi-identity phase 5).
+   * The colour's and the mark's sibling in every mechanical respect:
+   * home-scoped, lands in the actors log, replays on load, not undoable, and
+   * forwarded to every home because the actors log never replicates down.
+   *
+   * **The claim check is the whole authorization**: the presenting badge must
+   * claim BOTH actors, through `claimsActor`, or the op is refused with
+   * `bad-join`. That is exactly what journey 6 leaves a laptop holding after
+   * it proved its address and became Dimitri — its own claim on `Dimitri 2`
+   * and its vouched claim on Dimitri — and it means no stranger can fold
+   * anybody into anybody. The speaker is checked too, as on every write.
+   *
+   * On success the rooms where `from` appears are repainted, because that is
+   * where the comments now wearing the wrong name are.
+   */
+  joinActors(request: {
+    op: ActorJoinOp;
+    actor: Actor;
+    clientId?: string;
+    badgeId: string;
+  }): Promise<LogEntry> {
+    return this.enqueue(async () => {
+      await this.requireActor(request.badgeId, request.actor.id);
+      const { from, into } = request.op;
+      const claims = await this.desk.claimsOf(request.badgeId);
+      for (const id of [from, into]) {
+        if (!claimsActor(claims, id)) throw notBothActors(from, into, id);
+      }
+      const homes = this.homes?.all() ?? [];
+      if (homes.length > 0) {
+        await Promise.allSettled(
+          homes.map((home) =>
+            home.submitOp({
+              canvasId: null,
+              actor: request.actor,
+              op: request.op,
+              ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+            }),
+          ),
+        );
+      }
+      const runtime = await this.actors();
+      const registry = applyActorJoin(runtime.registry, request.op);
+      const envelope: OpEnvelope = {
+        id: newOpId(),
+        canvasId: null,
+        actor: request.actor,
+        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+        ts: new Date().toISOString(),
+        op: request.op,
+      };
+      const seq = runtime.lastSeq + 1;
+      const entry: LogEntry = { seq, envelope, inverse: null };
+      await this.appendActorsOrFence(entry);
+      runtime.registry = registry;
+      runtime.lastSeq = seq;
+      await this.store.saveActors(registry, seq);
+      this.identityChanged(actorColors(registry), from);
       return entry;
     });
   }
@@ -1265,9 +1364,12 @@ export class Engine {
        * every op reaches clients by the ordinary broadcast, so the return
        * value is a receipt rather than the payload.
        */
+      // Every id this person has written under (multi-identity phase 5): a
+      // join folds two actors' stacks into one walk, in log order.
+      const person = actorAliases((await this.actors()).registry.joined, actor.id);
       let written: LogEntry | null = null;
       for (;;) {
-        const group = runtime.undo.nextUndoGroup(actor.id);
+        const group = runtime.undo.nextUndoGroup(person);
         if (group.length === 0) {
           if (written !== null) return written;
           throw new NothingToUndoError("undo", actor.name);
@@ -1291,7 +1393,7 @@ export class Engine {
         }
         // The inverse no longer applies (its objects were changed by someone
         // else); its effect is already gone, so drop it and try the next.
-        runtime.undo.discardUndoTarget(actor.id, targetSeq);
+        runtime.undo.discardUndoTarget(person, targetSeq);
       }
     });
   }
@@ -1313,9 +1415,10 @@ export class Engine {
       const runtime = await this.runtime(canvasId);
       // The mirror of `undo` above, member for member: a gesture redone is a
       // gesture, and in the order it was originally written.
+      const person = actorAliases((await this.actors()).registry.joined, actor.id);
       let redone: LogEntry | null = null;
       for (;;) {
-        const group = runtime.undo.nextRedoGroup(actor.id);
+        const group = runtime.undo.nextRedoGroup(person);
         if (group.length === 0) {
           if (redone !== null) return redone;
           throw new NothingToUndoError("redo", actor.name);
@@ -1336,7 +1439,7 @@ export class Engine {
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
-        runtime.undo.discardRedoTarget(actor.id, next.targetSeq);
+        runtime.undo.discardRedoTarget(person, next.targetSeq);
       }
     });
   }
@@ -1970,6 +2073,7 @@ export class Engine {
     const mine = me?.attestations ?? [];
     if (mine.length === 0) return [];
     const names = await this.actorNames();
+    const { registry } = await this.actors();
     // Already one of mine, so not something to resume. Includes the actor this
     // badge is wearing right now, which would otherwise be offered back to it.
     const seen = new Set<string>(me!.claims.map((claim) => claim.actorId));
@@ -1980,6 +2084,9 @@ export class Engine {
         for (const claim of badge.claims) {
           if (seen.has(claim.actorId)) continue;
           seen.add(claim.actorId);
+          // An actor folded into somebody else answers to nobody, so there is
+          // nobody to resume under that id (multi-identity phase 5).
+          if (resolveActor(registry.joined, claim.actorId) !== claim.actorId) continue;
           rows.push({
             actor: { id: claim.actorId, name: names[claim.actorId] ?? "" },
             via: attestation.attribute,

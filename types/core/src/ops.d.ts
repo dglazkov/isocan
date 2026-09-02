@@ -135,6 +135,28 @@ export type Operation = {
     /** One emoji, or null to go back to the initial. */
     mark: string | null;
 } | {
+    /**
+     * **Two actors become one person** (multi-identity phase 5).
+     *
+     * A person who was `Dimitri 2` on one machine for a while and then
+     * became Dimitri leaves two actors behind, each with its own comments,
+     * mentions and undo history. This folds `from` into `into`: the
+     * registry records the join, and every reader resolves `from` through
+     * it before comparing — names, colours, marks, the inbox, presence,
+     * undo. Nothing in the log is rewritten; every op `from` wrote still
+     * carries `from`'s id.
+     *
+     * Home-scoped and not undoable, like the colour and the mark. Refused
+     * unless the presenting badge claims BOTH actors, when `from` equals
+     * `into`, when either id is unknown to the home, or when the join would
+     * close a cycle.
+     */
+    type: "actor.join";
+    /** The actor that stops answering. */
+    from: string;
+    /** The actor that answers for both from now on. */
+    into: string;
+} | {
     type: "project.create";
     canvasId: string;
     title: string;

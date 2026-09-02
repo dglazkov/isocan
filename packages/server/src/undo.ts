@@ -19,6 +19,14 @@ interface ActorStacks {
  */
 export class UndoStacks {
   private byActor = new Map<string, ActorStacks>();
+  /**
+   * **A person may hold several stacks** (multi-identity phase 5). After
+   * `actor.join` folds `Dimitri 2` into Dimitri, Dimitri's ⌘Z reaches the ops
+   * either id wrote, in log order. The stacks stay per actor id — that is what
+   * the log records — and every question below accepts the list of ids that
+   * resolve to one person (`actorAliases`), walking them as one stack. A
+   * caller with a single id gets exactly the behaviour there always was.
+   */
   /** targetSeq → seq of the undo entry that reversed it. */
   private undoneBy = new Map<number, number>();
   /**
@@ -53,12 +61,19 @@ export class UndoStacks {
     if (entry.cause?.kind === "undo") {
       const target = entry.cause.targetSeq;
       this.undoneBy.set(target, entry.seq);
-      stacks.undo = stacks.undo.filter((seq) => seq !== target);
+      // The target is removed from whichever stack holds it: the performer's
+      // own, or — after a join — the stack of an id the performer used to
+      // write under. For anyone not joined those are the same stack.
+      for (const other of this.byActor.values()) {
+        other.undo = other.undo.filter((seq) => seq !== target);
+      }
       stacks.redo.push(target);
     } else if (entry.cause?.kind === "redo") {
       const target = entry.cause.targetSeq;
       this.undoneBy.delete(target);
-      stacks.redo = stacks.redo.filter((seq) => seq !== target);
+      for (const other of this.byActor.values()) {
+        other.redo = other.redo.filter((seq) => seq !== target);
+      }
       stacks.undo.push(target);
     } else {
       // A fresh op truncates this actor's redo branch — even a non-undoable
@@ -71,9 +86,25 @@ export class UndoStacks {
     }
   }
 
+  /**
+   * One person's stack across every id they wrote under. An undo stack is
+   * in log order per id, so the merge is a sort by seq. A redo stack is in
+   * the order things were UNDONE — the last thing undone is the first thing
+   * redone — so the merge sorts by the seq of the undo entry that put each
+   * target there, which `undoneBy` remembers.
+   */
+  private merged(who: string | readonly string[], which: "undo" | "redo"): number[] {
+    const ids = typeof who === "string" ? [who] : who;
+    if (ids.length === 1) return this.stacksFor(ids[0]!)[which];
+    const all: number[] = [];
+    for (const id of ids) all.push(...this.stacksFor(id)[which]);
+    const key = (seq: number) => (which === "undo" ? seq : (this.undoneBy.get(seq) ?? 0));
+    return all.sort((a, b) => key(a) - key(b));
+  }
+
   /** Seq of the entry this actor's next undo should reverse, or null. */
-  nextUndoTarget(actorId: string): number | null {
-    const { undo } = this.stacksFor(actorId);
+  nextUndoTarget(who: string | readonly string[]): number | null {
+    const undo = this.merged(who, "undo");
     return undo.length > 0 ? undo[undo.length - 1]! : null;
   }
 
@@ -93,8 +124,8 @@ export class UndoStacks {
    * cannot break a group. That falls out of the stacks being per-actor and is
    * the reason this stays simple.
    */
-  nextUndoGroup(actorId: string): number[] {
-    const { undo } = this.stacksFor(actorId);
+  nextUndoGroup(who: string | readonly string[]): number[] {
+    const undo = this.merged(who, "undo");
     if (undo.length === 0) return [];
     const top = undo[undo.length - 1]!;
     const group = this.groupOf.get(top);
@@ -110,8 +141,8 @@ export class UndoStacks {
   /** The same question for redo: the group at the top of the redo stack,
    *  oldest first — the order they were originally written, which is the
    *  order that re-does them. */
-  nextRedoGroup(actorId: string): { targetSeq: number; undoSeq: number }[] {
-    const { redo } = this.stacksFor(actorId);
+  nextRedoGroup(who: string | readonly string[]): { targetSeq: number; undoSeq: number }[] {
+    const redo = this.merged(who, "redo");
     if (redo.length === 0) return [];
     const top = redo[redo.length - 1]!;
     const group = this.groupOf.get(top);
@@ -138,8 +169,8 @@ export class UndoStacks {
 
   /** For this actor's next redo: the original entry to re-do, plus the undo
    * entry whose stored inverse performs it. */
-  nextRedoTarget(actorId: string): { targetSeq: number; undoSeq: number } | null {
-    const { redo } = this.stacksFor(actorId);
+  nextRedoTarget(who: string | readonly string[]): { targetSeq: number; undoSeq: number } | null {
+    const redo = this.merged(who, "redo");
     if (redo.length === 0) return null;
     const targetSeq = redo[redo.length - 1]!;
     const undoSeq = this.undoneBy.get(targetSeq);
@@ -149,14 +180,18 @@ export class UndoStacks {
 
   /** Drop an undo candidate whose inverse no longer applies (its objects were
    * removed by another actor). Nothing to redo — the effect is already gone. */
-  discardUndoTarget(actorId: string, seq: number): void {
-    const stacks = this.stacksFor(actorId);
-    stacks.undo = stacks.undo.filter((s) => s !== seq);
+  discardUndoTarget(who: string | readonly string[], seq: number): void {
+    for (const id of typeof who === "string" ? [who] : who) {
+      const stacks = this.stacksFor(id);
+      stacks.undo = stacks.undo.filter((s) => s !== seq);
+    }
   }
 
   /** Drop a redo candidate that can no longer be re-applied. */
-  discardRedoTarget(actorId: string, seq: number): void {
-    const stacks = this.stacksFor(actorId);
-    stacks.redo = stacks.redo.filter((s) => s !== seq);
+  discardRedoTarget(who: string | readonly string[], seq: number): void {
+    for (const id of typeof who === "string" ? [who] : who) {
+      const stacks = this.stacksFor(id);
+      stacks.redo = stacks.redo.filter((s) => s !== seq);
+    }
   }
 }

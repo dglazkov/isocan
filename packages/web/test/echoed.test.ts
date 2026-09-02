@@ -35,6 +35,8 @@ const ALLOWED: Record<string, string> = {
   "packages/web/src/lib/api.ts": "defines sendOp",
   "packages/web/src/stores/canvasStore.ts": "sendEchoed's own post, and the offline flush",
   "packages/web/src/lib/identitycolor.ts": "actor.setColor is identity, not canvas state (canvasId is null)",
+  "packages/web/src/lib/identity.ts":
+    "actor.join is identity, not canvas state (canvasId is null); the roster row leaves on the answer",
   "packages/web/src/pages/CanvasListPage.tsx":
     "project.create/update/delete on canvases this tab does not have open",
 };

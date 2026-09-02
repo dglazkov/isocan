@@ -246,6 +246,41 @@ describe("a machine that lost its badge", () => {
     expect((await isocan(claude("s-1"), "whoami")).stdout).toContain(`Isaac (${isaac})`);
   });
 
+  it("`--join` folds an actor this machine speaks for into the one it is (multi-identity phase 5)", async () => {
+    // The machine's badge speaks for Nico (the person) and for Isaac (an
+    // agent session on it): the shape the join needs, and one badge — so
+    // this is the CLI's half of journey 6, with the two personas a laptop
+    // holds after it proved its address.
+    const named = await isocan(claude("s-1"), "identity", "--name", "Isaac", "--session");
+    const isaac = /\((usr_[^)]+)\)/.exec(named.stdout)![1]!;
+    const said = await isocan(claude("s-1"), "comment", "add", "as Isaac", "--at", "0,0", "--canvas", "prj_1");
+    expect(said.code).toBe(0);
+
+    const joined = await isocan({}, "identity", "--join", isaac);
+    expect(joined.code).toBe(0);
+    expect(joined.stdout).toContain(`${isaac} is now Nico`);
+
+    // One person, on every reader: the registry answers Nico for Isaac's id,
+    // and `who --all` lists one row under Nico's id for what Isaac wrote.
+    const names = (await (
+      await fetch(`${base}/api/names`, { headers: badge.headers })
+    ).json()) as Record<string, string>;
+    expect(names[isaac]).toBe("Nico");
+    const who = await isocan({}, "--json", "who", "--all", "--canvas", "prj_1");
+    const rows = JSON.parse(who.stdout) as { name: string; id: string }[];
+    // The name the canvas remembers still gets its row; the id under it is
+    // the person's.
+    expect(rows.filter((r) => r.id !== seeder.id)).toEqual([
+      { name: "Isaac", id: nico.id, live: false },
+    ]);
+
+    // The log keeps the id the comment was written with.
+    const snapshot = (await (
+      await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })
+    ).json()) as { canvas: { threads: Record<string, { createdBy: { id: string } }> } };
+    expect(Object.values(snapshot.canvas.threads).map((t) => t.createdBy.id)).toEqual([isaac]);
+  });
+
   it("still says 'no identity configured' when the home really is blank", async () => {
     // A different situation, and it keeps its own message: nobody has ever
     // named themselves here, so there is nothing to come back as.

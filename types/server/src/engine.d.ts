@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorMarks, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
 import type { BlobUploadRequest, Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import type { HomeDirectory } from "./home-link.js";
@@ -172,8 +172,20 @@ export declare class Engine {
     listCanvases(): Promise<Canvas[]>;
     getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse>;
     /** Chosen identity colors, actor id → hex. Everything absent is derived
-     * from the id, so this map is only ever the exceptions. */
+     * from the id, so this map is only ever the exceptions — plus one row per
+     * folded actor, wearing the person's colour (multi-identity phase 5). */
     actorColors(): Promise<ActorColors>;
+    /** Actors folded into others, old id → new id (`actor.join`). */
+    actorJoins(): Promise<ActorJoins>;
+    /**
+     * Presence as a reader should see it after a join (multi-identity phase
+     * 5): a session still beating under a folded id is the person it was
+     * folded into, so the facepile draws one face and `isocan who` lists one
+     * name. The session keeps its id, kind, label and status; only the actor
+     * is resolved, and only on the way out — the beat itself is checked
+     * against the badge's claims on the id it actually presented.
+     */
+    resolveSessions(sessions: PresenceSession[]): Promise<PresenceSession[]>;
     /**
      * Every slash command available here: what isocan ships with, laid under
      * whatever this home has written. The menu, the CLI, and an agent looking up
@@ -224,6 +236,28 @@ export declare class Engine {
      */
     setActorMark(request: {
         op: ActorSetMarkOp;
+        actor: Actor;
+        clientId?: string;
+        badgeId: string;
+    }): Promise<LogEntry>;
+    /**
+     * **Two actors become one person** (`actor.join`, multi-identity phase 5).
+     * The colour's and the mark's sibling in every mechanical respect:
+     * home-scoped, lands in the actors log, replays on load, not undoable, and
+     * forwarded to every home because the actors log never replicates down.
+     *
+     * **The claim check is the whole authorization**: the presenting badge must
+     * claim BOTH actors, through `claimsActor`, or the op is refused with
+     * `bad-join`. That is exactly what journey 6 leaves a laptop holding after
+     * it proved its address and became Dimitri — its own claim on `Dimitri 2`
+     * and its vouched claim on Dimitri — and it means no stranger can fold
+     * anybody into anybody. The speaker is checked too, as on every write.
+     *
+     * On success the rooms where `from` appears are repainted, because that is
+     * where the comments now wearing the wrong name are.
+     */
+    joinActors(request: {
+        op: ActorJoinOp;
         actor: Actor;
         clientId?: string;
         badgeId: string;

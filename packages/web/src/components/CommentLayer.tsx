@@ -34,8 +34,11 @@ import { useActorMarks } from "../lib/marks.ts";
  * from the store, so the rosters are never stale. */
 export function makeComment(body: string): NewComment {
   const { canvas, sessions } = useCanvasStore.getState();
-  const { actorNames } = useCanvasStore.getState();
-  const mentions = extractMentions(body, mentionRoster(canvas, sessions, undefined, actorNames).candidates);
+  const { actorNames, actorJoins } = useCanvasStore.getState();
+  const mentions = extractMentions(
+    body,
+    mentionRoster(canvas, sessions, undefined, actorNames, actorJoins).candidates,
+  );
   const items = canvas ? extractItemRefs(body, collectItemRefCandidates(canvas)) : [];
   return {
     id: newCommentId(),
@@ -58,6 +61,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
   const seen = useUnreadStore((s) => s.seen);
+  const joined = useCanvasStore((s) => s.actorJoins);
 
   if (!canvas) return null;
 
@@ -93,7 +97,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
             screen={screenOf(thread)}
             corner={atCorner(canvas, thread)}
             open={openThreadId === thread.id}
-            unread={unreadCount(thread, seen, actor.id)}
+            unread={unreadCount(thread, seen, actor.id, joined)}
           />
         ))}
       </div>

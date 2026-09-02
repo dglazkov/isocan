@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Actor, ActivityEntry, PresenceSession, ActorMarks} from "@isocan/core";
-import { elapsedLabel, recentActivity } from "@isocan/core";
+import { elapsedLabel, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
@@ -41,12 +41,13 @@ export function Presence({ actor }: { actor: Actor }) {
   const [peek, setPeek] = useState<string | null>(null);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
+  const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
   if (!canvas) return null;
 
-  const pending = unreadThreads(canvas, seen, actor.id);
-  const unreadBy = unreadByAuthor(pending, seen, actor.id);
+  const pending = unreadThreads(canvas, seen, actor.id, joined);
+  const unreadBy = unreadByAuthor(pending, seen, actor.id, joined);
   // One entry per PERSON, you included — see lib/facepile.ts for why that is
   // a rule and not a preference.
   const faces = facesFor(sessions, unreadBy, actor);
@@ -69,8 +70,10 @@ export function Presence({ actor }: { actor: Actor }) {
     // not "outside" it — but going to look at someone else is done with it.
     ui.setIdentityOpen(false);
     // Their comment first: it is the thing that wants an answer.
-    const next = unreadThreads(state, useUnreadStore.getState().seen, actor.id).find((thread) =>
-      thread.comments.some((comment) => comment.author.id === face.actor.id),
+    const live = useCanvasStore.getState().actorJoins;
+    const next = unreadThreads(state, useUnreadStore.getState().seen, actor.id, live).find(
+      (thread) =>
+        thread.comments.some((comment) => sameActor(live, comment.author.id, face.actor.id)),
     );
     const target = next ? threadWorldPos(state, next) : face.cursor;
     if (!target) return;

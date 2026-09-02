@@ -167,6 +167,7 @@ function CanvasSurface({
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
   const capability = useCanvasStore((s) => s.capability);
+  const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
   const followedLabel = useCanvasStore((s) => {
@@ -318,7 +319,7 @@ function CanvasSurface({
    * be this effect's whole job is now one part of it.
    */
   useEffect(() => {
-    const count = canvas ? unreadThreads(canvas, seen, actor.id).length : 0;
+    const count = canvas ? unreadThreads(canvas, seen, actor.id, joined).length : 0;
     const staged = itemId ?? wbItemId ?? null;
     document.title = pageTitle({
       canvas: canvasTitle,
@@ -329,7 +330,7 @@ function CanvasSurface({
     return () => {
       document.title = pageTitle({});
     };
-  }, [canvas, canvasTitle, seen, actor.id, itemId, wbItemId, onWorkbench]);
+  }, [canvas, canvasTitle, seen, actor.id, joined, itemId, wbItemId, onWorkbench]);
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {

@@ -1,5 +1,6 @@
-import type { ActorNames } from "./identity.ts";
+import type { ActorJoins, ActorNames } from "./identity.ts";
 import type { Actor, CanvasContents } from "./model.ts";
+import { resolveActor } from "./identity.ts";
 import { isSystemActor } from "./model.ts";
 
 /**
@@ -85,14 +86,26 @@ export function extractMentions(body: string, candidates: MentionCandidate[]): s
 export function actorsAnswerTo(
   actors: MentionCandidate[],
   names: ActorNames | undefined,
+  /** The registry's joins (multi-identity phase 5): every candidate's id is
+   * resolved first, so a new "@Dimitri 2" is stored as a mention of Dimitri —
+   * the person who answers to it now — rather than of an actor nobody is any
+   * more. */
+  joined?: ActorJoins,
 ): MentionCandidate[] {
-  const out = [...actors];
-  const seen = new Set(actors.map((actor) => `${actor.id}\u0000${actor.name}`));
+  const out: MentionCandidate[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, name: string) => {
+    const key = `${id}\u0000${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ id, name });
+  };
+  for (const actor of actors) add(resolveActor(joined, actor.id), actor.name);
   for (const actor of actors) {
+    // The name the stamped id goes by now — for a folded actor that is the
+    // person's name, because `actorNames` already resolves it.
     const now = names?.[actor.id];
-    if (!now || seen.has(`${actor.id}\u0000${now}`)) continue;
-    seen.add(`${actor.id}\u0000${now}`);
-    out.push({ id: actor.id, name: now });
+    if (now) add(resolveActor(joined, actor.id), now);
   }
   return out;
 }

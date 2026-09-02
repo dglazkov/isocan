@@ -2,7 +2,12 @@ export type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" 
 /** The speaker named an actor its badge does not claim (the identity desk's
  * mechanism 5). The remedy is always the same and always available: claim
  * the actor first. */
- | "not-your-actor" | "internal-op" | "unknown-op"
+ | "not-your-actor"
+/** `actor.join` refused as a join: folding an actor into itself, closing a
+ * cycle, folding one that is already folded, or a presenting badge that
+ * does not speak for both actors (multi-identity phase 5). The remedy is
+ * in the message; an unknown id is `unknown-actor`, as everywhere else. */
+ | "bad-join" | "internal-op" | "unknown-op"
 /** This daemon is no longer the writer for that canvas — another instance
  * already used the sequence number it tried to claim. Never retried by the
  * client: see `OplogFencedError`. */

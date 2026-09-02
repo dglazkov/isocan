@@ -259,6 +259,7 @@ export function storeConformance(
           names: { usr_ada: { name: "Ada", at: "2026-01-01T00:00:00.000Z" } },
           colors: { usr_ada: "#0f8a80" },
           marks: { usr_ada: "⚓" },
+          joined: { usr_ada_2: "usr_ada" },
         };
         await store.saveActors(full, 7);
         const back = await store.loadActors();
