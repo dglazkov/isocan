@@ -7,6 +7,7 @@ import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
 import { RcHolds } from "./rc-holds.ts";
 import { attachWebSockets } from "./ws.ts";
+import { buildStamp } from "./build.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
 import { FileDesk } from "./file-desk.ts";
@@ -24,6 +25,10 @@ import { CONTENT_CSP, contentPorts, registerContentRoutes } from "./content.ts";
 export interface DaemonOptions {
   port?: number;
   home?: string;
+  /** The WebSocket heartbeat interval; tests only. Production beats every
+   * 25 s (`ws.ts`), and a test that has to watch a beat find an instance
+   * behind the store should not have to wait one. */
+  heartbeatMs?: number;
   /**
    * Which interface to listen on. Loopback unless told otherwise, which is the
    * only safe default for a daemon that trusts localhost by name (`isOpen`'s
@@ -454,7 +459,14 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // down a canvas socket is written through the engine, and an engine whose
   // daemon is still coming up is a race for no benefit.
   await homes.start();
-  const closeWebSockets = attachWebSockets(app.server, engine, desk, presence, rc);
+  // Which build this is, on the hello and the heartbeat (#85): Cloud Run's
+  // revision when there is one, so a tab can say which instance it left and
+  // which it reached across a rollout; the commit otherwise.
+  const revision = process.env["K_REVISION"] ?? buildStamp().commit ?? undefined;
+  const closeWebSockets = attachWebSockets(app.server, engine, desk, presence, rc, {
+    ...(options.heartbeatMs !== undefined ? { heartbeatMs: options.heartbeatMs } : {}),
+    ...(revision !== undefined ? { revision } : {}),
+  });
 
   /**
    * **The home's own housekeeping** (phase 13.7): every canvas the store

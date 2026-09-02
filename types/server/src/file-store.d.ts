@@ -33,6 +33,10 @@ export declare class FileStore implements Store {
     backfillLastOp(keepGoing?: () => boolean): Promise<number>;
     saveCanvas(canvas: Canvas): Promise<void>;
     saveSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void>;
+    /** The oplog's last line, or the snapshot's seq when the log has been
+     * compacted past it — whichever is further along. The file is read whole;
+     * a local oplog is small and this runs once per open room per 25 s. */
+    tipSeq(id: string): Promise<number | null>;
     appendLog(id: string, entry: LogEntry): Promise<void>;
     /** project.delete is soft: the directory is moved aside, recoverable by hand. */
     softDeleteCanvas(id: string): Promise<void>;

@@ -14,7 +14,14 @@ import type {
   ActorNames,
   SlashCommand,
 } from "@isocan/core";
-import { applyOperation, newOpId, WS_NO_BADGE, WS_NO_CANVAS, WS_NOT_ADMITTED } from "@isocan/core";
+import {
+  applyOperation,
+  newOpId,
+  WS_BEHIND,
+  WS_NO_BADGE,
+  WS_NO_CANVAS,
+  WS_NOT_ADMITTED,
+} from "@isocan/core";
 import {
   ApiError,
   CLIENT_ID,
@@ -871,6 +878,27 @@ const RECONNECT_MAX_MS = 10_000;
 let backoffMs = RECONNECT_MIN_MS;
 
 /**
+ * Which build of the home this tab last heard from — the hello and the beat
+ * both carry it (#85). Kept so a change can be SAID: a rollout moves a tab
+ * from one instance to another, and when a freeze is reported the one fact
+ * that settles whether it was that shape is which revision the tab was on
+ * and when it changed. Absent from a home too old to say.
+ */
+let homeRevision: string | null = null;
+function noteRevision(revision: string | undefined): void {
+  if (revision === undefined || revision === homeRevision) return;
+  if (homeRevision !== null) {
+    console.info(`isocan: the home now answers from build ${revision} (was ${homeRevision})`);
+  }
+  homeRevision = revision;
+}
+/** For the debugging hand that asks: `isocan`'s tab-side counterpart to
+ * `/healthz`'s commit. */
+export function currentHomeRevision(): string | null {
+  return homeRevision;
+}
+
+/**
  * Dials that closed without the home ever saying hello.
  *
  * The difference between "hold on" and "keep going, your work is being kept",
@@ -960,6 +988,7 @@ function openSocket(canvasId: string): void {
     heard();
     const message = JSON.parse(event.data as string) as ServerMessage;
     if (message.type === "heartbeat") {
+      noteRevision(message.revision);
       /**
        * **The beat proves the socket; the TIP proves the subscription** (#85).
        *
@@ -996,6 +1025,7 @@ function openSocket(canvasId: string): void {
       return;
     }
     if (message.type === "snapshot") {
+      noteRevision(message.revision);
       backoffMs = RECONNECT_MIN_MS;
       failedDials = 0;
       greeted = true;
@@ -1024,6 +1054,7 @@ function openSocket(canvasId: string): void {
       // TOP of it. Clearing them here — the way a fresh connect does — would
       // unmount the canvas for as long as the tail took to arrive.
       replayThrough = message.lastSeq;
+      noteRevision(message.revision);
       backoffMs = RECONNECT_MIN_MS;
       failedDials = 0;
       greeted = true;
@@ -1112,6 +1143,17 @@ function openSocket(canvasId: string): void {
       void knockOnDoor().then(() => {
         if (currentProjectId === canvasId && socket === null) void open(canvasId);
       });
+      return;
+    }
+    // The home's instance found itself behind its store and hung up so this
+    // tab redials — through the load balancer, to the instance that is
+    // current (#85). Nothing failed on this side, so no backoff: dial now,
+    // and resume from the cursor as any reconnect does.
+    if (event.code === WS_BEHIND) {
+      backoffMs = RECONNECT_MIN_MS;
+      failedDials = 0;
+      useCanvasStore.setState({ connection: "reconnecting" });
+      void open(canvasId);
       return;
     }
     retryLater(canvasId);

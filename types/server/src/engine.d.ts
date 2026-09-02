@@ -108,6 +108,8 @@ export declare class Engine {
     private queue;
     private listeners;
     private colorListeners;
+    /** Told when `tipSeq` finds this instance's cache behind the store (#85). */
+    private behindListeners;
     /**
      * The homes this engine is a REPLICA of, per canvas — empty (or null) when
      * this daemon is the home of everything it holds.
@@ -151,6 +153,16 @@ export declare class Engine {
     forwardTo(directory: HomeDirectory | null): void;
     /** Subscribe to canvas events; returns an unsubscribe function. */
     onEvent(listener: EventListener): () => void;
+    /**
+     * **This instance has found itself behind the store** (#85): another
+     * writer moved the canvas on and nothing here noticed, because the cache
+     * is only ever dropped by this instance's OWN fenced append. The listener
+     * is `ws.ts`, which hangs up on the room so every client redials through
+     * the load balancer to whichever instance is current. By the time it is
+     * called the cache is already dropped, so a redial that lands back HERE is
+     * answered from the store rather than from the stale runtime.
+     */
+    onBehind(listener: (canvasId: string, cached: number, tip: number) => void): () => void;
     private emit;
     /**
      * Resolves when everything currently on the single-writer chain has run.

@@ -851,6 +851,51 @@ describe("a heartbeat that says the canvas has moved on", () => {
     expect(FakeSocket.opened.length).toBe(dialled);
   });
 
+  it("redials at once when the home hangs up because ITS instance fell behind", async () => {
+    /* The root cause (#85): a rollout leaves the tab's socket on the draining
+       instance while every write lands on the new one. That instance now
+       reads the tip from the store, finds its cache behind, and closes the
+       room with WS_BEHIND. Nothing failed on this side, so there is no
+       backoff to sit out: the tab dials again immediately and resumes. */
+    const { WS_BEHIND } = await import("@isocan/core");
+    const { useCanvasStore } = await store();
+    await connected(2);
+    const dialled = FakeSocket.opened.length;
+    const doomed = FakeSocket.last;
+    doomed.readyState = FakeSocket.CLOSED;
+    doomed.onclose?.({ code: WS_BEHIND });
+    await settle();
+    expect(FakeSocket.opened.length).toBe(dialled + 1);
+    expect(useCanvasStore.getState().connection).toBe("reconnecting");
+    // And it resumes from where it was, not from nothing.
+    expect(FakeSocket.opened[FakeSocket.opened.length - 1]).toContain("since=2");
+  });
+
+  it("says when the home starts answering from a different build", async () => {
+    /* The hello and the beat both name the home's revision. A change is the
+       one fact that settles whether a reported freeze was a rollout, so it
+       is said out loud rather than kept. */
+    const { currentHomeRevision } = await store();
+    const said: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((line: unknown) => {
+      said.push(String(line));
+    });
+    try {
+      await connected(2);
+      FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 2, revision: "isocan-00042" });
+      await settle();
+      expect(currentHomeRevision()).toBe("isocan-00042");
+      // The first revision is learned quietly; only a CHANGE is worth a line.
+      expect(said.filter((l) => l.includes("now answers from build"))).toHaveLength(0);
+      FakeSocket.last.deliver({ type: "heartbeat", canvasId: "prj_1", tip: 2, revision: "isocan-00043" });
+      await settle();
+      expect(currentHomeRevision()).toBe("isocan-00043");
+      expect(said.some((l) => l.includes("isocan-00043") && l.includes("isocan-00042"))).toBe(true);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("still takes a bare beat as proof of life, from a home too old to send a tip", async () => {
     const { useCanvasStore } = await store();
     await connected(2);

@@ -25,6 +25,7 @@ second week.
 - An agent starting a fresh conversation can come back as itself with `isocan identity --as` straight away, instead of being refused for half an hour.
 - One agent, one name, many canvases: an agent this machine already answers for can be enrolled on another canvas (`isocan rc add --canvas <ref> <name>`) and it is the same agent there — one history, one identity. A summons now tells the agent which canvas it is for, so an agent enrolled from one directory can answer on several.
 - Rename offers itself only when the name has actually changed.
+- A canvas tab that said "live" while nothing moved: this happened when the home was being updated underneath it, and it now fixes itself within a heartbeat instead of needing a reload.
 
 
 ## 31 August 2026

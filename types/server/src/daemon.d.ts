@@ -8,6 +8,10 @@ import { HomeLinks } from "./home-links.js";
 export interface DaemonOptions {
     port?: number;
     home?: string;
+    /** The WebSocket heartbeat interval; tests only. Production beats every
+     * 25 s (`ws.ts`), and a test that has to watch a beat find an instance
+     * behind the store should not have to wait one. */
+    heartbeatMs?: number;
     /**
      * Which interface to listen on. Loopback unless told otherwise, which is the
      * only safe default for a daemon that trusts localhost by name (`isOpen`'s

@@ -125,6 +125,18 @@ export interface Store {
    * when `entry.seq` was already claimed by another writer. */
   appendLog(id: string, entry: LogEntry): Promise<void>;
 
+  /**
+   * **How far the canvas has got, read from the backing and never from a
+   * cache** (#85). The engine keeps a per-canvas runtime and drops it only when
+   * its own append is fenced — so an instance nobody writes through (the
+   * draining half of a rollout, holding every socket that was open before the
+   * new revision took the traffic) keeps a cache that agrees with its frozen
+   * rooms forever. This is the one read that can disagree with it. Cheap by
+   * contract: one small read, called once per open room per heartbeat. `null`
+   * for a canvas this backing does not hold.
+   */
+  tipSeq(id: string): Promise<number | null>;
+
   /** project.delete is soft: the state is moved aside, recoverable by hand. */
   softDeleteCanvas(id: string): Promise<void>;
 

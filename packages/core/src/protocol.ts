@@ -46,12 +46,17 @@ export type ServerMessage =
    * and an old home simply sends a beat without a tip: unknown fields and
    * unknown message types already fall through.
    */
-  | { type: "heartbeat"; canvasId?: string; tip?: number }
+  | { type: "heartbeat"; canvasId?: string; tip?: number; revision?: string }
   | {
       type: "snapshot";
       project: Canvas;
       canvas: CanvasContents;
       lastSeq: number;
+      /** Which build of the home answered — Cloud Run's revision, else the
+       * commit. So a tab that reconnected can say WHICH instance it left and
+       * which it reached, and a freeze is attributable without a repro (#85).
+       * Absent from a home too old to say. */
+      revision?: string;
       /** Chosen identity colors, so the first paint is already right. */
       colors: ActorColors;
       /** Current names (actor id → name), so a rename reaches the words
@@ -92,6 +97,8 @@ export type ServerMessage =
       from: number;
       /** The last seq it will hold once the tail below has been applied. */
       lastSeq: number;
+      /** See `snapshot.revision`. */
+      revision?: string;
       colors: ActorColors;
       names: ActorNames;
       /** As on `snapshot`. */
@@ -519,6 +526,23 @@ export const STALE_CLIENT_STATUS = 426;
 /** The socket half of {@link STALE_CLIENT_STATUS}, continuing ws.ts's
  * 4400/4401/4404/4500 convention of 4000 + the HTTP status it mirrors. */
 export const WS_STALE_CLIENT = 4426;
+
+/**
+ * **This instance found itself behind the store, and is hanging up on
+ * purpose** (#85). Not a refusal: the client did nothing wrong and should dial
+ * again at once — through the load balancer, which by now routes to the
+ * instance that is current. The shape it closes: a rollout leaves the old
+ * instance holding sockets for up to an hour while every new request goes to
+ * the new one; the old instance's cache is dropped only when its OWN append is
+ * fenced, and nobody writes through it, so its rooms went quiet with the tab
+ * reporting "live". The beat now reads the tip from the STORE, and an instance
+ * whose cache is behind what it just read closes every socket in that room
+ * with this code rather than leaving the tab to notice.
+ *
+ * 4409 for the 409 the same condition already wears on the write path
+ * (`writer-fenced`): one cause, two carriers.
+ */
+export const WS_BEHIND = 4409;
 
 /** A WebSocket close reason is capped at 123 BYTES by the protocol itself, and
  * a longer one throws rather than truncating — so the socket gets its own,
