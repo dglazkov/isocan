@@ -868,14 +868,20 @@ THE PHASES, AND THE VERB FOR EACH.
 - supervote: the Decider's 🏆, up to three. Nobody else's counts. If the
   winner is a /variation child, \`isocan choose <winner>\` folds it home in one
   undoable gesture; otherwise mark it with \`isocan context pin\`.
-- storyboard: fifteen items in a row, existing sketches moved in rather than
-  redrawn; \`isocan slides add\` them so the deck is the storyboard.
+- storyboard: \`isocan area grid Storyboard 1x15\` draws fifteen frames on the
+  sheet; move the winning sketches in (\`isocan mv <sketch> --in Storyboard
+  --cell 1,3\`) rather than redrawing, and a missing frame is a note in its
+  cell (\`isocan text "…" --in Storyboard --cell 1,7 --paper yellow\`). Then
+  \`isocan slides add --in Storyboard\`: the deck is the row, in order.
 - prototype: fan out — one agent per screen, one name each, said in the Chat
   first; a Stitcher runs \`isocan design check\` and \`isocan format\`; the
   trial run is the deck full screen.
-- test: FIVE PEOPLE, interviewed by a person. Agents transcribe, never
-  invent: notes as \`isocan text --paper\` on a grid, rows per interviewee,
-  columns per storyboard frame. Patterns need three of five.
+- test: FIVE PEOPLE, interviewed by a person. Before the first interview,
+  \`isocan area grid Test 5x15 --rows "<the five names>"\` — rows are people,
+  columns are frames. Agents transcribe, never invent: one note per cell
+  from what was said, \`isocan text "…" --in Test --cell <person>,<frame>
+  --paper yellow\`. Patterns need three of five; mark one with a reaction on
+  the notes that show it.
 - wrap: quote Monday's questions by #Title and answer each; \`isocan recap\` and
   \`isocan timeline --majors\` are the week's record. Then \`isocan sprint end\`.
 

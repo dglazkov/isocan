@@ -8,6 +8,8 @@ import {
   annotationsOf,
   isAnnotation,
   isArea,
+  areaGrid,
+  areaInner,
   areaTint,
   itemsIn,
   AREA_TITLE_HEIGHT,
@@ -230,6 +232,8 @@ function ItemViewInner({
   // tool used inside it still reaches the canvas. See `core/area.ts`.
   const isAreaItem = isArea(item);
   const tint = isAreaItem ? areaTint(item) : null;
+  const grid = isAreaItem ? areaGrid(item) : null;
+  const inner = isAreaItem ? areaInner(item) : null!;
   // The words' world size, and whether they are still words at this zoom.
   // Below the cut a node draws ONE mark instead of forty shapes of grey
   // smear — see `textIsLegible` in core for why 5px and not a fade.
@@ -645,6 +649,46 @@ function ItemViewInner({
         >
           ×{item.versions.length}
         </button>
+      )}
+      {isAreaItem && grid && (
+        /* The grid (sprint phase 5): guides between cells and a name per row
+           and column, in world units inside the sheet's inner region — the
+           storyboard's fifteen frames, the test wall's people × frames. No
+           pointer: a cell is geometry, and the sheet lets tools through. */
+        <div className="area-grid" aria-hidden>
+          {Array.from({ length: grid.cols - 1 }, (_, i) => (
+            <span
+              key={`c${i}`}
+              className="area-grid-line v"
+              style={{ left: inner.x - x + ((i + 1) * inner.width) / grid.cols, top: inner.y - y, height: inner.height }}
+            />
+          ))}
+          {Array.from({ length: grid.rows - 1 }, (_, i) => (
+            <span
+              key={`r${i}`}
+              className="area-grid-line h"
+              style={{ top: inner.y - y + ((i + 1) * inner.height) / grid.rows, left: inner.x - x, width: inner.width }}
+            />
+          ))}
+          {grid.colNames.map((name, i) => (
+            <span
+              key={`cn${i}`}
+              className="area-grid-name col"
+              style={{ left: inner.x - x + (i * inner.width) / grid.cols + 8, top: inner.y - y - 24 }}
+            >
+              {name}
+            </span>
+          ))}
+          {grid.rowNames.map((name, i) => (
+            <span
+              key={`rn${i}`}
+              className="area-grid-name row"
+              style={{ left: inner.x - x + 8, top: inner.y - y + (i * inner.height) / grid.rows + 6 }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
       )}
       {isAreaItem && (
         /* The strip is the area's name AND its handle — the one part of the

@@ -133,6 +133,9 @@ import {
   briefItem,
   DESK_OF_PROP,
   deskTitle,
+  areaGrid,
+  cellSpot,
+  gridPatch,
   areaInner,
   areasOf,
   findArea,
@@ -4000,7 +4003,7 @@ program
  * may be tidied clear of what is already on the canvas (`Placement.chosen`). */
 function placementFor(
   snapshot: CanvasSnapshotResponse,
-  opts: { at?: string; anchor?: string; in?: string },
+  opts: { at?: string; anchor?: string; in?: string; cell?: string },
   /** The thing's size, when the caller knows it — what `--in` needs to find
    *  a spot inside the area that will hold it. */
   size?: { width: number; height: number },
@@ -4013,8 +4016,19 @@ function placementFor(
     const area = findArea(snapshot.canvas, opts.in);
     if (!area) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
     const want = size ?? { width: 0, height: 0 };
+    // `--cell r,c`: one cell of the sheet's grid, counted from 1 at the
+    // top-left — a note on Friday's test wall goes in the cell for that
+    // person and that frame, and nowhere else.
+    if (opts.cell) {
+      const [row, col] = opts.cell.split(",").map((one) => Number(one.trim()));
+      if (row === undefined || col === undefined || !Number.isInteger(row) || !Number.isInteger(col)) {
+        throw new Error(`--cell wants row,col counted from 1, e.g. --cell 3,4 — got: ${opts.cell}`);
+      }
+      return { ...cellSpot(snapshot.canvas, area, row, col, want.width, want.height), chosen: true };
+    }
     return { ...freeSpotIn(snapshot.canvas, area, want.width, want.height), chosen: true };
   }
+  if (opts.cell) throw new Error("--cell needs --in <area>: a cell is a cell of a sheet's grid");
   if (opts.anchor) return { anchorItemId: resolveItem(snapshot, opts.anchor).id };
   const leftmost = Object.values(snapshot.canvas.items).reduce<Item | null>(
     (best, item) => (best === null || item.x < best.x ? item : best),
@@ -4095,6 +4109,7 @@ program
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size, e.g. 480x360")
   .option("--title <title>")
   .option("-d, --description <text>")
@@ -4501,6 +4516,7 @@ program
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
@@ -5122,8 +5138,11 @@ areaCmd
         const tint = opts.tint === undefined ? null : pickOne("tint", opts.tint, PAPERS, "yellow");
         const { width, height } = sizeFor(opts.size, AREA_DEFAULT_SIZE);
         // The card is markdown, like a text node's words: what happens here.
+        // A sheet with nothing to say still needs a blob — the daemon refuses
+        // an empty one — so a plain sheet carries one newline, which renders
+        // as nothing.
         const card = (opts.note ?? "").trim();
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card, "utf8"), AREA_MIME, AREA_FILENAME);
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card.length > 0 ? card : "\n", "utf8"), AREA_MIME, AREA_FILENAME);
         /**
          * Where a sheet goes by default: to the RIGHT of everything, level
          * with the top of it — a new region beside the work, never over it.
@@ -5161,6 +5180,54 @@ areaCmd
     ),
   );
 
+/**
+ * **A grid on a sheet** (sprint phase 5): rows × columns, each with a name,
+ * drawn as guides in the app; `--cell r,c` on `text`, `add` and `mv` then
+ * addresses one cell. The storyboard is 1×15; Friday's test wall is people
+ * down the side and frames along the top. Four properties, no new op.
+ */
+areaCmd
+  .command("grid <area> [size]")
+  .description("Put a grid on a sheet — `area grid Test 5x15 --rows \"Ana,Ben,Cy,Di,Ed\"` — or `--clear` it")
+  .option("--rows <names>", "row names, comma-separated, top to bottom")
+  .option("--cols <names>", "column names, comma-separated, left to right")
+  .option("--clear", "take the grid off the sheet")
+  .action(
+    run(
+      async (
+        ref: string,
+        size: string | undefined,
+        opts: { rows?: string; cols?: string; clear?: boolean },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const area = findArea(snapshot.canvas, ref);
+        if (!area) throw new Error(`no area called "${ref}" — \`isocan area ls\` names them`);
+        if (opts.clear) {
+          await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(null) });
+          if (ctx.json) return printJson({ itemId: area.id, grid: null });
+          return console.log(`"${area.title}" is a plain sheet again`);
+        }
+        const match = (size ?? "").match(/^(\d+)x(\d+)$/i);
+        if (!match) throw new Error(`a grid is ROWSxCOLS, e.g. 5x15 — got: ${size ?? "nothing"}`);
+        const rows = Number(match[1]);
+        const cols = Number(match[2]);
+        if (rows < 1 || cols < 1) throw new Error("a grid needs at least one row and one column");
+        const names = (raw: string | undefined, what: string, count: number): string[] => {
+          const list = (raw ?? "").split(",").map((one) => one.trim()).filter((one) => one.length > 0);
+          if (list.length > count) throw new Error(`${list.length} ${what} names for ${count} ${what}s`);
+          return list;
+        };
+        const grid = { rows, cols, rowNames: names(opts.rows, "row", rows), colNames: names(opts.cols, "column", cols) };
+        await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(grid) });
+        if (ctx.json) return printJson({ itemId: area.id, grid });
+        console.log(`"${area.title}" is a ${rows}×${cols} grid${grid.rowNames.length > 0 ? ` — rows: ${grid.rowNames.join(", ")}` : ""}${grid.colNames.length > 0 ? ` — columns: ${grid.colNames.join(", ")}` : ""}`);
+        console.log("place into a cell with --in and --cell: isocan text \"…\" --in " + JSON.stringify(area.title) + " --cell 1,1");
+      },
+    ),
+  );
+
 areaCmd
   .command("ls", { isDefault: true })
   .description("The areas, in reading order, and how much each holds")
@@ -5176,6 +5243,10 @@ areaCmd
         pos: `${area.x},${area.y}`,
         size: `${area.width}x${area.height}`,
         tint: area.properties[AREA_TINT_PROP] ?? "",
+        grid: (() => {
+          const grid = areaGrid(area);
+          return grid ? `${grid.rows}x${grid.cols}` : "";
+        })(),
       }));
       if (ctx.json) return printJson(rows);
       if (rows.length === 0) return console.log("no areas here — `isocan area new <title>` lays one");
@@ -5301,6 +5372,7 @@ program
   .description("Move an item — to x y, or by a delta with --by")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
   .option("--in <area>", "move it into this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
     run(
@@ -5308,7 +5380,7 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string },
+        opts: { by?: string; in?: string; cell?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -5324,9 +5396,17 @@ program
         delete without.items[item.id];
         // Relative is what an agent usually means: nudging a thing clear of a
         // neighbour, the same gesture the arrow keys make in the web app.
+        const cell =
+          opts.cell === undefined ? null : opts.cell.split(",").map((one) => Number(one.trim()));
+        if (cell && (cell.length !== 2 || !cell.every((one) => Number.isInteger(one)))) {
+          throw new Error(`--cell wants row,col counted from 1, e.g. --cell 3,4 — got: ${opts.cell}`);
+        }
+        if (cell && !into) throw new Error("--cell needs --in <area>: a cell is a cell of a sheet's grid");
         const target =
           into !== null
-            ? freeSpotIn(without, into, item.width, item.height)
+            ? cell
+              ? cellSpot(without, into, cell[0]!, cell[1]!, item.width, item.height)
+              : freeSpotIn(without, into, item.width, item.height)
             : opts.by !== undefined
             ? (() => {
                 const delta = parseXY(opts.by);
@@ -6403,16 +6483,25 @@ const slidesCmd = program
 
 function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
   slidesCmd
-    .command(`${name} <items...>`)
+    .command(`${name} [items...]`)
     .description(blurb)
     .option("--canvas <canvas>")
+    .option("--in <area>", "every item on this sheet, in reading order — the storyboard row becomes the deck")
     .action(
-      run(async (refs: string[], opts: { canvas?: string }, cmd: Command) => {
+      run(async (refs: string[], opts: { canvas?: string; in?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         if (opts.canvas) ctx.canvasRef = opts.canvas;
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-        for (const ref of refs) {
-          const item = resolveItem(snapshot, ref);
+        // A sheet's contents in reading order — a 1×15 storyboard's frames
+        // left to right — so the deck flips in the order the wall reads.
+        const sheet = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+        if (opts.in !== undefined && !sheet) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+        const targets: Item[] = [
+          ...refs.map((ref) => resolveItem(snapshot, ref)),
+          ...(sheet ? itemsIn(snapshot.canvas, sheet) : []),
+        ];
+        if (targets.length === 0) throw new Error(`name items, or a sheet with --in <area>`);
+        for (const item of targets) {
           if (isSlide(item) === on) {
             console.log(
               on ? `"${item.title}" is already a slide` : `"${item.title}" was not a slide`,

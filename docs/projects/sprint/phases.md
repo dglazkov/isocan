@@ -48,7 +48,13 @@ the project, written by a click while the chip says *Placing* and by
 `isocan react --at`; dots draw where they were put, only yours under the
 curtain, everyone's at the bell; the reducer keeps a point when the mark
 comes off so undo can put the dot back without the inverter knowing whose
-(`core/test/heatmap.test.ts`, `cli/test/heatmap.test.ts`). Phase 5 is next.
+(`core/test/heatmap.test.ts`, `cli/test/heatmap.test.ts`). **Phase 5 is
+built:** a sheet carries a grid as four properties — `isocan area grid Test
+5x15 --rows "…"` — drawn as guides with names in the app; `--cell row,col`
+with `--in` on `text`, `add` and `mv` places into one cell, counted from 1
+at the top-left; `slides add --in Storyboard` makes the deck from a sheet in
+reading order (`core/test/grid.test.ts`, `cli/test/grid.test.ts`). Phase 6
+is next: the run.
 
 ---
 

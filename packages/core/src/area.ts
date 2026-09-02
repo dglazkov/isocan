@@ -168,3 +168,126 @@ export function freeSpotIn(
   };
   return nearestFreeSpot(want, occupied, within);
 }
+
+/**
+ * **A grid on a sheet** (sprint phase 5): rows and columns, each with a
+ * name, drawn as guides inside the sheet — the storyboard is one row of
+ * fifteen frames, Friday's test wall is people down the side and frames
+ * along the top. Four properties on the area item and nothing else: a cell
+ * is geometry (the inner region divided evenly), so an item is IN a cell by
+ * its centre the way it is in the sheet, and `isocan text --in Test --cell
+ * 3,4` is a placement, not a relation. Rows and columns are counted from 1,
+ * top-left, because that is how a person reads a table.
+ */
+export const AREA_ROWS_PROP = "rows";
+export const AREA_COLS_PROP = "cols";
+export const AREA_ROW_NAMES_PROP = "rowNames";
+export const AREA_COL_NAMES_PROP = "colNames";
+
+export interface AreaGrid {
+  rows: number;
+  cols: number;
+  /** A name per row, in order; shorter than `rows` when some are unnamed. */
+  rowNames: string[];
+  colNames: string[];
+}
+
+function splitNames(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((one) => one.trim())
+    .filter((one) => one.length > 0);
+}
+
+/** The grid a sheet carries, or null for a plain sheet. */
+export function areaGrid(area: Item): AreaGrid | null {
+  const rows = Number(area.properties[AREA_ROWS_PROP]);
+  const cols = Number(area.properties[AREA_COLS_PROP]);
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
+  return {
+    rows,
+    cols,
+    rowNames: splitNames(area.properties[AREA_ROW_NAMES_PROP]),
+    colNames: splitNames(area.properties[AREA_COL_NAMES_PROP]),
+  };
+}
+
+/** The patch that puts a grid on a sheet, or takes it off — one spelling
+ *  for both surfaces. Names are stored comma-joined, so a name may not
+ *  carry a comma; the CLI says so when one does. */
+export function gridPatch(
+  grid: { rows: number; cols: number; rowNames?: string[]; colNames?: string[] } | null,
+): { properties: Record<string, string> } | { removeProperties: string[] } {
+  if (grid === null) {
+    return { removeProperties: [AREA_ROWS_PROP, AREA_COLS_PROP, AREA_ROW_NAMES_PROP, AREA_COL_NAMES_PROP] };
+  }
+  return {
+    properties: {
+      [AREA_ROWS_PROP]: String(grid.rows),
+      [AREA_COLS_PROP]: String(grid.cols),
+      [AREA_ROW_NAMES_PROP]: (grid.rowNames ?? []).join(","),
+      [AREA_COL_NAMES_PROP]: (grid.colNames ?? []).join(","),
+    },
+  };
+}
+
+/** The box of one cell, counted from 1 at the top-left. */
+export function cellBox(
+  area: Item,
+  row: number,
+  col: number,
+): { x: number; y: number; width: number; height: number } {
+  const grid = areaGrid(area);
+  if (!grid) throw new Error(`"${area.title}" has no grid`);
+  if (!Number.isInteger(row) || !Number.isInteger(col) || row < 1 || col < 1 || row > grid.rows || col > grid.cols) {
+    throw new Error(`"${area.title}" is ${grid.rows}×${grid.cols} — there is no cell ${row},${col}`);
+  }
+  const inner = areaInner(area);
+  const width = inner.width / grid.cols;
+  const height = inner.height / grid.rows;
+  return {
+    x: Math.round(inner.x + (col - 1) * width),
+    y: Math.round(inner.y + (row - 1) * height),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
+/** Which cell an item's centre is in, or null when off the grid. */
+export function cellOf(area: Item, item: Item): { row: number; col: number } | null {
+  const grid = areaGrid(area);
+  if (!grid || !inArea(area, item)) return null;
+  const inner = areaInner(area);
+  const cx = item.x + item.width / 2 - inner.x;
+  const cy = item.y + item.height / 2 - inner.y;
+  if (cx < 0 || cy < 0 || cx >= inner.width || cy >= inner.height) return null;
+  return {
+    row: Math.min(grid.rows, Math.floor(cy / (inner.height / grid.rows)) + 1),
+    col: Math.min(grid.cols, Math.floor(cx / (inner.width / grid.cols)) + 1),
+  };
+}
+
+/** The first clear spot inside one cell, for a thing of this size. A cell
+ *  too small or too full answers its own corner, like a sheet does. */
+export function cellSpot(
+  canvas: CanvasContents,
+  area: Item,
+  row: number,
+  col: number,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  const cell = cellBox(area, row, col);
+  const pad = 8;
+  const occupied = Object.values(canvas.items)
+    .filter((item) => !isArea(item))
+    .map((item) => ({ x: item.x, y: item.y, width: item.width, height: item.height }));
+  const want = { x: cell.x + pad, y: cell.y + pad, width, height };
+  const within = {
+    x: cell.x + pad - PLACEMENT_CLEARANCE,
+    y: cell.y + pad - PLACEMENT_CLEARANCE,
+    width: Math.max(0, cell.width - pad * 2) + PLACEMENT_CLEARANCE * 2,
+    height: Math.max(0, cell.height - pad * 2) + PLACEMENT_CLEARANCE * 2,
+  };
+  return nearestFreeSpot(want, occupied, within);
+}

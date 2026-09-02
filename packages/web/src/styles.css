@@ -4391,6 +4391,17 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
+/* A grid on the sheet (sprint phase 5): hairlines between cells and a
+   name per row and column, in world units so they hold their place at
+   every zoom. Drawn under the contents and taking no pointer. */
+.area-grid { position: absolute; inset: 0; pointer-events: none; }
+.area-grid-line { position: absolute; background: var(--paper-edge, var(--line)); opacity: 0.6; }
+.area-grid-line.v { width: 1px; }
+.area-grid-line.h { height: 1px; }
+.area-grid-name {
+  position: absolute; font-size: 18px; line-height: 1; font-weight: 600;
+  color: var(--paper-ink-soft, var(--ink-muted)); white-space: nowrap;
+}
 /* The card — what happens here, in a few lines — under the name, in the
    band `AREA_CARD_HEIGHT` reserves for it (120 world units), so it can
    never spill into the sheet's contents and nothing placed on the sheet

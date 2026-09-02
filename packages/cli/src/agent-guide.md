@@ -776,6 +776,12 @@ isocan format --in Sketches               # tidy the sheet's contents, within it
 A spot found inside a sheet is *chosen*: the daemon never tidies it out. A
 sheet names itself by exact title, then by prefix — `--in sket` is Sketches.
 
+A sheet can carry a **grid**: `isocan area grid Test 5x15 --rows "Ana,Ben,Cy,Di,Ed"`
+draws rows and columns with names, and `--cell row,col` (from 1, top-left)
+with `--in` on `text`, `add` and `mv` puts a thing in one cell. `isocan area
+grid Test --clear` takes it off. `isocan slides add --in Storyboard` makes the
+deck from everything on a sheet, in reading order.
+
 ## What changed
 
 `isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
