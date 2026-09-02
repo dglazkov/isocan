@@ -108,7 +108,7 @@ export async function foldIdentity(from: Actor, into: Actor): Promise<void> {
 }
 
 /** Drop a persona from the roster this browser remembers. */
-export function forgetIdentity(actorId: string): void {
+function forgetIdentity(actorId: string): void {
   write(
     ROSTER_KEY,
     personas().filter((known) => known.id !== actorId),

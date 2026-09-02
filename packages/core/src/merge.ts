@@ -16,7 +16,7 @@ import { INK_PADDING, drawingViewBox, type InkBounds } from "./drawing.ts";
  * silently moving somebody's artwork is worse than refusing.
  */
 
-export interface MergeablePart {
+interface MergeablePart {
   /** For the error message when one cannot be merged. */
   id: string;
   svg: string;
@@ -71,7 +71,3 @@ export function mergeDrawings(parts: MergeablePart[]): { svg: string; bounds: In
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
-
-/** Padding is already inside each part's box, so a merged box does not grow
- * it again — exported so a caller can say why the box is what it is. */
-export const MERGE_KEEPS_PADDING = INK_PADDING;

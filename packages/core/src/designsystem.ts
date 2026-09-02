@@ -19,11 +19,11 @@ import type { CanvasContents, Item } from "./model.ts";
  * The convention is one property, so nothing else has to learn a new kind.
  */
 
-export const ROLE_PROP = "role";
+const ROLE_PROP = "role";
 export const DESIGN_SYSTEM_ROLE = "design-system";
 /** What this was called for an afternoon. Canvases written in that window
  * still say it, and a rename that orphans somebody's file is not a rename. */
-export const LEGACY_DESIGN_ROLE = "house-style";
+const LEGACY_DESIGN_ROLE = "house-style";
 
 /** The properties that make an item this canvas's design system. */
 export function designSystemProperties(): Record<string, string> {

@@ -18,7 +18,7 @@ import type { CanvasContents, Item } from "./model.ts";
 /** The item this ink is about. */
 export const ANNOTATES_PROP = "annotates";
 /** Where it lands on that item, as fractions: "x,y,w,h". */
-export const REGION_PROP = "region";
+const REGION_PROP = "region";
 
 export interface Box {
   x: number;
@@ -28,7 +28,7 @@ export interface Box {
 }
 
 /** A rectangle in fractions of the target: 0,0 is its top-left, 1,1 bottom-right. */
-export interface Region {
+interface Region {
   x: number;
   y: number;
   width: number;

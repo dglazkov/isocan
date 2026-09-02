@@ -38,7 +38,7 @@ export interface Insets {
 }
 
 /** One item a beacon speaks for, with its own reading. */
-export interface BeaconMember {
+interface BeaconMember {
   item: RadarItem;
   /** World-space distance from the middle of the screen. */
   distance: number;
@@ -73,7 +73,7 @@ export interface Beacon {
 }
 
 /** Beacons closer together than this along the rim become one. */
-export const CLUSTER_RADIUS = 56;
+const CLUSTER_RADIUS = 56;
 
 /** A beacon never gets shorter than this, however small or far its item —
  * the bar has to stay something you can see and point at. */

@@ -82,7 +82,7 @@ export function textStyleOf(item: Item): TextStyle {
   return isTextStyle(raw) ? raw : "body";
 }
 
-export function isTextStyle(value: unknown): value is TextStyle {
+function isTextStyle(value: unknown): value is TextStyle {
   return typeof value === "string" && (TEXT_STYLES as readonly string[]).includes(value);
 }
 
@@ -168,7 +168,7 @@ export function textFaceOf(item: Item): TextFace {
   return isTextFace(raw) ? raw : "sans";
 }
 
-export function isTextFace(value: unknown): value is TextFace {
+function isTextFace(value: unknown): value is TextFace {
   return typeof value === "string" && (TEXT_FACES as readonly string[]).includes(value);
 }
 
@@ -248,7 +248,7 @@ export const PAPER_SIZE = 220;
  * `hasRoomForChrome` drops a label and badge when an item is too small on
  * screen — so this is that discipline reaching the words themselves.
  */
-export const TEXT_LEGIBLE_PX = 5;
+const TEXT_LEGIBLE_PX = 5;
 
 /** Should this node draw its words, or the mark that stands for them? */
 export function textIsLegible(worldSize: number, scale: number): boolean {

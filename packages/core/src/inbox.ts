@@ -32,7 +32,7 @@ import { opMatchesFilters } from "./touches.ts";
 
 /** Why a comment is yours. Kept because the reasons are not equally urgent —
  *  a direct mention is somebody asking you; the Chat is the room being loud. */
-export type InboxReason = "mentioned" | "main-thread" | "in-your-thread";
+type InboxReason = "mentioned" | "main-thread" | "in-your-thread";
 
 export interface InboxEntry {
   canvasId: string;

@@ -37,7 +37,7 @@ export interface TreeEntry {
   size: number;
 }
 
-export interface TreeRoot {
+interface TreeRoot {
   root: string;
   entries: TreeEntry[];
   truncated: boolean;
@@ -198,7 +198,7 @@ export async function readBound(root: string, rel: string): Promise<Buffer | nul
  * `$HOME` is the ceiling. Above it lies every other account on the machine
  * and the system itself, and nothing up there is a project.
  */
-export interface PickEntry {
+interface PickEntry {
   name: string;
   /** Absolute, so the app can hand it straight back to the bind route. */
   path: string;
@@ -307,14 +307,14 @@ export async function pickList(home: string, at: string | null): Promise<PickLis
  * Every refusal is a `WriteRefusal` rather than a throw, because the caller
  * has to tell a person which rule stopped them.
  */
-export type WriteRefusal =
+type WriteRefusal =
   | "outside-root"
   | "not-listable"
   | "symlink"
   | "drifted"
   | "unwritable";
 
-export interface WriteResult {
+interface WriteResult {
   ok: boolean;
   refusal?: WriteRefusal;
   /** What was actually on disk when we looked — for the drift message. */

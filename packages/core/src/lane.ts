@@ -40,7 +40,7 @@ import type { CanvasContents, Comment, CommentThread } from "./model.ts";
  * append-only in creation order — the same "v5" the item's own badge shows,
  * so a chip and the thing it points at agree.
  */
-export interface LaneEntry {
+interface LaneEntry {
   itemId: string;
   title: string;
   /** 1-based, matching the badge on the item. */
@@ -54,7 +54,7 @@ export interface LaneEntry {
  * Long enough to cover "make the thing, then say so", short enough that a
  * first message cannot claim a canvas somebody built last week.
  */
-export const CLAIM_GRACE_MS = 120_000;
+const CLAIM_GRACE_MS = 120_000;
 
 /** When this author next speaks in the thread — the upper bound for what this
  *  message can claim. `null` means they never speak again, so the bound is

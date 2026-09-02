@@ -8,7 +8,7 @@ export interface FitTarget {
   height: number;
 }
 
-export interface FitResult {
+interface FitResult {
   resizes: { itemId: string; width: number; height: number }[];
   moves: { itemId: string; x: number; y: number }[];
 }

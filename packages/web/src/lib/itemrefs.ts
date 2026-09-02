@@ -16,14 +16,14 @@ export interface ItemEntry {
   title: string;
 }
 
-export interface ItemRefRoster {
+interface ItemRefRoster {
   /** One entry per name an item answers to (title and id); feeds core. */
   candidates: ItemRefCandidate[];
   /** One entry per item, most recently touched first; feeds the "#" menu. */
   entries: ItemEntry[];
 }
 
-export function itemRefRoster(canvas: CanvasContents | null): ItemRefRoster {
+function itemRefRoster(canvas: CanvasContents | null): ItemRefRoster {
   if (!canvas) return { candidates: [], entries: [] };
   const entries = Object.values(canvas.items)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

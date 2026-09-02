@@ -51,7 +51,7 @@ import { undoneSeqs } from "./undone.ts";
  */
 
 /** What became of an ask. */
-export type AskOutcome =
+type AskOutcome =
   /** Somebody other than the asker replied in the thread. */
   | "answered"
   /** The asker called it off — a `/cancel` later in the same thread. */
@@ -62,7 +62,7 @@ export type AskOutcome =
 /** How an op was tied to an ask. See the file comment: `window` is a guess. */
 export type Attribution = "anchor" | "reference" | "window";
 
-export interface AttributedOp {
+interface AttributedOp {
   seq: number;
   type: string;
   itemId?: string;
@@ -74,7 +74,7 @@ export interface AttributedOp {
   undone: boolean;
 }
 
-export interface AskEntry {
+interface AskEntry {
   threadId: string;
   commentId: string;
   at: string;
@@ -100,7 +100,7 @@ export interface AskEntry {
   produced: AttributedOp[];
 }
 
-export interface CorpusSummary {
+interface CorpusSummary {
   asks: number;
   /** The two populations, apart. `addressed` is measured; `broadcast` is an
    * upper bound unless every agent here has been enrolled. */
@@ -122,7 +122,7 @@ export interface CorpusSummary {
   commands: { name: string; count: number }[];
 }
 
-export interface Corpus {
+interface Corpus {
   summary: CorpusSummary;
   asks: AskEntry[];
 }
@@ -152,7 +152,7 @@ export interface Corpus {
  * There is no `isAgent` bit on `Actor` to reach for instead, and inventing
  * one here would be a second opinion about identity; the roster owns that.
  */
-export type AskKind = "addressed" | "broadcast";
+type AskKind = "addressed" | "broadcast";
 
 function askKind(
   comment: Comment,
@@ -332,7 +332,7 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
  * saves, and an inflated count here would be read as "Stage 4's calibration
  * problem is solved" when it is not.
  */
-export interface PreferencePair {
+interface PreferencePair {
   itemId: string;
   title: string;
   /** The version made current. */

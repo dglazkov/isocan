@@ -21,7 +21,7 @@
  * called `step-2.html`, agents named for models. Nothing here is lifted from a
  * canvas anybody actually has.
  */
-export type LedgerRow = {
+type LedgerRow = {
   /** What a person does with a pointer or a key. */
   did: string;
   /** The part that would otherwise need a paragraph. */

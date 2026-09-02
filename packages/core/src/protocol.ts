@@ -549,7 +549,7 @@ export const WS_BEHIND = 4409;
  * shorter, sentence and this is the limit it is measured against. */
 export const WS_CLOSE_REASON_BYTES = 123;
 
-export interface StaleClientRefusal {
+interface StaleClientRefusal {
   code: typeof STALE_CLIENT_CODE;
   /** The `error` field of the refusal body — what a person reads in their
    * terminal, because the CLI prints `error: <message>` and nothing else. */
@@ -743,7 +743,7 @@ export interface UploadTicket {
 
 /** The daemon's answer to "I have a big blob": either a ticket, or the news
  * that these bytes are already here and no upload is needed. */
-export type BeginUploadResponse =
+type BeginUploadResponse =
   | { upload: UploadTicket; blob?: undefined }
   | { upload?: undefined; blob: BlobUploadResponse };
 
@@ -832,7 +832,7 @@ export interface UpgradeVerdict {
   why: string;
 }
 
-export interface HealthResponse {
+interface HealthResponse {
   ok: true;
   pid: number;
   version: string;

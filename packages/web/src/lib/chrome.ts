@@ -213,7 +213,7 @@ export const MIN_NAME_ROOM = 48;
 export const CHROME_INSET = 0;
 
 /** What the title row shows at this size, and how much of it the name gets. */
-export interface TitleRow {
+interface TitleRow {
   icon: boolean;
   name: boolean;
   /** Screen pixels the name may claim. Meaningless when `name` is false. */
@@ -278,7 +278,7 @@ export function nameFits(width: number, scale: number): boolean {
  *
  * Entering an item silences both: inside, your clicks belong to the page.
  */
-export type UnderSlot = "size" | "hint" | null;
+type UnderSlot = "size" | "hint" | null;
 
 export function underSlotFor(state: {
   entered: boolean;

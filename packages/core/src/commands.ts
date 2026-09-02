@@ -46,7 +46,7 @@ export interface SlashCommand {
  * always a legal filename, and never ambiguous with the text after it. */
 export const COMMAND_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 
-export interface ParsedCommand {
+interface ParsedCommand {
   name: string;
   /** Everything after the name, trimmed. Empty string when there is none. */
   args: string;

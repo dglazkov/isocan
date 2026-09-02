@@ -25,7 +25,7 @@ function personaPath(root: string, name: string): string | null {
   return path.join(root, PERSONA_DIR, `${name}.md`);
 }
 
-export interface PersonaOnDisk {
+interface PersonaOnDisk {
   /** Repo-relative, for display and for `isocan persona show`. */
   file: string;
   persona: Persona;
@@ -54,7 +54,7 @@ export async function readPersonas(root: string): Promise<PersonaOnDisk[]> {
   return out;
 }
 
-export type PersonaWriteRefusal = "bad-name" | "not-a-persona" | "too-big" | "symlink" | "failed";
+type PersonaWriteRefusal = "bad-name" | "not-a-persona" | "too-big" | "symlink" | "failed";
 
 /** Front matter or it is not a persona — the same test the reader applies, so
  *  a save cannot produce a file the listing would then ignore. */

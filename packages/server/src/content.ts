@@ -40,7 +40,7 @@ export interface ContentDeps {
   homes: HomeLinks | null;
 }
 
-export interface ContentOptions {
+interface ContentOptions {
   /**
    * The `Content-Security-Policy` these responses carry, or null for none.
    *

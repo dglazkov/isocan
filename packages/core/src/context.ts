@@ -25,7 +25,7 @@ import { excludedItems, pinnedItems } from "./contextmark.ts";
  * attached, never a bare flag: "older than 6 of the screens it governs" is
  * actionable and "stale: true" is an accusation.
  */
-export interface ContextPiece {
+interface ContextPiece {
   /** What it is called, in the words the product uses. */
   name: string;
   /** Where it comes from — the canvas, this machine, the CLI itself. */
@@ -44,7 +44,7 @@ export interface ContextPiece {
 
 /** Facts only the machine running the CLI can know. The web has none of them,
  *  which is why they are passed in rather than read. */
-export interface ContextExtras {
+interface ContextExtras {
   /** The directory bound to this canvas here, if any. */
   directory?: string | null;
   /** How many entries the oplog holds, for the recap's resolution. */

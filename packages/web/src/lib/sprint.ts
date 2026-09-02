@@ -39,7 +39,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** The current second, shared. */
-export function useClockSecond(): number {
+function useClockSecond(): number {
   return useSyncExternalStore(subscribe, () => nowSecond, () => nowSecond);
 }
 

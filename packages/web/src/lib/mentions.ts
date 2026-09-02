@@ -23,7 +23,7 @@ export interface MentionPeer {
   online: boolean;
 }
 
-export interface MentionRoster {
+interface MentionRoster {
   /** One entry per name an actor answers to; feeds core's resolution. */
   candidates: MentionCandidate[];
   /** One entry per actor, live label preferred; feeds the "@" menu. */

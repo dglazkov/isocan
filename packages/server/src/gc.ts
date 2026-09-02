@@ -71,7 +71,7 @@ export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[]
 }
 
 /** Every blobHash an operation can (re-)introduce. */
-export function hashesInOperation(op: Operation): string[] {
+function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
     case "item.add":
     case "item.addVersion":
@@ -131,7 +131,7 @@ export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<s
  * This is the RHYTHM, not the first sweep — an hour after boot is longer than
  * some homes live. See {@link firstSweepDelay}.
  */
-export const DEFAULT_GC_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_GC_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * The interval an innkeeper configured, or the default.
@@ -214,7 +214,7 @@ export async function gcCanvases(
   return { canvases, totals };
 }
 
-export interface GcSweeperOptions {
+interface GcSweeperOptions {
   engine: Pick<Engine, "gc">;
   /**
    * **Every canvas this home holds** — `store.listCanvases`, not a badge's
@@ -236,7 +236,7 @@ export interface GcSweeperOptions {
   log?: (message: string) => void;
 }
 
-export interface GcSweeper {
+interface GcSweeper {
   /** Stop sweeping, and settle whatever sweep is already running. Idempotent,
    * and safe before the first sweep has fired. */
   stop(): Promise<void>;

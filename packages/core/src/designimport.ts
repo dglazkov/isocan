@@ -23,7 +23,7 @@ import type { DesignTokens } from "./designmd.ts";
  * than one that says which half it could not read, because the first is
  * discovered weeks later by somebody wondering why a colour is missing.
  */
-export interface ImportedDesign {
+interface ImportedDesign {
   tokens: DesignTokens;
   /** What could not be read or placed, in the importer's own words. */
   problems: string[];
@@ -151,7 +151,7 @@ export function detectFormat(text: string): "css" | "dtcg" {
 /** A theme's name, from the file it came in. `shadcn-theme.css` → "shadcn
  *  theme" — enough that `design check` has something to cite and a person can
  *  see at a glance which import this is. */
-export function importedName(source: string): string {
+function importedName(source: string): string {
   return source
     .replace(/\.[^.]+$/, "")
     .replace(/[-_.]+/g, " ")

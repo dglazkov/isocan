@@ -34,7 +34,7 @@ export interface DirClaim {
   title?: string;
 }
 
-export type BindVerdict = "free" | "adopt" | "taken";
+type BindVerdict = "free" | "adopt" | "taken";
 
 export function bindVerdict(claim: DirClaim | null | undefined, canvasId: string): BindVerdict {
   if (!claim) return "free";

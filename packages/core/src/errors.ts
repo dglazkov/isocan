@@ -1,4 +1,4 @@
-export type OpErrorCode =
+type OpErrorCode =
   | "unknown-item"
   | "unknown-version"
   | "unknown-thread"
