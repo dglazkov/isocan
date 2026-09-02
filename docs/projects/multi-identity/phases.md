@@ -340,6 +340,41 @@ web produces the same registry.
 - **2026-09-01 — Unread counts compared ids without the map.** Found on the
   walk: Dimitri's own words under the old id showed as "1 new from Dimitri".
   The unread helpers and the facepile now resolve authors through the map.
+- **2026-09-01 — Ownership is an actor id, and it did not join the resolve
+  list.** Raised from the roles research
+  ([`docs/research/2026-09-01-roles.md`](../../research/2026-09-01-roles.md)),
+  which leans on `project.createdBy` as an unremovable owner floor. The
+  readers this phase converted are the ones that DISPLAY an actor — names,
+  colours, marks, the inbox, the roster, the unread counts. Ownership is the
+  one that AUTHORIZES on one, and `ownerOf` still returns
+  `project.createdBy.id` raw (`core/src/grants.ts:80`). Fold `Dimitri 2` into
+  Dimitri and every canvas `Dimitri 2` created has a `createdBy` naming an
+  actor nobody answers to.
+
+  The two surfaces then disagree in OPPOSITE directions, which is what makes
+  it hard to see from either one. `ShareDialog` asks
+  `ownsCanvas(record, actor.id)` — a raw compare against the CURRENT actor —
+  so the capability buttons go disabled and the dialog reads "Made by
+  Dimitri 2" rather than "you". `ownsThisCanvas` asks
+  `claimsActor(badge claims, ownerOf(project))` — does this BADGE claim the
+  creator — and the fold neither revokes the claim on `from` nor could,
+  since this phase requires the badge to claim both. So the server still says
+  yes. The app refuses what the daemon permits: not a habit the app enforces
+  alone, but the app enforcing MORE than the rule, which no ratchet looks for.
+
+  On the second machine it is worse and simpler. That badge never claimed
+  `Dimitri 2`, so both surfaces refuse, and a person is locked out of the
+  owner controls on a canvas they made — one gesture after the gesture that
+  promised to make them one person. That is the shape of the lockout the
+  owner rule was added to prevent.
+
+  **The fix is one call**: `ownerOf` resolves through `joined` before it
+  returns. It needs the registry, which `grants.ts` does not take today, so
+  the shape of that argument is the only real decision. Plus a test that a
+  canvas created by the folded actor still answers to the surviving one, and
+  a check of the other direction — `ownsCanvas` must not start saying yes to
+  somebody who was never folded in.
+
 - **Left for later, named here:** `actorBindings` and orphaned-claim lookups
   still answer a folded actor's raw id; readers resolve it, and the CLI keeps
   writing under its own id after a join, which the log is meant to record.

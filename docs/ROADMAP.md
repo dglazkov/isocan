@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**11 built · 25 still open** — of which 13 partly
+**12 built · 24 still open** — of which 12 partly
 built, 12 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>13</sub>
+## Partly built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -29,7 +29,6 @@ and the done column should not be flattered by either.
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
-| **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | phases 1–3 closed 1 Sep 2026 (the offer reaches the door; the door starts the proof; the refusal renders its remedy — journeys 1, 2 and 4 close, journey 6 through step 3); phases 4–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both. · see multiuser |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
@@ -51,13 +50,14 @@ and the done column should not be flattered by either.
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake is the hinge; the history is already a derivation · see launch, personas, on-demand |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
-## Built <sub>11</sub>
+## Built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [agent-custody](docs/projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. · see agent-custody |
 | **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
+| **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |
 | research | [One gesture, one undo — grouping in the oplog](docs/research/2026-08-28-op-grouping.md) | 2026-08-29 |  · see ui-refresh |
 | research | [Teleport: moving a canvas to another home](docs/research/2026-09-01-teleport.md) | 2026-09-01 | the move built 1 Sep as `isocan teleport --to <home> [--dry-run]`; keeping two homes writable is deliberately NOT built, because exactly one place assigns order · see multiuser, on-demand |
