@@ -1,7 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
+import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
   backingOf,
@@ -1280,9 +1278,7 @@ function MarkdownViewInner({
   return (
     <div className="md-view">
       {/* GFM: tables, strikethrough, task lists, autolinks */}
-      <ReactMarkdown remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}>
-        {load.text}
-      </ReactMarkdown>
+      <Markdown breaks={breaks}>{load.text}</Markdown>
     </div>
   );
 }

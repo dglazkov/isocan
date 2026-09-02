@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
 import { isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
@@ -511,9 +510,9 @@ function Panel({
               )}
               <div className="body">
                 <CommandChip body={comment.body} />
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
+                <Markdown rehypePlugins={chips}>
                   {withoutCommand(comment.body)}
-                </ReactMarkdown>
+                </Markdown>
               </div>
               {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
               {(comment.items ?? [])
