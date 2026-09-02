@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { CANVAS_ROUTE, ITEM_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
@@ -35,6 +36,29 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
    * removes none", arriving as a rendering decision.
    */
   const [proved, setProved] = useState<SignInLanding | null>(null);
+
+  /**
+   * **Ask for the markdown chunk while nothing is happening.**
+   *
+   * `Markdown` is lazy so a first visit does not download the ~175 KB parser
+   * stack before the app is interactive. That is the whole win, and it costs a
+   * Suspense fallback the first time markdown renders — which on a canvas with
+   * fifty markdown items would be fifty boundaries resolving in sequence.
+   *
+   * So the download is asked for on idle, once, as soon as the app mounts: off
+   * the critical path, and in practice landed before anybody scrolls to a
+   * document. `requestIdleCallback` is not in every browser this runs in, so
+   * the timeout is the fallback rather than a second code path.
+   */
+  useEffect(() => {
+    const idle = window.requestIdleCallback;
+    if (typeof idle === "function") {
+      const handle = idle(() => preloadMarkdown(), { timeout: 3000 });
+      return () => window.cancelIdleCallback?.(handle);
+    }
+    const timer = window.setTimeout(preloadMarkdown, 1000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!arrival) return;

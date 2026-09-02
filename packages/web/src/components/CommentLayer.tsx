@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, CanvasContents, CommentThread, NewComment } from "@isocan/core";
 import {
   collectItemRefCandidates,
@@ -371,9 +370,9 @@ function ThreadPopover({
             )}
             <div className="body">
               <CommandChip body={comment.body} />
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={chips}>
+              <Markdown rehypePlugins={chips}>
                 {withoutCommand(comment.body)}
-              </ReactMarkdown>
+              </Markdown>
             </div>
           </div>
         ))}

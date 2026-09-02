@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "../lib/markdown.tsx";
 import type { DesignDoc, DesignTypography } from "@isocan/core";
 import { bySeverity, checkDesign, parseDesign, parseHex, resolveToken } from "@isocan/core";
 import {
@@ -95,7 +94,7 @@ function DesignSystemViewInner({ canvasId, blobHash }: { canvasId: string; blobH
           {doc.sections.map((s) => (
             <div key={s.title}>
               <h3>{s.title}</h3>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.body}</ReactMarkdown>
+              <Markdown>{s.body}</Markdown>
             </div>
           ))}
         </section>
