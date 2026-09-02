@@ -172,25 +172,37 @@ const METRICS = {
         ),
     },
   },
+  /**
+   * **The ENTRY chunk, not the biggest one on disk.**
+   *
+   * This took `Math.max` over every `.js` in `dist/assets` while its own
+   * description said "what a first visit downloads", and on 1 Sep 2026 those
+   * two stopped meaning the same thing. Splitting the markdown parser out took
+   * the entry from 757,948 to 600,420 — a real 157 KB off a first visit — and
+   * the metric went on reporting 615,249, because `StageEditor` is now the
+   * biggest file in the directory. `StageEditor` is lazy. Nobody downloads it
+   * on a first visit, and a bound it can breach is a bound that fails for a
+   * reason unrelated to the sentence describing it.
+   *
+   * Worse in the other direction: the max would have gone UNDER the bound the
+   * moment anything eager was split into two eager chunks, which downloads
+   * exactly the same bytes. A number you can satisfy by rearranging files is a
+   * number that rewards rearranging files.
+   *
+   * So it reads the module script out of the built HTML, which is the one
+   * artifact that knows which chunk the browser fetches first.
+   */
   "bundle-bytes": {
-    what: "the largest built JavaScript chunk, in bytes — what a first visit downloads",
-    take() {
-      const dir = path.join(repo, "packages/web/dist/assets");
-      if (!existsSync(dir)) {
-        throw new Error("no build at packages/web/dist — run `npm run build` first");
-      }
-      const sizes = readdirSync(dir)
-        .filter((f) => f.endsWith(".js"))
-        .map((f) => statSync(path.join(dir, f)).size);
-      return sizes.length ? Math.max(...sizes) : 0;
-    },
+    what: "the entry chunk, in bytes — what a first visit downloads before anything renders",
+    take: () => statSync(path.join(repo, entryChunk())).size,
     breakIt: {
-      // Not the bundle — a source file, so the number moves only if a build
-      // ran. That is the honest shape: this metric measures the artifact, and
-      // an artifact nobody rebuilt is a stale reading rather than a lie.
-      file: "packages/web/dist/assets/.selftest-chunk.js",
-      create: true,
-      apply: () => `// selftest\n${"x".repeat(2_000_000)}\n`,
+      // A getter, because the entry's name carries a content hash and changes
+      // with every build — a literal path here would go stale silently, which
+      // is the failure this whole file exists to make impossible.
+      get file() {
+        return entryChunk();
+      },
+      apply: (t) => `${t}\n// selftest\n${"x".repeat(2_000_000)}\n`,
     },
   },
   /**
@@ -327,6 +339,23 @@ const METRICS = {
  * fires on a false positive. A number that cries wolf is a number people turn
  * off.
  */
+/**
+ * Where the built HTML says the browser should start. Vite emits the entry as
+ * `<script type="module" src="/assets/index-<hash>.js">`, and that file — not
+ * the largest one in the directory — is what a first visit downloads.
+ */
+function entryChunk() {
+  const html = path.join(repo, "packages/web/dist/index.html");
+  if (!existsSync(html)) {
+    throw new Error("no build at packages/web/dist — run `npm run build` first");
+  }
+  const found = /<script[^>]*\ssrc="\/assets\/([^"]+\.js)"/.exec(readFileSync(html, "utf8"));
+  if (!found) {
+    throw new Error("no module script in packages/web/dist/index.html — the build's shape changed");
+  }
+  return path.join("packages/web/dist/assets", found[1]);
+}
+
 function scanExports() {
   const list = (glob) =>
     execFileSync("git", ["ls-files", ...glob], { cwd: repo, encoding: "utf8" })
