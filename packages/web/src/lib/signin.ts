@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, AuthOffer } from "@isocan/core";
 import { attest, attestOffer } from "./api.ts";
 
@@ -76,10 +77,83 @@ const PENDING_KEY = "isocan.signin.email";
 /** What this home has borrowed, fetched once per page. Cached because three
  * dialogs ask and the answer cannot change while the process is up. */
 let offer: Promise<AttestOffer> | null = null;
+/** The most recent answer, once it has arrived. `useResumable` reads this on
+ * its first render so a door mounted after the offer resolved does not paint
+ * an empty list and then fill it. Cleared with `offer`. */
+let lastOffer: AttestOffer | null = null;
 
 export function attesterOffer(refresh = false): Promise<AttestOffer> {
-  if (refresh || !offer) offer = attestOffer();
+  if (refresh || !offer) {
+    const asked = attestOffer();
+    offer = asked;
+    asked.then(
+      (answer) => {
+        // A refresh may have replaced this request while it was in flight; only
+        // the request the cache still holds gets to say what the answer is.
+        if (offer === asked) lastOffer = answer;
+      },
+      () => {},
+    );
+  }
   return offer;
+}
+
+/**
+ * Who is told when the cached offer is thrown away.
+ *
+ * A Set with an unsubscribe, not the one-slot setter `onReBadge` and
+ * `onOfflineWrite` use: the door is mounted from `Doorway`, `FrontPage` and
+ * `ViewerGate`, and a second mount must not knock the first one off the list
+ * (multi-identity phase 1).
+ */
+const offerListeners = new Set<() => void>();
+
+/** Run `fn` each time the offer cache is invalidated. Returns the unsubscribe. */
+export function onOfferInvalidated(fn: () => void): () => void {
+  offerListeners.add(fn);
+  return () => {
+    offerListeners.delete(fn);
+  };
+}
+
+/** Drop the cached offer so the next reader re-asks, and say so. */
+function invalidateOffer(): void {
+  offer = null;
+  lastOffer = null;
+  for (const fn of offerListeners) fn();
+}
+
+/**
+ * The actors this badge may become — `AttestOffer.resumable`, kept current.
+ *
+ * The door reads it through this hook wherever it is mounted, so nothing is
+ * threaded through props. It reads the same cached offer the other dialogs
+ * read, re-reads when `settle()` invalidates that cache after a proof lands,
+ * and leaves the listener list on unmount. `[]` while the answer is on its
+ * way, when the home could not be asked, and on a home with no attester —
+ * where the door has to render exactly as it did before this hook existed.
+ */
+export function useResumable(): Actor[] {
+  const [resumable, setResumable] = useState<Actor[]>(() => offered(lastOffer));
+  useEffect(() => {
+    let live = true;
+    const read = (): void => {
+      attesterOffer()
+        .then((answer) => live && setResumable(offered(answer)))
+        .catch(() => live && setResumable([]));
+    };
+    read();
+    const stop = onOfferInvalidated(read);
+    return () => {
+      live = false;
+      stop();
+    };
+  }, []);
+  return resumable;
+}
+
+function offered(answer: AttestOffer | null): Actor[] {
+  return answer && answer.auth !== null ? answer.resumable : [];
 }
 
 /** Can this home verify an email at all? The Share dialog's "who" field and
@@ -195,8 +269,9 @@ async function settle(code: string): Promise<SignInLanding> {
      */
     const written = await attest(body.idToken);
     // The offer is stale the moment the row lands — it carried the old
-    // attestations and the old resumable list — so the next reader re-asks.
-    offer = null;
+    // attestations and the old resumable list — so the next reader re-asks,
+    // and any door already on screen is told to.
+    invalidateOffer();
     return {
       proved: written.attestation.attribute,
       via: written.attestation.verifiedVia,

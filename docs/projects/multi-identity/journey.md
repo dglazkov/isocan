@@ -1,8 +1,8 @@
 ---
-status: designed
-since: 2026-08-31
+status: partial
+since: 2026-09-01
 see: multiuser
-note: "the door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
+note: "phase 1 closed 1 Sep 2026 (the offer reaches the door); phases 2–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
 ---
 
 # Multi-identity — the journeys

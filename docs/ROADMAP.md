@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**11 built · 25 still open** — of which 12 partly
-built, 13 designed, 0 blocked, and
+**11 built · 25 still open** — of which 13 partly
+built, 12 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>12</sub>
+## Partly built <sub>13</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -29,11 +29,12 @@ and the done column should not be flattered by either.
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stage 2's graders exist and are wired to a nightly · see evals |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
+| **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | phase 1 closed 1 Sep 2026 (the offer reaches the door); phases 2–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both. · see multiuser |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>13</sub>
+## Designed, not built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -43,7 +44,6 @@ and the done column should not be flattered by either.
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
-| **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-08-31 | the door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both. · see multiuser |
 | **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | AUTHORITATIVE for the wake since 30 Aug — a user-started `isocan rc` parks against the home and vends agent sessions over ACP. journey.md is the acceptance suite, design.md the argument, phases.md the walk; phase 1 stands alone. · see on-demand, launch |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 |  · see personas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |

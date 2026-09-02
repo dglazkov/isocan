@@ -113,7 +113,12 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
           after `Doorway` is now the same guarantee for all three faces. */}
       {refused && <ArrivalNotice refusal={refused} onDismiss={() => setRefused(null)} />}
       {proved && (
-        <SignInNotice landing={proved} onIdentity={setActor} onDismiss={() => setProved(null)} />
+        <SignInNotice
+          landing={proved}
+          actor={actor}
+          onIdentity={setActor}
+          onDismiss={() => setProved(null)}
+        />
       )}
     </BrowserRouter>
   );
@@ -260,13 +265,23 @@ function ArrivalNotice({
  * here blocks anybody. A person who proved an address and does not want to
  * resume anyone dismisses it and carries on as whoever they were, with the
  * attestation quietly doing its other job at the door.
+ *
+ * **While the door is showing, the door owns the offer** (multi-identity
+ * phase 1). With `actor === null` the door is on screen and renders the same
+ * people as rows, so this notice says what was proved and carries no buttons:
+ * a toast over a dialog is the wrong place for the one act the person came to
+ * do. With an actor, the toast is the right interruption and is unchanged.
+ *
+ * Exported for the test that holds that rule.
  */
-function SignInNotice({
+export function SignInNotice({
   landing,
+  actor,
   onIdentity,
   onDismiss,
 }: {
   landing: SignInLanding;
+  actor: Actor | null;
   onIdentity: (actor: Actor) => void;
   onDismiss: () => void;
 }) {
@@ -283,6 +298,7 @@ function SignInNotice({
     );
   }
   const address = landing.proved.replace(/^email:/, "");
+  const offering = actor !== null ? landing.resumable : [];
   return (
     <div className="arrival-notice" role="status">
       <div className="arrival-note">
@@ -291,8 +307,10 @@ function SignInNotice({
       <div className="arrival-hint">
         {landing.resumable.length === 0
           ? "Anybody can now invite you here by that address instead of handing out the link."
-          : "Another surface that proved the same address answers to:"}
-        {landing.resumable.map((who) => (
+          : actor === null
+            ? "The people it lets you be are listed at the door."
+            : "Another surface that proved the same address answers to:"}
+        {offering.map((who) => (
           <button
             key={who.id}
             className="btn"
