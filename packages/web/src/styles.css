@@ -4349,11 +4349,56 @@ button.mt-card:hover { border-color: var(--accent); }
    first line by six pixels — the exact jump the text tool exists to not
    make. */
 .item.textnode.paper .md-view { padding: 10px; }
-.item.textnode.paper-yellow, .text-paper.paper-yellow, .text-composer.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
-.item.textnode.paper-pink, .text-paper.paper-pink, .text-composer.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
-.item.textnode.paper-blue, .text-paper.paper-blue, .text-composer.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
-.item.textnode.paper-green, .text-paper.paper-green, .text-composer.paper-green { --paper: var(--paper-green); --paper-edge: var(--paper-green-edge); }
-.item.textnode.paper-grey, .text-paper.paper-grey, .text-composer.paper-grey { --paper: var(--paper-grey); --paper-edge: var(--paper-grey-edge); }
+.item.textnode.paper-yellow, .item.area.paper-yellow, .text-paper.paper-yellow, .text-composer.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
+.item.textnode.paper-pink, .item.area.paper-pink, .text-paper.paper-pink, .text-composer.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
+.item.textnode.paper-blue, .item.area.paper-blue, .text-paper.paper-blue, .text-composer.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
+.item.textnode.paper-green, .item.area.paper-green, .text-paper.paper-green, .text-composer.paper-green { --paper: var(--paper-green); --paper-edge: var(--paper-green-edge); }
+.item.textnode.paper-grey, .item.area.paper-grey, .text-paper.paper-grey, .text-composer.paper-grey { --paper: var(--paper-grey); --paper-edge: var(--paper-grey-edge); }
+
+/* ---------- areas: a titled sheet things are placed on ----------
+
+   `core/area.ts`: an area is an item whose box is a region, drawn BEHIND
+   everything (the viewport renders areas first) and TRANSPARENT TO THE
+   POINTER except for its title strip and its handles — so the Text tool,
+   the Pen and a marquee used inside an area reach the canvas, and the
+   sheet is grabbed by its name. A faint wash of its tint, or of the card
+   colour when it has none; a dashed hairline so the region reads as a
+   region and not as a card; no shadow, because a sheet lies flat. */
+.item.area {
+  background: color-mix(in srgb, var(--paper, var(--card)) 40%, transparent);
+  border: 1px dashed var(--paper-edge, var(--line));
+  box-shadow: none;
+  pointer-events: none;
+}
+.item.area.selected { border-style: solid; }
+.item.area .area-title,
+.item.area .item-titlebar,
+.item.area .resize-handle,
+.item.area .version-badge { pointer-events: auto; }
+.item.area .item-content { background: transparent; }
+/* The name, in world units so it holds its place on the sheet at every
+   zoom — readable from as far out as the board is meant to be read. Its
+   size is set per item from `AREA_TITLE_HEIGHT` (the way a text node's
+   comes from its step) rather than declared here, so the app's type scale
+   gains no step for a label that is canvas content. Grabbable: it is the
+   handle. */
+.area-title {
+  display: flex; align-items: center;
+  padding: 0 24px; box-sizing: border-box;
+  font-weight: 700; line-height: 1;
+  color: var(--paper-ink, var(--ink));
+  cursor: grab; user-select: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.item.area.dragging .area-title { cursor: grabbing; }
+/* The card — what happens here, in a few lines — under the name. */
+.item.area .md-view {
+  padding: 0 24px 24px;
+  font-size: 18px; line-height: 1.4;
+  color: var(--paper-ink-soft, var(--ink-muted));
+  max-width: 720px;
+  overflow: hidden;
+}
 /* The mark that stands in for words too small to be words. Quiet on purpose:
    at the zoom where these appear there may be dozens, and their job is to say
    "text lives here" while the canvas is read as a whole — not to compete with

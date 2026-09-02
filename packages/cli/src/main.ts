@@ -116,6 +116,18 @@ import {
   TEXT_PROPERTIES,
   TEXT_STYLES,
   textStyleFrom,
+  AREA_DEFAULT_SIZE,
+  AREA_FILENAME,
+  AREA_MIME,
+  AREA_PROPERTIES,
+  AREA_TINT_PROP,
+  PLACEMENT_GAP,
+  areaInner,
+  areasOf,
+  findArea,
+  freeSpotIn,
+  itemsIn,
+  isArea,
   TEXT_STYLE_PROP,
   textBox,
   textTitle,
@@ -3977,9 +3989,21 @@ program
  * may be tidied clear of what is already on the canvas (`Placement.chosen`). */
 function placementFor(
   snapshot: CanvasSnapshotResponse,
-  opts: { at?: string; anchor?: string },
+  opts: { at?: string; anchor?: string; in?: string },
+  /** The thing's size, when the caller knows it — what `--in` needs to find
+   *  a spot inside the area that will hold it. */
+  size?: { width: number; height: number },
 ): Placement {
   if (opts.at) return { ...parseXY(opts.at), chosen: true };
+  // `--in <area>`: the first clear spot inside the sheet, and CHOSEN, because
+  // the search already found it clear and the daemon must not tidy it out
+  // of the area (`core/area.ts`).
+  if (opts.in) {
+    const area = findArea(snapshot.canvas, opts.in);
+    if (!area) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+    const want = size ?? { width: 0, height: 0 };
+    return { ...freeSpotIn(snapshot.canvas, area, want.width, want.height), chosen: true };
+  }
   if (opts.anchor) return { anchorItemId: resolveItem(snapshot, opts.anchor).id };
   const leftmost = Object.values(snapshot.canvas.items).reduce<Item | null>(
     (best, item) => (best === null || item.x < best.x ? item : best),
@@ -4059,6 +4083,7 @@ program
   .description("Upload a file as a new canvas item (default placement: left of the leftmost item)")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
+  .option("--in <area>", "place inside this area, at the first clear spot")
   .option("--size <WxH>", "display size, e.g. 480x360")
   .option("--title <title>")
   .option("-d, --description <text>")
@@ -4120,7 +4145,7 @@ program
         // goes through `placementFor`, where `--at` is the chosen case.
         const placement = inkBox
           ? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) }
-          : placementFor(snapshot, opts);
+          : placementFor(snapshot, opts, { width, height });
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
@@ -4431,6 +4456,7 @@ program
   )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
+  .option("--in <area>", "place inside this area, at the first clear spot")
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
@@ -4532,7 +4558,7 @@ program
           },
           width,
           height,
-          placement: placementFor(snapshot, opts),
+          placement: placementFor(snapshot, opts, { width, height }),
           title: opts.title ?? textTitle(body),
           // Defaults are written as ABSENCE, so a plain `isocan text` makes
           // the byte-identical item the web's plain Text tool makes.
@@ -5018,14 +5044,110 @@ program
     }),
   );
 
+/**
+ * **Areas** — `core/area.ts`: a titled sheet things are placed on, walked
+ * to, and read back from. `docs/projects/sprint/journey.md` is why: a
+ * sprint is a board of them, one per phase. An area is an ordinary item
+ * (`kind=area`) whose title is its name, whose blob is the card that says
+ * what happens there, and whose box is the region; membership is geometry,
+ * read by `ls --in`, `mv --in`, `format --in`, and `--in` on `text` and
+ * `add`. Nothing here is a new op.
+ */
+const areaCmd = program
+  .command("area")
+  .description("Areas — titled sheets things are placed on; `--in <area>` on text, add, mv, ls and format");
+
+areaCmd
+  .command("new <title...>")
+  .description("Lay an area — a titled sheet, to the right of everything unless --at says where")
+  .option("--at <x,y>", "place the sheet's top-left at world coordinates")
+  .option("--size <WxH>", `the sheet's size (default ${AREA_DEFAULT_SIZE.width}x${AREA_DEFAULT_SIZE.height})`)
+  .option("--tint <colour>", "yellow | pink | blue | green | grey — a wash on the sheet")
+  .option("--note <text>", "the card: what happens here, in a few lines")
+  .action(
+    run(
+      async (
+        words: string[],
+        opts: { at?: string; size?: string; tint?: string; note?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const title = words.join(" ").trim();
+        if (!title) throw new Error("an area needs a name");
+        const tint = opts.tint === undefined ? null : pickOne("tint", opts.tint, PAPERS, "yellow");
+        const { width, height } = sizeFor(opts.size, AREA_DEFAULT_SIZE);
+        // The card is markdown, like a text node's words: what happens here.
+        const card = (opts.note ?? "").trim();
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card, "utf8"), AREA_MIME, AREA_FILENAME);
+        /**
+         * Where a sheet goes by default: to the RIGHT of everything, level
+         * with the top of it — a new region beside the work, never over it.
+         * `--at` is a chosen spot; this one is chosen too, because the
+         * corner of a sheet is exactly where somebody meant it to be and a
+         * sheet nudged by the tidy rule would land its contents somewhere
+         * else on every replay.
+         */
+        const all = Object.values(snapshot.canvas.items);
+        const right = all.length === 0 ? 0 : Math.max(...all.map((one) => one.x + one.width)) + PLACEMENT_GAP;
+        const top = all.length === 0 ? 0 : Math.min(...all.map((one) => one.y));
+        const placement: Placement = opts.at
+          ? { ...parseXY(opts.at), chosen: true }
+          : { x: right, y: top, chosen: true };
+        const itemId = newItemId();
+        await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: {
+            id: newVersionId(),
+            blobHash: upload.blobHash,
+            mimeType: AREA_MIME,
+            filename: AREA_FILENAME,
+            size: upload.size,
+          },
+          width,
+          height,
+          placement,
+          title,
+          properties: { ...AREA_PROPERTIES, ...(tint === null ? {} : { [AREA_TINT_PROP]: tint }) },
+        });
+        if (ctx.json) return printJson({ itemId, title, placement, width, height });
+        console.log(`laid "${title}" (${itemId}) at ${"x" in placement ? `${placement.x},${placement.y}` : "?"}, ${width}x${height}`);
+      },
+    ),
+  );
+
+areaCmd
+  .command("ls", { isDefault: true })
+  .description("The areas, in reading order, and how much each holds")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { snapshot } = await canvasAndSnapshot(ctx);
+      const areas = areasOf(snapshot.canvas);
+      const rows = areas.map((area) => ({
+        id: area.id,
+        title: area.title,
+        holds: String(itemsIn(snapshot.canvas, area).length),
+        pos: `${area.x},${area.y}`,
+        size: `${area.width}x${area.height}`,
+        tint: area.properties[AREA_TINT_PROP] ?? "",
+      }));
+      if (ctx.json) return printJson(rows);
+      if (rows.length === 0) return console.log("no areas here — `isocan area new <title>` lays one");
+      printTable(rows);
+    }),
+  );
+
 program
   .command("ls")
   .description("List items on the canvas")
   .option("--kind <kind>", `only this kind: ${ITEM_KINDS.join(", ")}`)
   .option("--filter <text>", "only items whose title or filename contains this")
   .option("--reaction <emoji>", "only items wearing this mark")
+  .option("--in <area>", "only what is inside this area (by its centre)")
   .action(
-    run(async (opts: { kind?: string; filter?: string; reaction?: string }, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
@@ -5033,9 +5155,17 @@ program
         throw new Error(`--kind expects one of ${ITEM_KINDS.join(", ")}, got: ${opts.kind}`);
       }
       const needle = opts.filter?.trim().toLowerCase();
+      // `--in`: membership is geometry, read now — the same answer the app
+      // gives when it drags a sheet and takes its contents along.
+      const area = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+      if (opts.in !== undefined && !area) {
+        throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+      }
+      const held = area ? new Set(itemsIn(snapshot.canvas, area).map((one) => one.id)) : null;
       // The same two questions the web's files panel answers, so a canvas
       // reads the same way from either side.
       const items = Object.values(snapshot.canvas.items).filter((item) => {
+        if (held && !held.has(item.id)) return false;
         if (opts.reaction && !(item.reactions?.[opts.reaction]?.length)) return false;
         if (opts.kind && itemKind(item) !== opts.kind) return false;
         if (!needle) return true;
@@ -5126,6 +5256,7 @@ program
   .command("mv <item> [x] [y]")
   .description("Move an item — to x y, or by a delta with --by")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
+  .option("--in <area>", "move it into this area, at the first clear spot")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
     run(
@@ -5133,16 +5264,26 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string },
+        opts: { by?: string; in?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
+        // `--in`: the sheet's first clear spot, the search not counting the
+        // item itself as in the way.
+        const into = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+        if (opts.in !== undefined && !into) {
+          throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+        }
+        const without = { ...snapshot.canvas, items: { ...snapshot.canvas.items } };
+        delete without.items[item.id];
         // Relative is what an agent usually means: nudging a thing clear of a
         // neighbour, the same gesture the arrow keys make in the web app.
         const target =
-          opts.by !== undefined
+          into !== null
+            ? freeSpotIn(without, into, item.width, item.height)
+            : opts.by !== undefined
             ? (() => {
                 const delta = parseXY(opts.by);
                 return { x: item.x + delta.x, y: item.y + delta.y };
@@ -5426,11 +5567,28 @@ program
   .description("Tidy the canvas — `grid` straightens the lines (default), `smart` reads it")
   .option("--dry-run", "say what would move, move nothing")
   .option("--per-row <n>", "how many per row")
+  .option("--in <area>", "tidy only what is inside this area, within it")
   .action(
-    run(async (mode: string | undefined, opts: { dryRun?: boolean; perRow?: string }, cmd: Command) => {
+    run(async (mode: string | undefined, opts: { dryRun?: boolean; perRow?: string; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
+      /**
+       * `--in <area>`: the same arrangement over the sheet's contents only,
+       * starting at the sheet's inner corner — a wall formatted as a wall.
+       * The rest of the canvas is not in the fold, so it does not move.
+       */
+      const area = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+      if (opts.in !== undefined && !area) {
+        throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+      }
+      const scope = area
+        ? {
+            ...snapshot.canvas,
+            items: Object.fromEntries(itemsIn(snapshot.canvas, area).map((one) => [one.id, one])),
+          }
+        : snapshot.canvas;
+      const origin = area ? { x: areaInner(area).x, y: areaInner(area).y } : undefined;
       if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
         throw new Error(`--per-row wants a number: ${opts.perRow}`);
       }
@@ -5444,9 +5602,10 @@ program
         throw new Error(`not a format: ${mode} — ${FORMAT_MODES.join(", ")}`);
       }
       const chosen: FormatMode | undefined = mode;
-      const moves = formatMoves(snapshot.canvas, {
+      const moves = formatMoves(scope, {
         ...(chosen ? { mode: chosen } : {}),
         ...(perRow === undefined ? {} : { perRow }),
+        ...(origin ? { origin } : {}),
       });
       if (opts.dryRun) {
         if (ctx.json) return printJson(moves);

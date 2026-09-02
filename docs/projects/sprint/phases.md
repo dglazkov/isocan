@@ -24,7 +24,10 @@ and a property.
 
 ---
 
-**Where we are: DESIGNED, 2 Sep 2026. Nothing built.** Phase 0 is next.
+**Where we are: phase 0 built, 2 Sep 2026.** Areas exist on both surfaces —
+`core/area.ts`, the sheet drawn behind everything and grabbed by its name,
+`isocan area new/ls` and `--in` on `text`, `add`, `mv`, `ls` and `format`
+— proved over the wire in `cli/test/area.test.ts`. Phase 1 is next.
 
 ---
 
