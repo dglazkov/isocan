@@ -17,17 +17,26 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 ---
 
 **Where we are: NOTHING BUILT.** Design and journeys written 31 Aug 2026.
-Scope decided the same day: the door only, the precondition stays copy, and
-the whole diff lives in `packages/web` — no server change, no new op, no new
-route. Journey 5's acceptance ("no diff under `packages/cli` or
-`packages/core`") holds every phase to that, not just the last one.
+Scope decided the same day for phases 1–4: the door and the menu, the
+precondition stays copy, and the diff lives in `packages/web` — no server
+change, no new op, no new route. Journey 5's acceptance ("no diff under
+`packages/cli` or `packages/core`") holds phases 1–4 to that, with one named
+exception: phase 3 corrects a stale menu label inside the `name-taken`
+refusal text in `core/src/claims.ts`. That is a copy fix, not a mechanism.
+
+**Phase 5 was added 1 Sep 2026 and lifts that rule on purpose.** It is the
+project's one new op, `actor.join`, and it touches core, the server, the CLI
+and the web, because an op that only one surface could send would break the
+isomorphism. It runs after phase 4 because it needs what journey 6 steps 1–4
+leave the laptop holding: a badge that speaks for both actors.
 
 The order below is dependency order: phase 1 is wiring with a small visible
 result and proves the offer reaches the door; phase 2 is the feature, where
 the door states and their copy land; phases 3 and 4 are each one branch and
-one set of words. The phases are deliberately unequal — phase 2 is the
-boulder — because the split follows the proofs: each phase ends at a journey
-that can be walked, and a finer split would need invented acceptance tests.
+one set of words; phase 5 is the op. The phases are deliberately unequal —
+phases 2 and 5 are the boulders — because the split follows the proofs: each
+phase ends at a journey that can be walked, and a finer split would need
+invented acceptance tests.
 
 **Deliberately open.** Postponed on purpose, so a later session decides
 deliberately instead of improvising mid-task:
@@ -53,8 +62,9 @@ deliberately instead of improvising mid-task:
 
 **Work:** The wiring [journey.md](journey.md)'s "What the journeys force"
 section names: `signin.ts` notifies when its offer cache invalidates (a
-module-level subscription in the shape of `onReBadge`), a `useResumable()`
-hook reads it, and `IdentityDialog` renders resumable rows in the existing
+module-level subscriber list with unsubscribe — not the one-slot shape of
+`onReBadge`, which holds a single callback), a `useResumable()` hook reads it
+and unregisters on unmount, and `IdentityDialog` renders resumable rows in the existing
 `.identity-known-row` style wherever it is mounted — `Doorway`, `FrontPage`,
 and the `ViewerGate` door prop alike, with nothing threaded through props.
 
@@ -115,19 +125,38 @@ proving an address nobody else proved.
 
 **Status: not started.**
 
-**Work:** The `name-taken` branch: when the door's claim is refused with that
-wire code, the dialog renders the refusal with a **Prove your address**
-control that opens state B. The branch keys on `ApiError.code`, never on
-message text. The CLI's refusal prose is untouched.
+**Work:** The `name-taken` branch, in both places a browser meets it. When
+the door's claim is refused with that wire code, the dialog renders its own
+copy — *Dimitri is somebody else here…* — with a **Prove your address**
+control that opens state B. When the identity menu's rename is refused with
+it, the menu renders the same copy, and the control opens the **Prove your
+address** panel in place of the menu. The server's message
+is not shown for this code: `claims.ts` throws `name-taken` from two places,
+and the one a typed name meets (`requireFree`) names `--as` and `--new`, which
+are CLI remedies. The branch keys on `ApiError.code`, never on message text,
+and covers both throws. The CLI's refusal prose is untouched, with one
+correction: the `admit` refusal in `claims.ts` still names a menu entry called
+"Work from your terminal…", which was renamed "Bring your own agent…". The
+string changes to the current label. The same stale label sits in
+`VerifyDialog.tsx`'s header comment and is corrected there too.
 
-**Outcome:** Journey 2 closes. The refusal that names a remedy in prose now
-renders it as a control, for the person who typed their real name before
-reading anything.
+The `claims.ts` string is the one line this project writes outside
+`packages/web`. Journey 5 check 4 names it as the sole exception, so the
+proof's `git diff --stat` is expected to show exactly that line under
+`packages/core` and nothing under `packages/cli`.
+
+**Outcome:** Journey 2 closes, and journey 6 up to its step 3. The refusal
+that names a remedy in prose now renders it as a control, for the person who
+typed their real name before reading anything and for the person who has been
+a second name for weeks and tries to rename their way out.
 
 **Proof:** Journey 2 walked: type the taken name, meet the refusal, click
-through to being yourself. A test asserts the branch fires on the code alone
+through to being yourself. Journey 6 walked from a browser that is already
+somebody: rename to the taken name, meet the same refusal in the menu, click
+through to the panel. A test asserts the branch fires on the code alone
 (a reworded message still branches). `git diff --stat` for the phase shows
-`packages/web` only.
+`packages/web` plus the one corrected string in `core/src/claims.ts`, and
+`grep -rn "Work from your" packages` finds nothing.
 
 **Findings:** none yet.
 
@@ -144,17 +173,69 @@ through to being yourself. A test asserts the branch fires on the code alone
   lets your other machines be you* — and mentions invitations second.
 - The identity-menu entry's reason moves out of the hover tooltip into words
   a person actually meets.
+- The panel's empty case gets journey 3's instructions. Today a badge that
+  proved an address nobody else proved sees a list with nothing in it; it
+  should read that nobody else here has proved this address and name the
+  gesture on the other machine, which is journey 6's last acceptance.
 
 No prompt on first claim; that was considered and refused, and this phase
 does not reopen it.
 
-**Outcome:** Journey 3 closes end to end: the failure message on the second
-machine and the panel it points to on the first machine now tell one story.
+**Outcome:** Journey 3 closes end to end, and journey 6 through step 4: the
+failure message on the second machine and the panel it points to on the first
+machine now tell one story, whether the person met it at the door or in the
+identity menu.
 
 **Proof:** Journey 3 walked across both machines, including the return with
-no second email round trip. Then the journey 5 sweep, which is the project's
-closing proof: the stranger's door, the viewer's deck, the
-already-somebody toast, and `git diff --stat` across all four phases showing
-no line under `packages/cli` or `packages/core`.
+no second email round trip. Journey 6 walked to step 4 from a laptop that is
+`Dimitri 2`: become Dimitri, confirm `isocan who` shows one Dimitri and the
+roster still offers `Dimitri 2`. Then the journey 5 sweep, which closes the
+web-only half of the project: the stranger's door, the viewer's deck, the
+already-somebody toast, and `git diff --stat` across phases 1–4 showing no
+line under `packages/cli` and, under `packages/core`, only phase 3's
+corrected menu label in `claims.ts`.
+
+**Findings:** none yet.
+
+---
+
+## Phase 5 — Two actors become one person
+
+**Status: not started.**
+
+**Work:** `actor.join { from, into }`, designed in [design.md](design.md)'s
+"Joining two actors":
+
+- **Core.** The op type, beside `actor.setColor` and `actor.setMark`. The
+  registry gains a `joined` map and one function that resolves an actor id
+  through it, transitively. `actorNameIn`, the color and mark lookups, the
+  inbox's author and mention checks, and the roster all call it before they
+  compare. The reducer refuses `from === into`, an id the home does not know,
+  and a cycle.
+- **Server.** The engine applies the op to the registry the way it applies a
+  color, saves the actors log, and replays it on load. The claim check: the
+  presenting badge must claim both actors, through `claimsActor`, or the op
+  is refused with its own code. Undo walks the joined stack in log order.
+- **CLI.** `isocan identity --join <actorId>` sends the op. `isocan who`
+  shows one person afterwards. One line in the agent guide.
+- **Web.** In the identity menu's roster, a row for a persona this badge also
+  claims offers **Fold into <current name>**, with one sentence saying it
+  cannot be undone. On success the row leaves the roster and the canvas
+  repaints names, colors and marks from the registry it already subscribes
+  to.
+
+**Outcome:** Journey 6 closes. A person who spent weeks as a second name on a
+second machine ends with one actor, one name over everything they wrote, one
+inbox and one undo, and nothing in the log rewritten.
+
+**Proof:** Journey 6 walked to the end on two machines: fold `Dimitri 2` into
+Dimitri from the laptop, then confirm on the desk machine that a comment
+written as `Dimitri 2` shows Dimitri, that a thread mentioning `Dimitri 2`
+is in Dimitri's inbox, that `isocan who` shows one Dimitri, and that Dimitri's
+undo reaches an op `Dimitri 2` wrote. Tests hold the refusals: a badge that
+claims only one of the two is refused, `from === into` is refused, a cycle is
+refused. A test holds that the log entry `Dimitri 2` wrote still carries
+`Dimitri 2`'s id after the join. The same op sent from the CLI and from the
+web produces the same registry.
 
 **Findings:** none yet.

@@ -12,10 +12,15 @@ phase 14. That doc is a record now; this is where the design moves.
 
 **The debt this discharges.** A person who is Dimitri on their desk machine
 walks to a laptop and wants to be Dimitri there. Today there is no gesture that
-starts from the laptop. The door asks for a name, refuses the one they want —
-*"Dimitri is somebody else here (another surface already speaks as them)"* —
-and tells them in prose to *"prove the address they signed in with"*, while
-rendering no control that proves an address.
+starts from the laptop. The door asks for a name and refuses the one they
+want. Which refusal depends on what the browser sent. A browser that has been
+Dimitri before clicks the roster row, sends the actor id, and reads *"Dimitri
+is somebody else here (another surface already speaks as them)"* with the
+prose remedy *"prove the address they signed in with"*. A browser that has
+never been Dimitri types the name, sends no actor id, and reads *"Dimitri is
+taken here"* with remedies that are CLI flags — `--as`, `--new` — and no
+mention of an address at all. Neither renders a control that proves one, and
+the second does not even say that proving one would help.
 
 The identity desk's mechanism 6 — person resumption across browsers — is not
 missing. It was designed, built in phase 9 stage 2, and played on prod in
@@ -113,12 +118,30 @@ at the problem:
 
 ## Two fixes that fall out
 
-**The refusal gets a control instead of prose.** `claims.ts` throws `name-taken`
-naming two remedies, and the CLI needs those words. The browser has the code on
-`ApiError` and should render the remedy:
+**The refusal gets a control instead of prose.** `claims.ts` throws
+`name-taken` from two places, and both reach the door. `admit` refuses a claim
+that carries an actor id somebody else holds — the roster-row case — and its
+prose names the pass and the address as remedies. `requireFree` refuses a
+fresh claim whose name somebody else answers to — the typed-name case, which
+is what a new machine does — and its prose names `--as` and `--new`, which are
+the CLI's remedies and mean nothing in a browser. The CLI needs both messages
+as written. The browser has the code on `ApiError` and should render its own
+words for it, the same words for both throws, because to the person they are
+one refusal:
 
 > **Dimitri is somebody else here.** Another surface already speaks as them.
 > If that's you: [Prove your address] — or pick a different name.
+
+The server's message text is not shown in this branch. Every other refusal
+code still renders the server's words, as today.
+
+The door is not the only place a browser meets this code. The identity menu's
+rename form sends `actor.claim` with the current actor id and a new name, and
+a person who has been `Dimitri 2` on a second machine and types `Dimitri`
+there meets `requireFree`'s refusal with the CLI flags in it. Journey 6 is
+that person. The same branch renders the same copy in the menu, and its
+control opens the **Prove your address** panel in place of the menu, the way
+the menu already opens its other panels.
 
 This is the reactive path, and it catches the person who types their real name.
 State A's persistent line catches the other one, which is quieter and worse: a
@@ -147,13 +170,17 @@ resumption.
 
 `signin.ts` already owns the offer cache and already invalidates it after a
 successful attest (`offer = null`, so the next reader re-asks). It needs to
-**notify** as well as invalidate: a module-level subscription in the shape of
-`onReBadge` and `onOfflineWrite`, read through a `useResumable()` hook. The
-dialog then works wherever it is mounted, which is the property that makes this
-one change rather than two.
+**notify** as well as invalidate: a module-level subscriber list with an
+unsubscribe, read through a `useResumable()` hook that registers on mount and
+leaves on unmount. Not the one-slot shape of `onReBadge` and `onOfflineWrite`,
+which hold a single callback and would drop the previous reader when a second
+door mounted. The dialog then works wherever it is mounted, which is the
+property that makes this one change rather than two.
 
-**No server change. No new op. No new route.** An address field and the states
-above inside one dialog, a subscription, and a `name-taken` branch.
+**No server change, no new op, no new route for any of the above.** An address
+field and the states inside one dialog, a subscription, and a `name-taken`
+branch. The one op this project adds is the join, in its own section below,
+and it arrives only after all of this is built.
 
 ## The precondition, and why it stays copy
 
@@ -183,6 +210,59 @@ the door cannot know and must not assume.
 The residual cost is stated rather than hidden: a person who never opens the
 identity menu on their first machine will meet state D′ on their second, and
 will have to walk back. D′ tells them how. That is the trade.
+
+## Joining two actors
+
+Added 1 Sep 2026, and the one place this project writes a new op.
+
+A person who was `Dimitri 2` on the laptop for a while and then becomes
+Dimitri leaves two actors behind, each with its own comments, mentions and
+undo history. The canvas shows two people who were both them, and every
+reader who scrolls up sees it. The switch alone does not fix this, and the
+first draft of this design left it open. It is now phase 5.
+
+**The op is `actor.join { from, into }`**, and it belongs to the family
+`actor.setColor` and `actor.setMark` already define: home-scoped, applied to
+the actor registry, written to the actors log, replayed on load, and not
+undoable. The registry gains one map, `joined`, from an old actor id to the
+id it was folded into. The log is not touched. Every op `Dimitri 2` wrote
+still carries `Dimitri 2`'s id, which is the rule the registry has always
+worked by: history keeps what it recorded, nobody is shown it.
+
+**Readers resolve before they compare.** Today `actorNameIn` looks a name up
+by actor id; colors and marks do the same; the inbox asks whether a comment's
+author id or mention list is this actor; presence lists actors by id; undo
+walks the entries one actor id wrote. Each of those gets the id through the
+`joined` map first, transitively, in one function in core. That is the whole
+mechanism, and it is why a mention of `Dimitri 2` in an old thread reaches
+Dimitri, why Dimitri's undo reaches an op `Dimitri 2` wrote, and why `isocan
+who` shows one person.
+
+**Who may send it.** The op is refused unless the presenting badge claims both
+actors. That is not a new kind of check: `claimsActor` already answers it for
+every write. It is exactly what journey 6 leaves the laptop holding after
+step 4, its own claim on `Dimitri 2` and its vouched claim on Dimitri, and it
+means no stranger can fold anybody into anybody. The op is also refused when
+`from` equals `into`, when either id is unknown to the home, and when the
+join would close a cycle.
+
+**Decided, because a join has to decide them:**
+
+- *Undo stacks combine.* The person is one, so their undo is one, in log
+  order. A join is not itself undoable, like every registry op, and the
+  menu says so once before it sends.
+- *Old mentions reach the new person.* The mention was resolved to an actor
+  id when it was written, and that id now resolves to Dimitri.
+- *The old name is released.* `Dimitri 2` stops answering to anyone, so the
+  name is free again. The roster row for it leaves this browser.
+- *Direction is the person's choice.* The row offers to fold the persona
+  named on it into the actor currently active. Folding Dimitri into
+  `Dimitri 2` is the same op with the ids swapped, and nothing prevents it.
+
+**Both surfaces.** The web offers it from the identity menu's roster, on a row
+for a persona this badge also claims. The CLI sends the same op as
+`isocan identity --join <actorId>`, and the agent guide gains one line saying
+when an agent would want it, which is almost never.
 
 ## Considered and left out
 
