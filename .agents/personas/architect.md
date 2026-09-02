@@ -20,10 +20,29 @@ goal:
   # Raised rather than absorbed, and by hand: this bound is what stops the op
   # vocabulary growing by accident, so every rise should cost somebody a
   # sentence about why the vocabulary genuinely needed to be bigger.
+  #
+  # 31 → 33 on 2026-09-01, answering the nightly's own MISSED finding, and by
+  # hand for the reason above. Two ops, both about a PERSON rather than the
+  # canvas, and both needed because identity is home-scoped state that has
+  # nowhere else durable to live:
+  #
+  #   `actor.setMark` (b2e2d60) — the emoji you wear instead of your initial.
+  #   A field and not a prefix on the name, because a name is matched on,
+  #   listed and sorted, and one that sometimes starts with a pictograph
+  #   breaks all three.
+  #
+  #   `actor.join` (b9389e0) — two actors become one person. A person who was
+  #   `Dimitri 2` on one machine and then Dimitri leaves two actors behind
+  #   with two histories; nothing in the log is rewritten, the registry
+  #   records the join and readers resolve through it.
+  #
+  # Both are home-scoped and not undoable, exactly like `actor.setColor` next
+  # to them, so this is the existing actor.* family growing rather than a new
+  # kind of fact. The vocabulary genuinely needed to be bigger.
   - name: operations in the vocabulary
-    at most: 31
+    at most: 33
     measured by: node scripts/measure.mjs op-types
-    baseline: 31, 2026-08-30, 3502dc8
+    baseline: 33, 2026-09-01, baac5a4
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

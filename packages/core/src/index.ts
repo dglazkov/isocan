@@ -32,6 +32,8 @@ export * from "./textnode.ts";
 export * from "./annotation.ts";
 export * from "./backing.ts";
 export * from "./activity.ts";
+export * from "./evals.ts";
+export * from "./undone.ts";
 export * from "./lineage.ts";
 export * from "./commands.ts";
 export * from "./shortcuts.ts";
