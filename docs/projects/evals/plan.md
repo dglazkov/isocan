@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals
-note: stage 2's graders exist and are wired to a nightly
+note: stages 1 and 2 are built; stage 1's join key was not the one this plan named
 ---
 # Evals
 
@@ -50,16 +50,51 @@ preference-pair harvest is not a standing asset we are ignoring; it is an asset
 that begins to exist the first time anybody reaches for `/variation`, which so
 far nobody has. Stage 4's calibration problem is **not** already solved.
 
+**Re-measured 1 Sep 2026 by `isocan evals`, across 21 canvases at the same
+home.** 384 asks — **259 answered, 31 cancelled, 94 silent**. 116 of them
+named somebody; the other 268 reached everybody through the Chat and are an
+upper bound, because on a canvas with nobody enrolled an agent's own receipt
+in the Chat has the same shape as a question. 16,050 ops attributed, **35
+later undone**. **11 preference pairs**, up from 2 — real growth, and still
+two orders of magnitude short of a calibration set.
+
+The number worth looking at is **94 silent, one ask in four**. Nothing else
+this repo measures can see it.
+
+**And a bug the harvest found in passing.** The first version of this counted
+0 undone across every canvas, because it read `LogEntry.undoneBy` — a field
+the server derives in memory and **never writes to the log or sends over the
+wire**. It is the silent-zero shape from lesson #2, in a report whose whole
+job is to be believed. `undoneSeqs` in core now derives it from the log's own
+undo entries, `chooseRetained` in `gc.ts` uses the same fold instead of its
+own copy of those four lines, and the corrected count reproduced this
+document's hand-measured 16 exactly on the canvas it was taken from.
+
 That has a product consequence worth naming: nothing generates preference pairs
 until divergence is something people actually use, and divergence is not worth
 using while [convergence](../atlas/convergence.md) is missing. The op is on the
 critical path for the eval programme, not only for the canvas.
 
 **Comments are the request corpus.** What people ask agents for, in their own
-words, timestamped, with `@mentions` naming who was asked and `onThread`
-joining the request to the work that answered it. `onThread` is the join key
-the whole programme depends on: it is what makes "this ask produced these ops
-and that answer" a query rather than a guess.
+words, timestamped, with `@mentions` naming who was asked.
+
+~~`onThread` is the join key the whole programme depends on.~~ **Wrong, and
+corrected 1 Sep 2026 when Stage 1 was built against it.** `onThread` lives on
+`SessionState`, which is the presence plane — `http.ts:2150` marks it
+*ephemeral — no oplog, no storage*, and the agent guide promises agents the
+same thing: claiming a thread "costs no op, leaves no trace in the history,
+and vanishes when you stop." Nothing about who was answering what survives the
+session that said it, so it cannot join anything after the fact.
+
+The join that does exist is three weaker ones, and `evals.ts` labels which of
+them produced every row: `anchor` (the thread is pinned to the item),
+`reference` (the ask or its answer named it — `comment.items`, recorded at
+authoring time), and `window` (the agent that was asked acted before anybody
+spoke again). The first two are facts. **The third is a guess, and it is
+labelled rather than dropped** — dropping it would report zero for most asks,
+and folding it in unlabelled would make a guess indistinguishable from a
+measurement. Measured over this home: 15,199 of 16,050 attributed ops came
+from `anchor` or `reference`, so the guess is the small half.
 
 **Outputs are files.** A screen is HTML and CSS on disk, not a chat message.
 That is what makes Stage 2 possible at all.
@@ -358,12 +393,17 @@ programmes end up with beautiful dashboards nobody reads.
 
 Three things, in order, none of which needs a decision from anybody else:
 
-1. **`isocan evals corpus`** — a read-only report that joins comments to the
-   ops that answered them via `onThread`, and dumps the result. Stage 1 cannot
-   start without it, and it is a query over data we already have.
-2. **Harvest the version stacks.** Every `item.setCurrentVersion` over a
-   multi-child parent is a preference pair. Count them. If the number is large,
-   Stage 4's calibration problem is already solved and we did not know it.
+1. ~~**`isocan evals corpus`**~~ **Done, 1 Sep 2026** — `packages/core/src/evals.ts`
+   and `isocan evals corpus`. Not via `onThread`, which cannot do it (above);
+   via the anchor, the references, and a labelled window. Read-only, local,
+   writes nothing. The taxonomy step (§Stage 1.2, hand-labelling 200 asks) is
+   the part still to do, and the corpus is what it reads.
+2. ~~**Harvest the version stacks.**~~ **Done** — `isocan evals pairs`. A pair
+   is somebody making an EARLIER version current while later ones existed;
+   promoting the newest is a save, not a choice, and counting those would have
+   inflated the harvest into looking like a solved calibration problem. **11
+   across the home.** The answer is the one this document predicted: not
+   solved, and it will not be until divergence is something people use.
 3. ~~**Score one real canvas with the graders we own.**~~ **Done** —
    `scripts/grade.mjs`, above. The number was not worse than expected, which is
    its own finding: three hand-written screens and the marketing page all pass

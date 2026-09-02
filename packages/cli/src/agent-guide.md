@@ -1372,6 +1372,22 @@ isocan fit <items...>                  # grow items to the size their content wa
   any of it at full resolution — the history `gc` compacts is archived, never
   deleted, and both verbs can read it. Joining a canvas with a past, run
   `recap` once before forming an impression from `comment list` alone.
+- **What this canvas has actually asked for.** `isocan evals corpus` is the
+  same history read as a question about the WORK rather than the ops: every
+  ask, whether it was answered, cancelled or met with silence, and the ops
+  attributed to it. `isocan evals pairs` is the other half — the version
+  stacks where somebody kept an earlier take over a later one.
+
+  Two things to hold when you read it. **The attribution says how it knows**,
+  and one of its three labels is a guess: `anchor` and `reference` are
+  recorded facts, `window` is "the agent that was asked did this before
+  anybody spoke again". Do not quote a `window` count as though it were
+  measured. And **there is no score, deliberately** — a ratio over a handful
+  of asks is noise wearing a decimal point.
+
+  It reads this machine's copy and writes nothing, to the canvas or anywhere
+  else. The `silent` column is the one worth looking at: an ask nobody
+  answered is the failure this canvas cannot see any other way.
 - **The keys the human has.** `isocan shortcuts` prints every key the canvas
   answers to — the same list their `?` panel shows, from the same source. When
   somebody asks how to do a thing without a mouse, or you are telling them
@@ -1565,7 +1581,9 @@ the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
 `undo`/`redo`, `wait`, `tail -f` (`--archived`: the full history, including
 what gc compacted), `recap` (that history at decaying resolution — old spans
-summarized, recent ops verbatim), `gc [--all]` (`--all`: every canvas you are
+summarized, recent ops verbatim), `evals corpus|pairs` (what people have asked
+agents for here and what came of it — a local report, never a score),
+`gc [--all]` (`--all`: every canvas you are
 admitted to at this home, not just this one),
 `blobs [--push]` (are this canvas's bytes at its home — and send the ones
 that are not; the answer when a teammate sees an item and no picture),

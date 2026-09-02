@@ -100,7 +100,9 @@ import {
   mainThread,
   newCommentId,
   anchorOffset,
+  buildCorpus,
   buildRecap,
+  harvestPreferences,
   cleanFilePath,
   FILE_PROP,
   copyProperties,
@@ -9143,6 +9145,138 @@ program
       }
       if (recap.windows.length > 0) {
         console.log(`(any span at full resolution: isocan tail --archived — the record is all there)`);
+      }
+    }),
+  );
+
+// ---------- evals ----------
+
+/**
+ * **Stage 1 of the eval programme** (`docs/projects/evals/plan.md`), and it is
+ * deliberately a REPORT rather than a score.
+ *
+ * The plan's own warning is the reason: "most eval work fails by starting at
+ * 'pick a metric', which is a hypothesis nobody tested about work nobody
+ * characterised." So this prints distributions and rows. Whoever reads them
+ * can see how few there are, which is the finding on a young canvas.
+ *
+ * Local by default and by nature: it reads this machine's replica and writes
+ * nothing anywhere. Comment text never leaves — Stage 6 puts it on the list of
+ * what is never sent on any setting — which is also why there is no `--post`
+ * and no canvas write here, only stdout.
+ */
+const evals = program
+  .command("evals")
+  .description("What people ask agents for here, and what happened next — a local report, no score")
+  .addHelpText(
+    "after",
+    `
+Two reads over data this canvas already has:
+
+  isocan evals corpus     every ask, its outcome, and the ops it produced
+  isocan evals pairs      version stacks where somebody kept an earlier take
+
+Neither writes anything, to the canvas or anywhere else. \`--json\` on either
+for the whole structure.
+
+**Attribution is labelled, and one of the three labels is a guess.** An op is
+tied to an ask by \`anchor\` (the thread is pinned to that item), by
+\`reference\` (the ask or its answer named it), or by \`window\` (the agent
+that was asked did it before anyone spoke again). Only the first two are
+established; \`window\` is reported so the numbers are not empty and labelled
+so it cannot be mistaken for the others.
+`,
+  );
+
+evals
+  .command("corpus", { isDefault: true })
+  .description("Every ask on this canvas, its outcome, and the ops attributed to it")
+  .option("-n, --recent <n>", "show only the last n asks (default 20)")
+  .action(
+    run(async (opts: { recent?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      // Archive first, then live — `buildRecap`'s contract, and for the same
+      // reason: the asks worth studying are the old ones, and `gc` compacts
+      // them out of the live log.
+      const archived = await ctx.client.getArchivedLog(p.id);
+      const live = await ctx.client.getLog(p.id, 0);
+      const snap = await ctx.client.snapshot(p.id);
+      const corpus = buildCorpus(snap.canvas, [...archived, ...live]);
+      if (ctx.json) return printJson(corpus);
+
+      const s = corpus.summary;
+      if (s.asks === 0) {
+        return console.log("nobody has asked an agent for anything here yet");
+      }
+      console.log(
+        `${s.asks} asks — ${s.answered} answered, ${s.cancelled} cancelled, ${s.silent} silent`,
+      );
+      console.log(
+        `${s.addressed} named somebody, ${s.broadcast} reached everybody through the Chat` +
+          // Said out loud rather than left for the reader to infer, because
+          // the two numbers look equally solid and are not: with nobody
+          // enrolled, an agent's own receipt in the Chat is indistinguishable
+          // from a question and is counted as one.
+          (s.broadcastUnfiltered && s.broadcast > 0
+            ? " — an upper bound: nobody is enrolled here, so agents' own replies are in it (isocan agent add)"
+            : ""),
+      );
+      console.log(
+        `${s.opsAttributed} ops attributed (${s.opsByAnchorOrReference} by anchor or reference, ` +
+          `${s.opsAttributed - s.opsByAnchorOrReference} by window — a guess), ${s.opsUndone} later undone`,
+      );
+      if (s.commands.length > 0) {
+        console.log(`commands: ${s.commands.map((c) => `/${c.name} ${c.count}`).join(", ")}`);
+      }
+      console.log("");
+      const budget = Number(opts.recent ?? 20);
+      for (const ask of corpus.asks.slice(-budget)) {
+        // One line of the ask, not the whole thing: a corpus is read for its
+        // shape, and the text is on the canvas for anyone who wants it.
+        const said = ask.body.replace(/\s+/g, " ").slice(0, 72);
+        const how = ask.produced.length === 0
+          ? "no ops"
+          : `${ask.produced.length} ops (${ask.produced.filter((o) => o.how !== "window").length} established)`;
+        console.log(
+          `${ask.at.slice(0, 16).replace("T", " ")}  ${ask.outcome.padEnd(9)} ${how.padEnd(24)} ` +
+            `${ask.askedBy.name}: ${said}`,
+        );
+      }
+      if (corpus.asks.length > budget) {
+        console.log(`\n(${corpus.asks.length - budget} older — -n for more, --json for all)`);
+      }
+    }),
+  );
+
+evals
+  .command("pairs")
+  .description("Version stacks where somebody kept an earlier take — the labels Stage 4 needs")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const archived = await ctx.client.getArchivedLog(p.id);
+      const live = await ctx.client.getLog(p.id, 0);
+      const snap = await ctx.client.snapshot(p.id);
+      const pairs = harvestPreferences(snap.canvas, [...archived, ...live]);
+      if (ctx.json) return printJson(pairs);
+      if (pairs.length === 0) {
+        // The empty answer is the finding, so it says what would fill it
+        // rather than just reporting nothing.
+        return console.log(
+          "no preference pairs here yet — a pair is somebody making an EARLIER version\n" +
+            "current again while later ones existed, which is what choosing between\n" +
+            "alternatives looks like in the log. Nothing generates them until somebody\n" +
+            "reaches for /variation and then keeps one.",
+        );
+      }
+      console.log(`${pairs.length} preference pairs`);
+      for (const pair of pairs) {
+        console.log(
+          `${pair.chosenAt.slice(0, 16).replace("T", " ")}  ${pair.chosenBy} kept ${pair.chosen} ` +
+            `over ${pair.against.length} on ${pair.title}`,
+        );
       }
     }),
   );
