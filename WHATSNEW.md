@@ -22,6 +22,8 @@ second week.
 - Changing a note's colour, size or face saves the moment you choose it, as its own undo step — no need to change the words too.
 - Double-clicking text edits it in place: the field sits exactly on the note or caption, transparent, with the words selected, the way renaming works.
 - A new note opens on the paper you chose last, the way it already remembered your size and face.
+- Hover a paper swatch and the note you are typing wears that colour until the pointer leaves; click to keep it.
+- The text bar is bigger, and the sizes are now S, M, L and XL instead of the initials of the step names. Hover one for what it is called and how far out it stays readable; `isocan text --style M` works too, beside `--style heading`.
 - Words land exactly where you typed them. A note committed next to or on top of another used to be nudged to clear space; now it stays put, like a real post-it. `isocan text --at` keeps its spot the same way.
 
 ## 1 September 2026

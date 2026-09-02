@@ -150,6 +150,23 @@ would be clipped; a post-it never grows. The first version measured the
 words and painted a card, which put a short white field inside the selected
 item and the default square inside a note somebody had made taller.
 
+**The bar says sizes.** The ladder's steps are named for what they are —
+body, heading, title, display, each readable to a stated zoom — and the
+bar showed their initials, B / H / T / D, which is a code for anyone who
+was not told the words. It now says S / M / L / XL, a vocabulary everybody
+has, with the step's name and its zoom promise on hover; the labels are one
+map in core, and `--style M` is accepted by the CLI beside `--style
+heading`, so what a person reads on the screen is a word the terminal
+takes. The controls grew from 22 to 28px: the bar is counter-scaled to hold
+its size at every zoom, and at 22 it was the smallest thing on the screen.
+
+**Hover previews, click chooses.** The bar's principle is that a choice is
+previewed by the thing you are typing into; a hover is the same principle
+one step earlier. The composer wears the paper under the pointer for as
+long as it is there — box and all, so hovering yellow over a caption shows
+the square it would take — and goes back when it leaves. Nothing is sent
+or remembered by a hover.
+
 **What is remembered.** The paper you chose last opens the next new node,
 the same argument that remembers the step: six post-its is choosing yellow
 once. The *default* is still no paper.

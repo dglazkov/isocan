@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
+import { TEXT_STYLE_LABEL, textStyleFrom } from "../src/textnode.ts";
 import {
   TEXT_COLUMN,
   TEXT_FACES,
@@ -220,5 +221,30 @@ describe("when words stop being words", () => {
     expect(size).toBeGreaterThan(0);
     // …and never so big it reads as a letter somebody typed.
     expect(textMarkSize(4000, 4000, 1)).toBe(TEXT_MARK_MAX);
+  });
+});
+
+/**
+ * The bar says S / M / L / XL and the property says body / heading / title /
+ * display. One map, and a resolver that takes either spelling, so what a
+ * person reads on the screen is a word the terminal accepts.
+ */
+describe("a step from its name or its size label", () => {
+  it("labels every step, and no two the same", () => {
+    const labels = TEXT_STYLES.map((s) => TEXT_STYLE_LABEL[s]);
+    expect(new Set(labels).size).toBe(TEXT_STYLES.length);
+    expect(labels).toEqual(["S", "M", "L", "XL"]);
+  });
+
+  it("resolves a name, a label, and either case", () => {
+    expect(textStyleFrom("heading")).toBe("heading");
+    expect(textStyleFrom("M")).toBe("heading");
+    expect(textStyleFrom("xl")).toBe("display");
+    expect(textStyleFrom(" Body ")).toBe("body");
+  });
+
+  it("refuses rather than guesses", () => {
+    expect(textStyleFrom("XXL")).toBeNull();
+    expect(textStyleFrom("")).toBeNull();
   });
 });

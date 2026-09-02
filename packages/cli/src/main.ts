@@ -115,6 +115,7 @@ import {
   TEXT_MIME,
   TEXT_PROPERTIES,
   TEXT_STYLES,
+  textStyleFrom,
   TEXT_STYLE_PROP,
   textBox,
   textTitle,
@@ -4427,7 +4428,10 @@ program
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
-  .option("--style <step>", "body | heading | title | display — how far out it stays readable")
+  .option(
+    "--style <step>",
+    "S | M | L | XL (or body | heading | title | display) — how far out it stays readable",
+  )
   .option("--face <face>", "sans | mono | serif")
   .option("--paper <colour>", "yellow | pink | blue | green | grey — a post-it rather than a caption")
   .action(
@@ -4487,7 +4491,16 @@ program
         // they can read it.
         // The ladder step decides the world size of the words and the column
         // they wrap in; `--size` still overrides the box outright.
-        const style = pickOne("style", opts.style, TEXT_STYLES, "body");
+        // The bar says S / M / L / XL and the property says body / heading /
+        // title / display; both are accepted here, resolved by the one map
+        // in core, so what a person read on the screen is a word the
+        // terminal takes.
+        const style = pickOne(
+          "style",
+          opts.style === undefined ? undefined : (textStyleFrom(opts.style) ?? opts.style),
+          TEXT_STYLES,
+          "body",
+        );
         const face = pickOne("face", opts.face, TEXT_FACES, "sans");
         /**
          * Paper starts SQUARE rather than measured, and that is the point of

@@ -57,6 +57,24 @@ export declare const TEXT_SIZE = 16;
 export declare const TEXT_STYLES: readonly ["body", "heading", "title", "display"];
 export type TextStyle = (typeof TEXT_STYLES)[number];
 export declare const TEXT_STYLE_SIZE: Record<TextStyle, number>;
+/**
+ * **What each step is CALLED on a control: a size, not a role.**
+ *
+ * The names above are the ladder's own vocabulary — a heading is a heading
+ * because of how far out it stays readable — and they are what the property
+ * and the CLI say. On the bar they were shown as B / H / T / D, and four
+ * initials of words nobody had been told is a code, not a control; it was
+ * reported as hard to grok. S / M / L / XL is a vocabulary everybody already
+ * has, and it says the one thing a person choosing is thinking about. The
+ * step name stays the canvas's word, so a label change is not a migration.
+ *
+ * One map, read by both surfaces: the bar shows these, and `isocan text
+ * --style` accepts them beside the names.
+ */
+export declare const TEXT_STYLE_LABEL: Record<TextStyle, string>;
+/** A step from what somebody typed — its name or its label, either case —
+ *  or null, so the caller can refuse with the list rather than guess. */
+export declare function textStyleFrom(value: string): TextStyle | null;
 /** `properties.textStyle` — absent means `body`, which is what every text
  *  node made before the ladder existed says, and it stays correct. */
 export declare const TEXT_STYLE_PROP = "textStyle";

@@ -104,3 +104,61 @@ describe("an existing node is edited on its own box", () => {
     expect(body).not.toContain("var(--card)");
   });
 });
+
+/**
+ * **Hovering a swatch previews the paper; only a click chooses it.**
+ *
+ * The bar's principle is that a choice is previewed by the thing you are
+ * typing into. A hover is the same principle one step earlier: the composer
+ * wears the paper under the pointer for as long as it is there, and goes
+ * back when it leaves. Nothing is sent or remembered by a hover.
+ */
+describe("hovering a swatch previews its paper", () => {
+  const swatch = composer.slice(composer.indexOf("[null, ...PAPERS]"), composer.indexOf("</div>", composer.indexOf("[null, ...PAPERS]")));
+
+  it("dresses the composer in the hovered paper and undresses on leave", () => {
+    expect(swatch).toContain("onPointerEnter={() => setPeek(one)}");
+    expect(swatch).toContain("onPointerLeave={() => setPeek(undefined)}");
+    expect(composer).toContain("const paper = peek !== undefined ? peek : (pending?.paper ?? null);");
+  });
+
+  it("sends nothing on hover — restyle is the click's alone", () => {
+    expect(swatch).not.toMatch(/onPointerEnter=\{[^}]*restyle/);
+    expect(swatch).toContain("onClick={() => restyle({ paper: one })}");
+  });
+
+  it("forgets the hover when a new composer opens", () => {
+    const reset = composer.slice(composer.indexOf("setBody(pending?.body"), composer.indexOf("placeCaret.current = true;"));
+    expect(reset).toContain("setPeek(undefined)");
+  });
+});
+
+/**
+ * **The bar says sizes, and both surfaces read the same map.**
+ *
+ * B / H / T / D were the initials of the step names, a code for anyone not
+ * told the words. S / M / L / XL is a vocabulary everybody has. The labels
+ * live in core so the bar cannot say one thing and the CLI accept another.
+ */
+describe("the step buttons say sizes", () => {
+  it("draws the label from core, never a hand-written initial", () => {
+    expect(composer).toContain("{TEXT_STYLE_LABEL[s]}");
+    expect(composer).not.toContain("{s[0]!.toUpperCase()}");
+  });
+
+  it("keeps the step's name and its promise one hover away", () => {
+    expect(composer).toMatch(/title=\{`\$\{s\} — readable down to/);
+  });
+
+  it("is accepted by the CLI in the same spelling", () => {
+    const cli = read("../../cli/src/main.ts");
+    expect(cli).toContain("textStyleFrom(opts.style)");
+    expect(cli).toContain("S | M | L | XL");
+  });
+
+  it("is a control you can see — 28px, between the rail and a chip", () => {
+    const rule = css.slice(css.indexOf(".text-style-btn {"));
+    const body = rule.slice(0, rule.indexOf("}"));
+    expect(body).toContain("height: 28px");
+  });
+});
