@@ -5218,7 +5218,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .vote-dot {
   position: absolute; transform: translate(-50%, -50%);
   font-size: 18px; line-height: 1;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 .vote-dot.mine { transform: translate(-50%, -50%) scale(1.15); }
 /* While a mark is being placed, a sketch on the wall is a target. */

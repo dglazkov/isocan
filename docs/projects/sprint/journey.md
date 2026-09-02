@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: on-demand, personas, mindmap, atlas
-note: phases 0–2 built 2 Sep, the day of the design — areas on both surfaces, the board and the brief, the walk with the chip's actions; Scenes 0 and 1 play. Phases 3–6 (desks, the wall as the Vote area, grids, a real run) are designed and not built
+note: phases 0–5 built 2 Sep, the day of the design — areas, the board and the brief, the walk, desks, the wall as the Vote sheet with placed dots, grids; Scenes 0–3 and 5 play, and the one-hour cut is rehearsed end to end over the wire in cli/test/one-hour.test.ts. Still owed: phase 6's run with people, and Scene 7's rival rooms as practice
 ---
 # The sprint journey
 

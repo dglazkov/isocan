@@ -53,8 +53,15 @@ built:** a sheet carries a grid as four properties — `isocan area grid Test
 5x15 --rows "…"` — drawn as guides with names in the app; `--cell row,col`
 with `--in` on `text`, `add` and `mv` places into one cell, counted from 1
 at the top-left; `slides add --in Storyboard` makes the deck from a sheet in
-reading order (`core/test/grid.test.ts`, `cli/test/grid.test.ts`). Phase 6
-is next: the run.
+reading order (`core/test/grid.test.ts`, `cli/test/grid.test.ts`). **Phase
+6 is rehearsed, not run:** `cli/test/one-hour.test.ts` plays the one-hour
+cut end to end against a real daemon — board, brief, desk, HMW notes into
+the sheet, a 🎯, a sketch handed in from the desk, the wall on the Vote
+sheet, placed 🔴 dots under the curtain, ⭐, 🏆, a 1×3 storyboard as the
+deck, a 2×3 test wall with a note in a cell, wrap, end — and reads the board
+back left to right. One actor plays every chair, which is what a real run
+must not do. **The run with people is still owed**, and it is the next
+thing to do before anything else is built here.
 
 ---
 

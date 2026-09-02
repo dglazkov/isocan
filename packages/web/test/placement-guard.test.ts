@@ -59,7 +59,9 @@ describe("both ends of the wire honour it", () => {
   it("the CLI's --at is a chosen spot; --anchor and the default are not", () => {
     const cli = read("../../cli/src/main.ts");
     expect(cli).toContain("if (opts.at) return { ...parseXY(opts.at), chosen: true };");
-    expect(cli).toContain("placement: { x, y, ...(opts.at ? { chosen: true } : {}) }");
+    // A copy's spot is chosen when --at named it, and when a sheet's search
+    // found it (sprint phase 3): both are spots somebody meant.
+    expect(cli).toContain("placement: { x, y, ...(opts.at || sheet ? { chosen: true } : {}) }");
     expect(cli).not.toContain("{ anchorItemId: resolveItem(snapshot, opts.anchor).id, chosen");
   });
 });
