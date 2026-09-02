@@ -1,6 +1,6 @@
 # Agents on demand
 
-**30 August 2026.** Design. Nothing built. The project's status lives in
+**30 August 2026.** Design; built the same day (every phase closed — see [phases.md](phases.md)). The project's status lives in
 [journey.md](journey.md)'s front matter — the journeys are the acceptance
 suite, this doc is the argument, [phases.md](phases.md) the walk.
 

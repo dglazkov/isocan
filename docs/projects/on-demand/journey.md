@@ -1,8 +1,8 @@
 ---
-status: designed
+status: built
 since: 2026-08-30
 see: on-demand, launch
-note: AUTHORITATIVE for the wake since 30 Aug — a user-started `isocan rc` parks against the home and vends agent sessions over ACP. journey.md is the acceptance suite, design.md the argument, phases.md the walk; phase 1 stands alone.
+note: every phase closed 30 Aug 2026 — `isocan rc` parks against the home, vends agent sessions over ACP, and a summoned agent replies in a thread with presence; journey 10 (a week on one canvas) is lived rather than built. Residue is personas and the web tray's answerable relay (the latter built 31 Aug by agent-custody). AUTHORITATIVE for the wake since 30 Aug.
 ---
 # Agents on demand — the journeys
 

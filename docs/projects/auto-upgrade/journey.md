@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-08-29
 see: auto-upgrade
-note: phases 1-2 done; 3-4 not started
+note: all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md.
 ---
 # The auto-upgrade journey
 
