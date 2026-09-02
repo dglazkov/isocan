@@ -15,8 +15,8 @@ import { adoptIdentity } from "../lib/identity.ts";
  * it is the word that would make people look for a password, an account
  * settings page, and a way to delete an account that does not exist.
  *
- * **It sits in the identity menu**, beside "Your surfaces…" and "Work from
- * your terminal…", for the reason that menu already states: this menu is *how
+ * **It sits in the identity menu**, beside "Your surfaces…" and "Bring your
+ * own agent…", for the reason that menu already states: this menu is *how
  * I'm connected here*, and what this browser has proved is another fact about
  * how it is connected. Share is *who may be here*, which is about somebody
  * else — and the Share dialog's "who" field is the other end of this same

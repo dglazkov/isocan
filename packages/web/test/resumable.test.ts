@@ -245,6 +245,7 @@ describe("the sign-in notice", () => {
     // nothing, so the current actor is left out of the offer.
     const html = drawn(dimitri);
     expect(html).not.toContain("Be Dimitri");
+    expect(html).toContain("You are already the person it answers to here.");
     expect(html.match(/<button/g)).toHaveLength(1);
   });
 });

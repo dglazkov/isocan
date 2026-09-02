@@ -11,6 +11,8 @@ import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
 import { useActorMarks } from "../lib/marks.ts";
+import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
+import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -44,7 +46,7 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   surface of yours is another way you are connected. Unlike escalation it
  *   needs no canvas: a badge is not about one room, which is exactly why
  *   ending one ends it everywhere.
- * - WORK FROM YOUR TERMINAL is Scene 5, and it belongs here rather than
+ * - BRING YOUR OWN AGENT is Scene 5, and it belongs here rather than
  *   beside Share for a reason the journey states: this menu is *how I'm
  *   connected here*, and escalation is another way to be connected — a second
  *   surface of the same person. Share is *who may be here*, which is about
@@ -54,7 +56,11 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  * All of it is `actor.claim` under the hood (#58): the daemon applies one
  * continuity rule for every client, and a refusal — a name somebody on a
  * canvas already answers to — is shown here rather than second-guessed by a
- * client-side check.
+ * client-side check. One refusal, `name-taken`, is shown in the browser's own
+ * words rather than the server's, which name CLI flags: `NameTaken.tsx`
+ * renders it with a **Prove your address** control that opens the panel in
+ * place of the menu (multi-identity phase 3). This is journey 6's person,
+ * who has been a second name for weeks and tries to rename their way out.
  *
  * Past ops are never rewritten: every op carries the actor as it read at the
  * time. What people are SHOWN is a different question, and the answer is the
@@ -83,11 +89,15 @@ export function IdentityMenu({
   const markButton = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(actor.name);
   const [others] = useState(() => knownIdentities().filter((known) => known.id !== actor.id));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Refusal | null>(null);
   const [terminal, setTerminal] = useState(false);
   const [cloud, setCloud] = useState(false);
   const [surfaces, setSurfaces] = useState(false);
   const [verify, setVerify] = useState(false);
+  // The same gate every control of this project stands behind: the refusal's
+  // "Prove your address" is drawn only where the home can verify an email.
+  const offer = useAttestOffer();
+  const canProve = offer !== null && canVerifyEmail(offer);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const trimmed = name.trim();
@@ -101,14 +111,16 @@ export function IdentityMenu({
    */
   const renames = trimmed !== "" && trimmed !== actor.name;
 
-  const attempt = (claim: Promise<Actor>) => {
+  /** Send a claim; `name` is what the person asked to be called, for the
+   * refusal to name. */
+  const attempt = (claim: Promise<Actor>, name: string) => {
     setError(null);
     claim
       .then((who) => {
         onIdentity(who);
         onClose();
       })
-      .catch((err: Error) => setError(err.message));
+      .catch((err: unknown) => setError(refusalFor(err, name)));
   };
 
   // The dialog takes the popover over rather than opening a second one beside
@@ -137,7 +149,7 @@ export function IdentityMenu({
         onSubmit={(e) => {
           e.preventDefault();
           if (!renames) return onClose();
-          attempt(renameIdentity(trimmed));
+          attempt(renameIdentity(trimmed), trimmed);
         }}
       >
         {/**
@@ -195,7 +207,7 @@ export function IdentityMenu({
           Rename
         </button>
       </form>
-      {error && <div className="identity-warning">{error}</div>}
+      {error && <RefusalNote refusal={error} onProve={canProve ? () => setVerify(true) : null} />}
       {others.length > 0 && (
         <>
           <div className="identity-menu-head">Switch to</div>
@@ -205,7 +217,7 @@ export function IdentityMenu({
                 key={other.id}
                 className="identity-known-row"
                 title={`Continue as ${other.name} — the same you as before`}
-                onClick={() => attempt(adoptIdentity(other))}
+                onClick={() => attempt(adoptIdentity(other), other.name)}
               >
                 <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
                   {faceMark(marks, other)}
@@ -229,7 +241,9 @@ export function IdentityMenu({
               aria-label={option.name}
               aria-pressed={active}
               onClick={() => {
-                void setActorColor(actor, option.value).catch((err: Error) => setError(err.message));
+                void setActorColor(actor, option.value).catch((err: Error) =>
+                  setError({ kind: "message", text: err.message }),
+                );
               }}
             />
           );

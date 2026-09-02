@@ -16,7 +16,7 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phases 1–2 CLOSED 1 Sep 2026; phase 3 is next.** Design and
+**Where we are: phases 1–3 CLOSED 1 Sep 2026; phase 4 is next.** Design and
 journeys written 31 Aug 2026. Scope decided the same day for phases 1–4: the door and the menu, the
 precondition stays copy, and the diff lives in `packages/web` — no server
 change, no new op, no new route. Journey 5's acceptance ("no diff under
@@ -160,7 +160,16 @@ proving an address nobody else proved.
 
 ## Phase 3 — The refusal renders its remedy
 
-**Status: not started.**
+**Status: CLOSED** 1 Sep 2026. Journey 2 walked by the conductor: a Chrome
+badge typed `Dimitri` at the canvas door while a proved bearer badge held the
+actor, met *Dimitri is somebody else here… Prove your address — or pick a
+different name*, clicked the control into the address field, proved, and
+became `usr_Ik0D_mNpU7`. Journey 6 steps 1–3 walked from a browser that was
+`Dimitri 2`: the rename met the same copy in the menu, and its control opened
+the Prove your address panel in place of the menu. `test/nametaken.test.ts`
+holds the branch on the code alone, and a repo walk holds that the old label
+is gone. `git diff --stat`: `packages/web` plus the one string in
+`core/src/claims.ts`.
 
 **Work:** The `name-taken` branch, in both places a browser meets it. When
 the door's claim is refused with that wire code, the dialog renders its own
@@ -195,7 +204,18 @@ through to the panel. A test asserts the branch fires on the code alone
 `packages/web` plus the one corrected string in `core/src/claims.ts`, and
 `grep -rn "Work from your" packages` finds nothing.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-09-01 — Decided: the door draws the refusal's control only while
+  the address field can be reached.** Once the badge is proved (D, D′) or a
+  link is out (C), the `Prove` component renders no field, so the control
+  would have done nothing. In those states the refusal ends at "pick a
+  different name", and the words beneath already carry the instructions. The
+  menu's control keeps the plain `canVerifyEmail` gate, because the panel it
+  opens is meaningful in every state.
+- **2026-09-01 — The sign-in notice, with its current actor filtered out,
+  read "answers to:" and then nothing.** Found on the journey 2 walk. When
+  every resumable actor is the one you already are, the notice now says so.
 
 ---
 
