@@ -16,7 +16,7 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: phases 1–3 CLOSED 1 Sep 2026; phase 4 is next.** Design and
+**Where we are: phases 1–4 CLOSED 1 Sep 2026; phase 5 is next.** Design and
 journeys written 31 Aug 2026. Scope decided the same day for phases 1–4: the door and the menu, the
 precondition stays copy, and the diff lives in `packages/web` — no server
 change, no new op, no new route. Journey 5's acceptance ("no diff under
@@ -221,7 +221,16 @@ through to the panel. A test asserts the branch fires on the code alone
 
 ## Phase 4 — The words on the first machine
 
-**Status: not started.**
+**Status: CLOSED** 1 Sep 2026. Journey 3 walked by the conductor: the desk
+badge was killed and the laptop's door read D′; a new desk badge proved the
+address and, in the same attest response, was offered Dimitri and Dimitri 2
+with no second email; the identity menu shows the entry's reason as words,
+and the panel leads with resumption and states the empty case in the door's
+sentences. `test/firstmachine.test.ts` holds the order, the absence of "sign
+in", the empty case, and the visible reason. Journey 5's sweep: the stranger's
+door (state A), the already-somebody toast, and `git diff --stat` were walked
+in phases 1–3; the viewer's deck is held by `frontdoor.test.ts` rather than
+walked, since the scratch home had no view link.
 
 **Work:** The copy-only precondition payment, decided in
 [design.md](design.md):
@@ -252,7 +261,18 @@ already-somebody toast, and `git diff --stat` across phases 1–4 showing no
 line under `packages/cli` and, under `packages/core`, only phase 3's
 corrected menu label in `claims.ts`.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-09-01 — D′ said something the door cannot know.** The server's
+  `resumable` leaves out actors the asking badge already claims. A browser
+  that already is Dimitri, on a home where another badge proved the same
+  address, is answered `[]`, and "Nobody else here has proved it" was false
+  there. D′ and the panel's empty case now say only what the offer supports:
+  the address is proved and it lets you pick up nobody new here. The advice
+  that follows is unchanged. design.md and journey 3 carry the new sentence.
+- **2026-09-01 — "Sign in" still reaches the panel through provider errors.**
+  `providerError` in signin.ts says "sign-in link" in three refusals that
+  render in the panel's warning slot. Left as found; a separate copy call.
 
 ---
 

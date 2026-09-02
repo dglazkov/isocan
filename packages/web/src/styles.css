@@ -592,6 +592,10 @@ img { height: auto; }
 /* The clock, beside the button that copies the thing it is counting down. */
 .terminal-expiry { color: var(--ink-soft); font-size: 11px; }
 .identity-terminal { justify-content: center; font-size: 12.5px; }
+/* The "Prove your address…" entry with its reason under it. One flex column
+   holding both, so the menu's gap falls between entries and the smaller gap
+   ties the line to the button it explains (multi-identity phase 4). */
+.identity-prove-entry { display: flex; flex-direction: column; gap: 4px; }
 
 /* ---------- your surfaces (kill-a-badge, phase 9) ---------- */
 /* It reuses `.terminal-menu` for the shell — same popover takeover, same

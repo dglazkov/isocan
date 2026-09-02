@@ -36,10 +36,10 @@ const THEME_OPTS: { value: ThemePref; label: string }[] = [
  *   registry beside your name, because a color only you can see would not be
  *   an identity: everyone on every canvas sees you change.
  * - PROVE YOUR ADDRESS is the borrowed attester (phase 9 stage 2). Not a
- *   login — isocan has no accounts — but the one gesture that makes an
- *   `email:` grant able to admit you, and the one that lets this browser
- *   RESUME a person your other machines already are. It sits here because
- *   what this browser has proved is another fact about how it is connected.
+ *   login — isocan has no accounts — but the one gesture that lets your other
+ *   machines RESUME the person this browser is, and the one that makes an
+ *   `email:` grant able to admit you. It sits here because what this browser
+ *   has proved is another fact about how it is connected.
  * - YOUR SURFACES is kill-a-badge (phase 9): every holder that carries this
  *   identity, and the button that ends one. It sits here for the reason the
  *   escalation dialog does — this menu is *how I'm connected here*, and a
@@ -301,14 +301,25 @@ export function IdentityMenu({
           attester: the panel behind it says, in one sentence, that this home
           has borrowed nothing and that the link is how sharing works. Hiding
           the entry would make a person hunt for a control that is deliberately
-          absent, which is a worse answer than being told. */}
-      <button
-        className="btn identity-terminal"
-        title="Prove an email address — so somebody can invite you by name, and so this browser can be a person your other machines already are"
-        onClick={() => setVerify(true)}
-      >
-        Prove your address…
-      </button>
+          absent, which is a worse answer than being told.
+
+          The reason is written under the label, not only in the tooltip
+          (multi-identity phase 4). The label says what the gesture is and
+          nothing about why; a person on their first machine has no cause to
+          hover over it, and the why is what would make them do it before a
+          second machine needs it done. */}
+      <div className="identity-prove-entry">
+        <button
+          className="btn identity-terminal"
+          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
+          onClick={() => setVerify(true)}
+        >
+          Prove your address…
+        </button>
+        <div className="share-link-note">
+          So your other machines can be you, and so somebody can invite you by email.
+        </div>
+      </div>
       {/* Kill-a-badge, one click from your own face. It is above Leave on
           purpose: both end something, and the one that ends a holder's
           recognition everywhere should not sit under the one that only

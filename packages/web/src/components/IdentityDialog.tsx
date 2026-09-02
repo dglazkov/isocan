@@ -39,7 +39,7 @@ import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
  *   could have entered as anybody.
  * - **D**, proved, and `resumable` names somebody: the rows above the name
  *   field are the whole of it, so no line renders.
- * - **D′**, proved, and nobody to pick up: the words say what was proved and
+ * - **D′**, proved, and nobody new to pick up: the words say what was proved and
  *   name the gesture on the other machine, because this is the one moment the
  *   person is guaranteed to be looking at the problem.
  *
@@ -198,8 +198,7 @@ function Prove({
     return (
       <div className="identity-prove">
         <div className="identity-prove-line">
-          <b>{address}</b> is proved on this browser. Nobody else here has proved it, so there is
-          nobody to pick up.
+          <b>{address}</b> is proved on this browser, and it lets you pick up nobody new here.
         </div>
         <div className="identity-prove-line">
           If you are already somebody on another machine, prove the same address there too —

@@ -104,7 +104,7 @@ function rowsIn(html: string): string[] {
 }
 
 const LINE = "Already isocan on another machine?";
-const NOBODY = "Nobody else here has proved it, so there is nobody to pick up.";
+const NOBODY = "and it lets you pick up nobody new here.";
 
 beforeEach(() => {
   stubBrowserGlobals();
@@ -166,7 +166,7 @@ describe("the door's proof states", () => {
     await attesterOffer(true);
     const html = door();
     expect(html).toContain(
-      "<b>dimitri@example.com</b> is proved on this browser. " + NOBODY,
+      "<b>dimitri@example.com</b> is proved on this browser, " + NOBODY,
     );
     expect(html).toContain(
       "If you are already somebody on another machine, prove the same address there too — " +

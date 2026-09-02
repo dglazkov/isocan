@@ -97,10 +97,10 @@ it fails with instructions instead of a dead end.
 
 1. On the laptop, prove `dimitri@glazkov.com` at the door (journey 1, steps
    1–4).
-2. The door reports: *dimitri@glazkov.com is proved on this browser. Nobody
-   else here has proved it, so there is nobody to pick up. If you are Dimitri
-   on another machine, prove the same address there too — identity menu →
-   "Prove your address" — then come back here.*
+2. The door reports: *dimitri@glazkov.com is proved on this browser, and it
+   lets you pick up nobody new here. If you are already somebody on another
+   machine, prove the same address there too — identity menu → "Prove your
+   address…" — then come back here.*
 3. On the desk machine, open the identity menu and choose **Prove your
    address…**. The dialog's first sentence tells you why this matters: proving
    an address here is what lets your other machines be you.
