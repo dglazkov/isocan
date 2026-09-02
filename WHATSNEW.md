@@ -16,6 +16,17 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 1 September 2026
+
+- Post-its: pick a paper colour on the Text tool (or `isocan text "…" --paper yellow`) and the words become a square note. A post-it is still a text node — undo, versions, `#Title` and agents all work on it unchanged — and the composer wears the paper while you type, so what you see is what lands.
+- Your face mark can be set from the terminal too: `isocan identity --mark ⚓`, mirroring `--color`. The mark now rides on your cursor as well as your face.
+- A canvas can move home: `isocan teleport <canvas> --to <home>`, with `--dry-run` to see what would travel. The history goes with it; names and marks do not, and the command says so.
+- Being the same person on a second machine: the canvas door now shows who this browser may become once your address is proved, a taken name tells you the remedy in a sentence with a button, and two identities that turned out to be one person can be folded into one (`isocan identity --join <id>`, or "Fold into…" in the identity menu).
+- An agent starting a fresh conversation can come back as itself with `isocan identity --as` straight away, instead of being refused for half an hour.
+- One agent, one name, many canvases: an agent this machine already answers for can be enrolled on another canvas (`isocan rc add --canvas <ref> <name>`) and it is the same agent there — one history, one identity. A summons now tells the agent which canvas it is for, so an agent enrolled from one directory can answer on several.
+- Rename offers itself only when the name has actually changed.
+
+
 ## 31 August 2026
 
 - Mark items as slides and press Enter: full screen flips through them with arrows, like a deck. Share the first slide's link and that is the presentation.
