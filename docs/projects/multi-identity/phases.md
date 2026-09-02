@@ -16,8 +16,8 @@ a bare "phase 2" — bare numbers in existing code mean the multiuser project.
 
 ---
 
-**Where we are: NOTHING BUILT.** Design and journeys written 31 Aug 2026.
-Scope decided the same day for phases 1–4: the door and the menu, the
+**Where we are: phase 1 CLOSED 1 Sep 2026; phase 2 is next.** Design and
+journeys written 31 Aug 2026. Scope decided the same day for phases 1–4: the door and the menu, the
 precondition stays copy, and the diff lives in `packages/web` — no server
 change, no new op, no new route. Journey 5's acceptance ("no diff under
 `packages/cli` or `packages/core`") holds phases 1–4 to that, with one named
@@ -58,7 +58,13 @@ deliberately instead of improvising mid-task:
 
 ## Phase 1 — The offer reaches the door
 
-**Status: not started.**
+**Status: CLOSED** 1 Sep 2026. Proof walked by the conductor against a scratch
+daemon borrowing dev's attester: a bearer badge claimed Dimitri and proved
+the address; Chrome, as a second badge, became Throwaway, proved the same
+address from the identity menu, left, and opened the front page's door — the
+Dimitri row was there beside Throwaway, and clicking it made the browser
+`usr_Ik0D_mNpU7`, the actor the bearer badge had claimed. Suite and typecheck
+green; `test/resumable.test.ts` holds the notice rule and the subscription.
 
 **Work:** The wiring [journey.md](journey.md)'s "What the journeys force"
 section names: `signin.ts` notifies when its offer cache invalidates (a
@@ -84,7 +90,20 @@ Dimitri row is there, and clicking it claims the existing actor (`isocan who`
 shows one Dimitri). A component test holds the notice rule: `actor === null`
 renders no buttons in the notice.
 
-**Findings:** none yet.
+**Findings:**
+
+- **2026-09-01 — Decided: rows are gated on `auth !== null`.** The server
+  answers `resumable` from the badge's attestations whether or not the home
+  still has an attester, so a home that dropped its attester would still
+  vouch. The hook renders nothing in that case, keeping journey 4's rule that
+  an attester-less door is byte-for-byte today's door. The cost is that one
+  edge, which no scene has asked for.
+- **2026-09-01 — A second machine is a second origin.** Two storage-isolated
+  "profiles" for a proof need not be two browsers: a bearer badge from `curl`
+  plays the desk machine, and one Chrome tab plays the laptop. The proof ran
+  against a scratch daemon started with dev's `ISOCAN_AUTH_PROJECT` and
+  `ISOCAN_AUTH_API_KEY` (the browser key is public), with `localhost` as the
+  authorized domain. Later phases can use the same setup.
 
 ---
 
