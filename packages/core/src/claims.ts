@@ -740,8 +740,8 @@ function admit(
             ? "another surface already speaks as them"
             : "claimed by another session just now"
       }) — becoming them would be one actor wearing two faces. ` +
-        "Be handed it by a surface that already is them (`isocan pass`, or “Work from your " +
-        "terminal…”), or prove the address they signed in with.",
+        "Be handed it by a surface that already is them (`isocan pass`, or “Bring your own " +
+        "agent…”), or prove the address they signed in with.",
     );
   }
   const name = op.name ?? known!.name;

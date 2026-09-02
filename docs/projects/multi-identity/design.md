@@ -110,10 +110,10 @@ so the vouch has nothing to stand on. This state must be actionable rather than
 a shrug, because it is the only moment the person is guaranteed to be looking
 at the problem:
 
-> dimitri@glazkov.com is proved on this browser. Nobody else here has proved
-> it, so there is nobody to pick up.
+> dimitri@glazkov.com is proved on this browser, and it lets you pick up
+> nobody new here.
 >
-> If you are Dimitri on another machine, prove the same address there too —
+> If you are already somebody on another machine, prove the same address there too —
 > identity menu → "Prove your address" — then come back here.
 
 ## Two fixes that fall out

@@ -15,22 +15,36 @@ import { adoptIdentity } from "../lib/identity.ts";
  * it is the word that would make people look for a password, an account
  * settings page, and a way to delete an account that does not exist.
  *
- * **It sits in the identity menu**, beside "Your surfaces…" and "Work from
- * your terminal…", for the reason that menu already states: this menu is *how
+ * **It sits in the identity menu**, beside "Your surfaces…" and "Bring your
+ * own agent…", for the reason that menu already states: this menu is *how
  * I'm connected here*, and what this browser has proved is another fact about
  * how it is connected. Share is *who may be here*, which is about somebody
  * else — and the Share dialog's "who" field is the other end of this same
  * mechanism, which is exactly why the two are not the same panel.
  *
- * **Two things it does, and the second is the phase's Outcome.** Proving an
- * address makes an `email:` grant satisfiable, so a person invited by name can
- * be let in without the link. And it makes this browser eligible to RESUME the
- * person another surface already is — Jordan's phone becoming Jordan, which
- * before this could only be done by asserting it, which is to say by anybody.
+ * **Two things it does, and the first is the reason a person opens it.**
+ * Proving an address here is what lets this person's other machines be them:
+ * a browser that proves the same address may RESUME the actor this one holds,
+ * because the home vouches for the match (multi-identity phase 4 put this
+ * first; the copy used to lead with invitations). And it makes an `email:`
+ * grant satisfiable, so a person invited by name can be let in without the
+ * link.
+ *
+ * **The empty case carries instructions.** A badge that proved an address
+ * nobody else on this home proved has nobody to pick up, and the panel says
+ * so in the door's own D′ words — nobody else here has proved it; prove the
+ * same address on the other machine, identity menu → "Prove your address…",
+ * then come back — so the message on the second machine and the panel it
+ * points to on the first tell one story (journey 3, journey 6's last
+ * criterion).
  *
  * The panel is deliberately honest about a home that has borrowed nothing: it
  * says the link is how sharing works here rather than showing a control whose
  * only outcome is a refusal.
+ *
+ * `VerifyDialog` asks the desk for the offer; `VerifyPanel` draws it. The
+ * split exists so the words can be asserted under `renderToStaticMarkup`,
+ * where the effect that asks never runs.
  */
 export function VerifyDialog({
   actor,
@@ -42,20 +56,54 @@ export function VerifyDialog({
   onClose: () => void;
 }) {
   const [offer, setOffer] = useState<AttestOffer | null>(null);
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     attesterOffer(true)
       .then((answer) => !cancelled && setOffer(answer))
-      .catch((err: Error) => !cancelled && setError(err.message));
+      .catch((err: Error) => !cancelled && setAskError(err.message));
     return () => {
       cancelled = true;
     };
   }, []);
+
+  return (
+    <VerifyPanel
+      offer={offer}
+      askError={askError}
+      actor={actor}
+      onIdentity={onIdentity}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * The panel, drawn from the offer it is handed. `offer` is null while the desk
+ * is being asked; `askError` is why it could not be, if it could not.
+ * `VerifyDialog` is its one caller in the app; the tests are the other.
+ */
+export function VerifyPanel({
+  offer,
+  askError,
+  actor,
+  onIdentity,
+  onClose,
+}: {
+  offer: AttestOffer | null;
+  askError: string | null;
+  actor: Actor;
+  onIdentity: (actor: Actor) => void;
+  onClose: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // One warning slot: a refusal from sending or resuming, or the desk that
+  // could not be asked. A send needs an offer, so the two never both hold.
+  const shown = error ?? askError;
 
   async function send(): Promise<void> {
     if (!offer?.auth || busy) return;
@@ -98,7 +146,7 @@ export function VerifyDialog({
     >
       <div className="share-head">Prove your address</div>
 
-      {!offer && !error && <div className="share-link-note">asking the desk…</div>}
+      {!offer && !shown && <div className="share-link-note">asking the desk…</div>}
 
       {offer && !canVerifyEmail(offer) && (
         <div className="share-link-note">
@@ -111,10 +159,11 @@ export function VerifyDialog({
       {offer && canVerifyEmail(offer) && (
         <>
           <div className="share-link-note">
-            isocan has no accounts, so this is not a login: proving you read an inbox writes one
-            line onto this browser's badge. It lets somebody invite <b>you</b> by email instead
-            of handing out the link — and it lets this browser be a person your other machines
-            already are.
+            Proving an address here is what lets your other machines be you: a browser that
+            proves the same address can become this person instead of a new one. It also lets
+            somebody invite <b>you</b> by email instead of handing out the link. isocan has no
+            accounts, so this is not a login: proving you read an inbox writes one line onto
+            this browser's badge.
           </div>
 
           {offer.attestations.length > 0 && (
@@ -129,6 +178,19 @@ export function VerifyDialog({
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {offer.attestations.length > 0 && offer.resumable.length === 0 && (
+            // Proved, and nobody to pick up. The door's D′ words, so the
+            // message a person read on the other machine and the panel it sent
+            // them to say the same thing. The address is the door's rule too:
+            // the latest attestation, without the badge's `email:` prefix.
+            <div className="share-link-note">
+              <b>{offer.attestations[offer.attestations.length - 1]!.attribute.replace(/^email:/, "")}</b>{" "}
+              is proved on this browser, and it lets you pick up nobody new here. If you are
+              already somebody on another machine, prove the same address there too — identity
+              menu → “Prove your address…” — then come back here.
             </div>
           )}
 
@@ -194,7 +256,7 @@ export function VerifyDialog({
         </>
       )}
 
-      {error && <div className="identity-warning">{error}</div>}
+      {shown && <div className="identity-warning">{shown}</div>}
     </div>
   );
 }

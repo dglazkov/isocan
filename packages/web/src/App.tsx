@@ -313,7 +313,9 @@ export function SignInNotice({
           ? "Anybody can now invite you here by that address instead of handing out the link."
           : actor === null
             ? "The people it lets you be are listed at the door."
-            : "Another surface that proved the same address answers to:"}
+            : offering.length === 0
+              ? "You are already the person it answers to here."
+              : "Another surface that proved the same address answers to:"}
         {offering.map((who) => (
           <button
             key={who.id}

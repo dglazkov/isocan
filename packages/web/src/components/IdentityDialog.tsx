@@ -5,6 +5,7 @@ import { adoptIdentity, enterAs, knownIdentities } from "../lib/identity.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { canVerifyEmail, resumableIn, sendSignInLink, useAttestOffer } from "../lib/signin.ts";
+import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
 
 /**
  * The door. First time through it asks for a name; after that it also offers
@@ -38,12 +39,21 @@ import { canVerifyEmail, resumableIn, sendSignInLink, useAttestOffer } from "../
  *   could have entered as anybody.
  * - **D**, proved, and `resumable` names somebody: the rows above the name
  *   field are the whole of it, so no line renders.
- * - **D′**, proved, and nobody to pick up: the words say what was proved and
+ * - **D′**, proved, and nobody new to pick up: the words say what was proved and
  *   name the gesture on the other machine, because this is the one moment the
  *   person is guaranteed to be looking at the problem.
  *
  * D and D′ are read off the offer, not off the sign-in landing, so they are
  * true whenever the person meets the door and not only on the return leg.
+ *
+ * **The refusal renders its remedy** (multi-identity phase 3). A claim the
+ * home refuses with `name-taken` — a typed name somebody else answers to, or
+ * a row somebody else holds — is not shown in the server's words, which are
+ * written for the CLI. `NameTaken.tsx` renders the door's own sentence in the
+ * warning slot, and its **Prove your address** control opens state B. That is
+ * why B's `open` and C's `sent` live here and not in `Prove`: two controls
+ * open the field, and the refusal draws its control only while the field can
+ * still be reached.
  */
 export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
   const colors = useActorColors();
@@ -52,14 +62,26 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
   const [known] = useState(knownIdentities);
   const offer = useAttestOffer();
   const people = withResumable(known, resumableIn(offer));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Refusal | null>(null);
   const [busy, setBusy] = useState(false);
+  // Prove's B and C, lifted to the door: see the header.
+  const [proving, setProving] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  // The refusal's control opens the address field, so it is drawn only while
+  // that field can be reached: the home can verify an email, this badge has
+  // proved nothing yet (D and D′ draw no field), and no link has gone out (C).
+  // Otherwise the refusal ends at "pick a different name" and draws no control
+  // that would do nothing.
+  const canProve =
+    offer !== null && canVerifyEmail(offer) && offer.attestations.length === 0 && sent === null;
 
-  const attempt = (claim: Promise<Actor>) => {
+  /** Send a claim; `name` is what the person asked to be called, for the
+   * refusal to name. */
+  const attempt = (claim: Promise<Actor>, name: string) => {
     setBusy(true);
     setError(null);
-    claim.then(onDone).catch((err: Error) => {
-      setError(err.message);
+    claim.then(onDone).catch((err: unknown) => {
+      setError(refusalFor(err, name));
       setBusy(false);
     });
   };
@@ -79,7 +101,7 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
                 key={actor.id}
                 className="identity-known-row"
                 disabled={busy}
-                onClick={() => attempt(adoptIdentity(actor))}
+                onClick={() => attempt(adoptIdentity(actor), actor.name)}
                 title={`Come back as ${actor.name}`}
               >
                 <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
@@ -94,7 +116,7 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
           onSubmit={(e) => {
             e.preventDefault();
             const trimmed = name.trim();
-            if (trimmed) attempt(enterAs(trimmed));
+            if (trimmed) attempt(enterAs(trimmed), trimmed);
           }}
         >
           <input
@@ -108,8 +130,21 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
             Start
           </button>
         </form>
-        {error && <div className="identity-warning">{error}</div>}
-        {offer && canVerifyEmail(offer) && <Prove offer={offer} onError={setError} />}
+        {error && (
+          <RefusalNote refusal={error} onProve={canProve ? () => setProving(true) : null} />
+        )}
+        {offer && canVerifyEmail(offer) && (
+          <Prove
+            offer={offer}
+            open={proving}
+            onOpen={() => setProving(true)}
+            sent={sent}
+            onSent={setSent}
+            onError={(message) =>
+              setError(message === null ? null : { kind: "message", text: message })
+            }
+          />
+        )}
       </div>
     </div>
   );
@@ -124,21 +159,30 @@ export function withResumable(known: readonly Actor[], resumable: readonly Actor
 /**
  * The part of the door beneath the name form — states A, B, C and D′ above.
  * Only mounted when the home can verify an email; which state it is in is
- * read off the offer first (proved or not) and off local state second (has
- * the person opened the field, has a link gone out).
+ * read off the offer first (proved or not) and off the door's state second
+ * (has the person opened the field, has a link gone out).
  */
 function Prove({
   offer,
+  open,
+  onOpen,
+  sent,
+  onSent,
   onError,
 }: {
   offer: AttestOffer;
+  /** B — the address field is open. The door owns this because the
+   * `name-taken` refusal's control opens the field too. */
+  open: boolean;
+  onOpen: () => void;
+  /** C — the address a link went out to, or null. */
+  sent: string | null;
+  onSent: (address: string) => void;
   /** The door's one warning slot; a provider refusal renders where a refused
    * claim does. */
   onError: (message: string | null) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   const proved = offer.attestations.length > 0;
@@ -154,8 +198,7 @@ function Prove({
     return (
       <div className="identity-prove">
         <div className="identity-prove-line">
-          <b>{address}</b> is proved on this browser. Nobody else here has proved it, so there is
-          nobody to pick up.
+          <b>{address}</b> is proved on this browser, and it lets you pick up nobody new here.
         </div>
         <div className="identity-prove-line">
           If you are already somebody on another machine, prove the same address there too —
@@ -181,7 +224,7 @@ function Prove({
       <div className="identity-prove">
         <div className="identity-prove-line">
           Already isocan on another machine?{" "}
-          <button type="button" className="identity-prove-open" onClick={() => setOpen(true)}>
+          <button type="button" className="identity-prove-open" onClick={onOpen}>
             Prove your address
           </button>
         </div>
@@ -195,7 +238,7 @@ function Prove({
     onError(null);
     try {
       await sendSignInLink(email, offer.auth);
-      setSent(email.trim());
+      onSent(email.trim());
     } catch (err) {
       onError((err as Error).message);
     } finally {

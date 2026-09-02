@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-01
 see: multiuser
-note: "phases 1–2 closed 1 Sep 2026 (the offer reaches the door; the door starts the proof — journeys 1 and 4 close); phases 3–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
+note: "phases 1–3 closed 1 Sep 2026 (the offer reaches the door; the door starts the proof; the refusal renders its remedy — journeys 1, 2 and 4 close, journey 6 through step 3); phases 4–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
 ---
 
 # Multi-identity — the journeys
@@ -97,10 +97,10 @@ it fails with instructions instead of a dead end.
 
 1. On the laptop, prove `dimitri@glazkov.com` at the door (journey 1, steps
    1–4).
-2. The door reports: *dimitri@glazkov.com is proved on this browser. Nobody
-   else here has proved it, so there is nobody to pick up. If you are Dimitri
-   on another machine, prove the same address there too — identity menu →
-   "Prove your address" — then come back here.*
+2. The door reports: *dimitri@glazkov.com is proved on this browser, and it
+   lets you pick up nobody new here. If you are already somebody on another
+   machine, prove the same address there too — identity menu → "Prove your
+   address…" — then come back here.*
 3. On the desk machine, open the identity menu and choose **Prove your
    address…**. The dialog's first sentence tells you why this matters: proving
    an address here is what lets your other machines be you.
