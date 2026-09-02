@@ -5,7 +5,7 @@ export interface FitTarget {
     width: number;
     height: number;
 }
-export interface FitResult {
+interface FitResult {
     resizes: {
         itemId: string;
         width: number;
@@ -36,3 +36,4 @@ export interface FitResult {
  * hand survives.
  */
 export declare function fitMoves(canvas: CanvasContents, targets: FitTarget[]): FitResult;
+export {};

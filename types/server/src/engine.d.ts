@@ -4,7 +4,7 @@ import type { Desk } from "./desk.js";
 import type { HomeDirectory } from "./home-link.js";
 import { type GcOptions, type GcReport } from "./gc.js";
 /** What a teleport did, or would do. */
-export interface TeleportReport {
+interface TeleportReport {
     canvasId: string;
     to: string;
     entries: number;
@@ -13,7 +13,7 @@ export interface TeleportReport {
     /** False for a dry run, and for nothing else. */
     moved: boolean;
 }
-export interface EngineOptions {
+interface EngineOptions {
     /** Who is visibly on a canvas right now — presence, which lives outside
      * the engine. Claims consult it so a live face holds its name. */
     liveness?: (canvasId: string) => PresenceSession[];
@@ -24,7 +24,7 @@ export declare class CanvasNotFoundError extends Error {
 export declare class NothingToUndoError extends Error {
     constructor(kind: "undo" | "redo", actorName?: string);
 }
-export interface SubmitRequest {
+interface SubmitRequest {
     canvasId: string | null;
     actor: Actor;
     clientId?: string;
@@ -60,7 +60,7 @@ export interface SubmitRequest {
      */
     badgeId: string;
 }
-export interface ClaimRequest {
+interface ClaimRequest {
     op: ActorClaimOp;
     clientId?: string;
     /** The badge presenting the claim. `actor.claim` is "add an actor to THIS
@@ -88,7 +88,7 @@ type IncomingEntry = Omit<LogEntry, "inverse"> & {
 /** What `applyRemoteEntry` did, so the caller knows whether to resync.
  * "skipped" is the ordinary case, not an error: the POST answer and the
  * broadcast are the same entry arriving twice. */
-export type RemoteApply = "applied" | "skipped" | "gap";
+type RemoteApply = "applied" | "skipped" | "gap";
 /**
  * The single op engine. ALL mutations — from the CLI, the web app, and
  * undo/redo — funnel through one promise chain, giving single-writer

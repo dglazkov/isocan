@@ -27,7 +27,7 @@ import type { RcHolds } from "./rc-holds.ts";
 /** Returns a closer that terminates all live sockets — upgraded connections
  * are hijacked from the HTTP server, so Fastify's forceCloseConnections
  * cannot reach them and shutdown would hang otherwise. */
-export interface WebSocketOptions {
+interface WebSocketOptions {
   /** The beat interval. 25 s in production (see `beatMs` below); a test that
    * has to see two beats sets it low rather than waiting a minute. */
   heartbeatMs?: number;

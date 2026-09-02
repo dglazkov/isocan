@@ -14,7 +14,7 @@ import type { DesignTokens } from "./designmd.js";
  * stops meaning "read the prose and try".
  */
 /** The W3C shape: every leaf is `$value` plus a `$type`, groups nest. */
-export interface DtcgNode {
+interface DtcgNode {
     $value?: unknown;
     $type?: string;
     $description?: string;
@@ -26,3 +26,4 @@ export declare function toDtcg(tokens: DesignTokens): Record<string, DtcgNode>;
 export declare function fromDtcg(dtcg: Record<string, unknown>): DesignTokens;
 /** Custom properties, ready to paste into the page being built. */
 export declare function toCss(tokens: DesignTokens): string;
+export {};

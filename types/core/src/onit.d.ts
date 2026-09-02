@@ -12,7 +12,7 @@ import type { PresenceSession } from "./protocol.js";
  * the same question: the web app draws it under the last comment, and
  * `isocan who` should not disagree about who is on what.
  */
-export interface Worker {
+interface Worker {
     sessionId: string;
     actorId: string;
     /** Their presence label if they have one, else their name. */
@@ -55,20 +55,6 @@ export declare function summonedBy(sessions: PresenceSession[], thread: {
         mentions?: string[];
     }[];
 }): PresenceSession[];
-/**
- * Calling something off.
- *
- * Two different acts wear the word "cancel". Before anybody picks it up, the
- * fix is to RETRACT: posting a comment is undoable (`thread.reply` inverts to
- * `comment.remove`), so the request simply stops existing. Once an agent has
- * it, the request is already being acted on and cannot be unsaid — the only
- * honest move is to ask them to stop, which is a message like any other.
- *
- * So a cancellation is a comment reading `/cancel`, and that is not a
- * workaround: it lands in the history where "why did this stop halfway" gets
- * answered later, it reaches every surface, and it needs no new op.
- */
-export declare const CANCEL_COMMAND = "cancel";
 /** The most recent cancellation in this thread, if any. */
 export declare function latestCancel(thread: {
     comments: {
@@ -94,3 +80,4 @@ export declare function latestCancel(thread: {
  * minute ago is an instruction to stop what you are doing right now.
  */
 export declare function cancelledSince(thread: Parameters<typeof latestCancel>[0], sinceISO: string | null): ReturnType<typeof latestCancel>;
+export {};

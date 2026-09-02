@@ -15,7 +15,7 @@ import { type Persona } from "../../core/src/index.js";
  * better than one that catches every way of trying.
  */
 export declare const PERSONA_NAME: RegExp;
-export interface PersonaOnDisk {
+interface PersonaOnDisk {
     /** Repo-relative, for display and for `isocan persona show`. */
     file: string;
     persona: Persona;
@@ -24,7 +24,7 @@ export interface PersonaOnDisk {
     text: string;
 }
 export declare function readPersonas(root: string): Promise<PersonaOnDisk[]>;
-export type PersonaWriteRefusal = "bad-name" | "not-a-persona" | "too-big" | "symlink" | "failed";
+type PersonaWriteRefusal = "bad-name" | "not-a-persona" | "too-big" | "symlink" | "failed";
 /** Front matter or it is not a persona — the same test the reader applies, so
  *  a save cannot produce a file the listing would then ignore. */
 export declare const MAX_PERSONA_BYTES: number;
@@ -38,3 +38,4 @@ export declare function writePersona(root: string, name: string, text: string): 
 /** One sentence per refusal, because "no" without which "no" leaves somebody
  *  guessing at their own filesystem. */
 export declare function personaRefusal(refusal: PersonaWriteRefusal): string;
+export {};

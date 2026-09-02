@@ -233,7 +233,7 @@ function invertMetaPatch(
 }
 
 /** Strip server-assigned fields from a stored ItemVersion back to the wire shape. */
-export function toNewVersion(v: {
+function toNewVersion(v: {
   id: string;
   blobHash: string;
   mimeType: string;

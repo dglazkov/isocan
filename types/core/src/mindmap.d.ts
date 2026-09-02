@@ -24,8 +24,6 @@ export declare const MAP_PARENT_PROP = "mapParent";
 export declare function newMapId(): string;
 /** Which map this item belongs to, or null for an ordinary item. */
 export declare function mapOf(item: Item): string | null;
-/** The node this one hangs from, or null for a root. */
-export declare function mapParentOf(item: Item): string | null;
 /** Every node of one map, in creation order so a walk is stable. */
 export declare function mapNodes(canvas: CanvasContents, mapId: string): Item[];
 /**
@@ -84,7 +82,7 @@ export declare function mapChildren(canvas: CanvasContents, mapId: string, paren
  */
 export declare function mapOutline(canvas: CanvasContents, mapId: string): string;
 /** A box, which is all the geometry an edge needs from an item. */
-export interface NodeBox {
+interface NodeBox {
     x: number;
     y: number;
     width: number;
@@ -145,7 +143,5 @@ export interface MapMove {
     x: number;
     y: number;
 }
-/** Space between a column and the next, and between one row and the next. */
-export declare const TIDY_GAP_X = 60;
-export declare const TIDY_GAP_Y = 24;
 export declare function tidyMap(canvas: CanvasContents, mapId: string): MapMove[];
+export {};

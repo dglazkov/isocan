@@ -37,11 +37,11 @@ import type { CanvasContents, Item } from "./model.ts";
 
 /** Gaps in world units. Generous: a canvas is not a form. */
 export const FORMAT_GAP_X = 80;
-export const FORMAT_GAP_Y = 64;
+const FORMAT_GAP_Y = 64;
 /** Between a parent and the column under it — tighter, to read as belonging. */
-export const FORMAT_CHILD_GAP_Y = 40;
+const FORMAT_CHILD_GAP_Y = 40;
 /** Between the screens and the reference block below them. */
-export const FORMAT_BAND_GAP_Y = 160;
+const FORMAT_BAND_GAP_Y = 160;
 
 /**
  * **What kind of tidy.**
@@ -66,7 +66,7 @@ export function isFormatMode(value: unknown): value is FormatMode {
   return typeof value === "string" && (FORMAT_MODES as readonly string[]).includes(value);
 }
 
-export interface FormatOptions {
+interface FormatOptions {
   /** Which tidy. Defaults to `grid` — see `FormatMode`. */
   mode?: FormatMode;
   /** Where the top-left of the arrangement goes. Defaults to where the

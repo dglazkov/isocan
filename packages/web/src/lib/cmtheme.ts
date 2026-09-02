@@ -25,7 +25,7 @@ import type { Extension } from "@codemirror/state";
  * problem" everywhere else in the product, and a red tag name is not a
  * problem. Syntax gets its own small palette.
  */
-export const isocanHighlight = HighlightStyle.define([
+const isocanHighlight = HighlightStyle.define([
   // Comments recede: they are the one thing you skim past.
   { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: "var(--syn-comment)", fontStyle: "italic" },
   // The grammar's skeleton.

@@ -1,4 +1,4 @@
-import type { Canvas, CanvasState, GcReport, GcRequest, HomeGcReport, LogEntry, Operation } from "../../core/src/index.js";
+import type { Canvas, CanvasState, GcReport, GcRequest, HomeGcReport, LogEntry } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 /**
  * Garbage collection: the pure pieces of it — choosing the compaction horizon
@@ -26,27 +26,8 @@ export declare const DEFAULT_GRACE_MS: number;
  * Returns entries in log order.
  */
 export declare function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[];
-/** Every blobHash an operation can (re-)introduce. */
-export declare function hashesInOperation(op: Operation): string[];
 /** The mark set: live state ∪ trash ∪ retained entries (ops and inverses). */
 export declare function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string>;
-/**
- * How often a home collects itself, absent configuration: **an hour**.
- *
- * Garbage accrues only while a home is in USE — an upload that never became an
- * item, an emptied trash whose blobs have fallen past the undo horizon — so
- * the clock that matters is the instance's own uptime, not the wall calendar.
- * An hour is the honest middle of that: short enough that a busy home is never
- * carrying more than an hour of orphans, long enough that a home nobody is
- * touching spends its day doing one cheap listing per canvas and finding
- * nothing. Nothing depends on the number being exactly right — a sweep that
- * runs late collects the same bytes it would have collected on time, which is
- * the property that made the timer the right mechanism in the first place.
- *
- * This is the RHYTHM, not the first sweep — an hour after boot is longer than
- * some homes live. See {@link firstSweepDelay}.
- */
-export declare const DEFAULT_GC_INTERVAL_MS: number;
 /**
  * The interval an innkeeper configured, or the default.
  *
@@ -83,7 +64,7 @@ export declare function gcIntervalFromEnv(env?: NodeJS.ProcessEnv): number;
  * only caller that can halt one (the timer) is content to log.
  */
 export declare function gcCanvases(engine: Pick<Engine, "gc">, canvasIds: string[], request?: GcRequest, keepGoing?: () => boolean): Promise<HomeGcReport>;
-export interface GcSweeperOptions {
+interface GcSweeperOptions {
     engine: Pick<Engine, "gc">;
     /**
      * **Every canvas this home holds** — `store.listCanvases`, not a badge's
@@ -104,7 +85,7 @@ export interface GcSweeperOptions {
      * the only witness that housekeeping ran at all. */
     log?: (message: string) => void;
 }
-export interface GcSweeper {
+interface GcSweeper {
     /** Stop sweeping, and settle whatever sweep is already running. Idempotent,
      * and safe before the first sweep has fired. */
     stop(): Promise<void>;

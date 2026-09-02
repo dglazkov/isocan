@@ -39,7 +39,7 @@ import type { CanvasContents, Comment, CommentThread } from "./model.js";
  * append-only in creation order — the same "v5" the item's own badge shows,
  * so a chip and the thing it points at agree.
  */
-export interface LaneEntry {
+interface LaneEntry {
     itemId: string;
     title: string;
     /** 1-based, matching the badge on the item. */
@@ -47,15 +47,10 @@ export interface LaneEntry {
     /** The message brought the item into existence, rather than adding to it. */
     born: boolean;
 }
-/**
- * How far back a message may claim work when its author has not spoken before.
- * Long enough to cover "make the thing, then say so", short enough that a
- * first message cannot claim a canvas somebody built last week.
- */
-export declare const CLAIM_GRACE_MS = 120000;
 export declare function laneFor(canvas: CanvasContents, thread: CommentThread, comment: Comment): LaneEntry[];
 /** Everything a thread produced, newest message last — the lane as a whole. */
 export declare function laneOf(canvas: CanvasContents, thread: CommentThread): {
     comment: Comment;
     made: LaneEntry[];
 }[];
+export {};

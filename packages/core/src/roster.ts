@@ -69,7 +69,7 @@ export type RowState =
 /** An open question: the last `/ask` in a thread with no reply from anyone
  * but the asker after it. The-ask research's derivation, verbatim: state the
  * surfaces can compute is state no `comment.update` can lie about. */
-export interface OpenAsk {
+interface OpenAsk {
   threadId: string;
   commentId: string;
   askerId: string;

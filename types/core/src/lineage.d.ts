@@ -21,13 +21,3 @@ export declare function lineageProperties(parentId: string): Record<string, stri
 /** What was made from this item, oldest first — the order they were made in
  * is the order they should be read in. */
 export declare function childrenOf(canvas: CanvasContents, itemId: string): Item[];
-/**
- * Items nothing was made from — the tops of the trees, in the order they sit
- * on the canvas. A parent that has been deleted leaves its children as roots
- * rather than orphans pointing at nothing: the canvas shows what exists.
- */
-export declare function rootItems(canvas: CanvasContents): Item[];
-/** The whole line of descent under an item, depth first, parents before
- * children. Cycles are impossible to create honestly but trivial to write by
- * hand, so they are cut rather than trusted. */
-export declare function descendantsOf(canvas: CanvasContents, itemId: string, seen?: Set<string>): Item[];

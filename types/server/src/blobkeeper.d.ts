@@ -27,7 +27,7 @@ import type { Engine } from "./engine.js";
  * Homes are skipped, not swept: a home IS where the bytes live, so there is
  * nothing for them to be behind.
  */
-export interface BlobKeeperOptions {
+interface BlobKeeperOptions {
     engine: Engine;
     /** Canvas id → the home it belongs to, or null when this daemon is it.
      *  Read fresh each sweep so a canvas bound after boot is covered. */
@@ -38,7 +38,8 @@ export interface BlobKeeperOptions {
     firstSweepMs?: number;
     log?: (message: string) => void;
 }
-export interface BlobKeeper {
+interface BlobKeeper {
     stop: () => Promise<void>;
 }
 export declare function startBlobKeeper(options: BlobKeeperOptions): BlobKeeper;
+export {};

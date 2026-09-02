@@ -22,7 +22,7 @@ import { BROWSER_MIME, parseUriList } from "./browseritem.ts";
  * argument, and pretending a round trip exists is how somebody loses work.
  */
 
-export interface JsonCanvasNode {
+interface JsonCanvasNode {
   id: string;
   type: "file" | "text" | "link" | "group";
   x: number;
@@ -37,7 +37,7 @@ export interface JsonCanvasNode {
   text?: string;
 }
 
-export interface JsonCanvasEdge {
+interface JsonCanvasEdge {
   id: string;
   fromNode: string;
   toNode: string;
@@ -46,7 +46,7 @@ export interface JsonCanvasEdge {
   label?: string;
 }
 
-export interface JsonCanvasFile {
+interface JsonCanvasFile {
   nodes: JsonCanvasNode[];
   edges: JsonCanvasEdge[];
 }
@@ -54,7 +54,7 @@ export interface JsonCanvasFile {
 /** What this canvas holds that the format has no room for. Returned beside the
  *  file rather than logged, so every surface can say the same thing — an
  *  export that quietly drops half a canvas is the worst kind of success. */
-export interface ExportLosses {
+interface ExportLosses {
   versions: number;
   threads: number;
   properties: number;

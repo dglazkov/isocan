@@ -26,7 +26,7 @@ import type { ActorJoins } from "./identity.js";
  */
 /** Why a comment is yours. Kept because the reasons are not equally urgent —
  *  a direct mention is somebody asking you; the Chat is the room being loud. */
-export type InboxReason = "mentioned" | "main-thread" | "in-your-thread";
+type InboxReason = "mentioned" | "main-thread" | "in-your-thread";
 export interface InboxEntry {
     canvasId: string;
     /** For saying where, without a second lookup. */
@@ -144,3 +144,4 @@ export declare function inboxNewestFirst(entries: readonly InboxEntry[]): InboxE
 export declare function inboxTally(entries: readonly InboxEntry[]): Record<InboxReason, number>;
 /** One line, the same on every surface. */
 export declare function inboxLine(entry: InboxEntry): string;
+export {};

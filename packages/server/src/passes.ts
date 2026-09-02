@@ -27,7 +27,7 @@ import type { BadgeRecord, Desk, PassRecord } from "./desk.ts";
  */
 
 /** A minted pass, at the one moment the plaintext secret exists. */
-export interface MintedPass {
+interface MintedPass {
   record: PassRecord;
   /** `<passId>.<secret>` — handed to the caller once and never again. */
   token: string;

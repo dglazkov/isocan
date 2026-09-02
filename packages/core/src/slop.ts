@@ -24,9 +24,9 @@
  */
 
 /** What the tell is made of. The two halves of a screen. */
-export type SlopKind = "visual" | "copy";
+type SlopKind = "visual" | "copy";
 
-export interface SlopRule {
+interface SlopRule {
   name: string;
   kind: SlopKind;
   /** How to find it in the source, concretely. */

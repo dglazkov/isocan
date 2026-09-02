@@ -39,7 +39,7 @@ import type { CanvasContents, ItemVersion } from "./model.js";
  * field anything stores — and calling it what it is beats implying a record
  * that does not exist.
  */
-export interface ConvergePlan {
+interface ConvergePlan {
     /** The item the winner folds into. */
     parentId: string;
     /** The winner's current version, to be added to the parent. */
@@ -49,7 +49,7 @@ export interface ConvergePlan {
     /** The sentence a surface says about this decision. Not stored. */
     label: string;
 }
-export type ConvergeRefusal = {
+type ConvergeRefusal = {
     refused: string;
 };
 /**
@@ -61,3 +61,4 @@ export type ConvergeRefusal = {
  */
 export declare function convergePlan(canvas: CanvasContents, chosenId: string): ConvergePlan | ConvergeRefusal;
 export declare function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is ConvergeRefusal;
+export {};

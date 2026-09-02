@@ -56,7 +56,7 @@ export type RowState = "blocked" | "working" | "parked" | "quiet" | "here" | "an
 /** An open question: the last `/ask` in a thread with no reply from anyone
  * but the asker after it. The-ask research's derivation, verbatim: state the
  * surfaces can compute is state no `comment.update` can lie about. */
-export interface OpenAsk {
+interface OpenAsk {
     threadId: string;
     commentId: string;
     askerId: string;
@@ -106,3 +106,4 @@ export declare function answeringExcerpt(canvas: CanvasContents, session: Presen
     threadId: string;
     body: string;
 } | null;
+export {};

@@ -8,7 +8,7 @@
  * here and not in the code is a lie, which is worse. Both are cheap to check
  * against this file, and impossible to check against a screenshot.
  */
-export interface Shortcut {
+interface Shortcut {
     /** As a person would say it, e.g. "⌘K" or "Shift-drag". Several when the
      * same act has more than one key. */
     keys: string[];
@@ -19,7 +19,7 @@ export interface Shortcut {
      * tap, a rule about when it applies. */
     note?: string;
 }
-export type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
+type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 export declare const SHORTCUT_GROUPS: ShortcutGroup[];
 export declare const SHORTCUTS: Shortcut[];
 /** The shortcuts of one group, in the order they were written — which is
@@ -42,3 +42,4 @@ export declare function keyFor(does: string): string | null;
 /** The whole list as text, for a terminal or a comment: the same answer the
  * overlay gives, in the medium an agent can pass on. */
 export declare function shortcutsAsText(): string;
+export {};

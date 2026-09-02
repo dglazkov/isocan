@@ -29,8 +29,8 @@ import type { PresenceSession } from "./protocol.js";
  */
 export declare const SPRINT_PROP = "sprint";
 /** What kind of moment a phase is — decides what the surfaces hide. */
-export type PhaseKind = "group" | "silent" | "vote" | "decide";
-export interface PhaseSpec {
+type PhaseKind = "group" | "silent" | "vote" | "decide";
+interface PhaseSpec {
     /** The word after `/sprint`. */
     name: string;
     /** What the clock chip says. */
@@ -62,7 +62,7 @@ export declare function phaseSpec(name: string): PhaseSpec | null;
 export declare function parseDuration(text: string): number | null;
 /** Seconds → `14:02`, or `1:05:00` past an hour. What the chip shows. */
 export declare function clockLabel(seconds: number): string;
-export interface SprintCommand {
+interface SprintCommand {
     /** A phase name, or `end`. */
     phase: string;
     /** Explicit duration, or null to take the phase's default. */
@@ -126,7 +126,7 @@ export declare function handedInFor(item: Item): string | null;
  * the enrolled set alone, which under-claims rather than guesses.
  */
 export declare function agentActorIds(sessions: readonly PresenceSession[], canvas: CanvasContents): Set<string>;
-export interface Tally {
+interface Tally {
     item: Item;
     humans: number;
     agents: number;
@@ -149,3 +149,4 @@ export declare function tally(items: readonly Item[], mark: string, agents: Read
  * map over a sprint that never used hand-in still works, on everything.
  */
 export declare function wallFor(canvas: CanvasContents, state: SprintState): Item[];
+export {};

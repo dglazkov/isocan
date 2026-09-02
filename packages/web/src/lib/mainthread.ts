@@ -69,6 +69,6 @@ export async function postToMain(
  * out. Used to tell the user whether their emissary is actually listening
  * before they hit enter.
  */
-export function listeningAgents(sessions: PresenceSession[]): PresenceSession[] {
+function listeningAgents(sessions: PresenceSession[]): PresenceSession[] {
   return sessions.filter((s) => s.kind === "cli");
 }

@@ -18,7 +18,7 @@ import type { CanvasContents, Item } from "./model.js";
  * exactly the distinction the verb was asked for.
  */
 export declare const CONTEXT_PROP = "context";
-export type ContextMark = "pinned" | "excluded";
+type ContextMark = "pinned" | "excluded";
 /** What somebody decided about this item, or nothing. */
 export declare function contextMark(item: Item): ContextMark | null;
 export declare function pinnedItems(canvas: CanvasContents): Item[];
@@ -49,3 +49,4 @@ export declare function markPatch(mark: ContextMark | null): {
 };
 /** What a mark is called where somebody reads it. */
 export declare function markLabel(mark: ContextMark): string;
+export {};

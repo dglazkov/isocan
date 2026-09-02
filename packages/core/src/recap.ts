@@ -21,7 +21,7 @@ import type { CanvasContents } from "./model.ts";
  * today, and any other surface can render the same structure tomorrow.
  */
 
-export interface RecapWindow {
+interface RecapWindow {
   /** Inclusive seq span — the address of the full-resolution entries. */
   fromSeq: number;
   toSeq: number;
@@ -39,7 +39,7 @@ export interface RecapWindow {
   items: Array<{ id: string; title: string | null; ops: number }>;
 }
 
-export interface Recap {
+interface Recap {
   /** Every entry considered, archive included. */
   total: number;
   /** How many of those came from the archive rather than the live log. */
@@ -50,7 +50,7 @@ export interface Recap {
   recent: LogEntry[];
 }
 
-export interface RecapOptions {
+interface RecapOptions {
   /** How many recent entries stay verbatim (default 10). */
   verbatim?: number;
   /** Count of entries (a prefix of `entries`) that came from the archive. */

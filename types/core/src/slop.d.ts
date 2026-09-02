@@ -23,8 +23,8 @@
  * wanted.
  */
 /** What the tell is made of. The two halves of a screen. */
-export type SlopKind = "visual" | "copy";
-export interface SlopRule {
+type SlopKind = "visual" | "copy";
+interface SlopRule {
     name: string;
     kind: SlopKind;
     /** How to find it in the source, concretely. */
@@ -36,3 +36,4 @@ export declare const SLOP_RULES: SlopRule[];
 /** The list as an agent should read it. */
 /** The rules as prompt text — all of them, or one half. */
 export declare function slopRulesAsText(kind?: SlopKind): string;
+export {};

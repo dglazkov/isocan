@@ -11,8 +11,8 @@ import { type DesignDoc } from "./designmd.js";
  * and arithmetic. Whether a palette is any GOOD is not in here and should not
  * be; that is what the prose and a person are for.
  */
-export type DesignSeverity = "error" | "warning" | "note";
-export interface DesignFinding {
+type DesignSeverity = "error" | "warning" | "note";
+interface DesignFinding {
     severity: DesignSeverity;
     /** Where it is: a token path, a section name, or "front matter". */
     where: string;
@@ -23,3 +23,4 @@ export interface DesignFinding {
 export declare function checkDesign(doc: DesignDoc): DesignFinding[];
 /** Worst first, so a report leads with what matters. */
 export declare function bySeverity(findings: DesignFinding[]): DesignFinding[];
+export {};

@@ -32,47 +32,9 @@ export declare const CANVAS_ROUTE = "/p/:canvasId";
 export declare const ITEM_ROUTE = "/p/:canvasId/i/:itemId";
 /** The path a canvas is served at, origin-relative. */
 export declare function canvasPath(canvasId: string): string;
-/**
- * **One item, filling the screen.**
- *
- * Full screen is a ROUTE and not an operation, and the distinction is the
- * whole design. Operations are mutations — the reducer applies them, they land
- * in the oplog, they undo, and both surfaces see them. What you are looking at
- * is none of those things: your zoom is not my zoom, and an `item.focus` op
- * would drag every open tab to the same screen because one person opened it.
- *
- * But it is not merely local state either, because then only the person whose
- * finger was on the key could ever reach it. A route makes it **addressable**:
- * the browser's Back button leaves it for free, the address bar holds the
- * thing you are looking at, a link to one screen is a link to one screen — and
- * `isocan open <item>` can hand somebody exactly the view it means, which is
- * how the CLI takes part in a feature that has no op to send.
- *
- * `/i/` for the same reason as `/p/`: short, and spelled once.
- */
-export declare const ITEM_PATH_SEGMENT = "i";
 export declare function itemPath(canvasId: string, itemId: string): string;
 /** The whole address of one item, full screen: origin + path. */
 export declare function itemUrl(origin: string, canvasId: string, itemId: string): string;
-/**
- * **The workbench: the same canvas, flipped to the agent room.**
- *
- * A second projection of the canvas — the agent roster, the main thread, and
- * one artifact on a stage — and a ROUTE for every reason full screen is one
- * (see `ITEM_PATH_SEGMENT` above): what you are looking at is not a mutation,
- * but it has to be addressable or only the person at the keyboard could ever
- * reach it. `isocan open --workbench` hands somebody this exact view; Esc
- * pops one level, `/w/<item>` → `/w` → the canvas.
- *
- * The router's item segment is named `wbItemId`, not `itemId`, and that is
- * load-bearing rather than fussy: both cover routes mount the same
- * `CanvasPage` element, and `useParams` merges whatever the matched pattern
- * captured — one shared name would make "full screen or workbench?"
- * unanswerable from the params alone.
- *
- * `w` for the reason `i` and `p` are letters: short, and spelled once.
- */
-export declare const WORKBENCH_PATH_SEGMENT = "w";
 export declare const WORKBENCH_ROUTE = "/p/:canvasId/w";
 export declare const WORKBENCH_ITEM_ROUTE = "/p/:canvasId/w/:wbItemId";
 /** The workbench with nothing focused — the agent room itself. */

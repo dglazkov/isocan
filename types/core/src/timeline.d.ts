@@ -184,8 +184,8 @@ export declare function span(entries: readonly LogEntry[]): {
  * neighbour rather than a season of empty rail — the honest reading, since
  * the rail's whole job is to be pointed at.
  */
-export type AxisGrain = "hour" | "day" | "month" | "year";
-export interface AxisTick {
+type AxisGrain = "hour" | "day" | "month" | "year";
+interface AxisTick {
     /** Where along the rail, 0..1 of the seq span. */
     at: number;
     label: string;
@@ -204,3 +204,4 @@ export declare function axisGrain(spanMs: number): AxisGrain;
  * halfway.
  */
 export declare function axisTicks(entries: readonly LogEntry[], max?: number): AxisTick[];
+export {};

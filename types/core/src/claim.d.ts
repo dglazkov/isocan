@@ -32,7 +32,7 @@ export interface DirClaim {
      *  title existed do not, so this is a nicety, never the identity. */
     title?: string;
 }
-export type BindVerdict = "free" | "adopt" | "taken";
+type BindVerdict = "free" | "adopt" | "taken";
 export declare function bindVerdict(claim: DirClaim | null | undefined, canvasId: string): BindVerdict;
 /**
  * How a claimed directory is named to a person: the title when the marker has
@@ -48,3 +48,4 @@ export declare function claimName(claim: DirClaim): string;
  * took it.
  */
 export declare function takenSentence(root: string, claim: DirClaim): string;
+export {};

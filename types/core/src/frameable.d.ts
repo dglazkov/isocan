@@ -18,7 +18,7 @@
  * them — which is why this is a pure function over headers and the daemon is
  * what fetches them.
  */
-export interface FrameVerdict {
+interface FrameVerdict {
     /** The site permits framing by this app, as far as its headers say. */
     ok: boolean;
     /** The header that refused, verbatim, so the reason is the site's own words. */
@@ -30,3 +30,4 @@ export interface FrameVerdict {
 export declare function frameVerdict(headers: {
     get(name: string): string | null;
 }, self?: string | null): FrameVerdict;
+export {};

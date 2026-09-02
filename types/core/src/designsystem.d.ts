@@ -1,27 +1,5 @@
 import type { CanvasContents, Item } from "./model.js";
-/**
- * The design system: what this canvas has decided things look like.
- *
- * Every agent that builds a screen is otherwise designing from scratch, which
- * is why a canvas fills up with screens that are individually fine and
- * collectively a jumble — six type scales, four blues, three ideas about
- * spacing. The fix is not better adjectives in a prompt ("clean, modern"
- * describes nothing); it is a written-down system with NUMBERS in it, that
- * every builder reads first.
- *
- * It lives on the canvas as an ordinary item rather than in a dotfile, and
- * that is the whole design: the design system sits beside the designs it
- * governs, both surfaces can read and edit it, it versions like everything
- * else, and a person can see it without knowing it exists. A hidden file is a
- * file nobody updates.
- *
- * The convention is one property, so nothing else has to learn a new kind.
- */
-export declare const ROLE_PROP = "role";
 export declare const DESIGN_SYSTEM_ROLE = "design-system";
-/** What this was called for an afternoon. Canvases written in that window
- * still say it, and a rename that orphans somebody's file is not a rename. */
-export declare const LEGACY_DESIGN_ROLE = "house-style";
 /** The properties that make an item this canvas's design system. */
 export declare function designSystemProperties(): Record<string, string>;
 export declare function isDesignSystem(item: Item): boolean;

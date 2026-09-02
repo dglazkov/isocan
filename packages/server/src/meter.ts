@@ -43,7 +43,7 @@ export interface MintRefusal {
   retryAfter: number;
 }
 
-export interface TokenBucketsOptions {
+interface TokenBucketsOptions {
   burst?: number;
   perMinute?: number;
   /** Injected so the refill is testable without waiting a minute. Written as
@@ -151,7 +151,7 @@ export class TokenBuckets {
 
 // ---- whose bucket is this? ----
 
-export interface ProxyPosture {
+interface ProxyPosture {
   /** Is this daemon listening only to its own machine? `http.ts`'s
    * `loopbackBound` is the caller that knows. */
   loopback: boolean;

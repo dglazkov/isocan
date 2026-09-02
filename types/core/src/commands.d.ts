@@ -42,7 +42,7 @@ export interface SlashCommand {
 /** What a command may be called. Kept narrow so a name is always typeable,
  * always a legal filename, and never ambiguous with the text after it. */
 export declare const COMMAND_NAME: RegExp;
-export interface ParsedCommand {
+interface ParsedCommand {
     name: string;
     /** Everything after the name, trimmed. Empty string when there is none. */
     args: string;
@@ -90,3 +90,4 @@ export declare function parseCommandFile(name: string, text: string): SlashComma
 export declare function commandFileText(command: Pick<SlashCommand, "description" | "usage" | "body">): string;
 /** The commands isocan ships with. A home can shadow any of them by name. */
 export declare const DEFAULT_COMMANDS: SlashCommand[];
+export {};

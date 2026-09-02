@@ -22,7 +22,7 @@ import { listBadges } from "./api.ts";
 let known: ReadonlySet<string> | null = null;
 let asked: Promise<ReadonlySet<string>> | null = null;
 
-export function ownActors(refresh = false): Promise<ReadonlySet<string>> {
+function ownActors(refresh = false): Promise<ReadonlySet<string>> {
   if (refresh || !asked) {
     const request = listBadges().then((res) => {
       const mine = res.badges.find((badge) => badge.self);

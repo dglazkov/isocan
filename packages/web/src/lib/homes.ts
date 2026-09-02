@@ -44,7 +44,7 @@ export function homeOfCanvas(homes: HomesResponse, canvasId: string): string | n
  * it is not entitled to hold a copy of — the damage is done at mount, not at
  * paint.
  */
-export type CanvasHome =
+type CanvasHome =
   | { state: "asking" }
   | { state: "here" }
   | { state: "elsewhere"; home: string };

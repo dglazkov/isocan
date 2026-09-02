@@ -40,7 +40,7 @@ declare module "fastify" {
  * holds it to every extension under `packages/web/public/`.
  */
 export declare const STATIC_TYPES: Record<string, string>;
-export interface RouteOptions {
+interface RouteOptions {
     /** Where a canvas born here, naming nothing, is born — or null when it stays
      * here. What the health route reports as `home` (redefined in phase 10.3,
      * because `stalenessOf` and older CLIs read that key and the birth default
@@ -105,3 +105,4 @@ export declare function registerRoutes(app: FastifyInstance, engine: Engine, sto
  * the body says, for a `curl` or a script that would rather not scrape prose.
  * Deliberately NOT `Location`, and deliberately not a 3xx: see below. */
 export declare const HOME_HEADER = "X-Isocan-Home";
+export {};

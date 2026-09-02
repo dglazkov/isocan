@@ -21,7 +21,7 @@ export interface Move {
     x: number;
     y: number;
 }
-export type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
 export type Axis = "h" | "v";
 export declare const ALIGN_EDGES: readonly AlignEdge[];
 /**
@@ -36,3 +36,4 @@ export declare function alignMoves(boxes: LayoutBox[], edge: AlignEdge): Move[];
  * means. The outermost two hold still: they define the run.
  */
 export declare function distributeMoves(boxes: LayoutBox[], axis: Axis): Move[];
+export {};

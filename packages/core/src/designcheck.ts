@@ -14,9 +14,9 @@ import { DESIGN_SECTIONS, resolveToken, type DesignDoc } from "./designmd.ts";
  * be; that is what the prose and a person are for.
  */
 
-export type DesignSeverity = "error" | "warning" | "note";
+type DesignSeverity = "error" | "warning" | "note";
 
-export interface DesignFinding {
+interface DesignFinding {
   severity: DesignSeverity;
   /** Where it is: a token path, a section name, or "front matter". */
   where: string;

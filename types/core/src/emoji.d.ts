@@ -41,7 +41,7 @@ export interface EmojiEntry {
      * ones that are not in it. */
     keywords: readonly string[];
 }
-export interface EmojiGroup {
+interface EmojiGroup {
     /** The tab label. Short: these sit in a row across a narrow panel. */
     name: string;
     entries: readonly EmojiEntry[];
@@ -86,3 +86,4 @@ export declare function searchEmoji(query: string, limit?: number): EmojiEntry[]
  * wore that this file has never heard of — answer with themselves rather than
  * with nothing, so a title is never empty. */
 export declare function emojiName(emoji: string): string;
+export {};

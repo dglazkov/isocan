@@ -72,41 +72,23 @@
  */
 export declare const AUTH_ACTION_PATH = "/__/auth/action";
 /**
- * The five parameters the provider appends, measured (see this file's header).
- *
- * Used twice: to scrub any of them a caller smuggled into `continueUrl` before
- * the real ones are set, and — by the web app, once it is pointed here — to
- * strip them off the address bar when the landing page is done with them.
- */
-export declare const AUTH_ACTION_PARAMS: readonly ["mode", "oobCode", "apiKey", "continueUrl", "lang"];
-/**
- * The one mode this handler answers.
- *
- * `resetPassword`, `verifyEmail` and `recoverEmail` are the provider's other
- * three, and isocan has no password to reset and no address of its own to
- * verify — it borrows an inbox and writes one row on a badge. A cheerful
- * redirect for those would be this codebase's oldest recurring failure (the
- * default answer to a wrong address is a cheerful one), so they are refused in
- * words instead.
- */
-export declare const AUTH_ACTION_MODE = "signIn";
-/**
  * What the handler should do: hop to a path on this origin, or say no.
  *
  * A discriminated union rather than a nullable string, because "redirect to
  * `/`" and "refuse" are different answers and a null would collapse them into
  * the cheerful one.
  */
-export type AuthActionOutcome = {
+type AuthActionOutcome = {
     redirect: string;
 } | {
     refusal: string;
 };
 /** A query as Fastify hands it over (repeated keys arrive as arrays), or as
  * `URLSearchParams`, which is what a test and a browser both have. */
-export type AuthActionQuery = URLSearchParams | Record<string, unknown>;
+type AuthActionQuery = URLSearchParams | Record<string, unknown>;
 /**
  * **The whole decision**, so the route can be four lines and a test can import
  * the rule rather than restate it (lessons.md #5).
  */
 export declare function authActionOutcome(query: AuthActionQuery): AuthActionOutcome;
+export {};

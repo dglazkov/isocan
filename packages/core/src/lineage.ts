@@ -41,7 +41,7 @@ export function childrenOf(canvas: CanvasContents, itemId: string): Item[] {
  * on the canvas. A parent that has been deleted leaves its children as roots
  * rather than orphans pointing at nothing: the canvas shows what exists.
  */
-export function rootItems(canvas: CanvasContents): Item[] {
+function rootItems(canvas: CanvasContents): Item[] {
   const items = Object.values(canvas.items);
   return items
     .filter((item) => {
@@ -54,7 +54,7 @@ export function rootItems(canvas: CanvasContents): Item[] {
 /** The whole line of descent under an item, depth first, parents before
  * children. Cycles are impossible to create honestly but trivial to write by
  * hand, so they are cut rather than trusted. */
-export function descendantsOf(canvas: CanvasContents, itemId: string, seen = new Set<string>()): Item[] {
+function descendantsOf(canvas: CanvasContents, itemId: string, seen = new Set<string>()): Item[] {
   if (seen.has(itemId)) return [];
   seen.add(itemId);
   const out: Item[] = [];

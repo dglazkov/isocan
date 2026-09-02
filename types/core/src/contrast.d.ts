@@ -9,7 +9,6 @@
  */
 /** WCAG 2.2 minimums. Large is 18.66px bold or 24px regular. */
 export declare const CONTRAST_BODY = 4.5;
-export declare const CONTRAST_LARGE = 3;
 /** Non-text: the boundary of a control, an icon that carries meaning. */
 export declare const CONTRAST_UI = 3;
 /** #rgb / #rrggbb → channels, or null for anything else. Named colours and

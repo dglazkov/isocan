@@ -14,7 +14,7 @@ import { type InkBounds } from "./drawing.js";
  * groups, carry its own transforms, or use units these boxes do not mean, and
  * silently moving somebody's artwork is worse than refusing.
  */
-export interface MergeablePart {
+interface MergeablePart {
     /** For the error message when one cannot be merged. */
     id: string;
     svg: string;
@@ -31,6 +31,4 @@ export declare function mergeDrawings(parts: MergeablePart[]): {
     svg: string;
     bounds: InkBounds;
 };
-/** Padding is already inside each part's box, so a merged box does not grow
- * it again — exported so a caller can say why the box is what it is. */
-export declare const MERGE_KEEPS_PADDING = 8;
+export {};

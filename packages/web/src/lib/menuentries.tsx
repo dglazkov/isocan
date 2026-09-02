@@ -35,7 +35,7 @@ import { glideToBox } from "./zoomactions.ts";
  * as data. Nothing here draws anything.
  */
 
-export interface MenuContext {
+interface MenuContext {
   canvasId: string;
   actor: Actor;
   /** Where the right-click landed, in world coordinates — where a paste goes. */
@@ -351,7 +351,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
 }
 
 /** Only used to keep the import honest when a kind-specific entry is added. */
-export const _itemKind = itemKind;
+const _itemKind = itemKind;
 
 /**
  * **The `···` drawer: one handle instead of a row of buttons.**

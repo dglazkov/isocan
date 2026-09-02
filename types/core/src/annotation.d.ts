@@ -14,8 +14,6 @@
 import type { CanvasContents, Item } from "./model.js";
 /** The item this ink is about. */
 export declare const ANNOTATES_PROP = "annotates";
-/** Where it lands on that item, as fractions: "x,y,w,h". */
-export declare const REGION_PROP = "region";
 export interface Box {
     x: number;
     y: number;
@@ -23,7 +21,7 @@ export interface Box {
     height: number;
 }
 /** A rectangle in fractions of the target: 0,0 is its top-left, 1,1 bottom-right. */
-export interface Region {
+interface Region {
     x: number;
     y: number;
     width: number;
@@ -51,3 +49,4 @@ export declare function annotationsOf(canvas: CanvasContents, itemId: string): I
  * is a drawing near it, not a note about it.
  */
 export declare function annotationTargetFor(ink: Box, candidates: readonly Item[], minimumShare?: number): Item | null;
+export {};

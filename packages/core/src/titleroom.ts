@@ -20,7 +20,7 @@
  * unreadable exactly when you had asked to see it.
  */
 
-export interface TitleBox {
+interface TitleBox {
   x: number;
   y: number;
   width: number;

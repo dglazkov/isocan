@@ -324,9 +324,9 @@ export function span(entries: readonly LogEntry[]): { first: number; last: numbe
  * neighbour rather than a season of empty rail — the honest reading, since
  * the rail's whole job is to be pointed at.
  */
-export type AxisGrain = "hour" | "day" | "month" | "year";
+type AxisGrain = "hour" | "day" | "month" | "year";
 
-export interface AxisTick {
+interface AxisTick {
   /** Where along the rail, 0..1 of the seq span. */
   at: number;
   label: string;

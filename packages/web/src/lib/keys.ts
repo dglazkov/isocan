@@ -10,7 +10,7 @@
  * Works on a plain object as well as a real element, so the rule can be tested
  * without a DOM.
  */
-export interface KeyTarget {
+interface KeyTarget {
   tagName?: string;
   isContentEditable?: boolean;
   closest?: (selector: string) => unknown;
@@ -74,7 +74,7 @@ export function hasTextSelection(selection?: { isCollapsed?: boolean; toString()
  * Takes a plain object as well as a real event, so the rule can be tested
  * without a DOM.
  */
-export interface CoverKey {
+interface CoverKey {
   key: string;
   metaKey?: boolean;
   ctrlKey?: boolean;

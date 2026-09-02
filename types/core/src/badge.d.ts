@@ -67,7 +67,7 @@ export type BadgeKind = BadgeCarrier;
  * code that reads `token.id` at a badge check would be code that could
  * present the wrong one.
  */
-export interface DotToken {
+interface DotToken {
     id: string;
     secret: string;
 }
@@ -76,7 +76,7 @@ export declare function formatDotToken(id: string, secret: string): string;
  * token is refused the same way a missing one is. */
 export declare function parseDotToken(raw: string | undefined | null): DotToken | null;
 /** A badge's token: `<badgeId>.<secret>`, in both carriers. */
-export interface BadgeToken {
+interface BadgeToken {
     badgeId: string;
     secret: string;
 }
@@ -97,13 +97,6 @@ export interface DoorResponse {
 }
 /** Where a caller with no badge goes to get one. */
 export declare const DOOR_ROUTE = "/api/door";
-/**
- * Why a request was refused, as `ApiError.code`. The distinction is not
- * decoration — it is the recovery branch. `no-badge` means "get one";
- * `bad-badge` means "throw away what you stored and get a new one" (a home
- * that was wiped, and in phase 9 a badge that was killed).
- */
-export type BadgeRefusal = "no-badge" | "bad-badge" | "bad-origin";
 /** A CLI from before the door, talking to a daemon that has one, gets 401 on
  * everything. That is an accepted break — the two ship as one build — but a
  * break that explains itself is a different thing from a break, so the body
@@ -156,8 +149,6 @@ export interface ActorClaim {
      * at claim time (#60). Informational — which canvas this agent is of. */
     canvasId?: string;
 }
-/** badgeId → that badge's claims. */
-export type ClaimTable = Record<string, ActorClaim[]>;
 /**
  * One verified attribute, riding the badge (identity desk, mechanism 3).
  *
@@ -336,3 +327,4 @@ export interface SweepReport {
  * so this can never collide with one.
  */
 export declare const SHELF = "shelf";
+export {};

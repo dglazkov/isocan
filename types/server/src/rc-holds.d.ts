@@ -6,7 +6,7 @@ interface Mirror {
      * when the socket cannot carry it (closing, gone). */
     sendAsk: (ask: RcAsk) => boolean;
 }
-export interface RcAnswering {
+interface RcAnswering {
     parked: boolean;
     actorIds: string[];
 }

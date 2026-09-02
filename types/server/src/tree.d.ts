@@ -30,7 +30,7 @@ export interface TreeEntry {
     kind: "file" | "dir";
     size: number;
 }
-export interface TreeRoot {
+interface TreeRoot {
     root: string;
     entries: TreeEntry[];
     truncated: boolean;
@@ -79,7 +79,7 @@ export declare function readBound(root: string, rel: string): Promise<Buffer | n
  * `$HOME` is the ceiling. Above it lies every other account on the machine
  * and the system itself, and nothing up there is a project.
  */
-export interface PickEntry {
+interface PickEntry {
     name: string;
     /** Absolute, so the app can hand it straight back to the bind route. */
     path: string;
@@ -138,8 +138,8 @@ export declare function pickList(home: string, at: string | null): Promise<PickL
  * Every refusal is a `WriteRefusal` rather than a throw, because the caller
  * has to tell a person which rule stopped them.
  */
-export type WriteRefusal = "outside-root" | "not-listable" | "symlink" | "drifted" | "unwritable";
-export interface WriteResult {
+type WriteRefusal = "outside-root" | "not-listable" | "symlink" | "drifted" | "unwritable";
+interface WriteResult {
     ok: boolean;
     refusal?: WriteRefusal;
     /** What was actually on disk when we looked — for the drift message. */
@@ -155,3 +155,4 @@ export declare function writeBound(root: string, rel: string, bytes: Buffer, our
 /** The content hash of a file inside the jail, or null when it is not there —
  * what `backingOf` needs to say whether the disk matches the canvas. */
 export declare function hashBound(root: string, rel: string, hashOf: (bytes: Buffer) => string): Promise<string | null>;
+export {};

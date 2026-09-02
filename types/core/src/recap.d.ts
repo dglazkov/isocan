@@ -19,7 +19,7 @@ import type { CanvasContents } from "./model.js";
  * Pure over `LogEntry[]`, so it lives in core: the CLI renders it as text
  * today, and any other surface can render the same structure tomorrow.
  */
-export interface RecapWindow {
+interface RecapWindow {
     /** Inclusive seq span — the address of the full-resolution entries. */
     fromSeq: number;
     toSeq: number;
@@ -43,7 +43,7 @@ export interface RecapWindow {
         ops: number;
     }>;
 }
-export interface Recap {
+interface Recap {
     /** Every entry considered, archive included. */
     total: number;
     /** How many of those came from the archive rather than the live log. */
@@ -53,7 +53,7 @@ export interface Recap {
     /** The last `verbatim` entries, untouched — recency deserves full detail. */
     recent: LogEntry[];
 }
-export interface RecapOptions {
+interface RecapOptions {
     /** How many recent entries stay verbatim (default 10). */
     verbatim?: number;
     /** Count of entries (a prefix of `entries`) that came from the archive. */
@@ -70,3 +70,4 @@ export interface RecapOptions {
  * whatever remains rather than leaving a stub.
  */
 export declare function buildRecap(entries: LogEntry[], options?: RecapOptions): Recap;
+export {};

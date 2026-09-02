@@ -8,7 +8,7 @@ import type { CanvasContents, Item } from "./model.js";
  * two simultaneous reactions.
  */
 /** One emoji as it renders: the mark, how many wear it, and whether you do. */
-export interface Reaction {
+interface Reaction {
     emoji: string;
     actorIds: readonly string[];
     count: number;
@@ -29,7 +29,7 @@ export declare function reactionsOf(item: Item, selfId?: string): Reaction[];
 export declare function hasReacted(item: Item, emoji: string, actorId: string): boolean;
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */
-export interface ReactionGroup {
+interface ReactionGroup {
     emoji: string;
     items: Item[];
     /** How many ITEMS wear it — the number the bar shows. Distinct from a
@@ -59,3 +59,4 @@ export declare function reactionGroups(canvas: CanvasContents): ReactionGroup[];
 /** Every item wearing one mark — `ls --reaction 👀`, and one section of the
  * bar. */
 export declare function itemsWearing(canvas: CanvasContents, emoji: string): Item[];
+export {};

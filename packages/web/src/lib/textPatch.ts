@@ -32,7 +32,7 @@ import type { DefaultTreeAdapterMap } from "parse5";
  * no, and the rest of the file is still byte-for-byte untouched.
  */
 
-export type PatchOutcome = { ok: true; source: string } | { ok: false; reason: string };
+type PatchOutcome = { ok: true; source: string } | { ok: false; reason: string };
 
 /** One committed in-place edit. */
 export interface TextEdit {

@@ -13,7 +13,7 @@ import type { BadgeRecord, Desk, PassRecord } from "./desk.js";
  * looking order.
  */
 /** A minted pass, at the one moment the plaintext secret exists. */
-export interface MintedPass {
+interface MintedPass {
     record: PassRecord;
     /** `<passId>.<secret>` — handed to the caller once and never again. */
     token: string;
@@ -98,3 +98,4 @@ export declare class PassRefusedError extends Error {
  * half: spending the row, and the admission with its provenance.
  */
 export declare function redeemPass(desk: Desk, token: string, redeemer: BadgeRecord, now?: string): Promise<PassRecord>;
+export {};

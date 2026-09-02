@@ -32,11 +32,6 @@ import type { CanvasContents } from "./model.js";
  */
 /** Gaps in world units. Generous: a canvas is not a form. */
 export declare const FORMAT_GAP_X = 80;
-export declare const FORMAT_GAP_Y = 64;
-/** Between a parent and the column under it — tighter, to read as belonging. */
-export declare const FORMAT_CHILD_GAP_Y = 40;
-/** Between the screens and the reference block below them. */
-export declare const FORMAT_BAND_GAP_Y = 160;
 /**
  * **What kind of tidy.**
  *
@@ -55,7 +50,7 @@ export declare const FORMAT_BAND_GAP_Y = 160;
 export type FormatMode = "grid" | "smart";
 export declare const FORMAT_MODES: readonly FormatMode[];
 export declare function isFormatMode(value: unknown): value is FormatMode;
-export interface FormatOptions {
+interface FormatOptions {
     /** Which tidy. Defaults to `grid` — see `FormatMode`. */
     mode?: FormatMode;
     /** Where the top-left of the arrangement goes. Defaults to where the
@@ -72,3 +67,4 @@ export interface FormatOptions {
  * twice does nothing the second time — a formatted canvas is a fixed point.
  */
 export declare function formatMoves(canvas: CanvasContents, options?: FormatOptions): Move[];
+export {};

@@ -6,7 +6,7 @@ import type { BadgeKind, BadgeRecord, Desk } from "./desk.js";
  * Origin. Nothing here knows about Fastify or the engine.
  */
 /** A minted badge, at the one moment the plaintext secret exists. */
-export interface MintedBadge {
+interface MintedBadge {
     record: BadgeRecord;
     /** `<badgeId>.<secret>` — handed to the caller once and never again. */
     token: string;
@@ -19,7 +19,7 @@ export declare function sha256(value: string): string;
 /** Constant-time over the two digests. Equal length by construction, so
  * there is no length to leak either. */
 export declare function secretMatches(secret: string, expectedHash: string): boolean;
-export interface PresentedBadge {
+interface PresentedBadge {
     badgeId: string;
     secret: string;
     /** Cookie-carried requests get the Origin check; bearer-carried ones are
@@ -35,13 +35,6 @@ export declare function presentedBadge(headers: IncomingHttpHeaders): PresentedB
 /** The badge behind a presented token, or null if the desk does not know it
  * or the secret does not match. */
 export declare function resolveBadge(desk: Desk, presented: PresentedBadge | null): Promise<BadgeRecord | null>;
-/**
- * One cookie name, hand-parsed. Fifteen lines against a dependency that costs
- * more here than it looks: the root `package.json` duplicates the CLI's
- * runtime deps so a git install resolves (#47), so a new server dependency is
- * two edits and a release-branch concern.
- */
-export declare function readCookie(header: string | undefined, name: string): string | null;
 /**
  * The `Set-Cookie` value for a badge.
  *
@@ -63,7 +56,7 @@ export declare function badgeCookie(token: string, secure: boolean): string;
 /** Did this request arrive over TLS? Behind the load balancer the hop to the
  * service is plain HTTP, and the LB says so in the header. */
 export declare function isSecureRequest(headers: IncomingHttpHeaders, encrypted: boolean): boolean;
-export interface OriginPolicy {
+interface OriginPolicy {
     /** The host:port the daemon is bound to, when that is loopback. */
     loopback: boolean;
 }
@@ -88,3 +81,4 @@ export declare function originAllowed(origin: string | undefined, self: {
     host: string | undefined;
     secure: boolean;
 }, policy: OriginPolicy): boolean;
+export {};

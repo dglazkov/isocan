@@ -1,4 +1,4 @@
-export interface ParkClaim {
+interface ParkClaim {
     parkId: string;
     cursor: number;
     redeliverUpTo: number | null;
@@ -32,3 +32,4 @@ export declare class ParkCursors {
      * lost — the one other moment a displaced park finds out. */
     advance(canvasId: string, actorId: string, parkId: string, to: number): Promise<boolean>;
 }
+export {};

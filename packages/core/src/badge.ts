@@ -76,7 +76,7 @@ export type BadgeKind = BadgeCarrier;
  * code that reads `token.id` at a badge check would be code that could
  * present the wrong one.
  */
-export interface DotToken {
+interface DotToken {
   id: string;
   secret: string;
 }
@@ -98,7 +98,7 @@ export function parseDotToken(raw: string | undefined | null): DotToken | null {
 }
 
 /** A badge's token: `<badgeId>.<secret>`, in both carriers. */
-export interface BadgeToken {
+interface BadgeToken {
   badgeId: string;
   secret: string;
 }
@@ -140,7 +140,7 @@ export const DOOR_ROUTE = "/api/door";
  * `bad-badge` means "throw away what you stored and get a new one" (a home
  * that was wiped, and in phase 9 a badge that was killed).
  */
-export type BadgeRefusal = "no-badge" | "bad-badge" | "bad-origin";
+type BadgeRefusal = "no-badge" | "bad-badge" | "bad-origin";
 
 /** A CLI from before the door, talking to a daemon that has one, gets 401 on
  * everything. That is an accepted break — the two ship as one build — but a
@@ -201,7 +201,7 @@ export interface ActorClaim {
 }
 
 /** badgeId → that badge's claims. */
-export type ClaimTable = Record<string, ActorClaim[]>;
+type ClaimTable = Record<string, ActorClaim[]>;
 
 // ---- attestations: what a badge has PROVED about its holder (phase 9) ----
 

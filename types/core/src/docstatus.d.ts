@@ -20,8 +20,8 @@
  * gets lost.
  */
 export declare const DOC_STATES: readonly ["open", "designed", "noted", "partial", "built", "blocked", "superseded"];
-export type DocState = (typeof DOC_STATES)[number];
-export interface DocStatus {
+type DocState = (typeof DOC_STATES)[number];
+interface DocStatus {
     status: DocState;
     /** When the status was last true, as a date. A verdict with no date is a
      *  verdict nobody can age. */
@@ -53,3 +53,4 @@ export declare function burnDown(all: readonly DocStatus[]): {
  * than thrown: the roadmap should be able to print a doc AND its complaint.
  */
 export declare function statusProblems(doc: DocStatus): string[];
+export {};

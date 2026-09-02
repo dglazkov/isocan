@@ -19,7 +19,7 @@
  * each other, and the arrangement that reads as "these nine" would become
  * unreadable exactly when you had asked to see it.
  */
-export interface TitleBox {
+interface TitleBox {
     x: number;
     y: number;
     width: number;
@@ -51,3 +51,4 @@ export declare function titleRoom(item: TitleBox, others: readonly Neighbour[],
 strip: number, 
 /** How much clear space to leave before the next thing. */
 gap?: number): number;
+export {};

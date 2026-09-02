@@ -61,7 +61,6 @@ export declare const TEXT_STYLE_SIZE: Record<TextStyle, number>;
  *  node made before the ladder existed says, and it stays correct. */
 export declare const TEXT_STYLE_PROP = "textStyle";
 export declare function textStyleOf(item: Item): TextStyle;
-export declare function isTextStyle(value: unknown): value is TextStyle;
 /** World-unit size of a node's words. */
 export declare function textSizeOf(item: Item): number;
 /**
@@ -117,7 +116,6 @@ export declare const TEXT_FACE_SCALE: Record<TextFace, number>;
 export declare function textDrawSize(item: Item): number;
 export declare const TEXT_FACE_PROP = "textFace";
 export declare function textFaceOf(item: Item): TextFace;
-export declare function isTextFace(value: unknown): value is TextFace;
 /**
  * **Paper: the same words, on something you could pick up.**
  *
@@ -169,21 +167,6 @@ export declare function paperPatch(paper: Paper | null): {
  * and a drag overrides it, like any other item.
  */
 export declare const PAPER_SIZE = 220;
-/**
- * **Below this many screen pixels, words stop being words.**
- *
- * Not a rendering nicety: at 10% zoom a body node draws forty shapes of
- * ~1.6px each, which the eye reads as a loud grey smear competing with the
- * screens it was meant to annotate. One glyph in its place is quieter AND
- * says more — that there is text here, and where.
- *
- * 5px is where latin text stops being resolvable as letters at all (8px is
- * where it becomes readable, which is the ladder's business above). The
- * canvas already keeps a rule of exactly this shape for item chrome —
- * `hasRoomForChrome` drops a label and badge when an item is too small on
- * screen — so this is that discipline reaching the words themselves.
- */
-export declare const TEXT_LEGIBLE_PX = 5;
 /** Should this node draw its words, or the mark that stands for them? */
 export declare function textIsLegible(worldSize: number, scale: number): boolean;
 /**

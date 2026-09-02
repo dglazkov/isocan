@@ -20,7 +20,7 @@ import type { CanvasContents, Item } from "./model.ts";
  */
 export const CONTEXT_PROP = "context";
 
-export type ContextMark = "pinned" | "excluded";
+type ContextMark = "pinned" | "excluded";
 
 /** What somebody decided about this item, or nothing. */
 export function contextMark(item: Item): ContextMark | null {

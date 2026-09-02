@@ -41,7 +41,7 @@ import { childrenOf, parentOf } from "./lineage.ts";
  * field anything stores — and calling it what it is beats implying a record
  * that does not exist.
  */
-export interface ConvergePlan {
+interface ConvergePlan {
   /** The item the winner folds into. */
   parentId: string;
   /** The winner's current version, to be added to the parent. */
@@ -52,7 +52,7 @@ export interface ConvergePlan {
   label: string;
 }
 
-export type ConvergeRefusal = { refused: string };
+type ConvergeRefusal = { refused: string };
 
 /**
  * What choosing this item would do, or why it cannot be done.

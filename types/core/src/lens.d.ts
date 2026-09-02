@@ -225,7 +225,7 @@ export declare function lensShape(acts: readonly LensAct[]): {
  * possible. A canvas somebody is genuinely on outranks a parked process on the
  * same canvas — being there is the stronger fact.
  */
-export interface LensLive {
+interface LensLive {
     /** Canvas ids where this actor is actually present. */
     here: ReadonlySet<string>;
     /** Canvas ids where an rc is parked for them, and they are not present. */
@@ -259,3 +259,4 @@ export declare function lensLiveList(live: LensLive): Array<{
     canvasId: string;
     state: "here" | "available";
 }>;
+export {};

@@ -119,7 +119,7 @@ export interface Pass {
  * and code that could present one where the other is expected is code that
  * one day will.
  */
-export interface PassToken {
+interface PassToken {
   passId: string;
   secret: string;
 }
@@ -278,7 +278,7 @@ export const PASS_EXPIRED = "pass-expired";
  */
 
 /** Has this pass been redeemed? */
-export function passSpent(pass: Pass): boolean {
+function passSpent(pass: Pass): boolean {
   return pass.redeemedAt !== undefined;
 }
 

@@ -112,7 +112,7 @@ export interface Pass {
  * and code that could present one where the other is expected is code that
  * one day will.
  */
-export interface PassToken {
+interface PassToken {
     passId: string;
     secret: string;
 }
@@ -232,22 +232,7 @@ export declare const PASS_UNKNOWN = "unknown-pass";
 export declare const PASS_SPENT = "pass-spent";
 /** Older than `PASS_TTL_MS`. Never redeemed, and never will be. */
 export declare const PASS_EXPIRED = "pass-expired";
-/**
- * **There is deliberately no fourth code for "that is not your claim."**
- *
- * Minting a pass for an actor the minting badge does not hold is refused by
- * the check that already exists — mechanism 5's `not-your-actor`, the same
- * sentence with the same remedy ("claim that actor first"), spoken by
- * `Engine.requireActor` at the one place the claims registry lives. Inventing
- * `not-your-claim` beside it would be two spellings of one refusal, and the
- * second one would drift.
- *
- * The refusal above is about REDEEMING. This note is here because the brief
- * for this work said "spent, expired, unknown, not-yours", and a reader
- * counting codes should find the fourth one accounted for rather than missing.
- */
-/** Has this pass been redeemed? */
-export declare function passSpent(pass: Pass): boolean;
 /** Is it past its `expiresAt`? The clock is the caller's, as everywhere else
  * in core — this file stays pure. */
 export declare function passExpired(pass: Pass, now: string): boolean;
+export {};

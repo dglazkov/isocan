@@ -12,7 +12,7 @@ import type { CanvasContents } from "./model.js";
  * Deleted work is left out. An item in the trash is not something to offer
  * somebody a way to go and look at.
  */
-export type ActivityKind = "said" | "made" | "edited";
+type ActivityKind = "said" | "made" | "edited";
 export interface ActivityEntry {
     kind: ActivityKind;
     /** ISO timestamp of the act itself, not of anything downstream. */
@@ -29,3 +29,4 @@ export interface ActivityEntry {
 /** Most recent first. `limit` is a display budget, not a time window: a canvas
  * nobody has touched in a week should still say what happened last. */
 export declare function recentActivity(canvas: CanvasContents, actorId: string, limit?: number): ActivityEntry[];
+export {};

@@ -1,4 +1,4 @@
-export type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
+type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
 /** The speaker named an actor its badge does not claim (the identity desk's
  * mechanism 5). The remedy is always the same and always available: claim
  * the actor first. */
@@ -52,3 +52,4 @@ export declare class OplogFencedError extends Error {
  * assign as canvas state.
  */
 export declare function unknownOperation(op: never): never;
+export {};

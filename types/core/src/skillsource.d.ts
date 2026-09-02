@@ -11,7 +11,7 @@
  * "where did this come from" has to have an answer, and that answer has to be
  * shown to somebody before it lands.
  */
-export interface SkillSource {
+interface SkillSource {
     /** The raw file to fetch. */
     url: string;
     /** How to describe the origin to a person, e.g. "mattpocock/skills". */
@@ -27,3 +27,4 @@ export declare function skillSource(ref: string): SkillSource | null;
 /** A name for the command, when the person did not give one: the skill's own
  * directory (`…/grilling/SKILL.md` → `grilling`), else the filename. */
 export declare function skillNameFrom(ref: string): string | null;
+export {};

@@ -36,7 +36,7 @@ export interface ContentDeps {
      * the same pass-through the app-origin route has always done. */
     homes: HomeLinks | null;
 }
-export interface ContentOptions {
+interface ContentOptions {
     /**
      * The `Content-Security-Policy` these responses carry, or null for none.
      *
@@ -124,3 +124,4 @@ export declare function contentPorts(host: string, envValue: string | undefined,
 export declare const CONTENT_CSP: string;
 /** Register the content role's routes — all of them, which is one. */
 export declare function registerContentRoutes(app: FastifyInstance, deps: ContentDeps, options: ContentOptions): void;
+export {};
