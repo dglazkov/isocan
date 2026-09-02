@@ -302,6 +302,9 @@ export interface HomeConnection {
    * only one of them means push.
    */
   hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
+  /** Hand this home a canvas whole — its log, verbatim. The receiving half of
+   *  a teleport; see `Engine.adopt` for why it is not a replay of ops. */
+  adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }>;
   /** Bytes this replica has never seen, read straight from the home. Null when
    * the home does not have them either. */
   openBlob(
@@ -339,6 +342,10 @@ export interface HomeDirectory {
   /** Every open link — for the acts that are home-scoped rather than
    * canvas-scoped. */
   all(): readonly HomeConnection[];
+  /** A link to an address, opened if this daemon has not dialled it before.
+   *  For the acts that name a home rather than inheriting one — teleport
+   *  names where a canvas is going. */
+  linkFor(homeUrl: string): HomeConnection;
   /** Where a canvas born now, naming nothing, would live. */
   birth(): HomeConnection | null;
   /**
@@ -1715,6 +1722,29 @@ export class HomeLink implements HomeConnection {
       throw new HomeRefusedError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     }
     return json as BlobUploadResponse;
+  }
+
+  async adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }> {
+    const badge = await this.ensureBadge();
+    if (!badge) throw new HomeUnreachableError(this.homeUrl, "no badge");
+    const send = async (held: StoredBadge) =>
+      this.fetchHome(`/api/projects/${canvasId}/adopt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...bearerHeader(held) },
+        body: JSON.stringify({ entries }),
+      });
+    let res = await send(badge);
+    if (res.status === 401) {
+      const fresh = await this.reBadge();
+      if (fresh) res = await send(fresh);
+    }
+    const json = (await res.json().catch(() => null)) as
+      | ({ seqs: number } & { error?: string; code?: string })
+      | null;
+    if (!res.ok) {
+      throw new HomeRefusedError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+    }
+    return json as { seqs: number };
   }
 
   async hasBlob(canvasId: string, blobHash: string): Promise<boolean | null> {

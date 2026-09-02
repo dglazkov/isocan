@@ -3,6 +3,16 @@ import type { BlobUploadRequest, Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import type { HomeDirectory } from "./home-link.js";
 import { type GcOptions, type GcReport } from "./gc.js";
+/** What a teleport did, or would do. */
+export interface TeleportReport {
+    canvasId: string;
+    to: string;
+    entries: number;
+    blobs: number;
+    bytes: number;
+    /** False for a dry run, and for nothing else. */
+    moved: boolean;
+}
 export interface EngineOptions {
     /** Who is visibly on a canvas right now — presence, which lives outside
      * the engine. Claims consult it so a live face holds its name. */
@@ -263,6 +273,65 @@ export declare class Engine {
      * take down the one mechanism that is supposed to be steady.
      */
     tipSeq(canvasId: string): Promise<number | null>;
+    /**
+     * **Send a canvas to another home** — the move half, and a dry run of it.
+     *
+     * `docs/research/2026-09-01-teleport.md` is the argument. The short form:
+     * the log IS the canvas, the reducer is deterministic, so a home holding
+     * the same entries holds the same canvas. This is not a data migration, it
+     * is a replay — and the order below is chosen so that anything failing
+     * before the last step leaves the canvas exactly where it was.
+     *
+     *   1. bytes — content-addressed, so sending them twice is free
+     *   2. the log — verbatim, via `adopt`, which refuses a canvas that exists
+     *   3. the routing row — this daemon stops being the home and starts
+     *      forwarding, which is what makes it a MOVE rather than a copy
+     *
+     * Two things deliberately do not travel, and the report says so rather
+     * than leaving them to be discovered:
+     *
+     * **The grants.** Who may enter is a decision about a PLACE, and the new
+     * home is a different place with a different operator. A teleport that
+     * quietly recreated "anyone with the link can enter" would have widened
+     * access without anybody saying so.
+     *
+     * **The actor registry.** Names, colours and marks are home-scoped and
+     * never replicate; the receiving home knows these actors only by what is
+     * stamped on their ops. People arrive under the name they had when they
+     * wrote, which is a real loss and a visible one.
+     */
+    teleport(canvasId: string, toHomeUrl: string, options: {
+        dryRun: boolean;
+    }): Promise<TeleportReport>;
+    /**
+     * **Take a canvas whole, as somebody else's log** — the receiving half of a
+     * teleport.
+     *
+     * A canvas IS its log: the snapshot is what you get by folding it, and the
+     * reducer is deterministic, so a home holding the same entries holds the
+     * same canvas. This writes them VERBATIM — same seq, same `ts`, same
+     * envelope — which is the whole reason it exists rather than a loop over
+     * `submitOp`.
+     *
+     * Replaying through the ordinary write path would look equivalent and
+     * quietly is not. `PostOpRequest` carries no timestamp, deliberately: a
+     * client that stamps its own time is a client that can lie about when
+     * something happened. So a replayed canvas would arrive with every comment,
+     * every version and every item dated at the moment of the move — the order
+     * intact and the history erased. Seqs would survive by luck (an empty
+     * canvas numbers 1..N the same way), but times would not, and nobody would
+     * notice until they looked at a thread.
+     *
+     * **Only into nothing.** This refuses a canvas that already exists here,
+     * which keeps the surface narrow: it can create, never overwrite, so no
+     * sequence of calls to it can damage a canvas anybody is using. Moving a
+     * canvas ONTO a home that has it is not a teleport, it is a merge, and
+     * merging two orders is the thing `docs/research/2026-09-01-teleport.md`
+     * argues is a different product.
+     */
+    adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
+        seqs: number;
+    }>;
     getLog(canvasId: string, sinceSeq?: number): Promise<LogEntry[]>;
     /**
      * What `gc` compacted away, oldest first. Straight from the backing rather

@@ -330,6 +330,15 @@ export declare class DaemonRoutes {
         pushed: string[];
         unknown: string[];
     }>;
+    /** Send a canvas to another home, or ask what that would move. */
+    teleport(canvasId: string, to: string, dryRun: boolean): Promise<{
+        canvasId: string;
+        to: string;
+        entries: number;
+        blobs: number;
+        bytes: number;
+        moved: boolean;
+    }>;
     gc(canvasId: string, request: GcRequest): Promise<GcReport>;
     /** Every canvas this badge is admitted to at this home, in one sweep — the
      * same per-canvas policy, aggregated (phase 13.7). Names no canvas, so it

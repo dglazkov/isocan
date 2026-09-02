@@ -687,6 +687,15 @@ export class DaemonRoutes {
     return this.request("POST", `/api/projects/${canvasId}/blobs/reconcile`, { push });
   }
 
+  /** Send a canvas to another home, or ask what that would move. */
+  teleport(
+    canvasId: string,
+    to: string,
+    dryRun: boolean,
+  ): Promise<{ canvasId: string; to: string; entries: number; blobs: number; bytes: number; moved: boolean }> {
+    return this.request("POST", `/api/projects/${canvasId}/teleport`, { to, dryRun });
+  }
+
   gc(canvasId: string, request: GcRequest): Promise<GcReport> {
     return this.request("POST", `/api/projects/${canvasId}/gc`, request);
   }

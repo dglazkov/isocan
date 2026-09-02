@@ -143,6 +143,11 @@ export interface HomeConnection {
      * only one of them means push.
      */
     hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
+    /** Hand this home a canvas whole — its log, verbatim. The receiving half of
+     *  a teleport; see `Engine.adopt` for why it is not a replay of ops. */
+    adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
+        seqs: number;
+    }>;
     /** Bytes this replica has never seen, read straight from the home. Null when
      * the home does not have them either. */
     openBlob(canvasId: string, blobHash: string, range?: {
@@ -182,6 +187,10 @@ export interface HomeDirectory {
     /** Every open link — for the acts that are home-scoped rather than
      * canvas-scoped. */
     all(): readonly HomeConnection[];
+    /** A link to an address, opened if this daemon has not dialled it before.
+     *  For the acts that name a home rather than inheriting one — teleport
+     *  names where a canvas is going. */
+    linkFor(homeUrl: string): HomeConnection;
     /** Where a canvas born now, naming nothing, would live. */
     birth(): HomeConnection | null;
     /**
@@ -685,6 +694,9 @@ export declare class HomeLink implements HomeConnection {
         mimeType: string;
         filename: string;
     }): Promise<BlobUploadResponse>;
+    adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
+        seqs: number;
+    }>;
     hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
     /** Bytes this replica has never held, streamed from the home. What makes an
      * item somebody else added on another machine openable here. */
