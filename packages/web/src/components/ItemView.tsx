@@ -493,6 +493,9 @@ function ItemViewInner({
       height,
       style: textStyleOf(item),
       face: textFaceOf(item),
+      // The paper too, or a yellow note re-opens as a white field over its
+      // own square — a card on a card, and not the note you double-clicked.
+      paper,
     });
   }
 

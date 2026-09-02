@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 24 still open** — of which 15 partly
-built, 9 designed, 0 blocked, and
+**14 built · 24 still open** — of which 16 partly
+built, 8 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -16,10 +16,11 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>15</sub>
+## Partly built <sub>16</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is built, and both sources are watched — commits and the repo's own canvas; CI still cannot reach a canvas · see on-demand |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
@@ -36,11 +37,10 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>9</sub>
+## Designed, not built <sub>8</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is buildable today; the write half waits on on-demand's ACP wake, authoritative since 30 Aug · see on-demand |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |

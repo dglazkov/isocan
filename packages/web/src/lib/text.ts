@@ -15,6 +15,7 @@ import {
   type TextStyle,
   PAPER_PROP,
   PAPER_SIZE,
+  paperPatch,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
@@ -117,7 +118,14 @@ export async function reviseTextNode(
   grew = false,
   style: TextStyle = "body",
   face: TextFace = "sans",
+  /** The paper the words were on when they committed — the swatches sit on
+   *  the composer during an edit too, so a note re-opened yellow and closed
+   *  pink has to land pink, or the one control that changes how it looks
+   *  works only the first time. `null` takes the paper OFF; the patch comes
+   *  from core so this cannot spell the property differently from the CLI. */
+  paper: Paper | null = null,
 ): Promise<void> {
+  const onPaper = paperPatch(paper);
   // One edit, one undo: the version, the title and any resize are one act.
   const group = newGroupId();
   const blob = new Blob([body], { type: TEXT_MIME });
@@ -152,10 +160,12 @@ export async function reviseTextNode(
       properties: {
         ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
         ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+        ...("properties" in onPaper ? onPaper.properties : {}),
       },
       removeProperties: [
         ...(style === "body" ? [TEXT_STYLE_PROP] : []),
         ...(face === "sans" ? [TEXT_FACE_PROP] : []),
+        ...("removeProperties" in onPaper ? onPaper.removeProperties : []),
       ],
     },
     },

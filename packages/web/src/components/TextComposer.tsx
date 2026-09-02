@@ -157,11 +157,16 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * the principle only half holds — you would pick yellow and go on typing
    * into a white rectangle that becomes a square note on commit.
    *
-   * The square is `PAPER_SIZE`, which is exactly what `addTextNode` commits,
-   * so what is under the caret is the note.
+   * A NEW note is the `PAPER_SIZE` square, which is exactly what `addTextNode`
+   * commits, so what is under the caret is the note. An EXISTING note is
+   * whatever size it has been dragged to: re-opening one has to sit on the
+   * note's own box, edge for edge, the way renaming sits on the name — the
+   * first version of this put the default square over a note somebody had
+   * made taller, and a white field inside the yellow, which read as a form
+   * over the note rather than the note itself.
    */
-  const width = paper ? PAPER_SIZE : fit.width;
-  const height = paper ? PAPER_SIZE : fit.height;
+  const width = paper ? (pending.itemId ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE) : fit.width;
+  const height = paper ? (pending.itemId ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE) : fit.height;
 
   /** Change the step or face mid-sentence, without losing the sentence. */
   function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
@@ -197,12 +202,25 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     if (decision.do === "nothing") return;
     const words = decision.body;
     // What was measured IS what commits — the mirror rendered these words at
-    // this step and this face, so the node lands the shape it looked.
-    const measured = { width: fit.width, height: fit.height };
+    // this step and this face, so the node lands the shape it looked. On
+    // paper the box is the note, not the words: a post-it keeps its size
+    // (`core/textnode.ts`, "fixed size, not auto-grow"), so what commits is
+    // the square the person was typing into, and an edit never resizes one.
+    const measured = at.paper ? { width, height } : { width: fit.width, height: fit.height };
     try {
       if (at.itemId) {
         const grew = measured.height > (at.height ?? 0);
-        await reviseTextNode(canvasId, actor, at.itemId, words, measured, grew, at.style, at.face);
+        await reviseTextNode(
+          canvasId,
+          actor,
+          at.itemId,
+          words,
+          measured,
+          grew,
+          at.style,
+          at.face,
+          at.paper ?? null,
+        );
       } else {
         await addTextNode(
           canvasId,
