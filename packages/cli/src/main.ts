@@ -3972,12 +3972,14 @@ program
 // ---------- items ----------
 
 /** Shared placement rule for new items: --at > --anchor > left of the
- * leftmost item > the origin. */
+ * leftmost item > the origin. `--at` is a CHOSEN spot — naming coordinates
+ * is pointing at them — and lands exactly there; the rest are computed and
+ * may be tidied clear of what is already on the canvas (`Placement.chosen`). */
 function placementFor(
   snapshot: CanvasSnapshotResponse,
   opts: { at?: string; anchor?: string },
 ): Placement {
-  if (opts.at) return parseXY(opts.at);
+  if (opts.at) return { ...parseXY(opts.at), chosen: true };
   if (opts.anchor) return { anchorItemId: resolveItem(snapshot, opts.anchor).id };
   const leftmost = Object.values(snapshot.canvas.items).reduce<Item | null>(
     (best, item) => (best === null || item.x < best.x ? item : best),
@@ -4360,7 +4362,8 @@ program
           },
           width: item.width,
           height: item.height,
-          placement: { x, y },
+          // `--at` chose the spot, so the copies stay where they were put.
+          placement: { x, y, ...(opts.at ? { chosen: true } : {}) },
           title: item.title,
           ...(item.description ? { description: item.description } : {}),
           properties: copyProperties(item, { sameCanvas }),
