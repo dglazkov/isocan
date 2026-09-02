@@ -803,10 +803,14 @@ for ✅ on the brief, or "go", and do not call a phase before you have it.
 \`isocan sprint --json\` shows the marks each vote uses (🔴 heat map, ⭐ straw
 poll, 🏆 supervote); say them once so nobody invents a fourth.
 
-THE CLOCK. Every phase begins with exactly one command:
+THE CLOCK, AND THE WALK. Every phase begins with exactly one command:
     isocan sprint phase <phase> [duration] [note]
 That posts the /sprint line to the Chat, which is the only thing that starts a
-clock. Then read the seconds left and park on them:
+clock — and, with the board laid, it walks the room: everyone's camera glides
+to the phase's sheet, and the clock chip offers the phase's one action (New
+note on the phase's paper, in the sheet; Hand in, which lands the selection
+on the sheet). You never need to say where to go or what to click; call the
+phase and the board does that. \`isocan sprint\` names the sheet. Then read the seconds left and park on them:
     isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
 Exit 2 is the bell — call the next phase. A wake mid-box is somebody's question:
 answer it and park again for what is left (\`isocan sprint --json\` again). A

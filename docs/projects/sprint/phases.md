@@ -31,8 +31,12 @@ its name, `isocan area new/ls` and `--in` on `text`, `add`, `mv`, `ls` and
 `SPRINT_BOARD` in core, laid by `isocan sprint board` as one group and
 idempotently; every phase knows its sheet (`sprintState.area`); the brief is
 one card with a history (`isocan sprint brief`); and the `/sprint` skill lays
-the board before it asks anything (`cli/test/board.test.ts`). Phase 2 is
-next.
+the board before it asks anything (`cli/test/board.test.ts`). **Phase 2 is
+built too:** a phase call glides everyone who watched it to the phase's
+sheet, and the clock chip offers the phase's one action — *Go there*, *New
+note* on the phase's paper in the sheet, *Hand in* which lands the
+selection on the sheet — through helpers the item menu shares
+(`web/test/walk.test.ts`). Phase 3 is next.
 
 ---
 

@@ -5181,9 +5181,21 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 5px 12px 5px 10px; border-radius: 999px;
   background: var(--card); color: var(--ink); border: 1px solid var(--line);
   font-size: 11.5px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-pop);
-  pointer-events: none;
+  /* It has buttons now (the walk), so it takes the pointer — the chip is
+     small and central on purpose, and a canvas press beside it is a press
+     on the canvas. */
+  pointer-events: auto;
 }
 .sprint-chip.lowered { top: 92px; }
+/* The phase's one action, or two: a small button in the chip's own voice.
+   `primary` is Hand in, the one that lands something on the wall. */
+.sprint-action {
+  height: 22px; padding: 0 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+  font: inherit; font-size: 11px; font-weight: 600; line-height: 1;
+}
+.sprint-action:hover { border-color: var(--accent); }
+.sprint-action.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sprint-phase { display: inline-flex; align-items: center; gap: 5px; }
 .sprint-mark { font-size: 12px; }
 .sprint-clock {
