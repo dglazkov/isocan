@@ -782,15 +782,26 @@ phase change: the clock chip and \`isocan sprint\` derive the current phase from
 the newest such line in the Chat. Anything else after /sprint is a BRIEF for
 you: what the team wants to design. Only you post phase lines.
 
-SETUP, ONE ROUND. Before any phase, ask in one Chat comment and wait:
+SETUP, ONE ROUND — AND THE BOARD FIRST. Two things at once, in this order:
+    isocan sprint board
+lays the board: eleven sheets to the right of the work, one per stretch of
+the week — Brief · Map · Experts & HMW · Target · Demos · Sketches · Vote ·
+Storyboard · Prototype · Test · Wrap — each carrying a card that says what
+happens there. The board IS the walkthrough: nobody in the room has to know
+the method, because every sheet says what to do on it. Then, in one Chat
+comment, ask and wait:
 1. Who is the DECIDER — one person, named. Never you, never an agent.
 2. Who is sketching — the people, and which agents by name. Agents sketch as
    peers under the same rules.
 3. The long-term goal in one sentence, and the two or three sprint questions.
 4. Which cut — four days, one day, or the one-hour version (hmw → ideas →
    heatmap → poll → supervote). Default to one day if nobody says.
-Then \`isocan sprint --json\` shows the marks each vote uses (🔴 heat map,
-⭐ straw poll, 🏆 supervote); say them once so nobody invents a fourth.
+Write the answers onto the Brief sheet as they come:
+    isocan sprint brief --goal "…" --question "…" --question "…" --decider Maya --sketcher Theo --sketcher Nia --cut "one day"
+Every call is a new VERSION of the one brief, never a second card. Then ask
+for ✅ on the brief, or "go", and do not call a phase before you have it.
+\`isocan sprint --json\` shows the marks each vote uses (🔴 heat map, ⭐ straw
+poll, 🏆 supervote); say them once so nobody invents a fourth.
 
 THE CLOCK. Every phase begins with exactly one command:
     isocan sprint phase <phase> [duration] [note]

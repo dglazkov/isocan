@@ -24,10 +24,15 @@ and a property.
 
 ---
 
-**Where we are: phase 0 built, 2 Sep 2026.** Areas exist on both surfaces —
-`core/area.ts`, the sheet drawn behind everything and grabbed by its name,
-`isocan area new/ls` and `--in` on `text`, `add`, `mv`, `ls` and `format`
-— proved over the wire in `cli/test/area.test.ts`. Phase 1 is next.
+**Where we are: phases 0 and 1 built, 2 Sep 2026.** Areas exist on both
+surfaces — `core/area.ts`, the sheet drawn behind everything and grabbed by
+its name, `isocan area new/ls` and `--in` on `text`, `add`, `mv`, `ls` and
+`format` — proved over the wire in `cli/test/area.test.ts`. The board is
+`SPRINT_BOARD` in core, laid by `isocan sprint board` as one group and
+idempotently; every phase knows its sheet (`sprintState.area`); the brief is
+one card with a history (`isocan sprint brief`); and the `/sprint` skill lays
+the board before it asks anything (`cli/test/board.test.ts`). Phase 2 is
+next.
 
 ---
 

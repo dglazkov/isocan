@@ -122,6 +122,15 @@ import {
   AREA_PROPERTIES,
   AREA_TINT_PROP,
   PLACEMENT_GAP,
+  SPRINT_BOARD,
+  BOARD_GAP,
+  BOARD_PROP,
+  BRIEF_PROP,
+  boardLayout,
+  boardAreaFor,
+  boardOf,
+  briefCard,
+  briefItem,
   areaInner,
   areasOf,
   findArea,
@@ -6511,6 +6520,7 @@ sprintCmd
           over: phaseOver(state, now),
           hidesVotes: hidesVotes(state, now),
           handedIn: state.handedIn.map((i) => ({ id: i.id, title: i.title })),
+          area: state.area ? { id: state.area.id, title: state.area.title, x: state.area.x, y: state.area.y, width: state.area.width, height: state.area.height } : null,
           tally: rows.map((r) => ({ id: r.item.id, title: r.item.title, humans: r.humans, agents: r.agents, actorIds: r.actorIds })),
           marks: PHASES.filter((ph) => ph.mark).map((ph) => ({ phase: ph.name, mark: ph.mark })),
         });
@@ -6521,6 +6531,7 @@ sprintCmd
       for (const s of sessions) names.set(s.actor.id, s.label ?? s.actor.name);
       const who = names.get(state.facilitatorId) ?? state.facilitatorName;
       console.log(`${state.phase.label} (${state.phase.kind}) · ${clock} · called by ${who}${state.note ? ` — ${state.note}` : ""}`);
+      console.log(state.area ? `on the board: ${state.area.title} (${state.area.id})` : "no board laid — `isocan sprint board` lays one");
       console.log(
         state.handedIn.length === 0
           ? "handed in: nothing yet"
@@ -6563,6 +6574,145 @@ sprintCmd
       );
       if (box !== null) console.log(`the bell: isocan wait --timeout ${box}`);
     }),
+  );
+
+/**
+ * **The board** (sprint phase 1): the eleven sheets of `SPRINT_BOARD`, laid
+ * in one row to the right of everything as one group — so one ⌘Z takes the
+ * whole board away — each an area wearing `board=<key>` and carrying its
+ * card. Idempotent: a sheet that already exists (by key) is left where it
+ * is, so running this twice lays nothing twice and a board somebody has
+ * rearranged is not put back.
+ */
+sprintCmd
+  .command("board")
+  .description("Lay the board — one sheet per stretch of the week, to the right of everything")
+  .option("--at <x,y>", "the first sheet's top-left (default: right of everything)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { at?: string; canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const all = Object.values(snapshot.canvas.items);
+      const origin = opts.at
+        ? parseXY(opts.at)
+        : {
+            x: all.length === 0 ? 0 : Math.max(...all.map((one) => one.x + one.width)) + BOARD_GAP,
+            y: all.length === 0 ? 0 : Math.min(...all.map((one) => one.y)),
+          };
+      const group = newGroupId();
+      const laid: { key: string; itemId: string; title: string; x: number; y: number }[] = [];
+      const kept: { key: string; itemId: string; title: string }[] = [];
+      for (const sheet of boardLayout(origin)) {
+        const existing = boardAreaFor(snapshot.canvas, sheet.key);
+        if (existing) {
+          kept.push({ key: sheet.key, itemId: existing.id, title: existing.title });
+          continue;
+        }
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(sheet.card, "utf8"), AREA_MIME, AREA_FILENAME);
+        const itemId = newItemId();
+        await sendOp(
+          ctx,
+          p.id,
+          {
+            type: "item.add",
+            itemId,
+            version: {
+              id: newVersionId(),
+              blobHash: upload.blobHash,
+              mimeType: AREA_MIME,
+              filename: AREA_FILENAME,
+              size: upload.size,
+            },
+            width: sheet.width,
+            height: sheet.height,
+            // Chosen: the board is laid where the layout says, edge to edge,
+            // and a sheet the tidy rule moved would put its phase somewhere
+            // else on every replay.
+            placement: { x: sheet.x, y: sheet.y, chosen: true },
+            title: sheet.title,
+            properties: { ...AREA_PROPERTIES, [AREA_TINT_PROP]: sheet.tint, [BOARD_PROP]: sheet.key },
+          },
+          group,
+        );
+        laid.push({ key: sheet.key, itemId, title: sheet.title, x: sheet.x, y: sheet.y });
+      }
+      if (ctx.json) return printJson({ laid, kept, origin });
+      if (laid.length === 0) return console.log(`the board is already laid — ${kept.length} sheets, nothing added`);
+      console.log(`laid ${laid.length} sheet${laid.length === 1 ? "" : "s"}${kept.length > 0 ? ` (${kept.length} already there)` : ""}: ${laid.map((one) => one.title).join(" · ")}`);
+      console.log("one undo takes the whole board away; `isocan area ls` names the sheets");
+    }),
+  );
+
+/**
+ * **The brief** (sprint phase 1): what the setup round answered, as a card
+ * on the Brief sheet. Written once as a text node wearing `brief=1`; every
+ * later call writes the next VERSION of the same card, so the brief's
+ * history is on its stack and there is never a second brief.
+ */
+sprintCmd
+  .command("brief")
+  .description("Write the brief onto the Brief sheet — a new version each time, never a second card")
+  .option("--goal <sentence>", "the long-term goal, in one sentence")
+  .option("--question <q>", "a sprint question (repeatable)", (one: string, all: string[]) => [...all, one], [] as string[])
+  .option("--decider <name>", "the one person who decides — never an agent")
+  .option("--sketcher <name>", "somebody sketching, person or agent (repeatable)", (one: string, all: string[]) => [...all, one], [] as string[])
+  .option("--cut <which>", "four days | one day | one hour")
+  .option("--canvas <canvas>")
+  .action(
+    run(
+      async (
+        opts: { goal?: string; question: string[]; decider?: string; sketcher: string[]; cut?: string; canvas?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        if (opts.canvas) ctx.canvasRef = opts.canvas;
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const card = briefCard({
+          ...(opts.goal ? { goal: opts.goal } : {}),
+          ...(opts.question.length > 0 ? { questions: opts.question } : {}),
+          ...(opts.decider ? { decider: opts.decider } : {}),
+          ...(opts.sketcher.length > 0 ? { sketchers: opts.sketcher } : {}),
+          ...(opts.cut ? { cut: opts.cut } : {}),
+        });
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card, "utf8"), TEXT_MIME, TEXT_FILENAME);
+        const version = {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType: TEXT_MIME,
+          filename: TEXT_FILENAME,
+          size: upload.size,
+        };
+        const existing = briefItem(snapshot.canvas);
+        if (existing) {
+          await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
+          if (ctx.json) return printJson({ itemId: existing.id, version: existing.versions.length + 1 });
+          return console.log(`the brief has a new version (${existing.versions.length + 1}) — S fans the history`);
+        }
+        // A new brief lands on the Brief sheet when the board is laid, and
+        // wherever `text` would put it otherwise — a brief without a board
+        // is still a brief.
+        const sheet = boardAreaFor(snapshot.canvas, "brief");
+        const size = { width: 900, height: 600 };
+        const placement: Placement = sheet
+          ? { ...freeSpotIn(snapshot.canvas, sheet, size.width, size.height), chosen: true }
+          : placementFor(snapshot, {}, size);
+        const itemId = newItemId();
+        await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version,
+          width: size.width,
+          height: size.height,
+          placement,
+          title: "Brief",
+          properties: { ...TEXT_PROPERTIES, [BRIEF_PROP]: "1" },
+        });
+        if (ctx.json) return printJson({ itemId, version: 1, placement });
+        console.log(`the brief is on the board${sheet ? "" : " (no Brief sheet — laid where text goes)"} — react ✅ on it when it is right`);
+      },
+    ),
   );
 
 sprintCmd
