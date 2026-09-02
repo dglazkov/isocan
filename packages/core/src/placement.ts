@@ -81,8 +81,26 @@ const overlaps = (a: Box, b: Box, pad: number): boolean =>
  * reducer. It is also what makes a batch work: each `item.add` is applied in
  * turn, so the second file's search already sees the first one land.
  */
-export function nearestFreeSpot(want: Box, occupied: Placed[]): { x: number; y: number } {
-  const clear = (box: Box) => !occupied.some((item) => overlaps(box, item, PLACEMENT_CLEARANCE));
+export function nearestFreeSpot(
+  want: Box,
+  occupied: Placed[],
+  /**
+   * Confine the search to this box — an area's inner region
+   * (`core/area.ts`). A cell that would poke outside it is not a spot, and
+   * a region too full to hold the item answers with its own top-left rather
+   * than with somewhere outside it, because "inside the area" is the whole
+   * request and a spot beyond its edge would quietly break it.
+   */
+  within?: Box,
+): { x: number; y: number } {
+  const inside = (box: Box) =>
+    within === undefined ||
+    (box.x >= within.x &&
+      box.y >= within.y &&
+      box.x + box.width <= within.x + within.width &&
+      box.y + box.height <= within.y + within.height);
+  const clear = (box: Box) =>
+    inside(box) && !occupied.some((item) => overlaps(box, item, PLACEMENT_CLEARANCE));
   if (clear(want)) return { x: want.x, y: want.y };
 
   const stepX = want.width + PLACEMENT_GAP;
@@ -120,6 +138,8 @@ export function nearestFreeSpot(want: Box, occupied: Placed[]): { x: number; y: 
     }
   }
 
+  // Confined and full: the region's own corner, which is at least inside it.
+  if (within !== undefined) return { x: want.x, y: want.y };
   // A canvas dense enough to defeat the search still gets a real answer:
   // past the right edge of everything, level with where it was asked for.
   const right = Math.max(...occupied.map((i) => i.x + i.width));

@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, handInPatch, handedInFor, sprintState } from "@isocan/core";
+import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -20,6 +20,7 @@ import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/ca
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Panel, openPanel } from "./panels.ts";
 import { glideToBox } from "./zoomactions.ts";
+import { handIn, handable } from "./sprint.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -275,27 +276,16 @@ function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
   const canvas = useCanvasStore.getState().canvas;
   const state = canvas ? sprintState(canvas) : null;
   if (!state) return [];
-  const pending = items.filter((item) => handedInFor(item) !== state.phase.name);
+  const pending = handable(items, state);
   if (pending.length === 0) return [];
   const what = pending.length === 1 ? (items.length === 1 ? "this" : "1") : String(pending.length);
   return [
     {
       label: `Hand ${what} in for ${state.phase.label}`,
+      // The same act the clock chip's button does — one helper, so a hand-in
+      // from the menu and from the chip land the same way (on the sheet).
       run: () => {
-        const group = pending.length > 1 ? newGroupId() : undefined;
-        for (const item of pending) {
-          void sendEchoed(
-            ctx.canvasId,
-            ctx.actor,
-            { type: "item.update", itemId: item.id, patch: handInPatch(state.phase.name) },
-            group,
-          );
-        }
-        flashNotice(
-          pending.length === 1
-            ? `Handed in for ${state.phase.label}`
-            : `Handed ${pending.length} in for ${state.phase.label}`,
-        );
+        void handIn(ctx.canvasId, ctx.actor, pending, state);
       },
     },
   ];

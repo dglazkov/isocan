@@ -7,6 +7,10 @@ import {
   BROWSER_MIME,
   annotationsOf,
   isAnnotation,
+  isArea,
+  areaTint,
+  itemsIn,
+  AREA_TITLE_HEIGHT,
   isDrawingItem,
   isSlide,
   isTextItem,
@@ -213,6 +217,11 @@ function ItemViewInner({
   const isText = isTextItem(item);
   // Paper turns a caption into an object: see `core/textnode.ts`.
   const paper = isText ? paperOf(item) : null;
+  // An area is a sheet things are placed ON: drawn behind everything, and
+  // transparent to the pointer except for its title strip and handles, so a
+  // tool used inside it still reaches the canvas. See `core/area.ts`.
+  const isAreaItem = isArea(item);
+  const tint = isAreaItem ? areaTint(item) : null;
   // The words' world size, and whether they are still words at this zoom.
   // Below the cut a node draws ONE mark instead of forty shapes of grey
   // smear — see `textIsLegible` in core for why 5px and not a fade.
@@ -325,8 +334,22 @@ function ItemViewInner({
     // leaves the X you drew on it behind, which is the moment the mark stops
     // meaning anything.
     const canvasNow = useCanvasStore.getState().canvas;
+    // An area carries what is on it, the way it carries its annotations: the
+    // sheet is the handle for everything placed there, and membership is
+    // read off geometry at the moment of the grab (`core/area.ts`).
     const dragIds = canvasNow
-      ? [...new Set(chosen.flatMap((id) => [id, ...annotationsOf(canvasNow, id).map((one) => one.id)]))]
+      ? [
+          ...new Set(
+            chosen.flatMap((id) => {
+              const one = canvasNow.items[id];
+              return [
+                id,
+                ...annotationsOf(canvasNow, id).map((mark) => mark.id),
+                ...(one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : []),
+              ];
+            }),
+          ),
+        ]
       : chosen;
     if (!wasInSelection) ui.select(targetId);
 
@@ -546,7 +569,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}`}
       data-item-id={item.id}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
@@ -594,6 +617,18 @@ function ItemViewInner({
         >
           ×{item.versions.length}
         </button>
+      )}
+      {isAreaItem && (
+        /* The strip is the area's name AND its handle — the one part of the
+           sheet that takes the pointer, so it can be grabbed at any zoom
+           while the sheet itself lets tools through to the canvas. */
+        <div
+          className="area-title"
+          style={{ height: AREA_TITLE_HEIGHT, fontSize: Math.round(AREA_TITLE_HEIGHT * 0.6) }}
+          title={item.title}
+        >
+          {item.title}
+        </div>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>
         <span

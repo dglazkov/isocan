@@ -695,12 +695,26 @@ clock chip cannot disagree. `--json` carries `remainingSeconds`, which is the
 bell:
 
 ```sh
+isocan sprint board                       # lay the board: one sheet per stretch of the week
+isocan sprint brief --goal "…" --decider Maya --question "…"   # the brief, as one card with a history
 isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
 isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
 isocan sprint handin <items...>           # these were made for the current phase
 isocan sprint tally                       # human dots and agent dots, apart
 isocan sprint end                         # over — no phase, no clock
 ```
+
+**The board is the walkthrough.** `isocan sprint board` lays eleven areas
+(below) to the right of the work — Brief · Map · Experts & HMW · Target ·
+Demos · Sketches · Vote · Storyboard · Prototype · Test · Wrap — each with a
+card that says what happens there. Lay it BEFORE you ask the setup
+questions, so the room sees the week; then `isocan sprint brief` writes the
+answers onto the Brief sheet, a new version each time, never a second card.
+Every phase knows its sheet (`isocan sprint` names it, `--json` carries its
+box): calling a phase walks everyone's camera there and puts the phase's one
+action on the clock chip — *New note* on the phase's paper in the sheet,
+*Hand in* which lands the selection on the sheet. You never say where to go
+or what to click; call the phase and the board does that.
 
 `phase` refuses a word that is not a phase (`map experts hmw target demos
 notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
@@ -720,6 +734,31 @@ every parked agent wakes on it, so narrate with `session say` and keep the
 questions on item threads. **One sketch per sketcher**: an agent that could
 make forty makes one, and hands it in at the bell with `copy --to` and
 `sprint handin`.
+
+## Areas: sheets things are placed on
+
+An **area** is a titled region of the canvas — a sheet things are placed on,
+walked to, and read back from. It is an ordinary item (`kind=area`): its
+title is the sheet's name, its blob is a card saying what happens there, its
+box is the region. Membership is geometry, read now: an item is *in* an area
+when its centre is inside it. Nothing is stored on either side, so dragging a
+thing out is all it takes, and dragging the sheet in the app carries what is
+on it. `isocan area new <title>` lays one; `isocan area ls` names them and
+says how much each holds; `--in <area>` on `text`, `add`, `mv`, `ls` and
+`format` places into, reads from and tidies within one.
+
+```sh
+isocan area new "Sketches" --tint yellow --note "Sketch alone; hand in at the bell."
+isocan area ls                            # the sheets, and how much each holds
+isocan text "HMW skip the password" --in "Experts"   # placed inside, at the first clear spot
+isocan add sketch.html --in Sketches      # the same for a file
+isocan mv <item> --in Vote                # onto a sheet
+isocan ls --in Sketches                   # what is on it
+isocan format --in Sketches               # tidy the sheet's contents, within it
+```
+
+A spot found inside a sheet is *chosen*: the daemon never tidies it out. A
+sheet names itself by exact title, then by prefix — `--in sket` is Sketches.
 
 ## What changed
 

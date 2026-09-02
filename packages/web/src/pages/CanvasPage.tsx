@@ -812,7 +812,7 @@ function CanvasSurface({
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
-      <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} />
+      <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} canvasId={canvasId!} actor={actor} />
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
           isocan updated — reload to catch up

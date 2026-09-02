@@ -207,8 +207,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   with right-click → *Hand in* or `isocan sprint handin`; vote with reactions
   (🔴 heat map, ⭐ straw poll, 🏆 the Decider's supervote), which the app hides
   until the bell and never hides from the record. `isocan sprint tally` shows
-  human dots and agent dots apart. See
-  [the research](docs/research/2026-09-01-design-sprint.md).
+  human dots and agent dots apart. The sprint is a **board**: the facilitator
+  lays one sheet per stretch of the week (`isocan sprint board`), each saying
+  what happens there; calling a phase walks everyone to its sheet and the clock
+  chip offers the phase's one action — *New note* in the sheet, *Hand in* onto
+  it. See [the research](docs/research/2026-09-01-design-sprint.md) and
+  [the journey](docs/projects/sprint/journey.md).
+- **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,
+  then `--in Sketches` on `text`, `add` and `mv`, `isocan ls --in` to read it
+  back, `isocan format --in` to tidy within it. A sheet lies behind everything,
+  lets tools through to the canvas, and carries what is on it when dragged by
+  its name. Membership is geometry, never stored.
 - **The workbench (`W`)**: the same canvas flipped to the agent room — every
   agent with a live session in one roster (its status in its own words,
   expandable to what it is answering and what it last made), the main thread

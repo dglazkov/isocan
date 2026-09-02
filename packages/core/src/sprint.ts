@@ -2,6 +2,8 @@ import type { CanvasContents, Item } from "./model.ts";
 import { mainThread } from "./model.ts";
 import type { PresenceSession } from "./protocol.ts";
 import { parseSlashCommand } from "./commands.ts";
+import { AREA_KIND } from "./area.ts";
+import type { Paper } from "./textnode.ts";
 
 /**
  * **The design sprint, as state the canvas can derive.**
@@ -48,6 +50,218 @@ interface PhaseSpec {
   /** Knapp's timebox, in seconds, used when the command names none. Null
    * means the phase runs until the next one — a museum walk has no clock. */
   defaultSeconds: number | null;
+  /** Which sheet of the board this phase happens on — a key into
+   * `SPRINT_BOARD`. Several phases share a sheet: notes, ideas, crazy8s and
+   * sketch are all "Sketches", the whole of Wednesday's choosing is "Vote". */
+  area: BoardKey;
+}
+
+/**
+ * **The board: one sheet per stretch of the week, in the order it runs.**
+ *
+ * `docs/projects/sprint/journey.md`, Scene 0: a facilitator's first move is
+ * to cover the wall in labelled sheets so the week is visible before it
+ * starts and everyone always knows where to stand. This is that wall, as
+ * data both surfaces lay out identically — `isocan sprint board` and the
+ * `/sprint` skill read the same table, so a board laid from a terminal and
+ * one laid by an agent are the same board.
+ *
+ * Each sheet is an AREA (`core/area.ts`) wearing `board=<key>`, which is
+ * how a phase finds its sheet later even after somebody renames it: the
+ * title is for people, the key is for the phase table. The card is the
+ * three lines a person reads standing in front of it — what happens here,
+ * how long, what you do — so nobody has to know the method to follow it.
+ *
+ * Sizes are rough room for what each holds, top-aligned in one row with a
+ * gap, because a board is read left to right as a story: brief → map →
+ * questions → target → … → wrap. Not a grid: the order IS the week.
+ */
+export type BoardKey =
+  | "brief"
+  | "map"
+  | "experts"
+  | "target"
+  | "demos"
+  | "sketches"
+  | "vote"
+  | "storyboard"
+  | "prototype"
+  | "test"
+  | "wrap";
+
+export interface BoardArea {
+  key: BoardKey;
+  title: string;
+  tint: Paper;
+  width: number;
+  height: number;
+  /** The card: what happens here, in a few lines of markdown. */
+  card: string;
+}
+
+/** `board=<key>` on an area item says which sheet of the board it is. */
+export const BOARD_PROP = "board";
+/** Between sheets, in world units. */
+export const BOARD_GAP = 200;
+
+export const SPRINT_BOARD: readonly BoardArea[] = [
+  {
+    key: "brief",
+    title: "Brief",
+    tint: "grey",
+    width: 1200,
+    height: 900,
+    card: "**What we are designing, and who decides.**\n\nThe goal in a sentence, the two or three questions the week has to answer, the Decider, the sketchers, the cut. Done before the first bell — react ✅ on the brief when it is right.",
+  },
+  {
+    key: "map",
+    title: "Map",
+    tint: "blue",
+    width: 2400,
+    height: 1400,
+    card: "**Monday · Map · 45 min.**\n\nThe customer's path in 5–15 steps, actors on the left, the ending on the right. Say the steps; the facilitator draws them. Drag a node and the arrows follow.",
+  },
+  {
+    key: "experts",
+    title: "Experts & HMW",
+    tint: "yellow",
+    width: 2000,
+    height: 1400,
+    card: "**Monday · Ask the Experts, then How Might We · 10 min.**\n\nInterviews pin here, one thread each. While listening, write *How might we…* on yellow notes — one idea per note, silently. **New note** on the clock chip puts one here.",
+  },
+  {
+    key: "target",
+    title: "Target",
+    tint: "pink",
+    width: 1200,
+    height: 900,
+    card: "**Monday · Pick a target.**\n\nTwo ⭐ each on the HMW notes, silently. Then the Decider's 🎯 on one step of the map — that step and its notes come here. One thing on this sheet.",
+  },
+  {
+    key: "demos",
+    title: "Demos",
+    tint: "blue",
+    width: 1600,
+    height: 1000,
+    card: "**Tuesday · Lightning Demos · 3 min each.**\n\nA site worth stealing from, as an item, with one pink note under it saying what to steal.",
+  },
+  {
+    key: "sketches",
+    title: "Sketches",
+    tint: "yellow",
+    width: 2400,
+    height: 1400,
+    card: "**Tuesday · Notes, Ideas, Crazy 8s, Solution sketch.**\n\nWork alone, on your desk — nothing lands here until the bell. Then **Hand in**: one solution sketch each, three panels, a title that says the idea. The wall arrives together.",
+  },
+  {
+    key: "vote",
+    title: "Vote",
+    tint: "pink",
+    width: 2400,
+    height: 1400,
+    card: "**Wednesday · Museum, Heat Map, Critique, Straw Poll, Supervote.**\n\nWalk the wall in silence. 🔴 on the parts you like, as many as you want. Three minutes of critique per sketch, the author last. One ⭐ each. The Decider's 🏆 decides. Votes are hidden until the bell.",
+  },
+  {
+    key: "storyboard",
+    title: "Storyboard",
+    tint: "grey",
+    width: 3200,
+    height: 900,
+    card: "**Wednesday · Storyboard · 60 min.**\n\nFifteen frames in a row. Move the winning sketches in; a missing frame is a yellow note saying what goes there. The row is the deck.",
+  },
+  {
+    key: "prototype",
+    title: "Prototype",
+    tint: "green",
+    width: 2400,
+    height: 1400,
+    card: "**Thursday · Prototype.**\n\nA façade, frame by frame: one maker per stretch of frames, named in the Chat first; a Stitcher owns consistency. Each frame lands here as a screen. The trial run is the deck full screen.",
+  },
+  {
+    key: "test",
+    title: "Test",
+    tint: "blue",
+    width: 3200,
+    height: 1400,
+    card: "**Friday · Test · five people.**\n\nRows are people, columns are frames. One note per cell, from what was said — never invented. A pattern needs three of five.",
+  },
+  {
+    key: "wrap",
+    title: "Wrap",
+    tint: "grey",
+    width: 1200,
+    height: 900,
+    card: "**Friday · Wrap-up · 30 min.**\n\nQuote Monday's questions and answer each with a # to the thing that answers it. `isocan recap` writes the page. The board stays: it is the record.",
+  },
+];
+
+export function boardArea(key: BoardKey): BoardArea {
+  return SPRINT_BOARD.find((one) => one.key === key)!;
+}
+
+/**
+ * Where each sheet goes: one row from `origin`, top-aligned, a gap between.
+ * Pure, so the CLI's `sprint board` and a test agree to the pixel.
+ */
+export function boardLayout(origin: { x: number; y: number }): (BoardArea & { x: number; y: number })[] {
+  let x = origin.x;
+  return SPRINT_BOARD.map((one) => {
+    const placed = { ...one, x, y: origin.y };
+    x += one.width + BOARD_GAP;
+    return placed;
+  });
+}
+
+/** The sheet wearing `board=<key>`, or null when the board has not been
+ *  laid (or that sheet was deleted). By the property, not the title: a
+ *  renamed sheet is still the sheet. */
+export function boardAreaFor(canvas: CanvasContents, key: BoardKey): Item | null {
+  return (
+    Object.values(canvas.items).find(
+      (item) => item.properties.kind === AREA_KIND && item.properties[BOARD_PROP] === key,
+    ) ?? null
+  );
+}
+
+/** Every sheet of the board that exists here, in board order. */
+export function boardOf(canvas: CanvasContents): Item[] {
+  return SPRINT_BOARD.map((one) => boardAreaFor(canvas, one.key)).filter((one): one is Item => one !== null);
+}
+
+/**
+ * **The brief, as a card.** What the setup round answered, written once as
+ * markdown the Brief sheet holds — a text node wearing `brief=1` so the
+ * facilitator can find it again and write the next version rather than a
+ * second card. Empty fields are left out, not written as "TBD": a brief
+ * that says less is honest, and the next version fills it.
+ */
+export const BRIEF_PROP = "brief";
+
+export interface Brief {
+  goal?: string;
+  questions?: string[];
+  decider?: string;
+  sketchers?: string[];
+  cut?: string;
+}
+
+export function briefCard(brief: Brief): string {
+  const lines: string[] = ["# Brief", ""];
+  if (brief.goal) lines.push(`**Goal.** ${brief.goal}`, "");
+  if (brief.questions && brief.questions.length > 0) {
+    lines.push("**Sprint questions.**");
+    for (const q of brief.questions) lines.push(`- ${q}`);
+    lines.push("");
+  }
+  if (brief.decider) lines.push(`**Decider.** ${brief.decider}`, "");
+  if (brief.sketchers && brief.sketchers.length > 0) lines.push(`**Sketching.** ${brief.sketchers.join(", ")}`, "");
+  if (brief.cut) lines.push(`**Cut.** ${brief.cut}`, "");
+  return lines.join("\n").trimEnd() + "\n";
+}
+
+/** The brief card on this canvas, or null. */
+export function briefItem(canvas: CanvasContents): Item | null {
+  return Object.values(canvas.items).find((item) => item.properties[BRIEF_PROP] === "1") ?? null;
 }
 
 /**
@@ -57,24 +271,24 @@ interface PhaseSpec {
  * a timer. `end` closes the sprint.
  */
 export const PHASES: readonly PhaseSpec[] = [
-  { name: "map", label: "Map", kind: "group", mark: null, defaultSeconds: 45 * 60 },
-  { name: "experts", label: "Ask the Experts", kind: "group", mark: null, defaultSeconds: 20 * 60 },
-  { name: "hmw", label: "How Might We", kind: "silent", mark: null, defaultSeconds: 10 * 60 },
-  { name: "target", label: "Pick a target", kind: "decide", mark: "🎯", defaultSeconds: null },
-  { name: "demos", label: "Lightning Demos", kind: "group", mark: null, defaultSeconds: 3 * 60 },
-  { name: "notes", label: "Notes", kind: "silent", mark: null, defaultSeconds: 20 * 60 },
-  { name: "ideas", label: "Ideas", kind: "silent", mark: null, defaultSeconds: 20 * 60 },
-  { name: "crazy8s", label: "Crazy 8s", kind: "silent", mark: null, defaultSeconds: 8 * 60 },
-  { name: "sketch", label: "Solution sketch", kind: "silent", mark: null, defaultSeconds: 30 * 60 },
-  { name: "museum", label: "Art Museum", kind: "group", mark: null, defaultSeconds: null },
-  { name: "heatmap", label: "Heat Map", kind: "vote", mark: "🔴", defaultSeconds: 5 * 60 },
-  { name: "critique", label: "Speed Critique", kind: "group", mark: null, defaultSeconds: 3 * 60 },
-  { name: "poll", label: "Straw Poll", kind: "vote", mark: "⭐", defaultSeconds: 2 * 60 },
-  { name: "supervote", label: "Supervote", kind: "decide", mark: "🏆", defaultSeconds: null },
-  { name: "storyboard", label: "Storyboard", kind: "group", mark: null, defaultSeconds: 60 * 60 },
-  { name: "prototype", label: "Prototype", kind: "group", mark: null, defaultSeconds: null },
-  { name: "test", label: "Test", kind: "group", mark: null, defaultSeconds: null },
-  { name: "wrap", label: "Wrap-up", kind: "group", mark: null, defaultSeconds: 30 * 60 },
+  { name: "map", label: "Map", kind: "group", mark: null, defaultSeconds: 45 * 60, area: "map" },
+  { name: "experts", label: "Ask the Experts", kind: "group", mark: null, defaultSeconds: 20 * 60, area: "experts" },
+  { name: "hmw", label: "How Might We", kind: "silent", mark: null, defaultSeconds: 10 * 60, area: "experts" },
+  { name: "target", label: "Pick a target", kind: "decide", mark: "🎯", defaultSeconds: null, area: "target" },
+  { name: "demos", label: "Lightning Demos", kind: "group", mark: null, defaultSeconds: 3 * 60, area: "demos" },
+  { name: "notes", label: "Notes", kind: "silent", mark: null, defaultSeconds: 20 * 60, area: "sketches" },
+  { name: "ideas", label: "Ideas", kind: "silent", mark: null, defaultSeconds: 20 * 60, area: "sketches" },
+  { name: "crazy8s", label: "Crazy 8s", kind: "silent", mark: null, defaultSeconds: 8 * 60, area: "sketches" },
+  { name: "sketch", label: "Solution sketch", kind: "silent", mark: null, defaultSeconds: 30 * 60, area: "sketches" },
+  { name: "museum", label: "Art Museum", kind: "group", mark: null, defaultSeconds: null, area: "vote" },
+  { name: "heatmap", label: "Heat Map", kind: "vote", mark: "🔴", defaultSeconds: 5 * 60, area: "vote" },
+  { name: "critique", label: "Speed Critique", kind: "group", mark: null, defaultSeconds: 3 * 60, area: "vote" },
+  { name: "poll", label: "Straw Poll", kind: "vote", mark: "⭐", defaultSeconds: 2 * 60, area: "vote" },
+  { name: "supervote", label: "Supervote", kind: "decide", mark: "🏆", defaultSeconds: null, area: "vote" },
+  { name: "storyboard", label: "Storyboard", kind: "group", mark: null, defaultSeconds: 60 * 60, area: "storyboard" },
+  { name: "prototype", label: "Prototype", kind: "group", mark: null, defaultSeconds: null, area: "prototype" },
+  { name: "test", label: "Test", kind: "group", mark: null, defaultSeconds: null, area: "test" },
+  { name: "wrap", label: "Wrap-up", kind: "group", mark: null, defaultSeconds: 30 * 60, area: "wrap" },
 ];
 
 /** The word that closes a sprint. Not a phase: after it there is no clock. */
@@ -153,6 +367,9 @@ export interface SprintState {
   endsAt: string | null;
   /** Items wearing `sprint=<this phase>`. */
   handedIn: Item[];
+  /** The sheet of the board this phase happens on, or null when no board
+   * has been laid here — a sprint run with no board still has a clock. */
+  area: Item | null;
 }
 
 /**
@@ -184,6 +401,7 @@ export function sprintState(canvas: CanvasContents): SprintState | null {
       handedIn: Object.values(canvas.items).filter(
         (item) => item.properties[SPRINT_PROP] === phase.name,
       ),
+      area: boardAreaFor(canvas, phase.area),
     };
   }
   return null;
