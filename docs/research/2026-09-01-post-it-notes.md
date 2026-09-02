@@ -150,6 +150,13 @@ would be clipped; a post-it never grows. The first version measured the
 words and painted a card, which put a short white field inside the selected
 item and the default square inside a note somebody had made taller.
 
+**Hover previews, click chooses.** The bar's principle is that a choice is
+previewed by the thing you are typing into; a hover is the same principle
+one step earlier. The composer wears the paper under the pointer for as
+long as it is there — box and all, so hovering yellow over a caption shows
+the square it would take — and goes back when it leaves. Nothing is sent
+or remembered by a hover.
+
 **What is remembered.** The paper you chose last opens the next new node,
 the same argument that remembers the step: six post-its is choosing yellow
 once. The *default* is still no paper.

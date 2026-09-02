@@ -57,8 +57,18 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // the caret has been placed — see the focus effect for why that is not
   // the same render.
   const placeCaret = useRef(false);
+  /**
+   * The paper under the pointer, while it is over a swatch — `undefined` when
+   * it is not. A preview, in the exact sense: the composer dresses in it for
+   * as long as the pointer stays, and goes back to what was chosen when it
+   * leaves. Nothing is sent and nothing is remembered until a click, which
+   * is `restyle`'s job. Local to this component and reset per composer,
+   * because a hover is not a fact about the note.
+   */
+  const [peek, setPeek] = useState<Paper | null | undefined>(undefined);
   useEffect(() => {
     setBody(pending?.body ?? "");
+    setPeek(undefined);
     done.current = false;
     placeCaret.current = true;
     // `key` is the dependency ON PURPOSE and `pending.body` must NOT be one:
@@ -118,7 +128,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // there is no composer, and that render draws nothing.
   const style = pending?.style ?? "body";
   const face = pending?.face ?? "sans";
-  const paper = pending?.paper ?? null;
+  // What the composer WEARS: the swatch being hovered wins while it is
+  // hovered; otherwise the paper that was chosen. The box below follows,
+  // so hovering yellow over a caption previews the square it would take.
+  const paper = peek !== undefined ? peek : (pending?.paper ?? null);
   const mirror = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState({ width: TEXT_WIDTH, height: TEXT_SIZE * 2 });
   useLayoutEffect(() => {
@@ -345,6 +358,8 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
             className={`text-style-btn text-paper${one === null ? " text-paper-none" : ` paper-${one}`}${one === paper ? " on" : ""}`}
             title={one === null ? "No paper — words on the canvas" : `${one} paper`}
             aria-label={one === null ? "No paper" : `${one} paper`}
+            onPointerEnter={() => setPeek(one)}
+            onPointerLeave={() => setPeek(undefined)}
             onClick={() => restyle({ paper: one })}
           />
         ))}

@@ -104,3 +104,31 @@ describe("an existing node is edited on its own box", () => {
     expect(body).not.toContain("var(--card)");
   });
 });
+
+/**
+ * **Hovering a swatch previews the paper; only a click chooses it.**
+ *
+ * The bar's principle is that a choice is previewed by the thing you are
+ * typing into. A hover is the same principle one step earlier: the composer
+ * wears the paper under the pointer for as long as it is there, and goes
+ * back when it leaves. Nothing is sent or remembered by a hover.
+ */
+describe("hovering a swatch previews its paper", () => {
+  const swatch = composer.slice(composer.indexOf("[null, ...PAPERS]"), composer.indexOf("</div>", composer.indexOf("[null, ...PAPERS]")));
+
+  it("dresses the composer in the hovered paper and undresses on leave", () => {
+    expect(swatch).toContain("onPointerEnter={() => setPeek(one)}");
+    expect(swatch).toContain("onPointerLeave={() => setPeek(undefined)}");
+    expect(composer).toContain("const paper = peek !== undefined ? peek : (pending?.paper ?? null);");
+  });
+
+  it("sends nothing on hover — restyle is the click's alone", () => {
+    expect(swatch).not.toMatch(/onPointerEnter=\{[^}]*restyle/);
+    expect(swatch).toContain("onClick={() => restyle({ paper: one })}");
+  });
+
+  it("forgets the hover when a new composer opens", () => {
+    const reset = composer.slice(composer.indexOf("setBody(pending?.body"), composer.indexOf("placeCaret.current = true;"));
+    expect(reset).toContain("setPeek(undefined)");
+  });
+});
