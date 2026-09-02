@@ -64,7 +64,15 @@ export type Placed = Box;
  * reducer. It is also what makes a batch work: each `item.add` is applied in
  * turn, so the second file's search already sees the first one land.
  */
-export declare function nearestFreeSpot(want: Box, occupied: Placed[]): {
+export declare function nearestFreeSpot(want: Box, occupied: Placed[], 
+/**
+ * Confine the search to this box — an area's inner region
+ * (`core/area.ts`). A cell that would poke outside it is not a spot, and
+ * a region too full to hold the item answers with its own top-left rather
+ * than with somewhere outside it, because "inside the area" is the whole
+ * request and a spot beyond its edge would quietly break it.
+ */
+within?: Box): {
     x: number;
     y: number;
 };

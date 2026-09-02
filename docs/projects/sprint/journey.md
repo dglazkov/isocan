@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-02
 see: on-demand, personas, mindmap, atlas
-note: designed 2 Sep — `/sprint` starts the whole flow and walks the room across a board of areas; builds on the 1 Sep stages 0–2 (clock, curtain, tally). Nothing built yet; phase 0 (areas) is the one new primitive and the first thing to do
+note: phases 0–2 built 2 Sep, the day of the design — areas on both surfaces, the board and the brief, the walk with the chip's actions; Scenes 0 and 1 play. Phases 3–6 (desks, the wall as the Vote area, grids, a real run) are designed and not built
 ---
 # The sprint journey
 

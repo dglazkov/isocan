@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import type { Actor } from "@isocan/core";
 import { clockLabel, remainingSeconds } from "@isocan/core";
-import { useSprint, ringBell } from "../lib/sprint.ts";
+import { goToArea, handIn, handable, newNoteIn, phasePaper, phaseTakesNotes, ringBell, useSprint } from "../lib/sprint.ts";
 import { useActorNames } from "../lib/names.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
 
 /**
  * **The clock on the wall.**
@@ -20,28 +23,48 @@ import { useActorNames } from "../lib/names.ts";
  *
  * While a vote is open the chip says so: counts and names are hidden until
  * the bell, and a room that knows why is a room that does not ask.
+ *
+ * **And it walks the room** (sprint phase 2). When the board is laid, a
+ * phase call glides everyone's camera to the phase's sheet — the one
+ * moment the facilitator's authority reaches the camera, because a phase
+ * is the facilitator saying "everyone, over here", and only when the phase
+ * changed while you were watching: arriving mid-sprint is not a call. The
+ * chip then offers the phase's ONE action: *Go there* if you wandered,
+ * *New note* on the phase's paper in the sheet, *Hand in* for what you
+ * have selected. Each is the same act the item menu or the terminal does.
  */
-export function SprintChip({ lowered }: { lowered: boolean }) {
+export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; canvasId: string; actor: Actor }) {
   const { state, nowMs } = useSprint();
   const names = useActorNames();
   const [flash, setFlash] = useState<"phase" | "bell" | null>(null);
-  const lastPhase = useRef<string | null>(null);
+  // What this tab saw when it mounted — a phase's comment id, or null for
+  // "no sprint yet" — and then whatever it saw last. `undefined` is "not
+  // mounted yet", which is the one state that must never flash or walk.
+  const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
+  const selectedIds = useUiStore((s) => s.selectedItemIds);
+  const canvas = useCanvasStore((s) => s.canvas);
 
   const remaining = state ? remainingSeconds(state, nowMs) : null;
 
   useEffect(() => {
-    if (!state) {
-      lastPhase.current = null;
-      return;
+    // Nothing is watched until the canvas is here: a tab that opens on an
+    // empty store and then receives a running sprint saw the canvas LOAD,
+    // not a phase change, and must neither flash nor walk.
+    if (!canvas) return;
+    const now = state?.commentId ?? null;
+    // Only a change you WATCHED flashes and walks — arriving on a page
+    // mid-sprint is not a phase change, and a chip that flashes on mount is
+    // noise. But the first phase of a sprint, called while this tab was
+    // open, IS a change you watched: the tab saw "no sprint" on mount and
+    // sees Map now. That is the walk's most important moment.
+    const watched = lastPhase.current !== undefined && lastPhase.current !== now;
+    lastPhase.current = now;
+    if (watched && state) {
+      setFlash("phase");
+      goToArea(state);
     }
-    if (lastPhase.current !== state.commentId) {
-      // Only the SECOND phase onwards flashes — arriving on a page mid-sprint
-      // is not a phase change, and a chip that flashes on mount is noise.
-      if (lastPhase.current !== null) setFlash("phase");
-      lastPhase.current = state.commentId;
-    }
-  }, [state]);
+  }, [state, canvas]);
 
   useEffect(() => {
     if (!state || remaining !== 0 || rang.current === state.commentId) return;
@@ -68,6 +91,8 @@ export function SprintChip({ lowered }: { lowered: boolean }) {
   const handed = state.handedIn.length;
   const vote = state.phase.kind === "vote";
   const facilitator = names[state.facilitatorId] ?? state.facilitatorName;
+  const selected = canvas ? selectedIds.map((id) => canvas.items[id]).filter((one) => one !== undefined) : [];
+  const pending = handable(selected, state);
 
   return (
     <div
@@ -76,7 +101,7 @@ export function SprintChip({ lowered }: { lowered: boolean }) {
       aria-live="polite"
       title={`${state.phase.label}${state.note ? ` — ${state.note}` : ""} · called by ${facilitator}${
         vote ? " · votes are hidden until the bell" : ""
-      }`}
+      }${state.area ? ` · on ${state.area.title}` : ""}`}
     >
       <span className="sprint-phase">
         {state.phase.mark && <span className="sprint-mark">{state.phase.mark}</span>}
@@ -92,6 +117,33 @@ export function SprintChip({ lowered }: { lowered: boolean }) {
       )}
       {vote && remaining !== 0 && <span className="sprint-hidden">votes hidden</span>}
       {state.note && <span className="sprint-note">{state.note}</span>}
+      {state.area && (
+        <button
+          className="sprint-action"
+          title={`Glide to ${state.area.title}`}
+          onClick={() => goToArea(state)}
+        >
+          Go there
+        </button>
+      )}
+      {phaseTakesNotes(state) && (
+        <button
+          className="sprint-action"
+          title={`A ${phasePaper(state.phase.name)} note${state.area ? ` in ${state.area.title}` : ""}`}
+          onClick={() => newNoteIn(state)}
+        >
+          New note
+        </button>
+      )}
+      {pending.length > 0 && (
+        <button
+          className="sprint-action primary"
+          title={`Hand ${pending.length === 1 ? "this" : pending.length} in for ${state.phase.label}${state.area ? ` — it lands on ${state.area.title}` : ""}`}
+          onClick={() => void handIn(canvasId, actor, pending, state)}
+        >
+          Hand in{pending.length > 1 ? ` ${pending.length}` : ""}
+        </button>
+      )}
     </div>
   );
 }

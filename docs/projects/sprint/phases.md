@@ -24,7 +24,19 @@ and a property.
 
 ---
 
-**Where we are: DESIGNED, 2 Sep 2026. Nothing built.** Phase 0 is next.
+**Where we are: phases 0 and 1 built, 2 Sep 2026.** Areas exist on both
+surfaces — `core/area.ts`, the sheet drawn behind everything and grabbed by
+its name, `isocan area new/ls` and `--in` on `text`, `add`, `mv`, `ls` and
+`format` — proved over the wire in `cli/test/area.test.ts`. The board is
+`SPRINT_BOARD` in core, laid by `isocan sprint board` as one group and
+idempotently; every phase knows its sheet (`sprintState.area`); the brief is
+one card with a history (`isocan sprint brief`); and the `/sprint` skill lays
+the board before it asks anything (`cli/test/board.test.ts`). **Phase 2 is
+built too:** a phase call glides everyone who watched it to the phase's
+sheet, and the clock chip offers the phase's one action — *Go there*, *New
+note* on the phase's paper in the sheet, *Hand in* which lands the
+selection on the sheet — through helpers the item menu shares
+(`web/test/walk.test.ts`). Phase 3 is next.
 
 ---
 

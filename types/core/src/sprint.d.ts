@@ -1,5 +1,6 @@
 import type { CanvasContents, Item } from "./model.js";
 import type { PresenceSession } from "./protocol.js";
+import type { Paper } from "./textnode.js";
 /**
  * **The design sprint, as state the canvas can derive.**
  *
@@ -42,7 +43,82 @@ interface PhaseSpec {
     /** Knapp's timebox, in seconds, used when the command names none. Null
      * means the phase runs until the next one — a museum walk has no clock. */
     defaultSeconds: number | null;
+    /** Which sheet of the board this phase happens on — a key into
+     * `SPRINT_BOARD`. Several phases share a sheet: notes, ideas, crazy8s and
+     * sketch are all "Sketches", the whole of Wednesday's choosing is "Vote". */
+    area: BoardKey;
 }
+/**
+ * **The board: one sheet per stretch of the week, in the order it runs.**
+ *
+ * `docs/projects/sprint/journey.md`, Scene 0: a facilitator's first move is
+ * to cover the wall in labelled sheets so the week is visible before it
+ * starts and everyone always knows where to stand. This is that wall, as
+ * data both surfaces lay out identically — `isocan sprint board` and the
+ * `/sprint` skill read the same table, so a board laid from a terminal and
+ * one laid by an agent are the same board.
+ *
+ * Each sheet is an AREA (`core/area.ts`) wearing `board=<key>`, which is
+ * how a phase finds its sheet later even after somebody renames it: the
+ * title is for people, the key is for the phase table. The card is the
+ * three lines a person reads standing in front of it — what happens here,
+ * how long, what you do — so nobody has to know the method to follow it.
+ *
+ * Sizes are rough room for what each holds, top-aligned in one row with a
+ * gap, because a board is read left to right as a story: brief → map →
+ * questions → target → … → wrap. Not a grid: the order IS the week.
+ */
+export type BoardKey = "brief" | "map" | "experts" | "target" | "demos" | "sketches" | "vote" | "storyboard" | "prototype" | "test" | "wrap";
+export interface BoardArea {
+    key: BoardKey;
+    title: string;
+    tint: Paper;
+    width: number;
+    height: number;
+    /** The card: what happens here, in a few lines of markdown. */
+    card: string;
+}
+/** `board=<key>` on an area item says which sheet of the board it is. */
+export declare const BOARD_PROP = "board";
+/** Between sheets, in world units. */
+export declare const BOARD_GAP = 200;
+export declare const SPRINT_BOARD: readonly BoardArea[];
+export declare function boardArea(key: BoardKey): BoardArea;
+/**
+ * Where each sheet goes: one row from `origin`, top-aligned, a gap between.
+ * Pure, so the CLI's `sprint board` and a test agree to the pixel.
+ */
+export declare function boardLayout(origin: {
+    x: number;
+    y: number;
+}): (BoardArea & {
+    x: number;
+    y: number;
+})[];
+/** The sheet wearing `board=<key>`, or null when the board has not been
+ *  laid (or that sheet was deleted). By the property, not the title: a
+ *  renamed sheet is still the sheet. */
+export declare function boardAreaFor(canvas: CanvasContents, key: BoardKey): Item | null;
+/** Every sheet of the board that exists here, in board order. */
+export declare function boardOf(canvas: CanvasContents): Item[];
+/**
+ * **The brief, as a card.** What the setup round answered, written once as
+ * markdown the Brief sheet holds — a text node wearing `brief=1` so the
+ * facilitator can find it again and write the next version rather than a
+ * second card. Empty fields are left out, not written as "TBD": a brief
+ * that says less is honest, and the next version fills it.
+ */
+export declare const BRIEF_PROP = "brief";
+export interface Brief {
+    goal?: string;
+    questions?: string[];
+    decider?: string;
+    sketchers?: string[];
+    cut?: string;
+}
+export declare function briefCard(brief: Brief): string;
+/** The brief card on this canvas, or null. */
+export declare function briefItem(canvas: CanvasContents): Item | null;
 /**
  * The phases, in the order a five-day sprint runs them. A word not in this
  * table is NOT a phase — `/sprint make onboarding better` is a brief for the
@@ -92,6 +168,9 @@ export interface SprintState {
     endsAt: string | null;
     /** Items wearing `sprint=<this phase>`. */
     handedIn: Item[];
+    /** The sheet of the board this phase happens on, or null when no board
+     * has been laid here — a sprint run with no board still has a clock. */
+    area: Item | null;
 }
 /**
  * The sprint the Chat says is running, or null — no Chat, no `/sprint`

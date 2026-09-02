@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { parseUriList } from "@isocan/core";
+import { isArea, parseUriList } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
@@ -664,7 +664,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
   }
 
-  const items = canvas ? Object.values(canvas.items) : [];
+  // Areas first, so everything placed on a sheet paints over it: items are
+  // siblings at one z-index, and DOM order is the only order there is. A
+  // stable sort keeps the rest as they were.
+  const items = canvas
+    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
+    : [];
 
   return (
     <div
