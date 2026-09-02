@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-01
 see: multiuser
-note: "phases 1–3 closed 1 Sep 2026 (the offer reaches the door; the door starts the proof; the refusal renders its remedy — journeys 1, 2 and 4 close, journey 6 through step 3); phases 4–5 not started. The door grows mechanism 6's surface — resumable rows render exactly as known-identity rows. journey.md is the acceptance suite, design.md the argument, phases.md the walk — five phases. Phases 1–4 are the door and the menu, all in packages/web but one corrected label; scope decided 31 Aug: no server change, no new op, no new route. Phase 5, added 1 Sep, is the one new op: actor.join, folding a second actor into the person who holds both."
+note: "all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester."
 ---
 
 # Multi-identity — the journeys
