@@ -18,6 +18,9 @@ second week.
 
 ## 2 September 2026
 
+- `/sprint` lays out the week before it starts. Ask for a sprint and the facilitator covers the canvas in a board: one sheet per stretch of the week — Brief, Map, Experts & HMW, Target, Demos, Sketches, Vote, Storyboard, Prototype, Test, Wrap — each saying what happens there. Calling a phase walks everyone to its sheet, and the clock chip offers the one thing to do: *New note* on the right paper, in the sheet; *Hand in*, which lands what you selected on the sheet. Nobody has to know the method. `isocan sprint board` and `isocan sprint brief` are the same from a terminal.
+- Areas: a titled sheet you place things on. Draw one from the terminal (`isocan area new "Sketches"`), put things on it (`--in Sketches` on `text`, `add` and `mv`), read it back (`isocan ls --in Sketches`), tidy it (`isocan format --in Sketches`). In the app a sheet lies behind everything, lets your tools through to the canvas, and carries what is on it when you drag it by its name.
+
 - The Text tool keeps what you typed. Typing a note and then choosing a colour, size or face used to lose the words when you clicked away; it no longer does.
 - Changing a note's colour, size or face saves the moment you choose it, as its own undo step — no need to change the words too.
 - Double-clicking text edits it in place: the field sits exactly on the note or caption, transparent, with the words selected, the way renaming works.
