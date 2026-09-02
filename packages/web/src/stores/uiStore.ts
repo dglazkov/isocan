@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
-import { TEXT_FACES, TEXT_STYLES } from "@isocan/core";
+import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
@@ -103,6 +103,10 @@ interface UiStore {
    *  memory of what you were last writing in, never a canvas fact. */
   lastTextStyle: TextStyle;
   lastTextFace: TextFace;
+  /** The paper too: making six post-its is choosing yellow once, not six
+   *  times — the same argument that remembers the step. The DEFAULT is still
+   *  no paper; this only remembers what you chose last. */
+  lastPaper: Paper | null;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
@@ -209,7 +213,7 @@ interface UiStore {
   setPendingText: (pending: PendingText | null) => void;
   setClipboard: (clipboard: Clipboard | null) => void;
   setContextMenu: (menu: { at: { x: number; y: number }; entries: MenuEntry[] } | null) => void;
-  setLastText: (style: TextStyle, face: TextFace) => void;
+  setLastText: (style: TextStyle, face: TextFace, paper: Paper | null) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -367,6 +371,7 @@ function writeFlag(key: string, value: boolean): void {
 
 const TEXT_STEP_KEY = "isocan.text.style";
 const TEXT_FACE_KEY = "isocan.text.face";
+const TEXT_PAPER_KEY = "isocan.text.paper";
 
 /**
  * **The step and face you last typed in, kept across reloads.**
@@ -399,10 +404,23 @@ function readTextFace(): TextFace {
   }
 }
 
-function writeText(style: TextStyle, face: TextFace): void {
+function readPaper(): Paper | null {
+  try {
+    const raw = localStorage.getItem(TEXT_PAPER_KEY);
+    // `isPaper` is the closed set's own check: a stale key must not open the
+    // composer on a colour that no longer exists.
+    return isPaper(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeText(style: TextStyle, face: TextFace, paper: Paper | null): void {
   try {
     localStorage.setItem(TEXT_STEP_KEY, style);
     localStorage.setItem(TEXT_FACE_KEY, face);
+    if (paper === null) localStorage.removeItem(TEXT_PAPER_KEY);
+    else localStorage.setItem(TEXT_PAPER_KEY, paper);
   } catch {
     // A browser refusing storage is not a reason to refuse the tool.
   }
@@ -454,6 +472,7 @@ export const useUiStore = create<UiStore>((set) => {
     contextMenu: null,
     lastTextStyle: readTextStyle(),
     lastTextFace: readTextFace(),
+    lastPaper: readPaper(),
     sketch: [],
     sketchError: null,
     penSession: false,
@@ -511,9 +530,9 @@ export const useUiStore = create<UiStore>((set) => {
     setPendingText: (pendingText) => set({ pendingText }),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
-    setLastText: (lastTextStyle, lastTextFace) => {
-      writeText(lastTextStyle, lastTextFace);
-      set({ lastTextStyle, lastTextFace });
+    setLastText: (lastTextStyle, lastTextFace, lastPaper) => {
+      writeText(lastTextStyle, lastTextFace, lastPaper);
+      set({ lastTextStyle, lastTextFace, lastPaper });
     },
     setSketchError: (sketchError) => set({ sketchError }),
     setPenSession: (penSession) => set({ penSession }),

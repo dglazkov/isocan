@@ -18,7 +18,7 @@ import {
 } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice } from "../stores/canvasStore.ts";
-import { addTextNode, reviseTextNode, textCommit } from "../lib/text.ts";
+import { addTextNode, restyleTextNode, reviseTextNode, textCommit } from "../lib/text.ts";
 
 /**
  * The Text tool's one moment: a textarea sitting in world space exactly where
@@ -53,29 +53,49 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // A composer opened at a new spot is a NEW composer: reset, don't inherit
   // the last one's words. Keyed on the identity of what is being typed.
   const key = pending ? `${pending.itemId ?? "new"}:${pending.x},${pending.y}` : null;
+  // Set when a composer opens, cleared once its words are in the field and
+  // the caret has been placed — see the focus effect for why that is not
+  // the same render.
+  const placeCaret = useRef(false);
   useEffect(() => {
     setBody(pending?.body ?? "");
     done.current = false;
+    placeCaret.current = true;
     // `key` is the dependency ON PURPOSE and `pending.body` must NOT be one:
     // the body is what the person is typing, and re-running this on it would
     // reset the field back to the opening text under their hands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  /**
+   * Focus, and place the caret — once per composer, and only once the words
+   * are actually IN the field.
+   *
+   * The component stays mounted between composers, so on open the field
+   * still holds the last draft for one render while the effect above swaps
+   * the words in. Keyed on `key` alone this ran during that render: it
+   * selected the stale value, the real words then landed, and the browser
+   * put the caret at their end — a select-all that never showed. So it
+   * watches `body` too, and acts only on the render where the field holds
+   * the words it opened on; `placeCaret` is what keeps it from running
+   * again per keystroke and dragging the caret about mid-sentence.
+   *
+   * Re-opening a node selects its words, the way the rename field selects
+   * the name: the common edit is to say it differently, and a selection is
+   * one keystroke from that. The first version put the caret at the end to
+   * protect against typing over the lot; it was asked for the other way,
+   * and the textarea's own ⌘Z brings the words back if a keystroke does
+   * land on them. A NEW composer is empty, so there is nothing to select.
+   */
   useLayoutEffect(() => {
-    if (!pending) return;
+    if (!pending || !placeCaret.current) return;
     const el = area.current;
-    if (!el) return;
+    if (!el || el.value !== (pending.body ?? "")) return;
+    placeCaret.current = false;
     el.focus();
-    // An edit opens with the caret at the END of what is already there, which
-    // is where somebody who wants to add a sentence is going. Select-all would
-    // put one keystroke between them and losing the lot.
-    el.setSelectionRange(el.value.length, el.value.length);
-    // Keyed on the composer's identity: focus and caret placement belong to
-    // OPENING one. Re-running per keystroke would drag the caret to the end
-    // every time somebody edited in the middle of a line.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    if (pending.itemId) el.select();
+    else el.setSelectionRange(el.value.length, el.value.length);
+  }, [key, body, pending]);
 
   /**
    * **Measure the words, do not guess at them.**
@@ -158,17 +178,44 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * into a white rectangle that becomes a square note on commit.
    *
    * A NEW note is the `PAPER_SIZE` square, which is exactly what `addTextNode`
-   * commits, so what is under the caret is the note. An EXISTING note is
-   * whatever size it has been dragged to: re-opening one has to sit on the
-   * note's own box, edge for edge, the way renaming sits on the name — the
-   * first version of this put the default square over a note somebody had
-   * made taller, and a white field inside the yellow, which read as a form
-   * over the note rather than the note itself.
+   * commits, so what is under the caret is the note. A new caption is the
+   * measured words.
+   *
+   * An EXISTING node — paper or not — is edited on its OWN box, edge for
+   * edge, the way renaming sits on the name. The first version put the
+   * measured words' box over an existing caption (a short white field inside
+   * the selected item) and the default square over a note somebody had made
+   * taller; both read as a form over the thing rather than the thing. A
+   * caption's box may still GROW downward while you type, because words that
+   * wrap past the bottom would be clipped otherwise; a post-it never grows,
+   * by decision (`core/textnode.ts`).
    */
-  const width = paper ? (pending.itemId ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE) : fit.width;
-  const height = paper ? (pending.itemId ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE) : fit.height;
+  const editing = pending.itemId !== null;
+  const width = paper
+    ? editing ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE
+    : editing ? (pending.width ?? fit.width) : fit.width;
+  const height = paper
+    ? editing ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE
+    : editing ? Math.max(pending.height ?? 0, fit.height) : fit.height;
 
-  /** Change the step or face mid-sentence, without losing the sentence. */
+  /**
+   * Change the step, face or paper mid-sentence, without losing the sentence.
+   *
+   * **This must not write the draft into `pending.body`.** `pending.body` is
+   * the words the node HAD when the composer opened — the baseline that
+   * `textCommit` compares the draft against to decide whether anything was
+   * said. The first version copied the draft in here, so typing and THEN
+   * picking yellow made the baseline equal the draft, the commit read
+   * "unchanged", and the words were dropped on the floor — a new note lost
+   * entirely, an existing one never recoloured. Reported as both. The draft
+   * lives in this component's state and survives a restyle on its own,
+   * because the composer's key (which node, where) does not change.
+   *
+   * For a node that exists, the look lands NOW as its own op — see
+   * `restyleTextNode` for why a colour is not a version. For one that does
+   * not exist yet there is nothing to update; the look is held in `pending`
+   * and travels with the words when they commit.
+   */
   function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
     const ui = useUiStore.getState();
     const at = ui.pendingText;
@@ -178,17 +225,29 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // `undefined` is "unchanged" and `null` is "no paper", which are different
     // answers — so this asks whether the key was given, not whether it is set.
     const paper2 = "paper" in next ? (next.paper ?? null) : (at.paper ?? null);
+    // A caption putting paper ON takes the square, unless it is already
+    // bigger: a 320×40 post-it is a caption with a background. Taking paper
+    // OFF keeps the box; ⇧F re-fits whenever somebody wants that.
+    const grows =
+      at.itemId && paper2 !== null && (at.paper ?? null) === null
+        ? { width: Math.max(at.width ?? 0, PAPER_SIZE), height: Math.max(at.height ?? 0, PAPER_SIZE) }
+        : null;
     ui.setPendingText({
       ...at,
       style: style2,
       face: face2,
       paper: paper2,
-      body,
-      // A NEW node's column follows its step; an existing one keeps its box.
-      ...(at.itemId ? {} : { width: TEXT_COLUMN[style2] }),
+      // A NEW node's column follows its step; an existing one keeps its box,
+      // except for the one restyle that changes its shape.
+      ...(at.itemId ? (grows ?? {}) : { width: TEXT_COLUMN[style2] }),
     });
-    ui.setLastText(style2, face2);
+    ui.setLastText(style2, face2, paper2);
     area.current?.focus();
+    if (at.itemId) {
+      void restyleTextNode(canvasId, actor, at.itemId, style2, face2, paper2, grows).catch((err: unknown) => {
+        setNotice(`Could not restyle that text: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }
   }
 
   async function commit() {
@@ -201,12 +260,11 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     const decision = textCommit(body, at.body, at.itemId !== null);
     if (decision.do === "nothing") return;
     const words = decision.body;
-    // What was measured IS what commits — the mirror rendered these words at
-    // this step and this face, so the node lands the shape it looked. On
-    // paper the box is the note, not the words: a post-it keeps its size
-    // (`core/textnode.ts`, "fixed size, not auto-grow"), so what commits is
-    // the square the person was typing into, and an edit never resizes one.
-    const measured = at.paper ? { width, height } : { width: fit.width, height: fit.height };
+    // The box under the caret IS what commits, whichever rule sized it above:
+    // a new caption's measured words, a post-it's square, an existing node's
+    // own box (grown downward if the words needed it). The mirror rendered
+    // these words at this step and this face, so nothing moves when it lands.
+    const measured = { width, height };
     try {
       if (at.itemId) {
         const grew = measured.height > (at.height ?? 0);
@@ -300,7 +358,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
         style={{
           fontSize: size,
           fontFamily: TEXT_FACE_STACK[face],
-          maxWidth: TEXT_COLUMN_MAX[style],
+          // An existing node's words wrap at ITS width — measuring them
+          // against the column would answer a height for a box they are not
+          // in. A new composer wraps at the hard limit, as before.
+          maxWidth: editing && pending.width ? pending.width : TEXT_COLUMN_MAX[style],
         }}
       >
         {body === "" ? "Type…" : body}

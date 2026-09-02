@@ -116,3 +116,44 @@ because a yellow that works on `#ffffff` is wrong on `#0e0f12`.
 
 No new op, no reducer change, no migration: an item without the property is a
 plain text node, which is what every existing one already is.
+
+## Editing, and what a change saves (2 September)
+
+Three flows came back broken together, and reasoning through them turned up
+one contract the composer had never written down.
+
+**What the composer holds.** Two things, kept apart: the words the node HAD
+when it opened (`pending.body`, the *baseline*), and the words being typed
+(the component's own draft). `textCommit` compares draft to baseline to
+decide whether anything was said. The bug under two of the three reports was
+that choosing a step, face or paper copied the draft into the baseline — so
+"type, then pick yellow" committed as *unchanged*: a new note dropped, an
+existing one never recoloured. The baseline is now written once, when the
+composer opens, and never again.
+
+**A look is not a wording.** Step, face and paper are `item.update`; words
+are `item.addVersion`. So on an existing node a look change lands the moment
+it is chosen — one undo step of its own, the shape a move or a resize has —
+and the words, if they change, are a separate step when they commit. Escape
+abandons the words and leaves the look, which is what "as soon as I change
+it, it is saved" means. On a node that does not exist yet there is nothing
+to update: the look is held and travels with the words. The one restyle that
+changes a node's *shape* — a caption putting paper on — takes the square,
+grouped with the recolour so "make it a note" is still one ⌘Z; taking paper
+off keeps the box, and ⇧F re-fits.
+
+**Editing sits on the node.** Re-opening a node — paper or not — is editing
+it where it is, on its own box, edge for edge, the way renaming sits on the
+name: transparent field, the same inset and ink, words selected. A caption's
+box may grow downward while you type, because wrapped words past the bottom
+would be clipped; a post-it never grows. The first version measured the
+words and painted a card, which put a short white field inside the selected
+item and the default square inside a note somebody had made taller.
+
+**What is remembered.** The paper you chose last opens the next new node,
+the same argument that remembers the step: six post-its is choosing yellow
+once. The *default* is still no paper.
+
+**Undo, end to end.** New note: one op. Restyle: one step (two ops in a group
+when it also takes the square). Re-word: one group — version, title, and the
+resize if the words grew. Inside the field, ⌘Z is the textarea's own.

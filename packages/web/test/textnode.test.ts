@@ -196,8 +196,13 @@ describe("the composer box fits the type, not just the text", () => {
     // The composer renders at the size it will commit at. If the committed
     // height were computed some other way, the node would jump at the moment
     // of landing — which is the one thing this tool must never do.
+    // What commits is the SAME `width`/`height` the composer is drawn with —
+    // one derivation, used twice — and for a new caption those are the
+    // mirror's measure. (An existing node's own box and a post-it's square
+    // are the other cases; `textedit.test.ts` and `paper.test.ts` pin them.)
     const commit = src.slice(src.indexOf("const measured"), src.indexOf("try {"));
-    expect(commit).toContain("fit.width");
-    expect(commit).toContain("fit.height");
+    expect(commit).toContain("const measured = { width, height };");
+    expect(src).toContain("editing ? (pending.width ?? fit.width) : fit.width");
+    expect(src).toContain("editing ? Math.max(pending.height ?? 0, fit.height) : fit.height");
   });
 });

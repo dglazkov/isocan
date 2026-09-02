@@ -125,7 +125,6 @@ export async function reviseTextNode(
    *  from core so this cannot spell the property differently from the CLI. */
   paper: Paper | null = null,
 ): Promise<void> {
-  const onPaper = paperPatch(paper);
   // One edit, one undo: the version, the title and any resize are one act.
   const group = newGroupId();
   const blob = new Blob([body], { type: TEXT_MIME });
@@ -152,22 +151,7 @@ export async function reviseTextNode(
     {
     type: "item.update",
     itemId,
-    patch: {
-      title: textTitle(body),
-      // Restyling to a default must REMOVE the property rather than write
-      // the word "body" — otherwise there are two spellings of the same node
-      // and only one of them matches what the CLI writes.
-      properties: {
-        ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-        ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-        ...("properties" in onPaper ? onPaper.properties : {}),
-      },
-      removeProperties: [
-        ...(style === "body" ? [TEXT_STYLE_PROP] : []),
-        ...(face === "sans" ? [TEXT_FACE_PROP] : []),
-        ...("removeProperties" in onPaper ? onPaper.removeProperties : []),
-      ],
-    },
+    patch: { title: textTitle(body), ...lookPatch(style, face, paper) },
     },
     group,
   );
@@ -178,6 +162,70 @@ export async function reviseTextNode(
       { type: "item.resize", itemId, width: measured.width, height: measured.height },
       group,
     );
+  }
+}
+
+/**
+ * The patch that gives a text node its look — step, face and paper — in the
+ * one spelling both surfaces write.
+ *
+ * Restyling to a default must REMOVE the property rather than write the word
+ * "body": otherwise there are two spellings of the same node and only one of
+ * them matches what the CLI writes. Paper comes from core's `paperPatch` for
+ * the same reason, and `null` takes it off.
+ */
+function lookPatch(
+  style: TextStyle,
+  face: TextFace,
+  paper: Paper | null,
+): { properties: Record<string, string>; removeProperties: string[] } {
+  const onPaper = paperPatch(paper);
+  return {
+    properties: {
+      ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
+      ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+      ...("properties" in onPaper ? onPaper.properties : {}),
+    },
+    removeProperties: [
+      ...(style === "body" ? [TEXT_STYLE_PROP] : []),
+      ...(face === "sans" ? [TEXT_FACE_PROP] : []),
+      ...("removeProperties" in onPaper ? onPaper.removeProperties : []),
+    ],
+  };
+}
+
+/**
+ * **Change how an existing node looks, and land it now.**
+ *
+ * The step, face and paper buttons sit on the composer, and for a node that
+ * already exists they used to be held until the words committed — which
+ * they never did when the words had not changed, because "unchanged words
+ * are not a new version" is a rule about VERSIONS and was being asked about
+ * a colour. Double-click a caption, pick yellow, click away: nothing saved.
+ * Reported exactly so.
+ *
+ * A look is not a wording. It is `item.update`, it lands the moment it is
+ * chosen, and it is one undo step of its own — the same shape a resize or a
+ * move has. The words, if they change, are a separate step when they commit.
+ *
+ * `box` is for the one restyle that changes the node's SHAPE: a caption
+ * putting paper on becomes a square, because a 320×40 post-it is a caption
+ * with a background (`core/textnode.ts`). It rides in the same group, so
+ * "make it a note" is still one ⌘Z.
+ */
+export async function restyleTextNode(
+  canvasId: string,
+  actor: Actor,
+  itemId: string,
+  style: TextStyle,
+  face: TextFace,
+  paper: Paper | null,
+  box?: { width: number; height: number } | null,
+): Promise<void> {
+  const group = newGroupId();
+  await sendEchoed(canvasId, actor, { type: "item.update", itemId, patch: lookPatch(style, face, paper) }, group);
+  if (box) {
+    await sendEchoed(canvasId, actor, { type: "item.resize", itemId, width: box.width, height: box.height }, group);
   }
 }
 

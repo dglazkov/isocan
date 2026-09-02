@@ -442,6 +442,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         // clusters means choosing "title" once, not six times.
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
+        paper: ui.lastPaper,
       });
       return;
     }

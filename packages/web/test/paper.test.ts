@@ -103,15 +103,17 @@ describe("a post-it is a text node wearing paper", () => {
     it("sits on the note's own box, not the default square", () => {
       // A new note is `PAPER_SIZE`; an existing one is whatever it was
       // dragged to, and the composer has to be that, edge for edge.
-      expect(composer).toContain("pending.itemId ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE");
-      expect(composer).toContain("pending.itemId ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE");
+      expect(composer).toContain("editing ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE");
+      expect(composer).toContain("editing ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE");
     });
 
-    it("commits the note's box rather than the words' measure", () => {
+    it("commits the box under the caret, not the words' measure", () => {
       // The mirror measures prose. A post-it is fixed size by decision
       // (`core/textnode.ts`), so an edit must not hand `reviseTextNode` a
-      // narrow measure that would resize the note to its sentence.
-      expect(composer).toContain("at.paper ? { width, height } : { width: fit.width, height: fit.height }");
+      // narrow measure that would resize the note to its sentence. The box
+      // the rules above sized is the one that commits, for every case.
+      expect(composer).toContain("const measured = { width, height };");
+      expect(composer).not.toContain("{ width: fit.width, height: fit.height }");
     });
 
     it("lands a paper changed mid-edit, through core's own patch", () => {
@@ -120,7 +122,8 @@ describe("a post-it is a text node wearing paper", () => {
       // the app and the CLI cannot spell the property two ways.
       const text = read("../src/lib/text.ts");
       const revise = text.slice(text.indexOf("export async function reviseTextNode"));
-      expect(revise).toContain("paperPatch(paper)");
+      expect(text).toContain("paperPatch(paper)");
+      expect(revise).toContain("lookPatch(style, face, paper)");
       expect(composer).toContain("at.paper ?? null,");
     });
 

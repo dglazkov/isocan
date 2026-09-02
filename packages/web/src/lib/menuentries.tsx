@@ -328,6 +328,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
           body: "",
           style: ui.lastTextStyle,
           face: ui.lastTextFace,
+          paper: ui.lastPaper,
         });
       },
     },
