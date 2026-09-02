@@ -702,6 +702,7 @@ isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to th
 isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
 isocan copy <items...> --to <sprint> --in Sketches --handin   # a desk's bell: onto the sheet, stamped
 isocan sprint handin <items...>           # these were made for the current phase
+isocan react 🔴 <sketch> --at 0.4,0.6      # a heat-map dot on that PART of the sketch (fractions of its box)
 isocan sprint tally                       # human dots and agent dots, apart
 isocan sprint end                         # over — no phase, no clock
 ```
@@ -732,10 +733,14 @@ notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
 prototype test wrap`), so a typo cannot start a clock. A phase with no clock —
 the museum, the supervote — runs until the next one is called.
 
-**The curtain is a lens.** While a vote phase's clock runs, the app hides
-reaction counts and item bylines — not knowing who drew what while you vote
-is the method — but the record is untouched, and `sprint tally` reads it,
-because the facilitator is the referee and not a voter. A hand-in is a
+**The curtain is a lens, on the wall only.** While a vote phase's clock runs,
+the app hides reaction counts and item bylines on the WALL — the Vote
+sheet's contents when a board is laid, else the last silent phase's
+hand-ins — not knowing who drew what while you vote is the method — but the
+record is untouched, and `sprint tally` reads it, because the facilitator is
+the referee and not a voter. A mark placed with `--at` (or a click while the
+chip says *Placing*) is a dot on that part of the sketch; each person sees
+their own under the curtain and everyone's at the bell. A hand-in is a
 property (`sprint=<phase>`) on the item: `item.update`, one undo, visible to
 everybody, the same shape as a slide.
 

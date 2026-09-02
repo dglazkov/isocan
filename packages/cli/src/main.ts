@@ -5402,11 +5402,19 @@ program
   )
   .option("--off", "take your reaction back")
   .option("--who", "say who else is wearing it, rather than the count")
+  .option("--at <x,y>", "place it on a part of the item — fractions of its box, 0..1 each, e.g. 0.4,0.6 (a heat-map dot)")
   .action(
-    run(async (emoji: string, refs: string[], opts: { off?: boolean; who?: boolean }, cmd: Command) => {
+    run(async (emoji: string, refs: string[], opts: { off?: boolean; who?: boolean; at?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
+      // A dot is a point ON the item: fractions, so the same part of the
+      // sketch at every size, and the same op the app writes when you click.
+      const at = opts.at === undefined ? undefined : parseXY(opts.at);
+      if (at && !(at.x >= 0 && at.x <= 1 && at.y >= 0 && at.y <= 1)) {
+        throw new Error(`--at is a point on the item as fractions of its box, 0..1 each — got: ${opts.at}`);
+      }
+      if (at && opts.off) throw new Error("--at places a mark; --off takes one back — one or the other");
       // Reactions store ids and nothing else, so a name has to be looked up
       // NOW — which is the point: a rename reaches what somebody reacted to
       // before it (`lib/names.ts`, and the same rule mentions live by).
@@ -5420,6 +5428,7 @@ program
           itemId: item.id,
           emoji,
           on: !opts.off,
+          ...(at ? { at } : {}),
         });
         const worn = (item.reactions?.[emoji] ?? []).filter((id) => id !== ctx.actor.id);
         const after = opts.off ? worn : [...worn, ctx.actor.id];

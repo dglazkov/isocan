@@ -14,6 +14,7 @@ import {
   isDrawingItem,
   isSlide,
   isTextItem,
+  reactionPointsOf,
   SLIDE_EMOJI,
   textFaceOf,
   textDrawSize,
@@ -43,7 +44,7 @@ import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
-import { useVotesHidden } from "../lib/sprint.ts";
+import { useOnWall, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 
@@ -95,7 +96,14 @@ function ItemViewInner({
   const navigate = useNavigate();
   const colors = useActorColors();
   const names = useActorNames();
-  const votesHidden = useVotesHidden();
+  // The curtain applies to the WALL — the Vote sheet's contents — and only
+  // there; a note on the Brief keeps its byline while a sketch hides its own.
+  const votesHidden = useVotesHiddenOn(item);
+  const { state: sprint } = useSprint();
+  const mark = voteMark(sprint);
+  // On the wall during a vote: where a dot may be placed.
+  const wall = useOnWall(item);
+  const onWall = mark !== null && wall;
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -276,6 +284,26 @@ function ItemViewInner({
     // bubbles to the viewport — Hand pans, Zoom fits this item, the Pen draws
     // over it — even though it started here.
     if (ui.activeTool === "hand" || ui.activeTool === "zoom" || ui.activeTool === "pen") return;
+    /**
+     * **Placing a dot** (sprint phase 4). While a mark is being placed, a
+     * press on a sketch ON THE WALL puts the mark where the press landed, as
+     * fractions of the box, so it sits on the same part of the sketch at
+     * every zoom. One op — `item.react` with `at` — and the same op the
+     * terminal writes with `--at`. A second press moves your dot; the set
+     * semantics of a reaction make it one vote either way. A press off the
+     * wall is an ordinary press: the wall is where the votes are.
+     */
+    if (ui.stamp && onWall) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const at = {
+        x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+        y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height)),
+      };
+      e.stopPropagation();
+      e.preventDefault();
+      void sendEchoed(canvasId, actor, { type: "item.react", itemId: item.id, emoji: ui.stamp, on: true, at });
+      return;
+    }
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
@@ -628,6 +656,26 @@ function ItemViewInner({
           title={item.title}
         >
           {item.title}
+        </div>
+      )}
+      {mark !== null && reactionPointsOf(item, mark).length > 0 && (
+        /* The heat map: the mark, drawn where each person put it. Under the
+           curtain only YOUR dot shows — you may see where you voted, not
+           where anyone else did — and at the bell all of them. Fractions of
+           the box, so a dot stays on the part of the sketch it was put on. */
+        <div className="vote-dots" aria-hidden>
+          {reactionPointsOf(item, mark)
+            .filter((dot) => !votesHidden || dot.actorId === actor.id)
+            .map((dot) => (
+              <span
+                key={dot.actorId}
+                className={`vote-dot${dot.actorId === actor.id ? " mine" : ""}`}
+                style={{ left: `${dot.x * 100}%`, top: `${dot.y * 100}%` }}
+                title={votesHidden ? "your dot" : (names[dot.actorId] ?? dot.actorId)}
+              >
+                {mark}
+              </span>
+            ))}
         </div>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>

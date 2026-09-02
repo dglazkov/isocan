@@ -13,6 +13,7 @@ import {
   newItemId,
   newVersionId,
   sprintState,
+  wallFor,
 } from "@isocan/core";
 import { getSnapshot, readBlob, sendOp, uploadBlob } from "./api.ts";
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -278,6 +279,44 @@ export async function handInFromDesk(
 export function useVotesHidden(): boolean {
   const { state, nowMs } = useSprint();
   return hidesVotes(state, nowMs);
+}
+
+/**
+ * **The curtain, on the wall only** (sprint phase 4). With a board laid the
+ * wall is the Vote sheet's contents (`wallFor`), so a note on the Brief
+ * keeps its byline and its counts while the sketches on the wall hide
+ * theirs — the 1 Sep departure closed. Computed once per canvas and phase,
+ * not once per item: a wall is a set, and every item asks the same set.
+ */
+let wallMemo: { canvas: CanvasContents; commentId: string; ids: Set<string> } | null = null;
+
+function wallIdsFor(canvas: CanvasContents, state: SprintState): Set<string> {
+  // Keyed on the canvas OBJECT and the phase: the store hands out a new
+  // canvas on every change, so a stale key is exactly a stale wall, and
+  // forty items asking in one render share one fold.
+  if (wallMemo && wallMemo.canvas === canvas && wallMemo.commentId === state.commentId) return wallMemo.ids;
+  const ids = new Set(wallFor(canvas, state).map((one) => one.id));
+  wallMemo = { canvas, commentId: state.commentId, ids };
+  return ids;
+}
+
+/** Whether this item is on the running sprint's wall. */
+export function useOnWall(item: Item): boolean {
+  const { state } = useSprint();
+  const canvas = useCanvasStore((s) => s.canvas);
+  return state !== null && canvas !== null && wallIdsFor(canvas, state).has(item.id);
+}
+
+export function useVotesHiddenOn(item: Item): boolean {
+  const { state, nowMs } = useSprint();
+  const canvas = useCanvasStore((s) => s.canvas);
+  if (!hidesVotes(state, nowMs) || !state || !canvas) return false;
+  return wallIdsFor(canvas, state).has(item.id);
+}
+
+/** The mark a running vote phase counts, or null outside one. */
+export function voteMark(state: SprintState | null): string | null {
+  return state && state.phase.kind === "vote" ? state.phase.mark : null;
 }
 
 /**

@@ -2,7 +2,7 @@ import type { CanvasContents, Item } from "./model.ts";
 import { mainThread } from "./model.ts";
 import type { PresenceSession } from "./protocol.ts";
 import { parseSlashCommand } from "./commands.ts";
-import { AREA_KIND } from "./area.ts";
+import { AREA_KIND, inArea } from "./area.ts";
 import type { Paper } from "./textnode.ts";
 
 /**
@@ -521,13 +521,22 @@ export function tally(
 }
 
 /**
- * The wall a vote is about: what was handed in for the most recent silent
- * phase before this one, or — with nothing handed in — every item. A heat
- * map over a sprint that never used hand-in still works, on everything.
+ * The wall a vote is about. With a board laid, it is what is ON THE VOTE
+ * SHEET — the wall is a sheet now, which is what closes the 1 Sep build's
+ * one departure (hiding counts on every item because "the wall" had no
+ * precise meaning). Without a board, or with an empty Vote sheet: what was
+ * handed in for the most recent silent phase before this one, or — with
+ * nothing handed in — every item, so a heat map over a sprint that never
+ * used hand-in still works, on everything.
  */
 export function wallFor(canvas: CanvasContents, state: SprintState): Item[] {
   const chat = mainThread(canvas);
   const items = Object.values(canvas.items);
+  const vote = boardAreaFor(canvas, "vote");
+  if (vote) {
+    const onSheet = items.filter((item) => inArea(vote, item));
+    if (onSheet.length > 0) return onSheet;
+  }
   if (!chat) return items;
   // Walk back from the current phase's comment to the nearest silent phase.
   const at = chat.comments.findIndex((c) => c.id === state.commentId);

@@ -26,6 +26,26 @@ interface Reaction {
  * reshuffles when somebody reacts is a row nobody can aim at — and the useful
  * order for a reader is "what does this item mostly say", which is the count.
  */
+/**
+ * **The dots**: where a mark was placed on the item, per actor — the heat
+ * map's picture. Fractions of the box, so the caller multiplies by the box
+ * it is drawing. Joined against who WEARS the mark now: the reducer keeps a
+ * point when a mark comes off (so undo can put the dot back), and a point
+ * whose actor is not wearing the mark is not a dot. An actor wearing the
+ * mark with no point has no dot and is still counted; `reactionsOf` says
+ * how many, this says where.
+ */
+export function reactionPointsOf(
+  item: Item,
+  emoji: string,
+): { actorId: string; x: number; y: number }[] {
+  const wearing = new Set(item.reactions?.[emoji] ?? []);
+  const points = item.reactionPoints?.[emoji] ?? {};
+  return Object.entries(points)
+    .filter(([actorId]) => wearing.has(actorId))
+    .map(([actorId, point]) => ({ actorId, x: point.x, y: point.y }));
+}
+
 export function reactionsOf(item: Item, selfId?: string): Reaction[] {
   const entries = Object.entries(item.reactions ?? {});
   const out = entries.map(([emoji, actorIds]) => ({

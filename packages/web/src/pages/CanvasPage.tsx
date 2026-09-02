@@ -621,7 +621,10 @@ function CanvasSurface({
         navigate(one ? workbenchItemPath(canvasId!, one) : workbenchPath(canvasId!));
       } else if (e.key === "Escape") {
         // Watching is the outermost mode: Esc hands the camera back first.
-        if (ui.renamingItemId) ui.setRenaming(null);
+        // A mark being placed is the innermost: it is the thing under the
+        // pointer right now.
+        if (ui.stamp) ui.setStamp(null);
+        else if (ui.renamingItemId) ui.setRenaming(null);
         else if (ui.followSessionId) ui.setFollow(null);
         else if (ui.pendingText) ui.setPendingText(null);
         else if (ui.pendingComment) ui.setPendingComment(null);

@@ -849,10 +849,16 @@ THE PHASES, AND THE VERB FOR EACH.
 - museum: \`isocan format\` the sketches in a row. Walk the room:
   \`isocan present <sketch>\` per sketch; people who want the tour follow YOU
   from the agent tray. Nobody presents their own.
-- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone \`isocan react 🔴\`
-  (or clicks) on the PARTS they like, as many as they want, silently. The app
-  hides counts and names until the bell; you may read \`isocan sprint tally\`
-  because you are the referee, not a voter.
+- museum: before you call it, put the wall on the Vote sheet — \`isocan mv
+  <sketches...> --in Vote\` then \`isocan format --in Vote\` — because the
+  Vote sheet IS the wall: the curtain hides counts and names there and
+  nowhere else.
+- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone places 🔴 on the PARTS
+  they like, as many as they want, silently — the chip's "Place a 🔴" then a
+  click on the part, or \`isocan react 🔴 <sketch> --at 0.4,0.6\` (fractions
+  of the sketch's box). The dots draw where they were put; under the curtain
+  each person sees only their own, and all of them at the bell. You may read
+  \`isocan sprint tally\` because you are the referee, not a voter.
 - critique: three minutes per sketch, the room narrates, the author speaks last
   and only to say what was missed. A scribe (an agent is good at this) writes
   each big idea as \`isocan text --paper pink\` beside the sketch.

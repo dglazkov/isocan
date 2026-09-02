@@ -66,7 +66,10 @@ export function invertOperation(
     case "item.react":
       // Exact without knowing the actor, because undo is per-actor: the
       // inverse is replayed stamped with the same person, and removing your
-      // own id from a set is the precise opposite of adding it.
+      // own id from a set is the precise opposite of adding it. The DOT
+      // survives this without being carried: the reducer keeps a placed
+      // point when the mark comes off, and readers join points against who
+      // wears the mark now — so undoing an `off` shows the dot where it was.
       return { type: "item.react", itemId: op.itemId, emoji: op.emoji, on: !op.on };
 
     case "item.update": {

@@ -41,7 +41,14 @@ births a private canvas — link off, one pass in — that knows its sprint; its
 chip reads the sprint's clock by pulling the snapshot and offers *Hand in*,
 a cross-canvas copy onto the phase's sheet, stamped, in one group; the
 terminal's twin is `copy --to --in --handin` (`cli/test/desk.test.ts`).
-Phase 4 is next.
+**Phase 4 is built:** the wall is the Vote sheet's contents when a board is
+laid, and the curtain applies there and nowhere else; `item.react` carries
+an optional point as fractions of the item's box — the one wire change of
+the project, written by a click while the chip says *Placing* and by
+`isocan react --at`; dots draw where they were put, only yours under the
+curtain, everyone's at the bell; the reducer keeps a point when the mark
+comes off so undo can put the dot back without the inverter knowing whose
+(`core/test/heatmap.test.ts`, `cli/test/heatmap.test.ts`). Phase 5 is next.
 
 ---
 

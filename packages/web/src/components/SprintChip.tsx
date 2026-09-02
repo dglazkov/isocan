@@ -55,6 +55,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
   const selectedIds = useUiStore((s) => s.selectedItemIds);
+  const stamp = useUiStore((s) => s.stamp);
   const canvas = useCanvasStore((s) => s.canvas);
   // A desk: no sprint of its own, and a canvas record that names the sprint
   // it belongs to. Its chip reads THAT sprint — pulled, since the store
@@ -174,6 +175,23 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           onClick={() => goToArea(state)}
         >
           Go there
+        </button>
+      )}
+      {vote && state.phase.mark && remaining !== 0 && (
+        /* Place a mark: a mode, not an act — while it is on, a press on a
+           sketch on the wall puts the mark where the press landed. Escape
+           or a second press here takes the mode off. */
+        <button
+          className={`sprint-action${stamp === state.phase.mark ? " on" : ""}`}
+          aria-pressed={stamp === state.phase.mark}
+          title={
+            stamp === state.phase.mark
+              ? "Placing — click a sketch on the wall where you like it; Esc to stop"
+              : `Place a ${state.phase.mark} on the part of a sketch you like`
+          }
+          onClick={() => useUiStore.getState().setStamp(stamp === state.phase.mark ? null : state.phase.mark)}
+        >
+          {stamp === state.phase.mark ? `Placing ${state.phase.mark}` : `Place a ${state.phase.mark}`}
         </button>
       )}
       {phaseTakesNotes(state) && (

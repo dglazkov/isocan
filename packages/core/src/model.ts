@@ -110,6 +110,17 @@ export interface Item {
    * before it.
    */
   reactions?: Record<string, string[]>;
+  /**
+   * Where a reaction was PLACED on the item, when it was — emoji → actor id
+   * → a point as fractions of the item's box (0..1 each), so it lands on the
+   * same part of the sketch at every zoom and every size. A heat map is
+   * dots on the parts people liked, not a count under the card
+   * (`docs/research/2026-09-01-design-sprint.md`, "a vote that is also a
+   * picture"). Absent for a reaction worn without a point, which is every
+   * reaction made before this existed and every chip click since; the
+   * point is carried by `item.react`'s `at`, and removed with the reaction.
+   */
+  reactionPoints?: Record<string, Record<string, { x: number; y: number }>>;
   /** Append-only, creation order. The visible "top of stack" is currentVersionId. */
   versions: ItemVersion[];
   currentVersionId: string;
