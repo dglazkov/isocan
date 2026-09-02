@@ -57,7 +57,7 @@ export type ActorJoinOp = Extract<Operation, { type: "actor.join" }>;
  */
 
 /** The name one actor goes by now, and when they took it. */
-export interface ActorNameRow {
+interface ActorNameRow {
   name: string;
   /** The claim that set this name. Recency lives here rather than being
    * scanned out of the claims, which is what makes a name outlive the
@@ -66,7 +66,7 @@ export interface ActorNameRow {
 }
 
 /** Actor id → the name they go by now. */
-export type ActorNamesRegistry = Record<string, ActorNameRow>;
+type ActorNamesRegistry = Record<string, ActorNameRow>;
 
 export interface ActorRegistry {
   /**
@@ -380,7 +380,7 @@ export interface ClaimContext {
   mintId?: () => string;
 }
 
-export interface ClaimResult {
+interface ClaimResult {
   /** The public half, replayable — what the store persists. */
   registry: ActorRegistry;
   /** Who the claiming session now is — stamped into the envelope, which is

@@ -3,9 +3,9 @@ import { fetchBlobText } from "./blobtext.ts";
 
 /** Nothing grows past this: a screen that wants 6000px is a screen with a bug,
  *  and an item that fills the canvas is not a fit, it is a wall. */
-export const MAX_FIT = 2400;
+const MAX_FIT = 2400;
 /** A screen with nothing to say about its own width gets a desktop. */
-export const SCREEN_FIT = { width: 1280, height: 800 };
+const SCREEN_FIT = { width: 1280, height: 800 };
 
 const clamp = (n: number) => Math.max(80, Math.min(MAX_FIT, Math.round(n)));
 

@@ -49,9 +49,9 @@ export const DOC_STATES = [
   "superseded",
 ] as const;
 
-export type DocState = (typeof DOC_STATES)[number];
+type DocState = (typeof DOC_STATES)[number];
 
-export interface DocStatus {
+interface DocStatus {
   status: DocState;
   /** When the status was last true, as a date. A verdict with no date is a
    *  verdict nobody can age. */

@@ -563,7 +563,7 @@ export interface TreeEntry {
   size: number;
 }
 
-export interface TreeResponse {
+interface TreeResponse {
   roots: Array<{ root: string; entries: TreeEntry[]; truncated: boolean }>;
 }
 
@@ -620,7 +620,7 @@ export function pickDirectories(canvasId: string, at: string | null): Promise<Pi
   return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/pick${where}`);
 }
 
-export interface BindResponse {
+interface BindResponse {
   root: string;
   marker: string;
   /** The directory already carried this canvas's marker — a cloned repo whose
@@ -655,7 +655,7 @@ export interface PersonaFile {
   text: string;
 }
 
-export interface PersonasResponse {
+interface PersonasResponse {
   root: string;
   personas: PersonaFile[];
 }
@@ -686,7 +686,7 @@ export function savePersona(
   );
 }
 
-export interface BackingResponse {
+interface BackingResponse {
   bound: boolean;
   /** Path relative to the root → the content hash found there. */
   onDisk: Record<string, string>;

@@ -14,7 +14,7 @@ import type { CanvasContents } from "./model.ts";
  * somebody a way to go and look at.
  */
 
-export type ActivityKind = "said" | "made" | "edited";
+type ActivityKind = "said" | "made" | "edited";
 
 export interface ActivityEntry {
   kind: ActivityKind;

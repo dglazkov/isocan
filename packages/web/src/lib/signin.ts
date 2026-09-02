@@ -161,7 +161,7 @@ export function useAttestOffer(): AttestOffer | null {
 
 /** The actors this badge may become — `AttestOffer.resumable`, kept current.
  * `[]` until the answer is in, and on a home with no attester. */
-export function useResumable(): Actor[] {
+function useResumable(): Actor[] {
   return resumableIn(useAttestOffer());
 }
 

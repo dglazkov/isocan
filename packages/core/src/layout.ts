@@ -24,7 +24,7 @@ export interface Move {
   y: number;
 }
 
-export type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
 export type Axis = "h" | "v";
 
 export const ALIGN_EDGES: readonly AlignEdge[] = [

@@ -16,7 +16,7 @@ import type { DesignTokens, DesignTypography } from "./designmd.ts";
  */
 
 /** The W3C shape: every leaf is `$value` plus a `$type`, groups nest. */
-export interface DtcgNode {
+interface DtcgNode {
   $value?: unknown;
   $type?: string;
   $description?: string;

@@ -9,7 +9,7 @@
  * against this file, and impossible to check against a screenshot.
  */
 
-export interface Shortcut {
+interface Shortcut {
   /** As a person would say it, e.g. "⌘K" or "Shift-drag". Several when the
    * same act has more than one key. */
   keys: string[];
@@ -21,7 +21,7 @@ export interface Shortcut {
   note?: string;
 }
 
-export type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
+type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Tools",

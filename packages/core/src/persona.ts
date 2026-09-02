@@ -30,7 +30,7 @@
  * at authoring time is a number nobody took, and a persona judged against one
  * is judged against fiction — see `baselineOf`.
  */
-export interface PersonaGoal {
+interface PersonaGoal {
   /** What is counted, in the words a person would use. */
   name: string;
   /** The direction that is good, and the line. */
@@ -45,7 +45,7 @@ export interface PersonaGoal {
 
 /** Time, or an event. `docs/projects/personas/design.md` argues for starting
  *  with time: it is built, and its failure mode is boring. */
-export type PersonaTrigger =
+type PersonaTrigger =
   | { kind: "schedule"; cron: string }
   | { kind: "push"; to: string; paths?: string[] }
   | { kind: "manual" };
@@ -304,7 +304,7 @@ export function withBaseline(
  * lives beside the thing it describes cannot drift from it; one that lives
  * elsewhere needs somebody to keep the two in step, and nobody ever does.
  */
-export type FindingOutcome = "accepted" | "rejected" | "unanswered";
+type FindingOutcome = "accepted" | "rejected" | "unanswered";
 
 export interface RunFinding {
   finding: string;

@@ -12,7 +12,7 @@ import { findItemRefSpans, findMentionSpans } from "@isocan/core";
 import { actorColor } from "./colors.ts";
 
 /** `[plain text, chip, plain text, …]` — at most one of `mention`/`item`. */
-export type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan };
+type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan };
 
 export function splitChips(
   body: string,

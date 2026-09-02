@@ -57,7 +57,7 @@ export function fileOf(item: Item): string | null {
  * passes `force` — and `force` is what switches the real drift check OFF. The
  * one state that never needed the escape hatch was the one being handed it.
  */
-export type BackingState = "written" | "behind" | "drifted" | "absent" | "unbound";
+type BackingState = "written" | "behind" | "drifted" | "absent" | "unbound";
 
 export interface Backing {
   path: string;

@@ -10,7 +10,7 @@ import type { CanvasContents, Item } from "./model.ts";
  */
 
 /** One emoji as it renders: the mark, how many wear it, and whether you do. */
-export interface Reaction {
+interface Reaction {
   emoji: string;
   actorIds: readonly string[];
   count: number;
@@ -46,7 +46,7 @@ export function hasReacted(item: Item, emoji: string, actorId: string): boolean 
 
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */
-export interface ReactionGroup {
+interface ReactionGroup {
   emoji: string;
   items: Item[];
   /** How many ITEMS wear it — the number the bar shows. Distinct from a

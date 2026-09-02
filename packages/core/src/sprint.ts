@@ -34,9 +34,9 @@ import { parseSlashCommand } from "./commands.ts";
 export const SPRINT_PROP = "sprint";
 
 /** What kind of moment a phase is — decides what the surfaces hide. */
-export type PhaseKind = "group" | "silent" | "vote" | "decide";
+type PhaseKind = "group" | "silent" | "vote" | "decide";
 
-export interface PhaseSpec {
+interface PhaseSpec {
   /** The word after `/sprint`. */
   name: string;
   /** What the clock chip says. */
@@ -110,7 +110,7 @@ export function clockLabel(seconds: number): string {
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(rest).padStart(2, "0")}`;
 }
 
-export interface SprintCommand {
+interface SprintCommand {
   /** A phase name, or `end`. */
   phase: string;
   /** Explicit duration, or null to take the phase's default. */
@@ -238,7 +238,7 @@ export function agentActorIds(
   return ids;
 }
 
-export interface Tally {
+interface Tally {
   item: Item;
   humans: number;
   agents: number;

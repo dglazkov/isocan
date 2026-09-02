@@ -80,7 +80,7 @@ export const AUTH_ACTION_PATH = "/__/auth/action";
  * the real ones are set, and — by the web app, once it is pointed here — to
  * strip them off the address bar when the landing page is done with them.
  */
-export const AUTH_ACTION_PARAMS = ["mode", "oobCode", "apiKey", "continueUrl", "lang"] as const;
+const AUTH_ACTION_PARAMS = ["mode", "oobCode", "apiKey", "continueUrl", "lang"] as const;
 
 /**
  * The one mode this handler answers.
@@ -92,7 +92,7 @@ export const AUTH_ACTION_PARAMS = ["mode", "oobCode", "apiKey", "continueUrl", "
  * default answer to a wrong address is a cheerful one), so they are refused in
  * words instead.
  */
-export const AUTH_ACTION_MODE = "signIn";
+const AUTH_ACTION_MODE = "signIn";
 
 /**
  * What the handler should do: hop to a path on this origin, or say no.
@@ -101,11 +101,11 @@ export const AUTH_ACTION_MODE = "signIn";
  * `/`" and "refuse" are different answers and a null would collapse them into
  * the cheerful one.
  */
-export type AuthActionOutcome = { redirect: string } | { refusal: string };
+type AuthActionOutcome = { redirect: string } | { refusal: string };
 
 /** A query as Fastify hands it over (repeated keys arrive as arrays), or as
  * `URLSearchParams`, which is what a test and a browser both have. */
-export type AuthActionQuery = URLSearchParams | Record<string, unknown>;
+type AuthActionQuery = URLSearchParams | Record<string, unknown>;
 
 /**
  * **The whole decision**, so the route can be four lines and a test can import

@@ -6,14 +6,29 @@ effort: xhigh
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash
 goal:
+  # 129 → 0 on 2026-09-02. Not a cleanup sprint: every package here is
+  # `private: true`, so an export nothing in the repo names is not API in
+  # waiting — it is a keyword nobody needed. 155 declarations were used only
+  # inside their own file and lost the word `export`; one, `MERGE_KEEPS_PADDING`,
+  # was dead and its comment claimed it was "exported so a caller can say why
+  # the box is what it is", which no caller ever did, so it went with the
+  # invariant left where `merge.test.ts` already states it.
+  #
+  # The bound is 0 because that is what it measures now, and a ratchet set
+  # above its floor is slack nobody decided to leave. The next one fails on the
+  # commit that adds it, which is the whole point.
   - name: exports nothing outside their own file uses
-    at most: 129
+    at most: 0
     measured by: node scripts/measure.mjs unused-exports
-    baseline: 129, 2026-08-30, 66d9b67
+    baseline: 0, 2026-09-02, 6bb8994
+  # 277 → 253 on the same commit, and NOT because anything was documented:
+  # this counts exports with no comment above them, and 73 of the declarations
+  # above stopped being exports. The drop is a consequence, not an achievement,
+  # and it is recorded that way so nobody reads it as prose that was written.
   - name: exports with no comment above them
-    at most: 277
+    at most: 253
     measured by: node scripts/measure.mjs undocumented-exports
-    baseline: 277, 2026-08-30, ef7265a
+    baseline: 253, 2026-09-02, 6bb8994
   # Raised from 45 with the reason, which is the only sanctioned way: the two
   # new pairs are a lens roster agreeing with a 404 page's action row, and a
   # lens title agreeing with a share roster's name. Value-coincidence, not

@@ -34,7 +34,7 @@ export function mapOf(item: Item): string | null {
 }
 
 /** The node this one hangs from, or null for a root. */
-export function mapParentOf(item: Item): string | null {
+function mapParentOf(item: Item): string | null {
   return item.properties[MAP_PARENT_PROP] ?? null;
 }
 
@@ -176,7 +176,7 @@ export function mapOutline(canvas: CanvasContents, mapId: string): string {
 }
 
 /** A box, which is all the geometry an edge needs from an item. */
-export interface NodeBox {
+interface NodeBox {
   x: number;
   y: number;
   width: number;
@@ -270,8 +270,8 @@ export interface MapMove {
 }
 
 /** Space between a column and the next, and between one row and the next. */
-export const TIDY_GAP_X = 60;
-export const TIDY_GAP_Y = 24;
+const TIDY_GAP_X = 60;
+const TIDY_GAP_Y = 24;
 
 export function tidyMap(canvas: CanvasContents, mapId: string): MapMove[] {
   const roots = mapRoots(canvas, mapId);

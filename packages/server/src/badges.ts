@@ -10,7 +10,7 @@ import type { BadgeKind, BadgeRecord, Desk } from "./desk.ts";
  */
 
 /** A minted badge, at the one moment the plaintext secret exists. */
-export interface MintedBadge {
+interface MintedBadge {
   record: BadgeRecord;
   /** `<badgeId>.<secret>` — handed to the caller once and never again. */
   token: string;
@@ -51,7 +51,7 @@ export function secretMatches(secret: string, expectedHash: string): boolean {
 
 // ---- carriers ----
 
-export interface PresentedBadge {
+interface PresentedBadge {
   badgeId: string;
   secret: string;
   /** Cookie-carried requests get the Origin check; bearer-carried ones are
@@ -95,7 +95,7 @@ export async function resolveBadge(
  * runtime deps so a git install resolves (#47), so a new server dependency is
  * two edits and a release-branch concern.
  */
-export function readCookie(header: string | undefined, name: string): string | null {
+function readCookie(header: string | undefined, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(";")) {
     const eq = part.indexOf("=");
@@ -151,7 +151,7 @@ export function isSecureRequest(headers: IncomingHttpHeaders, encrypted: boolean
 
 // ---- the Origin rule ----
 
-export interface OriginPolicy {
+interface OriginPolicy {
   /** The host:port the daemon is bound to, when that is loopback. */
   loopback: boolean;
 }

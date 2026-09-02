@@ -57,7 +57,7 @@ export function canvasPath(canvasId: string): string {
  *
  * `/i/` for the same reason as `/p/`: short, and spelled once.
  */
-export const ITEM_PATH_SEGMENT = "i";
+const ITEM_PATH_SEGMENT = "i";
 
 export function itemPath(canvasId: string, itemId: string): string {
   return `${canvasPath(canvasId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
@@ -86,7 +86,7 @@ export function itemUrl(origin: string, canvasId: string, itemId: string): strin
  *
  * `w` for the reason `i` and `p` are letters: short, and spelled once.
  */
-export const WORKBENCH_PATH_SEGMENT = "w";
+const WORKBENCH_PATH_SEGMENT = "w";
 
 export const WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
 export const WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;

@@ -57,7 +57,7 @@ interface ParkRow {
   parkId: string;
 }
 
-export interface ParkClaim {
+interface ParkClaim {
   parkId: string;
   cursor: number;
   redeliverUpTo: number | null;

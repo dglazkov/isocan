@@ -289,7 +289,7 @@ function isOpen(method: string, pathname: string): boolean {
   return false;
 }
 
-export interface RouteOptions {
+interface RouteOptions {
   /** Where a canvas born here, naming nothing, is born — or null when it stays
    * here. What the health route reports as `home` (redefined in phase 10.3,
    * because `stalenessOf` and older CLIs read that key and the birth default

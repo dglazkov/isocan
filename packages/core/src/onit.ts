@@ -15,7 +15,7 @@ import type { PresenceSession } from "./protocol.ts";
  * `isocan who` should not disagree about who is on what.
  */
 
-export interface Worker {
+interface Worker {
   sessionId: string;
   actorId: string;
   /** Their presence label if they have one, else their name. */
@@ -91,7 +91,7 @@ export function summonedBy(
  * workaround: it lands in the history where "why did this stop halfway" gets
  * answered later, it reaches every surface, and it needs no new op.
  */
-export const CANCEL_COMMAND = "cancel";
+const CANCEL_COMMAND = "cancel";
 
 /** The most recent cancellation in this thread, if any. */
 export function latestCancel(thread: {

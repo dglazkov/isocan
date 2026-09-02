@@ -43,7 +43,7 @@ export interface EmojiEntry {
   keywords: readonly string[];
 }
 
-export interface EmojiGroup {
+interface EmojiGroup {
   /** The tab label. Short: these sit in a row across a narrow panel. */
   name: string;
   entries: readonly EmojiEntry[];

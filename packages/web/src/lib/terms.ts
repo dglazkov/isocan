@@ -31,7 +31,7 @@
  * say honestly it does not say.
  */
 
-export type TermsSection = {
+type TermsSection = {
   /** Stable key: the anchor a link can name, and what the guard reports by. */
   id: string;
   /** The obligation, as a heading somebody scanning would stop on. */

@@ -49,7 +49,7 @@ interface Mirror {
   sendAsk: (ask: RcAsk) => boolean;
 }
 
-export interface RcAnswering {
+interface RcAnswering {
   parked: boolean;
   actorIds: string[];
 }

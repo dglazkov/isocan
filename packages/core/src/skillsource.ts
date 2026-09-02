@@ -12,7 +12,7 @@
  * shown to somebody before it lands.
  */
 
-export interface SkillSource {
+interface SkillSource {
   /** The raw file to fetch. */
   url: string;
   /** How to describe the origin to a person, e.g. "mattpocock/skills". */
