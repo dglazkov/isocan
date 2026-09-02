@@ -78,4 +78,71 @@ describe("a post-it is a text node wearing paper", () => {
     // sticky one.
     expect(read("../src/components/TextComposer.tsx")).toContain("[null, ...PAPERS]");
   });
+
+  /**
+   * **Re-opening a note is editing the note, not filling a form over it.**
+   *
+   * Reported with a picture: a yellow note somebody had dragged to 259×326,
+   * double-clicked, and a white 220-square field sitting inside the yellow
+   * with the words in it. Three things were wrong at once, and each has its
+   * own guard because each was its own omission.
+   */
+  describe("re-opening a note for editing", () => {
+    const composer = read("../src/components/TextComposer.tsx");
+
+    it("carries the note's paper into the composer", () => {
+      // `openTextEditor` passed the box, the step and the face, and not the
+      // paper — so the composer opened as the plain white field, over the
+      // note it was supposed to be.
+      const view = read("../src/components/ItemView.tsx");
+      const open = view.slice(view.indexOf("async function openTextEditor"));
+      const call = open.slice(0, open.indexOf("});"));
+      expect(call).toContain("paper,");
+    });
+
+    it("sits on the note's own box, not the default square", () => {
+      // A new note is `PAPER_SIZE`; an existing one is whatever it was
+      // dragged to, and the composer has to be that, edge for edge.
+      expect(composer).toContain("pending.itemId ? (pending.width ?? PAPER_SIZE) : PAPER_SIZE");
+      expect(composer).toContain("pending.itemId ? (pending.height ?? PAPER_SIZE) : PAPER_SIZE");
+    });
+
+    it("commits the note's box rather than the words' measure", () => {
+      // The mirror measures prose. A post-it is fixed size by decision
+      // (`core/textnode.ts`), so an edit must not hand `reviseTextNode` a
+      // narrow measure that would resize the note to its sentence.
+      expect(composer).toContain("at.paper ? { width, height } : { width: fit.width, height: fit.height }");
+    });
+
+    it("lands a paper changed mid-edit, through core's own patch", () => {
+      // The swatches are on the composer during an edit too. Yellow opened
+      // and pink chosen has to commit pink — and through `paperPatch`, so
+      // the app and the CLI cannot spell the property two ways.
+      const text = read("../src/lib/text.ts");
+      const revise = text.slice(text.indexOf("export async function reviseTextNode"));
+      expect(revise).toContain("paperPatch(paper)");
+      expect(composer).toContain("at.paper ?? null,");
+    });
+
+    it("inks the note's words with the selector the words actually wear", () => {
+      // The ink rule was written for `.text-view`, a class nothing renders,
+      // so a committed note kept the canvas's ink — pale on yellow in dark
+      // mode, the exact failure the rule's own comment describes — while
+      // the composer over it used `--paper-ink`. The words changed colour
+      // the moment they landed. `MarkdownView` renders `.md-view`.
+      expect(css).toContain(".item.textnode.paper .md-view { color: var(--paper-ink); }");
+      expect(css).not.toContain(".item.textnode.paper .text-view");
+    });
+
+    it("insets the words on a note exactly as the composer does", () => {
+      // Composer and note share every metric or the words jump on commit.
+      // Paper gave the composer 10px of breathing room and left the note at
+      // the caption's 4px 6px, so every edit nudged the first line.
+      const noteInset = css.match(/\.item\.textnode\.paper \.md-view \{ padding: ([^;]+);/)?.[1];
+      const composerRule = css.slice(css.indexOf(".text-composer.on-paper textarea,"));
+      const composerInset = composerRule.match(/padding: ([^;]+);/)?.[1];
+      expect(noteInset, "the note's inset").toBeTruthy();
+      expect(noteInset).toBe(composerInset);
+    });
+  });
 });

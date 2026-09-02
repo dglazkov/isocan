@@ -4341,7 +4341,14 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Words on paper stop borrowing the canvas's ink: a note is its own surface,
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
-.item.textnode.paper .text-view { color: var(--paper-ink); }
+.item.textnode.paper .md-view { color: var(--paper-ink); }
+/* The same inset the composer gives the words on paper (`.text-composer
+   .on-paper textarea`, below). One number in two places on purpose: the
+   composer sits on the note edge for edge while you type, and if the note
+   set its words 4px in and the composer 10px, every commit would nudge the
+   first line by six pixels — the exact jump the text tool exists to not
+   make. */
+.item.textnode.paper .md-view { padding: 10px; }
 .item.textnode.paper-yellow, .text-paper.paper-yellow, .text-composer.paper-yellow { --paper: var(--paper-yellow); --paper-edge: var(--paper-yellow-edge); }
 .item.textnode.paper-pink, .text-paper.paper-pink, .text-composer.paper-pink { --paper: var(--paper-pink); --paper-edge: var(--paper-pink-edge); }
 .item.textnode.paper-blue, .text-paper.paper-blue, .text-composer.paper-blue { --paper: var(--paper-blue); --paper-edge: var(--paper-blue-edge); }
