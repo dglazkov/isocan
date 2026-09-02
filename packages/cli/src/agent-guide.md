@@ -41,7 +41,10 @@ canvas named after the directory is created and bound. So there is always a
 canvas to work on — this directory's. Every command resolves to it on its
 own; pass `--canvas <ref>` only when deliberately reaching for another
 canvas, and treat the human's other canvases as their business
-(`canvas list --all` shows them).
+(`canvas list --all` shows them). `ISOCAN_CANVAS=<id>` in the environment
+means the same as `--canvas` — an rc sets it for a summons, so a standing
+agent's shells act on the canvas the summons is FOR, whatever directory
+they run in.
 
 Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
@@ -329,6 +332,12 @@ that hold through every rule set — is readable with `isocan agent rules`.
 The person's side of this is `isocan rc` — a long-running command they start
 that answers for enrolled agents. It is not your verb: inside a harness
 session it refuses, and everything you need is the `agent` spelling above.
+
+One name, one machine, many canvases: a name this machine already answers
+for, enrolled on another canvas (`isocan rc add --canvas <ref> <name>`, the
+person's gesture), is the SAME agent — one actor, one history, standing on
+both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
+the name.
 
 ## The Chat
 

@@ -1,7 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-08-29
-see: personas
+see: standing-agents, personas
+note: the same-machine half answered 1 Sep by standing-agents phase 1 — the enrolment key is the name, so one badge holds one actor across canvases; the cross-machine credential (shape A) is not built and stays a vouch
 ---
 # One agent, many canvases
 

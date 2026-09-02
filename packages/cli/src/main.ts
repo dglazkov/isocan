@@ -7774,16 +7774,18 @@ async function mintAndEnrol(
   opts: { cwd: string; harness: string | null; rules?: unknown },
 ): Promise<Actor> {
   // The actor is minted through the same claim everything else uses, keyed
-  // per enrolment on this badge — so re-enrolling Sian after a withdrawal
-  // hands the same Sian back, history intact, and a worn name is refused by
-  // the registry rather than silently doubled. Phase 3 rebinds the actor to
+  // per NAME on this badge — so re-enrolling Sian after a withdrawal hands
+  // the same Sian back, history intact; so does enrolling Sian on a SECOND
+  // canvas from this machine (standing agents, phase 1): one machine, one
+  // Sian, standing wherever she is enrolled. A name worn by somebody else is
+  // refused by the registry rather than silently doubled. Phase 3 rebinds the actor to
   // its adapter-born session key when a session first exists.
   const claimed = await ctx.client.claimActor({
     type: "actor.claim",
     // The SAME key the rc's injected environment will present when this
     // agent's sessions run (acp.ts `enrolmentKey`): the mint claim IS the
     // session binding, so a CLI-added agent needs no rebinding, ever.
-    sessionKey: enrolmentKey(canvasId, name),
+    sessionKey: enrolmentKey(name),
     name,
   });
   const agent = claimed.envelope.actor;
@@ -7817,7 +7819,7 @@ async function enrolAgent(
   contained: boolean,
 ): Promise<void> {
   const ctx = await ctxOf(cmd);
-  if (contained && ctx.canvasRef !== undefined) {
+  if (contained && canvasRefOf(cmd.optsWithGlobals() as { canvas?: string; project?: string }, null) !== undefined) {
     throw new Error(
       "`isocan agent add` enrolls beside itself — no --canvas. Pointing anywhere is a person's gesture: `isocan rc add`.",
     );
@@ -7838,7 +7840,7 @@ async function enrolAgent(
 /** Both remove verbs land here — the standing goes, the history stays. */
 async function withdrawAgent(cmd: Command, name: string, contained: boolean): Promise<void> {
   const ctx = await ctxOf(cmd);
-  if (contained && ctx.canvasRef !== undefined) {
+  if (contained && canvasRefOf(cmd.optsWithGlobals() as { canvas?: string; project?: string }, null) !== undefined) {
     throw new Error(
       "`isocan agent remove` withdraws beside itself — no --canvas. Pointing anywhere is a person's gesture: `isocan rc remove`.",
     );
@@ -8025,7 +8027,7 @@ an error. Adapters: claude-code ships known; others are declared in
       // one it is the one rebinding the spike showed is needed.
       await ctx.client.claimActor({
         type: "actor.claim",
-        sessionKey: enrolmentKey(p.id, record.actor.name),
+        sessionKey: enrolmentKey(record.actor.name),
         as: record.actor.id,
       });
 
@@ -8399,7 +8401,7 @@ rcCommand.action(
       // rebinding a web-added one needs.
       await ctx.client.claimActor({
         type: "actor.claim",
-        sessionKey: enrolmentKey(p.id, record.actor.name),
+        sessionKey: enrolmentKey(record.actor.name),
         as: record.actor.id,
       });
       // Presence: the summoned session is SEEN — it appears when the turn

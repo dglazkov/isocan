@@ -1,12 +1,14 @@
 ---
-status: designed
+status: partial
 since: 2026-08-30
-see: launch, personas, on-demand
-note: the wake is the hinge; the history is already a derivation
+see: standing-agents, on-demand, personas
+note: the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents — phase 1 (one name, one machine, many canvases) built 1 Sep, the multi-canvas rc and `available` not
 ---
 # Standing agents: watching many canvases, woken into one
 
-**30 August 2026.** Research. Nothing built.
+**30 August 2026.** Research. The project it opened is
+[projects/standing-agents](../projects/standing-agents/design.md), where the
+status lives; phase 1 was built 1 Sep 2026.
 
 The question, in four parts: *one agent, one name, watching several canvases;
 woken when something wants it; starting a session with that canvas's context;

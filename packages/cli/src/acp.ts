@@ -28,9 +28,10 @@ import { readConfigFile } from "@isocan/server";
  * - The adapter's shells inherit the ADAPTER's environment and nothing
  *   else — `CLAUDE_CODE_SESSION_ID` is NOT set inside them — so identity
  *   travels by injection: the rc sets `ISOCAN_HARNESS=agent` and
- *   `ISOCAN_SESSION_ID=<canvasId>:<name>`, making the CLI inside present
- *   exactly the session key the enrolment claim minted
- *   (`agent:<canvasId>:<name>`, `main.ts`'s enrol verb). A CLI-added agent
+ *   `ISOCAN_SESSION_ID=<name>`, making the CLI inside present exactly the
+ *   session key the enrolment claim minted (`agent:<name>`, `main.ts`'s
+ *   enrol verb), and `ISOCAN_CANVAS=<canvasId>` so the CLI inside knows
+ *   which canvas the summons is for without a directory binding. A CLI-added agent
  *   needs no rebinding at all; a web-added one needs a single idempotent
  *   `actor.claim { as }` on the machine badge, which the turn verb makes.
  * - The Claude adapter refuses to start inside a Claude Code session (the
@@ -93,14 +94,28 @@ export function adapterEnv(canvasId: string, agentName: string): NodeJS.ProcessE
   const env = { ...process.env };
   for (const name of [...harnessVars, "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
   env["ISOCAN_HARNESS"] = "agent";
-  env["ISOCAN_SESSION_ID"] = `${canvasId}:${agentName}`;
+  env["ISOCAN_SESSION_ID"] = agentName;
+  // Which canvas this summons is FOR travels beside the identity, read by the
+  // CLI inside the way `--canvas` is (standing agents, phase 1): one agent may
+  // stand on several canvases from one directory, so the working directory's
+  // binding can no longer be the answer.
+  env["ISOCAN_CANVAS"] = canvasId;
   return env;
 }
 
-/** The session key the injected environment presents — and the exact key
- * the enrol verb claims, which is the whole trick. */
-export function enrolmentKey(canvasId: string, agentName: string): string {
-  return `agent:${canvasId}:${agentName}`;
+/**
+ * The session key the injected environment presents — and the exact key the
+ * enrol verb claims, which is the whole trick.
+ *
+ * **Scoped to the NAME, not to a canvas** (standing agents, phase 1). It was
+ * `agent:<canvasId>:<name>`, which made "Percy on a second canvas" a second
+ * session key on the same badge — refused by the desk as a name already worn,
+ * the same gate #89 hit. One machine answers for one Percy: the same key on
+ * every canvas resumes the same actor, so enrolling the name elsewhere hands
+ * the one Percy back, history intact, with no `as` and no vouch.
+ */
+export function enrolmentKey(agentName: string): string {
+  return `agent:${agentName}`;
 }
 
 interface JsonRpcMessage {
