@@ -643,7 +643,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // The drop's own failure, said out loud rather than left as an unhandled
     // rejection: offline, files are not queued (phase 10's deferred scope) and
     // `uploadBlob` throws with the sentence that explains why.
-    const ids = await addFiles(canvasId, actor, files, world).catch((err: unknown) => {
+    // Dropped AT the pointer: chosen, so the files stay where they were let
+    // go rather than being tidied clear (`Placement.chosen`).
+    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }).catch((err: unknown) => {
       setNotice(err instanceof Error ? err.message : "Those files could not be added.");
       return [] as string[];
     });

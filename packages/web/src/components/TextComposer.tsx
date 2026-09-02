@@ -298,7 +298,9 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           canvasId,
           actor,
           words,
-          { x: at.x, y: at.y },
+          // Chosen: the composer opened where somebody clicked, and the
+          // words land there — never tidied (`Placement.chosen`).
+          { x: at.x, y: at.y, chosen: true },
           measured,
           at.style,
           at.face,

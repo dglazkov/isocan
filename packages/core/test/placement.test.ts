@@ -118,16 +118,26 @@ describe("a position somebody chose means something", () => {
     ...(properties ? { properties } : {}),
   });
 
-  it("keeps a text node where it was typed", () => {
+  it("keeps anything a person put at a spot — the gesture carries the meaning", () => {
+    // A dropped file, a paste at the pointer, `--at`: `chosen` is the wire's
+    // word for "somebody pointed here", whatever the item is.
+    expect(positionIsMeaningful(add({ x: 40, y: 40, chosen: true }))).toBe(true);
+    expect(positionIsMeaningful(add({ x: 40, y: 40, chosen: true }, TEXT_PROPERTIES))).toBe(true);
+  });
+
+  it("keeps a text node at coordinates even unmarked, for the logs between", () => {
+    // The rule was first written by kind, and ops logged then carry no flag.
     expect(positionIsMeaningful(add({ x: 40, y: 40 }, TEXT_PROPERTIES))).toBe(true);
   });
 
   it("still tidies a text node placed by anchor — nobody chose that spot", () => {
     expect(positionIsMeaningful(add({ anchorItemId: "a" }, TEXT_PROPERTIES))).toBe(false);
+    expect(positionIsMeaningful(add({ anchorItemId: "a", chosen: true } as unknown as Placement))).toBe(false);
   });
 
-  it("still tidies a file dropped at coordinates", () => {
+  it("still tidies a file placed at computed coordinates", () => {
     expect(positionIsMeaningful(add({ x: 40, y: 40 }))).toBe(false);
+    expect(positionIsMeaningful(add({ x: 40, y: 40, chosen: false }))).toBe(false);
   });
 
   it("does not move typed words off a note they were typed on", () => {

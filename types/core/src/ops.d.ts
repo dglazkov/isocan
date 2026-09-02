@@ -20,9 +20,21 @@ export interface NewVersion {
  * item); the daemon resolves it to concrete coordinates (left of the anchor)
  * before logging, so the oplog never depends on ephemeral client state.
  */
+/**
+ * Where a new item goes. Coordinates, or an anchor to sit beside.
+ *
+ * `chosen` says a PERSON pointed at these coordinates — a click on the
+ * canvas, a drop at the pointer, `--at` in the terminal — as opposed to a
+ * spot some code computed. The daemon tidies new items clear of what is
+ * already there (`resolvePlacement`), which is right for a computed spot
+ * and wrong for a chosen one: words typed touching a note landed somewhere
+ * else, and "commit this here" has to mean here. Absent means not chosen,
+ * so every op already in a log replays exactly as it did.
+ */
 export type Placement = {
     x: number;
     y: number;
+    chosen?: boolean;
 } | {
     anchorItemId: string;
 };

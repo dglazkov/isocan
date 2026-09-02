@@ -2300,13 +2300,19 @@ export class Engine {
       op.type === "item.add"
         ? {
             ...op,
-            placement: resolvePlacement(
-              runtime.state.canvas,
-              op.placement,
-              op.width,
-              op.height,
-              positionIsMeaningful(op),
-            ),
+            placement: {
+              ...resolvePlacement(
+                runtime.state.canvas,
+                op.placement,
+                op.width,
+                op.height,
+                positionIsMeaningful(op),
+              ),
+              // The log keeps WHY it landed there: a chosen spot stays
+              // marked, so a replay — and anyone reading the log — sees a
+              // person's gesture rather than a coincidence of clear ground.
+              ...("x" in op.placement && op.placement.chosen ? { chosen: true } : {}),
+            },
           }
         : op;
 

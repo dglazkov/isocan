@@ -96,7 +96,10 @@ export async function pasteInto(
       },
       width: item.width,
       height: item.height,
-      placement: { x, y },
+      // A paste AT a point (the menu, at the pointer) is a chosen spot and
+      // stays put; a paste beside the originals is a computed one and may
+      // be tidied. See `Placement.chosen`.
+      placement: { x, y, ...(want ? { chosen: true } : {}) },
       title: item.title,
       ...(item.description ? { description: item.description } : {}),
       properties: copyProperties(item, { sameCanvas }),

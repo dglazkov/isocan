@@ -91,7 +91,13 @@ export async function addFiles(
     const { width, height } = await measure(file, mimeType);
 
     const at: Placement = spread
-      ? { x: (placement as { x: number }).x + offsetX, y: (placement as { y: number }).y }
+      ? {
+          x: (placement as { x: number }).x + offsetX,
+          y: (placement as { y: number }).y,
+          // The row inherits the drop's intent: files dropped at the
+          // pointer were put there, and each stays where the row puts it.
+          ...((placement as { chosen?: boolean }).chosen ? { chosen: true } : {}),
+        }
       : placement;
     offsetX += width + FILE_GAP;
 

@@ -84,15 +84,17 @@ export declare function resolvePlacement(canvas: CanvasContents, placement: Plac
 /**
  * Whether this item's position MEANS something, and must not be tidied.
  *
- * Ink is where the pen drew it and an annotation sits over the thing it is
- * about. Words typed at a spot are the third case: the Text tool opens its
- * composer where you clicked and renders the words at the size they will
- * land, on the promise that nothing moves when they commit — and the tidy
- * rule was moving them, so a note typed touching another landed somewhere
- * else (reported with pictures). A note laid half on another is what
- * post-its are for. Only a position somebody CHOSE counts: a click, or
- * `--at`. A text node placed by anchor — the CLI's default — is still
- * tidied, because nobody chose those coordinates.
+ * Two ways a position can mean something. By what the item IS: ink is where
+ * the pen drew it, and an annotation sits over the thing it is about — both
+ * inherent, so they hold for every op ever logged. And by how it was PLACED:
+ * `placement.chosen` says a person pointed at this spot — a click, a drop at
+ * the pointer, `--at` — and "commit this here" has to mean here. That rule
+ * was first written for text nodes by kind, after words typed touching a
+ * note landed somewhere else; it is the gesture that carries the meaning,
+ * not the kind, so a dropped file or a paste at the pointer stays put the
+ * same way, and a text node placed by anchor (the CLI's default) is still
+ * tidied because nobody chose those coordinates. The kind rule for text
+ * stays for logs written between the two, which replay the same either way.
  *
  * Lives here, beside the rule it exempts, because two callers need the
  * same answer: the daemon, which resolves the final position before logging,

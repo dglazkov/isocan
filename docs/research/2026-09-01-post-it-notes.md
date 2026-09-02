@@ -176,11 +176,22 @@ and are nudged clear of anything already there — right for a dropped file,
 wrong for words: the composer opens where you clicked and renders at the
 size it will commit, on the promise that nothing moves when it lands, and
 the tidy rule was moving it. A position chosen with a click or named with
-`--at` now means something, the way a pen stroke's does
-(`positionIsMeaningful`), so a note typed half onto another stays half onto
-it — which is what post-its are for. Placement by anchor, and the CLI's
-default of "left of the leftmost", still tidy: nobody chose those
-coordinates.
+`--at` now means something, the way a pen stroke's does, so a note typed
+half onto another stays half onto it — which is what post-its are for.
+Placement by anchor, and the CLI's default of "left of the leftmost", still
+tidy: nobody chose those coordinates.
+
+*The guard.* First written as a rule about text nodes, then rewritten as a
+rule about gestures, because it is the gesture that carries the meaning:
+`Placement.chosen` on the wire says a person pointed at these coordinates —
+the Text tool's click, a drop at the pointer, a paste at a point, `--at` —
+and the daemon and the reducer leave a chosen spot alone
+(`positionIsMeaningful`); the daemon keeps the flag on the logged op. A
+computed spot (the rail's file button, the workbench's ＋, an anchor, the
+CLI default) carries no flag and may be tidied. Absent means not chosen, so
+every op already logged replays as it did. `placement-guard.test.ts` pins
+each producer on both surfaces, so the next tool that places at a pointer
+fails a test the moment it forgets, rather than teleporting on commit.
 
 **Undo, end to end.** New note: one op. Restyle: one step (two ops in a group
 when it also takes the square). Re-word: one group — version, title, and the
