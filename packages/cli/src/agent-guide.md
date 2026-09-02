@@ -680,6 +680,47 @@ thing worth knowing, and it is often yours.
 amending what you asked is still asking. That is why "I'll just add a bit more
 detail" never accidentally marks you unblocked.
 
+## Running a sprint
+
+A design sprint is a script a facilitator runs over verbs you already have,
+and `/sprint` in the Chat is how somebody asks you to run one. The full
+procedure is that command's body (`isocan command show sprint`); the state is
+here.
+
+`isocan sprint` says which phase the Chat says is running, how long is left,
+what was handed in, and — for a vote — who wore the mark. **Nothing is
+stored**: the phase is the newest `/sprint <phase> [duration] [note]` line in
+the Chat, timed from that comment's daemon stamp, so this verb and the app's
+clock chip cannot disagree. `--json` carries `remainingSeconds`, which is the
+bell:
+
+```sh
+isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
+isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
+isocan sprint handin <items...>           # these were made for the current phase
+isocan sprint tally                       # human dots and agent dots, apart
+isocan sprint end                         # over — no phase, no clock
+```
+
+`phase` refuses a word that is not a phase (`map experts hmw target demos
+notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
+prototype test wrap`), so a typo cannot start a clock. A phase with no clock —
+the museum, the supervote — runs until the next one is called.
+
+**The curtain is a lens.** While a vote phase's clock runs, the app hides
+reaction counts and item bylines — not knowing who drew what while you vote
+is the method — but the record is untouched, and `sprint tally` reads it,
+because the facilitator is the referee and not a voter. A hand-in is a
+property (`sprint=<phase>`) on the item: `item.update`, one undo, visible to
+everybody, the same shape as a slide.
+
+Three rules that are yours whichever chair you sit in. **You never decide**:
+the supervote 🏆 is a person's. **Silent phases are silent in the Chat**:
+every parked agent wakes on it, so narrate with `session say` and keep the
+questions on item threads. **One sketch per sketcher**: an agent that could
+make forty makes one, and hands it in at the bell with `copy --to` and
+`sprint handin`.
+
 ## What changed
 
 `isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
@@ -1601,6 +1642,9 @@ answers only at the canvas's own machine),
 that become files**; `--force` overwrites one that changed on disk),
 `slides add|rm|show` (the deck full screen flips through — `show` prints the
 address to hand an audience),
+`sprint [show|phase|end|handin|tally]` (the design sprint's clock — derived
+from the Chat's newest `/sprint` line; `phase` calls one, `handin` marks what
+was made for it, `tally` splits human and agent dots),
 `present <item>` (a main-thread comment carrying the workbench address —
 inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,

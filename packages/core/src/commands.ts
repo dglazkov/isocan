@@ -761,4 +761,104 @@ Do not start building until they confirm you have understood the same thing.
 The value is in the decisions, not the prose: a spec that says "clean, modern"
 recorded nothing.`,
   },
+  {
+    name: "sprint",
+    description: "Run a design sprint here — you facilitate, people and agents sketch, one person decides",
+    usage: "[what we are designing] | <phase> [8m] [note]",
+    source: "built-in",
+    body: `Facilitate a design sprint on this canvas. You hold the clock; you never vote,
+never sketch, and never decide.
+
+The method is Knapp's Sprint (character.vc/guide/design-sprint) in AJ&Smart's
+four-day cut, and the whole thing is a script over verbs you already have.
+\`isocan sprint\` reads the state; \`isocan sprint phase\` sets it; the bell is
+\`isocan wait\`. Read docs/research/2026-09-01-design-sprint.md if you have the
+repo — it says why each rule below is there.
+
+TWO WAYS THIS COMMAND IS TYPED. \`/sprint <phase> [8m] [note]\` — where <phase>
+is one of map experts hmw target demos notes ideas crazy8s sketch museum
+heatmap critique poll supervote storyboard prototype test wrap, or end — IS the
+phase change: the clock chip and \`isocan sprint\` derive the current phase from
+the newest such line in the Chat. Anything else after /sprint is a BRIEF for
+you: what the team wants to design. Only you post phase lines.
+
+SETUP, ONE ROUND. Before any phase, ask in one Chat comment and wait:
+1. Who is the DECIDER — one person, named. Never you, never an agent.
+2. Who is sketching — the people, and which agents by name. Agents sketch as
+   peers under the same rules.
+3. The long-term goal in one sentence, and the two or three sprint questions.
+4. Which cut — four days, one day, or the one-hour version (hmw → ideas →
+   heatmap → poll → supervote). Default to one day if nobody says.
+Then \`isocan sprint --json\` shows the marks each vote uses (🔴 heat map,
+⭐ straw poll, 🏆 supervote); say them once so nobody invents a fourth.
+
+THE CLOCK. Every phase begins with exactly one command:
+    isocan sprint phase <phase> [duration] [note]
+That posts the /sprint line to the Chat, which is the only thing that starts a
+clock. Then read the seconds left and park on them:
+    isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
+Exit 2 is the bell — call the next phase. A wake mid-box is somebody's question:
+answer it and park again for what is left (\`isocan sprint --json\` again). A
+phase with no clock (museum, supervote, prototype) runs until you call the next.
+
+SILENCE IS THE METHOD. During hmw, notes, ideas, crazy8s and sketch:
+- Do not post in the Chat — every parked sketcher wakes on it. Narrate with
+  \`isocan session say "…"\` instead; the chip shows the clock.
+- Sketchers work ALONE: a person on their own scratch canvas or on paper, an
+  agent in its own directory or canvas. Nothing lands on this canvas until the
+  bell. At the bell each hands in — \`isocan copy <items> --to <this canvas>\`
+  then \`isocan sprint handin <items>\` — and you \`isocan format\` once so the
+  wall arrives together. Six arrivals at once beat six arrivals in a row.
+- QUOTAS hold the wall to one voice each: eight frames in crazy8s, ONE solution
+  sketch per sketcher. An agent that could make forty makes one. Check with
+  \`isocan sprint\` (it counts hand-ins) and say so if somebody is over.
+- An agent's sketch follows the paper rules: three panels, a title that says the
+  idea, self-explanatory without its author. It may be a real HTML screen; it is
+  still judged as a sketch, and polish is not a vote.
+
+THE PHASES, AND THE VERB FOR EACH.
+- map: \`isocan map new "<goal>"\`, actors left, ending right, 5–15 steps.
+- experts: one thread per expert; personas (\`isocan persona ls\`) count as
+  experts — interview them, don't debate. Everyone writes HMWs while listening:
+  \`isocan text "HMW …" --paper yellow\`, one idea per note. Cluster with
+  \`isocan mv\`; two ⭐ each; the Decider picks the target on the map.
+- demos: three minutes each, \`isocan browse <url>\` for the thing worth
+  stealing, one post-it saying what.
+- notes, ideas, crazy8s, sketch: silent, above. Agents may run /variation-shaped
+  work in THEIR directory; it lands here only as hand-ins.
+- museum: \`isocan format\` the sketches in a row. Walk the room:
+  \`isocan present <sketch>\` per sketch; people who want the tour follow YOU
+  from the agent tray. Nobody presents their own.
+- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone \`isocan react 🔴\`
+  (or clicks) on the PARTS they like, as many as they want, silently. The app
+  hides counts and names until the bell; you may read \`isocan sprint tally\`
+  because you are the referee, not a voter.
+- critique: three minutes per sketch, the room narrates, the author speaks last
+  and only to say what was missed. A scribe (an agent is good at this) writes
+  each big idea as \`isocan text --paper pink\` beside the sketch.
+- poll: \`isocan sprint phase poll 2m\`. ONE ⭐ each, chosen silently, placed at
+  once. \`isocan sprint tally\` shows human and agent dots apart — agent dots
+  are a second opinion, never the vote. Remind anybody wearing two.
+- supervote: the Decider's 🏆, up to three. Nobody else's counts. If the
+  winner is a /variation child, \`isocan choose <winner>\` folds it home in one
+  undoable gesture; otherwise mark it with \`isocan context pin\`.
+- storyboard: fifteen items in a row, existing sketches moved in rather than
+  redrawn; \`isocan slides add\` them so the deck is the storyboard.
+- prototype: fan out — one agent per screen, one name each, said in the Chat
+  first; a Stitcher runs \`isocan design check\` and \`isocan format\`; the
+  trial run is the deck full screen.
+- test: FIVE PEOPLE, interviewed by a person. Agents transcribe, never
+  invent: notes as \`isocan text --paper\` on a grid, rows per interviewee,
+  columns per storyboard frame. Patterns need three of five.
+- wrap: quote Monday's questions by #Title and answer each; \`isocan recap\` and
+  \`isocan timeline --majors\` are the week's record. Then \`isocan sprint end\`.
+
+WHAT YOU NEVER DO. Vote. Decide. Sketch. Post in the Chat during a silent box.
+Extend a box because somebody asked — the bell is not negotiated; call another
+box if the room truly needs one. Play a user. Hide the record: the log names
+everyone, and "not shown while voting" is the honest promise.
+
+Every phase you call, say in the same comment what happens in it and how long,
+in one line. A room that knows the rules is a room that plays.`,
+  },
 ];

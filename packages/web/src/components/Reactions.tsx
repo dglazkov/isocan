@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { hasReacted, reactionsOf } from "@isocan/core";
+import { agentActorIds, hasReacted, hidesVotes, reactionsOf } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { useActorNames } from "../lib/names.ts";
+import { useSprint } from "../lib/sprint.ts";
 
 /**
  * Smiley with a plus in the corner — the standard add-a-reaction mark.
@@ -81,6 +82,20 @@ export function Reactions({
   const [picking, setPicking] = useState(false);
   const addButton = useRef<HTMLButtonElement>(null);
   const reactions = reactionsOf(item, actor.id);
+  /**
+   * **The curtain, and the split tally** (core/sprint.ts). While a sprint's
+   * vote phase is open the count and the names are not drawn — the mark is,
+   * so the room can see dots are landing, and your own stays highlighted so
+   * you know where yours went. Hidden by LENS: the record is untouched, and
+   * `isocan sprint tally` reads it, because the facilitator is the referee.
+   * While any sprint runs, a chip also says how many of its wearers are
+   * agents — the second opinion, drawn apart from the vote.
+   */
+  const { state: sprint, nowMs } = useSprint();
+  const veiled = hidesVotes(sprint, nowMs);
+  const sessions = useCanvasStore((s) => s.sessions);
+  const canvas = useCanvasStore((s) => s.canvas);
+  const agents = sprint && canvas ? agentActorIds(sessions, canvas) : null;
   if (reactions.length === 0 && !visible) return null;
 
   function toggle(emoji: string) {
@@ -108,23 +123,33 @@ export function Reactions({
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {reactions.map((reaction) => (
-        <button
-          key={reaction.emoji}
-          className={`react-chip${reaction.mine ? " mine" : ""}`}
-          // Who, by the name they answer to NOW — a reaction stores ids only.
-          title={`${reaction.actorIds
-            .map((id) => names[id] ?? id)
-            .join(", ")} — click to ${reaction.mine ? "take yours back" : "add yours"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggle(reaction.emoji);
-          }}
-        >
-          <span className="react-emoji">{reaction.emoji}</span>
-          <span className="react-count">{reaction.count}</span>
-        </button>
-      ))}
+      {reactions.map((reaction) => {
+        const agentCount = agents ? reaction.actorIds.filter((id) => agents.has(id)).length : 0;
+        return (
+          <button
+            key={reaction.emoji}
+            className={`react-chip${reaction.mine ? " mine" : ""}${veiled ? " veiled" : ""}`}
+            // Who, by the name they answer to NOW — a reaction stores ids only.
+            title={
+              veiled
+                ? `hidden until the bell — click to ${reaction.mine ? "take yours back" : "add yours"}`
+                : `${reaction.actorIds
+                    .map((id) => names[id] ?? id)
+                    .join(", ")} — click to ${reaction.mine ? "take yours back" : "add yours"}`
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              toggle(reaction.emoji);
+            }}
+          >
+            <span className="react-emoji">{reaction.emoji}</span>
+            <span className="react-count">
+              {agentCount > 0 ? reaction.count - agentCount : reaction.count}
+              {agentCount > 0 && <span className="react-agents"> +{agentCount}🤖</span>}
+            </span>
+          </button>
+        );
+      })}
       {visible && (
         <span className="react-add-wrap">
           <button
