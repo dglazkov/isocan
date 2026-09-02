@@ -238,4 +238,13 @@ describe("the sign-in notice", () => {
     expect(html).toContain("Be Dimitri");
     expect(html).toContain("Another surface that proved the same address answers to:");
   });
+
+  it("never offers the person you already are", () => {
+    // The door's claim can land while the notice is still up (multi-identity
+    // phase 2 walk): a "Be Dimitri" button over Dimitri's own canvas does
+    // nothing, so the current actor is left out of the offer.
+    const html = drawn(dimitri);
+    expect(html).not.toContain("Be Dimitri");
+    expect(html.match(/<button/g)).toHaveLength(1);
+  });
 });

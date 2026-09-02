@@ -298,7 +298,11 @@ export function SignInNotice({
     );
   }
   const address = landing.proved.replace(/^email:/, "");
-  const offering = actor !== null ? landing.resumable : [];
+  // Never offer the person they already are: the door's claim can land while
+  // this notice is still up, and "Be Dimitri" over Dimitri's own canvas is a
+  // control that does nothing. The same rule VerifyDialog draws as "you, here".
+  const offering =
+    actor !== null ? landing.resumable.filter((who) => who.id !== actor.id) : [];
   return (
     <div className="arrival-notice" role="status">
       <div className="arrival-note">

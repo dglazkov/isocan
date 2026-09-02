@@ -77,9 +77,11 @@ const PENDING_KEY = "isocan.signin.email";
 /** What this home has borrowed, fetched once per page. Cached because three
  * dialogs ask and the answer cannot change while the process is up. */
 let offer: Promise<AttestOffer> | null = null;
-/** The most recent answer, once it has arrived. `useResumable` reads this on
- * its first render so a door mounted after the offer resolved does not paint
- * an empty list and then fill it. Cleared with `offer`. */
+/** The most recent answer, once it has arrived. `useAttestOffer` reads this
+ * on its first render so a door mounted after the offer resolved does not
+ * paint an empty list and then fill it. Cleared with `offer`, and cleared when
+ * an ask fails: a home that could not be reached has no last answer, and a
+ * door must not draw a proof control from one it gave earlier. */
 let lastOffer: AttestOffer | null = null;
 
 export function attesterOffer(refresh = false): Promise<AttestOffer> {
@@ -92,7 +94,9 @@ export function attesterOffer(refresh = false): Promise<AttestOffer> {
         // the request the cache still holds gets to say what the answer is.
         if (offer === asked) lastOffer = answer;
       },
-      () => {},
+      () => {
+        if (offer === asked) lastOffer = null;
+      },
     );
   }
   return offer;
@@ -124,23 +128,26 @@ function invalidateOffer(): void {
 }
 
 /**
- * The actors this badge may become — `AttestOffer.resumable`, kept current.
+ * The home's current offer, kept current — what it can verify, what this
+ * badge has proved, and who that lets it be.
  *
  * The door reads it through this hook wherever it is mounted, so nothing is
  * threaded through props. It reads the same cached offer the other dialogs
  * read, re-reads when `settle()` invalidates that cache after a proof lands,
- * and leaves the listener list on unmount. `[]` while the answer is on its
- * way, when the home could not be asked, and on a home with no attester —
- * where the door has to render exactly as it did before this hook existed.
+ * and leaves the listener list on unmount. `null` while the answer is on its
+ * way and when the home could not be asked; on a home with no attester the
+ * answer arrives with `auth === null`, and every reader of this hook renders
+ * nothing for it, so the door is the door it was before the hook existed
+ * (multi-identity phases 1 and 2).
  */
-export function useResumable(): Actor[] {
-  const [resumable, setResumable] = useState<Actor[]>(() => offered(lastOffer));
+export function useAttestOffer(): AttestOffer | null {
+  const [answer, setAnswer] = useState<AttestOffer | null>(lastOffer);
   useEffect(() => {
     let live = true;
     const read = (): void => {
       attesterOffer()
-        .then((answer) => live && setResumable(offered(answer)))
-        .catch(() => live && setResumable([]));
+        .then((got) => live && setAnswer(got))
+        .catch(() => live && setAnswer(null));
     };
     read();
     const stop = onOfferInvalidated(read);
@@ -149,10 +156,22 @@ export function useResumable(): Actor[] {
       stop();
     };
   }, []);
-  return resumable;
+  return answer;
 }
 
-function offered(answer: AttestOffer | null): Actor[] {
+/** The actors this badge may become — `AttestOffer.resumable`, kept current.
+ * `[]` until the answer is in, and on a home with no attester. */
+export function useResumable(): Actor[] {
+  return resumableIn(useAttestOffer());
+}
+
+/**
+ * Who the offer says this badge may be. The server answers `resumable` from
+ * the badge's attestations whether or not the home still has an attester, so
+ * this reads `[]` on a home without one — an attester-less door is today's
+ * door, whatever the badge once proved (multi-identity phase 1 finding).
+ */
+export function resumableIn(answer: AttestOffer | null): Actor[] {
   return answer && answer.auth !== null ? answer.resumable : [];
 }
 
