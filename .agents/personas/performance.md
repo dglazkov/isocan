@@ -6,10 +6,23 @@ effort: xhigh
 color: orange
 tools: Read, Write, Edit, Glob, Grep, Bash
 goal:
-  - name: largest built JavaScript chunk
-    at most: 700000
+  # **The metric changed on 2026-09-02, and the number moving is a consequence
+  # of that rather than a change in what a person waits for.** It measured the
+  # largest chunk on disk; it now measures the ENTRY chunk, which is what the
+  # sentence beside it always claimed. The two parted the day the markdown
+  # parser was split out: the entry fell 757,948 → 600,420, a real 157 KB off a
+  # first visit, while the max stayed at 615,249 because `StageEditor` is now
+  # the biggest file in the directory — and `StageEditor` is lazy.
+  #
+  # Renamed with it, so the goal and the thing agree in the reports too. The
+  # bound goes to 700,000 → 640,000: still the entry chunk's real headroom
+  # (~6%), and tighter than the old one, because a max-over-chunks bound could
+  # be satisfied by splitting an eager chunk in two and downloading exactly the
+  # same bytes. This one cannot.
+  - name: the entry chunk a first visit downloads
+    at most: 640000
     measured by: node scripts/measure.mjs bundle-bytes
-    baseline: 673076, 2026-08-29, cc085f0
+    baseline: 600420, 2026-09-02, 6bb8994
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
