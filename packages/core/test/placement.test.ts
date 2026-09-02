@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
+import type { Operation, Placement } from "../src/ops.ts";
 import {
   nearestFreeSpot,
   PLACEMENT_CLEARANCE,
   PLACEMENT_GAP,
+  positionIsMeaningful,
   resolvePlacement,
 } from "../src/placement.ts";
+import { TEXT_PROPERTIES } from "../src/textnode.ts";
 
 /**
  * New items ask for a spot; they do not claim one.
@@ -85,6 +88,55 @@ describe("placing a new item", () => {
   it("still resolves an anchor when exact", () => {
     const canvas = canvasOf(item("a", 500, 500, 200, 200));
     expect(resolvePlacement(canvas, { anchorItemId: "a" }, 100, 100, true)).toEqual({ x: 360, y: 500 });
+  });
+});
+
+/**
+ * **Words typed at a spot stay at that spot.**
+ *
+ * Reported with two pictures: a note typed touching another, ⌘Enter, and it
+ * was somewhere else. The Text tool opens its composer where you clicked and
+ * renders the words at the size they will land, on the stated promise that
+ * nothing moves when they commit — and the tidy rule then moved them. A
+ * position somebody chose with a click, or named with `--at`, means
+ * something in exactly the way a pen stroke's does; a post-it laid half on
+ * another is what post-its are for. Placement by anchor, or on an empty
+ * canvas, is unchanged: nobody chose those coordinates.
+ */
+describe("a position somebody chose means something", () => {
+  const add = (
+    placement: Placement,
+    properties?: Record<string, string>,
+    mimeType = "text/markdown",
+  ): Extract<Operation, { type: "item.add" }> => ({
+    type: "item.add",
+    itemId: "i",
+    version: { id: "v", blobHash: "h", mimeType, filename: "f", size: 1 },
+    width: 100,
+    height: 100,
+    placement,
+    ...(properties ? { properties } : {}),
+  });
+
+  it("keeps a text node where it was typed", () => {
+    expect(positionIsMeaningful(add({ x: 40, y: 40 }, TEXT_PROPERTIES))).toBe(true);
+  });
+
+  it("still tidies a text node placed by anchor — nobody chose that spot", () => {
+    expect(positionIsMeaningful(add({ anchorItemId: "a" }, TEXT_PROPERTIES))).toBe(false);
+  });
+
+  it("still tidies a file dropped at coordinates", () => {
+    expect(positionIsMeaningful(add({ x: 40, y: 40 }))).toBe(false);
+  });
+
+  it("does not move typed words off a note they were typed on", () => {
+    const canvas = canvasOf(item("note", 0, 0, 220, 220));
+    const op = add({ x: 100, y: 100 }, TEXT_PROPERTIES);
+    expect(resolvePlacement(canvas, op.placement, op.width, op.height, positionIsMeaningful(op))).toEqual({
+      x: 100,
+      y: 100,
+    });
   });
 });
 

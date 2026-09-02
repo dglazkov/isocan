@@ -154,6 +154,17 @@ item and the default square inside a note somebody had made taller.
 the same argument that remembers the step: six post-its is choosing yellow
 once. The *default* is still no paper.
 
+**Words land where they were typed.** New items ask the daemon for a spot
+and are nudged clear of anything already there — right for a dropped file,
+wrong for words: the composer opens where you clicked and renders at the
+size it will commit, on the promise that nothing moves when it lands, and
+the tidy rule was moving it. A position chosen with a click or named with
+`--at` now means something, the way a pen stroke's does
+(`positionIsMeaningful`), so a note typed half onto another stays half onto
+it — which is what post-its are for. Placement by anchor, and the CLI's
+default of "left of the leftmost", still tidy: nobody chose those
+coordinates.
+
 **Undo, end to end.** New note: one op. Restyle: one step (two ops in a group
 when it also takes the square). Re-word: one group — version, title, and the
 resize if the words grew. Inside the field, ⌘Z is the textarea's own.
