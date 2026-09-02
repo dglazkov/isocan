@@ -67,9 +67,16 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * because a hover is not a fact about the note.
    */
   const [peek, setPeek] = useState<Paper | null | undefined>(undefined);
+  // The step and the face under the pointer, on the same terms: the composer
+  // re-measures and redraws at the hovered size or face while the pointer is
+  // there, and goes back when it leaves. A click is what chooses.
+  const [peekStyle, setPeekStyle] = useState<TextStyle | undefined>(undefined);
+  const [peekFace, setPeekFace] = useState<TextFace | undefined>(undefined);
   useEffect(() => {
     setBody(pending?.body ?? "");
     setPeek(undefined);
+    setPeekStyle(undefined);
+    setPeekFace(undefined);
     done.current = false;
     placeCaret.current = true;
     // `key` is the dependency ON PURPOSE and `pending.body` must NOT be one:
@@ -127,8 +134,11 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // hook and hooks cannot sit under one (React #310, learned the hard way in
   // ArtifactStage). The defaults are only ever used on the render where
   // there is no composer, and that render draws nothing.
-  const style = pending?.style ?? "body";
-  const face = pending?.face ?? "sans";
+  // What the composer is DRAWN in: the hovered step or face while hovered,
+  // otherwise the chosen one. `restyle` and `commit` read `pending`, never
+  // these, so a hover changes nothing but the picture.
+  const style = peekStyle ?? pending?.style ?? "body";
+  const face = peekFace ?? pending?.face ?? "sans";
   // What the composer WEARS: the swatch being hovered wins while it is
   // hovered; otherwise the paper that was chosen. The box below follows,
   // so hovering yellow over a caption previews the square it would take.
@@ -336,6 +346,8 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
             // than the thing you have to know first.
             title={`${s} — readable down to ${Math.ceil((8 / TEXT_STYLE_SIZE[s]) * 100)}% zoom`}
             aria-label={`${TEXT_STYLE_LABEL[s]} (${s})`}
+            onPointerEnter={() => setPeekStyle(s)}
+            onPointerLeave={() => setPeekStyle(undefined)}
             onClick={() => restyle({ style: s })}
           >
             {TEXT_STYLE_LABEL[s]}
@@ -348,6 +360,8 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
             className={`text-style-btn text-style-face${f === face ? " on" : ""}`}
             style={{ fontFamily: TEXT_FACE_STACK[f] }}
             title={f}
+            onPointerEnter={() => setPeekFace(f)}
+            onPointerLeave={() => setPeekFace(undefined)}
             onClick={() => restyle({ face: f })}
           >
             Aa

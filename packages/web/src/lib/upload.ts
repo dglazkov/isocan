@@ -195,6 +195,9 @@ export async function addDrawing(
     },
     width: bounds.maxX - bounds.minX,
     height: bounds.maxY - bounds.minY,
+    // Not `chosen`: ink is where the pen drew it, meaningful by KIND rather
+    // than by gesture, and `positionIsMeaningful` keeps it there on that
+    // ground alone — including for every stroke logged before the flag.
     placement: { x: bounds.minX, y: bounds.minY },
     title: DRAWING_TITLE,
     properties: target
