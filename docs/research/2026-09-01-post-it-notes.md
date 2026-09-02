@@ -162,10 +162,11 @@ its size at every zoom, and at 22 it was the smallest thing on the screen.
 
 **Hover previews, click chooses.** The bar's principle is that a choice is
 previewed by the thing you are typing into; a hover is the same principle
-one step earlier. The composer wears the paper under the pointer for as
-long as it is there — box and all, so hovering yellow over a caption shows
-the square it would take — and goes back when it leaves. Nothing is sent
-or remembered by a hover.
+one step earlier. The composer wears the paper, the step or the face under
+the pointer for as long as it is there — box and all, so hovering yellow
+over a caption shows the square it would take, and hovering XL shows the
+words at that size — and goes back when it leaves. Nothing is sent or
+remembered by a hover: `restyle` and `commit` read what was chosen.
 
 **What is remembered.** The paper you chose last opens the next new node,
 the same argument that remembers the step: six post-its is choosing yellow
@@ -190,8 +191,12 @@ and the daemon and the reducer leave a chosen spot alone
 computed spot (the rail's file button, the workbench's ＋, an anchor, the
 CLI default) carries no flag and may be tidied. Absent means not chosen, so
 every op already logged replays as it did. `placement-guard.test.ts` pins
-each producer on both surfaces, so the next tool that places at a pointer
-fails a test the moment it forgets, rather than teleporting on commit.
+each producer on both surfaces, and then scans both for any coordinate
+placement it has never seen — a `placement:` literal, a `Placement`-typed
+value, a call into `addFiles` or `addTextNode` — and requires the word
+`chosen` within a few lines: the flag, or a comment saying why not. The
+next tool that places at a pointer and says neither fails a test the
+moment it is written, rather than teleporting on commit.
 
 **Undo, end to end.** New note: one op. Restyle: one step (two ops in a group
 when it also takes the square). Re-word: one group — version, title, and the

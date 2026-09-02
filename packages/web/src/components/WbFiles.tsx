@@ -128,6 +128,8 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
       if (!bytes) return;
       const name = entry.path.split("/").pop()!;
       const { viewport } = useUiStore.getState();
+      // Not `chosen`: the middle of the window is a spot found FOR the file,
+      // not one somebody pointed at, so the daemon may tidy it clear.
       const ids = await addFiles(
         canvasId,
         actor,

@@ -162,3 +162,33 @@ describe("the step buttons say sizes", () => {
     expect(body).toContain("height: 28px");
   });
 });
+
+describe("hovering a step or a face previews it too", () => {
+  it("draws the composer in the hovered step and face, chosen otherwise", () => {
+    expect(composer).toContain('const style = peekStyle ?? pending?.style ?? "body";');
+    expect(composer).toContain('const face = peekFace ?? pending?.face ?? "sans";');
+  });
+
+  it("previews on enter, restores on leave, chooses only on click", () => {
+    expect(composer).toContain("onPointerEnter={() => setPeekStyle(s)}");
+    expect(composer).toContain("onPointerLeave={() => setPeekStyle(undefined)}");
+    expect(composer).toContain("onPointerEnter={() => setPeekFace(f)}");
+    expect(composer).toContain("onPointerLeave={() => setPeekFace(undefined)}");
+  });
+
+  it("commits and restyles from what was chosen, never from a hover", () => {
+    const restyle = composer.slice(composer.indexOf("function restyle("), composer.indexOf("async function commit("));
+    expect(restyle).toContain("next.style ?? at.style");
+    expect(restyle).not.toContain("peekStyle");
+    const commit = composer.slice(composer.indexOf("async function commit("), composer.indexOf("commitRef.current = commit"));
+    expect(commit).toContain("at.style");
+    expect(commit).not.toContain("peekStyle");
+    expect(commit).not.toContain("peekFace");
+  });
+
+  it("forgets the hover when a new composer opens", () => {
+    const reset = composer.slice(composer.indexOf("setBody(pending?.body"), composer.indexOf("placeCaret.current = true;"));
+    expect(reset).toContain("setPeekStyle(undefined)");
+    expect(reset).toContain("setPeekFace(undefined)");
+  });
+});

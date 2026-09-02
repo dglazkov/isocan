@@ -4115,6 +4115,9 @@ program
               height: Math.ceil(inkBox.maxY) - Math.floor(inkBox.minY),
             }
           : sizeFor(opts.size, defaultSize(mimeType));
+        // Ink is not `chosen` and needs no flag: it is where the pen drew
+        // it, meaningful by kind (`positionIsMeaningful`). Everything else
+        // goes through `placementFor`, where `--at` is the chosen case.
         const placement = inkBox
           ? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) }
           : placementFor(snapshot, opts);
@@ -5384,6 +5387,8 @@ program
         },
         width: Math.ceil(bounds.maxX) - x,
         height: Math.ceil(bounds.maxY) - y,
+        // Not `chosen`: ink is where the pen drew it, meaningful by kind
+        // (`positionIsMeaningful`), so it needs no flag to stay put.
         placement: { x, y },
         title: opts.title ?? DRAWING_TITLE,
         properties: DRAWING_PROPERTIES,

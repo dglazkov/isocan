@@ -171,6 +171,9 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   const mine = actorColorIn(colors, actor.id);
   const ink = inkColor ?? mine;
 
+  /** Not `chosen`, either way: beside the selection or the middle of the
+   *  window is a spot found for the file, not one somebody pointed at, so
+   *  the daemon may tidy it clear (`Placement.chosen`). */
   function createPlacement(): Placement {
     const { selectedItemIds, viewport } = useUiStore.getState();
     return selectedItemIds.length === 1
@@ -186,6 +189,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     // the one thing that was not deferred with it is saying so — the error
     // carries the sentence (see `uploadBlob`), this puts it where it can be
     // read. An unhandled rejection in a console is not a person being told.
+    // Not `chosen` — `createPlacement` finds a spot for the file; see it.
     const ids = await addFiles(canvasId, actor, files, createPlacement()).catch((err: unknown) => {
       setNotice(err instanceof Error ? err.message : "That file could not be added.");
       return [] as string[];
