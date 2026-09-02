@@ -54,6 +54,18 @@ jobs:
           ONE: ${{ inputs.persona }}
         run: node scripts/persona-run.mjs ${ONE:---all}
 
+      # A SEPARATE step, deliberately, and not something `persona-run.mjs` does.
+      # The rule above is that a run writes its dated page and changes nothing
+      # else — that is what stops a runner editing its own goal — so the index
+      # is rebuilt once per nightly by the workflow, after every persona has
+      # been and gone, rather than by any of them.
+      #
+      # It exists because the index was hand-kept and stopped: four run-days
+      # behind by 1 Sep, on the one page the README asks every run to read
+      # first.
+      - name: Rebuild the review index
+        run: node scripts/reviews.mjs
+
       - name: Open the pull request
         env:
           GH_TOKEN: ${{ github.token }}

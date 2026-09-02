@@ -212,6 +212,20 @@ import {
   PAPER_PROP,
   PAPER_SIZE,
   isFaceMark,
+  PHASES,
+  SPRINT_END,
+  phaseSpec,
+  parseDuration,
+  clockLabel,
+  sprintState,
+  remainingSeconds,
+  phaseOver,
+  hidesVotes,
+  handInPatch,
+  handedInFor,
+  agentActorIds,
+  tally,
+  wallFor,
 } from "@isocan/core";
 import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
 import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
@@ -6216,6 +6230,239 @@ slidesCmd
       const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
       console.log(`\nThe deck's address (the first slide, full screen):`);
       console.log(itemUrl(origin, p.id, deck[0]!.id));
+    }),
+  );
+
+// ---------- the design sprint ----------
+
+/**
+ * **The sprint's clock, read and set from the terminal** — the facilitator's
+ * chair (`docs/research/2026-09-01-design-sprint.md`).
+ *
+ * Nothing here is stored anywhere new. `phase` posts a `/sprint <phase>` line
+ * to the Chat — the same shape `ask` gives `/ask` — and `sprintState` in core
+ * derives the running phase from the newest such line, so this verb, the
+ * app's clock chip and any agent reading the Chat agree by construction. A
+ * hand-in is `item.update` with one property. The tally is a read over
+ * reactions. The bell is `isocan wait --timeout <remainingSeconds>`, which the
+ * `/sprint` command's body spells out.
+ */
+const sprintCmd = program
+  .command("sprint")
+  .description("The design sprint — which phase the Chat says is running, its clock, and what was handed in")
+  .addHelpText(
+    "after",
+    `
+A sprint is a script the facilitator runs over verbs you already have. Phases:
+  ${PHASES.map((p) => p.name).join(" ")}  (and: end)
+
+  isocan sprint                        # phase, clock, hand-ins, tally
+  isocan sprint phase crazy8s 8m       # call a phase (posts /sprint to the Chat)
+  isocan sprint handin <items...>      # these were made for the current phase
+  isocan sprint tally                  # human dots and agent dots, apart
+  isocan sprint end                    # the sprint is over
+  isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)   # the bell`,
+  );
+
+/** Say a line in the Chat — replying to it, or starting it. The shape
+ * `notify` and `ask` both use; here so the phase line lands where the
+ * derivation reads. */
+async function sayInChat(
+  ctx: Ctx,
+  canvasId: string,
+  snapshot: CanvasSnapshotResponse,
+  body: string,
+): Promise<{ threadId: string; commentId: string }> {
+  const comment = await newComment(ctx, canvasId, snapshot, body);
+  const main = mainThread(snapshot.canvas);
+  if (main) {
+    await sendOp(ctx, canvasId, { type: "thread.reply", threadId: main.id, comment });
+    return { threadId: main.id, commentId: comment.id };
+  }
+  const threadId = newThreadId();
+  await sendOp(ctx, canvasId, {
+    type: "thread.create",
+    threadId,
+    x: 0,
+    y: 0,
+    anchorItemId: null,
+    main: true,
+    comment,
+  });
+  return { threadId, commentId: comment.id };
+}
+
+sprintCmd
+  .command("show", { isDefault: true })
+  .description("The phase the Chat says is running, how long is left, and what was handed in")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const state = sprintState(snapshot.canvas);
+      const now = Date.now();
+      if (!state) {
+        if (ctx.json) return printJson({ running: false, marks: PHASES.filter((ph) => ph.mark).map((ph) => ({ phase: ph.name, mark: ph.mark })) });
+        return console.log(
+          "No sprint running here. Ask for one with /sprint in the Chat, or call a phase:\n" +
+            "  isocan sprint phase map 45m",
+        );
+      }
+      const remaining = remainingSeconds(state, now);
+      const sessions = await ctx.client.listSessions(p.id).catch(() => [] as PresenceSession[]);
+      const agents = agentActorIds(sessions, snapshot.canvas);
+      const rows =
+        state.phase.mark === null ? [] : tally(wallFor(snapshot.canvas, state), state.phase.mark, agents);
+      if (ctx.json) {
+        return printJson({
+          running: true,
+          phase: state.phase.name,
+          label: state.phase.label,
+          kind: state.phase.kind,
+          mark: state.phase.mark,
+          note: state.note,
+          facilitatorId: state.facilitatorId,
+          facilitatorName: state.facilitatorName,
+          startedAt: state.startedAt,
+          endsAt: state.endsAt,
+          remainingSeconds: remaining,
+          over: phaseOver(state, now),
+          hidesVotes: hidesVotes(state, now),
+          handedIn: state.handedIn.map((i) => ({ id: i.id, title: i.title })),
+          tally: rows.map((r) => ({ id: r.item.id, title: r.item.title, humans: r.humans, agents: r.agents, actorIds: r.actorIds })),
+          marks: PHASES.filter((ph) => ph.mark).map((ph) => ({ phase: ph.name, mark: ph.mark })),
+        });
+      }
+      const clock =
+        remaining === null ? "no clock — runs until the next phase" : remaining === 0 ? "the bell has rung" : `${clockLabel(remaining)} left`;
+      const names = new Map<string, string>();
+      for (const s of sessions) names.set(s.actor.id, s.label ?? s.actor.name);
+      const who = names.get(state.facilitatorId) ?? state.facilitatorName;
+      console.log(`${state.phase.label} (${state.phase.kind}) · ${clock} · called by ${who}${state.note ? ` — ${state.note}` : ""}`);
+      console.log(
+        state.handedIn.length === 0
+          ? "handed in: nothing yet"
+          : `handed in: ${state.handedIn.length} — ${state.handedIn.map((i) => i.title).join(", ")}`,
+      );
+      if (state.phase.mark) {
+        console.log(
+          `votes: ${state.phase.mark}${hidesVotes(state, now) ? " — hidden in the app until the bell; you are reading the record" : ""}`,
+        );
+        if (rows.length > 0) {
+          printTable(rows.map((r) => ({ sketch: r.item.title, humans: String(r.humans), agents: String(r.agents) })));
+        }
+      }
+    }),
+  );
+
+sprintCmd
+  .command("phase <phase> [rest...]")
+  .description("Call a phase — posts /sprint <phase> [duration] [note] to the Chat, which is what starts the clock")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (phase: string, rest: string[], opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const spec = phaseSpec(phase);
+      if (!spec) {
+        throw new Error(
+          `"${phase}" is not a phase. One of: ${PHASES.map((p) => p.name).join(" ")} — or \`isocan sprint end\``,
+        );
+      }
+      const seconds = rest[0] !== undefined ? parseDuration(rest[0]) : null;
+      const note = (seconds === null ? rest : rest.slice(1)).join(" ").trim();
+      const body = `/sprint ${spec.name}${rest[0] !== undefined && seconds !== null ? ` ${rest[0]}` : ""}${note ? ` ${note}` : ""}`;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const posted = await sayInChat(ctx, p.id, snapshot, body);
+      const box = seconds ?? spec.defaultSeconds;
+      if (ctx.json) return printJson({ ...posted, phase: spec.name, seconds: box, body });
+      console.log(
+        `${spec.label} · ${box === null ? "no clock" : clockLabel(box)}${spec.mark ? ` · votes with ${spec.mark}` : ""} — said in the Chat`,
+      );
+      if (box !== null) console.log(`the bell: isocan wait --timeout ${box}`);
+    }),
+  );
+
+sprintCmd
+  .command("end [note...]")
+  .description("The sprint is over — no phase, no clock")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (note: string[], opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      if (!sprintState(snapshot.canvas)) throw new Error("no sprint is running here");
+      const words = note.join(" ").trim();
+      const posted = await sayInChat(ctx, p.id, snapshot, `/sprint ${SPRINT_END}${words ? ` ${words}` : ""}`);
+      if (ctx.json) return printJson(posted);
+      console.log("the sprint is over — said in the Chat");
+    }),
+  );
+
+sprintCmd
+  .command("handin <items...>")
+  .description("Mark items as handed in for the current phase (a property; undo takes it back)")
+  .option("--phase <phase>", "a phase other than the running one")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (refs: string[], opts: { phase?: string; canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const state = sprintState(snapshot.canvas);
+      const phase = opts.phase ? phaseSpec(opts.phase)?.name : state?.phase.name;
+      if (!phase) {
+        throw new Error(
+          opts.phase
+            ? `"${opts.phase}" is not a phase`
+            : "no sprint is running — hand in to a phase by name with --phase <phase>",
+        );
+      }
+      for (const ref of refs) {
+        const item = resolveItem(snapshot, ref);
+        if (handedInFor(item) === phase) {
+          console.log(`"${item.title}" is already in for ${phase}`);
+          continue;
+        }
+        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: handInPatch(phase) });
+        console.log(`"${item.title}" handed in for ${phase}`);
+      }
+    }),
+  );
+
+sprintCmd
+  .command("tally [mark]")
+  .description("Who wore the vote's mark on each sketch — human dots and agent dots, apart")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (mark: string | undefined, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const state = sprintState(snapshot.canvas);
+      const emoji = mark ?? state?.phase.mark ?? null;
+      if (!emoji) throw new Error("which mark? the running phase is not a vote — `isocan sprint tally 🔴`");
+      const sessions = await ctx.client.listSessions(p.id).catch(() => [] as PresenceSession[]);
+      const agents = agentActorIds(sessions, snapshot.canvas);
+      const wall = state ? wallFor(snapshot.canvas, state) : Object.values(snapshot.canvas.items);
+      const rows = tally(wall, emoji, agents);
+      if (ctx.json) {
+        return printJson(rows.map((r) => ({ id: r.item.id, title: r.item.title, humans: r.humans, agents: r.agents, actorIds: r.actorIds })));
+      }
+      if (rows.length === 0) return console.log(`nobody has worn ${emoji} yet`);
+      const names = new Map<string, string>();
+      for (const s of sessions) names.set(s.actor.id, s.label ?? s.actor.name);
+      printTable(
+        rows.map((r) => ({
+          sketch: r.item.title,
+          humans: String(r.humans),
+          agents: String(r.agents),
+          who: r.actorIds.map((id) => names.get(id) ?? id).join(", "),
+        })),
+      );
     }),
   );
 

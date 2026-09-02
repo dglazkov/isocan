@@ -199,6 +199,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   with none marked, everything is a slide. Marked items wear 🎬, and `isocan
   slides show` prints the running order plus the address to hand an audience:
   the first slide's full-screen URL.
+- **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
+  Knapp-style sprint — people and agents sketch as peers, one person decides.
+  The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows
+  the phase, the time left and how many sketches are in; `isocan sprint` prints
+  the same line, derived from the Chat rather than stored anywhere. Hand in
+  with right-click → *Hand in* or `isocan sprint handin`; vote with reactions
+  (🔴 heat map, ⭐ straw poll, 🏆 the Decider's supervote), which the app hides
+  until the bell and never hides from the record. `isocan sprint tally` shows
+  human dots and agent dots apart. See
+  [the research](docs/research/2026-09-01-design-sprint.md).
 - **The workbench (`W`)**: the same canvas flipped to the agent room — every
   agent with a live session in one roster (its status in its own words,
   expandable to what it is answering and what it last made), the main thread

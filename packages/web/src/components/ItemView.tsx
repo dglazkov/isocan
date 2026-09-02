@@ -41,6 +41,7 @@ import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
+import { useVotesHidden } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 
@@ -92,6 +93,7 @@ function ItemViewInner({
   const navigate = useNavigate();
   const colors = useActorColors();
   const names = useActorNames();
+  const votesHidden = useVotesHidden();
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -654,7 +656,11 @@ function ItemViewInner({
         ) : row.name ? (
           <span
             className="name"
-            title={`${item.title} (${current.filename}) — ${ICON_NOUN[kind]} · double-click to rename · last edit by ${actorNameIn(names, item.updatedBy)}`}
+            // Under a sprint's vote curtain the byline goes too: not knowing
+            // who drew what while you vote is the method (core/sprint.ts).
+            title={`${item.title} (${current.filename}) — ${ICON_NOUN[kind]} · double-click to rename${
+              votesHidden ? "" : ` · last edit by ${actorNameIn(names, item.updatedBy)}`
+            }`}
           >
             {item.title}
           </span>
