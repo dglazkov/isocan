@@ -305,6 +305,27 @@ export class CloudStore implements Store {
    * in which two processes both pass it. `ALREADY_EXISTS` means, and can only
    * mean, that another writer has already claimed this seq.
    */
+  /**
+   * The newest `ops/{seq}` document, by the single-field index Firestore keeps
+   * on `seq` — one document read, never the whole collection. Compacted marks
+   * keep their seq, so a canvas whose live log was compacted to nothing still
+   * answers with the seq it reached; the snapshot's `lastSeq` covers a canvas
+   * with a snapshot and no live op (it cannot be ahead of the log, so `max`
+   * is belt and braces).
+   */
+  async tipSeq(id: string): Promise<number | null> {
+    const canvas = await this.db.doc(canvasDoc(id)).get();
+    if (!canvas.exists || canvas.data()?.["deleted"] === true) return null;
+    const newest = await this.db
+      .collection(opsCollection(id))
+      .orderBy("seq", "desc")
+      .limit(1)
+      .get();
+    const fromLog = newest.empty ? 0 : ((newest.docs[0]!.data()["seq"] as number | undefined) ?? 0);
+    const snapshot = await this.readSnapshot(id);
+    return Math.max(fromLog, snapshot?.lastSeq ?? 0);
+  }
+
   async appendLog(id: string, entry: LogEntry): Promise<void> {
     const json = JSON.stringify(entry);
     const ref = this.db.collection(opsCollection(id)).doc(padSeq(entry.seq));

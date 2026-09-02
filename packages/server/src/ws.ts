@@ -7,6 +7,7 @@ import {
   staleClientRefusal,
   WS_BAD_ORIGIN,
   WS_NO_BADGE,
+  WS_BEHIND,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
   WS_STALE_CLIENT,
@@ -26,15 +27,27 @@ import type { RcHolds } from "./rc-holds.ts";
 /** Returns a closer that terminates all live sockets — upgraded connections
  * are hijacked from the HTTP server, so Fastify's forceCloseConnections
  * cannot reach them and shutdown would hang otherwise. */
+export interface WebSocketOptions {
+  /** The beat interval. 25 s in production (see `beatMs` below); a test that
+   * has to see two beats sets it low rather than waiting a minute. */
+  heartbeatMs?: number;
+  /** Which build of the home this is — Cloud Run's revision, else the commit
+   * — stamped on the hello and the heartbeat so a client can tell which
+   * instance it is talking to (#85). Absent means "do not say". */
+  revision?: string;
+}
+
 export function attachWebSockets(
   server: Server,
   engine: Engine,
   desk: Desk,
   presence: PresenceHub,
   rc?: RcHolds,
+  options: WebSocketOptions = {},
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Set<WebSocket>>();
+  const revision = options.revision !== undefined ? { revision: options.revision } : {};
 
   /**
    * **The beat, and the reaping.**
@@ -64,17 +77,25 @@ export function attachWebSockets(
    * that is sometimes late.
    */
   const alive = new WeakSet<WebSocket>();
-  const beatMs = 25_000;
-  const bareBeat = JSON.stringify({ type: "heartbeat" } satisfies ServerMessage);
+  const beatMs = options.heartbeatMs ?? 25_000;
+  const bareBeat = JSON.stringify({ type: "heartbeat", ...revision } satisfies ServerMessage);
   /**
    * **The beat says how far the canvas has got** (#85), and where that number
    * comes from is the fix.
    *
-   * It is read from the ENGINE, never counted along the broadcast path,
-   * because the failure it exists to catch is broadcasts stopping while the
-   * socket stays up. A tip derived from the thing that stopped would agree
-   * with the frozen tab and confirm the freeze. Asking the engine costs one
-   * cached lookup per room per 25 seconds.
+   * It is read from the STORE, never counted along the broadcast path and —
+   * since the root cause was found — never from the engine's cache either.
+   * The failure it exists to catch is broadcasts stopping while the socket
+   * stays up, and the shape that actually happened was a rollout: this
+   * instance draining, holding every socket opened before the new revision
+   * took the traffic, with a cache nothing would ever invalidate because
+   * nothing wrote through it. A tip from that cache agreed with the frozen
+   * tab. The store is what the other instance writes to. One small read per
+   * room per beat.
+   *
+   * And when the read says this instance is behind, the engine drops its
+   * cache and `onBehind` below hangs up on the room, so the tab is not the
+   * one that has to notice.
    */
   const beat = async (): Promise<void> => {
     const beaten = new Set<WebSocket>();
@@ -85,7 +106,7 @@ export function attachWebSockets(
       const payload =
         tip === null
           ? bareBeat
-          : JSON.stringify({ type: "heartbeat", canvasId, tip } satisfies ServerMessage);
+          : JSON.stringify({ type: "heartbeat", canvasId, tip, ...revision } satisfies ServerMessage);
       for (const socket of open) {
         socket.send(payload);
         beaten.add(socket);
@@ -129,6 +150,23 @@ export function attachWebSockets(
       if (socket.readyState === WebSocket.OPEN) socket.send(payload);
     }
   }
+
+  /**
+   * **The instance hangs up on a room it has fallen behind on** (#85). Every
+   * client redials — the tab and the replica daemons alike — through the load
+   * balancer, which routes to the current instance; one that lands back here
+   * is answered from the store, because the engine dropped the cache before
+   * telling us. `WS_BEHIND` rather than a plain close so the client knows to
+   * dial again at once rather than backing off from a failure it did not
+   * cause.
+   */
+  engine.onBehind((canvasId) => {
+    const room = rooms.get(canvasId);
+    if (!room) return;
+    for (const socket of room) {
+      if (socket.readyState === WebSocket.OPEN) socket.close(WS_BEHIND, "behind the store — redial");
+    }
+  });
 
   engine.onEvent((canvasId, message) => {
     broadcast(canvasId, message);
@@ -383,6 +421,7 @@ export function attachWebSockets(
       const hello: ServerMessage = resumable
         ? {
             type: "resumed",
+            ...revision,
             from: since,
             // Not `snapshot.lastSeq`: if an op landed while we were reading
             // the log, it is in the tail and the client will hold it.
@@ -392,7 +431,7 @@ export function attachWebSockets(
             ...(snapshot.joined !== undefined ? { joined: snapshot.joined } : {}),
             ...narrowed,
           }
-        : { type: "snapshot", ...snapshot, ...narrowed };
+        : { type: "snapshot", ...revision, ...snapshot, ...narrowed };
       ws.send(JSON.stringify(hello));
       if (resumable) {
         for (const entry of tail) {

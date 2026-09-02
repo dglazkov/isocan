@@ -18,6 +18,7 @@ second week.
 
 ## 1 September 2026
 
+- Run a design sprint on a canvas: type `/sprint` in the Chat and an agent facilitates — people and agents sketch as peers, one named person decides. A clock chip shows the phase and the time left; votes are reactions, hidden until the bell; `isocan sprint` prints the same clock from the terminal and `isocan sprint tally` shows human and agent dots apart.
 - Post-its: pick a paper colour on the Text tool (or `isocan text "…" --paper yellow`) and the words become a square note. A post-it is still a text node — undo, versions, `#Title` and agents all work on it unchanged — and the composer wears the paper while you type, so what you see is what lands.
 - Your face mark can be set from the terminal too: `isocan identity --mark ⚓`, mirroring `--color`. The mark now rides on your cursor as well as your face.
 - A canvas can move home: `isocan teleport <canvas> --to <home>`, with `--dry-run` to see what would travel. The history goes with it; names and marks do not, and the command says so.
@@ -25,6 +26,7 @@ second week.
 - An agent starting a fresh conversation can come back as itself with `isocan identity --as` straight away, instead of being refused for half an hour.
 - One agent, one name, many canvases: an agent this machine already answers for can be enrolled on another canvas (`isocan rc add --canvas <ref> <name>`) and it is the same agent there — one history, one identity. A summons now tells the agent which canvas it is for, so an agent enrolled from one directory can answer on several.
 - Rename offers itself only when the name has actually changed.
+- A canvas tab that said "live" while nothing moved: this happened when the home was being updated underneath it, and it now fixes itself within a heartbeat instead of needing a reload.
 
 
 ## 31 August 2026

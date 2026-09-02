@@ -242,6 +242,8 @@ export class Engine {
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<EventListener>();
   private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
+  /** Told when `tipSeq` finds this instance's cache behind the store (#85). */
+  private behindListeners = new Set<(canvasId: string, cached: number, tip: number) => void>();
 
   /**
    * The homes this engine is a REPLICA of, per canvas — empty (or null) when
@@ -296,6 +298,20 @@ export class Engine {
   onEvent(listener: EventListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * **This instance has found itself behind the store** (#85): another
+   * writer moved the canvas on and nothing here noticed, because the cache
+   * is only ever dropped by this instance's OWN fenced append. The listener
+   * is `ws.ts`, which hangs up on the room so every client redials through
+   * the load balancer to whichever instance is current. By the time it is
+   * called the cache is already dropped, so a redial that lands back HERE is
+   * answered from the store rather than from the stale runtime.
+   */
+  onBehind(listener: (canvasId: string, cached: number, tip: number) => void): () => void {
+    this.behindListeners.add(listener);
+    return () => this.behindListeners.delete(listener);
   }
 
   private emit(canvasId: string, message: ServerMessage): void {
@@ -682,11 +698,36 @@ export class Engine {
    * take down the one mechanism that is supposed to be steady.
    */
   async tipSeq(canvasId: string): Promise<number | null> {
+    /**
+     * **From the STORE, not the runtime** — the 31 Aug version read
+     * `runtime(canvasId).lastSeq`, and that is the cache this instance
+     * derives its broadcasts from, so in the one failure it was built to
+     * catch (a rollout: the tab's socket on the draining instance, every
+     * write landing on the new one) the tip agreed with the frozen tab and
+     * confirmed the freeze. The store is the thing the OTHER instance also
+     * writes to, which is what makes it a truth this instance cannot have
+     * gone stale on.
+     */
+    let tip: number | null;
     try {
-      return (await this.runtime(canvasId)).lastSeq;
+      tip = await this.store.tipSeq(canvasId);
     } catch {
       return null;
     }
+    const cached = this.canvases.get(canvasId);
+    if (tip !== null && cached && cached.lastSeq < tip) {
+      // Behind: another writer holds seqs this instance never saw. Same
+      // remedy as a fence — drop the runtime, so the next read reloads from
+      // the store — and then say so, because a fence happens on a write and
+      // this happens on a read, and the rooms have to be told.
+      console.error(
+        `[isocan] BEHIND on ${canvasId}: the store is at seq ${tip}, this instance's cache at ` +
+          `${cached.lastSeq}. Dropping the runtime and hanging up on the room so clients redial.`,
+      );
+      this.canvases.delete(canvasId);
+      for (const listener of this.behindListeners) listener(canvasId, cached.lastSeq, tip);
+    }
+    return tip;
   }
 
   /**

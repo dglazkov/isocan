@@ -186,6 +186,17 @@ export class FileStore implements Store {
     await this.saveCanvas(state.project);
   }
 
+  /** The oplog's last line, or the snapshot's seq when the log has been
+   * compacted past it — whichever is further along. The file is read whole;
+   * a local oplog is small and this runs once per open room per 25 s. */
+  async tipSeq(id: string): Promise<number | null> {
+    if (!(await this.canvasExists(id))) return null;
+    const snapshot = await readJson<CanvasSnapshotFile>(p.canvasFile(this.home, id));
+    const entries = await readJsonLines<LogEntry>(p.oplogFile(this.home, id));
+    const last = entries.length > 0 ? entries[entries.length - 1]!.seq : 0;
+    return Math.max(last, snapshot?.lastSeq ?? 0);
+  }
+
   async appendLog(id: string, entry: LogEntry): Promise<void> {
     await appendLineDurable(p.oplogFile(this.home, id), JSON.stringify(entry));
   }

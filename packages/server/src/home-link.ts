@@ -38,6 +38,7 @@ import {
   PASS_REDEEM_ROUTE,
   passesRoute,
   canvasesRoute,
+  WS_BEHIND,
   WS_NO_CANVAS,
 } from "@isocan/core";
 import type { Engine } from "./engine.ts";
@@ -1029,6 +1030,16 @@ export class HomeLink implements HomeConnection {
         );
         link.closed = true;
         this.links.delete(link.canvasId);
+        return;
+      }
+      // 4409: the home's instance found itself behind its store and hung up
+      // so we redial — through the load balancer, to whichever instance is
+      // current (#85). Not a failure of the link and not counted as one: the
+      // home is fine, this socket simply outlived its instance. Dial again
+      // from the floor of the backoff rather than wherever it had climbed to.
+      if (code === WS_BEHIND) {
+        link.backoffMs = RECONNECT_MIN_MS;
+        this.reconnect(link);
         return;
       }
       this.noteFailure(

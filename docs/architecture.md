@@ -241,6 +241,23 @@ re-sync is per canvas; process-level fencing — a draining instance that
 stops serving, or exits — is a rollout question and belongs to the
 phase where a rollout exists.
 
+**The reader's half of the same overlap, found the hard way (#85, 1 Sep
+2026).** "Errors loudly and re-syncs" covers the *writer*: a fenced append
+drops the cache. A draining instance that nobody writes through never
+appends, never gets fenced, and keeps a cache that agrees with its own
+frozen rooms — while holding, for up to an hour (Cloud Run's request
+timeout, and a WebSocket is one request), every socket that was open
+before the new revision took the traffic. The tab reads "live", the
+canvas stops, a reload lands on the new instance and shows everything.
+So the heartbeat's tip is read from the **store**, never from the runtime
+cache, once per open room per beat; an instance that finds its cache
+behind what it just read drops the cache and closes the room with
+`WS_BEHIND` (4409 — the 409 the write path's fence already wears), and
+every client redials at once through the load balancer. The hello and
+the beat also carry the instance's revision (`K_REVISION`), so a freeze
+can be attributed without a repro. `packages/server/test/rollout.test.ts`
+is the shape with two daemons over one store.
+
 ## Single-writer on a platform that wants to scale
 
 Why one instance is correct and not a compromise: the engine chain,
