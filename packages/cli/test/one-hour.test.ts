@@ -159,5 +159,8 @@ describe("the one-hour cut", () => {
     });
     // And the desk still holds the original sketch — a hand-in was a copy.
     expect((await json("ls", "--canvas", desk.canvasId)).length).toBe(1);
-  });
+    // Fifty-odd CLI spawns against one daemon: twenty-some seconds alone,
+    // and past the default budget when the whole suite is loading the
+    // machine — which is not a failure of the sprint.
+  }, 180_000);
 });
