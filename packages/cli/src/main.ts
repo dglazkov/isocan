@@ -10892,17 +10892,25 @@ evals
       if (s.commands.length > 0) {
         console.log(`commands: ${s.commands.map((c) => `/${c.name} ${c.count}`).join(", ")}`);
       }
+      // The classifier's reading, with its silent count beside each kind —
+      // "which kind of ask goes unanswered" is the Stage 1 question. It is a
+      // reading of words, not a label: the research note reports how often
+      // it agrees with a person, and the caveat travels with the number.
+      console.log(
+        `kinds (a classifier's reading — see docs/research/2026-09-03-what-people-ask-agents-for.md): ` +
+          s.categories.map((c) => `${c.name} ${c.count}${c.silent > 0 ? ` (${c.silent} silent)` : ""}`).join(", "),
+      );
       console.log("");
       const budget = Number(opts.recent ?? 20);
       for (const ask of corpus.asks.slice(-budget)) {
         // One line of the ask, not the whole thing: a corpus is read for its
         // shape, and the text is on the canvas for anyone who wants it.
-        const said = ask.body.replace(/\s+/g, " ").slice(0, 72);
+        const said = ask.body.replace(/\s+/g, " ").slice(0, 60);
         const how = ask.produced.length === 0
           ? "no ops"
           : `${ask.produced.length} ops (${ask.produced.filter((o) => o.how !== "window").length} established)`;
         console.log(
-          `${ask.at.slice(0, 16).replace("T", " ")}  ${ask.outcome.padEnd(9)} ${how.padEnd(24)} ` +
+          `${ask.at.slice(0, 16).replace("T", " ")}  ${ask.outcome.padEnd(9)} ${ask.category.padEnd(11)} ${how.padEnd(24)} ` +
             `${ask.askedBy.name}: ${said}`,
         );
       }

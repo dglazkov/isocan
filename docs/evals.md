@@ -50,15 +50,36 @@ Three rules hold all of it together, and each was paid for:
 
 ## What the numbers said
 
-Measured, not assumed, and dated. 1 Sep 2026, across 21 canvases at one home:
-**384 asks — 259 answered, 31 cancelled, 94 silent**. One ask in four gets no
-answer, and nothing else this repo measures can see that. **11 preference
-pairs**, up from 2 on 23 Aug: the human-labelled comparison data every judge
-needs is real, and two orders of magnitude short of a calibration set. The
-reading that matters for product: nothing generates preference pairs until
-divergence is something people use, and people stack versions and choose
-twice — so the morning ritual below is not a nicety, it is where the labels
-come from.
+Measured, not assumed, and dated — and then read, which changed them.
+
+**1 Sep 2026**, across 21 canvases at one home, the corpus said **384 asks —
+259 answered, 31 cancelled, 94 silent**: one ask in four gets no answer.
+**3 Sep**, every row at that home was read and labelled by hand
+([the note](research/2026-09-03-what-people-ask-agents-for.md)), and both
+halves of that headline turned out to be artefacts of a join. **73% of the
+rows were agents' own prose** — one bot's build notifications were a third of
+the corpus by themselves — and the silent rows were their receipts, correctly
+unanswered. Of the **98 asks people made, 95% were answered, 4% went silent,
+1 was cancelled.** The 31 cancels were one `/cancel` in the Chat scored
+against every earlier ask by that person; fixed, with a test built from the
+measured shape.
+
+What people ask for: **revise 21%, create 18%, orchestrate 13%**, then
+question, arrange, social, restyle, document, critique, repair, variation,
+converge. Editing beats making two to one. One ask in eight is a person
+pointing an agent at a comment rather than asking anything. Diverge and
+converge together are 6% — real, and the base rate the preference-pair
+harvest has to grow from. **11 preference pairs**, up from 2 on 23 Aug: the
+human-labelled comparison data every judge needs is real, and two orders of
+magnitude short of a calibration set. The reading that matters for product:
+nothing generates preference pairs until divergence is something people use,
+and people stack versions and choose twice — so the morning ritual below is
+not a nicety, it is where the labels come from.
+
+And the lesson, in the form the catalogue gives it: a caveat on a number is
+not a correction to it. The corpus said its broadcast count was an upper
+bound; it was believed anyway. Hand-labelling was not a preliminary to
+measurement, it was the measurement's audit.
 
 ## How a finding becomes a better skill or prompt
 
@@ -142,11 +163,15 @@ cannot forget what it paid for.
 
 ## The next four things, in order
 
-1. **Label two hundred asks by hand** from `isocan evals`, into categories the
-   data suggests, and publish the distribution. Until then every task suite is
-   a guess about our own users.
-2. **Twenty golden tasks** from the lessons and the top categories, each with
-   a deterministic grader where one exists, run by the same `grade.mjs`
+1. ~~**Label two hundred asks by hand** from `isocan evals`, into categories the
+   data suggests, and publish the distribution.~~ **Done 3 Sep 2026** — every
+   row at one home (414; 98 of them asks people made), fifteen kinds, the
+   distribution in [the note](research/2026-09-03-what-people-ask-agents-for.md),
+   and a classifier calibrated against the labels (84%) shipped in
+   `isocan evals corpus` with that number attached.
+2. **Twenty golden tasks** from the lessons and the top categories — revise
+   first, then create, then a restyle against a `DESIGN.md` — each with a
+   deterministic grader where one exists, run by the same `grade.mjs`
    machinery, versioned.
 3. **Lift for the two skills people actually use** — `isocan-collab` and
    `/sprint` — with and without, on the same fixtures, three numbers each.

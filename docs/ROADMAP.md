@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 30 still open** — of which 20 partly
+**15 built · 30 still open** — of which 20 partly
 built, 10 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -26,7 +26,7 @@ and the done column should not be flattered by either.
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
 | **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
-| **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built; stage 1's join key was not the one this plan named · see evals |
+| **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stages 3–5 open · see evals |
 | research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | stages 1–3 built 2 Sep — the ↗ on anything with a source (with inception), `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `isocan gdoc sync` stacking a version only where the bytes changed; public docs only. Stage 3's Drive token and changes feed, stage 4's live mode, and stage 5's folder watch are designed and not built · see standing-agents, on-demand |
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built · see on-demand, standing-agents |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
@@ -56,7 +56,7 @@ and the done column should not be flattered by either.
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
-## Built <sub>14</sub>
+## Built <sub>15</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -72,6 +72,7 @@ and the done column should not be flattered by either.
 | research | [The ask: what the field built for the moment an agent needs a person](docs/research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |
 | research | [The post-it, and which of three things it is](docs/research/2026-09-01-post-it-notes.md) | 2026-09-01 | built 1 Sep — `properties.paper` on a text node, a swatch row on the Text tool and `isocan text --paper`; option A as recommended, no new op and no new kind · see ui-refresh |
 | **project** | [ui-refresh](docs/projects/ui-refresh/phases.md) | 2026-08-29 | phases 1-6, all acceptances closed · see ui-refresh |
+| research | [What people ask agents for](docs/research/2026-09-03-what-people-ask-agents-for.md) | 2026-09-03 | Stage 1's deliverable — every ask at one home hand-labelled 3 Sep 2026, the distribution published, a classifier calibrated against it (84%) and shipped in `isocan evals corpus` with that number attached. Found and fixed a cancel bug that had inflated the cancelled count sixteen-fold on one canvas · see evals |
 | research | [Where the canvas is janky](docs/research/2026-08-29-performance.md) | 2026-08-29 |  |
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 
