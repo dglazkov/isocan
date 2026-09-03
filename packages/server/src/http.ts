@@ -48,6 +48,7 @@ import {
   FREE_NAME_ROUTE,
   actorNameIn,
   attestationSatisfying,
+  barSubjectRefusal,
   capabilityOf,
   grantSubjectRefusal,
   CANVAS_PATH_PREFIX,
@@ -60,6 +61,7 @@ import {
   PRESENCE_WHERE_ROUTE,
   type PresenceWhere,
   type PresenceWhereResponse,
+  isBar,
   isLive,
   isOpId,
   newId,
@@ -1398,7 +1400,19 @@ export function registerRoutes(
   app.post("/api/projects/:id/grants", async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
-    const refusal = grantSubjectRefusal(body.subject);
+    // `bars: true` or nothing — the same rule as `capability`, written only
+    // when it says something, so a caller sending `bars: false` is sending a
+    // shape this route has never meant.
+    if (body.bars !== undefined && body.bars !== true) {
+      return reply.status(400).send({
+        error: "a bar is written as `bars: true`, or not at all",
+        code: "bad-grant",
+      });
+    }
+    const bars = body.bars === true;
+    // A bar has its own subject rule (never `link`, never a group) on top of
+    // the shape every row must have; `barSubjectRefusal` asks both.
+    const refusal = bars ? barSubjectRefusal(body.subject) : grantSubjectRefusal(body.subject);
     if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
     // Shape-checked like the subject beside it: the ladder's four words, and
     // anything else is a caller sending something other than a rung (#88,
@@ -1410,6 +1424,15 @@ export function registerRoutes(
         error:
           `not a capability: ${String(body.capability)} (a grant admits to ` +
           `${RUNGS.map((rung) => `\`${rung}\``).join(", ")})`,
+        code: "bad-grant",
+      });
+    }
+    // A bar has no rung: it says no, and a "no" at Canvas Viewer is not a
+    // sentence. Refused rather than ignored, so a caller that meant one of
+    // the two learns it sent both.
+    if (bars && body.capability !== undefined) {
+      return reply.status(400).send({
+        error: "a bar has no rung — it keeps its subject out; drop `capability` or drop `bars`",
         code: "bad-grant",
       });
     }
@@ -1425,10 +1448,15 @@ export function registerRoutes(
     // `isocan share <email>` has no client-side "not yet". The actor rides up
     // with it, so the home asks `own` of the person and not of the machine.
     const home = options.homes?.for(id) ?? null;
-    if (home) return home.createGrant(id, subject, capability, await actorNamed(actorId));
+    if (home) return home.createGrant(id, subject, capability, await actorNamed(actorId), bars);
     const snapshot = await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
-    if (live && capabilityOf(live) === capability) return { grant: live } satisfies GrantResponse;
+    // What already stands is handed back, for the toggle's reason: a bar
+    // over a bar, or a rung over the same rung. A bar over an invitation, or
+    // an invitation over a bar, is the replacement below.
+    if (live && isBar(live) === bars && (bars || capabilityOf(live) === capability)) {
+      return { grant: live } satisfies GrantResponse;
+    }
     /**
      * **Writing a row is the owner's** (roles design, "What only an owner may
      * do") — inviting at any rung, and the link at any rung, alike. Until
@@ -1454,28 +1482,27 @@ export function registerRoutes(
      * the address is proved on a badge and the creator is a person.
      */
     if (await namesTheCreator(subject, snapshot.project)) {
-      return reply.status(400).send({
-        error:
-          `${subject} is ${await ownerName(snapshot.project)}'s own address, and they made this ` +
-          "canvas — the creator owns it without a row",
-        code: "bad-grant",
-      });
+      return reply.status(400).send({ error: await creatorRowRefusal(subject, snapshot.project, bars), code: "bad-grant" });
     }
     // After the owner's question, not before it: whether THIS home can
     // verify the address is the next thing wrong with the request, once the
-    // caller is somebody who may write a row at all.
+    // caller is somebody who may write a row at all. A bar is held to it
+    // too: a bar naming an address nobody here can prove keeps nobody out,
+    // and a row with no effect is the thing this refusal exists to prevent.
     const unverifiable = attesterRefusal(subject, attesters);
     if (unverifiable) {
       return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
-    const grant: Grant = {
-      id: newId("gnt"),
-      canvasId: id,
-      subject,
-      grantedBy: req.badge!.badgeId,
-      at: new Date().toISOString(),
-      ...(narrowed(capability) ? { capability } : {}),
-    };
+    const grant: Grant = bars
+      ? barRow(id, subject, req.badge!.badgeId)
+      : {
+          id: newId("gnt"),
+          canvasId: id,
+          subject,
+          grantedBy: req.badge!.badgeId,
+          at: new Date().toISOString(),
+          ...(narrowed(capability) ? { capability } : {}),
+        };
     /**
      * Same subject, different capability: a REPLACEMENT, in one gesture (#88).
      * The old row is tombstoned and the new one written BEFORE the sweep runs,
@@ -1486,16 +1513,44 @@ export function registerRoutes(
      * Two rows and a sweep rather than an edit-in-place, because provenance
      * points at grant ids and an id whose meaning changed underneath its
      * admissions would be a capability nothing ever re-checked.
+     *
+     * A bar replaces a live row the same way — and it sweeps even when there
+     * was no row to replace, because the person it names may be inside on
+     * the link. The sweep carries the bar without a mechanism of its own: it
+     * re-runs the door, and the door now says no (roles phase 3).
      */
     if (live) {
       await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
-      await desk.putGrant(grant);
+    }
+    await desk.putGrant(grant);
+    if (live || bars) {
       const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id, sweeps.report);
       return { grant, swept } satisfies GrantResponse;
     }
-    await desk.putGrant(grant);
     return { grant } satisfies GrantResponse;
   });
+
+  /** A bar row (roles design, "The bar"): a grant row with `bars: true` and
+   * no capability, for the DELETE's `?bar=1` and the POST's `bars` alike. */
+  const barRow = (canvasId: string, subject: GrantSubject, grantedBy: string): Grant => ({
+    id: newId("gnt"),
+    canvasId,
+    subject,
+    grantedBy,
+    at: new Date().toISOString(),
+    bars: true,
+  });
+
+  /** Why a row naming the creator's own address is not written — as an
+   * invitation (redundant: the creator owns it without one) or as a bar (it
+   * would do nothing: the door checks the floor before a bar takes effect). */
+  const creatorRowRefusal = async (
+    subject: GrantSubject,
+    project: { createdBy: { id: string; name: string } },
+    bars: boolean,
+  ): Promise<string> =>
+    `${subject} is ${await ownerName(project)}'s own address, and they made this canvas — ` +
+    (bars ? "the creator cannot be kept out" : "the creator owns it without a row");
 
   /**
    * **Who is acting**, for a write that asks `own` (roles design, "Over a
@@ -1570,10 +1625,13 @@ export function registerRoutes(
     const { id, grantId } = req.params as { id: string; grantId: string };
     // On the query, not in a body: a DELETE with nothing to say sends no
     // content type (see `revokeGrant` in the web client), and the actor is
-    // one id.
-    const actorId = await actingActor(req, (req.query as { actorId?: unknown }).actorId);
+    // one id. `bar=1` rides the same way (`grantRevokeRoute` in core): revoke
+    // and keep them out, in one request.
+    const query = req.query as { actorId?: unknown; bar?: unknown };
+    const actorId = await actingActor(req, query.actorId);
+    const bar = query.bar === "1" || query.bar === "true";
     const home = options.homes?.for(id) ?? null;
-    if (home) return home.revokeGrant(id, grantId, await actorNamed(actorId));
+    if (home) return home.revokeGrant(id, grantId, await actorNamed(actorId), bar);
     const snapshot = await engine.getSnapshot(id);
     // Read through this canvas's own rows, so a grant id belonging to another
     // canvas cannot be revoked through a canvas the caller happens to be in.
@@ -1588,11 +1646,56 @@ export function registerRoutes(
         .status(403)
         .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
     }
+    /**
+     * **`?bar=1` — withdraw and keep them out** (roles design, "Withdrawing
+     * versus barring"). Refused BEFORE anything is written when the bar
+     * could not be: the link is never a bar's subject, a bar over a bar is
+     * a second row saying the same thing, and the creator cannot be kept
+     * out. A refusal here leaves the row exactly as it was, so the caller
+     * can send the plain DELETE it meant.
+     */
+    if (bar) {
+      const refusal = isBar(mine)
+        ? `${grantId} is already a bar — revoking it lets them back in; there is nothing to keep out`
+        : barSubjectRefusal(mine.subject);
+      if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
+      if (await namesTheCreator(mine.subject, snapshot.project)) {
+        return reply.status(400).send({
+          error: await creatorRowRefusal(mine.subject, snapshot.project, true),
+          code: "bad-grant",
+        });
+      }
+    }
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
+    // The bar goes on the desk before the one sweep, for the replacement's
+    // reason: the sweep re-runs the door, and the door has to meet the bar.
+    const written = bar ? barRow(id, mine.subject, req.badge!.badgeId) : null;
+    if (written) await desk.putGrant(written);
     // The creator rides along for the floor: turning the link off must not
     // expel the creator's own browser (roles journey 1, step 2).
     const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id, sweeps.report);
-    return { grant: revoked ?? mine, swept } satisfies GrantResponse;
+    /**
+     * **What would still admit them**, read off the live rows AFTER the
+     * revoke, so the dialog and the CLI can say *they can still enter by the
+     * link* about the state that now obtains rather than the one that was.
+     * `link` when the link is live and no live bar names the subject — which
+     * is what a `?bar=1` just wrote, so that answer is absent by
+     * construction. The link's own revocation asks nothing: the subject is
+     * the link. Named `stillAdmittedBy` so roles phase 4 can add `space`.
+     */
+    const after = liveGrants(await desk.grantsFor(id));
+    const stillAdmittedBy =
+      mine.subject !== LINK &&
+      after.some((g) => g.subject === LINK && !isBar(g)) &&
+      !after.some((g) => isBar(g) && g.subject === mine.subject)
+        ? ("link" as const)
+        : undefined;
+    return {
+      grant: revoked ?? mine,
+      swept,
+      ...(written ? { bar: written } : {}),
+      ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
+    } satisfies GrantResponse;
   });
 
   // ---- your own surfaces: kill-a-badge (identity desk, mechanism 1) ----

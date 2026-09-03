@@ -554,6 +554,10 @@ function toGrant(data: DocumentData): Grant {
     ...(isCapability(data["capability"]) && narrowed(data["capability"])
       ? { capability: data["capability"] }
       : {}),
+    // A bar (roles phase 3) is the same shape of field, and the same trap:
+    // a rebuild that dropped it would turn "kept out" into a row the door
+    // reads as an edit invitation. `true` or absent, nothing else.
+    ...(data["bars"] === true ? { bars: true as const } : {}),
   };
 }
 

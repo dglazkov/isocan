@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Actor, AttestOffer, Capability, Grant, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark, RUNGS } from "@isocan/core";
+import type { Actor, AttestOffer, Capability, Grant, GrantSubject, SweepReport } from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, isBar, LINK, roster, faceMark, RUNGS } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
-import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
+import { createBar, createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -64,6 +64,15 @@ import { useActorMarks } from "../lib/marks.ts";
  * invited person can be raised to it here and then this dialog shows them
  * the same controls; the creator's row reads **Owner, made this** and has no
  * control, because the creator's standing is not a row.
+ *
+ * **Withdrawing versus barring** (roles phase 3). **Remove** on a row revokes
+ * it, and the answer says whether the link would still admit that person;
+ * when it would, the dialog says so — *they can still enter by the link* —
+ * and offers **and keep them out**, which writes a bar. A bar is a row that
+ * says no, listed under the invitations as **kept out** with who and when,
+ * and **Let back in** revokes it like any other row. The difference between
+ * the two gestures is the whole of journey 3 step 3, so the dialog names it
+ * before the second one is taken.
  */
 export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => void }) {
   const record = useCanvasStore((s) => s.project);
@@ -95,6 +104,13 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * toggle had done it.
    */
   const [swept, setSwept] = useState<{ what: "link" | string; report: SweepReport } | null>(null);
+  /**
+   * The person just removed whom the link would still admit — the answer's
+   * `stillAdmittedBy` — until they are kept out or the dialog closes. The
+   * subject is held rather than the row, because the row is a tombstone now
+   * and the bar is written by subject.
+   */
+  const [stillIn, setStillIn] = useState<GrantSubject | null>(null);
   /** What this home can verify, which decides whether the "who" field is a
    * control or a lie. Null while asking; a home that has borrowed nothing
    * answers with an empty `attesters` and the field never appears. */
@@ -150,7 +166,9 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const ownerNote = record
     ? `only ${ownerName}, who owns this canvas, can change who may enter it or what the link allows`
     : "";
-  const invited = (grants ?? []).filter((g) => g.subject !== LINK);
+  const invited = (grants ?? []).filter((g) => g.subject !== LINK && !isBar(g));
+  /** The bars: rows that say no (roles phase 3). Never the link. */
+  const keptOut = (grants ?? []).filter(isBar);
   /** The title on a control somebody below `own` cannot press. */
   const ownerTitle = owned ? undefined : ownerNote;
 
@@ -242,26 +260,39 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   }
 
   /**
-   * Un-invite one. The same route the link toggle drives, so the sweep runs
-   * and its count is reported the same way — a named person's grant is not a
-   * different kind of row.
+   * Remove one — revoke the row. The same route the link toggle drives, so
+   * the sweep runs and its count is reported the same way — a named person's
+   * grant is not a different kind of row. **Let back in** on a bar is this
+   * same call: revoking a bar is the ordinary DELETE (roles phase 3).
+   *
+   * The answer says whether the link would still admit the person; when it
+   * would, the *they can still enter by the link* line appears with **and
+   * keep them out**, which is `keepOut` below. Said AFTER the revoke and from
+   * the home's answer rather than from this dialog's copy of the rows,
+   * because the rows may have moved under it.
    *
    * **The row is dropped locally before the list is re-read**, and that is not
-   * an optimism about the network: un-inviting somebody can expel THE PERSON
+   * an optimism about the network: removing somebody can expel THE PERSON
    * DOING IT — the caller may be admitted by the very row they just revoked,
    * which is the ordinary case for anybody who was invited by name and is now
    * tidying up. The re-read then 403s, and a dialog that only trusted the
    * re-read would leave a revoked invitation on screen with a live-looking
-   * Un-invite button beside it. Measured in a real browser, where it did
+   * Remove button beside it. Measured in a real browser, where it did
    * exactly that.
    */
-  async function uninvite(grant: Grant): Promise<void> {
+  async function remove(grant: Grant): Promise<void> {
     if (!canvasId || busy) return;
     setBusy(true);
     setError(null);
     try {
       const answer = await revokeGrant(canvasId, grant.id, actor.id);
-      setSwept({ what: grant.subject, report: answer.swept ?? { expelled: 0, rerooted: 0 } });
+      // Letting somebody back in puts nobody out, so there is no count to
+      // report and no line about the link: the link admitting them again is
+      // the point.
+      setSwept(
+        isBar(grant) ? null : { what: grant.subject, report: answer.swept ?? { expelled: 0, rerooted: 0 } },
+      );
+      setStillIn(answer.stillAdmittedBy === "link" && !isBar(grant) ? grant.subject : null);
       setGrants((current) => (current ?? []).filter((row) => row.id !== grant.id));
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -271,6 +302,29 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
             "will not have you any more"
           : (err as Error).message,
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * **And keep them out** — the bar, written after a Remove whose answer said
+   * the link would still admit them (roles design, "Withdrawing versus
+   * barring"). One POST with `bars: true`; the home sweeps, so a person who
+   * re-entered on the link in the meantime is put out by this write, and the
+   * count is reported like any other.
+   */
+  async function keepOut(subject: GrantSubject): Promise<void> {
+    if (!canvasId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await createBar(canvasId, subject, actor.id);
+      if (answer.swept) setSwept({ what: subject, report: answer.swept });
+      setStillIn(null);
+      setGrants((await listGrants(canvasId)).grants);
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -487,7 +541,23 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
           nobody reads. Measured in a browser, where it did exactly that. */}
       {swept && swept.what !== "link" && (
         <div className="share-link-note">
-          {swept.what.replace(/^email:/, "")} is un-invited. {lost(swept.report)}
+          {swept.what.replace(/^email:/, "")} is removed. {lost(swept.report)}
+        </div>
+      )}
+      {/* The difference between withdrawing and barring, said where the
+          person can act on it: the home's answer said the link would still
+          admit them, so removing the row did not remove the person. */}
+      {stillIn && canEdit && (
+        <div className="share-link-note">
+          {stillIn.replace(/^email:/, "")} can still enter by the link.{" "}
+          <button
+            className="btn"
+            disabled={busy || !owned}
+            title={ownerTitle}
+            onClick={() => void keepOut(stillIn)}
+          >
+            and keep them out
+          </button>
         </div>
       )}
 
@@ -539,15 +609,50 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                       className="btn"
                       disabled={busy || !owned}
                       title={ownerTitle}
-                      onClick={() => void uninvite(grant)}
+                      onClick={() => void remove(grant)}
                     >
-                      Un-invite
+                      Remove
                     </button>
                   </span>
                 )}
               </div>
             ))}
           </div>
+          {/* The bars, under the invitations (roles phase 3): who is kept
+              out, by which badge and since when, and the one control that
+              lifts it. Shown to everybody for the invitations' reason — who
+              may not be here is worth knowing whoever you are — and
+              controlled by owners only, like every other row. */}
+          {keptOut.length > 0 && (
+            <>
+              <div className="identity-menu-head">Kept out</div>
+              <div className="share-roster">
+                {keptOut.map((grant) => (
+                  <div key={grant.id} className="surface-row share-invited">
+                    <span className="surface-what">
+                      <b>{grant.subject.replace(/^email:/, "")}</b>
+                      <span className="share-roster-kind">
+                        kept out {grant.at.slice(0, 10)} · by {grant.grantedBy} · refused at the door
+                        whatever the link allows
+                      </span>
+                    </span>
+                    {canEdit && (
+                      <span className="share-row-controls">
+                        <button
+                          className="btn"
+                          disabled={busy || !owned}
+                          title={ownerTitle}
+                          onClick={() => void remove(grant)}
+                        >
+                          Let back in
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 

@@ -317,7 +317,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   credential". Beside the toggle is **one field for one person**: invite an
   email address, and whoever proves that address is let in whether or not the
   link is on. `isocan share <email>` and `isocan share --revoke <email>` are the
-  same two gestures from a terminal. Every one of these is an **owner's**:
+  same two gestures from a terminal. Removing somebody is not the same as
+  keeping them out: if the link is on they can come straight back as a
+  stranger, and both surfaces say so before offering **and keep them out** —
+  a **bar**, a row that says no whatever the link or any invitation says,
+  listed as **kept out** with who and when, and lifted with **Let back in**
+  (`--revoke <email> --bar`, `--bar <email>`, `--unbar <email>` from a
+  terminal). The creator cannot be barred. Every one of these is an **owner's**:
   whoever made the canvas, or anybody invited as **Owner** — an invited
   person's rung is a picker on their row, and raising it reaches the tab they
   have open without a reload. Everyone else sees the controls disabled with
@@ -475,7 +481,8 @@ isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan home [<url>|--clear]        # where each canvas here lives; set where
                                    # NEW ones are born (nothing already here moves)
-isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view] [--revoke <email>]
+isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view]
+             [--revoke <email> [--bar]] [--bar <email>] [--unbar <email>]
                                    # the address, and who may enter this canvas
 isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join

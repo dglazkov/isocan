@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
@@ -39,6 +39,9 @@ let work: string;
 let homeDaemon: Daemon;
 let laptop: Daemon;
 let homeBase: string;
+/** What the home has borrowed: nothing, except where a suite below says so
+ * (`beforeAll` runs before the `beforeEach` that boots the home). */
+let homeAuth: { project: string; apiKey: string } | null = null;
 
 function baseOf(daemon: Daemon): string {
   const address = daemon.app.server.address();
@@ -55,7 +58,7 @@ beforeEach(async () => {
   // from whatever the developer's shell has in `ISOCAN_AUTH_PROJECT`. The
   // email refusal below is about a home with no attester, and it must be about
   // that on every machine.
-  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null, auth: null });
+  homeDaemon = await startDaemon({ port: 0, home: upstreamDir, birthHome: null, auth: homeAuth });
   homeBase = baseOf(homeDaemon);
   await fs.writeFile(
     path.join(laptopDir, "identity.json"),
@@ -258,4 +261,101 @@ describe("isocan share", () => {
     expect(payload.grants.map((g) => g.subject)).toEqual(["link"]);
     expect(payload.grants[0]!.canvasId).toBe(canvasId);
   }, 60_000);
+});
+
+/**
+ * **`--revoke [--bar]`, `--bar`, `--unbar`** (roles phase 3; journey 3 steps
+ * 3–4). The home here has borrowed an attester in configuration only, so an
+ * address can be invited and barred; the proofs are written on its desk. The
+ * door at the home is the witness, as above: a badge that has proved the
+ * barred address is refused while a stranger walks in on the same link.
+ */
+describe("isocan share keeps people out", () => {
+  beforeAll(() => {
+    homeAuth = { project: "acme-test", apiKey: "test-key" };
+  });
+  afterAll(() => {
+    homeAuth = null;
+  });
+
+  /** A badge at the home that has proved this address. */
+  async function holderOf(email: string) {
+    const badge = await mintTestBadge(homeBase);
+    await homeDaemon.desk.attest(badge.badgeId, {
+      attribute: `email:${email}`,
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    return badge;
+  }
+  const enter = async (badge: { headers: Record<string, string> }, canvasId: string) =>
+    (await fetch(`${homeBase}/api/projects/${canvasId}/canvas`, { headers: badge.headers })).status;
+
+  it("--revoke says the link would still admit them, and --bar keeps them out in the same request", async () => {
+    const canvasId = await bornCanvas();
+    expect((await cli("share", "sam@example.com")).code).toBe(0);
+    const sam = await holderOf("sam@example.com");
+    expect(await enter(sam, canvasId)).toBe(200);
+
+    const revoked = await cli("share", "--revoke", "sam@example.com");
+    expect(revoked.code, revoked.stderr).toBe(0);
+    expect(revoked.stdout).toContain("revoked email:sam@example.com");
+    // The sentence, from the home's answer: withdrawing is not barring.
+    expect(revoked.stdout).toContain("they can still enter by the link; `--bar` to keep them out");
+    expect(await enter(sam, canvasId)).toBe(200);
+
+    expect((await cli("share", "sam@example.com")).code).toBe(0);
+    const barred = await cli("share", "--revoke", "sam@example.com", "--bar");
+    expect(barred.code, barred.stderr).toBe(0);
+    expect(barred.stdout).toMatch(/revoked email:sam@example\.com .* and kept out/);
+    expect(barred.stdout).not.toContain("can still enter");
+    const rows = await grantsAtHome(canvasId);
+    expect(rows.filter((g) => g.subject === "email:sam@example.com")).toEqual([
+      expect.objectContaining({ bars: true }),
+    ]);
+    // The door: Sam is refused, a stranger is admitted by the same link.
+    expect(await enter(sam, canvasId)).toBe(403);
+    expect(await strangerCanRead(canvasId)).toBe(200);
+
+    // The table prints the bar as kept out, with when and by whom.
+    const shown = await cli("share");
+    expect(shown.code, shown.stderr).toBe(0);
+    const line = shown.stdout.split("\n").find((l) => l.includes("email:sam@example.com"))!;
+    expect(line).toMatch(/kept out\s+\d{4}-\d{2}-\d{2}\s+bdg_/);
+    const json = await cli("share", "--json");
+    const payload = JSON.parse(json.stdout) as { grants: Grant[] };
+    expect(payload.grants.find((g) => g.subject === "email:sam@example.com")?.bars).toBe(true);
+  }, 90_000);
+
+  it("--bar writes the bar directly, --unbar lifts it, and both refuse what is not there", async () => {
+    const canvasId = await bornCanvas();
+    const nico = await holderOf("nico@example.com");
+    expect(await enter(nico, canvasId)).toBe(200);
+
+    const kept = await cli("share", "--bar", "nico@example.com");
+    expect(kept.code, kept.stderr).toBe(0);
+    expect(kept.stdout).toMatch(/kept out email:nico@example\.com/);
+    expect(await enter(nico, canvasId)).toBe(403);
+
+    // Revoking somebody who is kept out, not invited, points at --unbar.
+    const wrong = await cli("share", "--revoke", "nico@example.com");
+    expect(wrong.code).toBe(1);
+    expect(wrong.stderr).toMatch(/--unbar/);
+
+    const back = await cli("share", "--unbar", "nico@example.com");
+    expect(back.code, back.stderr).toBe(0);
+    expect(back.stdout).toMatch(/let email:nico@example\.com back in/);
+    expect(await enter(nico, canvasId)).toBe(200);
+
+    const nobody = await cli("share", "--unbar", "nico@example.com");
+    expect(nobody.code).toBe(1);
+    expect(nobody.stderr).toMatch(/nobody is kept out/);
+    // A bare --bar with nobody to bar, and --bar <who> beside --revoke, are
+    // refused rather than guessed at.
+    expect((await cli("share", "--bar")).code).toBe(1);
+    expect((await cli("share", "--revoke", "a@example.com", "--bar", "b@example.com")).code).toBe(1);
+    // The link and the creator are the home's refusals, handed back whole.
+    const link = await cli("share", "--bar", "link");
+    expect(link.code).toBe(1);
+  }, 90_000);
 });

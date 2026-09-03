@@ -4,6 +4,7 @@ import {
   capabilityOf,
   claimsActor,
   GRANTED_BY_HOME,
+  isBar,
   isLive,
   LINK,
   narrowed,
@@ -118,6 +119,12 @@ export class NotAdmittedError extends Error {
  * `{root: "created"}`, the provenance the sweep already keeps without a door
  * test. `creator` is the canvas's `createdBy.id`; callers that do not hold
  * the snapshot pass null and get rows only.
+ *
+ * **The order, since roles phase 3:** gather the live rows; if a live BAR
+ * names the badge, no row admits; otherwise the rows sorted by rung then
+ * age, first match wins; then, only if a bar matched or no row did, the
+ * floor. So a barred person is refused however they were invited, and the
+ * creator is admitted however they were barred.
  */
 export interface DoorAnswer {
   /** The row that admits, or null when the creator's floor did. */
@@ -135,22 +142,39 @@ export async function admittingGrant(
   creator: string | null = null,
 ): Promise<DoorAnswer | null> {
   const grants = await desk.grantsFor(canvasId);
-  const rung = (grant: Grant) => RUNGS.indexOf(capabilityOf(grant));
-  const live = grants
-    .filter(isLive)
-    .sort((a, b) => rung(b) - rung(a) || a.at.localeCompare(b.at));
-  for (const grant of live) {
-    const admits =
-      grant.subject === LINK || attestationSatisfying(grant.subject, badge.attestations ?? []);
-    if (admits) {
-      return { grant, provenance: { root: "grant", grantId: grant.id }, capability: capabilityOf(grant) };
+  const live = grants.filter(isLive);
+  /**
+   * **A bar wins over every rung** (roles design, "The bar"). Asked of the
+   * live rows before any of them is allowed to admit: a bar is a row that
+   * says no, and highest-wins over the rungs must never see it as a rung.
+   * `link` is never a bar's subject (`barSubjectRefusal`), so a bar matches
+   * only by attestation. When one matches, no row admits; the only thing
+   * left to ask is the floor, because the creator cannot be barred.
+   */
+  const barred = live.some(
+    (grant) => isBar(grant) && attestationSatisfying(grant.subject, badge.attestations ?? []),
+  );
+  if (!barred) {
+    const rung = (grant: Grant) => RUNGS.indexOf(capabilityOf(grant));
+    const rows = live
+      .filter((grant) => !isBar(grant))
+      .sort((a, b) => rung(b) - rung(a) || a.at.localeCompare(b.at));
+    for (const grant of rows) {
+      const admits =
+        grant.subject === LINK || attestationSatisfying(grant.subject, badge.attestations ?? []);
+      if (admits) {
+        return { grant, provenance: { root: "grant", grantId: grant.id }, capability: capabilityOf(grant) };
+      }
+      // Anything else falls through, and falling through is the correct answer
+      // rather than a gap: a subject nobody has proved is a row that admits
+      // nobody YET. The refusal a caller sees is the door's, and the remedy is
+      // to go and prove the attribute — which is what the design means by "the
+      // door offers the attesters".
     }
-    // Anything else falls through, and falling through is the correct answer
-    // rather than a gap: a subject nobody has proved is a row that admits
-    // nobody YET. The refusal a caller sees is the door's, and the remedy is
-    // to go and prove the attribute — which is what the design means by "the
-    // door offers the attesters".
   }
+  // The floor, asked only when a bar matched or no row did: one `claimsOf`
+  // read, off the common path where a row answers. A creator-claiming badge
+  // is admitted here whatever the bars say — the creator cannot be barred.
   if (creator !== null && claimsActor(await desk.claimsOf(badge.badgeId), creator)) {
     return { grant: null, provenance: { root: "created" }, capability: "own" };
   }

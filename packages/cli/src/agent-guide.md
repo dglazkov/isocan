@@ -1139,7 +1139,19 @@ in the web app drives:
   like the creator, and cannot remove the creator.
 - `isocan share --revoke <email>` — un-invite them, which **expels them**
   unless another grant still covers them. It takes the address, not the grant
-  id.
+  id. If the link is on they can come straight back in as a stranger would,
+  and the verb says so: *they can still enter by the link; `--bar` to keep
+  them out*. Withdrawing an invitation and barring a person are different
+  acts; read the line before deciding which one was asked for.
+- `isocan share --revoke <email> --bar` — un-invite **and keep them out**, in
+  one request: a bar is a row that says no, and it beats the link and every
+  invitation until an owner lifts it. `isocan share --bar <email>` writes one
+  directly, for somebody who was never invited and enters by the link.
+  Neither the link nor the creator can be barred; the home refuses both with
+  the reason. The table `isocan share` prints shows a bar as **kept out**,
+  with who wrote it and when.
+- `isocan share --unbar <email>` — let them back in: the bar is revoked, and
+  the link or an invitation then decides whether they may enter.
 
 Three things to know before you use it:
 

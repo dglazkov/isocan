@@ -560,6 +560,8 @@ img { height: auto; }
    shared canvas simply useful. Quiet: it is a fact, not a control. */
 .share-owner { margin: 0; font-size: 11.5px; color: var(--ink-muted); }
 .share-link-note { color: var(--ink-muted); font-size: 11.5px; line-height: 1.35; }
+/* "and keep them out" sits inside the sentence it answers (roles phase 3). */
+.share-link-note .btn { margin-left: 4px; vertical-align: middle; }
 /* The "who" field's absence, said out loud. Phase 9 replaces this line with
    the control it describes; until then a sentence is the honest shape. */
 .share-deferred { color: var(--ink-soft); font-size: 11px; line-height: 1.35; }

@@ -41,7 +41,7 @@ import {
   DOOR_ROUTE,
   encodeFilename,
   FILENAME_HEADER,
-  grantRoute,
+  grantRevokeRoute,
   grantsRoute,
   HOMES_ROUTE,
   narrowed,
@@ -771,9 +771,32 @@ export function revokeGrant(
   canvasId: string,
   grantId: string,
   actorId?: string,
+  /** `?bar=1`: revoke and keep them out in one request (roles phase 3). The
+   * parameter's spelling is core's, like the route. */
+  bar?: boolean,
 ): Promise<GrantResponse> {
-  const route = grantRoute(canvasId, grantId);
-  return request("DELETE", actorId ? `${route}?actorId=${encodeURIComponent(actorId)}` : route);
+  return request(
+    "DELETE",
+    grantRevokeRoute(canvasId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
+  );
+}
+
+/**
+ * Keep somebody out (roles phase 3): a bar, written directly — the dialog's
+ * **and keep them out** after a Remove whose answer said the link would still
+ * admit them. The same POST as an invitation, with `bars: true` and no rung;
+ * the home replaces any live row naming them and sweeps.
+ */
+export function createBar(
+  canvasId: string,
+  subject: GrantSubject,
+  actorId?: string,
+): Promise<GrantResponse> {
+  return request("POST", grantsRoute(canvasId), {
+    subject,
+    bars: true,
+    ...(actorId ? { actorId } : {}),
+  });
 }
 
 // ---- what this holder has proved (phase 9 stage 2) ----
