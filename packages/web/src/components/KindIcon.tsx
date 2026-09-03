@@ -109,6 +109,13 @@ const PATHS: Record<IconKind, React.ReactNode> = {
       <path {...S} d="M6 7h.01M8.5 7h.01" />
     </>
   ),
+  // A canvas on a canvas: a frame with a smaller frame set inside it.
+  canvas: (
+    <>
+      <path {...S} d="M3 4h18v16H3z" />
+      <path {...S} d="M8 9h8v6H8z" />
+    </>
+  ),
   // article — prose. A sheet with lines of text on it.
   document: (
     <>

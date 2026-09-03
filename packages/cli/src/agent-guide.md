@@ -755,6 +755,17 @@ questions on item threads. **One sketch per sketcher**: an agent that could
 make forty makes one, and hands it in at the bell with `copy --to` and
 `sprint handin`.
 
+## A canvas on a canvas
+
+`isocan canvas place <ref|address>` puts another canvas on this one as an
+ordinary item: a card that draws the other canvas small and live, opens it in
+a new tab on a double-click or its ↗, and wears `kind=canvas`, `canvas=<id>`
+and `source=<address>` so you can read which canvas it is without opening
+it. A canvas is a place you go, not a thing you step inside of; a card is
+never entered. It takes `--in <area>` like everything else, which is how a
+person's canvases are shelved onto sheets. `isocan ls --kind canvas` lists
+them. A canvas will not be placed on itself.
+
 ## Areas: sheets things are placed on
 
 An **area** is a titled region of the canvas — a sheet things are placed on,

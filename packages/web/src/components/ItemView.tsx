@@ -8,6 +8,9 @@ import {
   annotationsOf,
   isAnnotation,
   isArea,
+  isCanvasItem,
+  canvasIdOf,
+  sourceOf,
   areaGrid,
   areaInner,
   areaTint,
@@ -41,6 +44,7 @@ import { snapBox, unionBox } from "../lib/snap.ts";
 import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
+import { CanvasCard } from "./CanvasCard.tsx";
 import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
 import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
@@ -211,7 +215,12 @@ function ItemViewInner({
   // the canvas fact and the per-machine one, kept apart by `backingOf`.
   const disk = useCanvasStore((s) => s.backing);
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
-  const isBrowser = current.mimeType === BROWSER_MIME;
+  // A canvas placed here carries a site's blob (an address) and is told
+  // apart by kind: it is a picture of a place, not a live frame, and it
+  // opens in a tab rather than being entered (`core/canvasitem.ts`).
+  const isCanvas = isCanvasItem(item);
+  const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
+  const source = sourceOf(item);
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
   const underSlot = underSlotFor({
@@ -571,6 +580,13 @@ function ItemViewInner({
     // The pointer capture above hands us the label's double-click too; naming
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
+    // A canvas is a place you go, not a thing you step inside of: the same
+    // gesture opens it in a tab. Never in place — a canvas inside a canvas
+    // inside a canvas is a maze, and a tab is where a place belongs.
+    if (isCanvas && source) {
+      window.open(source, "_blank", "noopener");
+      return;
+    }
     // A text node has nothing to step INSIDE of — the words are the whole of
     // it — so the same gesture that enters a document re-opens the composer
     // on what it says. Editing lands as `item.addVersion`, so every wording
@@ -805,6 +821,22 @@ function ItemViewInner({
             {item.title}
           </span>
         ) : null}
+        {source && (
+          /* Anything that points at something you can open — a canvas, and
+             later a document — wears a ↗ on its strip. The href is the
+             item's own `source`; a new tab, because it is a place. */
+          <a
+            className="item-open-source"
+            href={source}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Open in a new tab — ${source}`}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            ↗
+          </a>
+        )}
         {isBrowser && (
           <button
             className="browser-reload"
@@ -875,6 +907,8 @@ function ItemViewInner({
           entered={entered}
           designSystem={isDesignSystem(item)}
           textNode={isText}
+          canvasOf={canvasIdOf(item)}
+          size={{ width, height }}
           reloadToken={reloadToken}
         />
         )}
@@ -1125,12 +1159,19 @@ export function VersionContent({
   reloadToken = 0,
   designSystem,
   textNode,
+  canvasOf,
+  size,
   warm,
 }: {
   canvasId: string;
   blobHash: string;
   mimeType: string;
   filename: string;
+  /** A canvas placed here: the id of the canvas to draw small and live,
+   *  instead of framing the address the blob carries (`core/canvasitem.ts`). */
+  canvasOf?: string | null;
+  /** The item's box, for content that lays itself out to it (the canvas card). */
+  size?: { width: number; height: number };
   entered: boolean;
   /** Blobs to render out of sight because they are probably next — the slides
    *  either side of this one. See `HtmlView`. */
@@ -1163,6 +1204,9 @@ export function VersionContent({
   }
   if (mimeType.startsWith("video/")) {
     return <video className="video-view" src={url} controls={entered} muted loop playsInline />;
+  }
+  if (canvasOf) {
+    return <CanvasCard canvasId={canvasOf} width={size?.width ?? 800} height={size?.height ?? 600} />;
   }
   if (mimeType === BROWSER_MIME) {
     return <BrowserView canvasId={canvasId} blobHash={blobHash} reloadToken={reloadToken} />;
