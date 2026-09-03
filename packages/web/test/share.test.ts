@@ -215,7 +215,10 @@ describe("the Share dialog withdraws, and offers to keep out", () => {
   });
 
   it("offers *and keep them out* only when the home's answer says the link still admits them", () => {
-    expect(dialog).toContain('answer.stillAdmittedBy === "link"');
+    // The answer decides, and since roles phase 4 it can say `space` — in
+    // which case the remedy is the space's Share, not a bar.
+    expect(dialog).toContain("answer.stillAdmittedBy && !isBar(grant)");
+    expect(dialog).toContain('stillIn.by === "link"');
     expect(dialog).toContain("can still enter by the link");
     expect(dialog).toContain("and keep them out");
     expect(dialog).toContain("createBar(canvasId, subject, actor.id)");
@@ -231,7 +234,8 @@ describe("the Share dialog withdraws, and offers to keep out", () => {
   });
 
   it("gates every new control on the owner, like every other", () => {
-    // Remove, Let back in, and keep them out: three buttons, all
+    // Remove, Let back in, and keep them out on a canvas, and Remove and Let
+    // back in on a space (roles phase 4): five buttons, all
     // `disabled={busy || !owned}` with the owner's note as their title.
     // `.slice(1)`: the chunk before the first button is the file's prose,
     // which names Remove in a comment.
@@ -241,7 +245,7 @@ describe("the Share dialog withdraws, and offers to keep out", () => {
       .filter(
         (chunk) => chunk.includes("Remove") || chunk.includes("Let back in") || chunk.includes("and keep them out"),
       );
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(5);
     for (const button of buttons) {
       expect(button).toContain("disabled={busy || !owned}");
       expect(button).toContain("title={ownerTitle}");

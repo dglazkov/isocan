@@ -1169,6 +1169,39 @@ Three things to know before you use it:
 - **Turning the link off now removes people.** It used to be harmless. It is
   not any more, so it is a gesture to ask about rather than to try.
 
+## Spaces: a set of canvases, shared once
+
+A **space** is a named set of canvases that access is set on once. A
+canvas is in at most one space, and a person's rung on a canvas is the
+highest from any row on the canvas or on its space — the space's rows are a
+floor its canvases can only add to, never a ceiling.
+
+- `isocan space new <name>` — make one. You own it; it holds nothing yet.
+  A space is private until it is shared.
+- `isocan space list` — the spaces you may see: the ones you made, and the
+  ones a row admits you to. `isocan canvas list` groups by space when the
+  home has any, **No space** last.
+- `isocan space add <name> <canvas>…` / `isocan space remove <name>
+  <canvas>…` — put canvases in, take them out (by id or title). Adding needs
+  you to own the canvas AND the space; removing, the space. A canvas moved in
+  keeps its own rows and the space's apply to it from then on; one moved out
+  keeps its own rows and the space's stop reaching it.
+- `isocan share --space <name>` — the space's share: every `share` flag
+  applies to every canvas in it. `--link off|edit|read|view` is **every
+  canvas in this space**: each canvas's own link row is set in one gesture
+  and the verb prints how many canvases it reached; each canvas's own link
+  can be set again afterwards (`isocan share --link view` on one canvas
+  opens that one wider). `<email> --as <rung>`, `--revoke`, `--bar`,
+  `--unbar` write the space's rows, and each write sweeps every canvas in
+  it. `--as own` on a space makes an owner of the space and of every canvas
+  in it.
+- `isocan share` on a canvas in a space prints the space's rows marked *from
+  space* — read here, changed with `--space`. A canvas row below what the
+  space gives says so; it takes effect if the canvas leaves the space.
+- `isocan space delete <name>` — every canvas stays, with its own sharing.
+- Names are unique among the spaces you own, not across the home. A name
+  you can see twice is refused with both ids; use the id.
+
 ## Your own surfaces
 
 `isocan badges` lists every surface that carries your identity — this machine,
@@ -1744,8 +1777,10 @@ was made for it, `tally` splits human and agent dots),
 `present <item>` (a main-thread comment carrying the workbench address —
 inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,
-`share`, `pass` (a credential for another MACHINE — never post it, never
-commit it; `share`'s address is what you hand a person),
+`share`, `share --space <name>` (the space's rows, and `--link` on every
+canvas in it), `space new|list|add|remove|delete` (a named set of canvases
+access is set on once), `pass` (a credential for another MACHINE — never post
+it, never commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
 `open`, `setup`, `home` (which home this daemon answers to — read it
 freely, set it only when asked).

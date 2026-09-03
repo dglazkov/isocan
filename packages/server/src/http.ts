@@ -32,11 +32,27 @@ import type {
   RcAskRequest,
   RedeemPassRequest,
   RedeemPassResponse,
+  Space,
+  SpacesResponse,
+  SpaceResponse,
+  CreateSpaceRequest,
+  SpaceCanvasRequest,
+  SpaceCanvasResponse,
+  SpaceLinkRequest,
+  SpaceLinkResponse,
   UndoRedoRequest, LogEntry } from "@isocan/core";
 import {
   ATTEST_ROUTE,
   AUTH_ACTION_PATH,
   authActionOutcome,
+  BAD_SPACE,
+  CANVAS_IN_SPACE,
+  isSpaceLive,
+  sameSpaceName,
+  SPACE_NAME_TAKEN,
+  SPACE_NOT_FOUND,
+  spaceNameRefusal,
+  SPACES_ROUTE,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -112,6 +128,7 @@ import {
   capabilityIn,
   heldCapability,
   heldRung,
+  heldRungOnSpace,
   NOT_OWNER,
   NotAdmittedError,
   notOwnerMessage,
@@ -124,7 +141,7 @@ import {
   TOO_MANY_BADGES,
   type MintRefusal,
 } from "./meter.ts";
-import { killAndSweep, sweepCanvas, SweepHub } from "./sweep.ts";
+import { killAndSweep, sweepCanvas, sweepCanvases, sweepSpace, SweepHub } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
@@ -919,6 +936,25 @@ export function registerRoutes(
         code: "bad-op",
       });
     }
+    /**
+     * **`spaceId` is a birth's space and nothing else** (roles phase 4),
+     * refused beside anything but a create for `home`'s reason: request state
+     * about one canvas coming into existence, never a way to move one. Moving
+     * a canvas is `PUT /api/spaces/:id/canvases/:canvasId`.
+     */
+    if (body.spaceId !== undefined) {
+      if (body.op?.type !== "project.create") {
+        return reply.status(400).send({
+          error:
+            "`spaceId` says which space a canvas is being BORN in, so it belongs only on " +
+            "project.create — a canvas that exists is moved with `isocan space add`",
+          code: "bad-op",
+        });
+      }
+      if (typeof body.spaceId !== "string" || body.spaceId === "") {
+        return reply.status(400).send({ error: "`spaceId` names a space by id", code: BAD_SPACE });
+      }
+    }
     if (body.op?.type === "actor.claim") {
       // A claim resolves who is speaking, so it is the one op that arrives
       // without an actor; the response envelope carries the answer. It is
@@ -986,9 +1022,31 @@ export function registerRoutes(
         throw await viewOnly(body.canvasId);
       }
     }
+    /**
+     * **Born in a space** (roles design, "Born in a space"). Decided HERE
+     * when this daemon is the birth home: the space is looked up, `own` on
+     * it is asked of the actor, and the create is submitted with the birth
+     * link grant suppressed, so a locked space stays locked as it grows. The
+     * newborn is added to the space after the create lands, because a space
+     * naming a canvas whose creation then failed would be a row about
+     * nothing. When the birth goes to another home — a stated address, or
+     * this machine's birth default — the id rides up with the op
+     * (`forwardSubmit`) and that home decides, because the space is its desk
+     * state and this one holds no row to check.
+     */
+    let bornInto: Space | null = null;
+    if (body.spaceId !== undefined && body.op?.type === "project.create") {
+      const bornAway = options.homes ? body.home !== undefined || options.homes.birth() !== null : false;
+      if (!bornAway) {
+        const owned = await ownedSpace(req, reply, body.spaceId, body.actor.id);
+        if ("refused" in owned) return owned.refused;
+        bornInto = owned.space;
+      }
+    }
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
       badgeId: req.badge!.badgeId,
+      ...(bornInto ? { withoutLinkGrant: true } : {}),
     });
     if (body.op?.type === "project.create") {
       // The bootstrap badge's first admission, and it can only be taken after
@@ -996,6 +1054,14 @@ export function registerRoutes(
       // earned this one by making the canvas, which is the only provenance
       // that is not "somebody let me in".
       await admit(req, body.op.canvasId, true);
+      if (bornInto) {
+        // Re-read rather than reuse: another write may have moved the
+        // space's list while the create was landing.
+        const fresh = (await desk.space(bornInto.id)) ?? bornInto;
+        if (!fresh.canvasIds.includes(body.op.canvasId)) {
+          await desk.putSpace({ ...fresh, canvasIds: [...fresh.canvasIds, body.op.canvasId] });
+        }
+      }
     }
     return { seq: entry.seq, envelope: entry.envelope };
   });
@@ -1195,10 +1261,42 @@ export function registerRoutes(
     const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const visible: Canvas[] = [];
+    /**
+     * **The door's space reads, memoized for the wide list** (roles design,
+     * "The door reads both"). One `spacesFor(badge)` — the bounded queries —
+     * gives every space whose rows could admit this badge and the canvases
+     * each holds; one `grantsForSpace` per such space, on first use. A canvas
+     * in a space the badge cannot see is read as being in none, which is the
+     * truth the door would reach the long way: no row on an unseen space
+     * names this badge. So the list pays one query per visible space rather
+     * than one `spaceOf` per canvas. Built lazily, because the narrow answer
+     * runs no door test at all.
+     */
+    let canvasSpace: Map<string, Space> | null = null;
+    const spaceRows = new Map<string, Promise<Grant[]>>();
+    const via = {
+      spaceOf: async (canvasId: string): Promise<Space | null> => {
+        if (!canvasSpace) {
+          canvasSpace = new Map();
+          for (const space of await desk.spacesFor(badge)) {
+            for (const id of space.canvasIds) canvasSpace.set(id, space);
+          }
+        }
+        return canvasSpace.get(canvasId) ?? null;
+      },
+      grantsForSpace: (spaceId: string): Promise<Grant[]> => {
+        let rows = spaceRows.get(spaceId);
+        if (!rows) {
+          rows = desk.grantsForSpace(spaceId);
+          spaceRows.set(spaceId, rows);
+        }
+        return rows;
+      },
+    };
     for (const canvas of await engine.listCanvases()) {
       if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
       if (admitted.has(canvas.id)) visible.push(canvas);
-      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id))) {
+      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via))) {
         visible.push(canvas);
       }
     }
@@ -1400,42 +1498,18 @@ export function registerRoutes(
   app.post("/api/projects/:id/grants", async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
-    // `bars: true` or nothing — the same rule as `capability`, written only
-    // when it says something, so a caller sending `bars: false` is sending a
-    // shape this route has never meant.
-    if (body.bars !== undefined && body.bars !== true) {
-      return reply.status(400).send({
-        error: "a bar is written as `bars: true`, or not at all",
-        code: "bad-grant",
-      });
-    }
+    // The shape, in one place for this route and the space's (roles phase 4):
+    // `bars: true` or nothing — written only when it says something, so a
+    // caller sending `bars: false` is sending a shape this route has never
+    // meant; a bar's own subject rule (never `link`, never a group) on top of
+    // the shape every row must have; the ladder's four words and nothing
+    // else (#88, widened by the roles ladder — a home from before a rung
+    // refuses it here, which is what lets a newer client tell "this home
+    // cannot" from "this row was not written"); and no rung on a bar,
+    // because a "no" at Canvas Viewer is not a sentence.
+    const shape = badGrantBody(body);
+    if (shape) return reply.status(400).send({ error: shape, code: "bad-grant" });
     const bars = body.bars === true;
-    // A bar has its own subject rule (never `link`, never a group) on top of
-    // the shape every row must have; `barSubjectRefusal` asks both.
-    const refusal = bars ? barSubjectRefusal(body.subject) : grantSubjectRefusal(body.subject);
-    if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
-    // Shape-checked like the subject beside it: the ladder's four words, and
-    // anything else is a caller sending something other than a rung (#88,
-    // widened by the roles ladder). A home from before a rung refuses it
-    // here, which is what lets a newer client tell "this home cannot" from
-    // "this row was not written".
-    if (body.capability !== undefined && !isCapability(body.capability)) {
-      return reply.status(400).send({
-        error:
-          `not a capability: ${String(body.capability)} (a grant admits to ` +
-          `${RUNGS.map((rung) => `\`${rung}\``).join(", ")})`,
-        code: "bad-grant",
-      });
-    }
-    // A bar has no rung: it says no, and a "no" at Canvas Viewer is not a
-    // sentence. Refused rather than ignored, so a caller that meant one of
-    // the two learns it sent both.
-    if (bars && body.capability !== undefined) {
-      return reply.status(400).send({
-        error: "a bar has no rung — it keeps its subject out; drop `capability` or drop `bars`",
-        code: "bad-grant",
-      });
-    }
     const subject = normalizeSubject(body.subject!);
     const capability: Capability = body.capability ?? "edit";
     const actorId = await actingActor(req, body.actorId);
@@ -1595,6 +1669,87 @@ export function registerRoutes(
     return false;
   };
 
+  /** The creator of a canvas, for a sweep that does not hold the snapshot —
+   * `killAndSweep`'s shape, shared with the space sweeps. */
+  const creatorOf = (canvasId: string): Promise<string | null> =>
+    engine.getSnapshot(canvasId).then(
+      (snapshot) => snapshot.project.createdBy.id,
+      () => null,
+    );
+
+  /** An actor's name, through the registry, so a rename reaches it. */
+  const nameOf = async (actorId: string): Promise<string> =>
+    actorNameIn(await engine.actorNames(), { id: actorId, name: actorId });
+
+  const spaceNotFound = (reply: FastifyReply, spaceId: string): FastifyReply =>
+    reply.status(404).send({
+      error: `no space ${spaceId} here that this badge may see`,
+      code: SPACE_NOT_FOUND,
+    });
+
+  /**
+   * **A space this badge may WRITE** (roles phase 4), or the refusal: 404
+   * `space-not-found` for a space that is not here, is deleted, or that this
+   * badge may not see at all — three answers alike, so a stranger learns
+   * nothing about the space around a canvas — and 403 `not-owner`, naming
+   * the space's creator, for somebody who may see it and holds less than
+   * `own`. `heldRungOnSpace` is the question, with the actor narrowed the
+   * way the grant routes narrow it.
+   */
+  const ownedSpace = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    spaceId: string,
+    actorId: string | undefined,
+  ): Promise<{ space: Space } | { refused: FastifyReply }> => {
+    const space = await desk.space(spaceId);
+    if (!space || !isSpaceLive(space)) return { refused: spaceNotFound(reply, spaceId) };
+    const held = await heldRungOnSpace(desk, space, req.badge!, actorId ?? null);
+    if (held === null) return { refused: spaceNotFound(reply, spaceId) };
+    if (!atLeast(held, "own")) {
+      return {
+        refused: reply.status(403).send({
+          error:
+            `ask ${await nameOf(space.createdBy)}, who owns the space ${space.name} — only an ` +
+            "owner of a space can change what is in it or who may enter its canvases",
+          code: NOT_OWNER,
+        }),
+      };
+    }
+    return { space };
+  };
+
+  /** A space this badge may SEE — the read routes. Null answers like not found. */
+  const visibleSpace = async (req: FastifyRequest, spaceId: string): Promise<Space | null> => {
+    const space = await desk.space(spaceId);
+    if (!space || !isSpaceLive(space)) return null;
+    return (await heldRungOnSpace(desk, space, req.badge!)) === null ? null : space;
+  };
+
+  /**
+   * The shape checks a grant body gets on a canvas and on a space alike:
+   * `bars` is `true` or absent, the subject is one, the rung is one, and a
+   * bar has no rung. One function, so the two POSTs cannot drift.
+   */
+  const badGrantBody = (body: Partial<CreateGrantRequest>): string | null => {
+    if (body.bars !== undefined && body.bars !== true) {
+      return "a bar is written as `bars: true`, or not at all";
+    }
+    const bars = body.bars === true;
+    const refusal = bars ? barSubjectRefusal(body.subject) : grantSubjectRefusal(body.subject);
+    if (refusal) return refusal;
+    if (body.capability !== undefined && !isCapability(body.capability)) {
+      return (
+        `not a capability: ${String(body.capability)} (a grant admits to ` +
+        `${RUNGS.map((rung) => `\`${rung}\``).join(", ")})`
+      );
+    }
+    if (bars && body.capability !== undefined) {
+      return "a bar has no rung — it keeps its subject out; drop `capability` or drop `bars`";
+    }
+    return null;
+  };
+
   /**
    * Un-share it — "turn off the link", and the same gesture for every other
    * subject. **Both halves, since phase 9.**
@@ -1684,18 +1839,397 @@ export function registerRoutes(
      * the link. Named `stillAdmittedBy` so roles phase 4 can add `space`.
      */
     const after = liveGrants(await desk.grantsFor(id));
+    // The space's rows too (roles phase 4): a row on the space naming the
+    // same subject means removing them here did not remove them, and the
+    // remedy is the space's Share rather than a bar — said as `space`, which
+    // wins over `link` because it is the more specific answer.
+    const space = await desk.spaceOf(id);
+    const onSpace = space ? liveGrants(await desk.grantsForSpace(space.id)) : [];
+    const barred = [...after, ...onSpace].some((g) => isBar(g) && g.subject === mine.subject);
     const stillAdmittedBy =
-      mine.subject !== LINK &&
-      after.some((g) => g.subject === LINK && !isBar(g)) &&
-      !after.some((g) => isBar(g) && g.subject === mine.subject)
-        ? ("link" as const)
-        : undefined;
+      mine.subject === LINK || barred
+        ? undefined
+        : onSpace.some((g) => g.subject === mine.subject && !isBar(g))
+          ? ("space" as const)
+          : after.some((g) => g.subject === LINK && !isBar(g))
+            ? ("link" as const)
+            : undefined;
     return {
       grant: revoked ?? mine,
       swept,
       ...(written ? { bar: written } : {}),
       ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
     } satisfies GrantResponse;
+  });
+
+  // ---- the space: a named set of canvases access is set on once (roles phase 4) ----
+  //
+  // All at the home. A space is desk state for a grant's reason — it is part
+  // of what a grant means, and what a grant means does not travel — so a
+  // REPLICA forwards every one of these through `homeScoped()` and refuses
+  // on a mixed rig with the homes named (`refuseAmbiguousHome`), because a
+  // space belongs to the home its creator made it at and this daemon holds
+  // no row to answer from. Nothing here is canvas-scoped, so the door hook
+  // has NOT asked about the caller: every route asks for itself, through
+  // `heldRungOnSpace`, and a badge that may not see a space is told there is
+  // none.
+
+  /** The spaces this badge may see, each with its canvases — the canvas
+   * list joins these to `GET /api/projects`, which does not change. */
+  app.get(SPACES_ROUTE, async (req, reply) => {
+    const stuck = refuseAmbiguousHome(reply, options.homes, "list spaces");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.spaces();
+    // `spacesFor` is the bounded query; a bar on a space names the badge too,
+    // and a space that only keeps you out is not one you may see.
+    const spaces: Space[] = [];
+    for (const space of await desk.spacesFor(req.badge!)) {
+      if ((await heldRungOnSpace(desk, space, req.badge!)) !== null) spaces.push(space);
+    }
+    return { spaces } satisfies SpacesResponse;
+  });
+
+  /** Make one. Any actor may; the creator is the floor, and a space with no
+   * rows is visible to nobody else, so this is a private act until it is
+   * shared. The name is unique among the ones THIS actor owns. */
+  app.post(SPACES_ROUTE, async (req, reply) => {
+    const body = (req.body ?? {}) as Partial<CreateSpaceRequest>;
+    const refusal = spaceNameRefusal(body.name);
+    if (refusal) return reply.status(400).send({ error: refusal, code: BAD_SPACE });
+    const name = body.name!.trim();
+    const stuck = refuseAmbiguousHome(reply, options.homes, "make a space");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.createSpace(name, await actorNamed(actorId));
+    if (!actorId) {
+      return reply.status(400).send({
+        error:
+          "a space needs a maker, and this badge did not say who — claim an actor first, or name " +
+          "one of this badge's actors as `actorId`",
+        code: BAD_SPACE,
+      });
+    }
+    const mine = (await desk.spacesFor(req.badge!)).filter((space) => space.createdBy === actorId);
+    const taken = mine.find((space) => sameSpaceName(space.name, name));
+    if (taken) {
+      return reply.status(409).send({
+        error: `you already have a space called ${taken.name} (${taken.id}) — names are unique among the spaces you own`,
+        code: SPACE_NAME_TAKEN,
+      });
+    }
+    const space: Space = {
+      id: newId("spc"),
+      name,
+      createdBy: actorId,
+      canvasIds: [],
+      at: new Date().toISOString(),
+    };
+    await desk.putSpace(space);
+    return { space } satisfies SpaceResponse;
+  });
+
+  /**
+   * Delete one: a tombstone, like a grant's. Every canvas stays where it was
+   * with its own rows, and each is swept, because the space's rows stop
+   * reaching it the moment `spaceOf` stops naming it. Idempotent: deleting a
+   * deleted space answers with the tombstone and sweeps nothing.
+   */
+  app.delete(`${SPACES_ROUTE}/:id`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const query = req.query as { actorId?: unknown };
+    const stuck = refuseAmbiguousHome(reply, options.homes, "delete a space");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.deleteSpace(id, await actorNamed(actorId));
+    const existing = await desk.space(id);
+    if (!existing) return spaceNotFound(reply, id);
+    if (!isSpaceLive(existing)) {
+      // The tombstone's rows still say who may see it; an owner is told it
+      // is already gone, a stranger that it is not here.
+      const held = await heldRungOnSpace(desk, existing, req.badge!, actorId ?? null);
+      if (held === null || !atLeast(held, "own")) return spaceNotFound(reply, id);
+      return { space: existing, swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies SpaceCanvasResponse;
+    }
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const gone: Space = { ...owned.space, deletedAt: new Date().toISOString() };
+    await desk.putSpace(gone);
+    const { expelled, rerooted, reached } = await sweepCanvases(desk, gone.canvasIds, creatorOf, sweeps.report);
+    return { space: gone, swept: { expelled, rerooted }, reached } satisfies SpaceCanvasResponse;
+  });
+
+  /**
+   * Add a canvas. `own` on BOTH: the space's, through `ownedSpace`, and the
+   * canvas's, through the door and `heldRung` — this route is not
+   * canvas-scoped, so the hook has not asked. Refused when the canvas is in
+   * another space (`canvas-in-space`: a canvas is in at most one) or lives
+   * at another home (a space holds only canvases whose home is this one).
+   * The canvas keeps whatever rows it has and the space's apply from now,
+   * which the sweep makes real for whoever is inside.
+   */
+  app.put(`${SPACES_ROUTE}/:id/canvases/:canvasId`, async (req, reply) => {
+    const { id, canvasId } = req.params as { id: string; canvasId: string };
+    const body = (req.body ?? {}) as Partial<SpaceCanvasRequest>;
+    const stuck = refuseAmbiguousHome(reply, options.homes, "move a canvas into a space");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.addToSpace(id, canvasId, await actorNamed(actorId));
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const elsewhere = options.homes?.homeOf(canvasId) ?? null;
+    if (elsewhere !== null) {
+      return reply.status(400).send({
+        error:
+          `${canvasId} lives at ${elsewhere}, and a space holds only canvases whose home is ` +
+          "this one — make the space there",
+        code: BAD_SPACE,
+      });
+    }
+    const snapshot = await engine.getSnapshot(canvasId); // 404 for a canvas that is not here
+    await admit(req, canvasId); // the door, since the hook did not ask
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+      return reply
+        .status(403)
+        .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
+    }
+    const current = await desk.spaceOf(canvasId);
+    if (current && current.id !== owned.space.id) {
+      return reply.status(409).send({
+        error:
+          `${snapshot.project.title} is already in the space ${current.name} (${current.id}) — a canvas ` +
+          "is in at most one space; remove it there first",
+        code: CANVAS_IN_SPACE,
+      });
+    }
+    if (current) {
+      // Already here: the gesture is "this canvas is in the space", and it is.
+      return { space: owned.space, swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies SpaceCanvasResponse;
+    }
+    const next: Space = { ...owned.space, canvasIds: [...owned.space.canvasIds, canvasId] };
+    await desk.putSpace(next);
+    const swept = await sweepCanvas(desk, canvasId, snapshot.project.createdBy.id, sweeps.report);
+    return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
+  });
+
+  /** Remove a canvas: `own` on the space; the canvas keeps its own rows and
+   * is swept, so whoever was inside on the space's rows is put out or
+   * re-rooted onto a row of the canvas's own. Idempotent. */
+  app.delete(`${SPACES_ROUTE}/:id/canvases/:canvasId`, async (req, reply) => {
+    const { id, canvasId } = req.params as { id: string; canvasId: string };
+    const query = req.query as { actorId?: unknown };
+    const stuck = refuseAmbiguousHome(reply, options.homes, "move a canvas out of a space");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.removeFromSpace(id, canvasId, await actorNamed(actorId));
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    if (!owned.space.canvasIds.includes(canvasId)) {
+      return { space: owned.space, swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies SpaceCanvasResponse;
+    }
+    const next: Space = {
+      ...owned.space,
+      canvasIds: owned.space.canvasIds.filter((held) => held !== canvasId),
+    };
+    await desk.putSpace(next);
+    const swept = await sweepCanvas(desk, canvasId, await creatorOf(canvasId), sweeps.report);
+    return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
+  });
+
+  // The grants routes, scoped to the space. Reads for anybody who may see
+  // it; writes for `own` on it; every write sweeps every canvas in it, and
+  // the count reached rides back beside the sum.
+
+  app.get(`${SPACES_ROUTE}/:id/grants`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const stuck = refuseAmbiguousHome(reply, options.homes, "read a space's grants");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.spaceGrants(id);
+    const space = await visibleSpace(req, id);
+    if (!space) return spaceNotFound(reply, id);
+    return { grants: liveGrants(await desk.grantsForSpace(id)) } satisfies GrantsResponse;
+  });
+
+  /**
+   * Share the space. The canvas POST's rules, one scope wider, with one
+   * refusal of its own: **`link` is not a space subject.** A space has no
+   * address, so a link row on it would admit nobody and mean nothing;
+   * **Every canvas in this space** (`POST …/link`) is what sets each canvas's
+   * link. The space creator's own address is refused as redundant, like the
+   * canvas creator's.
+   */
+  app.post(`${SPACES_ROUTE}/:id/grants`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
+    const shape = badGrantBody(body);
+    if (shape) return reply.status(400).send({ error: shape, code: "bad-grant" });
+    const bars = body.bars === true;
+    const subject = normalizeSubject(body.subject!);
+    if (subject === LINK) {
+      return reply.status(400).send({
+        error:
+          "a space has no address, so it has no link row — set every canvas's link at once " +
+          "with `POST /api/spaces/:id/link` (`isocan share --space <name> --link …`)",
+        code: BAD_SPACE,
+      });
+    }
+    const capability: Capability = body.capability ?? "edit";
+    const stuck = refuseAmbiguousHome(reply, options.homes, "share a space");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.createSpaceGrant(id, subject, capability, await actorNamed(actorId), bars);
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const space = owned.space;
+    const live = liveGrants(await desk.grantsForSpace(id)).find((g) => g.subject === subject);
+    if (live && isBar(live) === bars && (bars || capabilityOf(live) === capability)) {
+      return { grant: live } satisfies GrantResponse;
+    }
+    if (await namesTheCreator(subject, { createdBy: { id: space.createdBy } })) {
+      return reply.status(400).send({
+        error:
+          `${subject} is ${await nameOf(space.createdBy)}'s own address, and they made this space — ` +
+          (bars ? "the creator cannot be kept out" : "the creator owns it without a row"),
+        code: "bad-grant",
+      });
+    }
+    const unverifiable = attesterRefusal(subject, attesters);
+    if (unverifiable) return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
+    const grant: Grant = {
+      id: newId("gnt"),
+      spaceId: id,
+      subject,
+      grantedBy: req.badge!.badgeId,
+      at: new Date().toISOString(),
+      ...(bars ? { bars: true as const } : narrowed(capability) ? { capability } : {}),
+    };
+    if (live) await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
+    await desk.putGrant(grant);
+    // Always swept, replacement or not: a new row on a space can RAISE people
+    // already inside its canvases on a lower row, and the sweep is what
+    // reaches their open sockets (journey 4, step 6).
+    const { expelled, rerooted, reached } = await sweepSpace(desk, id, creatorOf, sweeps.report);
+    return { grant, swept: { expelled, rerooted }, reached } satisfies GrantResponse;
+  });
+
+  /** Revoke one, `?bar=1` included — the canvas DELETE's rules, scoped to
+   * the space, with the sweep over every canvas in it. No `stillAdmittedBy`:
+   * a space has no link, and what its canvases' own rows would still admit is
+   * each canvas's answer. */
+  app.delete(`${SPACES_ROUTE}/:id/grants/:grantId`, async (req, reply) => {
+    const { id, grantId } = req.params as { id: string; grantId: string };
+    const query = req.query as { actorId?: unknown; bar?: unknown };
+    const bar = query.bar === "1" || query.bar === "true";
+    const stuck = refuseAmbiguousHome(reply, options.homes, "revoke a space's grant");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.revokeSpaceGrant(id, grantId, await actorNamed(actorId), bar);
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const mine = (await desk.grantsForSpace(id)).find((g) => g.id === grantId);
+    if (!mine) {
+      return reply.status(404).send({ error: `no grant ${grantId} on space ${id}`, code: "unknown-grant" });
+    }
+    if (bar) {
+      const refusal = isBar(mine)
+        ? `${grantId} is already a bar — revoking it lets them back in; there is nothing to keep out`
+        : barSubjectRefusal(mine.subject);
+      if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
+      if (await namesTheCreator(mine.subject, { createdBy: { id: owned.space.createdBy } })) {
+        return reply.status(400).send({
+          error: `${mine.subject} is the space creator's own address — the creator cannot be kept out`,
+          code: "bad-grant",
+        });
+      }
+    }
+    const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
+    const written: Grant | null = bar
+      ? {
+          id: newId("gnt"),
+          spaceId: id,
+          subject: mine.subject,
+          grantedBy: req.badge!.badgeId,
+          at: new Date().toISOString(),
+          bars: true,
+        }
+      : null;
+    if (written) await desk.putGrant(written);
+    const { expelled, rerooted, reached } = await sweepSpace(desk, id, creatorOf, sweeps.report);
+    return {
+      grant: revoked ?? mine,
+      swept: { expelled, rerooted },
+      reached,
+      ...(written ? { bar: written } : {}),
+    } satisfies GrantResponse;
+  });
+
+  /**
+   * **Every canvas in this space** (roles journey 4, step 4). The floor is
+   * not the ceiling: a canvas's own rows can only add to what the space
+   * gives, so "turn the link off for the space" cannot be one row on the
+   * space — it is the per-canvas link row written or revoked on every canvas
+   * in a loop, each followed by that canvas's sweep, and the answer says how
+   * many canvases it reached and how many it changed. Each canvas's own
+   * link can be set again afterwards, which is journey 5.
+   */
+  app.post(`${SPACES_ROUTE}/:id/link`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Partial<SpaceLinkRequest>;
+    const want = typeof body.capability === "string" ? body.capability.toLowerCase() : "";
+    const capability: Capability | "off" | null =
+      want === "off" ? "off" : isCapability(want) && want !== "own" ? want : null;
+    if (capability === null) {
+      return reply.status(400).send({
+        error: "the every-canvas link takes `edit`, `read`, `view` or `off` — never `own`",
+        code: BAD_SPACE,
+      });
+    }
+    const stuck = refuseAmbiguousHome(reply, options.homes, "set a space's links");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.setSpaceLink(id, capability, await actorNamed(actorId));
+    const owned = await ownedSpace(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const now = new Date().toISOString();
+    let changed = 0;
+    let expelled = 0;
+    let rerooted = 0;
+    for (const canvasId of owned.space.canvasIds) {
+      const live = liveGrants(await desk.grantsFor(canvasId)).find((g) => g.subject === LINK);
+      if (capability === "off") {
+        if (!live) continue;
+        await desk.revokeGrant(live.id, now, req.badge!.badgeId);
+      } else {
+        if (live && capabilityOf(live) === capability) continue;
+        if (live) await desk.revokeGrant(live.id, now, req.badge!.badgeId);
+        await desk.putGrant({
+          id: newId("gnt"),
+          canvasId,
+          subject: LINK,
+          grantedBy: req.badge!.badgeId,
+          at: now,
+          ...(narrowed(capability) ? { capability } : {}),
+        });
+      }
+      changed += 1;
+      const swept = await sweepCanvas(desk, canvasId, await creatorOf(canvasId), sweeps.report);
+      expelled += swept.expelled;
+      rerooted += swept.rerooted;
+    }
+    return {
+      reached: owned.space.canvasIds.length,
+      changed,
+      canvasIds: [...owned.space.canvasIds],
+      swept: { expelled, rerooted },
+    } satisfies SpaceLinkResponse;
   });
 
   // ---- your own surfaces: kill-a-badge (identity desk, mechanism 1) ----

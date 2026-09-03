@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, Grant } from "@isocan/core";
+import type { ActorClaim, Grant, Space } from "@isocan/core";
 import { LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
@@ -292,6 +292,104 @@ export function deskConformance(
         expect(again).toMatchObject({ revokedAt: at, revokedBy: "bdg_2" });
         // A grant this desk does not know is null, not a throw.
         expect(await desk.revokeGrant("gnt_nope", at, "bdg_1")).toBeNull();
+      }),
+    );
+
+    // ---- roles phase 4: the space, and the other arm of a grant's scope ----
+
+    test(
+      "grantsForSpace: a row on a space is read back by space, and grantsFor never sees it",
+      withDesk(async ({ desk }) => {
+        // No fallback, as for a canvas: a space with no rows admits nobody
+        // but its creator, and an empty answer stays empty.
+        expect(await desk.grantsForSpace("spc_a")).toEqual([]);
+        await desk.putGrant(grant("gnt_c", "prj_a", "bdg_1"));
+        await desk.putGrant({
+          ...spaceGrant("gnt_s", "spc_a", "bdg_1"),
+          subject: "email:jordan@acme.test",
+          capability: "own",
+        });
+        // The two arms of `GrantScope` do not leak into each other: a caller
+        // that asks about one canvas sees only that canvas's rows, and a row
+        // on a space comes back with `spaceId` and no `canvasId`.
+        expect((await desk.grantsFor("prj_a")).map((row) => row.id)).toEqual(["gnt_c"]);
+        const onSpace = await desk.grantsForSpace("spc_a");
+        expect(onSpace).toHaveLength(1);
+        expect(onSpace[0]).toMatchObject({
+          id: "gnt_s",
+          spaceId: "spc_a",
+          subject: "email:jordan@acme.test",
+          capability: "own",
+        });
+        expect("canvasId" in onSpace[0]!).toBe(false);
+        // Revocation is the same tombstone whichever arm the row is on.
+        await desk.revokeGrant("gnt_s", "2026-08-23T12:00:00.000Z", "bdg_2");
+        expect((await desk.grantsForSpace("spc_a"))[0]!.revokedAt).toBe("2026-08-23T12:00:00.000Z");
+      }),
+    );
+
+    test(
+      "spaces: written whole, read by id, spaceOf names the live one, and a tombstone drops out",
+      withDesk(async ({ desk }) => {
+        expect(await desk.space("spc_nope")).toBeNull();
+        expect(await desk.spaceOf("prj_a")).toBeNull();
+        await desk.putSpace(space("spc_a", "usr_priya", ["prj_a", "prj_b"]));
+        expect(await desk.space("spc_a")).toEqual(space("spc_a", "usr_priya", ["prj_a", "prj_b"]));
+        expect((await desk.spaceOf("prj_a"))?.id).toBe("spc_a");
+        expect((await desk.spaceOf("prj_b"))?.id).toBe("spc_a");
+        expect(await desk.spaceOf("prj_c")).toBeNull();
+        // A write REPLACES: moving a canvas out is the row written again
+        // without it, and `spaceOf` answers from the row as it now stands.
+        await desk.putSpace(space("spc_a", "usr_priya", ["prj_a"]));
+        expect(await desk.spaceOf("prj_b")).toBeNull();
+        expect((await desk.space("spc_a"))!.canvasIds).toEqual(["prj_a"]);
+        // The tombstone: read back by id, so a route can tell "gone" from
+        // "never was" — and nobody's answer to `spaceOf`, so its rows stop
+        // reaching the canvases it held.
+        const gone = { ...space("spc_a", "usr_priya", ["prj_a"]), deletedAt: "2026-08-23T12:00:00.000Z" };
+        await desk.putSpace(gone);
+        expect(await desk.space("spc_a")).toEqual(gone);
+        expect(await desk.spaceOf("prj_a")).toBeNull();
+      }),
+    );
+
+    test(
+      "spacesFor: by an actor the badge claims, by a live row naming what it has proved, and nothing else",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_priya"));
+        await desk.put(mint("bdg_jordan"));
+        await desk.put(mint("bdg_nobody"));
+        await desk.setClaims("bdg_priya", [claim("usr_priya", "cli:priya")]);
+        const at = "2026-01-02T00:00:00.000Z";
+        await desk.attest("bdg_jordan", { attribute: "email:jordan@acme.test", verifiedVia: "magic-link", at });
+        await desk.putSpace(space("spc_design", "usr_priya", ["prj_a"]));
+        await desk.putSpace(space("spc_other", "usr_sam", []));
+        await desk.putSpace({ ...space("spc_old", "usr_priya", []), deletedAt: at });
+        await desk.putGrant({
+          ...spaceGrant("gnt_j", "spc_other", "bdg_sam"),
+          subject: "email:jordan@acme.test",
+        });
+        await desk.putGrant({
+          ...spaceGrant("gnt_j_gone", "spc_design", "bdg_priya"),
+          subject: "email:jordan@acme.test",
+          revokedAt: at,
+          revokedBy: "bdg_priya",
+        });
+        // A row on a CANVAS naming the same address is not a space, and must
+        // not become one by sharing a subject.
+        await desk.putGrant({ ...grant("gnt_canvas", "prj_z", "bdg_sam"), subject: "email:jordan@acme.test" });
+
+        // The creator sees the spaces they made — and not the tombstone.
+        const priya = (await desk.spacesFor((await desk.badge("bdg_priya"))!)).map((s) => s.id);
+        expect(priya.sort()).toEqual(["spc_design"]);
+        // An invitee sees the space a LIVE row admits them to, and not the
+        // one whose row was revoked.
+        const jordan = (await desk.spacesFor((await desk.badge("bdg_jordan"))!)).map((s) => s.id);
+        expect(jordan).toEqual(["spc_other"]);
+        // A badge that claims nobody and has proved nothing sees no space —
+        // the no-fallback rule: a backing that scanned would answer with all
+        // three, and a stranger would learn what surrounds a canvas.
+        expect(await desk.spacesFor((await desk.badge("bdg_nobody"))!)).toEqual([]);
       }),
     );
 
@@ -600,6 +698,28 @@ export function pass(
     createdAt: new Date(at).toISOString(),
     expiresAt: new Date(at + PASS_TTL_MS).toISOString(),
     ...(actorId !== undefined ? { actorId } : {}),
+  };
+}
+
+/** A row on a space (roles phase 4) — the other arm of `GrantScope`. */
+export function spaceGrant(id: string, spaceId: string, grantedBy: string): Grant {
+  return {
+    id,
+    spaceId,
+    subject: "email:somebody@acme.test",
+    grantedBy,
+    at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  };
+}
+
+/** A space, as the desk holds it. */
+export function space(id: string, createdBy: string, canvasIds: string[]): Space {
+  return {
+    id,
+    name: `Space ${id}`,
+    createdBy,
+    canvasIds,
+    at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
   };
 }
 

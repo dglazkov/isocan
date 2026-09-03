@@ -1,4 +1,4 @@
-import type { Capability, SweepReport } from "@isocan/core";
+import type { Capability, Grant, SweepReport } from "@isocan/core";
 import { admittingGrant, rungOfAdmission } from "./grants.ts";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
@@ -234,7 +234,15 @@ export async function sweepCanvas(
     // longer there — the "helpful fallback" failure wearing a caching face.
     const badges = await desk.badgesIn(canvasId);
     const byId = new Map(badges.map((badge) => [badge.badgeId, badge]));
-    const grants = await desk.grantsFor(canvasId);
+    // Both scopes (roles phase 4): a `{root: "grant"}` admission names a row
+    // on the canvas OR on its space, and the lookup has to find it in either,
+    // or a space-admitted badge would be re-tested every sweep as if its row
+    // had vanished.
+    const space = await desk.spaceOf(canvasId);
+    const grants: Grant[] = [
+      ...(await desk.grantsFor(canvasId)),
+      ...(space ? await desk.grantsForSpace(space.id) : []),
+    ];
     const decided = new Map<string, Promise<Decision>>();
     let changed = false;
 
@@ -324,6 +332,24 @@ export async function sweepCanvas(
         // can revoke it and the sweep leaves it alone — see this file's header
         // and `Provenance` in `desk.ts`.
         if (root.root === "link") return { fate: "keep", capability: rungOfAdmission(admission) };
+        /**
+         * The space creator's floor (roles phase 4) is re-asked every sweep,
+         * unlike `created`: the canvas may have left the space. Kept only
+         * when the door answers with the SAME floor at the same rung —
+         * comparing the provenance too, or a floor that stands would be
+         * rewritten every round and the settle-check above would trip.
+         */
+        if (root.root === "space") {
+          const held = rungOfAdmission(admission);
+          const answer = await admittingGrant(desk, canvasId, badge, creator);
+          if (!answer) return expel(badge.badgeId);
+          const same =
+            answer.provenance.root === "space" &&
+            answer.provenance.spaceId === root.spaceId &&
+            answer.capability === held;
+          if (same) return { fate: "keep", capability: held };
+          return reroot(badge.badgeId, answer.provenance, answer.capability);
+        }
         if (root.root === "grant") {
           const grant = grants.find((row) => row.id === root.grantId);
           // A grant id pointing at nothing is why revocation is a TOMBSTONE
@@ -363,6 +389,52 @@ export async function sweepCanvas(
 
     if (!changed) return { expelled, rerooted };
   }
+}
+
+/** What a sweep over several canvases did, and how many it reached. */
+export interface SpaceSweepReport extends SweepReport {
+  reached: number;
+}
+
+/**
+ * **Sweep every canvas in a space** (roles phase 4) — one `sweepCanvas` per
+ * canvas, added up, with the count of canvases reached: what a write to a
+ * space's rows, a canvas removed, or the space deleted has to run, and what
+ * its response says.
+ *
+ * A loop and nothing cleverer, by the design's own note: fine for eleven,
+ * and a space of hundreds needs the sweep off the request path, which
+ * nothing here decides. The space is read whole, tombstone included, so a
+ * delete sweeps the canvases it just released. `creatorOf` is asked per
+ * canvas for the floor, as `killAndSweep` asks it.
+ */
+export async function sweepSpace(
+  desk: Desk,
+  spaceId: string,
+  creatorOf: (canvasId: string) => Promise<string | null> = async () => null,
+  report: SweepListener = () => {},
+): Promise<SpaceSweepReport> {
+  const space = await desk.space(spaceId);
+  return sweepCanvases(desk, space?.canvasIds ?? [], creatorOf, report);
+}
+
+/** The loop itself, over a list a caller already holds — a space's canvases
+ * as they were before a delete released them, or the one canvas an add or a
+ * remove touched. */
+export async function sweepCanvases(
+  desk: Desk,
+  canvasIds: readonly string[],
+  creatorOf: (canvasId: string) => Promise<string | null> = async () => null,
+  report: SweepListener = () => {},
+): Promise<SpaceSweepReport> {
+  let expelled = 0;
+  let rerooted = 0;
+  for (const canvasId of canvasIds) {
+    const swept = await sweepCanvas(desk, canvasId, await creatorOf(canvasId), report);
+    expelled += swept.expelled;
+    rerooted += swept.rerooted;
+  }
+  return { expelled, rerooted, reached: canvasIds.length };
 }
 
 /**

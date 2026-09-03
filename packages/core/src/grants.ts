@@ -201,15 +201,37 @@ export function attestedKindOf(subject: string): AttestedKind | null {
 }
 
 /**
+ * **What a grant names: one canvas, or one space** (roles design, "The
+ * space"). A discriminated scope rather than two optional fields, so a row
+ * cannot name both or neither. Every row in the wild has `canvasId` and
+ * matches the first arm with no migration; a space row is the second arm,
+ * written only by the space routes.
+ */
+export type GrantScope = { canvasId: string } | { spaceId: string };
+
+/** Which scope a row names, as one word and one id — for the code that has
+ * to branch on it without spelling `"canvasId" in grant` in five places. */
+export function scopeOf(grant: GrantScope): { kind: "canvas" | "space"; id: string } {
+  return "spaceId" in grant ? { kind: "space", id: grant.spaceId } : { kind: "canvas", id: grant.canvasId };
+}
+
+/** Is this a row on a space? */
+export function isSpaceGrant(grant: GrantScope): grant is { spaceId: string } {
+  return "spaceId" in grant;
+}
+
+/**
  * One grant, as the desk holds it and as the API hands it back.
  *
  * `{id, canvasId, subject, grantedBy, at}` is the architecture's
  * `grants/{id}` row exactly; `revokedAt`/`revokedBy` are what revocation
- * needs and are the only addition.
+ * needs and are the only addition. Since roles phase 4 the canvas id is one
+ * arm of {@link GrantScope}, and a row may name a space instead.
  */
-export interface Grant {
+export type Grant = GrantBase & GrantScope;
+
+export interface GrantBase {
   id: string;
-  canvasId: string;
   subject: GrantSubject;
   /**
    * Who granted it: the badge id that asked for the row, or one of the two
@@ -524,14 +546,194 @@ export interface GrantResponse {
    * which the dialog and the CLI both owe the person before they act on it:
    * *they can still enter by the link; `--bar` to keep them out*. Computed
    * from the live rows after the revoke, so a `?bar=1` answers without it.
-   * Absent when nothing would, and from a home from before bars. Named so a
-   * later scope can widen it: roles phase 4 adds `"space"`.
+   * Absent when nothing would, and from a home from before bars. `space`
+   * (roles phase 4) when a live row on the canvas's space names the same
+   * subject: removing them here does not remove them, and the remedy is the
+   * space's Share.
    */
-  stillAdmittedBy?: "link";
+  stillAdmittedBy?: "link" | "space";
   /** The bar written in the same request as the revocation (`?bar=1`), so a
    * caller knows the row it would revoke to let them back in. */
   bar?: Grant;
+  /**
+   * **How many canvases the sweep reached** — present on a write to a
+   * SPACE's rows (roles phase 4), whose sweep is one `sweepCanvas` per canvas
+   * in the space; `swept` is then the sum. Absent on a canvas write, which
+   * reaches exactly one.
+   */
+  reached?: number;
 }
+
+// ---- the space: a named set of canvases access is set on once (roles phase 4) ----
+
+/**
+ * **A space** (roles design, "The space"): desk state at the home, like a
+ * grant and for the same reason — it is part of what a grant means, and what
+ * a grant means does not travel to a replica.
+ *
+ * The set of canvases lives HERE and not on the canvas record, because the
+ * canvas record is oplog state and replicates to every laptop that holds the
+ * canvas, and a laptop has no use for the id of a space it cannot see. It
+ * also means moving a canvas is a desk write and not an op, so nothing in the
+ * op vocabulary changes. A canvas is in at most one space; the write that
+ * adds one refuses when it is already in another (`CANVAS_IN_SPACE`).
+ *
+ * `createdBy` is an actor id and it is the floor: the creator holds `own`
+ * over the space and every canvas in it, and cannot lose it. A space has no
+ * address, so it has no link row; `link` is refused as a space subject.
+ */
+export interface Space {
+  /** `spc_…` */
+  id: string;
+  name: string;
+  /** The actor who made it — the floor. */
+  createdBy: string;
+  canvasIds: string[];
+  at: string;
+  /** A tombstone, like a grant's: the row stays so the id keeps meaning what
+   * it meant, and `spaceOf` stops naming it. */
+  deletedAt?: string;
+}
+
+/** Is this actor the one who made the space? The same reading `ownsCanvas`
+ * makes of `createdBy`, so the floor is one rule on two kinds of thing. */
+export function ownsSpace(space: { createdBy: string }, actorId: string): boolean {
+  return space.createdBy === actorId;
+}
+
+/** Is this space still standing? */
+export function isSpaceLive(space: Space): boolean {
+  return space.deletedAt === undefined;
+}
+
+/** How long a space's name may be. Generous — it is a heading on a list, not
+ * an identifier — and bounded, because a name is stored on a row. */
+export const SPACE_NAME_MAX = 80;
+
+/**
+ * Why this is not a space name, or null when it is one. Trimmed by the
+ * caller; a name that is all whitespace is no name. Names are unique among
+ * the ones a person owns, not across the home — that is a fact about the
+ * desk and refused at the route (`SPACE_NAME_TAKEN`), not here.
+ */
+export function spaceNameRefusal(name: unknown): string | null {
+  if (typeof name !== "string" || name.trim() === "") return "a space needs a name";
+  if (name.trim().length > SPACE_NAME_MAX) {
+    return `a space's name is at most ${SPACE_NAME_MAX} characters`;
+  }
+  if (/[\n\r]/.test(name)) return "a space's name is one line";
+  return null;
+}
+
+/** The one spelling of "the same name" for the per-owner uniqueness rule:
+ * trimmed and case-folded, so `Design` and `design ` are one space. */
+export function sameSpaceName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** `GET` lists the spaces the badge may see; `POST {name}` makes one. All at
+ * the home; a replica forwards through its one home. */
+export const SPACES_ROUTE = "/api/spaces";
+
+/** `DELETE` marks it deleted. */
+export const spaceRoute = (spaceId: string): string =>
+  `${SPACES_ROUTE}/${encodeURIComponent(spaceId)}`;
+
+/** `PUT` adds the canvas; `DELETE` removes it. */
+export const spaceCanvasRoute = (spaceId: string, canvasId: string): string =>
+  `${spaceRoute(spaceId)}/canvases/${encodeURIComponent(canvasId)}`;
+
+/** The grants routes, scoped to the space: `GET` lists, `POST` creates. */
+export const spaceGrantsRoute = (spaceId: string): string => `${spaceRoute(spaceId)}/grants`;
+
+/** `DELETE` revokes one. */
+export const spaceGrantRoute = (spaceId: string, grantId: string): string =>
+  `${spaceGrantsRoute(spaceId)}/${encodeURIComponent(grantId)}`;
+
+/** The same `DELETE` with `actorId` and `bar=1` on its query, spelled once
+ * like `grantRevokeRoute`. */
+export const spaceGrantRevokeRoute = (
+  spaceId: string,
+  grantId: string,
+  options: { actorId?: string; bar?: boolean } = {},
+): string => {
+  const query = new URLSearchParams();
+  if (options.actorId) query.set("actorId", options.actorId);
+  if (options.bar) query.set("bar", "1");
+  const route = spaceGrantRoute(spaceId, grantId);
+  const tail = query.toString();
+  return tail ? `${route}?${tail}` : route;
+};
+
+/** **Every canvas in this space** — `POST {capability | "off"}` sets or
+ * revokes the link row on every canvas in the space, in a loop, and answers
+ * with the count (roles journey 4, step 4). */
+export const spaceLinkRoute = (spaceId: string): string => `${spaceRoute(spaceId)}/link`;
+
+/** The `DELETE`s on a space carry who is acting on the query, for
+ * `grantRevokeRoute`'s reason: a bodiless DELETE announces no content type. */
+export const spaceActingRoute = (route: string, actorId?: string): string =>
+  actorId ? `${route}?${new URLSearchParams({ actorId }).toString()}` : route;
+
+export interface SpacesResponse {
+  spaces: Space[];
+}
+
+export interface CreateSpaceRequest {
+  name: string;
+  /** Who is making it — the floor. A badge that claims one actor need not
+   * say; one that claims several must. */
+  actorId?: string;
+}
+
+export interface SpaceResponse {
+  space: Space;
+}
+
+/** A write on the space's set of canvases: `PUT` and `DELETE …/canvases/:id`,
+ * and `DELETE /api/spaces/:id`. The sweep's count rides back, added up over
+ * every canvas it reached. */
+export interface SpaceCanvasRequest {
+  actorId?: string;
+}
+
+export interface SpaceCanvasResponse {
+  space: Space;
+  swept: SweepReport;
+  /** How many canvases were swept — one for a canvas added or removed, the
+   * whole space for a delete. */
+  reached: number;
+}
+
+/** `POST /api/spaces/:id/link` — the every-canvas link setting. */
+export interface SpaceLinkRequest {
+  /** A rung the link admits to, or `off`. Never `own`. */
+  capability: Capability | "off";
+  actorId?: string;
+}
+
+export interface SpaceLinkResponse {
+  /** Every canvas in the space, walked. */
+  reached: number;
+  /** Of those, the ones whose link row was written or revoked — the rest
+   * already stood as asked. */
+  changed: number;
+  canvasIds: string[];
+  swept: SweepReport;
+}
+
+/** There is no such space, or it was deleted, or this badge may not see it —
+ * the three answer alike, so a stranger learns nothing about the space around
+ * a canvas they were invited to (roles design, "The space"). */
+export const SPACE_NOT_FOUND = "space-not-found";
+/** The canvas is already in another space — a canvas is in at most one. */
+export const CANVAS_IN_SPACE = "canvas-in-space";
+/** A request about a space that is not one: no name, no actor, a canvas
+ * whose home is elsewhere, `link` as a space subject. */
+export const BAD_SPACE = "bad-space";
+/** This actor already owns a space of that name. Names are unique per owner
+ * because the CLI resolves them; the wire carries ids. */
+export const SPACE_NAME_TAKEN = "space-name-taken";
 
 // ---- refusal ----
 

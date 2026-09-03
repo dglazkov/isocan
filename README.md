@@ -328,6 +328,19 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   person's rung is a picker on their row, and raising it reaches the tab they
   have open without a reload. Everyone else sees the controls disabled with
   the owner's name, and the daemon refuses them with `403 not-owner`.
+- **Spaces**: a named set of canvases access is set on once. **New space** on
+  the canvas list makes one; the list draws a heading per space and **No
+  space** last, and a card's **Move to space…** (or dragging it onto a
+  heading) puts a canvas in — at most one space per canvas. The space's
+  **Share**, from its heading, is the canvas's Share one scope wider, with one
+  more row at the top: **Every canvas in this space**, which sets or turns
+  off the link on each canvas in one gesture and says how many it reached.
+  A person's rung on a canvas is the highest from any row on the canvas or
+  on its space — the space's rows are a floor, never a ceiling, so one canvas
+  in a locked space can still be opened to a client. A canvas's Share shows
+  the space's rows first, greyed, as *from the space*. `isocan space
+  new|list|add|remove|delete` and `isocan share --space <name>` are the same
+  routes from a terminal, and `isocan canvas list` groups by space.
 - **Proving an address, which is not a login**: isocan has no accounts and does
   not want any. What a person can do is **borrow an attester they already
   have** — click your own face, pick **"Prove your address…"**, and a link

@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, UndoRedoRequest } from "../../core/src/index.js";
+import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, UndoRedoRequest } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 import type { PresenceHub } from "./presence.js";
 import { type HomeBuild } from "./build.js";
@@ -95,6 +95,22 @@ export interface HomeConnection {
      */
     badges(): Promise<BadgesResponse>;
     killBadge(badgeId: string): Promise<KillBadgeResponse>;
+    /**
+     * The space routes, forwarded (roles phase 4) — for the grant routes'
+     * reason, because a space is part of what a grant means: it is desk state
+     * at the home, and a laptop holds no row for it. Every write carries the
+     * actor acting, as a grant write does, so the home asks `own` of the person
+     * and not of the machine.
+     */
+    spaces(): Promise<SpacesResponse>;
+    createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
+    deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    addToSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    removeFromSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    spaceGrants(spaceId: string): Promise<GrantsResponse>;
+    createSpaceGrant(spaceId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
+    revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
+    setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
     /**
      * The attest routes, forwarded — for the badge routes' reason, and it is the
      * same sentence one word further on.
@@ -620,6 +636,15 @@ export declare class HomeLink implements HomeConnection {
     attest(body: AttestRequest): Promise<AttestResponse>;
     badges(): Promise<BadgesResponse>;
     killBadge(badgeId: string): Promise<KillBadgeResponse>;
+    spaces(): Promise<SpacesResponse>;
+    createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
+    deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    addToSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    removeFromSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+    spaceGrants(spaceId: string): Promise<GrantsResponse>;
+    createSpaceGrant(spaceId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
+    revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
+    setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
     /**
      * Mint a pass at the home, on this daemon's badge.
      *

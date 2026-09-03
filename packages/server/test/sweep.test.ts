@@ -6,7 +6,7 @@ import type { Grant, GrantSubject } from "@isocan/core";
 import { LINK } from "@isocan/core";
 import { FileDesk } from "../src/file-desk.ts";
 import { admittingGrant } from "../src/grants.ts";
-import { killAndSweep, sweepCanvas, type SweepOutcome } from "../src/sweep.ts";
+import { killAndSweep, sweepCanvas, sweepSpace, type SweepOutcome } from "../src/sweep.ts";
 import type { Provenance } from "../src/desk.ts";
 import { mintBadge } from "../src/badges.ts";
 
@@ -734,5 +734,70 @@ describe("a bar's write sweeps the person it names", () => {
       provenance: { root: "created" },
       capability: "own",
     });
+  });
+});
+
+/**
+ * **The space's sweep** (roles phase 4): one `sweepCanvas` per canvas in the
+ * space, added up, with the count of canvases reached — and the sweep's row
+ * lookup finding a `{root: "grant"}` admission's row on the SPACE, so a
+ * space-admitted badge is not re-tested as if its row had vanished.
+ */
+describe("sweeping a space", () => {
+  it("walks every canvas in the space, reports the count reached, and reads space rows as standing", async () => {
+    await desk.putSpace({
+      id: "spc_design",
+      name: "Design",
+      createdBy: "usr_priya",
+      canvasIds: [CANVAS, OTHER],
+      at: new Date().toISOString(),
+    });
+    const onSpace: Grant = {
+      id: "gnt_space_jordan",
+      spaceId: "spc_design",
+      subject: "email:jordan@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+    };
+    await desk.putGrant(onSpace);
+    const jordan = await badge();
+    await desk.attest(jordan, { attribute: "email:jordan@acme.test", verifiedVia: "magic-link", at: new Date().toISOString() });
+    await admit(jordan, { root: "grant", grantId: onSpace.id });
+    await admit(jordan, { root: "grant", grantId: onSpace.id }, OTHER);
+    const link = await grantOn(LINK, OTHER);
+    const stranger = await badge();
+    await admit(stranger, { root: "grant", grantId: link.id }, OTHER);
+
+    // Nothing changed: the space's row stands in both rooms, and the sweep
+    // says it reached two canvases and rewrote nothing.
+    expect(await sweepSpace(desk, "spc_design")).toEqual({ expelled: 0, rerooted: 0, reached: 2 });
+    expect(await rootOf(jordan)).toEqual({ root: "grant", grantId: onSpace.id });
+
+    // The space's row revoked: Jordan is put out of the canvas with no rows
+    // of its own and re-rooted onto the other's live link — the door, not a
+    // sweep rule — while the stranger on that link is untouched. Two
+    // canvases reached, whatever each decided.
+    await desk.revokeGrant(onSpace.id, new Date().toISOString(), "bdg_owner");
+    expect(await sweepSpace(desk, "spc_design")).toEqual({ expelled: 1, rerooted: 1, reached: 2 });
+    expect(await inRooms(jordan)).toEqual([OTHER]);
+    expect(await rootOf(jordan, OTHER)).toEqual({ root: "grant", grantId: link.id });
+    expect(await inRooms(stranger)).toEqual([OTHER]);
+    // A space this desk does not know reaches nothing.
+    expect(await sweepSpace(desk, "spc_never")).toEqual({ expelled: 0, rerooted: 0, reached: 0 });
+  });
+
+  it("re-asks the space creator's floor every sweep, and keeps it while it stands", async () => {
+    await desk.putSpace({ id: "spc_design", name: "Design", createdBy: "usr_priya", canvasIds: [CANVAS], at: new Date().toISOString() });
+    const priya = await badge();
+    await desk.setClaims(priya, [{ actorId: "usr_priya", boundAt: new Date().toISOString(), sessionKey: "web:priya" }]);
+    await admit(priya, { root: "space", spaceId: "spc_design" });
+    // Standing: the same floor at the same rung is kept, not rewritten.
+    expect(await sweepCanvas(desk, CANVAS)).toEqual({ expelled: 0, rerooted: 0 });
+    expect(await rootOf(priya)).toEqual({ root: "space", spaceId: "spc_design" });
+    // The canvas leaves the space: the floor no longer stands and nothing
+    // else admits, so the creator of the SPACE is put out of the canvas.
+    await desk.putSpace({ id: "spc_design", name: "Design", createdBy: "usr_priya", canvasIds: [], at: new Date().toISOString() });
+    expect(await sweepCanvas(desk, CANVAS)).toEqual({ expelled: 1, rerooted: 0 });
+    expect(await inRooms(priya)).toEqual([]);
   });
 });

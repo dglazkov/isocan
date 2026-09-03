@@ -167,6 +167,27 @@ export declare class SweepHub {
  * absent in a test that only wants the count.
  */
 export declare function sweepCanvas(desk: Desk, canvasId: string, creator?: string | null, report?: SweepListener): Promise<SweepReport>;
+/** What a sweep over several canvases did, and how many it reached. */
+export interface SpaceSweepReport extends SweepReport {
+    reached: number;
+}
+/**
+ * **Sweep every canvas in a space** (roles phase 4) — one `sweepCanvas` per
+ * canvas, added up, with the count of canvases reached: what a write to a
+ * space's rows, a canvas removed, or the space deleted has to run, and what
+ * its response says.
+ *
+ * A loop and nothing cleverer, by the design's own note: fine for eleven,
+ * and a space of hundreds needs the sweep off the request path, which
+ * nothing here decides. The space is read whole, tombstone included, so a
+ * delete sweeps the canvases it just released. `creatorOf` is asked per
+ * canvas for the floor, as `killAndSweep` asks it.
+ */
+export declare function sweepSpace(desk: Desk, spaceId: string, creatorOf?: (canvasId: string) => Promise<string | null>, report?: SweepListener): Promise<SpaceSweepReport>;
+/** The loop itself, over a list a caller already holds — a space's canvases
+ * as they were before a delete released them, or the one canvas an add or a
+ * remove touched. */
+export declare function sweepCanvases(desk: Desk, canvasIds: readonly string[], creatorOf?: (canvasId: string) => Promise<string | null>, report?: SweepListener): Promise<SpaceSweepReport>;
 /**
  * **Kill a badge, then sweep every room it had been in.**
  *

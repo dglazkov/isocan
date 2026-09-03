@@ -33,9 +33,21 @@ import type {
   RedeemPassResponse,
   ServingResponse,
   SlashCommand,
+  SpaceCanvasResponse,
+  SpaceLinkRequest,
+  SpaceLinkResponse,
+  SpaceResponse,
+  SpacesResponse,
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
+  spaceActingRoute,
+  spaceCanvasRoute,
+  spaceGrantRevokeRoute,
+  spaceGrantsRoute,
+  spaceLinkRoute,
+  spaceRoute,
+  SPACES_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
   DOOR_ROUTE,
@@ -797,6 +809,91 @@ export function createBar(
     bars: true,
     ...(actorId ? { actorId } : {}),
   });
+}
+
+// ---- the space: a named set of canvases access is set on once (roles phase 4) ----
+//
+// The canvas list's headings, **Move to space…**, and the space's Share
+// dialog drive these; `isocan space` and `isocan share --space` drive the
+// same routes, spelled once in core. A space is at the home, like a grant.
+
+/** The spaces this badge may see — made by an actor it claims, or named by
+ * a live row it satisfies — each with its `canvasIds`, which the canvas list
+ * joins to `GET /api/projects`. A badge admitted to one canvas sees none. */
+export function listSpaces(): Promise<SpacesResponse> {
+  return request("GET", SPACES_ROUTE);
+}
+
+export function createSpace(name: string, actorId?: string): Promise<SpaceResponse> {
+  return request("POST", SPACES_ROUTE, { name, ...(actorId ? { actorId } : {}) });
+}
+
+/** No body, for `revokeGrant`'s reason; the actor rides the query. */
+export function deleteSpace(spaceId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+  return request("DELETE", spaceActingRoute(spaceRoute(spaceId), actorId));
+}
+
+/** **Move to space…** — refused with `canvas-in-space` when the canvas is
+ * in another; move it out first. */
+export function addToSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+  return request("PUT", spaceCanvasRoute(spaceId, canvasId), actorId ? { actorId } : {});
+}
+
+/** **No space** — the canvas keeps its own rows and the space's stop
+ * reaching it; the home sweeps it. */
+export function removeFromSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+  return request("DELETE", spaceActingRoute(spaceCanvasRoute(spaceId, canvasId), actorId));
+}
+
+export function listSpaceGrants(spaceId: string): Promise<GrantsResponse> {
+  return request("GET", spaceGrantsRoute(spaceId));
+}
+
+export function createSpaceGrant(
+  spaceId: string,
+  subject: GrantSubject,
+  capability?: Capability,
+  actorId?: string,
+): Promise<GrantResponse> {
+  return request("POST", spaceGrantsRoute(spaceId), {
+    subject,
+    ...(narrowed(capability) ? { capability } : {}),
+    ...(actorId ? { actorId } : {}),
+  });
+}
+
+export function createSpaceBar(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
+  return request("POST", spaceGrantsRoute(spaceId), {
+    subject,
+    bars: true,
+    ...(actorId ? { actorId } : {}),
+  });
+}
+
+export function revokeSpaceGrant(
+  spaceId: string,
+  grantId: string,
+  actorId?: string,
+  bar?: boolean,
+): Promise<GrantResponse> {
+  return request(
+    "DELETE",
+    spaceGrantRevokeRoute(spaceId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
+  );
+}
+
+/** **Every canvas in this space** (roles journey 4, step 4): the link on
+ * each canvas set to a rung or turned off, in one request, and the answer
+ * says how many canvases it reached. */
+export function setSpaceLink(
+  spaceId: string,
+  capability: SpaceLinkRequest["capability"],
+  actorId?: string,
+): Promise<SpaceLinkResponse> {
+  return request("POST", spaceLinkRoute(spaceId), {
+    capability,
+    ...(actorId ? { actorId } : {}),
+  } satisfies SpaceLinkRequest);
 }
 
 // ---- what this holder has proved (phase 9 stage 2) ----

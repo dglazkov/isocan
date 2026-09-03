@@ -1,4 +1,4 @@
-import type { Capability, Grant } from "../../core/src/index.js";
+import type { Capability, Grant, Space } from "../../core/src/index.js";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.js";
 /**
  * The door's test over the desk's grant rows (identity desk, mechanisms 3 + 2).
@@ -104,7 +104,19 @@ export interface DoorAnswer {
     /** The rung the admission holds. */
     capability: Capability;
 }
-export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null): Promise<DoorAnswer | null>;
+/**
+ * **Where the door reads the space from** — the desk, unless a caller that
+ * runs many door tests at once hands it something memoized. The wide canvas
+ * list (`GET /api/projects`) runs one test per canvas the badge has not been
+ * in, and pays `spacesFor(badge)` once plus one `grantsForSpace` per visible
+ * space through this, rather than one `spaceOf` per canvas (roles design,
+ * "The door reads both").
+ */
+export interface DoorLookup {
+    spaceOf(canvasId: string): Promise<Space | null>;
+    grantsForSpace(spaceId: string): Promise<Grant[]>;
+}
+export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null, via?: DoorLookup): Promise<DoorAnswer | null>;
 /** The refusal when somebody below `own` tries to change who may enter a
  *  canvas — inviting, revoking, the link, its rung. Its own code, so a client
  *  can say the useful sentence rather than "no". */
@@ -155,6 +167,18 @@ export declare function heldRung(desk: Desk, project: {
         id: string;
     };
 }, badge: BadgeRecord, asActor?: string | null): Promise<Capability>;
+/**
+ * **What this badge holds over a SPACE** (roles phase 4), for the space
+ * routes: the highest rung from the live rows on the space that its
+ * attestations satisfy, raised to `own` if it claims the space's creator;
+ * null when nothing admits it, or a bar names it — in which case the space
+ * is not one it may see, and the route answers as if there were none.
+ *
+ * A space has no link row, so every row is answered by attestation, and the
+ * admission is not consulted because a space is not entered: it is a fact
+ * about a set of canvases, and a badge holds standing on it directly.
+ */
+export declare function heldRungOnSpace(desk: Desk, space: Space, badge: BadgeRecord, asActor?: string | null): Promise<Capability | null>;
 /**
  * A write met an admission below `edit` (#88, widened by the roles ladder to
  * `read`). 403 with its own code, for `NotAdmittedError`'s reason moved one

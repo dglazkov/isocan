@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
 /** The health route: who is holding the port, and which build they are. */
@@ -217,6 +217,19 @@ export declare class DaemonRoutes {
      * should not announce a content type. `bar` is `?bar=1` — revoke and keep
      * them out in one request (roles phase 3); the route's spelling is core's. */
     revokeGrant(canvasId: string, grantId: string, actorId?: string, bar?: boolean): Promise<GrantResponse>;
+    spaces(): Promise<SpacesResponse>;
+    createSpace(name: string, actorId?: string): Promise<SpaceResponse>;
+    /** No body, for `revokeGrant`'s reason; the actor rides the query. */
+    deleteSpace(spaceId: string, actorId?: string): Promise<SpaceCanvasResponse>;
+    addToSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse>;
+    removeFromSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse>;
+    spaceGrants(spaceId: string): Promise<GrantsResponse>;
+    createSpaceGrant(spaceId: string, subject: GrantSubject, capability?: Capability, actorId?: string): Promise<GrantResponse>;
+    barOnSpace(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse>;
+    revokeSpaceGrant(spaceId: string, grantId: string, actorId?: string, bar?: boolean): Promise<GrantResponse>;
+    /** **Every canvas in this space**: the link on each canvas set to a rung,
+     * or turned off, in one request; the answer says how many it reached. */
+    setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actorId?: string): Promise<SpaceLinkResponse>;
     badges(): Promise<BadgesResponse>;
     /** No body, for `revokeGrant`'s reason. */
     killBadge(badgeId: string): Promise<KillBadgeResponse>;

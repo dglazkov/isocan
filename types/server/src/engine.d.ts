@@ -48,6 +48,21 @@ interface SubmitRequest {
      * refused and phase 10.3 goes on refusing.
      */
     home?: string;
+    /**
+     * **Born in a space** (roles phase 4) — carried UP with a forwarded
+     * `project.create` and nothing else. The route at the home reads it; this
+     * engine only forwards it, because the space is desk state at the home and
+     * a replica cannot check `own` on a row it does not hold.
+     */
+    spaceId?: string;
+    /**
+     * **Write no birth link grant** (roles phase 4) — the flag `createProject`
+     * takes for a canvas born in a space: the space's rows apply to it from
+     * birth and a locked space stays locked as it grows. Set by the route at
+     * the home after it has checked `own` on the space; never forwarded,
+     * because the home decides it for itself.
+     */
+    withoutLinkGrant?: boolean;
     op: Operation;
     /**
      * The badge that presented this request — resolved by the transport and

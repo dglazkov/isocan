@@ -1,6 +1,6 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Attestation, Capability, Grant } from "@isocan/core";
-import { isCapability, narrowed, SHELF, upsertAttestation } from "@isocan/core";
+import type { ActorClaim, Attestation, Capability, Grant, Space } from "@isocan/core";
+import { isCapability, isLive, isSpaceLive, narrowed, SHELF, upsertAttestation } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -17,6 +17,23 @@ export const GRANTS = "grants";
  * would be a pass whose spending raced with every other write to that
  * document. */
 export const PASSES = "passes";
+/**
+ * `spaces/{id}` — the desk's fourth row (roles phase 4). A collection for the
+ * grants' reason: a space is part of what a grant means, and what a grant
+ * means never leaves the home. Queried three ways, each a single-field
+ * question Firestore's automatic indexes serve with nothing in
+ * `firestore.indexes.json`: `holding array-contains <canvasId>` (`spaceOf`),
+ * `createdBy == <actorId>` (`spacesFor`), and by id. `holding` is derived from
+ * `canvasIds` by the one writer below and EMPTIED on the tombstone, so a
+ * deleted space drops out of `spaceOf` by not being in the index, the way a
+ * killed badge drops out of `badgesIn`.
+ *
+ * **If the hosted home ever needs a composite index here, it is this one:**
+ * none today. Every query is one field. A later `where("createdBy").where(
+ * "deletedAt")` would be the first, and the note belongs beside the query
+ * that needs it.
+ */
+export const SPACES = "spaces";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -332,8 +349,85 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => toGrant(doc.data()));
   }
 
+  /**
+   * The other arm of `GrantScope`: `where("spaceId", "==", spaceId)`, a
+   * single-field equality like `grantsFor`'s, and no fallback for the same
+   * reason. A space with no rows admits nobody but its creator.
+   */
+  async grantsForSpace(spaceId: string): Promise<Grant[]> {
+    const found = await this.db.collection(GRANTS).where("spaceId", "==", spaceId).get();
+    return found.docs.map((doc) => toGrant(doc.data()));
+  }
+
   async putGrant(grant: Grant): Promise<void> {
     await this.db.collection(GRANTS).doc(grant.id).set(jsonSafe(grant));
+  }
+
+  // ---- spaces (roles phase 4) ----
+
+  /** THE ONE WRITER of a space document, like `writeBadge` for a badge: the
+   * `holding` array is derived here from `canvasIds` on every write, empty on
+   * a tombstone, so "did you remember to update the index?" is never asked. */
+  async putSpace(space: Space): Promise<void> {
+    await this.db.collection(SPACES).doc(space.id).set(denormalizeSpace(space));
+  }
+
+  async space(spaceId: string): Promise<Space | null> {
+    const doc = await this.db.collection(SPACES).doc(spaceId).get();
+    return doc.exists ? toSpace(doc.data()!) : null;
+  }
+
+  /**
+   * `where("holding", "array-contains", canvasId)` — the door's one extra
+   * read per test. Single-field, so the automatic index serves it; a tombstone
+   * derives an empty `holding` and cannot come back, by construction rather
+   * than by a filter. No fallback: a space whose array was never written
+   * holds nothing.
+   */
+  async spaceOf(canvasId: string): Promise<Space | null> {
+    const found = await this.db
+      .collection(SPACES)
+      .where("holding", "array-contains", canvasId)
+      .limit(1)
+      .get();
+    const doc = found.docs[0];
+    return doc ? toSpace(doc.data()) : null;
+  }
+
+  /**
+   * Bounded queries, never a scan (roles design, "Routes"): one `createdBy`
+   * equality per actor the badge claims, one `subject` equality over the
+   * grants per attested attribute — from which the live rows naming a space
+   * give the ids to fetch — and nothing else. Both single-field, so the
+   * automatic indexes serve them. Tombstones are dropped in memory from a
+   * list already bounded to one actor's own spaces, which is not a scan.
+   *
+   * Roles phase 5 adds the group branch here: rows whose subject is a group
+   * containing one of the attributes, one more bounded query.
+   */
+  async spacesFor(badge: BadgeRecord): Promise<Space[]> {
+    const seen = new Map<string, Space>();
+    const keep = (space: Space) => {
+      if (isSpaceLive(space) && !seen.has(space.id)) seen.set(space.id, space);
+    };
+    for (const actorId of unique(badge.claims.map((claim) => claim.actorId))) {
+      const found = await this.db.collection(SPACES).where("createdBy", "==", actorId).get();
+      for (const doc of found.docs) keep(toSpace(doc.data()));
+    }
+    const named = new Set<string>();
+    for (const attribute of unique((badge.attestations ?? []).map((row) => row.attribute))) {
+      const rows = await this.db.collection(GRANTS).where("subject", "==", attribute).get();
+      for (const doc of rows.docs) {
+        const grant = toGrant(doc.data());
+        if (isLive(grant) && "spaceId" in grant) named.add(grant.spaceId);
+      }
+    }
+    for (const spaceId of named) {
+      if (seen.has(spaceId)) continue;
+      const space = await this.space(spaceId);
+      if (space) keep(space);
+    }
+    return [...seen.values()];
   }
 
   /**
@@ -538,7 +632,13 @@ function toRecord(data: DocumentData): BadgeRecord {
 function toGrant(data: DocumentData): Grant {
   return {
     id: data["id"] as string,
-    canvasId: data["canvasId"] as string,
+    // One arm of `GrantScope` (roles phase 4): a row names a canvas or a
+    // space. Every row written before spaces has `canvasId`, and a rebuild
+    // that dropped `spaceId` would turn a space's row into one on a canvas
+    // called `undefined` — the field-picking trap, on the scope itself.
+    ...(typeof data["spaceId"] === "string"
+      ? { spaceId: data["spaceId"] as string }
+      : { canvasId: data["canvasId"] as string }),
     subject: data["subject"] as Grant["subject"],
     grantedBy: data["grantedBy"] as string,
     at: data["at"] as string,
@@ -574,6 +674,28 @@ function toPass(data: DocumentData): PassRecord {
     ...(typeof data["actorId"] === "string" ? { actorId: data["actorId"] } : {}),
     ...(typeof data["redeemedAt"] === "string" ? { redeemedAt: data["redeemedAt"] } : {}),
     ...(typeof data["redeemedBy"] === "string" ? { redeemedBy: data["redeemedBy"] } : {}),
+  };
+}
+
+/** A space document: the record plus `holding`, the array `spaceOf` queries —
+ * `canvasIds` while the space stands, EMPTY on a tombstone, so a deleted
+ * space is not in the index at all. One writer, like `denormalize`. */
+function denormalizeSpace(space: Space): DocumentData {
+  return {
+    ...jsonSafe(space),
+    holding: isSpaceLive(space) ? unique(space.canvasIds) : [],
+  };
+}
+
+/** A space document, back as a row; `holding` is derived and dropped. */
+function toSpace(data: DocumentData): Space {
+  return {
+    id: data["id"] as string,
+    name: data["name"] as string,
+    createdBy: data["createdBy"] as string,
+    canvasIds: (data["canvasIds"] as string[] | undefined) ?? [],
+    at: data["at"] as string,
+    ...(typeof data["deletedAt"] === "string" ? { deletedAt: data["deletedAt"] } : {}),
   };
 }
 

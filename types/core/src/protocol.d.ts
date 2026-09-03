@@ -669,6 +669,19 @@ export interface PostOpRequest {
      * daemon with no default is right here.
      */
     home?: string;
+    /**
+     * **Born in a space** (roles design, "The space") — meaningful for
+     * `project.create` alone, and refused by the route on anything else, like
+     * `home` beside it and for the same reason: it is write-once and about one
+     * canvas coming into existence.
+     *
+     * Request state and never op state: the op replicates and the space does
+     * not, so the space id cannot ride the envelope. The home checks `own` on
+     * the space, adds the newborn to it, and writes NO birth link grant — a
+     * locked space stays locked as it grows (journey 4's acceptance line). A
+     * replica forwards it up with the create, because the space is at the home.
+     */
+    spaceId?: string;
     op: Operation;
 }
 export interface PostOpResponse {

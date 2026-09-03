@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, Pass } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, Pass, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -112,10 +112,24 @@ export type Provenance =
     root: "pass";
     badgeId: string;
 }
-/** Admitted by a grant — the ordinary case from phase 7 on. */
+/** Admitted by a grant — the ordinary case from phase 7 on. The row may be
+ * on the canvas or on its space (roles phase 4): the provenance names the
+ * row's id whichever scope it came from, and the sweep looks in both. */
  | {
     root: "grant";
     grantId: string;
+}
+/**
+ * **Admitted by a space creator's floor** (roles phase 4). The badge claims
+ * the actor who made the space this canvas is in, and holds `own` over
+ * every canvas in it without a row — the same floor `created` is for the
+ * canvas's own creator, with one difference that is the whole reason this
+ * is a separate root: a canvas can LEAVE a space, so this admission must be
+ * re-asked by every sweep, where `created` is never touched.
+ */
+ | {
+    root: "space";
+    spaceId: string;
 };
 export interface Admission {
     canvasId: string;
@@ -408,6 +422,49 @@ export interface Desk {
      * the same answer either way.
      */
     revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
+    /**
+     * Every grant on one SPACE, revoked rows included — `grantsFor`'s twin over
+     * the other arm of `GrantScope` (roles phase 4). `where("spaceId", "==",
+     * spaceId)`, a single-field equality Firestore serves from its automatic
+     * index. Kept beside `grantsFor` rather than folded into it, so no caller
+     * that asks about one canvas suddenly sees rows it did not ask for; the
+     * door merges the two itself. No fallback: a space with no rows admits
+     * nobody but its creator.
+     */
+    grantsForSpace(spaceId: string): Promise<Grant[]>;
+    /** Write one, whole — creation and every change alike (a canvas added or
+     * removed, the tombstone). The id is minted by the caller. */
+    putSpace(space: Space): Promise<void>;
+    /** The space behind an id, tombstone included, or null for one this home
+     * does not know. Deleted spaces come back so a route can tell "gone" from
+     * "never was" and a delete can be idempotent; they are nobody's answer to
+     * `spaceOf` or `spacesFor`. */
+    space(spaceId: string): Promise<Space | null>;
+    /**
+     * **The live space this canvas is in, or null when it is in none** — the
+     * door's one extra read on every test, because a canvas in no space cannot
+     * be told apart without asking. Firestore: `where("holding",
+     * "array-contains", canvasId)` over the array the space document derives
+     * from `canvasIds` while it stands and empties when it is deleted, so a
+     * tombstone is not in the index at all. No fallback: a space whose array
+     * was never written holds nothing, loudly.
+     */
+    spaceOf(canvasId: string): Promise<Space | null>;
+    /**
+     * **The live spaces this badge may see** (roles design, "Routes"): made by
+     * an actor it claims, or named by a live row whose subject is one of its
+     * attested attributes. Bounded queries and never a scan, per this file's
+     * rule: one `createdBy` equality per claimed actor, one `subject` equality
+     * over the grants per attested attribute (then the rows' `spaceId`s
+     * fetched), and nothing else. A badge that claims nobody and has proved
+     * nothing sees no space, which is the truth about it.
+     *
+     * Roles phase 5 adds the third branch here — spaces named by rows on a
+     * group whose `members` holds one of the attributes — beside the second,
+     * as one more bounded query. The seam is `spacesFor`'s body and nothing
+     * else changes shape.
+     */
+    spacesFor(badge: BadgeRecord): Promise<Space[]>;
     /**
      * Write a freshly minted pass. A plain document write at `passes/{id}`: the
      * id is minted by the caller and a pass is never edited except by being

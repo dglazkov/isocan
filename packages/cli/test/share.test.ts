@@ -259,7 +259,8 @@ describe("isocan share", () => {
     const payload = JSON.parse(json.stdout) as { address: string; grants: Grant[] };
     expect(payload.address).toBe(canvasUrl(homeBase, canvasId));
     expect(payload.grants.map((g) => g.subject)).toEqual(["link"]);
-    expect(payload.grants[0]!.canvasId).toBe(canvasId);
+    // The row names the canvas, on the canvas arm of `GrantScope`.
+    expect(payload.grants[0]).toMatchObject({ canvasId });
   }, 60_000);
 });
 
