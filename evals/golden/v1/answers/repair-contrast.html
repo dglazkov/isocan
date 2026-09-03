@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preferences</title>
+<style>
+  :root { --paper: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --accent-ink: #ffffff; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 20px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .lede { color: var(--muted); margin: 0 0 16px; }
+  label { display: block; margin: 16px 0 4px; font-weight: 600; color: var(--ink); }
+  input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; }
+  button { margin-top: 20px; padding: 10px 16px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Preferences</h1>
+  <p class="lede">What the canvas calls you, and how it looks.</p>
+  <form>
+    <label for="name">Display name</label>
+    <input id="name" name="name" value="Di">
+    <button type="submit">Save</button>
+  </form>
+</main>
+</body>
+</html>

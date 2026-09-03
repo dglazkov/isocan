@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morning brief</title>
+<style>
+  :root { --paper: #ffffff; --panel: #f6f8fa; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --good: #1a7f37; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 24px; margin: 0 0 16px; }
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .panel { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--panel); min-width: 0; }
+  .panel h2 { margin: 0 0 8px; font-size: 16px; }
+  .big { font-size: 40px; font-weight: 700; color: var(--good); }
+  table { width: 100%; max-width: 640px; border-collapse: collapse; margin-top: 16px; }
+  td, th { text-align: left; padding: 8px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Morning brief</h1>
+  <div class="panels">
+    <div class="panel"><h2>Build</h2><div class="big">GREEN</div><p>3,220 tests, 0 failing.</p></div>
+    <div class="panel"><h2>Tree</h2><p>Every goal holding. Reviewer past bound yesterday, clean today.</p></div>
+    <div class="panel"><h2>Asks</h2><p>4 overnight, 4 answered.</p></div>
+  </div>
+  <table><tr><th>Persona</th><th>Number</th><th>Bound</th></tr>
+    <tr><td>performance</td><td>212 kB</td><td>≤ 240 kB</td></tr>
+    <tr><td>reviewer</td><td>0 unused exports</td><td>≤ 0</td></tr></table>
+</div>
+</body>
+</html>

@@ -27,6 +27,7 @@ kept as a test that runs, not a note that gets skimmed.
 | --- | --- | --- | --- |
 | **The request corpus** | `isocan evals`, `core/evals.ts` | What people ask agents for, and what happened next — answered, cancelled, silent; the ops each ask produced; preference pairs harvested from version choices. Every row says which of three joins produced it: `anchor` and `reference` are facts, `window` is a labelled guess. | On demand, local, no score |
 | **Deterministic graders** | `scripts/grade.mjs`, `grade-night.mjs` | Eight checks on a real screen at 390/768/1440: renders, contrast against what is painted, stretched images, sideways scroll, unnamed controls, target size, alt text, the greppable slop tells. Counts, never a weighted score. | Nightly (`grade.yml`, 08:23 UTC) → a dated page in `docs/grades/`, as a pull request |
+| **Golden tasks** | `evals/golden/v1/`, `scripts/golden.mjs`, `scripts/lib/golden.mjs` | Twenty tasks weighted by what people actually ask — revise, create, restyle, repair, then one each of the rest. A synthetic fixture, an ask, and checks a machine can make: what the file says, in what order, what stayed untouched, plus the screen checks by name. `--task`/`--dir` grade an attempt; `--selftest` requires every answer to pass and every fixture to fail. Versioned. | On demand; the browser-free selftest on every push (`test/golden.test.ts`) |
 | **The graders' own test** | `grade.mjs --selftest`, `test/fixtures/deliberately-bad.html` | Whether the grader still sees anything — a page built to fail every failable check must fail them all. Gates every nightly run. | Before every grade |
 | **Personas with numbers** | `.agents/personas/*.md`, `scripts/persona-run.mjs`, `scripts/measure.mjs` | Eight standing lenses, each with a goal that is `(number, bound, the command that produces it)` and a measured baseline — largest chunk, contrast failures, unused exports, eslint errors. Two bounds are ratchets. A run takes the numbers, writes a page, changes nothing, and may not touch the persona. | Nightly (`persona.yml`, 08:43 UTC) → `docs/reviews/<date>-<persona>.md`, as a pull request |
 | **Journeys** | `scripts/journeys.mjs`, `journeys.yml` | Whether the app still works when a browser drives it — the checks the suite structurally cannot make. | Weekly |
@@ -169,10 +170,13 @@ cannot forget what it paid for.
    distribution in [the note](research/2026-09-03-what-people-ask-agents-for.md),
    and a classifier calibrated against the labels (84%) shipped in
    `isocan evals corpus` with that number attached.
-2. **Twenty golden tasks** from the lessons and the top categories — revise
+2. ~~**Twenty golden tasks** from the lessons and the top categories — revise
    first, then create, then a restyle against a `DESIGN.md` — each with a
    deterministic grader where one exists, run by the same `grade.mjs`
-   machinery, versioned.
+   machinery, versioned.~~ **Done 3 Sep 2026** — `evals/golden/v1/`, six
+   revise, five create, two restyle, three repair, one each of arrange,
+   document, variation, converge; file checks of its own, screen checks
+   borrowed from `grade.mjs` by name; a selftest that runs both directions.
 3. **Lift for the two skills people actually use** — `isocan-collab` and
    `/sprint` — with and without, on the same fixtures, three numbers each.
 4. **The converge lane, one item wide**: one measured change per night, landed
