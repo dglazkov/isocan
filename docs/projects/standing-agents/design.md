@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-01
 see: standing-agents, on-demand, agent-custody
-note: phase 1 built 1 Sep — one name on one machine stands on many canvases (the enrolment key is the name; the summons carries its canvas). The rc that parks on every canvas its rows name, `available` in the web roster, and `isocan history` are not built.
+note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them. `available` in the web roster and `isocan history` are not built.
 ---
 # Standing agents
 
