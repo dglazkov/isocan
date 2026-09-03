@@ -341,7 +341,10 @@ One name, one machine, many canvases: a name this machine already answers
 for, enrolled on another canvas (`isocan rc add --canvas <ref> <name>`, the
 person's gesture), is the SAME agent — one actor, one history, standing on
 both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
-the name.
+the name. One `isocan rc --all` (the person's, again) answers on every canvas
+this machine's enrolments name: one budget per agent across all of them, one
+conversation per agent that carries on wherever it is summoned, and
+`ISOCAN_CANVAS` in your environment says which canvas asked this time.
 
 ## The Chat
 

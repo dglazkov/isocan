@@ -4,7 +4,7 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phase 1 closed (2026-09-01); phase 2 is next.**
+**Where we are: phases 1 and 2 closed (2026-09-03); phase 3 is next.**
 
 ## Phase 1 — One name, one machine, many canvases
 
@@ -45,6 +45,23 @@ once there is more than one.
 
 **Proof:** the running-rc test with two canvases — a comment on each,
 answered on each, one session handle per agent.
+
+**Status: CLOSED (2026-09-03).** The door went to the explicit word:
+`isocan rc --all` answers on every canvas the machine's enrolment
+records name (plus the bound one); bare `rc` is unchanged, and an
+unbound bare `rc` still refuses rather than doing something large by
+default. The rc's body became `runRcRoom`, one per canvas, run together;
+what must not be per canvas is `RcShared` — the ceiling and cycle guard
+keyed by actor, the ACP session handle keyed by actor (a summons on any
+canvas resumes the same conversation, `ISOCAN_CANVAS` saying which one
+asked), one auto-upgrade per process, and one Ctrl-C standing every
+announcement down. Narration carries `rc[<title>]:` once there is more
+than one room.
+
+**Trajectory.** The extraction found nothing per canvas that wanted to
+be per agent except the three things the phase named, and one it did
+not: the auto-upgrade, which would have run once per room. Phase 3 is
+unchanged.
 
 ## Phase 3 — `available` in the web roster
 

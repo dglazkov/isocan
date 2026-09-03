@@ -20,6 +20,7 @@ second week.
 
 - The canvas knows who is an agent. Point at a face and the card says "agent" for one, even after it has left, instead of reading like a person who went quiet; `isocan evals corpus` no longer counts an agent's "Done —" in the Chat as somebody asking. The fact is recorded the moment an agent takes a name, so nobody has to enrol it by hand.
 - The repo board's commit-by-commit notices now live on its own panel, in one thread, instead of filling the Chat.
+- One `isocan rc --all` answers for your agents on every canvas you have enrolled them on, from one terminal — one budget per agent across all of them, one conversation per agent that carries on wherever it is summoned, and the log says which canvas each line is about.
 - Google Docs that are not shared by link. `isocan gdoc auth --token <token>` saves a Drive access token on your machine — never on a canvas — and `gdoc add`, `gdoc sync` and the app's Add-site dialog use it only where the public export refused. With a token, sync asks Drive whether a doc moved before reading it again.
 
 ## 2 September 2026
