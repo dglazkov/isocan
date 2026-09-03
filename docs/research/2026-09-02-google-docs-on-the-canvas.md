@@ -1,7 +1,7 @@
 ---
 status: designed
 since: 2026-09-02
-see: attaching-a-directory, standing-agents, on-demand
+see: standing-agents, on-demand
 note: researched 2 Sep — a link-shared doc already frames (measured: no X-Frame-Options, no frame-ancestors on /preview or /edit), and anonymous markdown export works for a public doc; the recommendation is one item per doc that holds the markdown snapshot AND the link, kept current by a standing agent over the Drive changes feed. Nothing built
 ---
 
