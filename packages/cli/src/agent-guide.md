@@ -213,6 +213,10 @@ event forwarding, not something to paper over with a detached supervisor.
 - **Exit 2 means nothing came.** It is the quiet half of a conversation, not
   the end of one: park again. Never invent work out of a timeout, and never
   read one as permission to leave.
+- **Exit 4 means your access was withdrawn.** An owner removed you from the
+  canvas while you were parked, and the daemon said so — `wait:
+  withdrawn` — instead of going quiet. Do not park on that canvas again
+  unless an owner lets you back in; say so wherever you report, and stop.
 - **One waiter per NAME — enforced.** The daemon keeps one cursor row per
   actor per canvas, and the newest park adopts it: an older park speaking as
   the same actor exits 3 with "another park adopted this actor's cursor",
@@ -1127,7 +1131,12 @@ in the web app drives:
 - `isocan share <email> --as read` — invite them at a **rung**: `own`, `edit`
   (the default), `read` or `view`. A named invitation is never less than what
   the link gives: a person's rung is the highest of every grant that admits
-  them. The table `isocan share` prints has a `rung` column.
+  them. Inviting somebody who is already invited at another rung REPLACES
+  their row — one command, and if they are on the canvas their app redraws
+  at the new rung without a reload. The table `isocan share` prints has a
+  `rung` column, and its first line is the creator's: **owner, made this**.
+  `--as own` makes an owner: they may then invite, revoke and set the link
+  like the creator, and cannot remove the creator.
 - `isocan share --revoke <email>` — un-invite them, which **expels them**
   unless another grant still covers them. It takes the address, not the grant
   id.
@@ -1137,12 +1146,14 @@ Three things to know before you use it:
 - **Sharing is not a canvas op.** It changes who may knock, not what is on the
   canvas, so it never appears in the oplog and `undo` will not take it back.
   Turning the link off is undone by turning it on, and by nothing else.
-- **The creator owns the canvas.** Changing what the link admits to — and
-  inviting at any rung but `edit` — is theirs alone; the home refuses everyone
-  else with `not-owner` and names them. Inviting at `edit`, and turning the
-  link off, are open to anyone who can edit. That is a reason to be careful,
-  not a licence: change who may enter a canvas when the person asked you to,
-  and say on the thread that you did.
+- **Owners share; everybody else asks.** Every change to who may enter —
+  inviting at any rung, un-inviting, the link on, off or at a rung — is an
+  owner's: the creator, or anybody invited `--as own`. The home refuses
+  everyone else with `not-owner` and names the owner to ask. You hold what
+  the person who enrolled you holds, so an owner's agent can share and an
+  editor's cannot. That is a reason to be careful, not a licence: change who
+  may enter a canvas when the person asked you to, and say on the thread
+  that you did.
 - **Turning the link off now removes people.** It used to be harmless. It is
   not any more, so it is a gesture to ask about rather than to try.
 

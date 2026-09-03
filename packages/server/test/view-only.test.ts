@@ -198,6 +198,18 @@ describe("a view link grant", () => {
  * appears in presence, marked as reading.
  */
 describe("a read link grant", () => {
+  it("names the owner in the refusal — ask Priya, who owns it", async () => {
+    await makeCanvas();
+    await shareLink(owner, "read");
+    const jordan = await stranger();
+    await jordan.speakAs(spectator);
+    const refused = await rename(jordan, spectator);
+    expect(refused.status).toBe(403);
+    const body = (await refused.json()) as { code?: string; error?: string };
+    expect(body.code).toBe(VIEW_ONLY);
+    expect(body.error).toContain("ask Priya, who owns it");
+  });
+
   const spectator = { id: "usr_jordan", name: "Jordan" };
 
   it("admits a stranger to READ, and the read says `read`", async () => {
@@ -553,21 +565,120 @@ describe("changing what the link admits to", () => {
     expect((await grantsOf(owner)).find((g) => g.subject === "link")?.capability).toBe("view");
   });
 
-  it("still lets any editor invite somebody, or turn the link off", async () => {
-    // Only the CAPABILITY is owner-only. These are additive, or undoable by
-    // whoever did them, and neither can lock the room from the inside.
+  /**
+   * **Every write to grants is an owner's** (roles phase 2). Until this an
+   * editor could invite at edit and turn the link off; the research's
+   * argument stood — an editor who can invite is an owner with extra steps —
+   * and this is the one deliberate change in behaviour for existing users.
+   */
+  it("refuses an editor an invitation, and the link's off switch, with NOT_OWNER naming the owner", async () => {
     await makeCanvas();
     const other = await editorWhoDoesNotOwnIt();
     const invited = await post(other, grantsRoute(CANVAS), { subject: "email:sam@acme.test" });
-    // This daemon has no attester, so an email subject is refused 400 for
-    // that reason — which is the point: whatever stops it, it is not
-    // ownership. A 403 here would mean the rule had spread beyond capability.
-    expect(invited.status).not.toBe(403);
+    expect(invited.status).toBe(403);
+    const body = (await invited.json()) as { code?: string; error?: string };
+    expect(body.code).toBe("not-owner");
+    expect(body.error).toContain("ask Priya, who owns this canvas");
     const link = (await grantsOf(owner)).find((g) => g.subject === "link")!;
     const off = await fetch(`${base}${grantsRoute(CANVAS)}/${link.id}`, {
       method: "DELETE",
       headers: other.headers,
     });
+    expect(off.status).toBe(403);
+    expect(((await off.json()) as { code?: string }).code).toBe("not-owner");
+    // And the link is exactly as it was.
+    expect((await grantsOf(owner)).find((g) => g.subject === "link")?.revokedAt).toBeUndefined();
+    // The editor still edits: a refusal changed nothing about them.
+    expect((await rename(other, jordan)).status).toBe(200);
+  });
+
+  it("lets a person invited at `own` set the link and turn it off, like the creator", async () => {
+    await makeCanvas();
+    const badge = await stranger();
+    await badge.speakAs(jordan);
+    // The row is written on the desk — this home has no attester to prove an
+    // address through — and the proof is written on her badge the same way.
+    await daemon.desk.putGrant({
+      id: "gnt_jordan_own",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: owner.badgeId,
+      at: new Date().toISOString(),
+      capability: "own",
+    });
+    await daemon.desk.attest(badge.badgeId, {
+      attribute: "email:jordan@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    const seen = await get(badge, `/api/projects/${CANVAS}/canvas`);
+    expect(((await seen.json()) as CanvasSnapshotResponse).capability).toBe("own");
+    // What only an owner may do, done by the second owner.
+    expect((await post(badge, grantsRoute(CANVAS), { subject: "link", capability: "read" })).status).toBe(200);
+    const link = (await grantsOf(owner)).find((g) => g.subject === "link" && g.revokedAt === undefined)!;
+    expect(link.capability).toBe("read");
+    const off = await fetch(`${base}${grantsRoute(CANVAS)}/${link.id}`, {
+      method: "DELETE",
+      headers: badge.headers,
+    });
     expect(off.status).toBe(200);
+    // The creator's standing is not a row, so there is nothing of theirs to
+    // remove — and the creator still owns the canvas with the link off.
+    expect((await grantsOf(owner)).filter((g) => g.revokedAt === undefined)).toEqual([
+      expect.objectContaining({ id: "gnt_jordan_own" }),
+    ]);
+    expect((await post(owner, grantsRoute(CANVAS), { subject: "link" })).status).toBe(200);
+  });
+
+  it("refuses a row naming the creator's own address as redundant", async () => {
+    await makeCanvas();
+    await daemon.desk.attest(owner.badgeId, {
+      attribute: "email:priya@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    const answer = await post(owner, grantsRoute(CANVAS), { subject: "email:priya@acme.test" });
+    expect(answer.status).toBe(400);
+    const body = (await answer.json()) as { code?: string; error?: string };
+    expect(body.code).toBe("bad-grant");
+    expect(body.error).toContain("Priya's own address");
+  });
+
+  it("raises an invited person's rung with one POST, and the sweep moves them", async () => {
+    await makeCanvas();
+    await shareLink(owner, "view");
+    const badge = await stranger();
+    await daemon.desk.putGrant({
+      id: "gnt_jordan_read",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: owner.badgeId,
+      at: new Date().toISOString(),
+      capability: "read",
+    });
+    await daemon.desk.attest(badge.badgeId, {
+      attribute: "email:jordan@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    await get(badge, `/api/projects/${CANVAS}/canvas`);
+    // The route refuses an email subject on a home with no attester, so the
+    // replacement is made the way the route makes it and the sweep is run
+    // through the daemon's own hub — the same sweep the route runs.
+    await daemon.desk.revokeGrant("gnt_jordan_read", new Date().toISOString(), owner.badgeId);
+    await daemon.desk.putGrant({
+      id: "gnt_jordan_edit",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: owner.badgeId,
+      at: new Date().toISOString(),
+    });
+    const { sweepCanvas } = await import("../src/sweep.ts");
+    expect(await sweepCanvas(daemon.desk, CANVAS, priya.id, daemon.sweeps.report)).toEqual({
+      expelled: 0,
+      rerooted: 1,
+    });
+    const seen = await get(badge, `/api/projects/${CANVAS}/canvas`);
+    expect(((await seen.json()) as CanvasSnapshotResponse).capability).toBeUndefined();
   });
 });

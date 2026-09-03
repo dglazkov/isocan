@@ -63,6 +63,9 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly code?: string,
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside. */
+    readonly reason?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -168,7 +171,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     res = await send();
     json = (await res.json().catch(() => null)) as any;
   }
-  if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+  if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   return json as T;
 }
 
@@ -530,7 +533,7 @@ export async function uploadBlob(
   }
   if (res.status === 401 && (await knockOnDoor())) res = await send();
   const json = (await res.json().catch(() => null)) as any;
-  if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+  if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   return json as BlobUploadResponse;
 }
 
@@ -596,7 +599,7 @@ export async function readBoundFile(canvasId: string, path: string): Promise<Arr
   if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as any;
-    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   }
   return res.arrayBuffer();
 }
@@ -745,12 +748,16 @@ export function createGrant(
   canvasId: string,
   subject: GrantSubject,
   capability?: Capability,
+  /** Who is acting — the persona this tab wears. A write to grants asks
+   * `own`, which a person holds, and a browser's badge may hold several. */
+  actorId?: string,
 ): Promise<GrantResponse> {
   return request("POST", grantsRoute(canvasId), {
     subject,
     // Sent whenever it is not edit (#88, `narrowed`), so an older home never
     // meets the field for the one value it has always meant by omission.
     ...(narrowed(capability) ? { capability } : {}),
+    ...(actorId ? { actorId } : {}),
   });
 }
 
@@ -760,8 +767,13 @@ export function createGrant(
  * and while `http.ts` now answers that with the 400 it always was, the
  * request that never needed a body should not send headers about one.
  */
-export function revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
-  return request("DELETE", grantRoute(canvasId, grantId));
+export function revokeGrant(
+  canvasId: string,
+  grantId: string,
+  actorId?: string,
+): Promise<GrantResponse> {
+  const route = grantRoute(canvasId, grantId);
+  return request("DELETE", actorId ? `${route}?actorId=${encodeURIComponent(actorId)}` : route);
 }
 
 // ---- what this holder has proved (phase 9 stage 2) ----
@@ -897,7 +909,7 @@ async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> 
   if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as any;
-    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+    throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   }
   return res;
 }

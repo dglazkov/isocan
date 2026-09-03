@@ -19,6 +19,7 @@ import type {
   Grant,
   GrantResponse,
   GrantsResponse,
+  GrantSubject,
   KillBadgeResponse,
   JoinCanvasRequest,
   HomesResponse,
@@ -45,6 +46,8 @@ import {
   FILENAME_HEADER,
   fileOf,
   FREE_NAME_ROUTE,
+  actorNameIn,
+  attestationSatisfying,
   capabilityOf,
   grantSubjectRefusal,
   CANVAS_PATH_PREFIX,
@@ -71,6 +74,9 @@ import {
   AMBIGUOUS_HOME,
   atLeast,
   isCapability,
+  LINK,
+  ownerOf,
+  WITHDRAWN,
   narrowed,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
@@ -103,9 +109,10 @@ import {
   admittingGrant,
   capabilityIn,
   heldCapability,
+  heldRung,
   NOT_OWNER,
   NotAdmittedError,
-  ownsThisCanvas,
+  notOwnerMessage,
   ViewOnlyError,
 } from "./grants.ts";
 import {
@@ -115,7 +122,7 @@ import {
   TOO_MANY_BADGES,
   type MintRefusal,
 } from "./meter.ts";
-import { killAndSweep, sweepCanvas } from "./sweep.ts";
+import { killAndSweep, sweepCanvas, SweepHub } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
@@ -294,6 +301,13 @@ function isOpen(method: string, pathname: string): boolean {
 }
 
 interface RouteOptions {
+  /**
+   * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
+   * socket"): the daemon hands the same hub to `ws.ts`, which tells the
+   * re-rooted their new rung and closes the expelled. Absent in a test that
+   * constructs routes alone, in which case one is made and nobody listens.
+   */
+  sweeps?: SweepHub;
   /** Where a canvas born here, naming nothing, is born — or null when it stays
    * here. What the health route reports as `home` (redefined in phase 10.3,
    * because `stalenessOf` and older CLIs read that key and the birth default
@@ -442,7 +456,9 @@ export function registerRoutes(
     // in exactly the same way — a refresh loop minting credentials that cannot
     // help. `not-admitted` is a different recovery: ask for the link.
     if (err instanceof NotAdmittedError) {
-      return reply.status(403).send({ error: err.message, code: err.code });
+      return reply
+        .status(403)
+        .send({ error: err.message, code: err.code, ...(err.reason ? { reason: err.reason } : {}) });
     }
     // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
     // and the ledger says look-don't-touch. Its own code because the remedy is
@@ -591,6 +607,25 @@ export function registerRoutes(
    * and getting a badge is free — so what this changes is RECOGNITION: from
    * here on trust attaches to the badge and never to the address again.
    */
+  const sweeps = options.sweeps ?? new SweepHub();
+
+  /** The creator's name, resolved the way the Share dialog resolves
+   * `createdBy` — through the registry, so a rename reaches it. */
+  const ownerName = async (project: { createdBy: { id: string; name: string } }): Promise<string> =>
+    actorNameIn(await engine.actorNames(), project.createdBy);
+
+  /**
+   * The read-only refusal, naming the owner (roles journey 1 step 5: *ask
+   * Priya, who owns it*). The snapshot is read for the name only on the
+   * refusal itself — a rare path, and the engine holds the canvas already —
+   * so the hook pays nothing for it on the requests it lets through. A
+   * canvas that cannot be read says "whoever shared it", as before.
+   */
+  const viewOnly = async (canvasId: string): Promise<ViewOnlyError> => {
+    const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+    return new ViewOnlyError(canvasId, snapshot ? await ownerName(snapshot.project) : undefined);
+  };
+
   app.addHook("onRequest", async (req, reply) => {
     const pathname = (req.url ?? "/").split("?")[0]!;
     const presented = presentedBadge(req.headers);
@@ -637,7 +672,7 @@ export function registerRoutes(
           req.method !== "HEAD" &&
           !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")
         ) {
-          throw new ViewOnlyError(canvasId);
+          throw await viewOnly(canvasId);
         }
       }
       return;
@@ -946,7 +981,7 @@ export function registerRoutes(
       // (#88). BEFORE the submit for the door's own reason: a refusal that
       // arrives after the op has landed is not a refusal at all.
       if (!atLeast(capabilityIn(req.badge!, body.canvasId) ?? "edit", "edit")) {
-        throw new ViewOnlyError(body.canvasId);
+        throw await viewOnly(body.canvasId);
       }
     }
     const entry = await engine.submit({
@@ -1309,13 +1344,15 @@ export function registerRoutes(
   // remember. One endpoint for both surfaces — stage 2's Share dialog and the
   // CLI verb drive exactly these.
   //
-  // What is deliberately NOT here is a notion of OWNERSHIP: any admitted badge
-  // may share or un-share. The design leaves roles open ("whether grants may
-  // carry roles waits for a scene that forces it"), and inventing an owner
-  // here would invent it in the one place hardest to change later — the door.
-  // On a solo home this is exactly today's posture; on a shared one it is the
-  // familiar "anyone in the doc can share the doc", stated rather than
-  // stumbled into.
+  // **Every write here asks `own`** (roles design, "What only an owner may
+  // do"): inviting, revoking, the link and its rung. The reading routes stay
+  // with anyone admitted — who may be here is worth knowing whoever you are.
+  // Phase 7 deliberately left ownership out ("anyone in the doc can share the
+  // doc"); the roles research argued that an editor who can invite is an
+  // owner with extra steps, and roles phase 2 made every grant write an
+  // owner's. `heldRung` is the question: the admission's rung, raised to
+  // `own` if the badge claims the creator, and `own` is grantable like any
+  // other rung, so a canvas changes hands by adding an owner.
   //
   // On a REPLICA all three forward to the home. A grant is desk state and does
   // not replicate, so the row that decides who may enter the canvas lives at
@@ -1378,43 +1415,58 @@ export function registerRoutes(
     }
     const subject = normalizeSubject(body.subject!);
     const capability: Capability = body.capability ?? "edit";
+    const actorId = await actingActor(req, body.actorId);
     // A REPLICA forwards without asking its own opinion, and the order of
     // these two lines is that decision. Shape is universal and refused above;
     // "can anything here verify that" is a fact about the home that OWNS the
     // grant, and a laptop that answered it locally would be a second copy of a
     // policy that is about to change — refusing an invitation the home would
     // have accepted, on the strength of its own configuration. Same reason
-    // `isocan share <email>` has no client-side "not yet".
+    // `isocan share <email>` has no client-side "not yet". The actor rides up
+    // with it, so the home asks `own` of the person and not of the machine.
     const home = options.homes?.for(id) ?? null;
-    if (home) return home.createGrant(id, subject, capability);
-    const unverifiable = attesterRefusal(subject, attesters);
-    if (unverifiable) {
-      return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
-    }
+    if (home) return home.createGrant(id, subject, capability, await actorNamed(actorId));
     const snapshot = await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
     if (live && capabilityOf(live) === capability) return { grant: live } satisfies GrantResponse;
     /**
-     * **Changing what a grant admits to is the owner's alone.**
-     *
-     * Everything else about sharing stays with anyone who can edit — invite
-     * somebody, turn the link off — because those are additive or undoable by
-     * the person who did them. Capability is neither: replacing the edit link
-     * with a view one sweeps everybody rooted at the old row into `view`,
-     * including the person who pressed it, and the control that would put it
-     * back is behind the edit they just gave away. Reported exactly that way.
+     * **Writing a row is the owner's** (roles design, "What only an owner may
+     * do") — inviting at any rung, and the link at any rung, alike. Until
+     * roles phase 2 only the CAPABILITY was owner-only and any editor could
+     * invite at edit or turn the link off; the research's argument stands,
+     * that an editor who can invite is an owner with extra steps, and this is
+     * the one deliberate change in behaviour for existing users. The refusal
+     * names the remedy, which is a person.
      *
      * Checked here rather than in the client, and after the replica forward
      * above, so the home that owns the canvas is the one that answers.
      */
-    const changingCapability = live ? capabilityOf(live) !== capability : capability !== "edit";
-    if (changingCapability && !(await ownsThisCanvas(desk, snapshot.project, req.badge!))) {
-      return reply.status(403).send({
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+      return reply
+        .status(403)
+        .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
+    }
+    /**
+     * A row naming the creator's own address is refused as redundant: the
+     * creator holds `own` without one, by the floor, and a row that admits
+     * somebody the door already admits to more is a row that would only
+     * confuse the table. Asked of every badge that claims the creator, since
+     * the address is proved on a badge and the creator is a person.
+     */
+    if (await namesTheCreator(subject, snapshot.project)) {
+      return reply.status(400).send({
         error:
-          `only ${snapshot.project.createdBy.name}, who made this canvas, can change what its ` +
-          `link admits to — ask them, or share with somebody by name instead`,
-        code: NOT_OWNER,
+          `${subject} is ${await ownerName(snapshot.project)}'s own address, and they made this ` +
+          "canvas — the creator owns it without a row",
+        code: "bad-grant",
       });
+    }
+    // After the owner's question, not before it: whether THIS home can
+    // verify the address is the next thing wrong with the request, once the
+    // caller is somebody who may write a row at all.
+    const unverifiable = attesterRefusal(subject, attesters);
+    if (unverifiable) {
+      return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
     const grant: Grant = {
       id: newId("gnt"),
@@ -1438,12 +1490,55 @@ export function registerRoutes(
     if (live) {
       await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
       await desk.putGrant(grant);
-      const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id);
+      const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id, sweeps.report);
       return { grant, swept } satisfies GrantResponse;
     }
     await desk.putGrant(grant);
     return { grant } satisfies GrantResponse;
   });
+
+  /**
+   * **Who is acting**, for a write that asks `own` (roles design, "Over a
+   * replica, the write names the person"). The caller may say
+   * (`CreateGrantRequest.actorId`, or `?actorId=` on a DELETE), and whoever
+   * it names must be somebody this badge speaks for — mechanism 5's own
+   * `requireActor`, on the replica and again on the home, which is the same
+   * split a pass takes. A caller that says nothing and holds exactly one
+   * claim is taken to be that person; one that holds several and says
+   * nothing is judged by the badge as a whole, which is what every caller
+   * from before the field asked for.
+   */
+  const actingActor = async (req: FastifyRequest, said: unknown): Promise<string | undefined> => {
+    const actorId = typeof said === "string" && said ? said : undefined;
+    if (actorId) {
+      await engine.requireActor(req.badge!.badgeId, actorId);
+      return actorId;
+    }
+    const claims = req.badge!.claims;
+    return claims.length === 1 ? claims[0]!.actorId : undefined;
+  };
+
+  /** The actor with its name, for a forwarded write: the home may never have
+   * heard of this person, and `HomeLink` claims before it asks. */
+  const actorNamed = async (actorId: string | undefined): Promise<Actor | undefined> => {
+    if (!actorId) return undefined;
+    const names = await engine.actorNames();
+    return { id: actorId, name: names[actorId] ?? "" };
+  };
+
+  /** Does this subject name an address the creator has proved, on any badge
+   * that claims them? */
+  const namesTheCreator = async (
+    subject: GrantSubject,
+    project: { createdBy: { id: string } },
+  ): Promise<boolean> => {
+    if (subject === LINK) return false;
+    for (const { badgeId } of await desk.claimants(ownerOf(project))) {
+      const holder = await desk.badge(badgeId);
+      if (holder && attestationSatisfying(subject, holder.attestations ?? [])) return true;
+    }
+    return false;
+  };
 
   /**
    * Un-share it — "turn off the link", and the same gesture for every other
@@ -1473,8 +1568,12 @@ export function registerRoutes(
    */
   app.delete("/api/projects/:id/grants/:grantId", async (req, reply) => {
     const { id, grantId } = req.params as { id: string; grantId: string };
+    // On the query, not in a body: a DELETE with nothing to say sends no
+    // content type (see `revokeGrant` in the web client), and the actor is
+    // one id.
+    const actorId = await actingActor(req, (req.query as { actorId?: unknown }).actorId);
     const home = options.homes?.for(id) ?? null;
-    if (home) return home.revokeGrant(id, grantId);
+    if (home) return home.revokeGrant(id, grantId, await actorNamed(actorId));
     const snapshot = await engine.getSnapshot(id);
     // Read through this canvas's own rows, so a grant id belonging to another
     // canvas cannot be revoked through a canvas the caller happens to be in.
@@ -1482,10 +1581,17 @@ export function registerRoutes(
     if (!mine) {
       return reply.status(404).send({ error: `no grant ${grantId} on ${id}`, code: "unknown-grant" });
     }
+    // Revoking is a write to grants, and every write to grants is an owner's
+    // (roles phase 2) — the link's off switch included.
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+      return reply
+        .status(403)
+        .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
+    }
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
     // The creator rides along for the floor: turning the link off must not
     // expel the creator's own browser (roles journey 1, step 2).
-    const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id);
+    const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id, sweeps.report);
     return { grant: revoked ?? mine, swept } satisfies GrantResponse;
   });
 
@@ -1560,11 +1666,17 @@ export function registerRoutes(
         code: NOT_YOUR_BADGE,
       });
     }
-    const outcome = await killAndSweep(desk, badgeId, req.badge!.badgeId, undefined, (canvasId) =>
-      engine.getSnapshot(canvasId).then(
-        (snapshot) => snapshot.project.createdBy.id,
-        () => null,
-      ),
+    const outcome = await killAndSweep(
+      desk,
+      badgeId,
+      req.badge!.badgeId,
+      undefined,
+      (canvasId) =>
+        engine.getSnapshot(canvasId).then(
+          (snapshot) => snapshot.project.createdBy.id,
+          () => null,
+        ),
+      sweeps.report,
     );
     if (!outcome) {
       return reply
@@ -1992,6 +2104,19 @@ export function registerRoutes(
         admitted.has(canvas.id) ||
         Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id));
       judged.set(canvas.id, allowed);
+      /**
+       * **An expelled badge's next poll is refused, and told why** (roles
+       * design, "Reaching an open socket"). A badge that was swept out of a
+       * canvas it asked for by name is not quietly answered with nothing —
+       * that is a parked agent hearing silence forever — but refused with
+       * `not-admitted` and the reason `withdrawn`, which `isocan wait`
+       * prints and exits on. Only for a canvas the caller NAMED: a home-wide
+       * watch is not ended by one room. A badge admitted again is forgotten.
+       */
+      if (allowed) sweeps.forget(badge.badgeId, canvas.id);
+      else if (only?.has(canvas.id) && sweeps.withdrew(badge.badgeId, canvas.id)) {
+        throw new NotAdmittedError(canvas.id, WITHDRAWN);
+      }
       return allowed;
     };
 
@@ -2027,6 +2152,19 @@ export function registerRoutes(
       landed = true;
       wake?.();
     });
+    // And on this badge's own expulsion from a canvas it named: the parked
+    // agent is told within the sweep, not at the end of its poll window.
+    // The wake runs `collect`, which is where the refusal is raised.
+    const unsubscribeSweeps = sweeps.on((canvasId, badgeId, outcome) => {
+      if (badgeId !== badge.badgeId || outcome.outcome !== "expelled") return;
+      if (!only?.has(canvasId)) return;
+      // The answer this request memoised for that canvas is now stale, and
+      // so is the admission it read at the door; the re-run must ask again.
+      judged.delete(canvasId);
+      admitted.delete(canvasId);
+      landed = true;
+      wake?.();
+    });
     try {
       let result = await collect();
       const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
@@ -2047,6 +2185,7 @@ export function registerRoutes(
       return result;
     } finally {
       unsubscribe();
+      unsubscribeSweeps();
     }
   });
 

@@ -7,39 +7,46 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 /**
  * **The two halves of one rule, on the two sides that have to agree.**
  *
- * Changing what the link admits to is the owner's alone. The daemon is what
- * ENFORCES that — a client-side check is a habit — but the app must not offer
- * a control that is going to refuse, and it must say whose canvas it is, or
- * "why can I not press this" has no answer on screen.
+ * Every write to grants is an owner's (roles phase 2): inviting, revoking,
+ * the link and its rung. The daemon is what ENFORCES that — a client-side
+ * check is a habit — but the app must not offer a control that is going to
+ * refuse, and it must say whose canvas it is, or "why can I not press this"
+ * has no answer on screen.
  */
-describe("only the owner may change what the link allows", () => {
+describe("only an owner may change who may enter", () => {
   const dialog = read("../src/components/ShareDialog.tsx");
   const http = read("../../server/src/http.ts");
 
   it("is refused by the daemon, not merely hidden by the app", () => {
-    expect(http).toContain("ownsThisCanvas(desk, snapshot.project, req.badge!)");
+    // Both writes — the POST that invites or sets the link, and the DELETE
+    // that revokes — ask the same question of the same function.
+    const asks = http.match(
+      /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null\), "own"\)/g,
+    );
+    expect(asks).toHaveLength(2);
     expect(http).toContain("code: NOT_OWNER");
   });
 
-  it("is refused only for a CHANGE, so inviting at edit and turning it off stay open", () => {
-    // Additive or undoable-by-whoever-did-it. Capability is neither: it
-    // sweeps everybody, including the person who pressed it. Any rung but
-    // `edit` on a fresh row is a change too (roles phase 1) — the ladder
-    // has more than one rung below edit now, and one above.
-    expect(http).toContain(
-      'const changingCapability = live ? capabilityOf(live) !== capability : capability !== "edit";',
-    );
+  it("names the owner in the refusal, resolved through the registry", () => {
+    expect(http).toContain("notOwnerMessage(await ownerName(snapshot.project))");
   });
 
-  it("asks core who the owner is, rather than deciding again in the app", () => {
+  it("asks core who the creator is, and the hello who else owns it", () => {
     expect(dialog).toContain("ownsCanvas(record, actor.id)");
+    expect(dialog).toContain('atLeast(capability, "own")');
   });
 
-  it("disables the control for everybody else instead of hiding it", () => {
-    // What the link currently allows is worth knowing whoever you are, and a
-    // setting that vanishes reads as a bug.
+  it("disables every control for everybody else instead of hiding it", () => {
+    // What the link currently allows and who was invited are worth knowing
+    // whoever you are, and a setting that vanishes reads as a bug.
     expect(dialog).toContain("disabled={busy || !owned}");
+    expect(dialog).toContain("disabled={busy || grants === null || !owned}");
     expect(dialog).toContain("ownerNote");
+  });
+
+  it("puts Owner in both pickers, from core's ladder, and gives the creator no control", () => {
+    expect(dialog).toContain("const INVITE_RUNGS: readonly Capability[] = [...RUNGS].reverse();");
+    expect(dialog).toContain("Owner, made this");
   });
 
   it("says who made the canvas", () => {

@@ -110,10 +110,19 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     };
   }, []);
 
-  if (connection === "refused" || connection === "gone" || connection === "absent") {
+  if (
+    connection === "refused" ||
+    connection === "withdrawn" ||
+    connection === "gone" ||
+    connection === "absent"
+  ) {
     return (
       <div className="page-note">
-        {connection === "gone" ? "This canvas was deleted." : "This canvas will not have you."}
+        {connection === "gone"
+          ? "This canvas was deleted."
+          : connection === "withdrawn"
+            ? "Your access to this canvas was withdrawn."
+            : "This canvas will not have you."}
       </div>
     );
   }

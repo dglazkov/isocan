@@ -305,6 +305,17 @@ export interface CreateGrantRequest {
     /** Omitted means `edit`, which is what every caller from before the field
      * asked for by not being able to ask. */
     capability?: Capability;
+    /**
+     * **Who is acting** (roles design, "Over a replica, the write names the
+     * person"). A write to grants asks `own`, and `own` is held by a PERSON —
+     * the creator's floor is checked against the badge's claims. A badge that
+     * claims several people (a browser with two personas, a daemon relaying a
+     * whole machine) names the one acting here, and the home checks two
+     * things: the actor is among the presenting badge's claims, and the actor
+     * holds `own`. Absent, the home reads the badge's claims as a whole, which
+     * is what every caller from before the field asked for by not saying.
+     */
+    actorId?: string;
 }
 export interface GrantsResponse {
     grants: Grant[];
@@ -359,3 +370,13 @@ export declare const VIEW_ONLY = "view-only";
  * retrying the one it cannot fix.
  */
 export declare const WS_NOT_ADMITTED = 4402;
+/**
+ * **The reason a refusal gives when the caller had been inside** (roles
+ * design, "Reaching an open socket"). A `WS_NOT_ADMITTED` close carries it as
+ * the close reason; a `not-admitted` on `POST /api/oplog/watch` carries it as
+ * `reason`. The code is the same either way — an expelled badge is a badge
+ * that is not admitted — and the word is the whole difference for the person
+ * reading it: *your access to this canvas was withdrawn* is a different
+ * sentence from *this canvas will not have you*, because they were in.
+ */
+export declare const WITHDRAWN = "withdrawn";

@@ -113,6 +113,21 @@ export type ServerMessage =
 } | {
     type: "canvas-deleted";
 }
+/**
+ * **This connection's rung changed under it** (roles design, "Reaching an
+ * open socket"; journey 2 step 1). Sent to every socket the re-rooted
+ * badge holds on the canvas when a sweep moves its admission — an
+ * invitation raised from Canvas Viewer to Editor, a link narrowed to
+ * read. The store sets `capability` and the page re-picks its surface,
+ * with no reload and no second way of learning the canvas: the socket is
+ * the same one, and what changed is what it may do. An expelled badge is
+ * not told this; its sockets are closed with `WS_NOT_ADMITTED` and the
+ * reason `withdrawn`.
+ */
+ | {
+    type: "standing";
+    capability: Capability;
+}
 /** The roster carries the chosen identity colors with it: they change about
  * as often as who is here, and every client that needs one is already
  * listening. A color nobody else can see is not an identity, so it travels
@@ -1060,6 +1075,9 @@ export interface CanvasLinkState {
 export interface ApiError {
     error: string;
     code?: string;
+    /** Why, when the code alone does not say — `withdrawn` on a `not-admitted`
+     * from a badge that had been inside (see `WITHDRAWN`). */
+    reason?: string;
 }
 /**
  * **There is no such route under `/api/` on this daemon** — and saying so is

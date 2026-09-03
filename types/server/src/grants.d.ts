@@ -1,5 +1,5 @@
 import type { Capability, Grant } from "../../core/src/index.js";
-import type { BadgeRecord, Desk, Provenance } from "./desk.js";
+import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.js";
 /**
  * The door's test over the desk's grant rows (identity desk, mechanisms 3 + 2).
  *
@@ -32,8 +32,16 @@ import type { BadgeRecord, Desk, Provenance } from "./desk.js";
  */
 export declare class NotAdmittedError extends Error {
     readonly canvasId: string;
+    readonly reason?: string | undefined;
     readonly code = "not-admitted";
-    constructor(canvasId: string);
+    /**
+     * `withdrawn` when this badge HAD been inside and a sweep put it out
+     * (roles design, "Reaching an open socket"): the same code, because an
+     * expelled badge is a badge that is not admitted, and a different
+     * sentence, because the person was in and the difference is the whole
+     * message. Absent for a badge that was never admitted.
+     */
+    constructor(canvasId: string, reason?: string | undefined);
 }
 /**
  * The grant that lets this badge in, or null.
@@ -71,7 +79,7 @@ export declare class NotAdmittedError extends Error {
  *
  * **The creator's floor** (roles design, "Who holds what"). The creator holds
  * `own` and cannot lose it, and that is not a row: it is `project.createdBy`
- * checked against the badge's claims, exactly as `ownsThisCanvas` reads it.
+ * checked against the badge's claims, exactly as `heldRung` reads it.
  * It is applied HERE, at the door, and not only on owner routes, because
  * journey 1 step 2 says the creator stays when the link is turned off —
  * and until this the revoker of a link was expelled with everyone else who
@@ -91,35 +99,56 @@ export interface DoorAnswer {
     capability: Capability;
 }
 export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null): Promise<DoorAnswer | null>;
-/** The refusal when somebody who did not make the canvas tries to change what
- *  its link admits to. Its own code, so a client can say the useful sentence
- *  rather than "no". */
+/** The refusal when somebody below `own` tries to change who may enter a
+ *  canvas — inviting, revoking, the link, its rung. Its own code, so a client
+ *  can say the useful sentence rather than "no". */
 export declare const NOT_OWNER = "not-owner";
 /**
- * **Only the person who made a canvas may change what its link admits to.**
- *
- * Reported the hard way: an account that was not the owner pressed "Can
- * view", and the sweep that re-roots everybody at the surviving grant took
- * THEM with it — into a canvas they could now only look at, with the control
- * that would undo it behind an edit they no longer had. Every editor could do
- * that, to everybody, including themselves.
- *
- * Ownership is `project.createdBy`, which every canvas has already, and it is
- * checked against the badge's CLAIMS rather than against one badge id. A
- * person is not a badge — the canvas may have been made from a terminal and
- * the link pressed in a browser, which is exactly the shape that produced the
- * report — so what counts is whether this caller may act as the owner, which
- * is the same question `item` ops ask before they let anybody write.
- *
- * Only the CAPABILITY is owner-only. Inviting somebody, and turning the link
- * off, stay with anyone who can edit: they are additive or reversible by the
- * person who did them, and neither can lock the room from the inside.
+ * The refusal's sentence: the remedy, which is a person (roles design, "What
+ * only an owner may do"). `owner` is the creator's name resolved the way the
+ * Share dialog resolves `createdBy` — through the registry, so a rename
+ * reaches it.
  */
-export declare function ownsThisCanvas(desk: Desk, project: {
+export declare function notOwnerMessage(owner: string): string;
+/**
+ * The rung an admission holds, read off the admission.
+ *
+ * `created` is the creator's floor and reads as `own` whatever the field
+ * says: a bootstrap admission (`project.create`) stores no rung and a floor
+ * admission stores `own`, and both are the creator (roles phase 1's finding).
+ * Every other root reads its field, absent meaning edit. This is what a
+ * pass-derived admission adopts from its minter, at mint and at every sweep —
+ * "agents hold what their person holds".
+ */
+export declare function rungOfAdmission(admission: Admission): Capability;
+/**
+ * **What this badge holds HERE, for a route that asks `own`** (roles design,
+ * "Who holds what"): the admission's rung, raised to `own` if the badge
+ * claims the creator.
+ *
+ * Raised by CLAIMS and not by the stored rung, because the creator's own
+ * admission is not a reliable record of the floor: a bootstrap admission
+ * stores no rung at all, and only a floor admission written by the door
+ * stores `own`. Ownership is `project.createdBy`, which every canvas has
+ * carried since the first one, checked against who this badge may speak as —
+ * a person is not a badge; the canvas may have been made from a terminal and
+ * the Share dialog opened in a browser, which is exactly the shape that once
+ * produced a report.
+ *
+ * `asActor` narrows the question to one person (`CreateGrantRequest.actorId`):
+ * a badge that claims several — a browser with two personas, a daemon
+ * relaying a whole machine — is raised only if THAT actor is the creator. The
+ * caller has already checked the actor is among the badge's claims
+ * (`engine.requireActor`); this reads the claims once more only to apply the
+ * floor. One `claimsOf` read, only on routes that ask for `own`. This is what
+ * `ownsThisCanvas` was, with a wider answer.
+ */
+export declare function heldRung(desk: Desk, project: {
+    id: string;
     createdBy: {
         id: string;
     };
-}, badge: BadgeRecord): Promise<boolean>;
+}, badge: BadgeRecord, asActor?: string | null): Promise<Capability>;
 /**
  * A write met an admission below `edit` (#88, widened by the roles ladder to
  * `read`). 403 with its own code, for `NotAdmittedError`'s reason moved one
@@ -133,7 +162,10 @@ export declare function ownsThisCanvas(desk: Desk, project: {
 export declare class ViewOnlyError extends Error {
     readonly canvasId: string;
     readonly code = "view-only";
-    constructor(canvasId: string);
+    /** `owner` names the remedy — *ask Priya, who owns it* — when the caller
+     * could resolve the creator cheaply (roles journey 1 step 5); the hook's
+     * refusal without a snapshot says "whoever shared it". */
+    constructor(canvasId: string, owner?: string);
 }
 /**
  * What this badge's admission lets it do HERE, or null when it holds none.

@@ -105,6 +105,9 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly code?: string,
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside. */
+    readonly reason?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -187,7 +190,7 @@ export class DaemonRoutes {
       json = (await res.json().catch(() => null)) as any;
     }
     if (!res.ok) {
-      throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
+      throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
     }
     return json as T;
   }
@@ -432,20 +435,25 @@ export class DaemonRoutes {
     canvasId: string,
     subject: GrantSubject,
     capability?: Capability,
+    /** Who is acting — the CLI's actor. A write to grants asks `own`, which
+     * a person holds, and a badge may speak for several. */
+    actorId?: string,
   ): Promise<GrantResponse> {
     return this.request("POST", grantsRoute(canvasId), {
       subject,
       // Sent whenever it is not edit (`narrowed`), so an older home never
       // meets the field for the one value it has always meant by omission.
       ...(narrowed(capability) ? { capability } : {}),
+      ...(actorId ? { actorId } : {}),
     });
   }
 
   /** No body, deliberately: a DELETE that declares `application/json` and
    * sends nothing is a Fastify parse error, and a request with nothing to say
    * should not announce a content type. */
-  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
-    return this.request("DELETE", grantRoute(canvasId, grantId));
+  revokeGrant(canvasId: string, grantId: string, actorId?: string): Promise<GrantResponse> {
+    const route = grantRoute(canvasId, grantId);
+    return this.request("DELETE", actorId ? `${route}?actorId=${encodeURIComponent(actorId)}` : route);
   }
 
   // ---- your own surfaces: kill-a-badge (phase 9) ----

@@ -184,6 +184,29 @@ describe("isocan wait presence", () => {
     expect(session?.status ?? null).toBeNull();
   }, 30_000);
 
+  it("exits 4 and says withdrawn when an owner removes it while parked", async () => {
+    await isocan("session", "start", "--canvas", "prj_1");
+    const run = isocan("wait", "--canvas", "prj_1", "--timeout", "20");
+    await until(sessions, (list) => waiting(list).length === 1, "the parked status");
+
+    // The CLI's badge came in on the link. Dimitri, who made the canvas,
+    // turns it off: the sweep expels the badge, and the parked wait is told
+    // within the sweep rather than at the end of its poll window.
+    const { grants } = (await (
+      await fetch(`${base}/api/projects/prj_1/grants`, { headers: badge.headers })
+    ).json()) as { grants: { id: string; subject: string }[] };
+    const link = grants.find((g) => g.subject === "link")!;
+    const off = await fetch(
+      `${base}/api/projects/prj_1/grants/${link.id}?actorId=${dimitri.id}`,
+      { method: "DELETE", headers: badge.headers },
+    );
+    expect(off.status).toBe(200);
+
+    const done = await run;
+    expect(done.code).toBe(4);
+    expect(done.stderr).toContain("withdrawn");
+  }, 30_000);
+
   it("clears the status when it wakes", async () => {
     await isocan("session", "start", "--canvas", "prj_1");
     const run = isocan("wait", "--canvas", "prj_1", "--timeout", "20", "--all-ops");

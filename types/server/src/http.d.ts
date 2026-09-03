@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
+import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { BadgeRecord, Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
@@ -41,6 +42,13 @@ declare module "fastify" {
  */
 export declare const STATIC_TYPES: Record<string, string>;
 interface RouteOptions {
+    /**
+     * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
+     * socket"): the daemon hands the same hub to `ws.ts`, which tells the
+     * re-rooted their new rung and closes the expelled. Absent in a test that
+     * constructs routes alone, in which case one is made and nobody listens.
+     */
+    sweeps?: SweepHub;
     /** Where a canvas born here, naming nothing, is born — or null when it stays
      * here. What the health route reports as `home` (redefined in phase 10.3,
      * because `stalenessOf` and older CLIs read that key and the birth default

@@ -40,7 +40,13 @@ export interface Health extends Partial<BuildStamp> {
 export declare class ApiError extends Error {
     readonly status: number;
     readonly code?: string | undefined;
-    constructor(status: number, message: string, code?: string | undefined);
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside. */
+    readonly reason?: string | undefined;
+    constructor(status: number, message: string, code?: string | undefined, 
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside. */
+    reason?: string | undefined);
 }
 /**
  * **The typed route surface** — every request the daemon answers, typed, and
@@ -195,11 +201,14 @@ export declare class DaemonRoutes {
     }>;
     listCanvases(): Promise<Canvas[]>;
     grants(canvasId: string): Promise<GrantsResponse>;
-    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability): Promise<GrantResponse>;
+    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, 
+    /** Who is acting — the CLI's actor. A write to grants asks `own`, which
+     * a person holds, and a badge may speak for several. */
+    actorId?: string): Promise<GrantResponse>;
     /** No body, deliberately: a DELETE that declares `application/json` and
      * sends nothing is a Fastify parse error, and a request with nothing to say
      * should not announce a content type. */
-    revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse>;
+    revokeGrant(canvasId: string, grantId: string, actorId?: string): Promise<GrantResponse>;
     badges(): Promise<BadgesResponse>;
     /** No body, for `revokeGrant`'s reason. */
     killBadge(badgeId: string): Promise<KillBadgeResponse>;

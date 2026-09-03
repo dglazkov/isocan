@@ -1,5 +1,6 @@
 import { type FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
+import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
@@ -167,6 +168,13 @@ export interface Daemon {
      * importantly, what a link did NOT do.
      */
     homes: HomeLinks;
+    /**
+     * The sweep's outcomes (roles design, "Reaching an open socket"), exposed
+     * for the reason `homes` is: a test that writes rows on the desk can run a
+     * sweep that reports into the daemon's own hub, and watch what reached
+     * the sockets.
+     */
+    sweeps: SweepHub;
     /**
      * The ephemeral plane, exposed for the same reason `homes` is: the questions
      * worth asking about presence are about what a daemon did NOT do. A test can

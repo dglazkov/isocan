@@ -41,6 +41,8 @@ import {
   canvasesRoute,
   WS_BEHIND,
   WS_NO_CANVAS,
+  WS_NOT_ADMITTED,
+  WITHDRAWN,
 } from "@isocan/core";
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
@@ -219,14 +221,20 @@ export interface HomeConnection {
    * enter the canvas at all lives at the home, and a `isocan share` that
    * edited the laptop's ledger would report success while the link stayed on
    * for the world. These three go up for the same reason writes do.
+   *
+   * A WRITE names the person acting (roles design, "Over a replica, the
+   * write names the person"): this daemon's badge at the home claims everyone
+   * it has relayed, and `own` is held by a person, so the home is told which
+   * one — after the claim goes up, as it does before a forwarded op.
    */
   grants(canvasId: string): Promise<GrantsResponse>;
   createGrant(
     canvasId: string,
     subject: GrantSubject,
     capability?: Capability,
+    actor?: Actor,
   ): Promise<GrantResponse>;
-  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse>;
+  revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse>;
   /**
    * Your surfaces at the HOME, and ending one there — forwarded for the grant
    * routes' reason, arriving at the machine it is most obviously about.
@@ -1007,13 +1015,43 @@ export class HomeLink implements HomeConnection {
         .then(() => this.receive(link, since, message))
         .catch(() => {});
     });
-    socket.on("close", (code) => {
+    socket.on("close", (code, reason) => {
       if (link.socket !== socket) return; // superseded
       link.socket = null;
       // A socket that died before it ever opened leaves the attempt marked in
       // flight; the retry armed below is what is on it now.
       link.dialledAt = null;
       this.presence.mirror(link.canvasId, this.origin(), []);
+      // 4402: the home will not have this machine on that canvas — and, when
+      // the reason says `withdrawn`, it HAD it and put it out (roles design,
+      // "Reaching an open socket"). Not redialled: a refusal is not a blip,
+      // and dialling a door that just said no is the socket storm the 4404
+      // branch below already refuses to make. Said once, here, rather than
+      // after the several failures an unexplained close earns, because this
+      // one is explained. The next poll re-creates the link only if the home
+      // lists the canvas for this badge again, which is the home letting it
+      // back in.
+      if (code === WS_NOT_ADMITTED) {
+        const why =
+          String(reason) === WITHDRAWN
+            ? `the home withdrew this machine's access to ${link.canvasId} (${WS_NOT_ADMITTED} ${WITHDRAWN})`
+            : `the home does not admit this machine to ${link.canvasId} (${WS_NOT_ADMITTED})`;
+        const health = this.healthOf(link.canvasId);
+        health.failures += 1;
+        health.attemptedAt = Date.now();
+        health.lastFailure = why;
+        if (!health.complained) {
+          health.complained = true;
+          console.error(
+            `[isocan] ${this.homeUrl}: ${why} — this canvas is not redialled; ` +
+              "ops written here stay here until an owner lets this machine back in. " +
+              "`isocan home` shows this per canvas.",
+          );
+        }
+        link.closed = true;
+        this.links.delete(link.canvasId);
+        return;
+      }
       // 4404: the home says this canvas is not there. Stop dialling it — a
       // replica holding a canvas the home has never heard of is offline birth
       // (phase 13), and retrying forever would be a socket storm about a
@@ -1558,22 +1596,30 @@ export class HomeLink implements HomeConnection {
     return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
   }
 
-  createGrant(
+  async createGrant(
     canvasId: string,
     subject: GrantSubject,
     capability?: Capability,
+    actor?: Actor,
   ): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
     return this.api<GrantResponse>("POST", grantsRoute(canvasId), {
       subject,
       // Forwarded whenever it is not edit (`narrowed`), so an older home never
       // sees the field for the one value it has always meant by omission —
       // and refuses, with `bad-grant`, a rung it does not know.
       ...(narrowed(capability) ? { capability } : {}),
+      ...(actor ? { actorId: actor.id } : {}),
     });
   }
 
-  revokeGrant(canvasId: string, grantId: string): Promise<GrantResponse> {
-    return this.api<GrantResponse>("DELETE", grantRoute(canvasId, grantId));
+  async revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
+    const route = grantRoute(canvasId, grantId);
+    return this.api<GrantResponse>(
+      "DELETE",
+      actor ? `${route}?actorId=${encodeURIComponent(actor.id)}` : route,
+    );
   }
 
   /** Your surfaces AT THE HOME. This daemon's own badge there is one of them
