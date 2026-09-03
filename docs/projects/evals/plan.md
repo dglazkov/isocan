@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals
-note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stages 4–5 open
+note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stage 5's harness `scripts/lift.mjs` measured `/sprint` (same result, a third of the cost) and `isocan-collab` (same result, fewer turns) on 3 Sep. Stage 4 open; the converge lane next
 ---
 # Evals
 
@@ -359,6 +359,57 @@ Three separate questions, commonly confused:
 
 Report all three per skill, and re-run when the skill or the model changes. A
 skill's lift is not a property of the skill alone.
+
+### Built, 3 September 2026 — `scripts/lift.mjs`, and the first two readings
+
+The harness holds everything equal but the skill: the same golden fixture
+placed as an item on a fresh scratch canvas, the same ask posted as a comment
+on it, the same prompt, model, tools (`Read`, `Write`, `Edit`, `Glob`,
+`Grep`, `Bash` limited to `isocan …`) and turn budget, in a temp directory
+bound to the canvas. For `isocan-collab` the treatment is the skill's
+SKILL.md on the system prompt; for `sprint` it is the `/sprint` command's own
+text against a plain sentence asking for the same thing. It grades what
+reached the canvas with `golden.mjs`, records the model from the run's own
+report, prints the three numbers side by side, and deletes the canvases.
+Pages in `docs/lift/`.
+
+**`/sprint`, one run each** ([page](../../lift/2026-09-03-sprint.md)). Both
+conditions laid the board — eleven sheets, nine phases named, a brief. The
+skill's lift is entirely cost: **10 turns, $0.36, 47 s, finished** against
+**26 turns, $1.11, 169 s, out of turns**. Without the command's text the
+agent found `isocan sprint board` by reading `--help` and got there; with it,
+it went straight there. For a facilitation skill that is the right shape of
+lift — the method is in the CLI, the skill is knowing to reach for it.
+
+**`isocan-collab`, four golden tasks each way**
+([page](../../lift/2026-09-03-isocan-collab.md)). *Fires:* 4/4 both — every
+run landed a new version and replied, because the prompt names the canvas
+and the item, and an agent told that much finds `isocan` unaided. *Helps:*
+3/4 both; the same task failed both ways, and its two failures were the
+task's fault (below). *Costs:* the skill saved turns — **17.8 against 21.8
+on average** — and a little money, and lost time to one run that hit the
+turn budget while checking its own work. On tasks this small, with a prompt
+this specific, the collab skill's measurable value is a shorter lap, not a
+better result. The reading that follows: **the skill earns its keep where
+the prompt does not already say where the work is** — the standing agent
+woken by a bare mention — and that is the fixture the next run needs, not a
+better version of this one.
+
+**Two things the first run taught the harness.**
+
+- *The treatment ended differently from the control.* The collab skill's lap
+  ends by parking on `isocan wait`; in a one-shot run the agent landed its
+  work at minute two and waited out the whole fifteen-minute budget. Both
+  conditions are now told it is a one-shot job. A control that ends one way
+  and a treatment that ends another is a difference that is not the skill.
+- *A check may only ask for what the ask asked for.* `create-empty-state`
+  demanded a `[data-state=empty]` hook and an untouched header; two agents
+  built a sound empty state — one disabled Filter, one removed it — and
+  failed both. The suite is v2 for it, and `tasks.json` says why.
+
+Not built: the trigger-rate half of *does it fire* — tasks the skill should
+NOT fire on. And every number above is one run; a lift worth acting on is a
+delta that survives three.
 
 Two isocan-specific opportunities:
 
