@@ -20,6 +20,16 @@ export interface Major {
      * ops whose shape carries no item.
      */
     itemId: string | null;
+    /**
+     * WHAT it was about, in the op's own words — the title an `item.add`
+     * carried, the file a new version was named, the opening line of a
+     * conversation or a reply. "Beckham added something" says who moved and
+     * nothing about what; a home-screen card and a terminal timeline both
+     * wanted the thing named, and the op already names it, so nothing has to
+     * be looked up and a deleted item is still described. Null when the op
+     * carries no words about its subject (a move, a mark).
+     */
+    about: string | null;
 }
 /**
  * The entries worth a tick, oldest first.

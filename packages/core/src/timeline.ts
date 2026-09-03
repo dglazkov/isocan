@@ -1,4 +1,4 @@
-import type { LogEntry } from "./ops.ts";
+import type { LogEntry, Operation } from "./ops.ts";
 import { opWords } from "./opwords.ts";
 import type { CanvasState } from "./model.ts";
 import { applyOperation } from "./reducer.ts";
@@ -77,6 +77,46 @@ export interface Major {
    * ops whose shape carries no item.
    */
   itemId: string | null;
+  /**
+   * WHAT it was about, in the op's own words — the title an `item.add`
+   * carried, the file a new version was named, the opening line of a
+   * conversation or a reply. "Beckham added something" says who moved and
+   * nothing about what; a home-screen card and a terminal timeline both
+   * wanted the thing named, and the op already names it, so nothing has to
+   * be looked up and a deleted item is still described. Null when the op
+   * carries no words about its subject (a move, a mark).
+   */
+  about: string | null;
+}
+
+/** The op's own words about its subject, or null. One line, and short:
+ *  this completes a sentence, it is not the document. */
+function aboutOf(op: Operation): string | null {
+  // Defensive about shape on purpose: a log can carry an op an older or a
+  // poisoned writer produced, and the timeline's own tests replay ops with
+  // fields missing. Nothing here may throw — a seam with no words is a seam.
+  const firstLine = (text: unknown): string | null => {
+    if (typeof text !== "string") return null;
+    const line = text.split("\n").find((one) => one.trim().length > 0)?.trim() ?? "";
+    if (!line) return null;
+    return line.length > 80 ? `${line.slice(0, 79)}…` : line;
+  };
+  const o = op as unknown as Record<string, any>;
+  switch (op.type) {
+    case "item.add":
+      return firstLine(o.title) ?? firstLine(o.version?.filename);
+    case "item.addVersion":
+      return firstLine(o.version?.filename);
+    case "thread.create":
+    case "thread.reply":
+      return firstLine(o.comment?.body);
+    case "project.create":
+      return firstLine(o.title);
+    case "project.update":
+      return firstLine(o.patch?.title);
+    default:
+      return null;
+  }
 }
 
 /**
@@ -103,6 +143,7 @@ export function majors(entries: readonly LogEntry[], minWeight = 4): Major[] {
       kind: entry.envelope.op.type,
       weight,
       itemId: typeof op.itemId === "string" ? op.itemId : null,
+      about: aboutOf(entry.envelope.op),
     });
   }
   return out;
@@ -191,7 +232,12 @@ export function track(entries: readonly LogEntry[], buckets = 60): TrackBucket[]
  * from here.
  */
 export function majorWhat(major: Major): string {
-  return `${major.actor} ${opWords(major.kind) ?? major.kind}`;
+  const words = `${major.actor} ${opWords(major.kind) ?? major.kind}`;
+  // "Beckham added something — “Onboarding flow”": the thing, in the op's
+  // own words, when the op had any. Quoted, because it is somebody's title
+  // or somebody's sentence, and a title that reads as our prose is a lie
+  // about who said it.
+  return major.about ? `${words} — “${major.about}”` : words;
 }
 
 export function majorLine(major: Major): string {

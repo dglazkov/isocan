@@ -5150,11 +5150,21 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 11.5px;
   color: var(--ink-soft);
 }
-.card-peek-row { display: flex; align-items: baseline; gap: 8px; }
+.card-peek-row { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+/* A row that is a link to its item: the same quiet row, and a hover that
+   says so — the card around it is already the link to the canvas. */
+.card-peek-row.linked { border-radius: 6px; margin: 0 -4px; padding: 2px 4px; }
+.card-peek-row.linked:hover { background: var(--chip); color: var(--ink); }
+/* The thing itself, small — the lens's thumbnail, at the lens's size. */
+.card-peek-thumb { flex: none; display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--line-soft); }
+.card-peek-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .card-peek-what {
-  flex: 1; min-width: 0;
+  min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* The item's name under the verb, in the ink the card's title uses: the
+   verb is the small print and the name is the point. */
+.card-peek-about { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Figures that line up, because these are read as a column of times. */
 .card-peek-when { flex: none; font-variant-numeric: tabular-nums; }
 .card-peek-quiet { font-style: italic; }

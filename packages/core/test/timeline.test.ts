@@ -142,7 +142,7 @@ describe("saying it", () => {
   });
 
   it("falls back to the op type rather than inventing a phrase", () => {
-    const m = { seq: 3, ts: "t", actor: "Kenny", kind: "thread.setMain", weight: 5, itemId: null };
+    const m = { seq: 3, ts: "t", actor: "Kenny", kind: "thread.setMain", weight: 5, itemId: null, about: null };
     expect(majorLine({ ...m, kind: "odd.op" })).toBe("3  Kenny odd.op");
   });
 });

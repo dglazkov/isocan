@@ -18,6 +18,8 @@ second week.
 
 ## 2 September 2026
 
+- Pointing at a canvas on the home screen now shows what happened there, not just who did something: a thumbnail of each thing that was added, its name, and a link straight to it; a conversation shows its opening line, so a request to an agent reads as the request. `isocan timeline` names the thing too.
+
 - `/sprint` lays out the week before it starts. Ask for a sprint and the facilitator covers the canvas in a board: one sheet per stretch of the week — Brief, Map, Experts & HMW, Target, Demos, Sketches, Vote, Storyboard, Prototype, Test, Wrap — each saying what happens there. Calling a phase walks everyone to its sheet, and the clock chip offers the one thing to do: *New note* on the right paper, in the sheet; *Hand in*, which lands what you selected on the sheet. Nobody has to know the method. `isocan sprint board` and `isocan sprint brief` are the same from a terminal.
 - Sketch in private, hand in at the bell. The facilitator gives each sketcher a desk (`isocan sprint desk Theo`): a canvas of their own, link off, one pass in, that shows the sprint's clock. *Hand in* on the desk copies your selection onto the sprint's sheet for the running phase. From a terminal: `isocan copy … --to <sprint> --in Sketches --handin`.
 - The heat map is a picture. During a vote, *Place a 🔴* on the clock chip and click the part of a sketch you like; the dot lands there and stays there at every zoom. You see your own dots while the vote is open and everyone's at the bell. Counts and names hide on the Vote sheet only. `isocan react 🔴 <sketch> --at 0.4,0.6` places the same dot.
