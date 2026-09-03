@@ -48,6 +48,33 @@ describe("a canvas is a place you go", () => {
   });
 });
 
+describe("the popup has two doors and one dialog", () => {
+  const popup = read("../src/components/PlaceCanvas.tsx");
+  const actions = read("../src/lib/actions.ts");
+  const rail = read("../src/components/CanvasTools.tsx");
+
+  it("searches your canvases, most recent first, or takes an address", () => {
+    expect(popup).toContain("listCanvases()");
+    expect(popup).toContain("Date.parse(b.updatedAt) - Date.parse(a.updatedAt)");
+    expect(popup).toContain("parseCanvasAddress(query)");
+  });
+
+  it("is opened by the rail and by ⌘K through one shared state", () => {
+    expect(rail).toContain("<PlaceCanvas canvasId={canvasId} actor={actor} />");
+    expect(actions).toContain('id: "place-canvas"');
+    expect(actions).toContain("setPlacingCanvas(true)");
+    expect(popup).toContain("useUiStore((s) => s.placingCanvas)");
+  });
+
+  it("places through the same contract the terminal uses", () => {
+    const upload = read("../src/lib/upload.ts");
+    expect(upload).toContain("const made = canvasItemOf(origin, targetCanvasId);");
+    expect(popup).toContain("addCanvasItem(canvasId, actor,");
+    // A spot found FOR the card is not chosen; the daemon may tidy it clear.
+    expect(popup).toContain("not `chosen`");
+  });
+});
+
 describe("the terminal places one with one verb", () => {
   it("has isocan canvas place, by ref or by address, through the shared contract", () => {
     expect(cli).toContain('.command("place <canvas>")');

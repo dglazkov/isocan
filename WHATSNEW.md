@@ -18,7 +18,7 @@ second week.
 
 ## 2 September 2026
 
-- A canvas on a canvas. `isocan canvas place <name or address>` puts another canvas on this one as a card that draws it small and live — its items where they are, how many, who is there — and opens it in a new tab when you double-click it or its ↗. Shelve your canvases onto sheets; an agent can too. The popup to place one from the app is next.
+- A canvas on a canvas. `isocan canvas place <name or address>` puts another canvas on this one as a card that draws it small and live — its items where they are, how many, who is there — and opens it in a new tab when you double-click it or its ↗. Shelve your canvases onto sheets; an agent can too. In the app, the rail's new button or *Place a canvas…* in ⌘K opens a popup: type to search your canvases, or paste a canvas address.
 - Pointing at a canvas on the home screen now shows what happened there, not just who did something: a thumbnail of each thing that was added, its name, and a link straight to it; a conversation shows its opening line, so a request to an agent reads as the request. `isocan timeline` names the thing too.
 
 - `/sprint` lays out the week before it starts. Ask for a sprint and the facilitator covers the canvas in a board: one sheet per stretch of the week — Brief, Map, Experts & HMW, Target, Demos, Sketches, Vote, Storyboard, Prototype, Test, Wrap — each saying what happens there. Calling a phase walks everyone to its sheet, and the clock chip offers the one thing to do: *New note* on the right paper, in the sheet; *Hand in*, which lands what you selected on the sheet. Nobody has to know the method. `isocan sprint board` and `isocan sprint brief` are the same from a terminal.

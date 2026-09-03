@@ -7,6 +7,7 @@ import { siteLabel } from "@isocan/core";
 import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
+import { PlaceCanvas } from "./PlaceCanvas.tsx";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -282,6 +283,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           from a URL. It sat in the top bar among navigation and identity,
           which is why it never read as belonging to anything. */}
       <ProjectSite canvasId={canvasId} actor={actor} />
+      <PlaceCanvas canvasId={canvasId} actor={actor} />
       <input
         ref={fileInput}
         type="file"

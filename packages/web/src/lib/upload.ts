@@ -15,6 +15,8 @@ import {
   regionOf,
   siteFilename,
   siteLabel,
+  CANVAS_ITEM_SIZE,
+  canvasItemOf,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
@@ -152,6 +154,42 @@ export async function addBrowserItem(
     ...BROWSER_SIZE,
     placement,
     title: siteLabel(site),
+  });
+  return itemId;
+}
+
+/**
+ * **A canvas placed on this canvas** (inception phase 1) — the app's half of
+ * `isocan canvas place`, through the same contract: `canvasItemOf` says the
+ * properties, the blob and the file, so the two cannot drift. The picture is
+ * drawn live by the card; nothing is captured here.
+ */
+export async function addCanvasItem(
+  canvasId: string,
+  actor: Actor,
+  origin: string,
+  targetCanvasId: string,
+  title: string,
+  placement: Placement,
+): Promise<string> {
+  const made = canvasItemOf(origin, targetCanvasId);
+  const blob = new Blob([made.blob], { type: made.mimeType });
+  const upload = await uploadBlob(canvasId, blob, made.filename);
+  const itemId = newItemId();
+  await sendEchoed(canvasId, actor, {
+    type: "item.add",
+    itemId,
+    version: {
+      id: newVersionId(),
+      blobHash: upload.blobHash,
+      mimeType: made.mimeType,
+      filename: made.filename,
+      size: upload.size,
+    },
+    ...CANVAS_ITEM_SIZE,
+    placement,
+    title,
+    properties: made.properties,
   });
   return itemId;
 }

@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: on-demand, standing-agents
-note: phase 0 built 2 Sep — core/canvasitem.ts, the card drawn live from the other canvas's snapshot one level deep, ↗ and double-click open a tab, `isocan canvas place` by ref or address; phases 1–4 (the popup, the screenshot, thumbnails everywhere, another home) designed and not built
+note: phases 0–1 built 2 Sep — core/canvasitem.ts, the card drawn live from the other canvas's snapshot one level deep, ↗ and double-click open a tab, `isocan canvas place` by ref or address, and the popup from the rail and ⌘K (search or paste an address); phases 2–4 (the screenshot, thumbnails everywhere, another home) designed and not built
 ---
 # Canvas Inception
 
@@ -182,6 +182,18 @@ everything else. Proved in `core/test/canvasitem.test.ts`,
 `web/test/inception.test.ts`, `cli/test/place.test.ts` over a real daemon,
 and by eye: *Lake House · 16 items · 1 here*, its screens and photos where
 they are, opened in a tab on a double-click.
+
+**Phase 1, the same day.** The popup (`web/components/PlaceCanvas.tsx`): a
+button on the rail beside Add site and *Place a canvas…* in ⌘K open one
+popover through one shared state; type and the list narrows over your
+canvases, most recent first, each with its last act; paste a `/p/<id>`
+address at any origin and it is the one row offered, with the home's title
+when it knows one. Placing lands the card where there is room in view,
+through `addCanvasItem`, which reads the same contract the terminal does.
+The third door the design named — pasting an address straight onto the
+canvas — is not built: the app's ⌘V reads its own clipboard, not the
+system's, and reaching the system clipboard is a permission question worth
+its own decision.
 
 **Zero new op types**, the target every project here has met so far; the one
 place that might want one is none. **Both surfaces**, held by the tests that

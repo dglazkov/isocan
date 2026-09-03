@@ -3257,6 +3257,22 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop); white-space: nowrap;
 }
 .site-popover .text-input { width: 220px; }
+/* Place a canvas: the site popover's shape with a list under the field —
+   your canvases, most recent first, narrowed as you type; or the one row an
+   address names. */
+.place-canvas { position: relative; }
+.canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
+.canvas-picker .text-input { width: 300px; }
+.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow: auto; }
+.canvas-picker-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 6px 8px; border: none; border-radius: 6px; background: none; cursor: pointer;
+  color: var(--ink); text-align: left; font: inherit;
+}
+.canvas-picker-row:hover, .canvas-picker-row:focus-visible { background: var(--chip); outline: none; }
+.canvas-picker-title { font-size: 12.5px; font-weight: 600; }
+.canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
+.canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
 .site-error {
   position: absolute; top: calc(100% + 4px); right: 10px;
   font-size: 10.5px; color: var(--danger); white-space: nowrap;
