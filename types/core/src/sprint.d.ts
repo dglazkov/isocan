@@ -120,6 +120,27 @@ export declare function briefCard(brief: Brief): string;
 /** The brief card on this canvas, or null. */
 export declare function briefItem(canvas: CanvasContents): Item | null;
 /**
+ * **The desk** (sprint phase 3, journey Scene 2): a private canvas per
+ * sketcher, born by the facilitator, that knows which sprint it belongs to.
+ *
+ * `sprintOf=<canvas id>` on the DESK canvas's own properties is the whole
+ * record. The privacy is real rather than a courtesy: the desk's link grant
+ * is turned off at birth and one single-use pass admits one browser, so
+ * the daemon refuses everyone else at the door — the answer the 1 Sep
+ * research chose over a veil. What the desk's chip shows (the sprint's
+ * phase and clock) it reads from the sprint canvas by asking for it; what
+ * *Hand in* does from a desk is a cross-canvas copy onto the sprint's
+ * sheet, stamped for the phase. Nothing on a desk is on the wall until its
+ * sketcher says so.
+ */
+export declare const DESK_OF_PROP = "sprintOf";
+/** The sprint this canvas is a desk for, or null when it is not a desk. */
+export declare function deskOf(project: {
+    properties?: Record<string, string>;
+}): string | null;
+/** What a desk is called: the sketcher's name, possessive. */
+export declare function deskTitle(name: string): string;
+/**
  * The phases, in the order a five-day sprint runs them. A word not in this
  * table is NOT a phase — `/sprint make onboarding better` is a brief for the
  * facilitator, not a state change — which is what keeps a typo from starting
@@ -223,9 +244,13 @@ interface Tally {
  */
 export declare function tally(items: readonly Item[], mark: string, agents: ReadonlySet<string>): Tally[];
 /**
- * The wall a vote is about: what was handed in for the most recent silent
- * phase before this one, or — with nothing handed in — every item. A heat
- * map over a sprint that never used hand-in still works, on everything.
+ * The wall a vote is about. With a board laid, it is what is ON THE VOTE
+ * SHEET — the wall is a sheet now, which is what closes the 1 Sep build's
+ * one departure (hiding counts on every item because "the wall" had no
+ * precise meaning). Without a board, or with an empty Vote sheet: what was
+ * handed in for the most recent silent phase before this one, or — with
+ * nothing handed in — every item, so a heat map over a sprint that never
+ * used hand-in still works, on everything.
  */
 export declare function wallFor(canvas: CanvasContents, state: SprintState): Item[];
 export {};

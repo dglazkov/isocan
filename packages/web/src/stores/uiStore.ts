@@ -129,6 +129,10 @@ interface UiStore {
    * comment code already reads — the two never disagree. */
   activeTool: Tool;
   commentMode: boolean;
+  /** The mark being PLACED: while set, a click on a sketch on the wall puts
+   *  this emoji where the click landed (sprint phase 4's heat map). Local,
+   *  like a tool; Escape clears it. Null is the ordinary pointer. */
+  stamp: string | null;
   trashOpen: boolean;
   /** The identity menu, opened by clicking your own face in the pile. */
   identityOpen: boolean;
@@ -227,6 +231,7 @@ interface UiStore {
   undoStroke: () => void;
   clearSketch: () => void;
   setActiveTool: (tool: Tool) => void;
+  setStamp: (stamp: string | null) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
@@ -480,6 +485,7 @@ export const useUiStore = create<UiStore>((set) => {
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
+    stamp: null,
     trashOpen: false,
     identityOpen: false,
     shareOpen: false,
@@ -555,6 +561,7 @@ export const useUiStore = create<UiStore>((set) => {
     // activeTool is the source of truth; commentMode is its "comment" facet,
     // set together so the two can never drift.
     setActiveTool: (activeTool) => set({ activeTool, commentMode: activeTool === "comment" }),
+    setStamp: (stamp) => set({ stamp }),
     setCommentMode: (commentMode) =>
       set((s) => ({
         commentMode,

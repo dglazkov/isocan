@@ -104,3 +104,57 @@ export declare function freeSpotIn(canvas: CanvasContents, area: Item, width: nu
     x: number;
     y: number;
 };
+/**
+ * **A grid on a sheet** (sprint phase 5): rows and columns, each with a
+ * name, drawn as guides inside the sheet — the storyboard is one row of
+ * fifteen frames, Friday's test wall is people down the side and frames
+ * along the top. Four properties on the area item and nothing else: a cell
+ * is geometry (the inner region divided evenly), so an item is IN a cell by
+ * its centre the way it is in the sheet, and `isocan text --in Test --cell
+ * 3,4` is a placement, not a relation. Rows and columns are counted from 1,
+ * top-left, because that is how a person reads a table.
+ */
+export declare const AREA_ROWS_PROP = "rows";
+export declare const AREA_COLS_PROP = "cols";
+export declare const AREA_ROW_NAMES_PROP = "rowNames";
+export declare const AREA_COL_NAMES_PROP = "colNames";
+export interface AreaGrid {
+    rows: number;
+    cols: number;
+    /** A name per row, in order; shorter than `rows` when some are unnamed. */
+    rowNames: string[];
+    colNames: string[];
+}
+/** The grid a sheet carries, or null for a plain sheet. */
+export declare function areaGrid(area: Item): AreaGrid | null;
+/** The patch that puts a grid on a sheet, or takes it off — one spelling
+ *  for both surfaces. Names are stored comma-joined, so a name may not
+ *  carry a comma; the CLI says so when one does. */
+export declare function gridPatch(grid: {
+    rows: number;
+    cols: number;
+    rowNames?: string[];
+    colNames?: string[];
+} | null): {
+    properties: Record<string, string>;
+} | {
+    removeProperties: string[];
+};
+/** The box of one cell, counted from 1 at the top-left. */
+export declare function cellBox(area: Item, row: number, col: number): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+/** Which cell an item's centre is in, or null when off the grid. */
+export declare function cellOf(area: Item, item: Item): {
+    row: number;
+    col: number;
+} | null;
+/** The first clear spot inside one cell, for a thing of this size. A cell
+ *  too small or too full answers its own corner, like a sheet does. */
+export declare function cellSpot(canvas: CanvasContents, area: Item, row: number, col: number, width: number, height: number): {
+    x: number;
+    y: number;
+};

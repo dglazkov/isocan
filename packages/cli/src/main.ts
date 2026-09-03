@@ -135,6 +135,11 @@ import {
   boardOf,
   briefCard,
   briefItem,
+  DESK_OF_PROP,
+  deskTitle,
+  areaGrid,
+  cellSpot,
+  gridPatch,
   areaInner,
   areasOf,
   findArea,
@@ -4045,7 +4050,7 @@ program
  * may be tidied clear of what is already on the canvas (`Placement.chosen`). */
 function placementFor(
   snapshot: CanvasSnapshotResponse,
-  opts: { at?: string; anchor?: string; in?: string },
+  opts: { at?: string; anchor?: string; in?: string; cell?: string },
   /** The thing's size, when the caller knows it — what `--in` needs to find
    *  a spot inside the area that will hold it. */
   size?: { width: number; height: number },
@@ -4058,8 +4063,19 @@ function placementFor(
     const area = findArea(snapshot.canvas, opts.in);
     if (!area) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
     const want = size ?? { width: 0, height: 0 };
+    // `--cell r,c`: one cell of the sheet's grid, counted from 1 at the
+    // top-left — a note on Friday's test wall goes in the cell for that
+    // person and that frame, and nowhere else.
+    if (opts.cell) {
+      const [row, col] = opts.cell.split(",").map((one) => Number(one.trim()));
+      if (row === undefined || col === undefined || !Number.isInteger(row) || !Number.isInteger(col)) {
+        throw new Error(`--cell wants row,col counted from 1, e.g. --cell 3,4 — got: ${opts.cell}`);
+      }
+      return { ...cellSpot(snapshot.canvas, area, row, col, want.width, want.height), chosen: true };
+    }
     return { ...freeSpotIn(snapshot.canvas, area, want.width, want.height), chosen: true };
   }
+  if (opts.cell) throw new Error("--cell needs --in <area>: a cell is a cell of a sheet's grid");
   if (opts.anchor) return { anchorItemId: resolveItem(snapshot, opts.anchor).id };
   const leftmost = Object.values(snapshot.canvas.items).reduce<Item | null>(
     (best, item) => (best === null || item.x < best.x ? item : best),
@@ -4140,6 +4156,7 @@ program
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size, e.g. 480x360")
   .option("--title <title>")
   .option("-d, --description <text>")
@@ -4398,8 +4415,10 @@ program
   .description("Copy items — beside themselves, or into another canvas with --to")
   .option("--to <canvas>", "copy into this canvas instead of beside the originals")
   .option("--at <x,y>", "where the copy goes (default: clear ground beside the originals)")
+  .option("--in <area>", "onto this sheet of the canvas they land on, at the first clear spots")
+  .option("--handin", "and hand them in for the phase running where they land — a desk's bell")
   .action(
-    run(async (items: string[], opts: { to?: string; at?: string }, cmd: Command) => {
+    run(async (items: string[], opts: { to?: string; at?: string; in?: string; handin?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: from, snapshot } = await canvasAndSnapshot(ctx);
       const sources = items.map((ref) => resolveItem(snapshot, ref));
@@ -4413,11 +4432,34 @@ program
       // beside the originals when that is the same one, on clear ground when
       // it is not.
       const into = sameCanvas ? snapshot.canvas : (await ctx.client.snapshot(target.id)).canvas;
-      const placements = duplicatePlacements(
-        into,
-        sources,
-        opts.at ? parseXY(opts.at) : undefined,
-      );
+      /**
+       * `--in <sheet>`: each copy takes the first clear spot on the sheet,
+       * the search seeing the ones before it land — a hand-in from a desk is
+       * this, and a wall that arrives together needs every sketch on the
+       * sheet, not one on it and five nudged off. `--handin` stamps them for
+       * the phase running on the canvas they land on, so a desk's bell is
+       * one command.
+       */
+      const sheet = opts.in === undefined ? null : findArea(into, opts.in);
+      if (opts.in !== undefined && !sheet) {
+        throw new Error(`no area called "${opts.in}" on "${target.title}" — \`isocan area ls\` there names them`);
+      }
+      const running = opts.handin ? sprintState(into) : null;
+      if (opts.handin && !running) {
+        throw new Error(`no sprint is running on "${target.title}" — nothing to hand in for`);
+      }
+      let placements: { item: Item; x: number; y: number }[];
+      if (sheet) {
+        let occupied = into;
+        placements = [];
+        for (const item of sources) {
+          const spot = freeSpotIn(occupied, sheet, item.width, item.height);
+          placements.push({ item, ...spot });
+          occupied = { ...occupied, items: { ...occupied.items, [`pending_${placements.length}`]: { ...item, ...spot } } };
+        }
+      } else {
+        placements = duplicatePlacements(into, sources, opts.at ? parseXY(opts.at) : undefined);
+      }
       // One copy is one act: eight items land as eight ops under one id, and
       // one ⌘Z takes them all back. See `LogEntry.group`.
       const group = newGroupId();
@@ -4446,17 +4488,25 @@ program
           },
           width: item.width,
           height: item.height,
-          // `--at` chose the spot, so the copies stay where they were put.
-          placement: { x, y, ...(opts.at ? { chosen: true } : {}) },
+          // `--at` chose the spot, and so did a sheet's search: the copies
+          // stay where they were put.
+          placement: { x, y, ...(opts.at || sheet ? { chosen: true } : {}) },
           title: item.title,
           ...(item.description ? { description: item.description } : {}),
-          properties: copyProperties(item, { sameCanvas }),
+          properties: {
+            ...copyProperties(item, { sameCanvas }),
+            ...(running ? handInPatch(running.phase.name).properties : {}),
+          },
         }, group);
         made.push(itemId);
       }
-      if (ctx.json) return printJson({ items: made, canvasId: target.id });
-      const where = sameCanvas ? "beside the originals" : `into "${target.title}"`;
-      console.log(`copied ${made.length} item${made.length === 1 ? "" : "s"} ${where}`);
+      if (ctx.json) return printJson({ items: made, canvasId: target.id, ...(running ? { handedInFor: running.phase.name } : {}) });
+      const where = sheet
+        ? `onto "${sheet.title}"${sameCanvas ? "" : ` in "${target.title}"`}`
+        : sameCanvas
+          ? "beside the originals"
+          : `into "${target.title}"`;
+      console.log(`copied ${made.length} item${made.length === 1 ? "" : "s"} ${where}${running ? `, handed in for ${running.phase.name}` : ""}`);
       for (const id of made) console.log(`  ${id}`);
     }),
   );
@@ -4513,6 +4563,7 @@ program
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
   .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
@@ -5134,8 +5185,11 @@ areaCmd
         const tint = opts.tint === undefined ? null : pickOne("tint", opts.tint, PAPERS, "yellow");
         const { width, height } = sizeFor(opts.size, AREA_DEFAULT_SIZE);
         // The card is markdown, like a text node's words: what happens here.
+        // A sheet with nothing to say still needs a blob — the daemon refuses
+        // an empty one — so a plain sheet carries one newline, which renders
+        // as nothing.
         const card = (opts.note ?? "").trim();
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card, "utf8"), AREA_MIME, AREA_FILENAME);
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card.length > 0 ? card : "\n", "utf8"), AREA_MIME, AREA_FILENAME);
         /**
          * Where a sheet goes by default: to the RIGHT of everything, level
          * with the top of it — a new region beside the work, never over it.
@@ -5173,6 +5227,54 @@ areaCmd
     ),
   );
 
+/**
+ * **A grid on a sheet** (sprint phase 5): rows × columns, each with a name,
+ * drawn as guides in the app; `--cell r,c` on `text`, `add` and `mv` then
+ * addresses one cell. The storyboard is 1×15; Friday's test wall is people
+ * down the side and frames along the top. Four properties, no new op.
+ */
+areaCmd
+  .command("grid <area> [size]")
+  .description("Put a grid on a sheet — `area grid Test 5x15 --rows \"Ana,Ben,Cy,Di,Ed\"` — or `--clear` it")
+  .option("--rows <names>", "row names, comma-separated, top to bottom")
+  .option("--cols <names>", "column names, comma-separated, left to right")
+  .option("--clear", "take the grid off the sheet")
+  .action(
+    run(
+      async (
+        ref: string,
+        size: string | undefined,
+        opts: { rows?: string; cols?: string; clear?: boolean },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const area = findArea(snapshot.canvas, ref);
+        if (!area) throw new Error(`no area called "${ref}" — \`isocan area ls\` names them`);
+        if (opts.clear) {
+          await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(null) });
+          if (ctx.json) return printJson({ itemId: area.id, grid: null });
+          return console.log(`"${area.title}" is a plain sheet again`);
+        }
+        const match = (size ?? "").match(/^(\d+)x(\d+)$/i);
+        if (!match) throw new Error(`a grid is ROWSxCOLS, e.g. 5x15 — got: ${size ?? "nothing"}`);
+        const rows = Number(match[1]);
+        const cols = Number(match[2]);
+        if (rows < 1 || cols < 1) throw new Error("a grid needs at least one row and one column");
+        const names = (raw: string | undefined, what: string, count: number): string[] => {
+          const list = (raw ?? "").split(",").map((one) => one.trim()).filter((one) => one.length > 0);
+          if (list.length > count) throw new Error(`${list.length} ${what} names for ${count} ${what}s`);
+          return list;
+        };
+        const grid = { rows, cols, rowNames: names(opts.rows, "row", rows), colNames: names(opts.cols, "column", cols) };
+        await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(grid) });
+        if (ctx.json) return printJson({ itemId: area.id, grid });
+        console.log(`"${area.title}" is a ${rows}×${cols} grid${grid.rowNames.length > 0 ? ` — rows: ${grid.rowNames.join(", ")}` : ""}${grid.colNames.length > 0 ? ` — columns: ${grid.colNames.join(", ")}` : ""}`);
+        console.log("place into a cell with --in and --cell: isocan text \"…\" --in " + JSON.stringify(area.title) + " --cell 1,1");
+      },
+    ),
+  );
+
 areaCmd
   .command("ls", { isDefault: true })
   .description("The areas, in reading order, and how much each holds")
@@ -5188,6 +5290,10 @@ areaCmd
         pos: `${area.x},${area.y}`,
         size: `${area.width}x${area.height}`,
         tint: area.properties[AREA_TINT_PROP] ?? "",
+        grid: (() => {
+          const grid = areaGrid(area);
+          return grid ? `${grid.rows}x${grid.cols}` : "";
+        })(),
       }));
       if (ctx.json) return printJson(rows);
       if (rows.length === 0) return console.log("no areas here — `isocan area new <title>` lays one");
@@ -5313,6 +5419,7 @@ program
   .description("Move an item — to x y, or by a delta with --by")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
   .option("--in <area>", "move it into this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
     run(
@@ -5320,7 +5427,7 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string },
+        opts: { by?: string; in?: string; cell?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -5336,9 +5443,17 @@ program
         delete without.items[item.id];
         // Relative is what an agent usually means: nudging a thing clear of a
         // neighbour, the same gesture the arrow keys make in the web app.
+        const cell =
+          opts.cell === undefined ? null : opts.cell.split(",").map((one) => Number(one.trim()));
+        if (cell && (cell.length !== 2 || !cell.every((one) => Number.isInteger(one)))) {
+          throw new Error(`--cell wants row,col counted from 1, e.g. --cell 3,4 — got: ${opts.cell}`);
+        }
+        if (cell && !into) throw new Error("--cell needs --in <area>: a cell is a cell of a sheet's grid");
         const target =
           into !== null
-            ? freeSpotIn(without, into, item.width, item.height)
+            ? cell
+              ? cellSpot(without, into, cell[0]!, cell[1]!, item.width, item.height)
+              : freeSpotIn(without, into, item.width, item.height)
             : opts.by !== undefined
             ? (() => {
                 const delta = parseXY(opts.by);
@@ -5414,11 +5529,19 @@ program
   )
   .option("--off", "take your reaction back")
   .option("--who", "say who else is wearing it, rather than the count")
+  .option("--at <x,y>", "place it on a part of the item — fractions of its box, 0..1 each, e.g. 0.4,0.6 (a heat-map dot)")
   .action(
-    run(async (emoji: string, refs: string[], opts: { off?: boolean; who?: boolean }, cmd: Command) => {
+    run(async (emoji: string, refs: string[], opts: { off?: boolean; who?: boolean; at?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
+      // A dot is a point ON the item: fractions, so the same part of the
+      // sketch at every size, and the same op the app writes when you click.
+      const at = opts.at === undefined ? undefined : parseXY(opts.at);
+      if (at && !(at.x >= 0 && at.x <= 1 && at.y >= 0 && at.y <= 1)) {
+        throw new Error(`--at is a point on the item as fractions of its box, 0..1 each — got: ${opts.at}`);
+      }
+      if (at && opts.off) throw new Error("--at places a mark; --off takes one back — one or the other");
       // Reactions store ids and nothing else, so a name has to be looked up
       // NOW — which is the point: a rename reaches what somebody reacted to
       // before it (`lib/names.ts`, and the same rule mentions live by).
@@ -5432,6 +5555,7 @@ program
           itemId: item.id,
           emoji,
           on: !opts.off,
+          ...(at ? { at } : {}),
         });
         const worn = (item.reactions?.[emoji] ?? []).filter((id) => id !== ctx.actor.id);
         const after = opts.off ? worn : [...worn, ctx.actor.id];
@@ -6406,16 +6530,25 @@ const slidesCmd = program
 
 function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
   slidesCmd
-    .command(`${name} <items...>`)
+    .command(`${name} [items...]`)
     .description(blurb)
     .option("--canvas <canvas>")
+    .option("--in <area>", "every item on this sheet, in reading order — the storyboard row becomes the deck")
     .action(
-      run(async (refs: string[], opts: { canvas?: string }, cmd: Command) => {
+      run(async (refs: string[], opts: { canvas?: string; in?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         if (opts.canvas) ctx.canvasRef = opts.canvas;
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-        for (const ref of refs) {
-          const item = resolveItem(snapshot, ref);
+        // A sheet's contents in reading order — a 1×15 storyboard's frames
+        // left to right — so the deck flips in the order the wall reads.
+        const sheet = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+        if (opts.in !== undefined && !sheet) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+        const targets: Item[] = [
+          ...refs.map((ref) => resolveItem(snapshot, ref)),
+          ...(sheet ? itemsIn(snapshot.canvas, sheet) : []),
+        ];
+        if (targets.length === 0) throw new Error(`name items, or a sheet with --in <area>`);
+        for (const item of targets) {
           if (isSlide(item) === on) {
             console.log(
               on ? `"${item.title}" is already a slide` : `"${item.title}" was not a slide`,
@@ -6760,6 +6893,48 @@ sprintCmd
         console.log(`the brief is on the board${sheet ? "" : " (no Brief sheet — laid where text goes)"} — react ✅ on it when it is right`);
       },
     ),
+  );
+
+/**
+ * **The desk** (sprint phase 3): a private canvas for one sketcher. Born
+ * knowing its sprint (`sprintOf`), its link grant turned off at birth so the
+ * address alone admits nobody, and one single-use pass minted for the one
+ * browser that should get in. The facilitator hands the address to that
+ * sketcher and nobody else; the daemon refuses the rest at the door.
+ */
+sprintCmd
+  .command("desk <name...>")
+  .description("A private canvas for one sketcher — link off, one pass in; hand them the address it prints")
+  .option("--canvas <canvas>", "the sprint canvas this desk belongs to")
+  .action(
+    run(async (words: string[], opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const sprint = await resolveCanvas(ctx);
+      const name = words.join(" ").trim();
+      if (!name) throw new Error("whose desk? — `isocan sprint desk Theo`");
+      const canvasId = newCanvasId();
+      await sendOp(ctx, null, {
+        type: "project.create",
+        canvasId,
+        title: deskTitle(name),
+        description: `${name}'s desk for "${sprint.title}" — sketch here; Hand in puts it on the sprint's wall`,
+        properties: { [DESK_OF_PROP]: sprint.id },
+      });
+      // The link grant every canvas is born with is the one thing that would
+      // let anybody with the address in. Off, before the address exists.
+      const link = (await ctx.client.grants(canvasId)).grants.find((g) => g.subject === LINK);
+      if (link) await ctx.client.revokeGrant(canvasId, link.id);
+      // One pass, one browser, once. Admit-only: the sketcher names
+      // themselves at the door, the way anyone entering a canvas does.
+      const origin = (await ctx.homeOf(canvasId)) ?? ctx.client.base;
+      const { token } = await ctx.client.mintPass(canvasId);
+      const address = canvasUrlWithPass(origin, canvasId, token);
+      if (ctx.json) return printJson({ canvasId, title: deskTitle(name), sprintOf: sprint.id, address });
+      console.log(`${deskTitle(name)} (${canvasId}) — the link is off. Hand ${name} this address and nobody else; it admits one browser, once:`);
+      console.log(`  ${address}`);
+      console.log(`their Hand in lands on "${sprint.title}"; \`isocan sprint desk ${name}\` again mints a fresh pass if this one lapses`);
+    }),
   );
 
 sprintCmd

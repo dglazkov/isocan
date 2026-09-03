@@ -23,6 +23,20 @@ interface Reaction {
  * reshuffles when somebody reacts is a row nobody can aim at — and the useful
  * order for a reader is "what does this item mostly say", which is the count.
  */
+/**
+ * **The dots**: where a mark was placed on the item, per actor — the heat
+ * map's picture. Fractions of the box, so the caller multiplies by the box
+ * it is drawing. Joined against who WEARS the mark now: the reducer keeps a
+ * point when a mark comes off (so undo can put the dot back), and a point
+ * whose actor is not wearing the mark is not a dot. An actor wearing the
+ * mark with no point has no dot and is still counted; `reactionsOf` says
+ * how many, this says where.
+ */
+export declare function reactionPointsOf(item: Item, emoji: string): {
+    actorId: string;
+    x: number;
+    y: number;
+}[];
 export declare function reactionsOf(item: Item, selfId?: string): Reaction[];
 /** Does this actor already wear this emoji here? The client asks before it
  * sends, so the op says what should be true rather than "flip it". */

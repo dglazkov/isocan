@@ -163,8 +163,36 @@ export function applyOperation(
       if (next.length > 0) reactions[emoji] = next;
       else delete reactions[emoji];
       const hasAny = Object.keys(reactions).length > 0;
-      const { reactions: _drop, ...rest } = item;
-      return putItem({ ...rest, ...(hasAny ? { reactions } : {}), ...stamp });
+      /**
+       * The point, kept beside the set. `on` with `at` places (or moves) this
+       * actor's dot; `on` without `at` leaves any dot they had — a chip click
+       * after a placed dot is still the same vote, not a vote that lost its
+       * place. `off` does NOT remove the dot: the inverse of `off` is `on`
+       * with no `at` (the inverter cannot know whose), so a dot that vanished
+       * on `off` could never come back on undo. It stays, and readers join
+       * points against who WEARS the mark now (`reactionPointsOf`) — a point
+       * for an actor not wearing the mark is not a dot. A point is fractions
+       * of the box: anything else is refused, because a dot outside the
+       * sketch is not on any part of it.
+       */
+      if (op.at !== undefined) {
+        const { x, y } = op.at;
+        if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) {
+          throw new OpValidationError("bad-op", "item.react: `at` is a point on the item, 0..1 each");
+        }
+      }
+      const points: Record<string, Record<string, { x: number; y: number }>> = { ...item.reactionPoints };
+      if (op.on && op.at !== undefined) {
+        points[emoji] = { ...points[emoji], [actor.id]: { x: op.at.x, y: op.at.y } };
+      }
+      const hasPoints = Object.keys(points).length > 0;
+      const { reactions: _drop, reactionPoints: _dropPoints, ...rest } = item;
+      return putItem({
+        ...rest,
+        ...(hasAny ? { reactions } : {}),
+        ...(hasPoints ? { reactionPoints: points } : {}),
+        ...stamp,
+      });
     }
 
     case "item.move":

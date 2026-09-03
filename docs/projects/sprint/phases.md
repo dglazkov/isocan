@@ -36,7 +36,32 @@ built too:** a phase call glides everyone who watched it to the phase's
 sheet, and the clock chip offers the phase's one action — *Go there*, *New
 note* on the phase's paper in the sheet, *Hand in* which lands the
 selection on the sheet — through helpers the item menu shares
-(`web/test/walk.test.ts`). Phase 3 is next.
+(`web/test/walk.test.ts`). **Phase 3 is built:** `isocan sprint desk <name>`
+births a private canvas — link off, one pass in — that knows its sprint; its
+chip reads the sprint's clock by pulling the snapshot and offers *Hand in*,
+a cross-canvas copy onto the phase's sheet, stamped, in one group; the
+terminal's twin is `copy --to --in --handin` (`cli/test/desk.test.ts`).
+**Phase 4 is built:** the wall is the Vote sheet's contents when a board is
+laid, and the curtain applies there and nowhere else; `item.react` carries
+an optional point as fractions of the item's box — the one wire change of
+the project, written by a click while the chip says *Placing* and by
+`isocan react --at`; dots draw where they were put, only yours under the
+curtain, everyone's at the bell; the reducer keeps a point when the mark
+comes off so undo can put the dot back without the inverter knowing whose
+(`core/test/heatmap.test.ts`, `cli/test/heatmap.test.ts`). **Phase 5 is
+built:** a sheet carries a grid as four properties — `isocan area grid Test
+5x15 --rows "…"` — drawn as guides with names in the app; `--cell row,col`
+with `--in` on `text`, `add` and `mv` places into one cell, counted from 1
+at the top-left; `slides add --in Storyboard` makes the deck from a sheet in
+reading order (`core/test/grid.test.ts`, `cli/test/grid.test.ts`). **Phase
+6 is rehearsed, not run:** `cli/test/one-hour.test.ts` plays the one-hour
+cut end to end against a real daemon — board, brief, desk, HMW notes into
+the sheet, a 🎯, a sketch handed in from the desk, the wall on the Vote
+sheet, placed 🔴 dots under the curtain, ⭐, 🏆, a 1×3 storyboard as the
+deck, a 2×3 test wall with a note in a cell, wrap, end — and reads the board
+back left to right. One actor plays every chair, which is what a real run
+must not do. **The run with people is still owed**, and it is the next
+thing to do before anything else is built here.
 
 ---
 

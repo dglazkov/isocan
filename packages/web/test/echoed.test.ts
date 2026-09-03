@@ -39,6 +39,8 @@ const ALLOWED: Record<string, string> = {
     "actor.join is identity, not canvas state (canvasId is null); the roster row leaves on the answer",
   "packages/web/src/pages/CanvasListPage.tsx":
     "project.create/update/delete on canvases this tab does not have open",
+  "packages/web/src/lib/sprint.ts":
+    "handInFromDesk writes item.add to the SPRINT canvas from a desk tab — not the canvas this tab has open (sprint phase 3); every write to the open canvas in this file goes through sendEchoed",
 };
 
 describe("writes to the open canvas", () => {

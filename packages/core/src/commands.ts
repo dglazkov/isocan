@@ -819,11 +819,16 @@ phase with no clock (museum, supervote, prototype) runs until you call the next.
 SILENCE IS THE METHOD. During hmw, notes, ideas, crazy8s and sketch:
 - Do not post in the Chat — every parked sketcher wakes on it. Narrate with
   \`isocan session say "…"\` instead; the chip shows the clock.
-- Sketchers work ALONE: a person on their own scratch canvas or on paper, an
-  agent in its own directory or canvas. Nothing lands on this canvas until the
-  bell. At the bell each hands in — \`isocan copy <items> --to <this canvas>\`
-  then \`isocan sprint handin <items>\` — and you \`isocan format\` once so the
-  wall arrives together. Six arrivals at once beat six arrivals in a row.
+- Sketchers work ALONE, each on a DESK you give them before the first silent
+  box: \`isocan sprint desk <name>\` makes a private canvas for that one
+  person — link off, one pass in — and prints an address to hand to them and
+  nobody else (a DM, never the Chat). An agent sketches in its own directory
+  or on a desk of its own. Nothing lands on this canvas until the bell. At
+  the bell each hands in — the desk's clock chip has a Hand in button that
+  lands the selection on this sprint's sheet, or from a terminal
+  \`isocan copy <items> --to <this canvas> --in <sheet> --handin\` — and you
+  \`isocan format --in <sheet>\` once so the wall arrives together. Six
+  arrivals at once beat six arrivals in a row.
 - QUOTAS hold the wall to one voice each: eight frames in crazy8s, ONE solution
   sketch per sketcher. An agent that could make forty makes one. Check with
   \`isocan sprint\` (it counts hand-ins) and say so if somebody is over.
@@ -844,10 +849,16 @@ THE PHASES, AND THE VERB FOR EACH.
 - museum: \`isocan format\` the sketches in a row. Walk the room:
   \`isocan present <sketch>\` per sketch; people who want the tour follow YOU
   from the agent tray. Nobody presents their own.
-- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone \`isocan react 🔴\`
-  (or clicks) on the PARTS they like, as many as they want, silently. The app
-  hides counts and names until the bell; you may read \`isocan sprint tally\`
-  because you are the referee, not a voter.
+- museum: before you call it, put the wall on the Vote sheet — \`isocan mv
+  <sketches...> --in Vote\` then \`isocan format --in Vote\` — because the
+  Vote sheet IS the wall: the curtain hides counts and names there and
+  nowhere else.
+- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone places 🔴 on the PARTS
+  they like, as many as they want, silently — the chip's "Place a 🔴" then a
+  click on the part, or \`isocan react 🔴 <sketch> --at 0.4,0.6\` (fractions
+  of the sketch's box). The dots draw where they were put; under the curtain
+  each person sees only their own, and all of them at the bell. You may read
+  \`isocan sprint tally\` because you are the referee, not a voter.
 - critique: three minutes per sketch, the room narrates, the author speaks last
   and only to say what was missed. A scribe (an agent is good at this) writes
   each big idea as \`isocan text --paper pink\` beside the sketch.
@@ -857,14 +868,20 @@ THE PHASES, AND THE VERB FOR EACH.
 - supervote: the Decider's 🏆, up to three. Nobody else's counts. If the
   winner is a /variation child, \`isocan choose <winner>\` folds it home in one
   undoable gesture; otherwise mark it with \`isocan context pin\`.
-- storyboard: fifteen items in a row, existing sketches moved in rather than
-  redrawn; \`isocan slides add\` them so the deck is the storyboard.
+- storyboard: \`isocan area grid Storyboard 1x15\` draws fifteen frames on the
+  sheet; move the winning sketches in (\`isocan mv <sketch> --in Storyboard
+  --cell 1,3\`) rather than redrawing, and a missing frame is a note in its
+  cell (\`isocan text "…" --in Storyboard --cell 1,7 --paper yellow\`). Then
+  \`isocan slides add --in Storyboard\`: the deck is the row, in order.
 - prototype: fan out — one agent per screen, one name each, said in the Chat
   first; a Stitcher runs \`isocan design check\` and \`isocan format\`; the
   trial run is the deck full screen.
-- test: FIVE PEOPLE, interviewed by a person. Agents transcribe, never
-  invent: notes as \`isocan text --paper\` on a grid, rows per interviewee,
-  columns per storyboard frame. Patterns need three of five.
+- test: FIVE PEOPLE, interviewed by a person. Before the first interview,
+  \`isocan area grid Test 5x15 --rows "<the five names>"\` — rows are people,
+  columns are frames. Agents transcribe, never invent: one note per cell
+  from what was said, \`isocan text "…" --in Test --cell <person>,<frame>
+  --paper yellow\`. Patterns need three of five; mark one with a reaction on
+  the notes that show it.
 - wrap: quote Monday's questions by #Title and answer each; \`isocan recap\` and
   \`isocan timeline --majors\` are the week's record. Then \`isocan sprint end\`.
 

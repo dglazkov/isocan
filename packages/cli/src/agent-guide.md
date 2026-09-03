@@ -697,9 +697,12 @@ bell:
 ```sh
 isocan sprint board                       # lay the board: one sheet per stretch of the week
 isocan sprint brief --goal "…" --decider Maya --question "…"   # the brief, as one card with a history
+isocan sprint desk Theo                   # a private canvas for one sketcher: link off, one pass in
 isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
 isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
+isocan copy <items...> --to <sprint> --in Sketches --handin   # a desk's bell: onto the sheet, stamped
 isocan sprint handin <items...>           # these were made for the current phase
+isocan react 🔴 <sketch> --at 0.4,0.6      # a heat-map dot on that PART of the sketch (fractions of its box)
 isocan sprint tally                       # human dots and agent dots, apart
 isocan sprint end                         # over — no phase, no clock
 ```
@@ -716,15 +719,28 @@ action on the clock chip — *New note* on the phase's paper in the sheet,
 *Hand in* which lands the selection on the sheet. You never say where to go
 or what to click; call the phase and the board does that.
 
+**Desks are where the silence happens.** `isocan sprint desk <name>` births a
+private canvas for one sketcher — the link grant off, one single-use pass
+minted — and prints an address to hand to that person and nobody else. The
+desk knows its sprint (`sprintOf` on the canvas record), so its clock chip
+shows the sprint's phase and clock and offers *Hand in*, which copies the
+selection onto the sprint's sheet for the running phase, stamped. The
+terminal's twin is `isocan copy <items> --to <sprint> --in <sheet> --handin`.
+The original stays on the desk: a hand-in is a copy.
+
 `phase` refuses a word that is not a phase (`map experts hmw target demos
 notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
 prototype test wrap`), so a typo cannot start a clock. A phase with no clock —
 the museum, the supervote — runs until the next one is called.
 
-**The curtain is a lens.** While a vote phase's clock runs, the app hides
-reaction counts and item bylines — not knowing who drew what while you vote
-is the method — but the record is untouched, and `sprint tally` reads it,
-because the facilitator is the referee and not a voter. A hand-in is a
+**The curtain is a lens, on the wall only.** While a vote phase's clock runs,
+the app hides reaction counts and item bylines on the WALL — the Vote
+sheet's contents when a board is laid, else the last silent phase's
+hand-ins — not knowing who drew what while you vote is the method — but the
+record is untouched, and `sprint tally` reads it, because the facilitator is
+the referee and not a voter. A mark placed with `--at` (or a click while the
+chip says *Placing*) is a dot on that part of the sketch; each person sees
+their own under the curtain and everyone's at the bell. A hand-in is a
 property (`sprint=<phase>`) on the item: `item.update`, one undo, visible to
 everybody, the same shape as a slide.
 
@@ -759,6 +775,12 @@ isocan format --in Sketches               # tidy the sheet's contents, within it
 
 A spot found inside a sheet is *chosen*: the daemon never tidies it out. A
 sheet names itself by exact title, then by prefix — `--in sket` is Sketches.
+
+A sheet can carry a **grid**: `isocan area grid Test 5x15 --rows "Ana,Ben,Cy,Di,Ed"`
+draws rows and columns with names, and `--cell row,col` (from 1, top-left)
+with `--in` on `text`, `add` and `mv` puts a thing in one cell. `isocan area
+grid Test --clear` takes it off. `isocan slides add --in Storyboard` makes the
+deck from everything on a sheet, in reading order.
 
 ## What changed
 

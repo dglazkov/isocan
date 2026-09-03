@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { agentActorIds, hasReacted, hidesVotes, reactionsOf } from "@isocan/core";
+import { agentActorIds, hasReacted, reactionsOf } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { useActorNames } from "../lib/names.ts";
-import { useSprint } from "../lib/sprint.ts";
+import { useSprint, useVotesHiddenOn } from "../lib/sprint.ts";
 import { useCanEdit } from "../lib/capability.ts";
 
 /**
@@ -96,8 +96,9 @@ export function Reactions({
    * While any sprint runs, a chip also says how many of its wearers are
    * agents — the second opinion, drawn apart from the vote.
    */
-  const { state: sprint, nowMs } = useSprint();
-  const veiled = hidesVotes(sprint, nowMs);
+  const { state: sprint } = useSprint();
+  // On the wall only: a count on the Brief is not a vote (sprint phase 4).
+  const veiled = useVotesHiddenOn(item);
   const sessions = useCanvasStore((s) => s.sessions);
   const canvas = useCanvasStore((s) => s.canvas);
   const agents = sprint && canvas ? agentActorIds(sessions, canvas) : null;

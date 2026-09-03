@@ -205,6 +205,13 @@ export type Operation = {
     itemId: string;
     emoji: string;
     on: boolean;
+    /** Where on the item it was placed, as fractions of its box (0..1) —
+     * a heat-map dot on the part somebody liked. Optional: a chip click
+     * wears the mark with no point, and `off` removes both. */
+    at?: {
+        x: number;
+        y: number;
+    };
 } | {
     type: "item.move";
     itemId: string;

@@ -211,7 +211,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   lays one sheet per stretch of the week (`isocan sprint board`), each saying
   what happens there; calling a phase walks everyone to its sheet and the clock
   chip offers the phase's one action — *New note* in the sheet, *Hand in* onto
-  it. See [the research](docs/research/2026-09-01-design-sprint.md) and
+  it. Sketchers get desks (`isocan sprint desk Theo`): private canvases that
+  show the sprint's clock and hand in across canvases. A vote is a picture:
+  *Place a 🔴* and click the part of a sketch you like; dots hide on the Vote
+  sheet until the bell. Grids draw the storyboard and the test wall
+  (`isocan area grid Test 5x15`). See
+  [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
 - **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,
   then `--in Sketches` on `text`, `add` and `mv`, `isocan ls --in` to read it
