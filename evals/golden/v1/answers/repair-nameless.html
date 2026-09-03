@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor</title>
+<style>
+  :root { --paper: #ffffff; --panel: #f6f8fa; --ink: #1f2328; --line: #d0d7de; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  .toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .toolbar button { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
+  .toolbar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+  main { padding: 20px; }
+</style>
+</head>
+<body>
+<div class="toolbar" role="toolbar" aria-label="Edit">
+  <button type="button" aria-label="Add" title="Add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4v16"/></svg></button>
+  <button type="button" aria-label="Remove" title="Remove"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+  <button type="button" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <button type="button" aria-label="Select" title="Select"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg></button>
+</div>
+<main><p>Select something on the canvas to edit it.</p></main>
+</body>
+</html>

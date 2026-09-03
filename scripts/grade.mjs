@@ -110,9 +110,14 @@ const PROBE = `(() => {
     const r = img.getBoundingClientRect(); if (!r.width || !r.height) return false;
     return Math.abs(r.width / r.height - img.naturalWidth / img.naturalHeight) > 0.02;
   }).map((img) => ({ src: String(img.currentSrc || img.src).slice(-40), natural: img.naturalWidth + "x" + img.naturalHeight, rendered: Math.round(img.getBoundingClientRect().width) + "x" + Math.round(img.getBoundingClientRect().height) }));
+  // A form control's name can also come from its <label> — wrapping it, or
+  // pointing at it with for= — which is how most checkboxes and fields are
+  // named. The golden suite's checklist answer found this missing: eight
+  // labelled checkboxes read as eight nameless controls.
+  const labelled = (el) => !!(el.labels && [...el.labels].some((l) => (l.textContent || "").trim()));
   const named = (el) => (el.textContent || "").trim() || el.getAttribute("aria-label") || el.getAttribute("title") ||
     (el.getAttribute("aria-labelledby") && document.getElementById(el.getAttribute("aria-labelledby"))?.textContent.trim()) ||
-    (el.tagName === "IMG" && el.getAttribute("alt") !== null);
+    (el.tagName === "IMG" && el.getAttribute("alt") !== null) || labelled(el);
   const controls = [...document.querySelectorAll("a[href], button, input, select, textarea, [role=button]")];
   /**
    * **WCAG 2.5.8's inline exception, which this grader did not know.**

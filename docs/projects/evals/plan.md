@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals
-note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stages 3–5 open
+note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stages 4–5 open
 ---
 # Evals
 
@@ -272,6 +272,38 @@ system already on the canvas*.
 
 **Version the suite.** A task suite that changes silently makes every
 comparison across time meaningless.
+
+### Built, 3 September 2026 — twenty tasks, `evals/golden/v1/`
+
+Twenty tasks, weighted by the Stage 1 distribution rather than by what is
+easy to score: six revise (one of them in the `orchestrate` shape — a bare
+mention under a comment), five create (the empty state, the error state
+that says what failed and what to do, a pricing screen and a checklist from
+a shell that carries the design system, a greeting card), two restyle
+(literals to tokens; a fixed-width dashboard made to work at 390), three
+repair (contrast, a squashed photo, nameless toolbar buttons), and one each
+of arrange, document (a README, in markdown), variation (three type
+treatments) and converge (the best of two takes, as one screen).
+
+Each is a synthetic fixture, an ask in plain words, and checks a machine can
+make. `scripts/lib/golden.mjs` has the file checks — says / no longer says /
+in this order / this element untouched / the same words rearranged / fewer
+colour literals — and a task names which of `grade.mjs`'s screen checks it
+wants (contrast, sideways scroll, named controls, target size, stretched
+images) rather than re-deriving any. Counts and pass/fail; no score.
+
+**The suite tests itself in both directions.** `scripts/golden.mjs
+--selftest` requires every reference answer to pass every check and every
+untouched fixture to fail at least one — a task whose fixture passes asks
+for nothing, and a task whose answer fails asks for what its author could
+not do. `test/golden.test.ts` runs the browser-free half of that on every
+push, so a broken browser can never make the suite look like it measures
+something it does not. `--task <id> --file <out>` grades one attempt;
+`--dir <runs>` grades a directory of them, one file per task id — which is
+the shape Stage 5's with-and-without runs will produce.
+
+Not built: anything that runs an agent against the tasks. That is Stage 5,
+and this suite is what it runs.
 
 ---
 

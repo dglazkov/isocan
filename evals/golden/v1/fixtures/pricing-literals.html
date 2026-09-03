@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plans</title>
+<style>
+  :root { --paper: #ffffff; --panel: #f6f8fa; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --accent-ink: #ffffff; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #1f2328; background: #ffffff; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+  h1 { font-size: 28px; margin: 0 0 20px; color: #1f2328; }
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .tier { border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; background: #f6f8fa; }
+  .tier h2 { margin: 0 0 4px; font-size: 20px; color: #1f2328; }
+  .price { font-size: 28px; font-weight: 700; color: #0969da; }
+  .tier p { color: #57606a; margin: 8px 0 16px; }
+  .tier button { width: 100%; padding: 10px; border: 0; border-radius: 8px; background: #0969da; color: #ffffff; font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Plans</h1>
+  <div class="tiers">
+    <div class="tier"><h2>Solo</h2><div class="price">$0</div><p>One canvas, one agent, yours.</p><button type="button">Start with Solo</button></div>
+    <div class="tier"><h2>Team</h2><div class="price">$12</div><p>Per person. Every canvas shared, every agent enrolled.</p><button type="button">Start with Team</button></div>
+    <div class="tier"><h2>Studio</h2><div class="price">$40</div><p>Per person. A home of your own and the night shift.</p><button type="button">Talk to us about Studio</button></div>
+  </div>
+</main>
+</body>
+</html>

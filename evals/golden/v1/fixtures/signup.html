@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account</title>
+<style>
+  :root { --paper: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --accent-ink: #ffffff; --bad: #cf222e; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  main { max-width: 420px; margin: 0 auto; padding: 32px 20px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  label { display: block; margin: 16px 0 4px; font-weight: 600; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; }
+  button { width: 100%; margin-top: 20px; padding: 12px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Create your account</h1>
+  <p>One step. We will send a link to prove the address.</p>
+  <form>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" value="di@example.com">
+    <label for="name">Name</label>
+    <input id="name" name="name" value="Di">
+    <button type="submit">Send the link</button>
+  </form>
+</main>
+</body>
+</html>
