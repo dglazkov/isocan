@@ -18,6 +18,8 @@ second week.
 
 ## 2 September 2026
 
+- An emoji on your face is easier to see. A face wearing an emoji now shows it on a plain disc with your colour as a ring around it, instead of on a solid disc of your colour, where a mark on a dark blue or green was hard to make out. Initials are unchanged.
+- Google Docs on the canvas. Type a doc's address into Add site, or `isocan gdoc add <url>`, and the doc lands as a document you can read, search and version here, with a ↗ that opens the real thing. `isocan gdoc sync` refreshes every doc on the canvas, stacking a new version only where the document changed. Docs shared by link only, for now.
 - A canvas on a canvas. `isocan canvas place <name or address>` puts another canvas on this one as a card that draws it small and live — its items where they are, how many, who is there — and opens it in a new tab when you double-click it or its ↗. Shelve your canvases onto sheets; an agent can too. In the app, the rail's new button or *Place a canvas…* in ⌘K opens a popup: type to search your canvases, or paste a canvas address. `isocan canvas shot <name> --into <item>` keeps a real screenshot on the card for anyone who cannot see the live picture.
 - Pointing at a canvas on the home screen now shows what happened there, not just who did something: a thumbnail of each thing that was added, its name, and a link straight to it; a conversation shows its opening line, so a request to an agent reads as the request. `isocan timeline` names the thing too.
 

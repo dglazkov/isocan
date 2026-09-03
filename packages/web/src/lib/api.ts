@@ -18,6 +18,7 @@ import type {
   HomesResponse,
   NewsResponse,
   PresenceWhereResponse,
+  DocExportResponse,
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
@@ -65,6 +66,7 @@ import {
   narrowed,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
+  DOC_EXPORT_ROUTE,
   newClientId,
   newOpId,
   PASS_REDEEM_ROUTE,
@@ -1106,6 +1108,15 @@ export function getServing(): Promise<ServingResponse> {
  * free to try. Refusing a site on a failed probe would be worse than the
  * blank frame this exists to prevent.
  */
+/**
+ * A Google Doc's markdown, through the daemon — a browser cannot read
+ * docs.google.com across origins. Throws with the daemon's words when the
+ * doc is private or Google is unreachable, so the dialog can say why.
+ */
+export async function exportDoc(url: string): Promise<DocExportResponse> {
+  return request("GET", `${DOC_EXPORT_ROUTE}?url=${encodeURIComponent(url)}`);
+}
+
 export async function checkFrameable(
   url: string,
 ): Promise<{ ok: boolean; why?: string; url?: string }> {

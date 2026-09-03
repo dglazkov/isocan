@@ -17,6 +17,8 @@ import {
   siteLabel,
   CANVAS_ITEM_SIZE,
   canvasItemOf,
+  DOC_MIME,
+  docProperties,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
@@ -154,6 +156,41 @@ export async function addBrowserItem(
     ...BROWSER_SIZE,
     placement,
     title: siteLabel(site),
+  });
+  return itemId;
+}
+
+/**
+ * **A document from somewhere else, as an item that keeps its link** — a
+ * Google Doc's markdown export with `source` and `synced` on it
+ * (`core/googledoc.ts`). The same `item.add` a dropped `.md` makes, so it
+ * renders, thumbs and versions like any document; the two properties are
+ * what make it a snapshot of something rather than a file.
+ */
+export async function addDocumentItem(
+  canvasId: string,
+  actor: Actor,
+  doc: { title: string; markdown: string; filename: string; source: string; syncedAt: string },
+  placement: Placement,
+): Promise<string> {
+  const blob = new Blob([doc.markdown], { type: DOC_MIME });
+  const upload = await uploadBlob(canvasId, blob, doc.filename);
+  const itemId = newItemId();
+  await sendEchoed(canvasId, actor, {
+    type: "item.add",
+    itemId,
+    version: {
+      id: newVersionId(),
+      blobHash: upload.blobHash,
+      mimeType: DOC_MIME,
+      filename: doc.filename,
+      size: upload.size,
+    },
+    width: 640,
+    height: 800,
+    placement,
+    title: doc.title,
+    properties: docProperties(doc.source, doc.syncedAt),
   });
   return itemId;
 }

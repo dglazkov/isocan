@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-02
 see: standing-agents, on-demand
-note: researched 2 Sep — a link-shared doc already frames (measured: no X-Frame-Options, no frame-ancestors on /preview or /edit), and anonymous markdown export works for a public doc; the recommendation is one item per doc that holds the markdown snapshot AND the link, kept current by a standing agent over the Drive changes feed. Nothing built
+note: stages 1–3 built 2 Sep — the ↗ on anything with a source (with inception), `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `isocan gdoc sync` stacking a version only where the bytes changed; public docs only. Stage 3's Drive token and changes feed, stage 4's live mode, and stage 5's folder watch are designed and not built
 ---
 
 # Google Docs on the canvas
@@ -92,8 +92,8 @@ do alone: get you to the real doc, or show the live thing.
 export (so B's everything); `properties.source` is the doc's URL (so A's
 link); the app draws a ↗ on any item with a `source`, and a "live" mode that
 swaps the rendered markdown for the `/preview` frame *in the same item* —
-a mode you flip, not a second item to keep in sync. `isocan doc add <url>`
-does the export and the add in one gesture; `isocan doc sync` re-exports
+a mode you flip, not a second item to keep in sync. `isocan gdoc add <url>`
+does the export and the add in one gesture; `isocan gdoc sync` re-exports
 every item with a Google `source` whose Drive `modifiedTime` moved, as new
 versions. A standing agent runs the sync on a timer or on Drive's push.
 
@@ -102,7 +102,7 @@ it, and the live view is a lens over the same thing.
 
 ## What the agent does
 
-`isocan doc sync` on a schedule (the nightly pattern) or an rc parked on
+`isocan gdoc sync` on a schedule (the nightly pattern) or an rc parked on
 Drive push notifications. Per item with a Google `source`: read Drive's
 `modifiedTime` (one metadata call), compare to the item's last version's
 time (a property, `synced=<iso>`), export markdown if newer, `edit` a new
@@ -110,7 +110,7 @@ version, stamp `synced`. Images: the markdown export links to Google-hosted
 images that need the same credential; the sync should download them and add
 them as image items beside the doc, or rewrite the links to the canvas's own
 blobs — the same job [design import](2026-08-24-design-systems-and-tokens.md)
-did for a design file. New docs in a watched folder: `isocan doc add` for
+did for a design file. New docs in a watched folder: `isocan gdoc add` for
 each, `--in` the sheet that folder maps to.
 
 Credentials live on the machine that runs the agent — a Drive read-only
@@ -120,7 +120,7 @@ the canvas. Public docs need none, which is the case to build first.
 ## What has to be said out loud
 
 - **The canvas cannot keep a secret.** A doc's words, once on a canvas, are
-  readable by everyone admitted to it. `doc add` should say so once, and a
+  readable by everyone admitted to it. `gdoc add` should say so once, and a
   private doc should not be added to a canvas with a link grant on without a
   deliberate flag.
 - **A frame of a private doc is a login, not an error.** The app should say
@@ -137,16 +137,35 @@ the canvas. Public docs need none, which is the case to build first.
 1. **↗ on anything with a source.** `properties.source`, drawn as a
    titlebar glyph that opens a tab; `browse` sets it on site items. Small,
    general, useful beyond Google.
-2. **`isocan doc add <url>`** — export as markdown (anonymous for public
+2. **`isocan gdoc add <url>`** — export as markdown (anonymous for public
    docs, Drive API with a local token otherwise), `add` with `source` and
    `synced`, `--in` a sheet. The web's Add-URL dialog does the same when the
    URL is a Google Doc.
-3. **`isocan doc sync`** and a standing agent that runs it; images pulled
+3. **`isocan gdoc sync`** and a standing agent that runs it; images pulled
    into blobs.
 4. **Live mode** on a doc item — the `/preview` frame in place of the
    markdown, remembered per person, never a second item.
 5. **A folder as a sheet** — `isocan doc watch <folder> --in <sheet>`, the
    agent adding and syncing what appears there.
+
+## What was built
+
+**2 September 2026, stages 1 to 3, the anonymous half.** `core/googledoc.ts`
+recognises a doc's address in every form Google writes, derives the export
+and preview addresses, names the item from its first heading, and spells the
+two properties — `source`, the ↗ (shared with the canvas item), and
+`synced`. `isocan gdoc add <url>` fetches the anonymous markdown export and
+lands it as a document with both, `--in` a sheet like anything else; the
+Add-site dialog does the same when the address is a doc, through
+`GET /api/docs/export`, because a browser cannot read docs.google.com across
+origins and the daemon can — for an address core recognises as a doc and
+nothing else. A doc that is not shared by link answers a sign-in page, which
+both fetchers refuse by its content type, in words. `isocan gdoc sync`
+re-exports every doc item on the canvas and lands a new version only when
+the daemon's hash of the bytes changed, moving `synced` with it. Not built:
+the Drive token and the changes feed (a private doc, and knowing it moved
+without re-reading it), images pulled into blobs, live mode, the folder
+watch.
 
 ## Sources
 

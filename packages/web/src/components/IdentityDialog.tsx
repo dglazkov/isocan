@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Actor, Attestation, AttestOffer } from "@isocan/core";
 import { adoptIdentity, enterAs, knownIdentities } from "../lib/identity.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { canVerifyEmail, resumableIn, sendSignInLink, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
@@ -104,7 +105,7 @@ export function IdentityDialog({ onDone }: { onDone: (actor: Actor) => void }) {
                 onClick={() => attempt(adoptIdentity(actor), actor.name)}
                 title={`Come back as ${actor.name}`}
               >
-                <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
+                <span className={faceMarkClass(marks, actor)} style={faceMarkStyle(colors, actor)}>
                   {faceMark(marks, actor)}
                 </span>
                 {actor.name}

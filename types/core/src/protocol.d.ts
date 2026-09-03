@@ -1018,6 +1018,18 @@ export interface PresenceWhere {
     statusSource: PresenceSession["statusSource"];
     lastSeen: string;
 }
+/** `GET /api/docs/export?url=` — a Google Doc's markdown, fetched by the
+ *  daemon for the app (`core/googledoc.ts`). */
+export declare const DOC_EXPORT_ROUTE = "/api/docs/export";
+export interface DocExportResponse {
+    id: string;
+    /** The doc's canonical address — what the item's `source` records. */
+    source: string;
+    markdown: string;
+    title: string;
+    /** ISO, when the daemon fetched it — what `synced` records. */
+    fetchedAt: string;
+}
 export interface PresenceWhereResponse {
     where: PresenceWhere[];
 }
