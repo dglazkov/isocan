@@ -442,3 +442,70 @@ describe("one agent, one name, one machine, many canvases", () => {
     expect(JSON.parse(beside.stdout).canvasId).toBe("prj_2");
   }, 30_000);
 });
+
+describe("one rc, every canvas its rows name (phase 2)", () => {
+  it("`rc --all` answers a summons on each of two canvases, one session handle per agent, one budget", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Q" },
+    });
+    await isocan("--canvas", "prj_1", "rc", "add", "Sian");
+    await isocan("--canvas", "prj_2", "rc", "add", "Sian");
+
+    const rc = spawnCli(["rc", "--all"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on 2 canvases"), "the rc to come up on both");
+    // Narration names the canvas once there is more than one room.
+    await until(async () => out, (o) => o.includes("rc[P]: answering on") && o.includes("rc[Q]: answering on"), "both rooms announced");
+
+    const ask = (canvasId: string, n: number) =>
+      post("/api/ops", {
+        canvasId,
+        actor: dimitri,
+        op: {
+          type: "thread.create",
+          threadId: `th_${n}`,
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          comment: { id: `cmt_${n}`, body: "@Sian the spacing here looks wrong" },
+        },
+      });
+    await ask("prj_1", 1);
+    await until(async () => out, (o) => o.includes("rc[P]: summons for Sian"), "the first summons");
+    await until(async () => out, (o) => o.includes("rc[P]: Sian's turn ended"), "the first turn");
+    await ask("prj_2", 2);
+    await until(async () => out, (o) => o.includes("rc[Q]: summons for Sian"), "the second summons");
+    await until(async () => out, (o) => o.includes("rc[Q]: Sian's turn ended"), "the second turn");
+
+    // One session handle per agent: the second room resumed what the first
+    // minted (the fake adapter refuses the first load of a fresh process,
+    // so the handle is rebuilt once and then carried — either way, both
+    // rows end up naming one session).
+    const rows = (await rcRows()).filter((r) => r.name === "Sian");
+    expect(rows.map((r) => r.canvasId).sort()).toEqual(["prj_1", "prj_2"]);
+    expect(rows.every((r) => r.sessionId !== null)).toBe(true);
+    expect(new Set(rows.map((r) => r.sessionId)).size).toBe(1);
+
+    rc.kill("SIGINT");
+    await done;
+  }, 40_000);
+
+  it("`rc --all` with only the bound canvas is one room, untagged — nothing large happens by default", async () => {
+    const rc = spawnCli(["rc", "--all"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    expect(out).toContain('rc: answering on "P"');
+    expect(out).not.toContain("canvases —");
+    expect(out).not.toContain("rc[");
+    rc.kill("SIGINT");
+    await done;
+  }, 20_000);
+});
