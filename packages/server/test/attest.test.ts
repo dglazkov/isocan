@@ -215,4 +215,17 @@ describe("what a home has borrowed", () => {
     // canvas is born with.
     expect(attesterRefusal("link", ["email"])).toBeNull();
   });
+
+  it("has its own case for a group, and never reads it as the link (roles phase 5)", () => {
+    // Before the case existed a `group:` subject fell through
+    // `attestedKindOf`'s null as "needs no attester", and a home with none
+    // would have written a row that admitted nobody. A group's members are
+    // attested attributes, so the group is allowed exactly when the home can
+    // prove one — and refused, with why, when it cannot.
+    expect(attesterRefusal("group:ppl_design", ["email"])).toBeNull();
+    const refusal = attesterRefusal("group:ppl_design", []);
+    expect(refusal).toMatch(/cannot admit a group/);
+    expect(refusal).toMatch(/members are addresses/);
+    expect(refusal).toMatch(/Share the link/);
+  });
 });

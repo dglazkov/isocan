@@ -1,6 +1,16 @@
 import { promises as fs } from "node:fs";
-import type { ActorClaim, Attestation, Capability, Grant, Space } from "@isocan/core";
-import { isLive, isSpaceGrant, isSpaceLive, narrowed, scopeOf, SHELF, upsertAttestation } from "@isocan/core";
+import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
+import {
+  groupSubject,
+  isGroupLive,
+  isLive,
+  isSpaceGrant,
+  isSpaceLive,
+  narrowed,
+  scopeOf,
+  SHELF,
+  upsertAttestation,
+} from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
@@ -76,7 +86,11 @@ type DeskLogEntry =
    * the latest write is the row. Losing one would quietly widen or narrow who
    * may enter every canvas in it, which is the direction a lost file must
    * never fail in. */
-  | { seq: number; type: "space"; space: Space; at: string };
+  | { seq: number; type: "space"; space: Space; at: string }
+  /** A group, WHOLE, on every write (roles phase 5), for the space's reason:
+   * losing a member removal would quietly re-admit somebody to every canvas
+   * the group reaches. */
+  | { seq: number; type: "group"; group: Group; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -98,6 +112,10 @@ interface DeskSnapshot {
    * written before spaces, and correctly EMPTY: a canvas whose space was
    * never written is in no space, which is what every canvas was. */
   spaces?: Record<string, Space>;
+  /** `groups/{id}` (roles phase 5), keyed by group id. Absent before groups,
+   * and correctly EMPTY: a `group:` row whose group was never written admits
+   * nobody. */
+  groups?: Record<string, Group>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -106,7 +124,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -130,6 +148,9 @@ export class FileDesk implements Desk {
       // Absent in every desk written before roles phase 4; empty means every
       // canvas is in no space, which is the truth about all of them.
       spaces: snapshot?.spaces ?? {},
+      // Absent before roles phase 5; empty means no group exists, so a
+      // `group:` row admits nobody, which is the only safe reading.
+      groups: snapshot?.groups ?? {},
     };
     // Crash recovery: replay any log tail the snapshot doesn't cover.
     let recovered = false;
@@ -401,14 +422,65 @@ export class FileDesk implements Desk {
       const scope = scopeOf(grant);
       if (scope.kind === "space") keep(spaces[scope.id]);
     }
-    // Roles phase 5: spaces named by rows on a group whose members hold one
-    // of `attributes` — one more bounded walk, here.
+    // The third branch (roles phase 5): the live groups holding one of the
+    // attributes, then the live rows naming each as `group:<id>` that name a
+    // space. The same walk `CloudDesk` serves with `array-contains` on
+    // `members` and `subject` equality.
+    const inGroups = new Set(
+      Object.values(this.groups())
+        .filter((group) => isGroupLive(group) && group.members.some((member) => attributes.has(member)))
+        .map((group) => groupSubject(group.id)),
+    );
+    if (inGroups.size > 0) {
+      for (const grant of Object.values(this.state.grants)) {
+        if (!isLive(grant) || !inGroups.has(grant.subject)) continue;
+        const scope = scopeOf(grant);
+        if (scope.kind === "space") keep(spaces[scope.id]);
+      }
+    }
     return [...seen.values()];
   }
 
   /** The spaces ledger, which a desk from before roles phase 4 lacks. */
   private spaces(): Record<string, Space> {
     return (this.state.spaces ??= {});
+  }
+
+  // ---- groups (roles phase 5) ----
+
+  async putGroup(group: Group): Promise<void> {
+    await this.enqueue(async () => {
+      this.groups()[group.id] = { ...group, members: [...group.members] };
+      await this.append({ type: "group", group, at: new Date().toISOString() });
+    });
+  }
+
+  async group(groupId: string): Promise<Group | null> {
+    const found = this.groups()[groupId];
+    return found ? { ...found, members: [...found.members] } : null;
+  }
+
+  async groupsFor(badge: BadgeRecord): Promise<Group[]> {
+    // By creator, for each actor the badge claims — the one bounded question
+    // this list answers. Never "every group", and never the groups a badge is
+    // merely IN: those are the owner's list, members and all.
+    const actorIds = new Set(badge.claims.map((claim) => claim.actorId));
+    return Object.values(this.groups())
+      .filter((group) => isGroupLive(group) && actorIds.has(group.createdBy))
+      .map((group) => ({ ...group, members: [...group.members] }));
+  }
+
+  async grantsBySubject(subject: GrantSubject): Promise<Grant[]> {
+    // The same walk as `grantsFor`, by subject and live rows only; `CloudDesk`
+    // serves it with `where("subject", "==", …)`.
+    return Object.values(this.state.grants)
+      .filter((grant) => isLive(grant) && grant.subject === subject)
+      .map((grant) => ({ ...grant }));
+  }
+
+  /** The groups ledger, which a desk from before roles phase 5 lacks. */
+  private groups(): Record<string, Group> {
+    return (this.state.groups ??= {});
   }
 
   async putGrant(grant: Grant): Promise<void> {
@@ -605,6 +677,11 @@ export class FileDesk implements Desk {
         // A replacement, not `??=`: the log carries the space whole on every
         // write, and the newest write is the row.
         this.spaces()[entry.space.id] = { ...entry.space, canvasIds: [...entry.space.canvasIds] };
+        return;
+      }
+      case "group": {
+        // A replacement, like a space's: the newest write is the row.
+        this.groups()[entry.group.id] = { ...entry.group, members: [...entry.group.members] };
         return;
       }
     }

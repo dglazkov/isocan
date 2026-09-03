@@ -28,6 +28,7 @@ import {
   sendOp,
 } from "../lib/api.ts";
 import { ShareDialog } from "../components/ShareDialog.tsx";
+import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
@@ -256,6 +257,11 @@ export function CanvasListPage({
   const [over, setOver] = useState<string | null | undefined>(undefined);
   const [naming, setNaming] = useState(false);
   const [spaceName, setSpaceName] = useState("");
+  /** **Groups…** (roles phase 5): the panel where a group is made and its
+   * members edited, beside **New space** because both are made once and
+   * used across canvases. */
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const groupsRef = useDismissOnOutside<HTMLDivElement>(groupsOpen, () => setGroupsOpen(false));
   /** The spaces this person may move a canvas into: the ones they made. A
    * space owned through a row is the CLI's or the space's Share to reach —
    * the list holds no rung to gate on. */
@@ -658,6 +664,20 @@ export function CanvasListPage({
             New space
           </button>
         )}
+        <div className="identity-anchor" ref={groupsRef}>
+          <button
+            className={`btn quiet${groupsOpen ? " active" : ""}`}
+            title="Your groups — sets of people you share a canvas or a space with once"
+            onClick={() => setGroupsOpen(!groupsOpen)}
+          >
+            Groups…
+          </button>
+          {groupsOpen && (
+            <div className="identity-popover share-popover">
+              <GroupsPanel actor={actor} onClose={() => setGroupsOpen(false)} />
+            </div>
+          )}
+        </div>
         <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}

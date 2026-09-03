@@ -5294,6 +5294,18 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-space-new { display: flex; gap: 6px; align-items: center; }
 .canvas-space-new .text-input { width: 180px; font-size: 12.5px; }
 
+/* ---------- groups (roles phase 5) ---------- */
+/* The Groups panel hangs off the head beside New space and wears the Share
+   popover's shell. One group is a row, its members as chips under it, and
+   the add field under those — the same pieces the Share dialog is made of. */
+.groups-group { display: flex; flex-direction: column; gap: 6px; }
+.groups-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.groups-member {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px;
+  background: var(--chip); border: 1px solid var(--chip-line); border-radius: var(--radius);
+}
+.groups-member .btn { padding: 0 4px; font-size: 12px; line-height: 1; }
+
 /* ---------- the space's Share ---------- */
 /* **Every canvas in this space**: the row above the invitations, shaped like
    the link toggle it stands in for — a chip holding a label, the radios and

@@ -424,6 +424,14 @@ two-ledger rule:
   tombstone so a deleted space is not in the index at all. Every query is
   single-field — `holding`, `createdBy`, and `spaceId`/`subject` on grants
   — so no composite index is needed.
+- `groups/{id}` — `{name, createdBy, members, at, deletedAt?}` (roles
+  phase 5): a named set of people access is given to once. `members` are
+  normalized attributes (`email:…`, `repo:…`) and a grant may name the group
+  as `group:<id>`; the door reads `members` on every test of such a row and
+  copies it nowhere, so removing a member is one write followed by a sweep
+  of every canvas the group's rows reach. Two single-field queries —
+  `createdBy` and `members` (`array-contains`, for the spaces a member may
+  see) — and the door's read is by id. The tombstone keeps its members.
 - `registrations/{id}` — frozen delegation's record; the scoped launch
   token is KMS-wrapped at write and unwrapped only at fire time.
 - `audit/` — append-only firing and admission ledger. The audit ledger

@@ -1202,6 +1202,31 @@ floor its canvases can only add to, never a ceiling.
 - Names are unique among the spaces you own, not across the home. A name
   you can see twice is refused with both ids; use the id.
 
+## Groups: a set of people, shared with once
+
+A **group** is a named set of addresses that access is given to once. A
+row on a canvas or a space can name a group instead of an address, and the
+door reads who is in the group at the moment somebody asks — membership is
+never copied onto a row, so taking somebody out of a group is one write that
+reaches every canvas the group is shared with.
+
+- `isocan group new <name>` — make one. You own it and you are the only one
+  who sees its members; a canvas owner you share it with sees its name and
+  size.
+- `isocan group list` — the groups you made, with who is in each.
+- `isocan group add <name> <address>…` / `isocan group remove <name>
+  <address>…` — put people in, take them out. Removing EXPELS them from
+  every canvas the group's rows reach (their agents with them), unless
+  another row or the link still covers them; adding raises somebody already
+  inside on a lower row without a reload.
+- `isocan share group:<name> [--as <rung>]`, and `isocan share --space
+  <space> group:<name>` — share a canvas, or a space, with the group. The
+  share table prints the row as `group <name> (<size>)`. A group cannot be
+  kept out (`--bar`): un-invite it instead (`--revoke group:<name>`).
+- `isocan group delete <name>` — its rows stop admitting anybody.
+- A home that can verify no address refuses a group row with `no-attester`,
+  because a group's members get in by proving an address.
+
 ## Your own surfaces
 
 `isocan badges` lists every surface that carries your identity — this machine,
@@ -1778,8 +1803,11 @@ was made for it, `tally` splits human and agent dots),
 inviting the room to a view, never dragging anyone to it),
 `use`, `canvas`,
 `share`, `share --space <name>` (the space's rows, and `--link` on every
-canvas in it), `space new|list|add|remove|delete` (a named set of canvases
-access is set on once), `pass` (a credential for another MACHINE — never post
+canvas in it), `share group:<name>` (a row naming a group),
+`space new|list|add|remove|delete` (a named set of canvases access is set on
+once), `group new|list|add|remove|delete` (a named set of people access is
+given to once; `remove` reaches every canvas the group is shared with),
+`pass` (a credential for another MACHINE — never post
 it, never commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
 `open`, `setup`, `home` (which home this daemon answers to — read it

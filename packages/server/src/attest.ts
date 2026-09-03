@@ -2,6 +2,7 @@ import { createPublicKey, verify as verifySignature, X509Certificate } from "nod
 import {
   attestedKindOf,
   BAD_ID_TOKEN,
+  isGroupSubject,
   normalizeAttribute,
   type AttestedKind,
   type Attestation,
@@ -144,6 +145,22 @@ export function attesterRefusal(
   subject: GrantSubject,
   attesters: readonly AttestedKind[],
 ): string | null {
+  /**
+   * **A group has its own case** (roles phase 5), and it is not the null
+   * `attestedKindOf` returns for it. Before this, a `group:` subject fell
+   * through that null as if it were the link — "needs no attester" — and a
+   * home that had borrowed none would have written a row admitting nobody.
+   * A group's members are attested attributes, so the group is allowed
+   * exactly when this home can prove at least one kind of them.
+   */
+  if (isGroupSubject(subject)) {
+    if (attesters.length > 0) return null;
+    return (
+      `this home cannot admit a group yet: a group's members are addresses its holders prove, ` +
+      "and this home has borrowed nowhere to verify one — an inbox, a Google or GitHub " +
+      "sign-in — so a grant to the group would admit nobody. Share the link instead."
+    );
+  }
   const kind = attestedKindOf(subject);
   if (kind === null || attesters.includes(kind)) return null;
   if (kind === "repo") {

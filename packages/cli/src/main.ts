@@ -29,6 +29,7 @@ import type {
   Capability,
   Grant,
   GrantResponse,
+  GroupView,
   Space,
   SweepReport,
   UpgradeVerdict,
@@ -58,6 +59,9 @@ import {
   isCapability,
   normalizeSubject,
   sameSpaceName,
+  sameGroupName,
+  groupIdOf,
+  groupSubject,
   PASS_TTL_MS,
   actorNameIn,
   canvasUrl,
@@ -2470,7 +2474,11 @@ async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
 program
   .command("share")
   .description("Who may enter this canvas: the address to send, the \"anyone with the link\" grant, and who was invited by name")
-  .argument("[who]", "an email to invite by name — they get in by proving that address")
+  .argument(
+    "[who]",
+    "an email to invite by name — they get in by proving that address — or `group:<name>`, one of " +
+      "your groups (`isocan group list`): its members get in by proving an address in it",
+  )
   .option(
     "--link <on|off|edit|read|view>",
     "what the link grant admits to: on (or edit) — anyone with the address can edit; read — " +
@@ -2628,6 +2636,9 @@ program
         const row = spaceRows.find((g) => g.subject === subject && !isBar(g));
         return row ? capabilityOf(row) : null;
       };
+      // A group row prints as `group <name> (<size>)` (roles phase 5): the
+      // home answers name and size to anybody a row lets see the group.
+      const label = await groupLabels(ctx, [...others, ...spaceRows]);
       printTable([
         // The creator, first: their standing is the floor and not a row, so
         // the table says so where the Share dialog's first row does.
@@ -2635,7 +2646,7 @@ program
         // The space's rows next, marked *from space* — read here, changed
         // there (roles journey 5, step 1).
         ...spaceRows.map((g) => ({
-          subject: g.subject,
+          subject: label(g.subject),
           rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
           granted: g.at.slice(0, 10),
           by: g.grantedBy,
@@ -2650,7 +2661,7 @@ program
           const above = spaceGives(g.subject);
           const below = !isBar(g) && above !== null && !atLeast(capabilityOf(g), above);
           return {
-            subject: g.subject,
+            subject: label(g.subject),
             // The rung, in the dialog's words, so the table and the Share
             // dialog name one thing one way.
             rung: isBar(g)
@@ -2747,7 +2758,7 @@ async function shareRows(
       }
 
       if (opts.revoke !== undefined) {
-        const subject = normalizeSubject(grantSubjectOf(opts.revoke));
+        const subject = await subjectOf(ctx, opts.revoke);
         const live = (await scope.grants()).find((g) => g.subject === subject);
         if (!live) {
           throw new Error(
@@ -2825,13 +2836,19 @@ async function shareRows(
         // a client-side "not yet" would be a second copy of a policy that
         // changes with a home's configuration. A home that has borrowed an
         // attester grants it; one that has not refuses with `no-attester` and
-        // says what to do instead.
-        const answer = await scope.invite(grantSubjectOf(who), rung);
+        // says what to do instead. `group:<name>` is resolved here to the
+        // group's id (roles phase 5), because the wire carries ids.
+        const subject = await subjectOf(ctx, who);
+        const answer = await scope.invite(subject, rung);
         sweepAlso(answer.swept);
         const { grant } = answer;
+        const groupId = groupIdOf(grant.subject);
         console.log(
           `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
-            `(${grant.id})${reachedLine(answer)} — they get in by proving that address; nothing was emailed from here`,
+            `(${grant.id})${reachedLine(answer)} — ` +
+            (groupId !== null
+              ? "its members get in by proving an address in the group; who is in it is read at the door"
+              : "they get in by proving that address; nothing was emailed from here"),
         );
       }
 
@@ -2889,10 +2906,11 @@ async function shareSpace(
     link: "a space has no link of its own — `--link` sets every canvas's",
   });
   if (swept) console.log(sweptLine(swept));
+  const label = await groupLabels(ctx, grants);
   printTable([
     { subject: owner, rung: "owner, made this", granted: space.at.slice(0, 10), by: "" },
     ...[...grants.filter((g) => !isBar(g)), ...grants.filter(isBar)].map((g) => ({
-      subject: g.subject,
+      subject: label(g.subject),
       rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
       granted: g.at.slice(0, 10),
       by: g.grantedBy,
@@ -3021,6 +3039,177 @@ spaceCommand
       if (ctx.json) return printJson(answer);
       const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
       console.log(`deleted the space ${space.name} (${space.id}) — ${reached} kept, each with its own sharing; ${sweptLine(answer.swept)}`);
+    }),
+  );
+
+// ---------- groups (roles phase 5) ----------
+//
+// A group is a named set of people access is given to once. These are the
+// verbs behind the canvas list's **Groups…** panel and the Share dialog's
+// group picker: the same routes, at the home. Membership is read at the door,
+// so `group add` and `group remove` reach every canvas the group's rows reach.
+
+/**
+ * **A group by name, or by id** (roles design, "Names"): a name is unique
+ * among the groups one person owns, and `isocan group list` is the owner's
+ * list, so a name seen twice can only be two of your own — which the home
+ * refuses at creation. Still refused with both ids rather than guessed at,
+ * for `resolveSpace`'s reason.
+ */
+async function resolveGroup(ctx: Ctx, ref: string): Promise<GroupView> {
+  const { groups } = await ctx.client.groups();
+  const byId = groups.find((group) => group.id === ref);
+  if (byId) return byId;
+  const named = groups.filter((group) => sameGroupName(group.name, ref));
+  if (named.length === 1) return named[0]!;
+  if (named.length === 0) {
+    throw new Error(
+      `no group called ${ref} that you own — \`isocan group list\` shows them, ` +
+        `\`isocan group new ${ref}\` makes one`,
+    );
+  }
+  throw new Error(
+    `${named.length} groups are called ${ref}: ` +
+      named.map((group) => group.id).join(", ") +
+      " — name the one you mean by id",
+  );
+}
+
+/**
+ * What somebody typed, as the subject the home is sent: an address or a
+ * repo through `grantSubjectOf`, and `group:<name>` resolved through the
+ * owner's list to `group:<id>` (roles phase 5). A `group:ppl_…` typed by id
+ * passes through `resolveGroup`'s id branch unchanged.
+ */
+async function subjectOf(ctx: Ctx, who: string): Promise<GrantSubject> {
+  const ref = groupIdOf(who.trim());
+  if (ref !== null) return groupSubject((await resolveGroup(ctx, ref)).id);
+  return normalizeSubject(grantSubjectOf(who));
+}
+
+/**
+ * How a group row prints in a share table: `group <name> (<size>)`, from
+ * `GET /api/groups/:id`, which answers name and size to anybody a row lets
+ * see the group. One read per distinct group; a group the home will not
+ * show — deleted, or the badge may not see it — prints as its subject.
+ */
+async function groupLabels(ctx: Ctx, grants: readonly Grant[]): Promise<(subject: string) => string> {
+  const labels = new Map<string, string>();
+  for (const grant of grants) {
+    const groupId = groupIdOf(grant.subject);
+    if (groupId === null || labels.has(grant.subject)) continue;
+    try {
+      const { group } = await ctx.client.group(groupId);
+      labels.set(grant.subject, `group ${group.name} (${group.size})`);
+    } catch {
+      labels.set(grant.subject, grant.subject);
+    }
+  }
+  return (subject) => labels.get(subject) ?? subject;
+}
+
+const groupCommand = program
+  .command("group")
+  .description("A named set of people access is given to once — make one, put addresses in it, share it with `isocan share group:<name>`");
+
+groupCommand
+  .command("new <name>")
+  .description("Make a group. You own it and see its members; it holds nobody until `group add`")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { group } = await ctx.client.createGroup(name, ctx.actor.id);
+      if (ctx.json) return printJson(group);
+      console.log(
+        `made the group ${group.name} (${group.id}) — \`isocan group add ${group.name} <address>…\` puts ` +
+          "people in it, `isocan share group:" + group.name + "` shares a canvas with it",
+      );
+    }),
+  );
+
+groupCommand
+  .command("list")
+  .description("The groups you made, with who is in each")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { groups } = await ctx.client.groups();
+      if (ctx.json) return printJson(groups);
+      if (groups.length === 0) return console.log("no groups yet — `isocan group new <name>` makes one");
+      printTable(
+        [...groups]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((group) => ({
+            id: group.id,
+            name: group.name,
+            members: String(group.size),
+            who: (group.members ?? []).map((member) => member.replace(/^email:/, "")).join(", "),
+            made: group.at.slice(0, 10),
+          })),
+      );
+    }),
+  );
+
+groupCommand
+  .command("add <name> <address...>")
+  .description("Put people in a group, by address — reaches every canvas the group is shared with")
+  .action(
+    run(async (name: string, addresses: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const group = await resolveGroup(ctx, name);
+      for (const address of addresses) {
+        // Spelled as the home stores it, so the line names the row written.
+        const member = normalizeSubject(grantSubjectOf(address));
+        const answer = await ctx.client.addGroupMember(group.id, member, ctx.actor.id);
+        if (ctx.json) printJson(answer);
+        else if (answer.reached === 0 && answer.group.size === group.size) {
+          console.log(`${member} was already in ${group.name}`);
+        } else {
+          console.log(
+            `${member} is in ${group.name} (${answer.group.size})` +
+              (answer.reached ? ` — reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}; ${sweptLine(answer.swept!)}` : ""),
+          );
+        }
+        group.size = answer.group.size;
+      }
+    }),
+  );
+
+groupCommand
+  .command("remove <name> <address...>")
+  .description("Take people out of a group — EXPELS them from every canvas the group's rows reach, unless another row still covers them")
+  .action(
+    run(async (name: string, addresses: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const group = await resolveGroup(ctx, name);
+      for (const address of addresses) {
+        const member = normalizeSubject(grantSubjectOf(address));
+        const answer = await ctx.client.removeGroupMember(group.id, member, ctx.actor.id);
+        if (ctx.json) printJson(answer);
+        else if (answer.reached === 0 && answer.group.size === group.size) {
+          console.log(`${member} was not in ${group.name}`);
+        } else {
+          console.log(
+            `${member} is out of ${group.name} (${answer.group.size})` +
+              (answer.reached ? ` — reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}; ${sweptLine(answer.swept!)}` : ""),
+          );
+        }
+        group.size = answer.group.size;
+      }
+    }),
+  );
+
+groupCommand
+  .command("delete <name>")
+  .description("Delete a group — its rows stop admitting anybody; the sweep puts its members out")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const group = await resolveGroup(ctx, name);
+      const answer = await ctx.client.deleteGroup(group.id, ctx.actor.id);
+      if (ctx.json) return printJson(answer);
+      const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached ?? 0} canvases`;
+      console.log(`deleted the group ${group.name} (${group.id}) — reached ${reached}; ${sweptLine(answer.swept ?? { expelled: 0, rerooted: 0 })}`);
     }),
   );
 

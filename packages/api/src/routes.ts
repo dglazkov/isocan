@@ -44,9 +44,15 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  GroupResponse,
+  GroupsResponse,
 } from "@isocan/core";
 import {
   encodeFilename,
+  groupActingRoute,
+  groupMemberRoute,
+  groupRoute,
+  GROUPS_ROUTE,
   spaceActingRoute,
   spaceCanvasRoute,
   spaceGrantRevokeRoute,
@@ -565,6 +571,40 @@ export class DaemonRoutes {
       capability,
       ...(actorId ? { actorId } : {}),
     } satisfies SpaceLinkRequest);
+  }
+
+  // ---- the group: a named set of people access is given to once (roles phase 5) ----
+  //
+  // `isocan group` and `isocan share group:<name>` drive these; the Groups
+  // panel on the canvas list and the Share dialog's picker drive the same
+  // routes. All at the home.
+
+  /** The groups this badge's actors made, members and all. */
+  groups(): Promise<GroupsResponse> {
+    return this.request("GET", GROUPS_ROUTE);
+  }
+
+  createGroup(name: string, actorId?: string): Promise<GroupResponse> {
+    return this.request("POST", GROUPS_ROUTE, { name, ...(actorId ? { actorId } : {}) });
+  }
+
+  /** One group: members for its maker; name and size for anybody a live
+   * row naming it lets see it. */
+  group(groupId: string): Promise<GroupResponse> {
+    return this.request("GET", groupRoute(groupId));
+  }
+
+  addGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
+    return this.request("PUT", groupMemberRoute(groupId, attribute), actorId ? { actorId } : {});
+  }
+
+  /** No body; the actor rides the query. */
+  removeGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
+    return this.request("DELETE", groupActingRoute(groupMemberRoute(groupId, attribute), actorId));
+  }
+
+  deleteGroup(groupId: string, actorId?: string): Promise<GroupResponse> {
+    return this.request("DELETE", groupActingRoute(groupRoute(groupId), actorId));
   }
 
   // ---- your own surfaces: kill-a-badge (phase 9) ----

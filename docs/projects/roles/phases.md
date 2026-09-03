@@ -16,9 +16,10 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phases 1 to 4 CLOSED 2 Sep 2026; roles phase 5 is
-next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 4
-built and walked the same day.
+**Where we are: roles phases 1 to 5 CLOSED 2 Sep 2026; roles phase 6 is
+next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 5
+built and walked the same day. Phase 6 is the walk on prod and needs the
+deploy.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
 one canvas and change no storage shape; phase 4 adds the space and the first
@@ -348,7 +349,20 @@ touched. From the CLI holding a badge admitted to one canvas only, `GET
 
 ## Phase 5 — The group
 
-**Status: not started.**
+**Status: CLOSED** 2 Sep 2026. Journeys 4 and 6 walked by the conductor on
+the scratch home, the CLI as the creator, a Chrome origin and a bearer
+badge as one member: a group of three addresses made and granted `edit` on
+the space with no other row naming anybody; the member entered all three
+canvases; removed from the group, their open tab dropped to *withdrawn*
+within the heartbeat and their terminal badge was refused on every canvas,
+and a canvas whose own link was on re-admitted them as a stranger; invited
+at `read` on one canvas and inside, adding them back to the group grew the
+toolbar under their hands with no reload; `GET /api/groups/:id` as a
+member who owned no canvas, and as an owner of one, returned the name and
+size and no members, and the maker saw the members. In Chrome the
+**Groups…** panel listed the group with its members as chips, and the
+canvas's Share showed the space's row as *Design team · group of 3*.
+Suite 298 files, 3247 tests; typecheck clean.
 
 **Closes journeys 4 and 6.**
 
@@ -379,6 +393,24 @@ heartbeat, and a canvas whose own link is on re-admits them as a stranger. A
 member added while already inside at `read` by a canvas row sees the toolbar
 appear without a reload. `GET /api/groups/:id` as a canvas owner who is not the
 group's returns the name and size and no members.
+
+**Findings:**
+
+- **2026-09-02 — Using a group in a grant needs only that it be live**, not
+  that the inviter own it. The design's table gave no rule; lending the id
+  is how a canvas owner uses somebody's group. Easy to tighten.
+- **2026-09-02 — A member entering by an older link is rooted at the link**,
+  so removing them from the group keeps them. Correct by the sort rule; a
+  test expected an expulsion.
+- **2026-09-02 — Open: `stillAdmittedBy` still ignores group rows.** The
+  phase 4 finding, one scope wider.
+- **2026-09-02 — A deleted group's row prints as `group:ppl_…`**; the row
+  stays live and admits nobody.
+- **2026-09-02 — Open: a person's own invited row in the canvas dialog
+  shows no controls** while the rows beside it show disabled ones. Seen
+  on the walk; cosmetic.
+- **2026-09-02 — Groups sit on the canvas list, not the identity menu.**
+  The phase allowed either.
 
 ## Phase 6 — Nothing changed for anyone else
 

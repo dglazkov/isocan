@@ -128,7 +128,9 @@ describe("the Share dialog's pickers", () => {
 
   it("invites at the picked rung, Editor by default", () => {
     expect(dialog).toContain('useState<Capability>("edit")');
-    expect(dialog).toContain("createGrant(canvasId, grantSubjectOf(who), inviteRung, actor.id)");
+    // `inviteSubject` is `grantSubjectOf` for an address and the group's id
+    // for a `group:<name>` (roles phase 5); the rung rides as before.
+    expect(dialog).toContain("createGrant(canvasId, inviteSubject(who, groups), inviteRung, actor.id)");
   });
 
   it("is the ladder the research described: each rung can do what the ones below can", () => {
