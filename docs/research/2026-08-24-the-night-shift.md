@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals,personas
-note: steps 1, 3 and 4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`); the morning comment and the diverge lane are open
+note: steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open
 ---
 # The night shift
 
@@ -297,6 +297,13 @@ Each of these is useful alone, and none requires the next — the same disciplin
 2. **The morning comment.** One agent, one canvas, posts one summary to the
    main thread. No changes at all. Proves the ritual before trusting it with
    work.
+   **Built 3 Sep 2026, after step 3 rather than before it:** `npm run night
+   -- --canvas <ref>` runs the converge lane on each canvas named and then
+   posts one comment in its Chat — three lines: what was graded, what landed
+   (with the `#Title` handle and how to say no) or why nothing did, and
+   where the score is. The night is its own actor, **Night**, claimed once
+   per machine and known to the registry as an agent, so the morning can
+   tell its work from a person's. A dry run posts nothing.
 3. **The converge lane, one item wide.** One measured fix per night, landed as
    a version, with the before/after in the reply. Track the accept rate from
    the first night — it is the trust battery's first reading.
