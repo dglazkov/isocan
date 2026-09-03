@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 25 still open** — of which 17 partly
-built, 8 designed, 0 blocked, and
+**14 built · 26 still open** — of which 17 partly
+built, 9 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -38,7 +38,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>8</sub>
+## Designed, not built <sub>9</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -48,6 +48,7 @@ and the done column should not be flattered by either.
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
+| **project** | [roles](docs/projects/roles/journey.md) | 2026-09-02 | journeys, design and six phases written 2 Sep 2026; nothing built. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address · see multiuser, multi-identity |
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
