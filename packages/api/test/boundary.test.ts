@@ -51,12 +51,15 @@ describe("the API/CLI seam", () => {
     // `@isocan/api` and holds typed results. A script that instead hand-rolled
     // a `fetch` of an `/api/` path would be the drift this file exists to
     // prevent, wearing a different directory — so the sweep covers scripts/
-    // too. One named exemption: journeys.mjs drives a real BROWSER and its
-    // `/api/` strings are evaluated inside the page, where they are the web
-    // client's own speech, not a Node-side client.
+    // too. Two named exemptions, for one reason: `lib/browser.mjs` holds the
+    // door-crossing every headless run makes, and `journeys.mjs` watches the
+    // page's own requests — in both, the `/api/` strings are evaluated inside
+    // the page, where they are the web client's own speech, not a Node-side
+    // client. The crossing moved from journeys.mjs into the shared helper when
+    // the canvas screenshot needed the same door, so there is one copy of it.
     const offenders: string[] = [];
     for (const file of scriptFiles(path.join(repo, "scripts"))) {
-      if (path.basename(file) === "journeys.mjs") continue;
+      if (path.basename(file) === "browser.mjs" || path.basename(file) === "journeys.mjs") continue;
       const text = readFileSync(file, "utf8");
       for (const [i, line] of text.split("\n").entries()) {
         const lead = line.trimStart();

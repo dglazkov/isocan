@@ -101,8 +101,12 @@ describe("the picture that survives, and a canvas at another home", () => {
     expect(cli).toContain("scripts/canvas-shot.mjs");
     const shot = read("../../../scripts/canvas-shot.mjs");
     expect(shot).toContain("Page.captureScreenshot");
-    expect(shot).toContain('op: { type: "actor.claim", name: "Camera" }');
+    expect(shot).toContain('throughTheDoor(b, origin, "Camera", "canvas-shot")');
     expect(shot).toContain('"edit", into, out');
+    // The address arrives whole from the CLI, built by canvasUrl: the script
+    // never spells /p/<id>, the one shape the repo refuses to write twice.
+    expect(shot).toContain('const url = arg("--url");');
+    expect(cli).toContain('"--url", canvasUrl(origin, target.id)');
   });
 });
 

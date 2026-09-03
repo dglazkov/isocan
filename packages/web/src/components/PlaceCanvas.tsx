@@ -13,7 +13,7 @@ import { KindIcon } from "./KindIcon.tsx";
  * popover with two doors. Type, and the list narrows over your canvases —
  * the ones the home screen shows, most recent first, each with its title and
  * its last act; pick one and it lands where there is room in view. Or paste
- * an address: `/p/<id>` at any origin is recognised and offered as the one
+ * an address: a canvas address at any origin is recognised and offered as the one
  * row to place, with the title the home knows for it or the id until the
  * card can ask. Two doors, one gesture, one item — the same item
  * `isocan canvas place` makes, through the same contract.
@@ -51,7 +51,8 @@ export function PlaceCanvas({ canvasId, actor }: { canvasId: string; actor: Acto
     };
   }, [open]);
 
-  /** The address door: a pasted `/p/<id>` at any origin. */
+  /** The address door: a pasted canvas address at any origin, read by the
+   *  one parser (`parseCanvasAddress`), so the shape is spelled nowhere here. */
   const address = useMemo(() => parseCanvasAddress(query), [query]);
   const needle = query.trim().toLowerCase();
   const matches = useMemo(() => {

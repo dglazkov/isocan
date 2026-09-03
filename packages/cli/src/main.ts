@@ -3899,7 +3899,10 @@ canvas
         throw new Error("canvas shot needs the repository checkout (scripts/canvas-shot.mjs) and Chrome — run it from a clone of isocan");
       }
       const { width, height } = sizeFor(opts.size, { width: 1600, height: 1000 });
-      const args = [script, "--canvas", target.id, "--origin", (await ctx.homeOf(target.id)) ?? ctx.client.base, "--width", String(width), "--height", String(height)];
+      // The address, whole, built here by `canvasUrl` — so the script never
+      // spells the one shape this repo refuses to write twice.
+      const origin = (await ctx.homeOf(target.id)) ?? ctx.client.base;
+      const args = [script, "--url", canvasUrl(origin, target.id), "--width", String(width), "--height", String(height)];
       if (opts.out) args.push("--out", opts.out);
       if (opts.into) {
         const { canvas: p } = await canvasAndSnapshot(ctx);
