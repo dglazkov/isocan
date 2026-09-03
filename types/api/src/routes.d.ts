@@ -205,10 +205,18 @@ export declare class DaemonRoutes {
     /** Who is acting — the CLI's actor. A write to grants asks `own`, which
      * a person holds, and a badge may speak for several. */
     actorId?: string): Promise<GrantResponse>;
+    /**
+     * Keep somebody out (roles phase 3): a bar, written directly. The same
+     * POST as an invitation with `bars: true` and no rung; the home replaces
+     * any live row naming them and sweeps, so a person inside on the link is
+     * put out by the write.
+     */
+    bar(canvasId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse>;
     /** No body, deliberately: a DELETE that declares `application/json` and
      * sends nothing is a Fastify parse error, and a request with nothing to say
-     * should not announce a content type. */
-    revokeGrant(canvasId: string, grantId: string, actorId?: string): Promise<GrantResponse>;
+     * should not announce a content type. `bar` is `?bar=1` — revoke and keep
+     * them out in one request (roles phase 3); the route's spelling is core's. */
+    revokeGrant(canvasId: string, grantId: string, actorId?: string, bar?: boolean): Promise<GrantResponse>;
     badges(): Promise<BadgesResponse>;
     /** No body, for `revokeGrant`'s reason. */
     killBadge(badgeId: string): Promise<KillBadgeResponse>;

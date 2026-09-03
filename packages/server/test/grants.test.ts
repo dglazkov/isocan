@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 import type {
+  CanvasSnapshotResponse,
   FreeNameResponse,
   GrantResponse,
   GrantsResponse,
@@ -22,6 +23,7 @@ import {
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
+import type { AuthConfig } from "../src/attest.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
@@ -46,6 +48,9 @@ let home: string;
 let daemon: Daemon;
 let base: string;
 let owner: TestBadge;
+/** What this home has borrowed: nothing, except where a suite below says
+ * otherwise (`beforeAll`, which runs before the `beforeEach` that boots). */
+let auth: AuthConfig | null = null;
 
 async function boot(): Promise<void> {
   // `auth: null` is this suite SAYING this home has borrowed nothing, rather
@@ -53,7 +58,7 @@ async function boot(): Promise<void> {
   // set. A developer with a dev home configured in their shell would otherwise
   // watch the no-attester assertions below fail for a reason that has nothing
   // to do with the code — the same courtesy `birthHome: null` extends.
-  daemon = await startDaemon({ port: 0, home, auth: null });
+  daemon = await startDaemon({ port: 0, home, auth });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 }
@@ -778,5 +783,206 @@ describe("where everybody is, read across canvases", () => {
     await parkSession(owner, CANVAS, "rc");
     const { where } = await whereOf(owner);
     expect(where[0]!.kind).toBe("rc");
+  });
+});
+
+/**
+ * **The bar** (roles design, "The bar"; roles phase 3; journey 3 steps 3–4).
+ *
+ * A row that says no. Written two ways — `POST …/grants` with `bars: true`,
+ * and `DELETE …/grants/:id?bar=1`, which revokes and bars in one request —
+ * and lifted the ordinary way. What is asserted is the door's answer, never
+ * the row alone: a barred address is refused with `not-admitted` while the
+ * same link admits a stranger; the creator cannot be barred, at the route
+ * and at the door; and the DELETE's answer says whether the link would still
+ * admit the person, which is the sentence both surfaces owe before *keep
+ * them out* is offered.
+ *
+ * This home has borrowed an attester (configuration only — nothing is
+ * verified here; the proofs are written on the desk), because a bar is held
+ * to the same rule as an invitation: a row naming an address nobody here can
+ * prove is a row with no effect, and the route refuses to write one.
+ */
+describe("the bar", () => {
+  const sam = "email:sam@acme.test";
+  beforeAll(() => {
+    auth = { project: "acme-test", apiKey: "test-key" };
+  });
+  afterAll(() => {
+    auth = null;
+  });
+
+  const post = (badge: TestBadge, url: string, body: unknown) =>
+    fetch(`${base}${url}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify(body),
+    });
+  const del = (badge: TestBadge, url: string) =>
+    fetch(`${base}${url}`, { method: "DELETE", headers: badge.headers });
+  const enter = (badge: TestBadge) => get(badge, `/api/projects/${CANVAS}/canvas`);
+  const prove = (badge: TestBadge, attribute: string) =>
+    daemon.desk.attest(badge.badgeId, { attribute, verifiedVia: "magic-link", at: new Date().toISOString() });
+  /** A badge that has proved this address and nothing else. */
+  const holderOf = async (attribute: string): Promise<TestBadge> => {
+    const badge = await stranger();
+    await prove(badge, attribute);
+    return badge;
+  };
+  const liveRowsFor = async (subject: string) =>
+    (await grantsOf(owner)).grants.filter((g) => g.subject === subject);
+  const bar = async (subject: string) =>
+    (await (await post(owner, grantsRoute(CANVAS), { subject, bars: true })).json()) as GrantResponse;
+  const invite = async (subject: string, capability?: string) =>
+    (await (
+      await post(owner, grantsRoute(CANVAS), { subject, ...(capability ? { capability } : {}) })
+    ).json()) as GrantResponse;
+  const body = (res: Response) => res.json() as Promise<{ code?: string; error?: string }>;
+
+  it("keeps a barred address out at the door with `not-admitted`, while the link admits a stranger", async () => {
+    await makeCanvas();
+    const holder = await holderOf(sam);
+    expect((await enter(holder)).status).toBe(200); // in on the link, like anybody
+
+    const written = await bar(sam);
+    expect(written.grant).toMatchObject({ subject: sam, bars: true, grantedBy: owner.badgeId });
+    expect(written.grant.capability).toBeUndefined();
+    // The write swept, and the sweep met the bar: Sam was inside on the link
+    // and is not any more.
+    expect(written.swept).toEqual({ expelled: 1, rerooted: 0 });
+
+    const refused = await enter(holder);
+    expect(refused.status).toBe(403);
+    expect((await body(refused)).code).toBe("not-admitted");
+    expect(await socketClose(holder)).toBe(WS_NOT_ADMITTED);
+    // The same link, the same moment, a stranger: the bar is about Sam.
+    expect((await enter(await stranger())).status).toBe(200);
+    // And the row is listed, as a row.
+    expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ bars: true })]);
+  });
+
+  it("cannot bar the creator: the route refuses with the reason, and the door ignores such a row", async () => {
+    await makeCanvas();
+    await prove(owner, "email:priya@acme.test");
+    const refused = await post(owner, grantsRoute(CANVAS), { subject: "email:priya@acme.test", bars: true });
+    expect(refused.status).toBe(400);
+    const why = await body(refused);
+    expect(why.code).toBe("bad-grant");
+    expect(why.error).toContain("cannot be kept out");
+    expect(await liveRowsFor("email:priya@acme.test")).toEqual([]);
+
+    // A row that got there anyway — written on the desk, past the route —
+    // does nothing: the floor is asked before a bar takes effect. A second
+    // badge of the creator's, proved and claiming them, walks in as owner.
+    await daemon.desk.putGrant({
+      id: "gnt_bar_priya",
+      canvasId: CANVAS,
+      subject: "email:priya@acme.test",
+      grantedBy: "bdg_somebody",
+      at: new Date().toISOString(),
+      bars: true,
+    });
+    const phone = await holderOf("email:priya@acme.test");
+    await phone.speakAs(priya);
+    const seen = await enter(phone);
+    expect(seen.status).toBe(200);
+    expect(((await seen.json()) as CanvasSnapshotResponse).capability).toBe("own");
+  });
+
+  it("refuses to bar the link, however it is asked, and leaves the link on", async () => {
+    await makeCanvas();
+    const direct = await post(owner, grantsRoute(CANVAS), { subject: "link", bars: true });
+    expect(direct.status).toBe(400);
+    expect((await body(direct)).error).toMatch(/link cannot be kept out/);
+    const link = (await grantsOf(owner)).grants.find((g) => g.subject === "link")!;
+    const withRevoke = await del(owner, `${grantRoute(CANVAS, link.id)}?bar=1`);
+    expect(withRevoke.status).toBe(400);
+    expect((await body(withRevoke)).code).toBe("bad-grant");
+    // Refused BEFORE anything was written: the link is exactly as it was.
+    expect((await grantsOf(owner)).grants.find((g) => g.subject === "link")?.revokedAt).toBeUndefined();
+    expect((await enter(await stranger())).status).toBe(200);
+    // And a bar has no rung.
+    const ranked = await post(owner, grantsRoute(CANVAS), { subject: sam, bars: true, capability: "read" });
+    expect(ranked.status).toBe(400);
+    expect((await body(ranked)).error).toMatch(/a bar has no rung/);
+  });
+
+  it("`?bar=1` revokes the row and writes the bar in one request, and the one sweep meets the bar", async () => {
+    await makeCanvas();
+    const invited = await invite(sam);
+    const holder = await holderOf(sam);
+    expect((await enter(holder)).status).toBe(200);
+
+    const answer = (await (await del(owner, `${grantRoute(CANVAS, invited.grant.id)}?bar=1`)).json()) as GrantResponse;
+    expect(answer.grant.id).toBe(invited.grant.id);
+    expect(answer.grant.revokedAt).toBeDefined();
+    expect(answer.bar).toMatchObject({ subject: sam, bars: true, canvasId: CANVAS });
+    expect(answer.swept).toEqual({ expelled: 1, rerooted: 0 });
+    // The bar is there, so nothing would still admit them — and the answer
+    // does not pretend the link would.
+    expect(answer.stillAdmittedBy).toBeUndefined();
+    expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: answer.bar!.id, bars: true })]);
+    expect((await enter(holder)).status).toBe(403);
+  });
+
+  it("says whether the link would still admit them, read off the rows after the revoke", async () => {
+    await makeCanvas();
+    const first = await invite(sam);
+    const plain = (await (await del(owner, grantRoute(CANVAS, first.grant.id))).json()) as GrantResponse;
+    expect(plain.stillAdmittedBy).toBe("link");
+    expect(plain.bar).toBeUndefined();
+    // With the link off, nothing would: the answer is silent.
+    const link = (await grantsOf(owner)).grants.find((g) => g.subject === "link")!;
+    const off = (await (await del(owner, grantRoute(CANVAS, link.id))).json()) as GrantResponse;
+    expect(off.stillAdmittedBy).toBeUndefined();
+    const second = await invite(sam);
+    const alone = (await (await del(owner, grantRoute(CANVAS, second.grant.id))).json()) as GrantResponse;
+    expect(alone.stillAdmittedBy).toBeUndefined();
+  });
+
+  it("replaces the live row, hands back a standing bar, and is replaced by an invitation", async () => {
+    await makeCanvas();
+    const invited = await invite(sam, "read");
+    const first = await bar(sam);
+    expect(first.grant.id).not.toBe(invited.grant.id);
+    expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: first.grant.id, bars: true })]);
+    // A bar over a bar is the row that is already there — the toggle's rule.
+    const again = await bar(sam);
+    expect(again.grant.id).toBe(first.grant.id);
+    // Inviting them again is how a bar ends (journey 3 step 4): the bar is
+    // tombstoned and the invitation admits.
+    const back = await invite(sam);
+    expect(back.grant.bars).toBeUndefined();
+    expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: back.grant.id })]);
+    expect((await enter(await holderOf(sam))).status).toBe(200);
+  });
+
+  it("is lifted by the ordinary DELETE, and the door admits them again", async () => {
+    await makeCanvas();
+    const written = await bar(sam);
+    const holder = await holderOf(sam);
+    expect((await enter(holder)).status).toBe(403);
+    const lifted = (await (await del(owner, grantRoute(CANVAS, written.grant.id))).json()) as GrantResponse;
+    expect(lifted.grant.revokedAt).toBeDefined();
+    // Honest about what now admits them: the link is on.
+    expect(lifted.stillAdmittedBy).toBe("link");
+    expect((await enter(holder)).status).toBe(200);
+    // A bar cannot be revoked "and barred": there is nothing to keep out.
+    const twice = await del(owner, `${grantRoute(CANVAS, written.grant.id)}?bar=1`);
+    expect(twice.status).toBe(400);
+  });
+
+  it("is an owner's write: an editor in on the link is refused with `not-owner`", async () => {
+    await makeCanvas();
+    const editor = await stranger();
+    expect((await enter(editor)).status).toBe(200);
+    const direct = await post(editor, grantsRoute(CANVAS), { subject: sam, bars: true });
+    expect(direct.status).toBe(403);
+    expect((await body(direct)).code).toBe("not-owner");
+    const invited = await invite(sam);
+    const withRevoke = await del(editor, `${grantRoute(CANVAS, invited.grant.id)}?bar=1`);
+    expect(withRevoke.status).toBe(403);
+    expect((await body(withRevoke)).code).toBe("not-owner");
+    expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: invited.grant.id })]);
   });
 });

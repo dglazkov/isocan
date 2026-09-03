@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: multiuser, multi-identity
-note: journeys, design and six phases written 2 Sep 2026; phases 1 and 2 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, and a rung change that reaches an open socket as `standing` or `withdrawn`; journeys 1 and 2 play, journey 7 for the canvas. Phases 3–6 (the bar, the space, the group, the compatibility walk) are designed and not built. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address
+note: journeys, design and six phases written 2 Sep 2026; phases 1 to 3 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, a rung change that reaches an open socket as `standing` or `withdrawn`, and the bar as a row that says no; journeys 1 to 3 play, journey 7 for the canvas. Phases 4–6 (the space, the group, the compatibility walk) are designed and not built. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address
 ---
 
 # Roles — the journeys

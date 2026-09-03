@@ -184,9 +184,30 @@ export interface Grant {
     revokedAt?: string;
     revokedBy?: string;
     /** What this row admits its holder to do. Written whenever it is not
-     * `edit` (see `narrowed`); absent is `edit` — see {@link Capability}. */
+     * `edit` (see `narrowed`); absent is `edit` — see {@link Capability}. A
+     * bar (below) has none. */
     capability?: Capability;
+    /**
+     * **A bar: this row says no** (roles design, "The bar"). Its subject may
+     * not enter until the row is revoked, whatever any other row says — a
+     * live bar beats every rung, which is why it is not a rung: rungs are
+     * compared by highest-wins and a bar has to win. It is a grant row and
+     * not a second table because everything that lists, revokes and sweeps
+     * rows then works on it with no second path, and `isocan share` prints
+     * it in the same table as *kept out*.
+     *
+     * A bar's subject is an address or a repo, never `link` and never a
+     * group (`barSubjectRefusal`). The creator cannot be barred: the door
+     * checks the floor before a bar takes effect, and the route refuses to
+     * write a row that would do nothing. Written as `true` or not at all, the
+     * way `capability` is written only when it narrows.
+     */
+    bars?: true;
 }
+/** Is this row a bar — a row that refuses rather than admits? */
+export declare function isBar(grant: {
+    bars?: true;
+}): boolean;
 /**
  * `grantedBy` for the standing link grant a REPLICA writes for a canvas that
  * arrived from its home. No badge on this machine granted it — the home did,
@@ -217,6 +238,18 @@ export declare const GRANTED_BY_MIGRATION = "migration";
  * the wrong place.
  */
 export declare function grantSubjectRefusal(subject: unknown): string | null;
+/**
+ * Why this cannot be a BAR's subject, or null when it can.
+ *
+ * A bar names a person or a repo — something a badge proves — and never
+ * `link`, because "anyone with the address may not enter" is the link turned
+ * off, and never a group, because barring a group is un-inviting it (roles
+ * design, "The bar"). The two bar-only refusals come BEFORE the shape check
+ * on purpose: `group:` is not a grant subject until roles phase 5 adds it,
+ * and when it is, this must still refuse it as a bar without being
+ * re-taught.
+ */
+export declare function barSubjectRefusal(subject: unknown): string | null;
 /**
  * **One spelling of an attribute, and everything goes through it.**
  *
@@ -300,11 +333,28 @@ export declare function isLive(grant: Grant): boolean;
 export declare const grantsRoute: (canvasId: string) => string;
 /** `DELETE` revokes one. */
 export declare const grantRoute: (canvasId: string, grantId: string) => string;
+/**
+ * The same `DELETE`, with what rides on its query. A revocation sends no
+ * body (a bodiless DELETE that declares a content type is a parse error),
+ * so what it has to say goes here: `actorId`, who is acting, and `bar=1`,
+ * **revoke and keep them out in one request** (roles design, "Withdrawing
+ * versus barring") — the row is tombstoned and a bar for the same subject
+ * is written before the one sweep runs. Spelled once so the browser, the
+ * CLI and a replica's forwarder cannot disagree about the parameter's name.
+ */
+export declare const grantRevokeRoute: (canvasId: string, grantId: string, options?: {
+    actorId?: string;
+    bar?: boolean;
+}) => string;
 export interface CreateGrantRequest {
     subject: GrantSubject;
     /** Omitted means `edit`, which is what every caller from before the field
-     * asked for by not being able to ask. */
+     * asked for by not being able to ask. Not sent with `bars`. */
     capability?: Capability;
+    /** Write a BAR rather than an invitation (see `Grant.bars`): the subject
+     * is kept out until the row is revoked. A live row for the same subject is
+     * replaced, the way a re-grant replaces one, and the sweep runs. */
+    bars?: true;
     /**
      * **Who is acting** (roles design, "Over a replica, the write names the
      * person"). A write to grants asks `own`, and `own` is held by a PERSON —
@@ -334,6 +384,20 @@ export interface GrantResponse {
      * courtesy `?reach=admitted` extended in the other direction.
      */
     swept?: SweepReport;
+    /**
+     * **After a revocation: what would still admit the subject.** `link` when
+     * the canvas's link is live and no bar names them — the difference between
+     * withdrawing an invitation and barring a person (roles journey 3, step 3),
+     * which the dialog and the CLI both owe the person before they act on it:
+     * *they can still enter by the link; `--bar` to keep them out*. Computed
+     * from the live rows after the revoke, so a `?bar=1` answers without it.
+     * Absent when nothing would, and from a home from before bars. Named so a
+     * later scope can widen it: roles phase 4 adds `"space"`.
+     */
+    stillAdmittedBy?: "link";
+    /** The bar written in the same request as the revocation (`?bar=1`), so a
+     * caller knows the row it would revoke to let them back in. */
+    bar?: Grant;
 }
 /**
  * The door said no, and the caller's badge is perfectly good.

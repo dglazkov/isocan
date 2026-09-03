@@ -89,6 +89,12 @@ export declare class NotAdmittedError extends Error {
  * `{root: "created"}`, the provenance the sweep already keeps without a door
  * test. `creator` is the canvas's `createdBy.id`; callers that do not hold
  * the snapshot pass null and get rows only.
+ *
+ * **The order, since roles phase 3:** gather the live rows; if a live BAR
+ * names the badge, no row admits; otherwise the rows sorted by rung then
+ * age, first match wins; then, only if a bar matched or no row did, the
+ * floor. So a barred person is refused however they were invited, and the
+ * creator is admitted however they were barred.
  */
 export interface DoorAnswer {
     /** The row that admits, or null when the creator's floor did. */

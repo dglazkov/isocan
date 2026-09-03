@@ -51,6 +51,7 @@ import {
   atLeast,
   capabilityOf,
   capabilityWord,
+  isBar,
   isCapability,
   normalizeSubject,
   PASS_TTL_MS,
@@ -2434,7 +2435,15 @@ async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
  *   canvas you are standing in.
  * - `isocan share --revoke <email>` — un-invite, which EXPELS them unless a
  *   surviving grant still covers them. It takes the sentence, not the row id:
- *   a person who wants somebody out knows their address.
+ *   a person who wants somebody out knows their address. When the link would
+ *   still admit them the verb says so — *they can still enter by the link;
+ *   `--bar` to keep them out* — because withdrawing an invitation and barring
+ *   a person are different acts (roles journey 3, step 3).
+ * - `isocan share --revoke <email> --bar` — both in one request: the row is
+ *   revoked and a BAR is written, a row that says no whatever the link or any
+ *   other row says, until an owner lifts it. `--bar <email>` writes one
+ *   directly; `--unbar <email>` lifts it. The table prints a bar as **kept
+ *   out**, with who wrote it and when.
  *
  * **An agent can do all four, and that is deliberate.** Signing in is a
  * person's gesture — an agent has no inbox and no browser — but *inviting
@@ -2471,10 +2480,21 @@ program
   )
   .option(
     "--revoke <who>",
-    "un-invite somebody granted by name — EXPELS them unless another grant still covers them",
+    "un-invite somebody granted by name — EXPELS them unless another grant still covers them; " +
+      "with --bar, keep them out as well",
   )
+  .option(
+    "--bar [who]",
+    "keep somebody out: with --revoke, the same person in the same request; alone, `--bar <email>` " +
+      "writes the bar directly. They are refused at the door whatever the link allows, until --unbar",
+  )
+  .option("--unbar <who>", "let somebody back in — lift the bar; the link or an invitation then decides")
   .action(
-    run(async (who: string | undefined, opts: { link?: string; as?: string; revoke?: string }, cmd: Command) => {
+    run(async (
+      who: string | undefined,
+      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string },
+      cmd: Command,
+    ) => {
       const ctx = await ctxOf(cmd);
       const canvas = await resolveCanvas(ctx);
       // The one origin, per canvas: people always enter through the home that
@@ -2553,6 +2573,22 @@ program
        * the worst possible answer here, and a mistyped address is the ordinary
        * way to get it.
        */
+      /**
+       * `--bar` is two flags in one spelling, and the shape of the value
+       * says which: `--revoke <who> --bar` is the bare flag (true) riding on
+       * the revoke, and `--bar <who>` alone names somebody to keep out
+       * directly. `--revoke a --bar b` is two people in one gesture and is
+       * refused rather than guessed at.
+       */
+      const barWith = opts.bar === true;
+      const barWho = typeof opts.bar === "string" ? opts.bar : undefined;
+      if (barWith && opts.revoke === undefined) {
+        throw new Error("--bar alone wants an address to keep out: `--bar <email>`, or `--revoke <email> --bar`");
+      }
+      if (barWho !== undefined && opts.revoke !== undefined) {
+        throw new Error("--revoke <who> --bar keeps out the person being revoked; to keep out somebody else, run `--bar <email>` on its own");
+      }
+
       if (opts.revoke !== undefined) {
         const subject = normalizeSubject(grantSubjectOf(opts.revoke));
         const live = (await ctx.client.grants(canvas.id)).grants.find(
@@ -2563,8 +2599,58 @@ program
             `nothing on ${canvas.title} is granted to ${subject} — \`isocan share\` lists what is`,
           );
         }
-        sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id, ctx.actor.id)).swept);
-        console.log(`revoked ${subject} on ${canvas.title}`);
+        if (isBar(live)) {
+          throw new Error(`${subject} is kept out of ${canvas.title}, not invited — \`--unbar\` lets them back in`);
+        }
+        const answer = await ctx.client.revokeGrant(canvas.id, live.id, ctx.actor.id, barWith);
+        sweepAlso(answer.swept);
+        if (answer.bar) {
+          console.log(`revoked ${subject} on ${canvas.title}, and kept out — they are refused at the door until \`--unbar\``);
+        } else {
+          console.log(`revoked ${subject} on ${canvas.title}`);
+          // The difference between withdrawing and barring, said where the
+          // person can act on it (roles journey 3, step 3). From the home's
+          // answer, not from this verb's copy of the rows.
+          if (answer.stillAdmittedBy === "link") {
+            console.log("they can still enter by the link; `--bar` to keep them out");
+          }
+        }
+      }
+
+      /**
+       * **Keep out, directly.** A bar is a row that says no, and it goes on
+       * the desk whether or not the person was ever invited: somebody who
+       * has only ever entered by the link is exactly who it is for. The home
+       * refuses the link and the creator as subjects, with its own reasons.
+       */
+      if (barWho !== undefined) {
+        const subject = normalizeSubject(grantSubjectOf(barWho));
+        const { grant, swept: report } = await ctx.client.bar(canvas.id, subject, ctx.actor.id);
+        sweepAlso(report);
+        console.log(
+          `kept out ${subject} on ${canvas.title} (${grant.id}) — they are refused at the door ` +
+            "whatever the link allows, until `--unbar`",
+        );
+      }
+
+      /**
+       * **Let back in.** Revoking a bar is the ordinary DELETE; what they may
+       * then do is whatever the link or an invitation gives them, which this
+       * verb does not pretend to know. Refused loudly when nobody is kept
+       * out under that address, for `--revoke`'s reason.
+       */
+      if (opts.unbar !== undefined) {
+        const subject = normalizeSubject(grantSubjectOf(opts.unbar));
+        const bar = (await ctx.client.grants(canvas.id)).grants.find(
+          (g) => g.subject === subject && isBar(g),
+        );
+        if (!bar) {
+          throw new Error(
+            `nobody is kept out of ${canvas.title} as ${subject} — \`isocan share\` lists who is`,
+          );
+        }
+        await ctx.client.revokeGrant(canvas.id, bar.id, ctx.actor.id);
+        console.log(`let ${subject} back in to ${canvas.title} — the link or an invitation now decides`);
       }
 
       if (opts.as !== undefined && who === undefined) {
@@ -2625,11 +2711,14 @@ program
         // The creator, first: their standing is the floor and not a row, so
         // the table says so where the Share dialog's first row does.
         { subject: owner, rung: "owner, made this", granted: canvas.createdAt.slice(0, 10), by: "" },
-        ...others.map((g) => ({
+        // The invitations, then the bars — the dialog's order — each bar
+        // printed as **kept out** in the rung column, with who wrote it and
+        // when in the columns every row has (roles journey 3, step 4).
+        ...[...others.filter((g) => !isBar(g)), ...others.filter(isBar)].map((g) => ({
           subject: g.subject,
           // The rung, in the dialog's words, so the table and the Share
           // dialog name one thing one way.
-          rung: capabilityWord.dialog[capabilityOf(g)],
+          rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
           granted: g.at.slice(0, 10),
           by: g.grantedBy,
         })),

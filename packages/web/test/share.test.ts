@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { grantRoute, grantsRoute, LINK } from "@isocan/core";
-import { ApiError, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
+import { grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
+import { ApiError, createBar, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
 
 /**
  * **The Share dialog's three calls, as they go out on the wire.**
@@ -101,6 +101,31 @@ describe("the Share dialog's endpoint", () => {
     expect(seen[0]!.headers).toBeUndefined();
   });
 
+  it("keeps somebody out with `bars: true` and no rung (roles phase 3)", async () => {
+    answer = [200, { grant: { id: "gnt_4", subject: "email:sam@example.com", bars: true } }];
+    await createBar("prj_acme", "email:sam@example.com", "usr_priya");
+    expect(seen[0]!.method).toBe("POST");
+    expect(seen[0]!.url).toBe(grantsRoute("prj_acme"));
+    expect(JSON.parse(seen[0]!.body!)).toEqual({
+      subject: "email:sam@example.com",
+      bars: true,
+      actorId: "usr_priya",
+    });
+  });
+
+  it("revokes and bars in one request with `?bar=1`, spelled by core, still bodiless", async () => {
+    answer = [200, { grant: { id: "gnt_1", revokedAt: "now" }, bar: { id: "gnt_5", bars: true } }];
+    await revokeGrant("prj_acme", "gnt_1", "usr_priya", true);
+    expect(seen[0]!.method).toBe("DELETE");
+    expect(seen[0]!.url).toBe(grantRevokeRoute("prj_acme", "gnt_1", { actorId: "usr_priya", bar: true }));
+    expect(seen[0]!.url).toContain("bar=1");
+    expect(seen[0]!.body).toBeUndefined();
+    expect(seen[0]!.headers).toBeUndefined();
+    // And without the flag the parameter is not sent at all.
+    await revokeGrant("prj_acme", "gnt_1", "usr_priya", false);
+    expect(seen[1]!.url).not.toContain("bar");
+  });
+
   it("surfaces the home's refusal of a phase-9 subject, code and all", async () => {
     // The honest half of the deferral: the dialog has no "who" field, and the
     // API's refusal is what a caller sees if anything reaches for one anyway.
@@ -167,6 +192,59 @@ describe("the share roster reads the same fold as everything else", () => {
     expect(src).toMatch(/const KIND_WORD: Record<RowState, string>/);
     for (const state of ["answerable", "enrolled", "blocked", "working", "parked", "quiet"]) {
       expect(src, `no word for ${state}`).toContain(`${state}:`);
+    }
+  });
+});
+
+/**
+ * **Withdrawing versus barring, in the dialog** (roles phase 3). Source-
+ * scanned for the same reason the roster is: what matters is that the
+ * dialog offers the second gesture only after the home's answer said the
+ * first one left the person able to come back, and that every new control
+ * is an owner's like the rest.
+ */
+describe("the Share dialog withdraws, and offers to keep out", () => {
+  const dialog = readFileSync(
+    fileURLToPath(new URL("../src/components/ShareDialog.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  it("says Remove, not Un-invite", () => {
+    expect(dialog).toContain(">\n                      Remove\n");
+    expect(dialog).not.toContain("Un-invite");
+  });
+
+  it("offers *and keep them out* only when the home's answer says the link still admits them", () => {
+    expect(dialog).toContain('answer.stillAdmittedBy === "link"');
+    expect(dialog).toContain("can still enter by the link");
+    expect(dialog).toContain("and keep them out");
+    expect(dialog).toContain("createBar(canvasId, subject, actor.id)");
+  });
+
+  it("lists the bars as kept out, with who and when, and lets them back in with the ordinary revoke", () => {
+    expect(dialog).toContain("filter(isBar)");
+    expect(dialog).toContain("Kept out");
+    expect(dialog).toContain("kept out {grant.at.slice(0, 10)} · by {grant.grantedBy}");
+    expect(dialog).toContain("Let back in");
+    // Let back in and Remove are one function: revoking a bar is a DELETE.
+    expect(dialog.match(/onClick=\{\(\) => void remove\(grant\)\}/g)).toHaveLength(2);
+  });
+
+  it("gates every new control on the owner, like every other", () => {
+    // Remove, Let back in, and keep them out: three buttons, all
+    // `disabled={busy || !owned}` with the owner's note as their title.
+    // `.slice(1)`: the chunk before the first button is the file's prose,
+    // which names Remove in a comment.
+    const buttons = dialog
+      .split("<button")
+      .slice(1)
+      .filter(
+        (chunk) => chunk.includes("Remove") || chunk.includes("Let back in") || chunk.includes("and keep them out"),
+      );
+    expect(buttons).toHaveLength(3);
+    for (const button of buttons) {
+      expect(button).toContain("disabled={busy || !owned}");
+      expect(button).toContain("title={ownerTitle}");
     }
   });
 });

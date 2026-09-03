@@ -255,6 +255,19 @@ export function deskConformance(
         await desk.putGrant({ ...grant("gnt_5", "prj_e", "bdg_1"), capability: "own" });
         expect((await desk.grantsFor("prj_d"))[0]!.capability).toBe("read");
         expect((await desk.grantsFor("prj_e"))[0]!.capability).toBe("own");
+        // And a BAR (roles phase 3) — a row with `bars: true` and no rung —
+        // comes back as one. A backing that dropped the field would read
+        // "kept out" as an edit invitation, which is the same field-picking
+        // trap with the sign flipped.
+        await desk.putGrant({
+          ...grant("gnt_6", "prj_f", "bdg_1"),
+          subject: "email:sam@acme.test",
+          bars: true,
+        });
+        const onF = await desk.grantsFor("prj_f");
+        expect(onF[0]!.bars).toBe(true);
+        expect(onF[0]!.capability).toBeUndefined();
+        expect(onA[0]!.bars).toBeUndefined();
       }),
     );
 

@@ -32,7 +32,7 @@ import {
   encodeFilename,
   FILENAME_HEADER,
   FREE_NAME_ROUTE,
-  grantRoute,
+  grantRevokeRoute,
   grantsRoute,
   healthPath,
   normalizeHomeUrl,
@@ -233,8 +233,13 @@ export interface HomeConnection {
     subject: GrantSubject,
     capability?: Capability,
     actor?: Actor,
+    /** A bar rather than an invitation (roles phase 3): carried up as
+     * `bars: true`, the way the rung is carried only when it narrows. */
+    bars?: boolean,
   ): Promise<GrantResponse>;
-  revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse>;
+  /** `bar` is the DELETE's `?bar=1` — revoke and keep them out, one request
+   * at the home, so the sweep that expels them meets the bar. */
+  revokeGrant(canvasId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
   /**
    * Your surfaces at the HOME, and ending one there — forwarded for the grant
    * routes' reason, arriving at the machine it is most obviously about.
@@ -1601,24 +1606,32 @@ export class HomeLink implements HomeConnection {
     subject: GrantSubject,
     capability?: Capability,
     actor?: Actor,
+    bars?: boolean,
   ): Promise<GrantResponse> {
     if (actor) await this.ensureClaim(actor);
     return this.api<GrantResponse>("POST", grantsRoute(canvasId), {
       subject,
       // Forwarded whenever it is not edit (`narrowed`), so an older home never
       // sees the field for the one value it has always meant by omission —
-      // and refuses, with `bad-grant`, a rung it does not know.
+      // and refuses, with `bad-grant`, a rung it does not know. A bar is
+      // forwarded the same way: `bars: true` or nothing, and a home from
+      // before bars refuses the field it does not know.
       ...(narrowed(capability) ? { capability } : {}),
+      ...(bars ? { bars: true } : {}),
       ...(actor ? { actorId: actor.id } : {}),
     });
   }
 
-  async revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse> {
+  async revokeGrant(
+    canvasId: string,
+    grantId: string,
+    actor?: Actor,
+    bar?: boolean,
+  ): Promise<GrantResponse> {
     if (actor) await this.ensureClaim(actor);
-    const route = grantRoute(canvasId, grantId);
     return this.api<GrantResponse>(
       "DELETE",
-      actor ? `${route}?actorId=${encodeURIComponent(actor.id)}` : route,
+      grantRevokeRoute(canvasId, grantId, { ...(actor ? { actorId: actor.id } : {}), ...(bar ? { bar } : {}) }),
     );
   }
 

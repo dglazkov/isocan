@@ -609,3 +609,130 @@ describe("the sweep recomputes rungs, and reports per badge", () => {
     expect(held.provenance).toEqual({ root: "pass", badgeId: creator });
   });
 });
+
+/**
+ * **The bar rides the sweep with no mechanism of its own** (roles phase 3).
+ * The route that writes a bar runs the same `sweepCanvas`, and the sweep
+ * re-runs the same door — which now says no to the person the bar names,
+ * and still says yes to the creator, whom no row can bar.
+ */
+describe("a bar's write sweeps the person it names", () => {
+  const creatorId = "usr_priya";
+  const claimOf = (actorId: string) => [{ actorId, boundAt: new Date().toISOString() }];
+  const prove = (badgeId: string, attribute: string) =>
+    desk.attest(badgeId, { attribute, verifiedVia: "magic-link", at: new Date().toISOString() });
+  const barOn = (subject: GrantSubject): Promise<void> =>
+    desk.putGrant({
+      id: `gnt_bar_${subject.replace(/[^a-z0-9]/gi, "_")}`,
+      canvasId: CANVAS,
+      subject,
+      grantedBy: "bdg_owner",
+      at: new Date().toISOString(),
+      bars: true,
+    });
+
+  it("expels a barred person inside on the link, and leaves the creator and the stranger", async () => {
+    const link = await grantOn(LINK);
+    const sam = await badge();
+    await prove(sam, "email:sam@acme.test");
+    await admit(sam, { root: "grant", grantId: link.id });
+    const tab = await badge();
+    await desk.setClaims(tab, claimOf(creatorId));
+    await admit(tab, { root: "grant", grantId: link.id });
+    const stranger = await badge();
+    await admit(stranger, { root: "grant", grantId: link.id });
+
+    await barOn("email:sam@acme.test");
+    // The link still stands, so nothing is re-rooted: the door simply says
+    // no to Sam and the same yes it always said to everybody else.
+    expect(await sweepCanvas(desk, CANVAS, creatorId)).toEqual({ expelled: 1, rerooted: 0 });
+    expect(await inRooms(sam)).toEqual([]);
+    expect(await inRooms(tab)).toEqual([CANVAS]);
+    expect(await inRooms(stranger)).toEqual([CANVAS]);
+  });
+
+  it("reaches the barred person's agent only as far as the door does — the link re-admits it", async () => {
+    // A pass root adopts its minter's OUTCOME, and an expelled minter sends
+    // the agent to the door — where the agent's own badge, which has proved
+    // no address, meets no bar and is admitted by the link like a stranger.
+    // Pinned as what happens, not as what should: a bar names an address and
+    // an agent proves none, so with the link on, barring the person does not
+    // bar their agent. Recorded as a roles phase 3 finding; agent-custody's
+    // question whether an agent should outlive its person's standing.
+    const link = await grantOn(LINK);
+    const sam = await badge();
+    await prove(sam, "email:sam@acme.test");
+    await admit(sam, { root: "grant", grantId: link.id });
+    const agent = await badge();
+    await admit(agent, { root: "pass", badgeId: sam });
+
+    await barOn("email:sam@acme.test");
+    expect(await sweepCanvas(desk, CANVAS, creatorId)).toEqual({ expelled: 1, rerooted: 1 });
+    expect(await inRooms(sam)).toEqual([]);
+    expect(await inRooms(agent)).toEqual([CANVAS]);
+    expect(await rootOf(agent)).toEqual({ root: "grant", grantId: link.id });
+  });
+
+  it("takes the barred person's agent with them when nothing else would admit it", async () => {
+    // Sam invited by name, link off: the bar replaces the invitation, Sam
+    // is refused, and the agent enrolled on Sam's pass has no door left.
+    await desk.putGrant({
+      id: "gnt_sam",
+      canvasId: CANVAS,
+      subject: "email:sam@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+    });
+    const sam = await badge();
+    await prove(sam, "email:sam@acme.test");
+    await admit(sam, { root: "grant", grantId: "gnt_sam" });
+    const agent = await badge();
+    await admit(agent, { root: "pass", badgeId: sam });
+
+    await desk.revokeGrant("gnt_sam", new Date().toISOString(), "bdg_owner");
+    await barOn("email:sam@acme.test");
+    expect(await sweepCanvas(desk, CANVAS, creatorId)).toEqual({ expelled: 2, rerooted: 0 });
+    expect(await inRooms(sam)).toEqual([]);
+    expect(await inRooms(agent)).toEqual([]);
+  });
+
+  it("does nothing to the creator, however their address is barred — the floor answers first", async () => {
+    const link = await grantOn(LINK);
+    const tab = await badge();
+    await desk.setClaims(tab, claimOf(creatorId));
+    await prove(tab, "email:priya@acme.test");
+    await admit(tab, { root: "grant", grantId: link.id });
+
+    await barOn("email:priya@acme.test");
+    // Not expelled, and not left on the link either: a bar that names the
+    // creator sends the door past every row to the floor, and the floor
+    // writes `created`.
+    expect(await sweepCanvas(desk, CANVAS, creatorId)).toEqual({ expelled: 0, rerooted: 1 });
+    expect(await inRooms(tab)).toEqual([CANVAS]);
+    expect(await rootOf(tab)).toEqual({ root: "created" });
+  });
+
+  it("is a door answer, not a sweep rule: a bar beats an invitation at any rung", async () => {
+    await grantOn(LINK);
+    await desk.putGrant({
+      id: "gnt_sam_own",
+      canvasId: CANVAS,
+      subject: "email:sam@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+      capability: "own",
+    });
+    await barOn("email:sam@acme.test");
+    const sam = await badge();
+    await prove(sam, "email:sam@acme.test");
+    expect(await admittingGrant(desk, CANVAS, (await desk.badge(sam))!)).toBeNull();
+    // Unless the badge claims the creator, in which case the answer is the
+    // floor's — never a row's, and never the bar's.
+    await desk.setClaims(sam, claimOf(creatorId));
+    expect(await admittingGrant(desk, CANVAS, (await desk.badge(sam))!, creatorId)).toMatchObject({
+      grant: null,
+      provenance: { root: "created" },
+      capability: "own",
+    });
+  });
+});

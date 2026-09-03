@@ -16,8 +16,8 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phases 1 and 2 CLOSED 2 Sep 2026; roles phase 3 is
-next.** Journeys, design and phases written 2 Sep 2026; phases 1 and 2
+**Where we are: roles phases 1 to 3 CLOSED 2 Sep 2026; roles phase 4 is
+next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 3
 built and walked the same day.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
@@ -210,7 +210,20 @@ the re-rooted badge's connections and no other.
 
 ## Phase 3 — Withdrawal, and the bar
 
-**Status: not started.**
+**Status: CLOSED** 2 Sep 2026. Journey 3 walked by the conductor on the
+scratch home, the CLI as the creator, a Chrome origin as the invitee's
+browser and a bearer badge as their terminal: invited at `edit` with the
+link off, the invitee entered; removed from the CLI, their tab rendered
+*your access to this canvas was withdrawn* and their terminal's oplog
+watch was refused with reason `withdrawn`. With the link on they re-entered
+as a stranger on both surfaces; the creator's Share dialog **Remove** said
+*can still enter by the link* and offered **and keep them out**, which
+dropped both surfaces to the door with `not-admitted` while a fourth
+stranger was admitted by the same link; the dialog and `isocan share`
+listed the bar as **kept out** with who and when; `--unbar` re-admitted
+them. The creator's-address refusal is held by test only: the scratch
+creator has proved no address, so the route had nothing to match. Suite
+292 files, 3169 tests; typecheck clean.
 
 **Closes journey 3.**
 
@@ -242,6 +255,18 @@ person re-enters as a stranger; the conductor removes them again with **and
 keep them out**, and they are refused at the door with `not-admitted` while
 a fourth stranger is admitted by the same link. `isocan share` lists the bar
 with who and when. `server/test/grants.test.ts` grows the bar cases.
+
+**Findings:**
+
+- **2026-09-02 — A barred person's agent is not barred.** Its badge proves
+  no address, so with the link on the sweep re-roots it at the link.
+  Pinned in `sweep.test.ts`; agent-custody's question.
+- **2026-09-02 — A bar needs an attester.** On a home with none, `--bar` is
+  refused with `no-attester`, because such a bar keeps nobody out.
+- **2026-09-02 — Inviting a barred address replaces the bar** with no
+  confirm. Journey 3 step 4's *until an owner invites them again*.
+- **2026-09-02 — The kept-out row names a badge id, not a person.** The
+  browser has no badge-to-name lookup; the CLI table is the same.
 
 ## Phase 4 — The space
 

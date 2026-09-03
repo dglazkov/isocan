@@ -70,8 +70,13 @@ export interface HomeConnection {
      * one — after the claim goes up, as it does before a forwarded op.
      */
     grants(canvasId: string): Promise<GrantsResponse>;
-    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor): Promise<GrantResponse>;
-    revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse>;
+    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, 
+    /** A bar rather than an invitation (roles phase 3): carried up as
+     * `bars: true`, the way the rung is carried only when it narrows. */
+    bars?: boolean): Promise<GrantResponse>;
+    /** `bar` is the DELETE's `?bar=1` — revoke and keep them out, one request
+     * at the home, so the sweep that expels them meets the bar. */
+    revokeGrant(canvasId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
     /**
      * Your surfaces at the HOME, and ending one there — forwarded for the grant
      * routes' reason, arriving at the machine it is most obviously about.
@@ -605,8 +610,8 @@ export declare class HomeLink implements HomeConnection {
     /** Who may enter this canvas, as the HOME has it. No claim goes up first:
      * a grant is about badges, never about actors. */
     grants(canvasId: string): Promise<GrantsResponse>;
-    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor): Promise<GrantResponse>;
-    revokeGrant(canvasId: string, grantId: string, actor?: Actor): Promise<GrantResponse>;
+    createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
+    revokeGrant(canvasId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
     /** Your surfaces AT THE HOME. This daemon's own badge there is one of them
      * and comes back marked `self` — so `isocan badges` run on a laptop shows
      * that laptop's row as the one it is standing on, which is exactly what a

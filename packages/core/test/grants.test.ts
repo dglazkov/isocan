@@ -3,8 +3,12 @@ import type { Attestation, GrantSubject } from "../src/index.ts";
 import {
   attestationSatisfying,
   attestedKindOf,
+  barSubjectRefusal,
+  grantRevokeRoute,
+  grantRoute,
   grantSubjectOf,
   grantSubjectRefusal,
+  isBar,
   LINK,
   normalizeAttribute,
   normalizeSubject,
@@ -171,5 +175,55 @@ describe("a badge accumulates proofs without piling them up", () => {
   it("normalizes on the way in, so the door never folds anything at request time", () => {
     const held = upsertAttestation([], proof("  email:Jordan@Acme.Test  "));
     expect(held[0]!.attribute).toBe("email:jordan@acme.test");
+  });
+});
+
+/**
+ * **The bar** (roles design, "The bar"; roles phase 3): a row that says no.
+ * Its subject rule is the invitation's plus two refusals of its own, and the
+ * two come FIRST so that a subject the shape check does not know yet is
+ * still refused as a bar when it arrives.
+ */
+describe("what a bar may name", () => {
+  it("takes an address or a repo, like an invitation", () => {
+    expect(barSubjectRefusal("email:sam@acme.test")).toBeNull();
+    expect(barSubjectRefusal("repo:github.com/acme/widgets")).toBeNull();
+  });
+
+  it("never the link — that is the link turned off", () => {
+    expect(barSubjectRefusal(LINK)).toMatch(/link cannot be kept out/);
+  });
+
+  it("never a group, before the shape check has an opinion about groups", () => {
+    // `group:` is not a grant subject until roles phase 5 adds it, and the
+    // bar's refusal must not lean on that: barring a group is un-inviting it.
+    expect(barSubjectRefusal("group:ppl_1")).toMatch(/group cannot be kept out/);
+  });
+
+  it("still refuses what is not a subject at all", () => {
+    expect(barSubjectRefusal("everyone")).toMatch(/not a grant subject/);
+    expect(barSubjectRefusal("email:Sam")).toMatch(/not an email address/);
+  });
+
+  it("is `bars: true` or nothing", () => {
+    expect(isBar({ bars: true })).toBe(true);
+    expect(isBar({})).toBe(false);
+  });
+});
+
+describe("the revoke route carries what a bodiless DELETE has to say", () => {
+  it("is the plain route with nothing to say", () => {
+    expect(grantRevokeRoute("prj_a", "gnt_1")).toBe(grantRoute("prj_a", "gnt_1"));
+  });
+
+  it("spells the actor and the bar once, for the browser, the CLI and the forwarder", () => {
+    expect(grantRevokeRoute("prj_a", "gnt_1", { actorId: "usr_p" })).toBe(
+      `${grantRoute("prj_a", "gnt_1")}?actorId=usr_p`,
+    );
+    expect(grantRevokeRoute("prj_a", "gnt_1", { bar: true })).toBe(`${grantRoute("prj_a", "gnt_1")}?bar=1`);
+    expect(grantRevokeRoute("prj_a", "gnt_1", { actorId: "usr_p", bar: true })).toBe(
+      `${grantRoute("prj_a", "gnt_1")}?actorId=usr_p&bar=1`,
+    );
+    expect(grantRevokeRoute("prj_a", "gnt_1", { bar: false })).toBe(grantRoute("prj_a", "gnt_1"));
   });
 });
