@@ -411,6 +411,27 @@ Not built: the trigger-rate half of *does it fire* — tasks the skill should
 NOT fire on. And every number above is one run; a lift worth acting on is a
 delta that survives three.
 
+**Later the same day, blind, three runs per cell**
+([page](../../lift/2026-09-03-isocan-collab-blind.md)). `lift.mjs --blind
+--runs 3`: the prompt no longer names the canvas or the item — *something
+on the canvas this directory belongs to needs you; find out what* — and
+every cell ran three times. Two tasks, twelve runs. *Fires:* 6/6 both ways
+again. Even blind, an agent with no skill finds the comment: the directory
+is bound, `isocan --agent-help` is in the tool, and the tool is enough. So
+the collab skill's discoverability value is nil on a machine where isocan
+is installed, and that is a finding about the CLI, not a failure of the
+skill. *Helps:* 6/6 both. *Costs:* **14.7 turns with the skill against
+23.2 without**, every one of the six pairs in the same direction (14–16
+against 21–26), and one skill-less run out of turns before it replied. The
+dollars are the same because the skill's turns are longer. The delta that
+survived three is the lap: the skill teaches the shape of a turn — read,
+act, reply, stop — and an agent without it rediscovers that shape each
+time, at a cost of eight or nine turns.
+
+Read for the product: the thing to ship is not the skill's discoverability
+but its lap, and the lap could live in `--agent-help` itself, where every
+agent already reads it.
+
 Two isocan-specific opportunities:
 
 - **`/skill find` could report lift**, not just stars and licence. "This one
