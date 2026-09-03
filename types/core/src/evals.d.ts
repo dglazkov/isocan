@@ -1,4 +1,4 @@
-import type { CanvasContents } from "./model.js";
+import type { CanvasContents, Item } from "./model.js";
 import type { LogEntry } from "./ops.js";
 /**
  * **The request corpus** — what people actually ask agents for, and what
@@ -198,6 +198,58 @@ type AskKind = "addressed" | "broadcast";
  * interesting kind and `gc` may have compacted it.
  */
 export declare function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus;
+/**
+ * **The converge lane's landings, and whether they were kept** — the night
+ * shift's step 3 (`docs/research/2026-08-24-the-night-shift.md`): one
+ * measured fix per night, landed as a version, kept or reverted by a person
+ * in the morning. The accept rate is the trust battery's first reading.
+ *
+ * A landing is recorded on the item it landed on, as `converged` —
+ * `<versionId>@<iso>`, comma-separated when there have been several — by
+ * `scripts/converge-night.mjs` the moment it stacks the version. Nothing
+ * else marks it: versions have no properties of their own, and a comment is
+ * prose. So this reads the property and the stack together, and says of each
+ * landing:
+ *
+ * - `reverted` — the current version is EARLIER in the stack than the
+ *   landing: somebody brought a previous take back. That is the morning's
+ *   "no", and it is a labelled rejection.
+ * - `built-on` — a later version exists. Somebody kept working on top of
+ *   the night's change, which is the strongest "yes" there is.
+ * - `kept` — the landing is still current and old enough that a morning
+ *   has passed over it.
+ * - `standing` — still current, too new to call. Not a yes yet.
+ *
+ * The accept rate is kept-or-built-on over everything that has been judged;
+ * `standing` is excluded rather than counted either way, so a fresh night
+ * cannot inflate or deflate the battery before anyone has looked.
+ */
+export declare const CONVERGED_PROP = "converged";
+/** How long a landing must stand before silence counts as keeping it. */
+export declare const KEPT_AFTER_MS: number;
+export type LandingStatus = "reverted" | "built-on" | "kept" | "standing";
+export interface Landing {
+    itemId: string;
+    title: string;
+    versionId: string;
+    landedAt: string;
+    status: LandingStatus;
+}
+export interface ConvergeReport {
+    landings: Landing[];
+    kept: number;
+    reverted: number;
+    standing: number;
+    /** kept-or-built-on ÷ (kept-or-built-on + reverted); null until something has been judged. */
+    acceptRate: number | null;
+}
+/** The property's value for one more landing — appended, never replaced. */
+export declare function withLanding(existing: string | undefined, versionId: string, at: string): string;
+export declare function landingsOf(item: Item): {
+    versionId: string;
+    landedAt: string;
+}[];
+export declare function harvestConverge(canvas: CanvasContents, now?: number): ConvergeReport;
 /**
  * **Preference pairs, harvested from version stacks** — the plan's "what to do
  * first" #2, and the thing it calls the single highest-leverage item in the

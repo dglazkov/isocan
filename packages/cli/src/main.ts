@@ -155,6 +155,7 @@ import {
   CANVAS_ITEM_SIZE,
   DOC_MIME,
   DOC_SYNCED_PROP,
+  harvestConverge,
   docFilenameFrom,
   docProperties,
   docTitleFrom,
@@ -10916,6 +10917,27 @@ evals
       }
       if (corpus.asks.length > budget) {
         console.log(`\n(${corpus.asks.length - budget} older — -n for more, --json for all)`);
+      }
+    }),
+  );
+
+evals
+  .command("converge")
+  .description("What the night's converge lane landed here, and whether people kept it — the trust battery's first reading")
+  .action(
+    run(async (_opts: Record<string, never>, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snap = await ctx.client.snapshot(p.id);
+      const report = harvestConverge(snap.canvas);
+      if (ctx.json) return printJson(report);
+      if (report.landings.length === 0) {
+        return console.log("the converge lane has landed nothing here yet — `node scripts/converge-night.mjs --canvas <ref>` runs one night");
+      }
+      const rate = report.acceptRate === null ? "no verdicts yet" : `accept rate ${Math.round(report.acceptRate * 100)}%`;
+      console.log(`${report.landings.length} landings — ${report.kept} kept, ${report.reverted} reverted, ${report.standing} standing · ${rate}`);
+      for (const l of report.landings) {
+        console.log(`  ${l.landedAt.slice(0, 16).replace("T", " ")}  ${l.status.padEnd(9)} ${l.title} (${l.itemId}) v ${l.versionId}`);
       }
     }),
   );
