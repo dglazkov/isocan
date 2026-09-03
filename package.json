@@ -27,6 +27,7 @@
     "release": "node scripts/release.mjs",
     "prepare": "node scripts/prepare.mjs",
     "board": "node scripts/canvas-board.mjs",
+    "night": "node scripts/night.mjs",
     "board:brief": "node scripts/canvas-board.mjs --only brief --notify",
     "board:watch": "node scripts/board-watch.mjs",
     "hooks": "node scripts/install-hooks.mjs"
